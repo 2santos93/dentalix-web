@@ -2667,7 +2667,10 @@ export function TreatmentPlansTab({
                                 amount={previewPaymentAmount}
                                 paymentCurrency={paymentCurrency}
                                 planCurrency={planDetail.currency}
-                                planBalance={planBalance.balance}
+                                planBalance={{
+                                  balance: planBalance.balance,
+                                  paymentsWithoutRate: planBalance.paymentsWithoutRate.length,
+                                }}
                                 date={paymentDate}
                               />
                             ) : null}

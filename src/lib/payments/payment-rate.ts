@@ -28,6 +28,37 @@ export interface RateQuote {
   toPerBase: number;
 }
 
+/** Las tasas de un día como las da `GET /exchange/rates`: unidades por 1 de `base`. */
+export interface RatesOfDay {
+  base: string;
+  rates: Record<string, number>;
+}
+
+/**
+ * Unidades de `currency` por 1 de la base ese día, con los 8 decimales que
+ * guarda la columna de la tasa congelada (`Decimal(18,8)`, DX-375): la API
+ * recorta así la tasa al congelar un abono. `null` sin tasa, o si la tasa
+ * redondea a 0 (la API también la trata como «sin tasa»).
+ */
+export function ratePerBase(day: RatesOfDay, currency: string): number | null {
+  if (currency === day.base) return 1;
+  const raw = day.rates[currency];
+  if (raw === undefined) return null;
+  const rate = Number(raw.toFixed(8));
+  return rate > 0 ? rate : null;
+}
+
+/**
+ * La cotización de `from` a `to` con las tasas de un día, la misma que la API
+ * congelaría para un abono de ese día (`freezePaymentRate`), o `null` si falta
+ * alguna de las dos («sin tasa»).
+ */
+export function quoteFromRates(day: RatesOfDay, from: string, to: string): RateQuote | null {
+  const fromPerBase = ratePerBase(day, from);
+  const toPerBase = ratePerBase(day, to);
+  return fromPerBase === null || toPerBase === null ? null : { currency: to, fromPerBase, toPerBase };
+}
+
 /**
  * «1 USD = 4.000,00 COP»: con la moneda mayor a la izquierda, para que la
  * cifra nunca sea un 0,000… ilegible. `money` pinta un importe con su moneda.

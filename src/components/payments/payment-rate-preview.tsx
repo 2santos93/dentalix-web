@@ -3,7 +3,7 @@ import { Loader2, TriangleAlert } from 'lucide-react';
 import { FieldError } from '@/components/errors/field-error';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate } from '@/lib/format/date';
-import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
+import { convertWithRate, paymentRateCopy, quoteFromRates, ratePairLabel, ratePerBase } from '@/lib/payments/payment-rate';
 import type { ExchangeRatesState } from './use-exchange-rates';
 
 // Copy como constantes (i18n-ready). Ningún texto nombra un país ni un banco.
@@ -18,6 +18,12 @@ export const ratePreviewCopy = {
   equivalent: (currency: string) => `Equivalente en ${currency}`,
   pendingAfter: 'Pendiente tras el abono',
   inFavorAfter: 'A favor tras el abono',
+  pendingLoading: 'Leyendo el saldo del plan…',
+  pendingUnavailable: 'No se pudo leer el saldo del plan: lo pendiente se verá al guardar.',
+  pendingWithoutRate: (n: number) =>
+    n === 1
+      ? 'No cuenta 1 abono anterior «sin tasa»: lo pendiente real será menor cuando se registre su tasa.'
+      : `No cuenta ${n} abonos anteriores «sin tasa»: lo pendiente real será menor cuando se registre su tasa.`,
   missing: (currency: string, date: string) =>
     `No hay tasa de ${currency} para el ${date}: el abono se guarda igual y queda «sin tasa» hasta que se registre la tasa de ese día.`,
 };
@@ -29,11 +35,18 @@ interface PaymentRatePreviewProps {
   amount: number | null;
   paymentCurrency: string;
   planCurrency: string;
-  /** Saldo del plan antes del abono, en su moneda. */
-  planBalance: number;
+  /**
+   * Saldo del plan antes del abono, en su moneda y con los abonos en otra
+   * moneda ya convertidos (`GET /treatment-plans/:id/balance`), y cuántos
+   * abonos «sin tasa» aún no cuenta. `'loading'` mientras se lee; `'error'`
+   * si no se pudo: el equivalente y la tasa se enseñan igual.
+   */
+  planBalance: PreviewPlanBalance;
   /** Día del abono (AAAA-MM-DD): el de la tasa que congelará (DX-375). */
   date: string;
 }
+
+export type PreviewPlanBalance = { balance: number; paymentsWithoutRate: number } | 'loading' | 'error';
 
 /**
  * DX-376: al cobrar en otra moneda que la del plan, cuánto cubre el abono en
@@ -89,12 +102,11 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
       </div>
     );
   }
-  const { base, source, rates } = state.rates;
-  const perBase = (currency: string): number | undefined => (currency === base ? 1 : rates[currency]);
-  const fromPerBase = perBase(paymentCurrency);
-  const toPerBase = perBase(planCurrency);
-  if (fromPerBase === undefined || toPerBase === undefined) {
-    const missing = fromPerBase === undefined ? paymentCurrency : planCurrency;
+  const { source } = state.rates;
+  // La misma tasa que congela la API (8 decimales; una que redondea a 0 es «sin tasa»).
+  const rate = quoteFromRates(state.rates, paymentCurrency, planCurrency);
+  if (rate === null) {
+    const missing = ratePerBase(state.rates, paymentCurrency) === null ? paymentCurrency : planCurrency;
     return (
       <p className="mt-1 flex items-start gap-2">
         <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
@@ -102,7 +114,6 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
       </p>
     );
   }
-  const rate = { currency: planCurrency, fromPerBase, toPerBase };
   const rateLine = copy.rate(
     ratePairLabel(paymentCurrency, rate, (value, currency) => formatCurrency(value, currency)),
     paymentRateCopy.source[source],
@@ -117,7 +128,8 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
     );
   }
   const equivalent = convertWithRate(amount, rate);
-  const after = Math.round((planBalance - equivalent) * 100) / 100;
+  const after =
+    typeof planBalance === 'object' ? Math.round((planBalance.balance - equivalent) * 100) / 100 : null;
   return (
     <>
       <dl className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2">
@@ -125,11 +137,25 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
           <dt className="text-muted">{copy.equivalent(planCurrency)}</dt>
           <dd className="font-semibold tabular-nums">{formatCurrency(equivalent, planCurrency)}</dd>
         </div>
-        <div className="min-w-0">
-          <dt className="text-muted">{after < 0 ? copy.inFavorAfter : copy.pendingAfter}</dt>
-          <dd className="font-semibold tabular-nums">{formatCurrency(Math.abs(after), planCurrency)}</dd>
-        </div>
+        {after !== null ? (
+          <div className="min-w-0">
+            <dt className="text-muted">{after < 0 ? copy.inFavorAfter : copy.pendingAfter}</dt>
+            <dd className="font-semibold tabular-nums">{formatCurrency(Math.abs(after), planCurrency)}</dd>
+          </div>
+        ) : planBalance === 'loading' ? (
+          <div className="min-w-0 flex items-center">
+            <Loader2 aria-hidden className="size-4 animate-spin text-muted" />
+            <span className="sr-only">{copy.pendingLoading}</span>
+          </div>
+        ) : null}
       </dl>
+      {planBalance === 'error' ? <p className="text-muted">{copy.pendingUnavailable}</p> : null}
+      {typeof planBalance === 'object' && planBalance.paymentsWithoutRate > 0 ? (
+        <p className="mt-1 flex items-start gap-2">
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <span>{copy.pendingWithoutRate(planBalance.paymentsWithoutRate)}</span>
+        </p>
+      ) : null}
       <p className="mt-1 text-muted tabular-nums">{rateLine}</p>
     </>
   );

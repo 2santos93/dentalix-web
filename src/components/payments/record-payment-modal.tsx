@@ -22,7 +22,8 @@ import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
 import { useBillablePlans } from './use-billable-plans';
 import { usePaymentLocationHint } from './use-payment-location-hint';
 import { useExchangeRates } from './use-exchange-rates';
-import { PaymentRatePreview, ratePreviewCopy } from './payment-rate-preview';
+import { PaymentRatePreview, ratePreviewCopy, type PreviewPlanBalance } from './payment-rate-preview';
+import { usePlanBalance } from './use-plan-balance';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 
@@ -177,6 +178,15 @@ export function RecordPaymentModal({
   // tasa del día del abono y cuánto cubre (un saldo migrado va en su moneda).
   const otherCurrency = plan !== null && currency !== '' && currency !== plan.currency;
   const rates = useExchangeRates(token, form.date, open && otherCurrency);
+  // Lo pendiente sale del saldo del plan con los abonos en otra moneda ya
+  // convertidos: `plan.balance` (lista de cobrables) no los descuenta.
+  const balance = usePlanBalance(token, plan?.id ?? null, open && otherCurrency);
+  const previewBalance: PreviewPlanBalance =
+    balance.status === 'ready'
+      ? { balance: balance.balance.balance, paymentsWithoutRate: balance.balance.paymentsWithoutRate.length }
+      : balance.status === 'error'
+        ? 'error'
+        : 'loading';
   const parsedAmount = currency ? parseMoneyInput(form.amount, currency) : null;
   const previewAmount = parsedAmount?.ok && parsedAmount.value > 0 ? parsedAmount.value : null;
 
@@ -343,7 +353,7 @@ export function RecordPaymentModal({
                   amount={previewAmount}
                   paymentCurrency={currency}
                   planCurrency={plan.currency}
-                  planBalance={plan.balance}
+                  planBalance={previewBalance}
                   date={form.date}
                 />
               ) : null}

@@ -1,8 +1,13 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RecordPaymentModal, recordPaymentCopy } from './record-payment-modal';
 import { ApiError } from '@/lib/api/client';
-import { recordOpeningBalancePayment, recordPayment } from '@/lib/payments/payments-api';
+import {
+  getPlanBalance,
+  recordOpeningBalancePayment,
+  recordPayment,
+  type PlanBalance,
+} from '@/lib/payments/payments-api';
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
@@ -11,6 +16,7 @@ import { getExchangeRates } from '@/lib/exchange/exchange-api';
 jest.mock('../../lib/payments/payments-api', () => ({
   recordPayment: jest.fn(),
   recordOpeningBalancePayment: jest.fn(),
+  getPlanBalance: jest.fn(),
 }));
 jest.mock('../../lib/payments/billable-plans-api', () => ({
   ...jest.requireActual('../../lib/payments/billable-plans-api'),
@@ -37,6 +43,25 @@ const mockedRecordOpening = recordOpeningBalancePayment as jest.MockedFunction<
 const mockedList = listBillablePlans as jest.MockedFunction<typeof listBillablePlans>;
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedRates = getExchangeRates as jest.MockedFunction<typeof getExchangeRates>;
+const mockedBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
+
+/** El saldo del plan USD como lo da `GET /treatment-plans/:id/balance` (abonos convertidos). */
+function usdBalance(overrides: Partial<PlanBalance> = {}): PlanBalance {
+  return {
+    planCurrency: 'USD',
+    billable: 500,
+    paid: 0,
+    balance: 500,
+    paymentsCount: 0,
+    paymentsWithoutRate: [],
+    allocated: 0,
+    unallocated: 0,
+    unconvertedPaymentsCount: 0,
+    manualPaymentIds: [],
+    items: [],
+    ...overrides,
+  };
+}
 
 const copPlan: BillablePlan = {
   id: 'plan-cop',
@@ -97,6 +122,8 @@ beforeEach(() => {
   mockedLocations.mockResolvedValue([clinicLocation()]);
   mockedRates.mockReset();
   mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { COP: 4000, VES: 36.5 } });
+  mockedBalance.mockReset();
+  mockedBalance.mockResolvedValue(usdBalance());
 });
 
 const opening = {
@@ -535,6 +562,68 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
       ),
     );
     expect(onRecorded.mock.calls[0][0]).toContain(recordPaymentCopy.recordedWithoutRate);
+  });
+
+  it('lo pendiente cuenta los abonos anteriores en otra moneda: sale del saldo convertido del plan, no del de la lista', async () => {
+    // La lista de planes cobrables no descuenta los abonos en otra moneda
+    // (500); el saldo del plan sí, con su tasa congelada (450).
+    mockedBalance.mockResolvedValue(usdBalance({ paid: 50, balance: 450, paymentsCount: 1 }));
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Pendiente tras el abono400,00 US$'));
+    expect(mockedBalance).toHaveBeenCalledWith('tok', 'plan-usd');
+  });
+
+  it('con abonos «sin tasa» anteriores avisa de que lo pendiente aún no los cuenta', async () => {
+    mockedBalance.mockResolvedValue(
+      usdBalance({
+        paymentsWithoutRate: [{ paymentId: 'p-0', amount: 1000, currency: 'VES', paidOn: '2026-10-01' }],
+        paymentsCount: 1,
+      }),
+    );
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Pendiente tras el abono450,00 US$'));
+    expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.pendingWithoutRate(1));
+  });
+
+  it('si el saldo del plan no se puede leer, enseña el equivalente y la tasa sin inventar lo pendiente', async () => {
+    mockedBalance.mockRejectedValue(new Error('red'));
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD50,00 US$'));
+    await waitFor(() => expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.pendingUnavailable));
+    expect(preview(dialog)).not.toHaveTextContent(/Pendiente tras el abono/);
+  });
+
+  it('la tasa del día se recorta a 8 decimales, como la congela la API', async () => {
+    mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 0.123456785 } });
+    mockedBalance.mockResolvedValue(usdBalance({ billable: 100000, balance: 100000 }));
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '10000');
+    // 10.000 / 0,12345678 = 81.000,01 (con la tasa cruda saldría 81.000,00).
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD81.000,01 US$'));
+  });
+
+  it('al escribir la fecha deprisa no pide la tasa de cada día intermedio: solo la del día final', async () => {
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await waitFor(() => expect(mockedRates).toHaveBeenCalled());
+    mockedRates.mockClear();
+    const date = within(dialog).getByLabelText('Fecha de pago');
+    // Lo que emite un <input type="date"> mientras se teclea el año.
+    for (const value of ['0002-10-01', '0020-10-01', '0202-10-01', '2026-10-01']) {
+      fireEvent.change(date, { target: { value } });
+    }
+    await waitFor(() => expect(mockedRates).toHaveBeenCalledWith('tok', '2026-10-01'));
+    expect(mockedRates).toHaveBeenCalledTimes(1);
   });
 
   it('en la moneda del plan no enseña previsualización ni consulta la tasa', async () => {
