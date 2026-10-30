@@ -3,6 +3,7 @@ import {
   importBatchDetail,
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_OPTIONS,
+  AUDIT_ACTION_VARIANT,
   AUDIT_RESOURCE_LABELS,
   AUDIT_RESOURCE_OPTIONS,
   actorRoleLabel,
@@ -17,6 +18,7 @@ import {
   healthRegistrationDetail,
   clinicSettingsDetail,
   locationCalendarDetail,
+  staffDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -396,5 +398,93 @@ describe('locationCalendarDetail (DX-316)', () => {
   it('null para otra reason o sin reason', () => {
     expect(locationCalendarDetail({ reason: 'CASH_SETTINGS' })).toBeNull();
     expect(locationCalendarDetail({})).toBeNull();
+  });
+});
+
+describe('staffDetail (DX-359)', () => {
+  it('etiquetas de la acción PASSWORD_CHANGE y de los recursos STAFF_INVITATION y CLINIC', () => {
+    expect(AUDIT_ACTION_LABELS.PASSWORD_CHANGE).toBe('Contraseña cambiada');
+    expect(AUDIT_ACTION_VARIANT.PASSWORD_CHANGE).toBe('warning');
+    expect(AUDIT_ACTION_OPTIONS).toContain('PASSWORD_CHANGE');
+    expect(AUDIT_RESOURCE_LABELS.STAFF_INVITATION).toBe('Invitación al personal');
+    expect(AUDIT_RESOURCE_LABELS.CLINIC).toBe('Clínica');
+    expect(AUDIT_RESOURCE_OPTIONS).toEqual(expect.arrayContaining(['STAFF_INVITATION', 'CLINIC']));
+  });
+
+  it.each([
+    ['INVITATION_SENT', 'Invitación enviada'],
+    ['INVITATION_RESENT', 'Invitación reenviada'],
+    ['INVITATION_REVOKED', 'Invitación retirada'],
+    ['INVITATION_REPLACED', 'Invitación sustituida por una nueva'],
+    ['INVITATION_ACCEPTED', 'Invitación aceptada'],
+    ['STAFF_UPDATED', 'Datos del miembro cambiados'],
+    ['STAFF_DEACTIVATED', 'Miembro desactivado'],
+    ['STAFF_REACTIVATED', 'Miembro reactivado'],
+    ['CLINIC_REGISTERED', 'Clínica registrada'],
+    ['OWN_NAME_CHANGED', 'Cambió su propio nombre'],
+    ['SESSIONS_REVOKED', 'Cambió su contraseña y cerró sus demás sesiones'],
+  ])('%s → %s', (reason, label) => {
+    expect(staffDetail({ reason })).toBe(label);
+  });
+
+  it('la invitación dice con qué rol se envía', () => {
+    expect(staffDetail({ reason: 'INVITATION_SENT', staffAccess: { after: { role: 'DENTIST' } } })).toBe(
+      'Invitación enviada · Rol: Odontólogo/a',
+    );
+  });
+
+  it('la aceptación y el registro dicen rol y sedes (null = todas)', () => {
+    expect(
+      staffDetail({
+        reason: 'INVITATION_ACCEPTED',
+        staffAccess: { after: { role: 'ASSISTANT', locationIds: ['a', 'b'] } },
+      }),
+    ).toBe('Invitación aceptada · Rol: Asistente · Sedes: 2 sedes');
+    expect(
+      staffDetail({ reason: 'CLINIC_REGISTERED', staffAccess: { after: { role: 'ADMIN', locationIds: null } } }),
+    ).toBe('Clínica registrada · Rol: Administrador/a · Sedes: Todas las sedes');
+  });
+
+  it('el cambio de un miembro dice antes → después de lo que cambió', () => {
+    expect(
+      staffDetail({
+        reason: 'STAFF_UPDATED',
+        changedFields: ['role', 'locationIds', 'professionalLicense', 'professionalSpecialty'],
+        staffAccess: {
+          before: { role: 'DENTIST', locationIds: ['a'], professionalLicense: null, professionalSpecialty: 'Ortodoncia' },
+          after: { role: 'ADMIN', locationIds: null, professionalLicense: 'RP-7', professionalSpecialty: null },
+        },
+      }),
+    ).toBe(
+      'Datos del miembro cambiados · Rol: Odontólogo/a → Administrador/a · Sedes: 1 sede → Todas las sedes · ' +
+        'Registro profesional: sin registro → «RP-7» · Especialidad: «Ortodoncia» → sin especialidad',
+    );
+  });
+
+  it('el nombre solo se nombra, nunca su valor', () => {
+    expect(staffDetail({ reason: 'STAFF_UPDATED', changedFields: ['fullName'] })).toBe(
+      'Datos del miembro cambiados · Nombre',
+    );
+    expect(
+      staffDetail({
+        reason: 'STAFF_UPDATED',
+        changedFields: ['fullName', 'role'],
+        staffAccess: { before: { role: 'RECEPTION' }, after: { role: 'ASSISTANT' } },
+      }),
+    ).toBe('Datos del miembro cambiados · Nombre · Rol: Recepción → Asistente');
+  });
+
+  it('sin sedes y un rol desconocido no rompen el texto', () => {
+    expect(
+      staffDetail({
+        reason: 'STAFF_UPDATED',
+        staffAccess: { before: { locationIds: [] }, after: { locationIds: ['a', 'b', 'c'] } },
+      }),
+    ).toBe('Datos del miembro cambiados · Sedes: ninguna sede → 3 sedes');
+  });
+
+  it('null para otra reason o sin reason', () => {
+    expect(staffDetail({ reason: 'LOGIN_UNLOCKED' })).toBeNull();
+    expect(staffDetail({})).toBeNull();
   });
 });

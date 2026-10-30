@@ -21,6 +21,8 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   PRINT: 'Impresión',
   // DX-136: enviar el recibo de caja por email.
   SEND: 'Envío por email',
+  // DX-359: el usuario cambia su propia contraseña (cierra sus demás sesiones).
+  PASSWORD_CHANGE: 'Contraseña cambiada',
 };
 
 export const AUDIT_ACTION_OPTIONS = Object.keys(AUDIT_ACTION_LABELS) as AuditAction[];
@@ -42,6 +44,7 @@ export const AUDIT_ACTION_VARIANT: Record<AuditAction, NonNullable<BadgeProps['v
   EXPORT: 'muted',
   PRINT: 'muted',
   SEND: 'muted',
+  PASSWORD_CHANGE: 'warning',
 };
 
 export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
@@ -113,6 +116,10 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   LOCATION_CALENDAR: 'Calendario de la sede',
   // DX-374: tasa de cambio manual registrada por el ADMIN (el resourceId es la tasa).
   EXCHANGE_RATE: 'Tasa de cambio',
+  // DX-359: invitaciones al personal (enviar, reenviar, retirar, sustituir) y
+  // alta de la clínica en el registro (el resourceId es la clínica).
+  STAFF_INVITATION: 'Invitación al personal',
+  CLINIC: 'Clínica',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -195,6 +202,77 @@ const STAFF_LOGIN_REASONS: Record<string, string> = {
  */
 export function staffLoginDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && STAFF_LOGIN_REASONS[metadata.reason]) ?? null;
+}
+
+const STAFF_REASONS: Record<string, string> = {
+  INVITATION_SENT: 'Invitación enviada',
+  INVITATION_RESENT: 'Invitación reenviada',
+  INVITATION_REVOKED: 'Invitación retirada',
+  INVITATION_REPLACED: 'Invitación sustituida por una nueva',
+  INVITATION_ACCEPTED: 'Invitación aceptada',
+  STAFF_UPDATED: 'Datos del miembro cambiados',
+  STAFF_DEACTIVATED: 'Miembro desactivado',
+  STAFF_REACTIVATED: 'Miembro reactivado',
+  CLINIC_REGISTERED: 'Clínica registrada',
+  OWN_NAME_CHANGED: 'Cambió su propio nombre',
+  SESSIONS_REVOKED: 'Cambió su contraseña y cerró sus demás sesiones',
+};
+
+type StaffAccessSide = NonNullable<NonNullable<AuditMetadata['staffAccess']>['after']>;
+
+/** Sedes de un lado de `staffAccess`: solo trae ids, así que se cuentan (null = todas). */
+function locationsLabel(ids: string[] | null | undefined): string {
+  if (ids === null || ids === undefined) return 'Todas las sedes';
+  if (ids.length === 0) return 'ninguna sede';
+  return ids.length === 1 ? '1 sede' : `${ids.length} sedes`;
+}
+
+const STAFF_ACCESS_FIELDS: {
+  key: keyof StaffAccessSide;
+  label: string;
+  value: (side: StaffAccessSide) => string;
+}[] = [
+  { key: 'role', label: 'Rol', value: (s) => (s.role ? ROLE_LABELS[s.role] ?? s.role : 'sin rol') },
+  { key: 'locationIds', label: 'Sedes', value: (s) => locationsLabel(s.locationIds) },
+  {
+    key: 'professionalLicense',
+    label: 'Registro profesional',
+    value: (s) => (s.professionalLicense ? `«${s.professionalLicense}»` : 'sin registro'),
+  },
+  {
+    key: 'professionalSpecialty',
+    label: 'Especialidad',
+    value: (s) => (s.professionalSpecialty ? `«${s.professionalSpecialty}»` : 'sin especialidad'),
+  },
+];
+
+/**
+ * DX-359: qué se hizo con una invitación, un miembro, la clínica o la propia
+ * cuenta, y los accesos que trae `staffAccess` («Datos del miembro cambiados ·
+ * Rol: Asistente → Odontólogo/a · Sedes: 1 sede → Todas las sedes»). Con los
+ * dos lados, antes → después; con uno (una alta), su valor. El nombre solo se
+ * nombra («Nombre»): su valor nunca viaja. null si el evento no es de personal.
+ */
+export function staffDetail(metadata: AuditMetadata): string | null {
+  const what = metadata.reason ? STAFF_REASONS[metadata.reason] : undefined;
+  if (!what) return null;
+  const parts = [what];
+  if (metadata.reason === 'STAFF_UPDATED' && metadata.changedFields?.includes('fullName')) {
+    parts.push('Nombre');
+  }
+  const { before, after } = metadata.staffAccess ?? {};
+  for (const field of STAFF_ACCESS_FIELDS) {
+    const inBefore = before !== undefined && Object.hasOwn(before, field.key);
+    const inAfter = after !== undefined && Object.hasOwn(after, field.key);
+    if (inBefore && inAfter) {
+      parts.push(`${field.label}: ${field.value(before)} → ${field.value(after)}`);
+    } else if (inAfter) {
+      parts.push(`${field.label}: ${field.value(after)}`);
+    } else if (inBefore) {
+      parts.push(`${field.label}: ${field.value(before)}`);
+    }
+  }
+  return parts.join(' · ');
 }
 
 const CASH_SESSION_REASONS: Record<string, string> = {

@@ -233,6 +233,48 @@ describe('AuditLogView', () => {
     expect(within(imported).getByText('Festivos importados')).toBeInTheDocument();
   });
 
+  it('DX-359: el cambio de un miembro dice qué accesos cambiaron y el cambio de contraseña su acción', async () => {
+    mockedList.mockResolvedValue(
+      page({
+        items: [
+          {
+            ...view,
+            id: 'ev-10',
+            action: 'UPDATE',
+            resourceType: 'STAFF_MEMBER',
+            resourceId: 'user-2',
+            patient: null,
+            metadata: {
+              reason: 'STAFF_UPDATED',
+              changedFields: ['role'],
+              staffAccess: { before: { role: 'ASSISTANT' }, after: { role: 'DENTIST' } },
+            },
+          },
+          {
+            ...view,
+            id: 'ev-11',
+            action: 'PASSWORD_CHANGE',
+            resourceType: 'SESSION',
+            resourceId: 'user-1',
+            patient: null,
+            metadata: { reason: 'SESSIONS_REVOKED' },
+          },
+        ],
+      }),
+    );
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    const [, updated, password] = within(table).getAllByRole('row');
+    expect(within(updated).getByText('Miembro del personal')).toBeInTheDocument();
+    expect(
+      within(updated).getByText('Datos del miembro cambiados · Rol: Asistente → Odontólogo/a'),
+    ).toBeInTheDocument();
+    expect(within(password).getByText('Contraseña cambiada')).toBeInTheDocument();
+    expect(
+      within(password).getByText('Cambió su contraseña y cerró sus demás sesiones'),
+    ).toBeInTheDocument();
+  });
+
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {
     mockedList.mockResolvedValue(page({ items: [] }));
     render(<AuditLogView token="tok" />);
