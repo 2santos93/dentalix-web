@@ -239,6 +239,66 @@ describe('AppShell', () => {
     expect(sidebar.queryByText('Dentalix')).not.toBeInTheDocument();
   });
 
+  // DX-365: a 390 px el scroller de la barra superior cortaba «Dashboard» en
+  // «Dashboar». La barra móvil se reorganiza: el título de la sección va en su
+  // propia fila y se trunca con elipsis (texto entero en el DOM y en `title`),
+  // y la navegación es una fila de iconos que no puede partir una palabra.
+  describe('DX-365: barra superior móvil', () => {
+    function renderAt(pathname: string, role = 'ADMIN') {
+      mockAccessToken = tokenForRole(role);
+      mockPathname = pathname;
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      return within(screen.getByRole('banner'));
+    }
+    afterEach(() => {
+      mockPathname = '/patients';
+    });
+
+    it.each([
+      ['/dashboard', 'Dashboard'],
+      ['/patients/p1', 'Pacientes'],
+      ['/caja/cartera', 'Cartera'],
+      ['/anamnesis-por-revisar', 'Anamnesis por revisar'],
+      ['/reportes', 'Reportes'],
+      ['/settings', 'Ajustes'],
+      ['/settings/plantillas-de-evolucion', 'Ajustes'],
+      ['/settings/auditoria', 'Auditoría'],
+      ['/settings/profile', 'Mi perfil'],
+    ])('en %s el título es «%s», truncable con elipsis y con `title`', async (pathname, title) => {
+      const banner = renderAt(pathname);
+      const heading = await banner.findByTestId('topbar-title');
+      expect(heading).toHaveTextContent(title);
+      expect(heading).toHaveAttribute('title', title);
+      // `truncate` = overflow hidden + text-overflow ellipsis + nowrap; con
+      // `min-w-0` el flex le deja encogerse por debajo de su texto.
+      expect(heading).toHaveClass('truncate', 'min-w-0');
+      // El texto entero se lee una sola vez: ni copia sr-only ni aria-label.
+      expect(heading).not.toHaveAttribute('aria-label');
+      expect(banner.getAllByText(title)).toHaveLength(1);
+    });
+
+    it('el título sale del menú aunque el rol no tenga la entrada', async () => {
+      const banner = renderAt('/dashboard', 'DENTIST');
+      expect(await banner.findByTestId('topbar-title')).toHaveTextContent('Dashboard');
+    });
+
+    it('la navegación móvil es de iconos con nombre accesible y `title`, sin texto que cortar', async () => {
+      const banner = renderAt('/caja/cartera');
+      const nav = within(banner.getByRole('navigation'));
+      const cartera = await nav.findByRole('link', { name: 'Cartera' });
+      expect(cartera).toHaveAttribute('aria-current', 'page');
+      for (const name of ['Dashboard', 'Pacientes', 'Cartera', 'Anamnesis por revisar']) {
+        const link = nav.getByRole('link', { name });
+        expect(link).toHaveAttribute('title', name);
+        expect(nav.queryByText(name)).not.toBeInTheDocument();
+      }
+    });
+  });
+
   it('DX-200: al odontólogo la Agenda le dice cuántos pacientes suyos esperan', async () => {
     window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
     mockAccessToken = tokenForRole('DENTIST');
