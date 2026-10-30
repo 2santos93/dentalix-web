@@ -118,7 +118,7 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
           <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
           <span>{copy.unavailable(sedeCivilDate(date, fmt))}</span>
         </p>
-        <Button type="button" variant="outline" size="sm" onClick={state.retry}>
+        <Button type="button" variant="outline" size="sm" onClick={state.retry} className="max-sm:min-h-11">
           {copy.retry}
         </Button>
       </div>
