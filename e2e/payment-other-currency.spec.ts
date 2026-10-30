@@ -181,7 +181,9 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
       const doc = page.getByTestId('receipt-document');
       await expect(doc).toContainText('Tasa aplicada', { timeout: 15_000 });
       await expect(doc).toContainText(/Equivalente en USD/);
-      texts.push((await doc.textContent()) ?? '');
+      // `formatCurrency` separa importe y moneda con un espacio duro (U+00A0):
+      // se normaliza para comparar con el texto esperado.
+      texts.push(((await doc.textContent()) ?? '').replace(/\s+/g, ' '));
       await page.keyboard.press('Escape');
       await expect(doc).toBeHidden();
     }
