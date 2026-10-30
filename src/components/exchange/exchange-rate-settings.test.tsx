@@ -1,8 +1,9 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
-import { ExchangeRateSettingsView, exchangeRateCopy, rateFormCopy } from './exchange-rate-settings';
+import { ExchangeRateSettingsView, correctRateCopy, exchangeRateCopy, rateFormCopy } from './exchange-rate-settings';
 import {
   getExchangeRateSettings,
   listManualExchangeRates,
+  correctManualExchangeRate,
   RATE_INPUT_COPY,
   registerManualExchangeRate,
   saveExchangeRateSettings,
@@ -19,6 +20,7 @@ jest.mock('../../lib/exchange/exchange-settings-api', () => ({
   saveExchangeRateSettings: jest.fn(),
   listManualExchangeRates: jest.fn(),
   registerManualExchangeRate: jest.fn(),
+  correctManualExchangeRate: jest.fn(),
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
 jest.mock('../../lib/locations/use-sede-time-zone', () => ({
@@ -38,6 +40,7 @@ const mockedGet = jest.mocked(getExchangeRateSettings);
 const mockedSave = jest.mocked(saveExchangeRateSettings);
 const mockedList = jest.mocked(listManualExchangeRates);
 const mockedRegister = jest.mocked(registerManualExchangeRate);
+const mockedCorrect = jest.mocked(correctManualExchangeRate);
 const mockedCurrencies = jest.mocked(listCurrencies);
 const copy = exchangeRateCopy;
 const fmt = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
@@ -52,6 +55,7 @@ const ves: ManualExchangeRate = {
   rate: 36.12345678,
   createdBy: { userId: 'u1', fullName: 'Dra. Admin' },
   createdAt: '2026-10-29T13:00:00.000Z',
+  inUse: false,
 };
 
 beforeEach(() => {
@@ -215,11 +219,81 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(screen.getByRole('dialog', { name: rateFormCopy.title })).toBeInTheDocument();
   });
 
+  // DX-375: una tasa que ningún abono usó se corrige; una usada lo dice y no
+  // ofrece corregirla (la API respondería 409).
+  it('una tasa usada por abonos lo dice y no se puede corregir; una sin usar sí', async () => {
+    mockedGet.mockResolvedValue(MANUAL);
+    const eur: ManualExchangeRate = {
+      ...ves,
+      id: 'r-eur',
+      currency: 'EUR',
+      rate: 0.91,
+      inUse: true,
+    };
+    mockedList.mockResolvedValue([eur, ves]);
+    renderView();
+    const table = await screen.findByRole('table', { name: copy.ratesHeading });
+    const [, eurRow, vesRow] = within(table).getAllByRole('row');
+    expect(eurRow).toHaveTextContent(copy.inUse);
+    expect(within(eurRow).queryByRole('button')).not.toBeInTheDocument();
+    expect(
+      within(vesRow).getByRole('button', {
+        name: copy.correctFor('VES', fmt.civilDate('2026-10-29')),
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('corrige una tasa sin usar en un modal con el día y la moneda fijos', async () => {
+    mockedGet.mockResolvedValue(MANUAL);
+    mockedList.mockResolvedValue([ves]);
+    mockedCorrect.mockResolvedValue({ ...ves, rate: 36.75 });
+    const user = setupUser();
+    renderView();
+    await user.click(
+      await screen.findByRole('button', {
+        name: copy.correctFor('VES', fmt.civilDate('2026-10-29')),
+      }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: correctRateCopy.title('VES', fmt.civilDate('2026-10-29')),
+    });
+    const input = within(dialog).getByLabelText(rateLabel);
+    await user.clear(input);
+    await user.type(input, '36,75');
+    await user.click(within(dialog).getByRole('button', { name: correctRateCopy.submit }));
+    await waitFor(() => expect(mockedCorrect).toHaveBeenCalledWith('tok', 'r-ves', 36.75));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const table = screen.getByRole('table', { name: copy.ratesHeading });
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent(fmt.number(36.75, { min: 0, max: 8 }));
+    expect(screen.getByText(copy.rateCorrected('VES'))).toBeInTheDocument();
+  });
+
+  it('si un abono la usó entretanto, el 409 se enseña arriba del modal', async () => {
+    mockedGet.mockResolvedValue(MANUAL);
+    mockedList.mockResolvedValue([ves]);
+    const inUse =
+      'Esta tasa ya la usa al menos un abono y no se puede cambiar: el saldo de esos abonos se calculó con ella.';
+    mockedCorrect.mockRejectedValue(new ApiError(409, inUse));
+    const user = setupUser();
+    renderView();
+    await user.click(
+      await screen.findByRole('button', {
+        name: copy.correctFor('VES', fmt.civilDate('2026-10-29')),
+      }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.clear(within(dialog).getByLabelText(rateLabel));
+    await user.type(within(dialog).getByLabelText(rateLabel), '37');
+    await user.click(within(dialog).getByRole('button', { name: correctRateCopy.submit }));
+    expect(await within(dialog).findByText(inUse)).toBeInTheDocument();
+  });
+
   it('ningún texto de la pantalla nombra un país ni un banco central', () => {
     const texts = JSON.stringify({
       exchangeRateCopy,
       rateFormCopy,
       RATE_INPUT_COPY,
+      correctRateCopy,
       fns: [copy.ratesHint('USD'), copy.colRate('USD'), rateFormCopy.rateHint('USD'), copy.manualSince('30/10/2026')],
     });
     expect(texts).not.toMatch(/venezuela|colombia|españa|méxico|banco central|bcv|estadounidense/i);
