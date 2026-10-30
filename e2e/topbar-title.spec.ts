@@ -147,7 +147,8 @@ test('escritorio (1440 px): la barra móvil no se ve y el sidebar no cambia', as
     // Sidebar expandido de siempre: 240 px y cada entrada con su etiqueta.
     const width = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
     expect(width, `${route.path}: ancho del sidebar`).toBe(240);
-    await expect(sidebar.getByText('Anamnesis por revisar', { exact: true })).toBeVisible();
+    // La etiqueta larga sigue entera (el contador va en el mismo enlace).
+    await expect(sidebar.getByRole('link', { name: /^Anamnesis por revisar/ })).toBeVisible();
     await expectNoHorizontalScroll(page);
   }
 });
