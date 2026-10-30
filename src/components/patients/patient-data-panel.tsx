@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import type { Patient } from '@/lib/patients/patients-api';
+import { displayPhone } from '@/lib/phone/display-phone';
 import { ageFrom } from '@/lib/patients/age';
 import { formatCivilDate } from '@/lib/format/date';
 import { Card, CardContent } from '@/components/ui/card';
@@ -118,7 +119,8 @@ export function PatientDataPanel({ patient, docTypeNames = {} }: PatientDataPane
         <Block
           title={copy.contact}
           fields={[
-            { label: copy.phone, value: patient.phone },
+            // DX-387: el formato internacional de la API, o el guardado tal cual.
+            { label: copy.phone, value: displayPhone(patient) },
             { label: copy.email, value: patient.email },
             { label: copy.address, value: patient.address },
             { label: copy.notes, value: patient.notes },

@@ -1,9 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PlanItemsBalance } from './plan-items-balance';
 import { getPlanBalance, type PlanBalance } from '@/lib/payments/payments-api';
 import { ApiError } from '@/lib/api/client';
-import { formatCurrency } from '@/lib/format/currency';
+import { regionalFormat } from '@/lib/format/regional-format';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { getExchangeRateSettings } from '@/lib/exchange/exchange-settings-api';
 import { tokenForRole } from '@/lib/test/data-consents';
 import { withoutRateCopy } from '@/components/payments/without-rate-notice';
 
@@ -17,10 +19,19 @@ jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
 }));
 
-const mockedBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
+// DX-386: la fuente de la clínica decide qué propone el aviso al ADMIN.
+jest.mock('../../lib/exchange/exchange-settings-api', () => ({
+  ...jest.requireActual('../../lib/exchange/exchange-settings-api'),
+  getExchangeRateSettings: jest.fn(),
+}));
 
+const mockedBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
+const mockedSettings = jest.mocked(getExchangeRateSettings);
+
+/** DX-386: el formato de la sede del fixture (es-CO) y el código ISO, con el espacio normalizado. */
+const ES_CO = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
 function money(amount: number, currency: string): string {
-  return formatCurrency(amount, currency).replace(/ /g, ' ');
+  return moneyWithCode(amount, currency, ES_CO).replace(/\u00A0/g, ' ');
 }
 
 function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {
@@ -70,6 +81,8 @@ function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {
 
 beforeEach(() => {
   mockedBalance.mockReset();
+  mockedSettings.mockReset();
+  mockedSettings.mockResolvedValue({ source: 'MANUAL', manualSince: '2026-10-01', baseCurrency: 'USD' });
 });
 
 it('loads on open and shows procedure, tooth, status, A pagar, Cobrado, Pendiente', async () => {
@@ -87,11 +100,15 @@ it('loads on open and shows procedure, tooth, status, A pagar, Cobrado, Pendient
 
   const rows = within(table).getAllByRole('row').slice(1);
   expect(rows).toHaveLength(3);
-  const first = within(rows[0])
-    .getAllByRole('cell')
-    .map((c) => (c.textContent ?? '').replace(/\u00A0/g, ' '));
-  // Mismas reglas que el plan: pendiente 0 es «Cubierto», no «0,00».
-  expect(first).toEqual(['Resina', '11', 'Realizado', money(100, 'EUR'), money(100, 'EUR'), 'Cubierto']);
+  const cellsOf = (row: HTMLElement) =>
+    within(row)
+      .getAllByRole('cell')
+      .map((c) => (c.textContent ?? '').replace(/\u00A0/g, ' '));
+  // Mismas reglas que el plan: pendiente 0 es «Cubierto», no «0,00». DX-386:
+  // con el formato de la sede y el código ISO («EUR 100,00»).
+  await waitFor(() =>
+    expect(cellsOf(rows[0])).toEqual(['Resina', '11', 'Realizado', 'EUR 100,00', 'EUR 100,00', 'Cubierto']),
+  );
   expect(within(rows[1]).getAllByRole('cell')[5]).toHaveTextContent(money(30, 'EUR'));
   // Un cargo sin diente (DX-291) no deja la celda vacía.
   expect(within(rows[2]).getAllByRole('cell')[1]).toHaveTextContent('Sin diente');
@@ -110,7 +127,7 @@ it('formats with the currency of the balance itself', async () => {
 
   const table = await screen.findByRole('table', { name: /por ítem/i });
   const firstRow = within(table).getAllByRole('row')[1];
-  expect(within(firstRow).getAllByRole('cell')[3]).toHaveTextContent(money(100, 'MXN'));
+  await waitFor(() => expect(within(firstRow).getAllByRole('cell')[3]).toHaveTextContent(money(100, 'MXN')));
   expect(screen.getByText('Sin imputar').closest('div')).toHaveTextContent(money(7.5, 'MXN'));
 });
 
@@ -146,7 +163,7 @@ it('abonos sin tasa: aviso con la lista y, para recepción, a quién pedir la ta
   expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
 });
 
-it('abonos sin tasa: al ADMIN le enlaza a Ajustes › Tasa de cambio', async () => {
+it('abonos sin tasa con fuente manual: al ADMIN le enlaza a Ajustes › Tasa de cambio', async () => {
   mockedBalance.mockResolvedValue(
     balanceFixture({
       paymentsWithoutRate: [{ paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' }],
@@ -157,6 +174,19 @@ it('abonos sin tasa: al ADMIN le enlaza a Ajustes › Tasa de cambio', async () 
     'href',
     '/settings/tasa-de-cambio',
   );
+});
+
+it('abonos sin tasa con fuente automática: al ADMIN no le pide registrar una tasa, le explica pasar a manual (DX-386)', async () => {
+  mockedSettings.mockResolvedValue({ source: 'AUTOMATIC', manualSince: null, baseCurrency: 'USD' });
+  mockedBalance.mockResolvedValue(
+    balanceFixture({
+      paymentsWithoutRate: [{ paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' }],
+    }),
+  );
+  render(<PlanItemsBalance token={tokenForRole('ADMIN')} planId="plan-1" />);
+  expect(await screen.findByText(withoutRateCopy.automatic)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: withoutRateCopy.switchToManualLink })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: withoutRateCopy.adminLink })).not.toBeInTheDocument();
 });
 
 it('cancelled plan shows no amounts to charge and the unallocated figure', async () => {
@@ -178,7 +208,7 @@ it('cancelled plan shows no amounts to charge and the unallocated figure', async
     for (const cell of cells.slice(3)) expect(within(cell).getByLabelText('Sin importe a cobrar')).toBeInTheDocument();
   }
   const unallocated = screen.getByText('Sin imputar').closest('div') as HTMLElement;
-  expect(unallocated).toHaveTextContent(money(50, 'EUR'));
+  await waitFor(() => expect(unallocated).toHaveTextContent(money(50, 'EUR')));
   expect(unallocated).toHaveTextContent('Abonos que todavía no cubren ningún ítem.');
 });
 

@@ -203,11 +203,11 @@ async function flow(page: Page, request: Parameters<typeof apiPost>[0], width: n
   await expect(statement.getByRole('region', { name: 'Resumen en COP' })).toBeVisible({ timeout: 15_000 });
   await statement.getByRole('button', { name: 'Registrar abono' }).click();
   const payDialog = page.getByRole('dialog', { name: 'Registrar abono' });
-  await expect(payDialog.getByLabel('Plan').locator('option:checked')).toContainText('Saldo 40.000', {
+  await expect(payDialog.getByLabel('Plan').locator('option:checked')).toContainText(/Saldo COP\s40\.000/, {
     timeout: 10_000,
   });
   await payDialog.getByLabel('Importe').fill('40.000');
-  await payDialog.getByLabel('Método').selectOption('CASH');
+  await payDialog.getByLabel('Método').selectOption({ label: 'Efectivo' });
   await expectNoHorizontalScroll(page);
   await payDialog.getByRole('button', { name: 'Registrar abono' }).click();
   await expect(payDialog).toBeHidden({ timeout: 10_000 });

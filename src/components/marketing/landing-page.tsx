@@ -70,8 +70,8 @@ const DIFFERENTIATORS = [
   },
   {
     icon: ShieldCheck,
-    title: 'Listo para cumplir',
-    desc: 'Auditoría de accesos, historia clínica inmutable y cifrado. Pensado para Habeas Data, LGPD, GDPR e HIPAA.',
+    title: 'Seguridad y trazabilidad',
+    desc: 'Registro de auditoría de accesos y cambios, historia clínica inmutable, consentimientos versionados y conexión cifrada.',
   },
 ] as const;
 

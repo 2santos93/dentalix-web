@@ -21,3 +21,35 @@ export function markLocationUnreviewed(locationId: string): void {
     input: `UPDATE locations SET "regionalSettingsReviewedAt" = NULL WHERE id = :'id';`,
   });
 }
+
+/**
+ * DX-380: el reintento del abono lleva `hours` horas pendiente (como si se
+ * hubiera cobrado sin tasa ayer). La API no deja fechar el alta del reintento:
+ * la pone la BD.
+ */
+export function ageRateBacklog(paymentId: string, hours: number): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  execFileSync(
+    'psql',
+    [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `id=${paymentId}`, '-v', `hours=${Math.trunc(hours)}`],
+    {
+      input: `UPDATE payment_base_retries SET "createdAt" = timezone('UTC', now()) - make_interval(hours => :hours) WHERE "paymentId" = :'id';`,
+    },
+  );
+}
+
+/**
+ * DX-402: deja el reintento del abono en el backoff que tendría tras más de
+ * 24 h sin tasa (varios intentos y el siguiente a `hours` vista), como en la
+ * QA de DX-380: registrar la tasa tiene que adelantarlo, no esperar.
+ */
+export function postponeRateRetry(paymentId: string, hours: number): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  execFileSync(
+    'psql',
+    [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `id=${paymentId}`, '-v', `hours=${Math.trunc(hours)}`],
+    {
+      input: `UPDATE payment_base_retries SET "attempts" = 5, "lastReason" = 'NO_RATE', "nextAttemptAt" = timezone('UTC', now()) + make_interval(hours => :hours) WHERE "paymentId" = :'id';`,
+    },
+  );
+}

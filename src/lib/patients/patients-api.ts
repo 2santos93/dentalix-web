@@ -69,6 +69,12 @@ export interface Patient {
   birthDate: string | null;
   sex: Sex;
   phone: string | null;
+  /**
+   * DX-387: el teléfono en formato internacional, calculado por la API con la
+   * región de la sede; null si no lo pudo leer. Se muestra `displayPhone`.
+   * Opcional: los fixtures anteriores no lo traen.
+   */
+  phoneInternational?: string | null;
   email: string | null;
   address: string | null;
   notes: string | null;

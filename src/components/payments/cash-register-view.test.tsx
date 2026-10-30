@@ -3,11 +3,15 @@ import userEvent from '@testing-library/user-event';
 import { CashRegisterView } from './cash-register-view';
 import { ApiError, NetworkError } from '@/lib/api/client';
 import {
+  downloadCashPaymentsCsv,
   listCashPayments,
   voidPayment,
   type CashPayment,
   type CashPaymentsResponse,
 } from '@/lib/payments/payments-api';
+import { listPaymentMethods, type ClinicPaymentMethod } from '@/lib/payments/payment-methods-api';
+import { saveCsv } from '@/lib/files/save-csv';
+import { notifyError } from '@/components/errors/notify';
 import { presetRange as presetRangeIn } from '@/lib/payments/cash-period';
 import { listLocations } from '@/lib/locations/locations-api';
 import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
@@ -30,10 +34,41 @@ const presetRange = (preset: Parameters<typeof presetRangeIn>[0]) => presetRange
 jest.mock('../../lib/payments/payments-api', () => ({
   listCashPayments: jest.fn(),
   voidPayment: jest.fn(),
+  downloadCashPaymentsCsv: jest.fn(),
 }));
+// DX-395: el filtro ofrece todos los medios de la clínica, también los inactivos.
+jest.mock('../../lib/payments/payment-methods-api', () => ({
+  ...jest.requireActual('../../lib/payments/payment-methods-api'),
+  listPaymentMethods: jest.fn(),
+}));
+jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
+jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
 const mockedList = listCashPayments as jest.MockedFunction<typeof listCashPayments>;
 const mockedVoid = voidPayment as jest.MockedFunction<typeof voidPayment>;
+const mockedCsv = downloadCashPaymentsCsv as jest.MockedFunction<typeof downloadCashPaymentsCsv>;
+const mockedMethods = listPaymentMethods as jest.MockedFunction<typeof listPaymentMethods>;
+const mockedSaveCsv = saveCsv as jest.MockedFunction<typeof saveCsv>;
+const mockedNotify = notifyError as jest.MockedFunction<typeof notifyError>;
+
+function clinicMethod(overrides: Partial<ClinicPaymentMethod>): ClinicPaymentMethod {
+  return {
+    id: 'pm-x',
+    name: 'Medio',
+    kind: 'OTHER',
+    active: true,
+    requiresReference: false,
+    legacyMethod: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+const CLINIC_METHODS: ClinicPaymentMethod[] = [
+  clinicMethod({ id: 'pm-cash', name: 'Efectivo', kind: 'CASH', legacyMethod: 'CASH' }),
+  clinicMethod({ id: 'pm-mobile', name: 'Pago móvil', kind: 'DIGITAL', requiresReference: true }),
+  clinicMethod({ id: 'pm-check', name: 'Cheque', active: false }),
+];
 
 const anaCash: CashPayment = {
   id: 'pay-1',
@@ -46,6 +81,8 @@ const anaCash: CashPayment = {
   amount: 150000.5,
   currency: 'COP',
   method: 'CASH',
+  paymentMethod: null,
+  reference: null,
   notes: null,
   location: { id: 'loc-1', name: 'Sede principal' },
   patient: { id: 'pat-1', fullName: 'Ana Gómez' },
@@ -89,6 +126,11 @@ function response(overrides: Partial<CashPaymentsResponse> = {}): CashPaymentsRe
         { currency: 'COP', total: 150000.5, count: 1 },
         { currency: 'USD', total: 50.25, count: 1 },
       ],
+      // DX-377: el resumen se pinta por medio de pago de la clínica.
+      byPaymentMethod: [
+        { paymentMethodId: 'pm-cash', name: 'Efectivo', currency: 'COP', total: 150000.5, count: 1 },
+        { paymentMethodId: 'pm-card', name: 'Tarjeta', currency: 'USD', total: 50.25, count: 1 },
+      ],
       byMethod: [
         { method: 'CASH', currency: 'COP', total: 150000.5, count: 1 },
         { method: 'CARD', currency: 'USD', total: 50.25, count: 1 },
@@ -106,6 +148,11 @@ function money(text: string | null | undefined): string {
 beforeEach(() => {
   mockedList.mockReset();
   mockedVoid.mockReset();
+  mockedCsv.mockReset();
+  mockedSaveCsv.mockReset();
+  mockedNotify.mockReset();
+  mockedMethods.mockReset();
+  mockedMethods.mockResolvedValue(CLINIC_METHODS);
   mockedLocations.mockReset();
   mockedLocations.mockResolvedValue([
     clinicLocation({
@@ -161,6 +208,17 @@ it('resume el período por moneda y por método en un registro, no en tarjetas',
   expect(money(card?.textContent)).toMatch(/USD/);
 });
 
+it('DX-377: cada abono muestra su medio de pago y su referencia', async () => {
+  mockedList.mockResolvedValue(
+    response({
+      items: [{ ...anaCash, method: 'TRANSFER', paymentMethod: { id: 'pm-mobile', name: 'Pago móvil' }, reference: '0412 555' }],
+    }),
+  );
+  render(<CashRegisterView token="tok" />);
+  expect((await screen.findAllByText('Pago móvil')).length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Ref. 0412 555').length).toBeGreaterThan(0);
+});
+
 it('marca el alcance de sede: "Todas las sedes" sin sede activa, el nombre con una', async () => {
   mockedList.mockResolvedValueOnce(response());
   const { unmount } = render(<CashRegisterView token="tok" />);
@@ -194,7 +252,7 @@ it('muestra el estado vacío cuando el período no tiene abonos', async () => {
     response({
       items: [],
       total: 0,
-      summary: { count: 0, byCurrency: [], byMethod: [] },
+      summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [] },
     }),
   );
   render(<CashRegisterView token="tok" />);
@@ -258,7 +316,7 @@ it('un 400 dice cuál es el problema en vez del error genérico', async () => {
   render(<CashRegisterView token="tok" />);
 
   const alert = await screen.findByRole('alert');
-  expect(alert).toHaveTextContent(/el período o el método no son válidos/i);
+  expect(alert).toHaveTextContent(/el período o el medio de pago no son válidos/i);
   expect(alert).not.toHaveTextContent(/no pudimos cargar la caja/i);
 });
 
@@ -304,11 +362,14 @@ it('cambiar de período o de método vuelve a pedir la caja con el filtro nuevo,
     'true',
   );
 
-  await user.selectOptions(screen.getByRole('combobox', { name: /método/i }), 'TRANSFER');
+  // DX-395: por cualquier medio de la clínica, también los propios.
+  const medium = screen.getByRole('combobox', { name: 'Medio de pago' });
+  await within(medium).findByRole('option', { name: 'Pago móvil' });
+  await user.selectOptions(medium, 'Pago móvil');
   await waitFor(() =>
     expect(mockedList).toHaveBeenLastCalledWith('tok', {
       ...presetRange('week'),
-      method: 'TRANSFER',
+      paymentMethodId: 'pm-mobile',
       page: 1,
     }),
   );
@@ -317,10 +378,82 @@ it('cambiar de período o de método vuelve a pedir la caja con el filtro nuevo,
   await waitFor(() =>
     expect(mockedList).toHaveBeenLastCalledWith('tok', {
       ...presetRange('month'),
-      method: 'TRANSFER',
+      paymentMethodId: 'pm-mobile',
       page: 1,
     }),
   );
+});
+
+describe('filtro por medio de pago (DX-395)', () => {
+  it('ofrece todos los medios de la clínica, los inactivos marcados', async () => {
+    mockedList.mockResolvedValue(response());
+    render(<CashRegisterView token="tok" />);
+    const medium = await screen.findByRole('combobox', { name: 'Medio de pago' });
+    await within(medium).findByRole('option', { name: 'Pago móvil' });
+    expect(within(medium).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Todos los medios',
+      'Efectivo',
+      'Pago móvil',
+      'Cheque (inactivo)',
+    ]);
+    expect(mockedMethods).toHaveBeenCalledWith('tok', { includeInactive: true });
+  });
+
+  it('si los medios no cargan, el selector se sustituye por el error con reintento', async () => {
+    mockedList.mockResolvedValue(response());
+    mockedMethods.mockRejectedValueOnce(new Error('boom'));
+    const user = userEvent.setup();
+    render(<CashRegisterView token="tok" />);
+    const status = await screen.findByText('No cargaron los medios');
+    expect(status.closest('[role="status"]')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('combobox', { name: 'Medio de pago' })).toBeInTheDocument();
+    // La caja sigue a la vista: falló un control, no la pantalla.
+    expect(screen.getByRole('table', { name: /abonos/i })).toBeInTheDocument();
+  });
+});
+
+describe('exportar la caja a CSV (DX-395)', () => {
+  it('descarga el CSV del período y del medio elegidos', async () => {
+    mockedList.mockResolvedValue(response());
+    mockedCsv.mockResolvedValue('Fecha,Sede\r\n');
+    const user = userEvent.setup();
+    render(<CashRegisterView token="tok" />);
+    await screen.findByRole('table', { name: /abonos/i });
+    const medium = screen.getByRole('combobox', { name: 'Medio de pago' });
+    await within(medium).findByRole('option', { name: 'Pago móvil' });
+    await user.selectOptions(medium, 'Pago móvil');
+
+    await user.click(screen.getByRole('button', { name: 'Exportar CSV' }));
+
+    const today = presetRange('today');
+    await waitFor(() =>
+      expect(mockedCsv).toHaveBeenCalledWith('tok', { ...today, paymentMethodId: 'pm-mobile' }),
+    );
+    expect(mockedSaveCsv).toHaveBeenCalledWith('Fecha,Sede\r\n', `caja-${today.from}-${today.to}.csv`, {
+      bom: true,
+    });
+    expect(await screen.findByText('Caja exportada.')).toBeInTheDocument();
+  });
+
+  it('si la descarga falla, lo avisa con reintento sin tocar la caja', async () => {
+    mockedList.mockResolvedValue(response());
+    mockedCsv.mockRejectedValueOnce(new Error('x'));
+    const user = userEvent.setup();
+    render(<CashRegisterView token="tok" />);
+    await screen.findByRole('table', { name: /abonos/i });
+
+    await user.click(screen.getByRole('button', { name: 'Exportar CSV' }));
+
+    await waitFor(() =>
+      expect(mockedNotify).toHaveBeenCalledWith(
+        'No pudimos exportar la caja.',
+        expect.objectContaining({ onRetry: expect.any(Function) as unknown }),
+      ),
+    );
+    expect(screen.getByRole('table', { name: /abonos/i })).toBeInTheDocument();
+    expect(mockedSaveCsv).not.toHaveBeenCalled();
+  });
 });
 
 it('el rango personalizado pide las fechas elegidas y no consulta un rango invertido', async () => {
@@ -562,7 +695,7 @@ describe('tras anular, la caja no se queda en una página vacía (DX-067)', () =
       response({
         items: [],
         total: 0,
-        summary: { count: 0, byCurrency: [], byMethod: [] },
+        summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [] },
       }),
     );
     render(<CashRegisterView token="tok" />);

@@ -105,10 +105,19 @@ it('lista movimientos con método y sede, marcando los anulados', async () => {
   expect(rows[0]).toHaveTextContent('Anulado por Rita Recepción: Cobro duplicado');
   expect(rows[0]).toHaveTextContent('Sede Norte');
   expect(rows[0]).toHaveTextContent('Tarjeta');
-  expect(rows[1]).toHaveTextContent('Transferencia');
+  // DX-395: el medio de la clínica y la referencia, no el método antiguo.
+  expect(rows[1]).toHaveTextContent('Pago móvil · Ref. ABC 123');
+  expect(rows[1]).not.toHaveTextContent('Transferencia');
   expect(rows[1]).not.toHaveTextContent(/anulado/i);
   expect(rows[1]).toHaveTextContent('Plan del');
   expect(rows[2]).toHaveTextContent(/sin método/i);
+});
+
+it('DX-395: la vista imprimible también lleva «Pago móvil · Ref. ABC 123»', async () => {
+  mockedGet.mockResolvedValue(accountStatementFixture());
+  render(<AccountStatementPrintView token="tok" patientId="pat-1" />);
+  const table = await screen.findByRole('table', { name: /movimientos/i });
+  expect(within(table).getByRole('row', { name: /Pago móvil/ })).toHaveTextContent('Pago móvil · Ref. ABC 123');
 });
 
 it('lista las cuotas con su estado: pagada, vencida, pendiente', async () => {
@@ -328,6 +337,10 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       paidAt: '2026-10-16T00:00:00.000Z',
       paidOn: '2026-10-16',
       method: null,
+      paymentMethodId: null,
+      paymentMethodName: null,
+      reference: null,
+      duplicateReferenceReason: null,
       notes: null,
       createdById: 'u-recep',
       createdAt: '2026-10-16T12:00:00.000Z',
@@ -359,7 +372,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       expect.any(String),
     );
     expect(money((await screen.findByText(/abono registrado/i)).textContent)).toMatch(
-      /50\.000,00 COP/,
+      /COP 50\.000,00/,
     );
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
     // DX-150: avisa a la ficha para releer la marca de saldo y la cobranza.

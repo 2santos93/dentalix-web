@@ -120,6 +120,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // alta de la clínica en el registro (el resourceId es la clínica).
   STAFF_INVITATION: 'Invitación al personal',
   CLINIC: 'Clínica',
+  PAYMENT_METHOD: 'Medio de pago',
+  ANESTHETIC_PRODUCT: 'Catálogo de anestésicos',
+  ANESTHESIA_ADMINISTRATION: 'Anestesia de evolución',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -317,12 +320,6 @@ export function staffDetail(
     }
   }
   return parts.join(' · ');
-}
-
-/** Si algún lado de `staffAccess` trae sedes concretas (hacen falta sus nombres). */
-export function hasStaffLocationIds(metadata: AuditMetadata): boolean {
-  const { before, after } = metadata.staffAccess ?? {};
-  return [before, after].some((side) => Array.isArray(side?.locationIds) && side.locationIds.length > 0);
 }
 
 const CASH_SESSION_REASONS: Record<string, string> = {
@@ -630,6 +627,21 @@ const LOCATION_CALENDAR_REASONS: Record<string, string> = {
   HOLIDAY_DELETED: 'Festivo eliminado',
   HOLIDAYS_IMPORTED: 'Festivos importados',
 };
+
+/**
+ * DX-402: el barrido congeló en un abono, como tasa de respaldo, la tasa
+ * manual de un día anterior a «manual desde» (un día sin tasa del proveedor).
+ * Las monedas y el origen; los días van en la metadata (sin formato de sede
+ * aquí, no se muestran).
+ */
+export function exchangeRateBackupDetail(metadata: AuditMetadata): string | null {
+  if (metadata.reason !== 'EXCHANGE_RATE_BACKUP') return null;
+  const currencies = metadata.exchangeRateBackup?.currencies ?? [];
+  const what = `Tasa de respaldo: la manual de un día anterior a «manual desde»${
+    currencies.length > 0 ? ` (${currencies.join(', ')})` : ''
+  }`;
+  return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
+}
 
 /** DX-316: qué cambió en el calendario de una sede, o null si el evento no es de él. */
 export function locationCalendarDetail(metadata: AuditMetadata): string | null {

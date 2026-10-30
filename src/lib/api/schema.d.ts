@@ -533,7 +533,7 @@ export interface paths {
         head?: never;
         /**
          * Cambiar canal, móvil, opt-in de WhatsApp o baja (DX-128)
-         * @description Solo recepción y ADMIN. El móvil se normaliza a E.164 con el país de la sede. WHATSAPP exige un móvil válido (400 `WHATSAPP_REQUIRES_VALID_MOBILE`). Queda en la auditoría con el autor, los campos y el origen.
+         * @description Solo recepción y ADMIN. El móvil se normaliza a E.164; sin «+» se lee con el prefijo telefónico por defecto de la sede. WHATSAPP exige un móvil válido (400 `WHATSAPP_REQUIRES_VALID_MOBILE`). Queda en la auditoría con el autor, los campos y el origen.
          */
         patch: operations["PatientCommunicationController_update"];
         trace?: never;
@@ -1128,6 +1128,144 @@ export interface paths {
         patch: operations["ClinicalNoteTemplatesController_update"];
         trace?: never;
     };
+    "/api/v1/anesthetics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Catálogo de anestésicos de la clínica
+         * @description Activos por nombre; con `includeInactive=true`, también los desactivados. Valores de ayuda: no sustituyen la ficha técnica del fabricante.
+         */
+        get: operations["AnestheticsController_list"];
+        put?: never;
+        /** Añadir un anestésico al catálogo */
+        post: operations["AnestheticsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/anesthetics/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cargar anestésicos sugeridos
+         * @description Crea los 5 anestésicos de ejemplo (lidocaína, articaína, mepivacaína, prilocaína y bupivacaína, con dosis máximas de referencia editables) que la clínica aún no tiene, y devuelve los creados. Repetirlo no duplica nada.
+         */
+        post: operations["AnestheticsController_loadSamples"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/anesthetics/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar o desactivar un anestésico
+         * @description Lo ya registrado no cambia: cada anestesia copió los valores del catálogo.
+         */
+        patch: operations["AnestheticsController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/anesthesia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anestesia registrada en las evoluciones del paciente (ficha) */
+        get: operations["AnesthesiaController_listByPatient"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/anesthesia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anestesia de una evolución y su acumulado frente al máximo */
+        get: operations["AnesthesiaController_listByEntry"];
+        put?: never;
+        /**
+         * Registra anestesia local en la evolución (inalterable)
+         * @description El servidor calcula los mg, el acumulado de la evolución y la fracción del máximo por peso. Al llegar al 100 % (o con alergia a anestésicos) responde 409 salvo `overrideReason`, que queda sellado y auditado.
+         */
+        post: operations["AnesthesiaController_record"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/anesthesia/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Previsualiza la dosis acumulada con un anestésico más
+         * @description No guarda nada. Lee la anamnesis vigente (peso y alergias) y lo ya registrado en la evolución.
+         */
+        post: operations["AnesthesiaController_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/anesthesia/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** No permitido: la anestesia no se edita */
+        put: operations["AnesthesiaController_rejectPut"];
+        post?: never;
+        /** No permitido: la anestesia no se borra */
+        delete: operations["AnesthesiaController_rejectDelete"];
+        options?: never;
+        head?: never;
+        /** No permitido: la anestesia no se edita */
+        patch: operations["AnesthesiaController_rejectPatch"];
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/tooth-records": {
         parameters: {
             query?: never;
@@ -1688,6 +1826,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payment-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PaymentMethodsController_list"];
+        put?: never;
+        post: operations["PaymentMethodsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-methods/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PaymentMethodsController_update"];
+        trace?: never;
+    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -2114,7 +2284,7 @@ export interface paths {
         };
         /**
          * Tasas de un día para la clínica, según su fuente (DX-374)
-         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor.
+         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo).
          */
         get: operations["ExchangeController_rates"];
         put?: never;
@@ -2152,7 +2322,7 @@ export interface paths {
         get: operations["ExchangeSettingsController_settings"];
         /**
          * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
-         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
+         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
          */
         put: operations["ExchangeSettingsController_updateClinicSettings"];
         post?: never;
@@ -2177,7 +2347,7 @@ export interface paths {
         put?: never;
         /**
          * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
-         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
+         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). DX-402: la de un día anterior a `manualSince` sirve, con MANUAL, de tasa de respaldo a los abonos de ese día que siguen sin tasa si el proveedor no tiene la de ese día (GET /payments/rate-backlog/day dice cuántos); nunca cambia una tasa ya congelada. Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
          */
         post: operations["ExchangeSettingsController_register"];
         delete?: never;
@@ -2375,6 +2545,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Caja en CSV: abonos del período con medio y referencia
+         * @description Mismos filtros que `GET /payments` (período, método y medio) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Moneda, Importe.
+         */
+        get: operations["PaymentsController_listCashCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/payments": {
         parameters: {
             query?: never;
@@ -2521,6 +2711,46 @@ export interface paths {
          * @description MANUAL sustituye todas las imputaciones del abono por `allocations` (vacío = todo sin imputar) y lo fija: el reparto automático ya no lo usa. AUTO borra sus imputaciones, lo desfija y lo reparte como un abono más (solo llena lo libre). `expectedVersion` es la `version` leída con GET. La respuesta se lee tras el reparto y trae `previous`.
          */
         put: operations["PaymentAllocationsController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/rate-backlog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Abonos sin tasa desde hace más de 24 h (DX-380, solo ADMIN)
+         * @description Abonos vivos de la clínica que siguen sin base de imputación o sin su tasa congelada pasadas 24 h: el barrido los reintenta con backoff (1 min, 5, 30, 2 h, 24 h). Registrar la tasa del día en Ajustes › Tasa de cambio, corregirla o cambiar la fuente adelanta el reintento al barrido siguiente. Sin datos del abono ni del paciente.
+         */
+        get: operations["PaymentRateBacklogController_backlog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/rate-backlog/day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Abonos sin tasa de un día que necesitan la tasa de una moneda (DX-402, solo ADMIN)
+         * @description Para el aviso del formulario de tasa manual. Con la fuente MANUAL, la tasa manual de un día anterior a `manualSince` es la tasa de respaldo de los abonos pendientes de ese día (sin tasa congelada) si el proveedor no tiene tasa guardada de él: el barrido siguiente la congela, crea la base y lo deja en la auditoría (EXCHANGE_RATE_BACKUP). Nunca cambia una tasa ya congelada. Solo el recuento.
+         */
+        get: operations["PaymentRateBacklogController_day"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -3316,7 +3546,7 @@ export interface paths {
         put?: never;
         /**
          * Anular un cargo ya generado, con motivo (SEC-050)
-         * @description La única forma de dejar sin efecto un cargo generado: desde el plan, su ítem no cambia de precio, descuento ni estado ni se quita (409 a todo rol). En una transacción, con la cita y el cargo bloqueados, guarda en el cargo quién, cuándo y el motivo (3–500) y retira su ítem del plan «Cargos administrativos» (deja de salir en el estado de cuenta). Una vez por cargo. Si los abonos vivos de ese plan ya cubren el cargo, 409: se anula antes el abono. Auditado (VOID APPOINTMENT, CANCELLATION_FEE_VOIDED, estado CHARGED → VOIDED, sin el texto del motivo). Sin Idempotency-Key, como condonar: repetirla da 409 «ya se anuló».
+         * @description La única forma de dejar sin efecto un cargo generado: desde el plan, su ítem no cambia de precio, descuento ni estado ni se quita (409 a todo rol). En una transacción, con la cita y el cargo bloqueados, guarda en el cargo quién, cuándo y el motivo (3–500) y retira su ítem del plan «Cargos administrativos» (deja de salir en el estado de cuenta). Una vez por cargo. Si los abonos vivos de ese plan ya cubren el cargo, 409: se anula antes el abono. Lo cobrado se compara en la moneda del plan con la base de imputación de cada abono (DX-051, con la tasa que congeló, DX-375); si algún abono vivo aún no la tiene («sin tasa»), 409 «Hay abonos sin convertir» (DX-382). Auditado (VOID APPOINTMENT, CANCELLATION_FEE_VOIDED, estado CHARGED → VOIDED, sin el texto del motivo). Sin Idempotency-Key, como condonar: repetirla da 409 «ya se anuló».
          */
         post: operations["CancellationFeeController_voidFee"];
         delete?: never;
@@ -4747,7 +4977,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -4824,7 +5054,7 @@ export interface components {
             after: components["schemas"]["AuditScheduleEntryDto"][];
         };
         AuditCurrencyTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Filas del archivo */
             rows: number;
@@ -4902,6 +5132,22 @@ export interface components {
             before?: components["schemas"]["AuditStaffAccessSideDto"];
             after?: components["schemas"]["AuditStaffAccessSideDto"];
         };
+        AuditExchangeRateBackupDto: {
+            /**
+             * Format: date
+             * @description Día civil de la tasa (el del abono en su sede).
+             * @example 2026-10-28
+             */
+            rateDate: string;
+            /**
+             * Format: date
+             * @description Desde qué día rige la tasa manual de la clínica (posterior a rateDate).
+             * @example 2026-10-30
+             */
+            manualSince: string;
+            /** @description Las monedas de la cotización (ISO 4217). */
+            currencies: string[];
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -4933,6 +5179,8 @@ export interface components {
             healthRegistration?: components["schemas"]["AuditHealthRegistrationChangeDto"];
             /** @description DX-359: accesos de un miembro antes y después (rol, sedes, nº de registro profesional, especialidad): solo lo que cambió, o un lado en un alta (invitación, aceptación, registro). Nunca el nombre, el email ni nada de la contraseña. */
             staffAccess?: components["schemas"]["AuditStaffAccessChangeDto"];
+            /** @description DX-402: el barrido congeló en un abono (`reason` EXCHANGE_RATE_BACKUP, `origin` JOB, sin usuario) la tasa manual de un día anterior a «manual desde», como tasa de respaldo de un día sin tasa del proveedor. Solo días y monedas; ni importes ni la tasa. */
+            exchangeRateBackup?: components["schemas"]["AuditExchangeRateBackupDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -4982,10 +5230,7 @@ export interface components {
             fullName: string;
             /** @description País de la primera sede: código ISO 3166-1 alfa-2 de la lista de países. Obligatorio junto con los otros campos location*. */
             locationCountry?: string;
-            /**
-             * @description Moneda ISO 4217 de la primera sede (GET /public/currencies).
-             * @example EUR
-             */
+            /** @description Moneda ISO 4217 de la primera sede (GET /public/currencies). */
             locationCurrency?: string;
             /**
              * @description Zona horaria IANA de la primera sede.
@@ -5344,6 +5589,8 @@ export interface components {
             /** @enum {string} */
             sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             email: string | null;
             address: string | null;
             countryCode: string | null;
@@ -5461,6 +5708,8 @@ export interface components {
             /** @enum {string} */
             sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             email: string | null;
             address: string | null;
             countryCode: string | null;
@@ -5581,7 +5830,7 @@ export interface components {
             names: components["schemas"]["DocumentTypeNamesValuesDto"];
         };
         OverdueAmountDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Lo exigible vencido, sin lo que está por vencer */
             amount: number;
@@ -5622,6 +5871,8 @@ export interface components {
             /** @enum {string} */
             sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             email: string | null;
             address: string | null;
             countryCode: string | null;
@@ -5762,7 +6013,7 @@ export interface components {
             reason: string;
         };
         /**
-         * @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp).
+         * @description MISSING: sin móvil. INVALID: no es un móvil válido con el prefijo de la sede (no puede ser canal WhatsApp).
          * @enum {string}
          */
         MobileStatus: "MISSING" | "VALID" | "INVALID";
@@ -5814,11 +6065,15 @@ export interface components {
             clinicDefaultChannel: components["schemas"]["ContactChannel"];
             /** @description Tal como está guardado. */
             phone: string | null;
-            /** @description E.164 (+ seguido del indicativo y el número, sin espacios), solo si es un móvil válido. */
+            /** @description E.164 (+ seguido del prefijo y el número, sin espacios), solo si es un móvil válido. */
             phoneE164: string | null;
-            /** @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp). */
+            /** @description MISSING: sin móvil. INVALID: no es un móvil válido con el prefijo de la sede (no puede ser canal WhatsApp). */
             phoneStatus: components["schemas"]["MobileStatus"];
-            /** @description País (ISO 3166-1 alfa-2) con el que se valida un número sin indicativo: el de la sede activa o la principal (sin sedes, el del paciente). null si no hay país o si ese país no tiene indicativo por defecto (hasta DX-329): el número se escribe con +. */
+            /** @description true si los dígitos se pueden leer como dos números válidos distintos: hay que escribirlo con + y su prefijo. */
+            phoneAmbiguous: boolean;
+            /** @description Número válido en formato internacional de la librería, con su extensión si la tiene. null si no es válido. */
+            phoneInternational: string | null;
+            /** @description Región (ISO 3166-1 alfa-2) cuyo prefijo se añade a un número escrito sin +: la de la sede activa o la principal. null si la sede no tiene prefijo por defecto. */
             phoneCountry: string | null;
             email: string | null;
             whatsappOptIn: components["schemas"]["WhatsappOptInDto"] | null;
@@ -5836,7 +6091,7 @@ export interface components {
         };
         UpdatePatientCommunicationDto: {
             contactChannel?: components["schemas"]["ContactChannel"];
-            /** @description Móvil. Se guarda en E.164 si es válido para el país de la sede; null o vacío lo borra. */
+            /** @description Móvil. Se guarda en E.164 si es válido; sin «+» se lee con el prefijo telefónico por defecto de la sede. null o vacío lo borra. */
             phone?: string | null;
             /** @description true registra el opt-in de WhatsApp (exige `whatsappOptInSource` y un móvil válido); false lo retira. */
             whatsappOptIn?: boolean;
@@ -5862,6 +6117,8 @@ export interface components {
             docNumber: string | null;
             email: string | null;
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
         };
         /** @enum {string} */
         ResponsibleRelationship: "MOTHER" | "FATHER" | "LEGAL_GUARDIAN" | "GRANDPARENT" | "SIBLING" | "SPOUSE" | "CHILD" | "OTHER";
@@ -5882,6 +6139,8 @@ export interface components {
             docNumber: string | null;
             email: string | null;
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             relationship: components["schemas"]["ResponsibleRelationship"];
             isPayer: boolean;
             receivesNotices: boolean;
@@ -6002,10 +6261,7 @@ export interface components {
         CreatePaymentPromiseDto: {
             /** @example 200000 */
             amount: number;
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Día del compromiso (AAAA-MM-DD) en la zona de la sede: desde hoy hasta un año
@@ -6031,7 +6287,7 @@ export interface components {
             /** Format: uuid */
             locationId: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Día civil de la sede
@@ -6062,7 +6318,7 @@ export interface components {
         CoveragePayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             type: components["schemas"]["PayerType"];
             active: boolean;
@@ -6149,7 +6405,7 @@ export interface components {
         PayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             type: components["schemas"]["PayerType"];
             active: boolean;
@@ -6173,7 +6429,7 @@ export interface components {
         AssignedAgreementPayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             type: components["schemas"]["PayerType"];
         };
@@ -6242,7 +6498,7 @@ export interface components {
         AgreementPayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             /** @description SEC-047: con un pagador externo, asignar el convenio exige una cobertura viva del paciente con él; OTHER (cortesía, empleados…) solo lo asigna ADMIN. */
             type: components["schemas"]["PayerType"];
@@ -6250,18 +6506,15 @@ export interface components {
         AgreementPriceListDto: {
             /** Format: uuid */
             id: string;
-            /** @example Lista Sanitas 2026 */
+            /** @example Lista de precios 2026 */
             name: string;
-            /**
-             * @description Código ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
         };
         AgreementDto: {
             /** Format: uuid */
             id: string;
-            /** @example Convenio Sanitas */
+            /** @example Convenio de empresa */
             name: string;
             payer: components["schemas"]["AgreementPayerDto"];
             kind: components["schemas"]["AgreementKind"];
@@ -6427,11 +6680,12 @@ export interface components {
             showHealthRegistrationNumber: boolean;
             /** @description DX-222: teléfono de la sede o null. */
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
+            /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. */
+            defaultPhoneRegion: string | null;
             isActive: boolean;
-            /**
-             * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1).
-             * @example EUR
-             */
+            /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1). */
             currency: string | null;
             /**
              * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios. null = sede sin configurar (fase 1).
@@ -6460,14 +6714,11 @@ export interface components {
         CreateLocationDto: {
             /** @example Sede Norte */
             name: string;
-            /** @example Cra 15 #90-20 */
+            /** @description Dirección postal de la sede, texto libre en el formato local. */
             address?: string;
             /** @description País de la sede: código ISO 3166-1 alfa-2 de la lista de países. No decide ninguna regla. */
             country: string;
-            /**
-             * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
-             * @example EUR
-             */
+            /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. */
             currency: string;
             /**
              * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios.
@@ -6487,25 +6738,23 @@ export interface components {
             hourCycle?: "h12" | "h23";
             /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. */
             phone?: string;
+            /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. Sin el campo se sugiere desde el país de la sede, si la librería lo admite. */
+            defaultPhoneRegion?: string | null;
         };
         UpdateLocationDto: {
             name?: string;
             address?: string;
             /** @description País de la sede: código ISO 3166-1 alfa-2 de la lista de países. No decide ninguna regla. */
             country?: string;
-            /**
-             * @description DX-319: nº de registro sanitario de la sede, texto libre sin formato ni validación por país (hasta 64 caracteres, se recorta). Solo ADMIN; queda auditado con su antes y después. Vacío o null lo quita; sin el campo no cambia.
-             * @example NRS 28/1234-AB
-             */
+            /** @description DX-319: nº de registro sanitario de la sede, texto libre sin formato ni validación por país (hasta 64 caracteres, se recorta). Solo ADMIN; queda auditado con su antes y después. Vacío o null lo quita; sin el campo no cambia. */
             healthRegistrationNumber?: string | null;
             /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
             showHealthRegistrationNumber?: boolean;
             /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia. */
             phone?: string | null;
-            /**
-             * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
-             * @example EUR
-             */
+            /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. Vacío o null lo quita; sin el campo no cambia, tampoco al cambiar el país. */
+            defaultPhoneRegion?: string | null;
+            /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. */
             currency?: string;
             /**
              * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios.
@@ -6541,10 +6790,7 @@ export interface components {
             id: string;
             /** @example Convenio Sura EPS */
             name: string;
-            /**
-             * @description Código ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: uuid
@@ -6561,10 +6807,7 @@ export interface components {
         };
         CreatePriceListDto: {
             name: string;
-            /**
-             * @description Código ISO 4217 de `currencies`.
-             * @example COP
-             */
+            /** @description Código ISO 4217 de `currencies`. */
             currency: string;
             /**
              * Format: uuid
@@ -6574,10 +6817,7 @@ export interface components {
         };
         UpdatePriceListDto: {
             name?: string;
-            /**
-             * @description Con precios cargados, otra moneda da 409.
-             * @example COP
-             */
+            /** @description Con precios cargados, otra moneda da 409. */
             currency?: string;
             /**
              * Format: uuid
@@ -6951,6 +7191,222 @@ export interface components {
             prompts?: components["schemas"]["NotePromptInputDto"][];
             /** @description false = desactivarla (sale del selector) */
             active?: boolean;
+        };
+        AnestheticProductDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Lidocaína 2 % con epinefrina 1:100.000 */
+            name: string;
+            /** @example Lidocaína */
+            activeIngredient: string;
+            /**
+             * @description Concentración en %
+             * @example 2
+             */
+            concentrationPct: number;
+            /** @example Epinefrina 1:100.000 */
+            vasoconstrictor: string | null;
+            /** @example 1.8 */
+            mlPerCarpule: number;
+            /** @example 7 */
+            maxMgPerKg: number;
+            /**
+             * @description Tope absoluto en mg
+             * @example 500
+             */
+            maxAbsoluteMg: number;
+            /** @example LIDOCAINE_2_EPI */
+            sampleCode: string | null;
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateAnestheticProductDto: {
+            name: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor?: string | null;
+            mlPerCarpule: number;
+            maxMgPerKg: number;
+            maxAbsoluteMg: number;
+        };
+        UpdateAnestheticProductDto: {
+            name?: string;
+            activeIngredient?: string;
+            concentrationPct?: number;
+            vasoconstrictor?: string | null;
+            mlPerCarpule?: number;
+            maxMgPerKg?: number;
+            maxAbsoluteMg?: number;
+            /** @description false = desactivado (no se borra) */
+            active?: boolean;
+        };
+        /** @enum {string} */
+        AnesthesiaTechnique: "INFILTRATION" | "NERVE_BLOCK" | "INTRALIGAMENTARY" | "INTRAPULPAL" | "INTRAOSSEOUS";
+        DoseAlertDto: {
+            /** @example DOSE_OVER_MAX */
+            code: string;
+            /** @enum {string} */
+            severity: "BLOCKING" | "INFO";
+            message: string;
+            source: string;
+        };
+        AnesthesiaAdministrationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: uuid */
+            anestheticId: string;
+            anestheticName: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor: string | null;
+            mlPerCarpule: number;
+            maxMgPerKg: number;
+            maxAbsoluteMg: number;
+            carpules: number;
+            doseMg: number;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            site: string | null;
+            lot: string | null;
+            /** Format: date-time */
+            administeredAt: string;
+            weightKg: number | null;
+            /** @enum {string|null} */
+            weightSource: "ANAMNESIS" | "ENTERED" | null;
+            cumulativeMg: number;
+            cumulativePercent: number | null;
+            safetyRulesVersion: string;
+            safetyAlerts: components["schemas"]["DoseAlertDto"][];
+            overrideReason: string | null;
+            /** Format: uuid */
+            authorId: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AnestheticDoseDto: {
+            name: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            carpules: number;
+            mg: number;
+            maxMg: number | null;
+            percent: number | null;
+        };
+        AnesthesiaDoseSummaryDto: {
+            /** @example ANESTHESIA_DOSE_V1 */
+            rulesVersion: string;
+            weightKg: number | null;
+            /** @description mg acumulados de la evolución */
+            totalMg: number;
+            byAnesthetic: components["schemas"]["AnestheticDoseDto"][];
+            /** @description Suma de las fracciones de cada máximo, en %; null sin peso */
+            percent: number | null;
+            /** @enum {string} */
+            level: "OK" | "WARNING" | "EXCEEDED" | "NO_WEIGHT";
+            alerts: components["schemas"]["DoseAlertDto"][];
+        };
+        EntryAnesthesiaDto: {
+            records: components["schemas"]["AnesthesiaAdministrationDto"][];
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+            ageYears: number | null;
+            weightRequired: boolean;
+        };
+        AnesthesiaDoseCheckDto: {
+            /**
+             * Format: uuid
+             * @description Anestésico del catálogo
+             */
+            anestheticId: string;
+            /** @example 1.5 */
+            carpules: number;
+            /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
+            weightKg?: number;
+        };
+        AnesthesiaCheckDto: {
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+            ageYears: number | null;
+            /** @enum {string|null} */
+            weightSource: "ANAMNESIS" | "ENTERED" | null;
+            /** @description Menor de 12 años sin peso: hay que anotarlo */
+            weightRequired: boolean;
+        };
+        RecordAnesthesiaDto: {
+            /**
+             * Format: uuid
+             * @description Anestésico del catálogo
+             */
+            anestheticId: string;
+            /** @example 1.5 */
+            carpules: number;
+            /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
+            weightKg?: number;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            /** @description Zona o dientes FDI */
+            site?: string;
+            /** @description Lote del carpule */
+            lot?: string;
+            /**
+             * Format: date-time
+             * @description Hora de la administración; por defecto, ahora
+             */
+            administeredAt?: string;
+            /** @description Motivo con el que se confirma superar la dosis máxima o un aviso de alergia. Sin él, 409. */
+            overrideReason?: string;
+        };
+        RecordedAnesthesiaDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: uuid */
+            anestheticId: string;
+            anestheticName: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor: string | null;
+            mlPerCarpule: number;
+            maxMgPerKg: number;
+            maxAbsoluteMg: number;
+            carpules: number;
+            doseMg: number;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            site: string | null;
+            lot: string | null;
+            /** Format: date-time */
+            administeredAt: string;
+            weightKg: number | null;
+            /** @enum {string|null} */
+            weightSource: "ANAMNESIS" | "ENTERED" | null;
+            cumulativeMg: number;
+            cumulativePercent: number | null;
+            safetyRulesVersion: string;
+            safetyAlerts: components["schemas"]["DoseAlertDto"][];
+            overrideReason: string | null;
+            /** Format: uuid */
+            authorId: string;
+            /** Format: date-time */
+            createdAt: string;
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+        };
+        AnesthesiaConflictDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @description Mensaje en español con los avisos */
+            message: string;
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+            safetyAlerts: components["schemas"]["DoseAlertDto"][];
         };
         CreateToothRecordDto: {
             /**
@@ -8154,6 +8610,51 @@ export interface components {
             /** @description false (defecto): una cita fuera del horario del profesional se agenda con el aviso PROVIDER_OFF_SCHEDULE. true: se rechaza con 409. */
             strictProviderSchedule: boolean;
         };
+        /**
+         * @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER).
+         * @enum {string}
+         */
+        PaymentMethodKind: "CASH" | "CARD" | "TRANSFER" | "DIGITAL" | "OTHER";
+        /**
+         * @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica.
+         * @enum {string}
+         */
+        PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+        PaymentMethodDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Pago móvil */
+            name: string;
+            /** @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER). */
+            kind: components["schemas"]["PaymentMethodKind"];
+            active: boolean;
+            /** @description Si el abono con este medio exige la referencia del pago. */
+            requiresReference: boolean;
+            /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
+            legacyMethod: components["schemas"]["PaymentMethod"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatePaymentMethodDto: {
+            /** @example Pago móvil */
+            name: string;
+            kind: components["schemas"]["PaymentMethodKind"];
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
+            /** @description Sin indicarlo, no pide referencia. */
+            requiresReference?: boolean;
+        };
+        UpdatePaymentMethodDto: {
+            /** @example Pago móvil */
+            name?: string;
+            kind?: components["schemas"]["PaymentMethodKind"];
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
+            /** @description Sin indicarlo, no pide referencia. */
+            requiresReference?: boolean;
+        };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
         WaitlistSourceAppointmentDto: {
@@ -8471,10 +8972,7 @@ export interface components {
              * @description Inicio de la cita.
              */
             expiresAt: string;
-            /**
-             * @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable.
-             * @example 573105550101
-             */
+            /** @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable. */
             whatsappPhone: string | null;
             appointment: components["schemas"]["PublicConfirmationAppointmentDto"];
         };
@@ -8494,7 +8992,7 @@ export interface components {
             /** @description Texto de la clínica (puede ir vacío). */
             text: string;
             suggestedFee: number | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string | null;
         };
         PublicAppointmentConfirmationDto: {
@@ -8602,12 +9100,9 @@ export interface components {
             patientId: string;
             /** @example Ana Pérez */
             patientName: string;
-            /** @example +57 300 123 4567 */
+            /** @description Teléfono tal como está en la ficha, con su prefijo si lo tiene. */
             patientPhone: string | null;
-            /**
-             * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
-             * @example 573001234567
-             */
+            /** @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable */
             patientWhatsApp: string | null;
             /** Format: uuid */
             optionGroupId: string | null;
@@ -8619,10 +9114,7 @@ export interface components {
             presentedLocationId: string;
             /** @description Días completos desde la presentación */
             daysSincePresented: number;
-            /**
-             * @description Moneda del plan (ISO 4217)
-             * @example COP
-             */
+            /** @description Moneda del plan (código ISO 4217 de 3 letras). */
             currency: string;
             /** @description Σ (precio − descuento) de los ítems vivos, en `currency` */
             total: number;
@@ -8635,10 +9127,7 @@ export interface components {
             pageSize: number;
         };
         CreateTreatmentPlanDto: {
-            /**
-             * @description ISO 4217 (si se omite, la moneda de la sede activa o la común de la clínica)
-             * @example EUR
-             */
+            /** @description ISO 4217 (si se omite, la moneda de la sede activa o la común de la clínica) */
             currency?: string;
             notes?: string;
         };
@@ -8756,10 +9245,7 @@ export interface components {
             patientId: string;
             /** @enum {string} */
             status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /**
-             * @description ISO 4217
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             notes: string | null;
             /** Format: uuid */
@@ -8798,10 +9284,7 @@ export interface components {
              * @enum {string}
              */
             status?: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /**
-             * @description ISO 4217
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency?: string;
             notes?: string;
             /**
@@ -8863,7 +9346,7 @@ export interface components {
             percent: number;
         };
         ApplyBulkDiscountResultDto: {
-            /** @description Los ítems descontados: el % de su precio redondeado a la unidad de la moneda del plan (COP sin decimales, EUR a céntimos), nunca por encima del tope del rol ítem a ítem */
+            /** @description Los ítems descontados: el % de su precio redondeado a la unidad de la moneda del plan (sin decimales si la moneda no los usa, a céntimos si usa dos), nunca por encima del tope del rol ítem a ítem */
             items: components["schemas"]["TreatmentPlanItemDto"][];
             /**
              * @description DX-105: ítems pedidos cuyo procedimiento no admite descuentos; se saltan y no cambian
@@ -8950,7 +9433,7 @@ export interface components {
             agreementName: string | null;
         };
         PlanQuoteTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Σ precios */
             gross: number;
@@ -8991,7 +9474,7 @@ export interface components {
             patientId: string;
             /** @enum {string} */
             planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             clinicName: string;
             clinicLogoUrl: string | null;
@@ -9040,7 +9523,7 @@ export interface components {
             agreementName: string | null;
             /** @description false = la prestación no admite descuentos (ni % del convenio ni discrecionales) */
             allowDiscount: boolean;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
         };
         DiscountMaxPercentByRoleDto: {
@@ -9079,7 +9562,7 @@ export interface components {
             location: components["schemas"]["DiscountReportLocationDto"] | null;
         };
         DiscountReportTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Ítems con descuento en esta moneda */
             items: number;
@@ -9091,7 +9574,7 @@ export interface components {
             percentOfGross: number;
         };
         AgreementReductionTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Líneas con rebaja de convenio en esta moneda */
             items: number;
@@ -9119,7 +9602,7 @@ export interface components {
             toothNumber: string;
             /** @description Procedimiento del catálogo */
             procedure: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre) */
             catalogPrice: number | null;
@@ -9208,13 +9691,7 @@ export interface components {
             base: "USD";
             /** @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día). */
             source: components["schemas"]["ExchangeRateSource"];
-            /**
-             * @description Units of each currency per 1 USD, for the requested date. Con fuente MANUAL solo trae las monedas con tasa registrada ese día: una moneda que NO aparece está «sin tasa» (no se inventa, no se toma la de otro día ni se pide al proveedor) y convertirla responde 400 EXCHANGE_RATE_MISSING.
-             * @example {
-             *       "COP": 4000,
-             *       "EUR": 0.92
-             *     }
-             */
+            /** @description Units of each currency per 1 USD, for the requested date, keyed by its ISO 4217 code (3 letters). Con fuente MANUAL solo trae las monedas con tasa registrada ese día: una moneda que NO aparece está «sin tasa» (no se inventa, no se toma la de otro día ni se pide al proveedor) y convertirla responde 400 EXCHANGE_RATE_MISSING. */
             rates: {
                 [key: string]: number;
             };
@@ -9222,9 +9699,9 @@ export interface components {
         ConvertResponseDto: {
             /** @example 100 */
             amount: number;
-            /** @example USD */
+            /** @description Código ISO 4217 de 3 letras. */
             from: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             to: string;
             /** @example 2026-07-01 */
             date: string;
@@ -9247,10 +9724,7 @@ export interface components {
              * @example 2026-10-30
              */
             manualSince: string | null;
-            /**
-             * @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia.
-             * @example USD
-             */
+            /** @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia. */
             baseCurrency: string;
         };
         UpdateExchangeRateSettingsDto: {
@@ -9274,7 +9748,7 @@ export interface components {
              * @example 2026-10-30
              */
             date: string;
-            /** @example VES */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Unidades de la moneda por 1 USD.
@@ -9296,10 +9770,7 @@ export interface components {
              * @example 2026-10-30
              */
             date: string;
-            /**
-             * @description Código ISO 4217 de la lista de monedas (GET /currencies). USD no: es la base.
-             * @example VES
-             */
+            /** @description Código ISO 4217 de la lista de monedas (GET /currencies). USD no: es la base. */
             currency: string;
             /**
              * @description Unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
@@ -9375,7 +9846,7 @@ export interface components {
             logoUrl: string | null;
         };
         CurrencyDto: {
-            /** @example EUR */
+            /** @description Código ISO 4217 de 3 letras. */
             code: string;
             /** @example Euro */
             name: string;
@@ -9391,9 +9862,9 @@ export interface components {
         CityDto: {
             /** @example 12345 */
             id: number;
-            /** @example Bogotá */
+            /** @description Nombre de la ciudad. */
             name: string;
-            /** @example Bogota D.C. */
+            /** @description Región, provincia o estado de la ciudad, si lo hay. */
             region: string | null;
         };
         Icd10CodeDto: {
@@ -9401,6 +9872,12 @@ export interface components {
             code: string;
             /** @example Caries de la dentina */
             labelEs: string;
+        };
+        CashPaymentMethodRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Pago móvil */
+            name: string;
         };
         CashLocationRefDto: {
             /** Format: uuid */
@@ -9450,7 +9927,7 @@ export interface components {
              */
             paidAt: string;
             /**
-             * @description Día civil (YYYY-MM-DD) de `paidAt` en la zona IANA de la sede del abono (DX-097): el día de caja en que cuenta. Un abono a las 20:00 en Bogotá es de ese día aunque en UTC ya sea el siguiente.
+             * @description Día civil (YYYY-MM-DD) de `paidAt` en la zona IANA de la sede del abono (DX-097): el día de caja en que cuenta. Un abono a las 20:00 de una sede en UTC−5 es de ese día aunque en UTC ya sea el siguiente.
              * @example 2026-10-16
              */
             paidOn: string;
@@ -9463,13 +9940,13 @@ export interface components {
             registeredToday: boolean;
             /** @example 150000 */
             amount: number;
-            /**
-             * @description ISO 4217 currency code
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @description DX-377: medio de pago (el inicial de su método si el abono es de una réplica anterior). */
+            paymentMethod: components["schemas"]["CashPaymentMethodRefDto"] | null;
+            reference: string | null;
             notes: string | null;
             location: components["schemas"]["CashLocationRefDto"];
             patient: components["schemas"]["CashPatientRefDto"];
@@ -9483,7 +9960,7 @@ export interface components {
             location: components["schemas"]["CashLocationRefDto"] | null;
         };
         CashCurrencyTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Suma sin convertir
@@ -9499,7 +9976,22 @@ export interface components {
              * @enum {string|null}
              */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @example 200000 */
+            total: number;
+            /** @example 2 */
+            count: number;
+        };
+        CashPaymentMethodTotalDto: {
+            /**
+             * Format: uuid
+             * @description Medio de pago (DX-377). Un abono de una réplica anterior cuenta en el medio inicial de su método; `null` = abonos sin método.
+             */
+            paymentMethodId: string | null;
+            /** @example Pago móvil */
+            name: string | null;
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 200000 */
             total: number;
@@ -9513,6 +10005,8 @@ export interface components {
             byCurrency: components["schemas"]["CashCurrencyTotalDto"][];
             /** @description Total por método y moneda. */
             byMethod: components["schemas"]["CashMethodTotalDto"][];
+            /** @description DX-377: total por medio de pago de la clínica y moneda. */
+            byPaymentMethod: components["schemas"]["CashPaymentMethodTotalDto"][];
         };
         CashPaymentsResponseDto: {
             items: components["schemas"]["CashPaymentDto"][];
@@ -9534,25 +10028,31 @@ export interface components {
              * @example 100
              */
             amount: number;
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
-             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en Bogotá) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC.
+             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en UTC−5) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC.
              * @example 2026-10-16
              */
             paidAt: string;
-            /** @enum {string} */
+            /**
+             * @description Método antiguo (clientes anteriores a DX-377). Con `paymentMethodId` se ignora: el método sale del tipo base del medio. Solo con él, el abono se enlaza al medio inicial de ese método.
+             * @enum {string}
+             */
             method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+            /**
+             * Format: uuid
+             * @description Medio de pago ACTIVO del catálogo de la clínica (GET /payment-methods).
+             */
+            paymentMethodId?: string;
+            /** @description Referencia del pago. Obligatoria si el medio la pide (400). Se compara sin espacios, puntos ni guiones y en mayúsculas (DX-395: «123-456», «123.456» y «123 456» son la misma): si el mismo medio ya la tiene en un abono vivo de ±90 días, 409 `PAYMENT_REFERENCE_DUPLICATE` con `matches`. Más de 60 caracteres: 400 en español. */
+            reference?: string;
+            /** @description Motivo para confirmar una referencia repetida tras el 409. Se guarda en el abono; la auditoría registra la confirmación y los abonos repetidos. Más de 300 caracteres: 400 en español. */
+            duplicateReferenceReason?: string;
             notes?: string;
         };
         FrozenExchangeRateDto: {
-            /**
-             * @description Moneda de destino: la del plan (o la del saldo migrado)
-             * @example USD
-             */
+            /** @description Moneda de destino: la del plan (o la del saldo migrado) */
             currency: string;
             /**
              * @description Unidades de la moneda del abono por 1 USD, tal como las dio la fuente ese día (hasta 8 decimales)
@@ -9596,10 +10096,7 @@ export interface components {
             patientId: string;
             /** @example 100 */
             amount: number;
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** Format: date-time */
             paidAt: string;
@@ -9608,8 +10105,24 @@ export interface components {
              * @example 2026-10-16
              */
             paidOn: string;
-            /** @enum {string|null} */
+            /**
+             * @description Método antiguo, derivado del tipo base del medio (DX-377: DIGITAL se guarda como TRANSFER). Se mantiene para informes y réplicas anteriores.
+             * @enum {string|null}
+             */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /**
+             * Format: uuid
+             * @description Medio de pago del catálogo de la clínica (DX-377).
+             */
+            paymentMethodId: string | null;
+            /** @example Pago móvil */
+            paymentMethodName: string | null;
+            /** @description Referencia del pago tal como la dio el pagador (DX-377). */
+            reference: string | null;
+            /** @description Motivo con que se confirmó una referencia repetida (DX-377); null si no se repetía. */
+            duplicateReferenceReason: string | null;
+            /** @description Solo en la respuesta del alta: ids de los abonos con la misma referencia y medio que se confirmaron con motivo. */
+            duplicateReferenceOf?: string[];
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
@@ -9622,10 +10135,7 @@ export interface components {
              * @example NOR-000123
              */
             receiptNumber: string | null;
-            /**
-             * @description DX-375: moneda a la que convierte la tasa del abono (la del plan o la del saldo migrado); null en un abono anterior a la tasa congelada aún sin congelar.
-             * @example USD
-             */
+            /** @description DX-375: moneda a la que convierte la tasa del abono (la del plan o la del saldo migrado); null en un abono anterior a la tasa congelada aún sin congelar. */
             exchangeRateCurrency: string | null;
             /** @description DX-375: la tasa que congeló el abono; null en su misma moneda, «sin tasa» o anterior aún sin congelar. */
             frozenRate: components["schemas"]["FrozenExchangeRateDto"] | null;
@@ -9640,7 +10150,7 @@ export interface components {
              * @example 150000
              */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Día civil del abono en su sede: el de la tasa que falta
@@ -9678,10 +10188,7 @@ export interface components {
             balance: number;
         };
         PlanBalanceWithItemsDto: {
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             planCurrency: string;
             /**
              * @description Sum of ACCEPTED|DONE item prices minus their discounts
@@ -9728,6 +10235,22 @@ export interface components {
              */
             reason: string;
         };
+        /**
+         * @description FROZEN: congeló su tasa (rate y equivalentAmount presentes). MISSING: «sin tasa» de su día. LEGACY: anterior a la tasa congelada y aún sin congelar.
+         * @enum {string}
+         */
+        ReceiptExchangeRateStatus: "FROZEN" | "MISSING" | "LEGACY";
+        ReceiptExchangeRateDto: {
+            /** @description FROZEN: congeló su tasa (rate y equivalentAmount presentes). MISSING: «sin tasa» de su día. LEGACY: anterior a la tasa congelada y aún sin congelar. */
+            status: components["schemas"]["ReceiptExchangeRateStatus"];
+            /** @description La tasa congelada (moneda de destino, fuente y día); null si no la congeló. */
+            rate: components["schemas"]["FrozenExchangeRateDto"] | null;
+            /**
+             * @description El abono en la moneda de destino (`rate.currency`) con la tasa congelada, redondeado a céntimos; null sin tasa.
+             * @example 50
+             */
+            equivalentAmount: number | null;
+        };
         ReceiptClinicDto: {
             /** @example Clínica Demo */
             name: string;
@@ -9765,10 +10288,14 @@ export interface components {
             id: string;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @description DX-377: nombre del medio de pago; ausente en los recibos anteriores. */
+            paymentMethodName?: string | null;
+            /** @description DX-377: referencia del pago; ausente en los recibos anteriores. */
+            reference?: string | null;
             /** Format: date-time */
             paidAt: string;
             /**
@@ -9797,7 +10324,7 @@ export interface components {
             asOfDate: string;
         };
         ReceiptPlanBalanceDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 900000 */
             billable: number;
@@ -9852,6 +10379,8 @@ export interface components {
             /** Format: date-time */
             voidedAt: string | null;
             voidReason: string | null;
+            /** @description DX-376: la tasa del abono y su equivalente en la moneda de su destino; null si el abono está en esa moneda. */
+            exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
             /** @description Foto inmutable al emitir (en los «sin serie», los datos de hoy). */
             snapshot: components["schemas"]["ReceiptSnapshotDto"];
         };
@@ -9920,14 +10449,14 @@ export interface components {
              * @example 100
              */
             paymentAmount: number;
-            /** @example USD */
+            /** @description Código ISO 4217 de 3 letras. */
             paymentCurrency: string;
             /**
              * @description Día civil del abono en su sede: la fecha de la tasa
              * @example 2026-10-20
              */
             paidOn: string;
-            /** @example EUR */
+            /** @description Código ISO 4217 de 3 letras. */
             planCurrency: string;
             /** @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos */
             planStatus: components["schemas"]["TreatmentPlanStatus"];
@@ -9989,14 +10518,14 @@ export interface components {
              * @example 100
              */
             paymentAmount: number;
-            /** @example USD */
+            /** @description Código ISO 4217 de 3 letras. */
             paymentCurrency: string;
             /**
              * @description Día civil del abono en su sede: la fecha de la tasa
              * @example 2026-10-20
              */
             paidOn: string;
-            /** @example EUR */
+            /** @description Código ISO 4217 de 3 letras. */
             planCurrency: string;
             /** @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos */
             planStatus: components["schemas"]["TreatmentPlanStatus"];
@@ -10018,6 +10547,46 @@ export interface components {
             items: components["schemas"]["AllocationItemOptionDto"][];
             /** @description Las líneas de antes de guardar */
             previous: components["schemas"]["PreviousAllocationLineDto"][];
+        };
+        PaymentRateBacklogDto: {
+            /**
+             * @description Abonos vivos de la clínica que llevan más de 24 h sin tasa (0: no hay aviso)
+             * @example 3
+             */
+            count: number;
+            /**
+             * Format: date-time
+             * @description Desde cuándo espera el más antiguo (UTC; la web lo enseña como día de la sede), o null si count es 0
+             * @example 2026-10-28T14:05:00.000Z
+             */
+            oldestSince: string | null;
+        };
+        PaymentRateOtherMissingDto: {
+            /** @example 0 */
+            count: number;
+            /** @description Las otras monedas sin tasa manual ese día (ISO 4217). */
+            currencies: string[];
+        };
+        PaymentRateBacklogDayDto: {
+            /**
+             * Format: date
+             * @example 2026-10-28
+             */
+            date: string;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * @description Abonos vivos de la clínica de ese día (en su sede) que esperan su tasa, están en esa moneda o van a un plan (o saldo migrado) en esa moneda, y cuya otra moneda es USD o ya tiene tasa manual ese día: a los que servirá de respaldo.
+             * @example 1
+             */
+            count: number;
+            /**
+             * @description Hay tasa del proveedor guardada para ese día: manda la automática y la manual de un día anterior a «manual desde» no se usa.
+             * @example false
+             */
+            providerRateSaved: boolean;
+            /** @description Abonos de ese día que necesitan esa moneda y otra distinta de USD sin tasa manual ese día: la de respaldo solo les servirá cuando se registre también la otra. */
+            otherRatesMissing: components["schemas"]["PaymentRateOtherMissingDto"];
         };
         CreatePaymentPlanDto: {
             /**
@@ -10094,10 +10663,7 @@ export interface components {
             id: string;
             /** @example clx0987654321 */
             treatmentPlanId: string;
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @enum {string} */
             status: "ACTIVE" | "COMPLETED" | "CANCELLED";
@@ -10210,10 +10776,7 @@ export interface components {
             amount: number;
         };
         AccountStatementCurrencySummaryDto: {
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Σ ítems ACCEPTED|DONE de los planes no cancelados en esta moneda
@@ -10250,7 +10813,7 @@ export interface components {
             nextInstallment: components["schemas"]["AccountStatementNextInstallmentDto"] | null;
         };
         AccountStatementOtherCurrencyDto: {
-            /** @example USD */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 50 */
             amount: number;
@@ -10260,7 +10823,7 @@ export interface components {
             id: string;
             /** @enum {string} */
             status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: date-time
@@ -10283,6 +10846,12 @@ export interface components {
             paidOtherCurrencies: components["schemas"]["AccountStatementOtherCurrencyDto"][];
             /** @example 1800000 */
             balance: number;
+        };
+        AccountStatementPaymentMethodRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Pago móvil */
+            name: string;
         };
         AccountStatementLocationRefDto: {
             /** Format: uuid */
@@ -10314,10 +10883,20 @@ export interface components {
             paidOn: string;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
-            /** @enum {string|null} */
+            /**
+             * @description Método antiguo, derivado del tipo base del medio (un medio digital es TRANSFER). Para mostrar, usar `paymentMethod.name`.
+             * @enum {string|null}
+             */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @description DX-395: medio de pago de la clínica con que se cobró (también los propios, como «Pago móvil»). Un abono de una réplica anterior sin medio lleva el medio inicial de su método; `null` si no tiene método. */
+            paymentMethod: components["schemas"]["AccountStatementPaymentMethodRefDto"] | null;
+            /**
+             * @description DX-395: referencia del pago tal como se tecleó, o `null`. Solo la ven los roles de cobro (este endpoint) y el paciente en su estado de cuenta.
+             * @example ABC 123
+             */
+            reference: string | null;
             location: components["schemas"]["AccountStatementLocationRefDto"];
             /**
              * Format: uuid
@@ -10350,7 +10929,7 @@ export interface components {
             paymentPlanId: string;
             /** Format: uuid */
             treatmentPlanId: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @enum {string} */
             kind: "DOWN_PAYMENT" | "INSTALLMENT";
@@ -10369,7 +10948,7 @@ export interface components {
         AccountStatementOpeningBalanceDto: {
             /** Format: uuid */
             id: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 150000 */
             amount: number;
@@ -10419,7 +10998,7 @@ export interface components {
             lastName: string;
         };
         FamilyCurrencyAmountsDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Igual que `summary[].budgeted` individual */
             budgeted: number;
@@ -10457,10 +11036,7 @@ export interface components {
              * @enum {string}
              */
             status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /**
-             * @description Moneda del plan (la del saldo y la del plan de cuotas)
-             * @example COP
-             */
+            /** @description Moneda del plan (la del saldo y la del plan de cuotas) */
             currency: string;
             /**
              * Format: date-time
@@ -10502,12 +11078,9 @@ export interface components {
             id: string;
             /** @example Ana Pérez */
             fullName: string;
-            /** @example +57 300 123 4567 */
+            /** @description Teléfono tal como está en la ficha, con su prefijo si lo tiene. */
             phone: string | null;
-            /**
-             * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
-             * @example 573001234567
-             */
+            /** @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable */
             whatsApp: string | null;
         };
         AgingBucketsDto: {
@@ -10529,7 +11102,7 @@ export interface components {
             amount: number;
         };
         AgingCurrencyDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Saldo neto = debt − credit: el mismo `balance` del estado de cuenta */
             balance: number;
@@ -10551,7 +11124,7 @@ export interface components {
              */
             paidOn: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
         };
         AgingRowNextInstallmentDto: {
@@ -10559,7 +11132,7 @@ export interface components {
             dueDate: string;
             /** @description Lo que falta por cubrir de esa cuota */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
         };
         AgingLastNoteDto: {
@@ -10572,7 +11145,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Día civil de la sede
@@ -10607,7 +11180,7 @@ export interface components {
             promise: components["schemas"]["AgingPromiseDto"] | null;
         };
         AgingTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Deudores con esta moneda */
             patients: number;
@@ -10665,7 +11238,7 @@ export interface components {
              * @enum {string|null}
              */
             trend: "BETTER" | "WORSE" | "EQUAL" | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description BE-045: solo en producción y % de cobro, y solo cuando la producción del período comparado en esta moneda no es base (empieza antes de DX-050 con realizados «Sin atribuir», o tuvo cobros sin producción): `change` y `trend` van a null
@@ -10755,14 +11328,12 @@ export interface components {
             fullName: string | null;
         };
         CashMoneyDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             amount: number;
         };
-        /** @enum {string} */
-        PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
         CashExpectedLineDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /** @description Fondo inicial (solo efectivo) */
@@ -10789,7 +11360,7 @@ export interface components {
              */
             paidOn: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
             /** @example PRI-000012 */
@@ -10808,7 +11379,7 @@ export interface components {
              */
             paidOn: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
             /** @example PRI-000012 */
@@ -10834,7 +11405,7 @@ export interface components {
             category: string;
             supplier: string | null;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** Format: date-time */
             createdAt: string;
@@ -10852,7 +11423,7 @@ export interface components {
             category: string;
             supplier: string | null;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** Format: date-time */
             createdAt: string;
@@ -10897,7 +11468,7 @@ export interface components {
             id: string;
             /** @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada. */
             kind: components["schemas"]["CashAdjustmentKind"];
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /** @description Con signo */
@@ -10918,7 +11489,7 @@ export interface components {
             originalSession: components["schemas"]["CashSessionRefDto"] | null;
         };
         CashClosingLineDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             opening: number;
@@ -11016,10 +11587,7 @@ export interface components {
             session: components["schemas"]["CashSessionDetailDto"] | null;
         };
         CashFloatInputDto: {
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 100000 */
             amount: number;
@@ -11063,10 +11631,7 @@ export interface components {
             pageSize: number;
         };
         CashCountInputDto: {
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /** @example 350000 */
@@ -11084,10 +11649,7 @@ export interface components {
             reason: string;
         };
         CreateCashAdjustmentDto: {
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /**
@@ -11144,7 +11706,7 @@ export interface components {
             /** Format: uuid */
             locationId: string;
             locationName: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Abonos vivos del mes civil de la sede, sin anulados. */
             income: number;
@@ -11184,7 +11746,7 @@ export interface components {
             description: string | null;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: date
@@ -11261,10 +11823,7 @@ export interface components {
              * @example 150000
              */
             amount: number;
-            /**
-             * @description Código ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: date
@@ -11290,7 +11849,7 @@ export interface components {
             id: string;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /**
@@ -11329,7 +11888,7 @@ export interface components {
             description: string | null;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: date
@@ -11378,7 +11937,7 @@ export interface components {
              * @example 150000
              */
             amount?: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency?: string;
             /** Format: uuid */
             locationId?: string;
@@ -11442,10 +12001,7 @@ export interface components {
              * @example 150000
              */
             amount: number;
-            /**
-             * @description Código ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: uuid
@@ -11654,7 +12210,7 @@ export interface components {
              * @example 50000
              */
             suggestedFee: number | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string | null;
             /** @description Texto para el paciente */
             patientText: string;
@@ -11683,10 +12239,7 @@ export interface components {
              * @example 50000
              */
             suggestedFee?: number | null;
-            /**
-             * @description ISO 4217 del importe sugerido (obligatoria con importe)
-             * @example COP
-             */
+            /** @description ISO 4217 del importe sugerido (obligatoria con importe) */
             currency?: string | null;
             /** @example Si no puedes venir, avísanos con 24 horas de antelación. */
             patientText?: string;
@@ -11699,7 +12252,7 @@ export interface components {
             version: number;
             noticeHours: number;
             suggestedFee: number | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string | null;
         };
         CancellationFeeRecordDto: {
@@ -12021,6 +12574,15 @@ export interface components {
             delayMs: number;
             /** @description Con retraso: más de 2 periodos sin correr, o nunca sincronizada */
             overdue: boolean;
+            /** @description DX-380: una sola ejecución a la vez (no encola un tick mientras el anterior siga PENDING o RUNNING) */
+            singleton: boolean;
+            /** @description DX-380: ticks saltados porque el anterior seguía en curso (0 si la tarea no está sincronizada) */
+            skippedCount: number;
+            /**
+             * Format: date-time
+             * @description DX-380: el último tick saltado, o null
+             */
+            lastSkippedAt: string | null;
         };
         JobsStatsDto: {
             /**
@@ -12109,10 +12671,7 @@ export interface components {
             from: string;
             /** Format: date-time */
             to: string;
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Sum of every active payment's amount in the range, each converted to `currency` using the rate of ITS OWN civil paid date in its location's time zone (never today's rate).
@@ -12124,13 +12683,7 @@ export interface components {
              * @example 12
              */
             count: number;
-            /**
-             * @description Breakdown of the ORIGINAL (unconverted) amounts grouped by each payment's own currency.
-             * @example {
-             *       "COP": 500000,
-             *       "USD": 30
-             *     }
-             */
+            /** @description Breakdown of the ORIGINAL (unconverted) amounts grouped by each payment's own currency, keyed by its ISO 4217 code (3 letters). */
             byCurrency: Record<string, never>;
         };
         DashboardLowStockItemDto: {
@@ -13762,7 +14315,7 @@ export interface components {
         /** @enum {string} */
         PatientImportDuplicateMode: "SKIP" | "FILL_EMPTY";
         BalanceCurrencyTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Filas del archivo */
             rows: number;
@@ -13770,7 +14323,7 @@ export interface components {
             amount: number;
         };
         ImportedBalanceTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Saldos migrados vivos */
             count: number;
@@ -17136,6 +17689,334 @@ export interface operations {
             };
         };
     };
+    AnestheticsController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también los desactivados (Ajustes) */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"][];
+                };
+            };
+        };
+    };
+    AnestheticsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAnestheticProductDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"];
+                };
+            };
+            /** @description Valores fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay uno con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnestheticsController_loadSamples: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"][];
+                };
+            };
+        };
+    };
+    AnestheticsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAnestheticProductDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"];
+                };
+            };
+            /** @description No es de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay uno con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_listByPatient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnesthesiaAdministrationDto"][];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_listByEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryAnesthesiaDto"];
+                };
+            };
+            /** @description Paciente o evolución no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordAnesthesiaDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordedAnesthesiaDto"];
+                };
+            };
+            /** @description Carpules, peso, hora futura, anestésico desactivado o menor de 12 años sin peso */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, evolución o anestésico no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnesthesiaConflictDto"];
+                };
+            };
+        };
+    };
+    AnesthesiaController_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnesthesiaDoseCheckDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnesthesiaCheckDto"];
+                };
+            };
+            /** @description Carpules o peso inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, evolución o anestésico no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_rejectPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: unknown;
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_rejectDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: unknown;
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_rejectPatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: unknown;
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     OdontogramController_create: {
         parameters: {
             query?: never;
@@ -18843,6 +19724,132 @@ export interface operations {
             };
         };
     };
+    PaymentMethodsController_list: {
+        parameters: {
+            query?: {
+                /** @description Incluir los desactivados (la pantalla de Ajustes). */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"][];
+                };
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentMethodDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"];
+                };
+            };
+            /** @description Nombre vacío o tipo desconocido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un medio con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePaymentMethodDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"];
+                };
+            };
+            /** @description Campo inválido, o cambio del tipo base de un medio inicial (DX-377). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un medio con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     WaitlistController_list: {
         parameters: {
             query?: {
@@ -19933,7 +20940,7 @@ export interface operations {
             query: {
                 /** @description Procedimiento del catálogo */
                 catalogItemId: string;
-                /** @description Moneda del plan (ISO 4217) */
+                /** @description Moneda del plan (código ISO 4217 de 3 letras). */
                 currency: string;
             };
             header?: {
@@ -20131,7 +21138,7 @@ export interface operations {
     ExchangeController_rates: {
         parameters: {
             query: {
-                /** @description Historical day to fetch USD-base rates for (YYYY-MM-DD). */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista). Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor entre el alta de la clínica (o su primer abono, lo anterior) y hoy en la zona de sus sedes: fuera de ahí, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -20148,17 +21155,38 @@ export interface operations {
                     "application/json": components["schemas"]["RatesResponseDto"];
                 };
             };
+            /** @description Fecha que no existe (`EXCHANGE_RATE_DATE_INVALID` o el mensaje de validación de `date`) o día sin tasa guardada fuera de la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     ExchangeController_convert: {
         parameters: {
             query: {
                 amount: number;
-                /** @description ISO 4217 currency code */
+                /** @description Código ISO 4217 de 3 letras. */
                 from: string;
-                /** @description ISO 4217 currency code */
+                /** @description Código ISO 4217 de 3 letras. */
                 to: string;
-                /** @description Historical day whose rate applies to this conversion (YYYY-MM-DD). */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista). Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor entre el alta de la clínica (o su primer abono, lo anterior) y hoy en la zona de sus sedes: fuera de ahí, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -20175,8 +21203,22 @@ export interface operations {
                     "application/json": components["schemas"]["ConvertResponseDto"];
                 };
             };
-            /** @description Moneda sin tasa ese día: «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español */
+            /** @description Fecha que no existe (`EXCHANGE_RATE_DATE_INVALID` o el mensaje de validación de `date`) o día sin tasa guardada fuera de la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20644,6 +21686,8 @@ export interface operations {
                 to: string;
                 /** @description Solo abonos de este método. Sin él, todos los métodos. */
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+                /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
+                paymentMethodId?: string;
                 page?: number;
                 pageSize?: number;
             };
@@ -20664,7 +21708,53 @@ export interface operations {
                     "application/json": components["schemas"]["CashPaymentsResponseDto"];
                 };
             };
-            /** @description Fecha inválida, from > to, período de más de 366 días, método desconocido o sede ajena a la clínica */
+            /** @description Fecha inválida, from > to, período de más de 366 días, método desconocido, medio de pago de otra clínica o sede ajena a la clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentsController_listCashCsv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (YYYY-MM-DD), inclusive, en la zona horaria de la sede de cada abono (la de su horario; con varias sedes en zonas distintas, cada una corta el día a su medianoche). */
+                from: string;
+                /** @description Último día del período (YYYY-MM-DD), inclusive (hasta la medianoche del día siguiente en la zona de la sede). Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
+                to: string;
+                /** @description Solo abonos de este método. Sin él, todos los métodos. */
+                method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+                /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
+                paymentMethodId?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin cabecera: todas las sedes de la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período no válido, medio de otra clínica o más de 10 000 abonos */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20725,7 +21815,14 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. */
+            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. DX-377: `code: PAYMENT_REFERENCE_DUPLICATE` si la referencia y el medio ya están en otro abono vivo de ±90 días (`matches`); se confirma repitiendo con `duplicateReferenceReason`. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21061,6 +22158,70 @@ export interface operations {
             };
             /** @description Saldo migrado, plan rechazado o cancelado, sin tasa para la fecha del abono, o la imputación cambió (expectedVersion) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentRateBacklogController_backlog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRateBacklogDto"];
+                };
+            };
+            /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentRateBacklogController_day: {
+        parameters: {
+            query: {
+                /** @description Día civil de la tasa (AAAA-MM-DD, un día que exista). */
+                date: string;
+                /** @description Moneda de la tasa (ISO 4217, tres letras mayúsculas). */
+                currency: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRateBacklogDayDto"];
+                };
+            };
+            /** @description Día que no existe o moneda que no es un código de tres letras */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23235,7 +24396,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Sin cargo generado (o condonado), ya anulado, ya cobrado (anula antes el abono), o la cita cambió */
+            /** @description Sin cargo generado (o condonado), ya anulado, ya cobrado (anula antes el abono), hay abonos del plan sin convertir a su moneda (registra la tasa del día), o la cita cambió. «Ya cobrado» compara en la moneda del plan con la base de cada abono (DX-382) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24402,7 +25563,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Sin email ni responsable que reciba avisos, sin teléfono con indicativo, o el paciente dio de baja los envíos */
+            /** @description Sin email ni responsable que reciba avisos, sin un teléfono que sirva para WhatsApp, o el paciente dio de baja los envíos */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26519,7 +27680,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Sede por defecto del lote (indicativo de los teléfonos). Sin ella, la sede de escritura. */
+                /** @description Sede por defecto del lote (su prefijo telefónico se usa con los teléfonos sin +). Sin ella, la sede de escritura. */
                 "X-Location-Id"?: string;
             };
             path?: never;

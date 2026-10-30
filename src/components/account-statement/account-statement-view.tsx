@@ -15,6 +15,8 @@ import {
   installmentLabel,
   isEmptyStatement,
   methodLabel,
+  movementMediumName,
+  movementReferenceLabel,
   movementDestination,
   openingAsOfLabel,
   openingNoteFor,
@@ -540,13 +542,20 @@ function StatementBody({
                       <VoidedDetail movement={m} />
                     </TableCell>
                     <TableCell data-label={copy.colMethod}>
+                      {/* DX-395: el medio de la clínica (no el método antiguo) y la referencia. */}
                       {m.method ? (
                         <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[m.method]}>
-                          {methodLabel(m.method)}
+                          {movementMediumName(m)}
                         </Badge>
                       ) : (
                         <span className="text-muted">{methodLabel(null)}</span>
                       )}
+                      {movementReferenceLabel(m) ? (
+                        <span className="mt-1 block font-mono text-xs text-muted">
+                          <span className="sr-only"> · </span>
+                          {movementReferenceLabel(m)}
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell data-label={copy.colLocation}>{m.location.name}</TableCell>
                     <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>

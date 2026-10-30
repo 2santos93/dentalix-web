@@ -110,7 +110,7 @@ describe('ConfirmationLinkPanel', () => {
     const wa = await screen.findByRole('button', { name: /abrir whatsapp/i });
     expect(wa).toBeDisabled();
     expect(
-      screen.getByText('El paciente no tiene un teléfono con indicativo internacional (+…). Agrégalo en su ficha o copia el enlace.'),
+      screen.getByText('El teléfono del paciente no sirve para WhatsApp: revísalo en su ficha o escríbelo con + y su prefijo. También puedes copiar el enlace.'),
     ).toBeInTheDocument();
     expect(wa).toHaveAttribute('aria-describedby');
     expect(screen.queryByRole('link', { name: /abrir whatsapp/i })).not.toBeInTheDocument();

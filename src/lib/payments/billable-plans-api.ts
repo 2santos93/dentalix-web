@@ -38,16 +38,18 @@ export async function listBillablePlans(
   );
 }
 
+/** Pinta un importe con su moneda. */
+export type MoneyFormatter = (amount: number, currency: string) => string;
+
 /**
  * Cómo se nombra un plan en el selector de cobro: el mismo «Plan del …» que el
  * estado de cuenta y la caja (el plan no tiene título), su estado y lo que
- * falta por pagar — lo que decide contra cuál se cobra.
+ * falta por pagar — lo que decide contra cuál se cobra. `money` pinta el
+ * importe (DX-386: con el formato de la sede donde la pantalla lo tiene).
  */
-export function billablePlanLabel(plan: BillablePlan): string {
+export function billablePlanLabel(plan: BillablePlan, money: MoneyFormatter = formatCurrency): string {
   const balance =
-    plan.balance < 0
-      ? `${formatCurrency(-plan.balance, plan.currency)} ${statementCopy.inFavor}`
-      : formatCurrency(plan.balance, plan.currency);
+    plan.balance < 0 ? `${money(-plan.balance, plan.currency)} ${statementCopy.inFavor}` : money(plan.balance, plan.currency);
   return [
     statementCopy.planLabel(plan.createdAt),
     PLAN_STATUS_LABELS[plan.status],

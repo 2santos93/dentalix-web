@@ -6,12 +6,17 @@ import { Building2, Lock } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
+  downloadCashPaymentsCsv,
   listCashPayments,
   type CashPayment,
   type CashPaymentsResponse,
   type CashPaymentsQuery,
-  type PaymentMethod,
 } from '@/lib/payments/payments-api';
+import type { ClinicPaymentMethod } from '@/lib/payments/payment-methods-api';
+import { saveCsv } from '@/lib/files/save-csv';
+import { notifyError } from '@/components/errors/notify';
+import { FieldError } from '@/components/errors/field-error';
+import { usePaymentMethods } from '@/components/payments/use-payment-methods';
 import {
   isValidRange,
   presetRange,
@@ -22,7 +27,6 @@ import {
 import {
   PAYMENT_METHOD_BADGE_VARIANT,
   PAYMENT_METHOD_LABELS,
-  PAYMENT_METHOD_OPTIONS,
 } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDate, zoneCityLabel } from '@/lib/format/date';
@@ -71,14 +75,25 @@ const copy = {
   invalidRangeOrder: 'La fecha final no puede ser anterior a la inicial.',
   invalidRangeLength: `El período no puede superar ${MAX_RANGE_DAYS} días. Acórtalo e intenta de nuevo.`,
   invalidRangeEmpty: 'Elige las dos fechas del período.',
-  methodLabel: 'Método',
-  methodAll: 'Todos los métodos',
+  // DX-395: el filtro es por medio de pago de la clínica (también los propios).
+  mediumLabel: 'Medio de pago',
+  mediumAll: 'Todos los medios',
+  mediumsLoading: 'Cargando medios…',
+  mediumInactive: (name: string) => `${name} (inactivo)`,
+  mediumsError: 'No cargaron los medios',
   methodNone: 'Sin método',
+  // DX-395: la caja del período en CSV, con medio y referencia.
+  export: 'Exportar CSV',
+  exportError: 'No pudimos exportar la caja.',
+  exported: 'Caja exportada.',
+  csvFileName: (from: string, to: string) => `caja-${from}-${to}.csv`,
   countNoun: 'abono',
   countNounPlural: 'abonos',
   summaryTitle: 'Resumen del período',
   byCurrency: 'Por moneda',
   byMethod: 'Por método',
+  // DX-377: referencia del pago bajo su medio.
+  referenceLabel: (reference: string) => `Ref. ${reference}`,
   paymentsCount: (n: number) => `${n} ${n === 1 ? 'abono' : 'abonos'}`,
   tableLabel: 'Abonos del período',
   colDate: 'Fecha',
@@ -100,7 +115,7 @@ const copy = {
   genericLoadError: 'No pudimos cargar la caja.',
   // 400: lo único que la pantalla manda es período, método y página, así que
   // el problema está ahí; el mensaje del servidor va en inglés y no se enseña.
-  badRequest: 'El período o el método no son válidos: revisa las fechas (como mucho 366 días).',
+  badRequest: 'El período o el medio de pago no son válidos: revisa las fechas (como mucho 366 días).',
   forbiddenTitle: 'Tu rol no tiene acceso a la caja.',
   forbiddenHint:
     'La caja es para administración y recepción. Pídele acceso a quien administra la clínica.',
@@ -112,17 +127,16 @@ const copy = {
   periodDays: (from: string, to: string) => (from === to ? from : `del ${from} al ${to}`),
   registeredOn: (date: string) => `Registrado el ${date}`,
   empty: 'No hay abonos en este período.',
-  emptyHint: 'Prueba con otro rango de fechas o con otro método.',
+  emptyHint: 'Prueba con otro rango de fechas o con otro medio de pago.',
 };
 
 type PeriodChoice = CashPreset | 'custom';
-type MethodFilter = PaymentMethod | 'ALL';
+/** `ALL` o el id de un medio de pago de la clínica (DX-395). */
+type MediumFilter = string;
+const ALL_MEDIUMS = 'ALL';
 
 const PERIOD_CHOICES: PeriodChoice[] = ['today', 'week', 'month', 'custom'];
 
-function methodLabel(method: PaymentMethod | null): string {
-  return method ? PAYMENT_METHOD_LABELS[method] : copy.methodNone;
-}
 
 function rangeError(range: CashRange): string | null {
   if (!range.from || !range.to) return copy.invalidRangeEmpty;
@@ -178,7 +192,12 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     from: '',
     to: '',
   });
-  const [method, setMethod] = useState<MethodFilter>('ALL');
+  const [medium, setMedium] = useState<MediumFilter>(ALL_MEDIUMS);
+  // DX-395: todos los medios de la clínica, también los desactivados (sus
+  // abonos anteriores siguen en la caja).
+  const mediums = usePaymentMethods(token, true, { includeInactive: true });
+  const [exporting, setExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState('');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<CashPaymentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -208,7 +227,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         const params: CashPaymentsQuery = {
           from,
           to,
-          ...(method !== 'ALL' ? { method } : {}),
+          ...(medium !== ALL_MEDIUMS ? { paymentMethodId: medium } : {}),
           page,
         };
         const res = await listCashPayments(token, params);
@@ -238,7 +257,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, rangeFrom, rangeTo, method, page, reloadKey]);
+  }, [token, rangeFrom, rangeTo, medium, page, reloadKey]);
 
   // Cada cambio de filtro vuelve a la página 1 en el MISMO render que el
   // filtro (React agrupa los dos `set`), así que sale una sola petición.
@@ -263,9 +282,32 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     }
   }
 
-  function changeMethod(next: MethodFilter) {
-    setMethod(next);
+  function changeMedium(next: MediumFilter) {
+    setMedium(next);
     setPage(1);
+  }
+
+  // DX-395: la caja del período en CSV, con los mismos filtros que la tabla.
+  // El reintento cierra sobre el período y el medio que se exportaban: es la
+  // operación que se repite, no estado de la pantalla.
+  async function exportCsv(from: string, to: string, mediumId: MediumFilter) {
+    setExporting(true);
+    setExportNotice('');
+    try {
+      const text = await downloadCashPaymentsCsv(token, {
+        from,
+        to,
+        ...(mediumId !== ALL_MEDIUMS ? { paymentMethodId: mediumId } : {}),
+      });
+      saveCsv(text, copy.csvFileName(from, to), { bom: true });
+      setExportNotice(copy.exported);
+    } catch (err) {
+      notifyError(apiErrorMessage(err, { fallback: copy.exportError }), {
+        onRetry: () => void exportCsv(from, to, mediumId),
+      });
+    } finally {
+      setExporting(false);
+    }
   }
 
   const customError = period === 'custom' ? rangeError(customRange) : null;
@@ -357,19 +399,42 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
             </div>
           ) : null}
 
-          <select
-            aria-label={copy.methodLabel}
-            value={method}
-            onChange={(e) => changeMethod(e.target.value as MethodFilter)}
-            className={cn(toolbarFieldClass, 'sm:w-48')}
-          >
-            <option value="ALL">{copy.methodAll}</option>
-            {PAYMENT_METHOD_OPTIONS.map((m) => (
-              <option key={m} value={m}>
-                {PAYMENT_METHOD_LABELS[m]}
+          {mediums.status === 'error' ? (
+            <FieldError
+              label={copy.mediumsError}
+              onRetry={mediums.retry}
+              className="h-10 max-sm:h-11 sm:w-56"
+            />
+          ) : (
+            <select
+              aria-label={copy.mediumLabel}
+              value={medium}
+              disabled={mediums.status === 'loading'}
+              onChange={(e) => changeMedium(e.target.value)}
+              className={cn(toolbarFieldClass, 'max-sm:h-11 sm:w-56')}
+            >
+              <option value={ALL_MEDIUMS}>
+                {mediums.status === 'loading' ? copy.mediumsLoading : copy.mediumAll}
               </option>
-            ))}
-          </select>
+              {mediums.methods.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {mediumOptionLabel(m)}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* La acción del listado cierra la barra, a la derecha (DESIGN.md). */}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => range && void exportCsv(range.from, range.to, medium)}
+            disabled={!range || customError !== null || forbidden}
+            loading={exporting}
+            className="max-sm:h-11 max-sm:w-full sm:ml-auto"
+          >
+            {copy.export}
+          </Button>
         </div>
 
         {customError ? <InlineError id={rangeErrorId}>{customError}</InlineError> : null}
@@ -382,6 +447,10 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
             )}
           </p>
         ) : null}
+
+        <p role="status" className={exportNotice ? 'text-sm text-success' : 'sr-only'}>
+          {exportNotice}
+        </p>
 
         {/* Aviso de la última anulación: fuera de AsyncSection para que la
             recarga no lo borre. */}
@@ -462,11 +531,16 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         <TableCell data-label={copy.colMethod}>
                           {payment.method ? (
                             <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
-                              {PAYMENT_METHOD_LABELS[payment.method]}
+                              {payment.paymentMethod?.name ?? PAYMENT_METHOD_LABELS[payment.method]}
                             </Badge>
                           ) : (
                             <span className="text-muted">{copy.methodNone}</span>
                           )}
+                          {payment.reference ? (
+                            <span className="mt-1 block font-mono text-xs text-muted">
+                              {copy.referenceLabel(payment.reference)}
+                            </span>
+                          ) : null}
                         </TableCell>
                         <TableCell data-label={copy.colLocation}>{payment.location.name}</TableCell>
                         <TableCell
@@ -553,6 +627,11 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   );
 }
 
+/** Nombre del medio en el filtro; el desactivado lo dice (DX-395). */
+function mediumOptionLabel(medium: ClinicPaymentMethod): string {
+  return medium.active ? medium.name : copy.mediumInactive(medium.name);
+}
+
 /**
  * «Registrado hoy» / «Registrado el …» bajo la fecha de pago cuando el abono se
  * registró otro día (DX-067). Explica por qué recepción ve «Anular» junto a un
@@ -621,10 +700,11 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
           ))}
         </SummaryList>
         <SummaryList label={copy.byMethod} className="max-sm:border-t max-sm:border-hairline">
-          {summary.byMethod.map((row) => (
+          {/* DX-377: por medio de pago de la clínica y moneda. */}
+          {summary.byPaymentMethod.map((row) => (
             <SummaryRow
-              key={`${row.method ?? 'none'}-${row.currency}`}
-              label={methodLabel(row.method)}
+              key={`${row.paymentMethodId ?? 'none'}-${row.currency}`}
+              label={row.name ?? copy.methodNone}
               meta={`${row.currency} · ${copy.paymentsCount(row.count)}`}
               value={formatCurrency(row.total, row.currency)}
             />

@@ -225,6 +225,18 @@ describe('paciente importado (DX-107)', () => {
   });
 });
 
+describe('PatientDataPanel · teléfono (DX-387)', () => {
+  it('shows the international phone of the API, or the stored one when it has none', () => {
+    const { rerender } = render(
+      <PatientDataPanel patient={patient({ phone: '0412-1234567', phoneInternational: '+58 412 1234567' })} />,
+    );
+    expect(screen.getByText('+58 412 1234567')).toBeInTheDocument();
+    expect(screen.queryByText('0412-1234567')).not.toBeInTheDocument();
+    rerender(<PatientDataPanel patient={patient({ phone: 'oficina 2', phoneInternational: null })} />);
+    expect(screen.getByText('oficina 2')).toBeInTheDocument();
+  });
+});
+
 describe('PatientDataPanel · maquetación', () => {
   it('un correo largo sin espacios parte la línea en vez de ensanchar la ficha a 390 px', () => {
     // jsdom no maqueta: se fija lo que lo hace posible. Sin `min-w-0` la celda

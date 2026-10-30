@@ -1,4 +1,5 @@
 import {
+  exchangeRateBackupDetail,
   cancellationDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
@@ -19,7 +20,6 @@ import {
   clinicSettingsDetail,
   locationCalendarDetail,
   staffDetail,
-  hasStaffLocationIds,
   locationNameMap,
 } from './audit-labels';
 
@@ -558,15 +558,6 @@ describe('staffDetail (DX-359)', () => {
     ).toBe('Invitación aceptada · Miembro reactivado · Rol: Recepción · Sedes: Todas las sedes');
   });
 
-  it('hasStaffLocationIds: solo con sedes concretas en algún lado', () => {
-    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: [CENTRO] } } })).toBe(true);
-    expect(hasStaffLocationIds({ staffAccess: { before: { locationIds: [CENTRO] }, after: { locationIds: null } } })).toBe(true);
-    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: null } } })).toBe(false);
-    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: [] } } })).toBe(false);
-    expect(hasStaffLocationIds({ staffAccess: { after: { role: 'ADMIN' } } })).toBe(false);
-    expect(hasStaffLocationIds({})).toBe(false);
-  });
-
   it('nunca muestra el token, el email ni el nombre aunque llegaran en la metadata', () => {
     const text = staffDetail({
       reason: 'INVITATION_SENT',
@@ -580,5 +571,22 @@ describe('staffDetail (DX-359)', () => {
   it('null para otra reason o sin reason', () => {
     expect(staffDetail({ reason: 'LOGIN_UNLOCKED' })).toBeNull();
     expect(staffDetail({})).toBeNull();
+  });
+});
+
+describe('exchangeRateBackupDetail (DX-402)', () => {
+  it('dice que el barrido usó una tasa manual de un día anterior a «manual desde» como respaldo', () => {
+    expect(
+      exchangeRateBackupDetail({
+        reason: 'EXCHANGE_RATE_BACKUP',
+        origin: 'JOB',
+        exchangeRateBackup: { rateDate: '2026-10-28', manualSince: '2026-10-30', currencies: ['COP', 'USD'] },
+      }),
+    ).toBe('Tasa de respaldo: la manual de un día anterior a «manual desde» (COP, USD) · proceso automático');
+  });
+
+  it('null para otra reason', () => {
+    expect(exchangeRateBackupDetail({ reason: 'RECEIPT_ISSUED' })).toBeNull();
+    expect(exchangeRateBackupDetail({})).toBeNull();
   });
 });

@@ -35,6 +35,8 @@ type CurrencySelectProps = CurrencySource & {
   required?: boolean;
   /** Códigos que no se ofrecen (p. ej. la moneda base de las tasas, que da la API). */
   exclude?: readonly string[];
+  /** Primera opción elegible con valor `''` (p. ej. «Sin segunda moneda»), para un campo opcional. */
+  noneLabel?: string;
 };
 
 export function CurrencySelect({
@@ -51,6 +53,7 @@ export function CurrencySelect({
   invalid,
   required,
   exclude,
+  noneLabel,
 }: CurrencySelectProps) {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [failed, setFailed] = useState(false);
@@ -90,7 +93,8 @@ export function CurrencySelect({
 
   // Until the list loads, keep `value` selectable so the control is never
   // empty and never loses the current selection.
-  const loaded = currencies.length > 0 ? currencies : [{ code: value, name: value, symbol: '' }];
+  const loaded =
+    currencies.length > 0 ? currencies : value ? [{ code: value, name: value, symbol: '' }] : [];
   const options = exclude?.length ? loaded.filter((c) => !exclude.includes(c.code)) : loaded;
 
   return (
@@ -111,6 +115,7 @@ export function CurrencySelect({
           {placeholder}
         </option>
       ) : null}
+      {noneLabel ? <option value="">{noneLabel}</option> : null}
       {options.filter((c) => !placeholder || c.code).map((c) => (
         <option key={c.code} value={c.code}>
           {c.symbol ? `${c.name} (${c.symbol})` : c.name}

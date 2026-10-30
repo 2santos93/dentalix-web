@@ -69,6 +69,7 @@ const motherParty: ResponsibleParty = {
     docNumber: '52987654',
     email: 'claudia@example.com',
     phone: null,
+    phoneInternational: null,
   },
   fullName: 'Claudia Navarro',
   docType: 'NATIONAL_ID',
@@ -77,6 +78,7 @@ const motherParty: ResponsibleParty = {
   docNumber: '52987654',
   email: 'claudia@example.com',
   phone: null,
+  phoneInternational: null,
   relationship: 'MOTHER',
   isPayer: true,
   receivesNotices: true,
@@ -147,6 +149,33 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
       'href',
       '/patients/mother',
     );
+  });
+
+  it('the contact line shows the international phone, or the stored one when it has none (DX-387)', async () => {
+    mockedGet.mockResolvedValue(
+      data({
+        parties: [
+          { ...motherParty, phone: '0412-1234567', phoneInternational: '+58 412 1234567' },
+          {
+            ...motherParty,
+            id: 'r2',
+            kind: 'CONTACT',
+            responsiblePatient: null,
+            fullName: 'Luis Ortiz',
+            docNumber: null,
+            email: null,
+            isPayer: false,
+            phone: 'oficina 2',
+            phoneInternational: null,
+          },
+        ],
+      }),
+    );
+    renderSection();
+    const rows = await screen.findAllByTestId('responsible-row');
+    expect(within(rows[0]).getByText(/\+58 412 1234567/)).toBeInTheDocument();
+    expect(within(rows[0]).queryByText(/0412-1234567/)).not.toBeInTheDocument();
+    expect(within(rows[1]).getByText('oficina 2')).toBeInTheDocument();
   });
 
   it('un correo largo sin espacios en el aviso parte la línea en vez de ensanchar la ficha a 390 px', async () => {

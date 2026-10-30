@@ -1,5 +1,5 @@
 'use client';
-import { billablePlanLabel, type BillablePlan } from '@/lib/payments/billable-plans-api';
+import { billablePlanLabel, type BillablePlan, type MoneyFormatter } from '@/lib/payments/billable-plans-api';
 import { formatCurrency } from '@/lib/format/currency';
 import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
@@ -34,6 +34,8 @@ interface BillablePlanFieldProps {
   /** Motivo por el que un plan no se puede elegir aquí, o `null` si se puede. */
   unavailableReason?: (plan: BillablePlan) => string | null;
   disabled?: boolean;
+  /** Cómo se pintan los importes (DX-386: el formato de la sede, si la pantalla lo tiene). */
+  money?: MoneyFormatter;
 }
 
 /**
@@ -50,6 +52,7 @@ export function BillablePlanField({
   onChange,
   unavailableReason,
   disabled,
+  money = formatCurrency,
 }: BillablePlanFieldProps) {
   const selected = state.plans?.find((p) => p.id === value) ?? null;
   const hintId = `${id}-hint`;
@@ -78,30 +81,30 @@ export function BillablePlanField({
               const reason = unavailableReason?.(plan) ?? null;
               return (
                 <option key={plan.id} value={plan.id} disabled={reason !== null}>
-                  {reason ? `${billablePlanLabel(plan)} (${reason})` : billablePlanLabel(plan)}
+                  {reason ? `${billablePlanLabel(plan, money)} (${reason})` : billablePlanLabel(plan, money)}
                 </option>
               );
             })}
           </select>
-          {selected ? <PlanFigures id={hintId} plan={selected} /> : null}
+          {selected ? <PlanFigures id={hintId} plan={selected} money={money} /> : null}
         </>
       )}
     </FormField>
   );
 }
 
-function PlanFigures({ id, plan }: { id: string; plan: BillablePlan }) {
+function PlanFigures({ id, plan, money }: { id: string; plan: BillablePlan; money: MoneyFormatter }) {
   const others = plan.paidOtherCurrencies
-    .map((o) => formatCurrency(o.amount, o.currency))
+    .map((o) => money(o.amount, o.currency))
     .join(', ');
   return (
     <p id={id} className="text-xs text-muted tabular-nums">
       {billablePlanFieldCopy.figures(
         plan.balance < 0
-          ? `${formatCurrency(-plan.balance, plan.currency)} ${billablePlanFieldCopy.inFavor}`
-          : formatCurrency(plan.balance, plan.currency),
-        formatCurrency(plan.total, plan.currency),
-        formatCurrency(plan.paid, plan.currency),
+          ? `${money(-plan.balance, plan.currency)} ${billablePlanFieldCopy.inFavor}`
+          : money(plan.balance, plan.currency),
+        money(plan.total, plan.currency),
+        money(plan.paid, plan.currency),
       )}
       {others ? (
         <span className="block">{billablePlanFieldCopy.otherCurrencies(others)}</span>

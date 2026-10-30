@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
+import { ApiError } from '@/lib/api/api-error';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { Patient } from './patients-api';
@@ -36,6 +37,19 @@ export const OPT_OUT_SOURCE_LABELS: Record<ReminderOptOutSource, string> = {
   STAFF: 'anotada por la clínica',
 };
 
+/**
+ * 400 de la API cuando el canal o la aceptación de WhatsApp piden un móvil que
+ * no lee (no válido o con dos lecturas). Lo da el PATCH de comunicaciones y
+ * también la edición general del paciente; su mensaje dice cómo escribir el
+ * móvil, así que la pantalla lo pone junto a ese campo.
+ */
+const WHATSAPP_REQUIRES_VALID_MOBILE = 'WHATSAPP_REQUIRES_VALID_MOBILE';
+
+/** True si `err` es ese 400: el error va en el campo del móvil, no en el formulario. */
+export function isWhatsappMobileError(err: unknown): err is ApiError {
+  return err instanceof ApiError && err.code === WHATSAPP_REQUIRES_VALID_MOBILE;
+}
+
 /** `GET /patients/:id/communication`: lo ven los 4 roles. */
 export async function getPatientCommunication(
   token: string,
@@ -60,18 +74,6 @@ export async function updatePatientCommunication(
 }
 
 /**
- * E.164 legible: `+57` agrupa 3-3-4 (`+57 310 123 4567`), `+34` 3-2-2-2
- * (`+34 612 34 56 78`); otro indicativo, sin agrupar tras él.
- */
-export function formatE164(e164: string): string {
-  const co = /^\+57(\d{3})(\d{3})(\d{4})$/.exec(e164);
-  if (co) return `+57 ${co[1]} ${co[2]} ${co[3]}`;
-  const es = /^\+34(\d{3})(\d{2})(\d{2})(\d{2})$/.exec(e164);
-  if (es) return `+34 ${es[1]} ${es[2]} ${es[3]} ${es[4]}`;
-  return e164;
-}
-
-/**
  * La ficha con lo que acaba de guardar el bloque «Comunicaciones»: el teléfono
  * (que «Datos» muestra y «Editar» siembra) y la preferencia. El resto, igual.
  */
@@ -79,6 +81,8 @@ export function withCommunication(patient: Patient, c: PatientCommunication): Pa
   return {
     ...patient,
     phone: c.phone,
+    // DX-387: con la misma región que la ficha (la sede activa o la principal).
+    phoneInternational: c.phoneInternational,
     contactChannel: c.contactChannel,
     whatsappOptInAt: c.whatsappOptIn?.at ?? null,
     whatsappOptInSource: c.whatsappOptIn?.source ?? null,

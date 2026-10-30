@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from './dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './dialog';
 
 /**
  * Los diálogos de la app se abren con `open` (sin `DialogTrigger`): al cerrar,
@@ -100,4 +100,22 @@ test('Escape on an expanded combobox does not dismiss the dialog; on a collapsed
   await user.keyboard('{Escape}');
   expect(onEscapeKeyDown).toHaveBeenCalledTimes(1);
   expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+
+test('DX-395: en móvil la «X» mide 44×44 y la cabecera deja su hueco para que el título no pase por debajo', () => {
+  render(
+    <Dialog open>
+      <DialogContent>
+        <DialogHeader data-testid="header">
+          <DialogTitle>Un título largo que en 390 px llega hasta la esquina del diálogo</DialogTitle>
+          <DialogDescription>Descripción</DialogDescription>
+        </DialogHeader>
+      </DialogContent>
+    </Dialog>,
+  );
+  // jsdom no mide: se comprueban las clases por debajo de sm.
+  expect(screen.getByRole('button', { name: 'Cerrar' }).className).toContain('max-sm:size-11');
+  // La X ocupa 8 + 44 = 52 px desde el borde; el contenido empieza a 24 (p-6):
+  // la cabecera reserva 32 px más.
+  expect(screen.getByTestId('header').className).toContain('max-sm:pr-8');
 });

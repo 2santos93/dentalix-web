@@ -69,6 +69,31 @@ describe('LocationPhoneSettings (DX-222)', () => {
     expect(await screen.findByText(/No pudimos guardar el teléfono|boom/)).toBeInTheDocument();
   });
 
+  it('shows the international phone of the API, or the stored one when it has none (DX-387)', async () => {
+    mockedList.mockResolvedValue([
+      { ...base, phone: '601 555 0101', phoneInternational: '+57 601 5550101' },
+      { ...base, id: 'l2', name: 'Sede norte', phone: 'recepción 2', phoneInternational: null },
+    ]);
+    render(<LocationPhoneSettings token="tok" canEdit={false} />);
+    expect(await screen.findByText('+57 601 5550101')).toBeInTheDocument();
+    expect(screen.queryByText('601 555 0101')).not.toBeInTheDocument();
+    expect(screen.getByText('recepción 2')).toBeInTheDocument();
+  });
+
+  it('ADMIN opens the field with the international phone and saving it unchanged is not offered (DX-387)', async () => {
+    mockedList.mockResolvedValue([{ ...base, phone: '601 555 0101', phoneInternational: '+57 601 5550101' }]);
+    render(<LocationPhoneSettings token="tok" canEdit />);
+    expect(await screen.findByLabelText(/Teléfono · Sede principal/)).toHaveValue('+57 601 5550101');
+    expect(screen.getByRole('button', { name: 'Guardar el teléfono de Sede principal' })).toBeDisabled();
+  });
+
+  it('a long phone wraps instead of widening the row at 390 px (DX-387)', async () => {
+    const phone = '+58 412 1234567 ext. 123456';
+    mockedList.mockResolvedValue([{ ...base, phone: '04121234567x123456', phoneInternational: phone }]);
+    render(<LocationPhoneSettings token="tok" canEdit={false} />);
+    expect(await screen.findByText(phone)).toHaveClass('[overflow-wrap:anywhere]');
+  });
+
   it('sin permiso de edición solo lo muestra', async () => {
     mockedList.mockResolvedValue([{ ...base, phone: '+57 601 555 0101' }]);
     render(<LocationPhoneSettings token="tok" canEdit={false} />);

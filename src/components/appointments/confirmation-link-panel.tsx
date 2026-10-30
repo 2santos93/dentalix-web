@@ -29,8 +29,10 @@ const copy = {
   copyFailed: 'No pudimos copiar automáticamente: cópialo a mano desde el campo.',
   whatsapp: 'Abrir WhatsApp',
   noClock: `${sedeConfigErrorCopy.fieldLabel.locale}: el mensaje no puede decir la hora de la cita. Copia el enlace.`,
+  // DX-329: sin + vale el prefijo de la sede, si tiene; el motivo puede ser
+  // un número que no se lee, con dos lecturas o sin prefijo con el que leerlo.
   noPhone:
-    'El paciente no tiene un teléfono con indicativo internacional (+…). Agrégalo en su ficha o copia el enlace.',
+    'El teléfono del paciente no sirve para WhatsApp: revísalo en su ficha o escríbelo con + y su prefijo. También puedes copiar el enlace.',
   notConfirmable: (status: string) =>
     `La cita está ${status.toLowerCase()}: no hay nada que confirmar.`,
   started: 'La cita ya empezó: el enlace nacería caducado.',

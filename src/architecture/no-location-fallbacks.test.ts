@@ -540,6 +540,9 @@ const DOC_TYPE_LEGACY_NORMALIZER = 'lib/patients/legacy-doc-type.ts';
 const LEGACY_FILES = [DOC_TYPE_LEGACY_NORMALIZER, PRESCRIPTION_LEGACY_LAYOUT];
 // DX-312 (R8, R10): copia byte a byte de la lista generada en la API; `scripts/check-api-reference-sync.mjs` la vigila.
 const COUNTRY_LIST_COPY = 'lib/locations/iso3166-countries.json';
+// DX-329 (§3.2): igual, la lista de regiones de numeración; también la vigila el script de sincronía.
+const PHONE_REGION_LIST_COPY = 'lib/locations/phone-regions-list.json';
+const GENERATED_LIST_COPIES = [COUNTRY_LIST_COPY, PHONE_REGION_LIST_COPY];
 const COUNTRY_DOCUMENT = /[Cc][ée]dula|[Tt]arjeta de identidad|[Ee]xtranjer[ií]a|\b(?:CC|TI|CE)\b|INVIMA/;
 /** Siglas de documentos de otros países: en cualquier caja, como palabra. */
 const COUNTRY_DOCUMENT_ACRONYM = /\b(?:NIT|NIF|RIF|DNI|NIE|RUT|CURP|CPF|RUC|CUIL|CUIT|NUIP)\b/i;
@@ -572,7 +575,7 @@ function documentScanFiles(dir: string = SRC): string[] {
     if (!/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name)) return [];
     const rel = relative(SRC, path).split(sep).join('/');
     if (/\.(test|spec)\./.test(rel) || rel.startsWith('lib/test/')) return [];
-    return LEGACY_FILES.includes(rel) || rel === COUNTRY_LIST_COPY ? [] : [path];
+    return LEGACY_FILES.includes(rel) || GENERATED_LIST_COPIES.includes(rel) ? [] : [path];
   });
 }
 
@@ -645,13 +648,14 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
     expect(mentions).toEqual([]);
   });
 
-  it('only the country list copy is skipped, and it is skipped only for its country codes', () => {
-    expect(existsSync(join(SRC, COUNTRY_LIST_COPY))).toBe(true);
+  it('only the country and phone region list copies are skipped, and only for their region codes', () => {
     const rels = documentScanFiles().map((f) => relative(SRC, f).split(sep).join('/'));
-    expect(rels).not.toContain(COUNTRY_LIST_COPY);
     expect(rels).toEqual(expect.arrayContaining(['lib/locations/iana-zone-names.json', 'lib/locations/countries.ts']));
-    const hits = countryDocumentHits(COUNTRY_LIST_COPY, readFileSync(join(SRC, COUNTRY_LIST_COPY), 'utf8'));
-    expect(hits.every((h) => /: "code": "[A-Z]{2}",$/.test(h))).toBe(true);
+    for (const copy of GENERATED_LIST_COPIES) {
+      expect([copy, existsSync(join(SRC, copy)), rels.includes(copy)]).toEqual([copy, true, false]);
+      const hits = countryDocumentHits(copy, readFileSync(join(SRC, copy), 'utf8'));
+      expect(hits.every((h) => /: "code": "[A-Z]{2}",$/.test(h))).toBe(true);
+    }
   });
 
   it('every named line exception still exists, so a closed ticket takes its exception with it', () => {
@@ -838,12 +842,13 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
  * `COUNTRY_NAMES`, `phoneCountryName`) ni el enum `ClinicCountry` (fuera de
  * los comentarios), ni nombra Colombia, España o Venezuela (comentarios
  * incluidos, sin tildes ni mayúsculas). Se salta los tests, `lib/test/**`, los
- * `*fixture*`, `lib/api/schema.d.ts` (generado), la copia de la lista de
- * países (datos generados) y la receta legada de R12 (W13).
+ * `*fixture*`, `lib/api/schema.d.ts` (generado), las copias de las listas de
+ * países y de regiones de numeración (datos generados) y la receta legada de
+ * R12 (W13).
  */
 const COUNTRY_LABEL_CODE = /COUNTRY_LABELS|COUNTRY_NAMES|ClinicCountry|phoneCountryName/;
 const COUNTRY_NAME = /colombi|espa[ñn]a|venezuel/i;
-const COUNTRY_NAME_EXCEPTIONS = [COUNTRY_LIST_COPY, PRESCRIPTION_LEGACY_LAYOUT];
+const COUNTRY_NAME_EXCEPTIONS = [...GENERATED_LIST_COPIES, PRESCRIPTION_LEGACY_LAYOUT];
 const COUNTRY_NAMES_LIB = 'lib/locations/countries.ts';
 const REGIONAL_FIELDS = 'components/locations/regional-settings-fields.tsx';
 
@@ -889,6 +894,14 @@ describe('arquitectura: país de la sede libre (DX-312)', () => {
     }
     expect(rels).not.toContain('lib/api/schema.d.ts');
     expect(rels.some((r) => r.startsWith('lib/test/') || r.includes('.test.') || r.includes('fixture'))).toBe(false);
+  });
+
+  it('the generated list copies are skipped only for their "name" lines', () => {
+    for (const copy of GENERATED_LIST_COPIES) {
+      const hits = lineHits([join(SRC, copy)], namesCountryOutsideList);
+      expect([copy, hits.length > 0]).toEqual([copy, true]);
+      expect(hits.filter((h) => !/: "name": "[^"]+",?$/.test(h))).toEqual([]);
+    }
   });
 
   it('country names come only from lib/locations/countries.ts', () => {
@@ -1152,6 +1165,223 @@ describe('arquitectura: la web no decide por el país (DX-312, R3)', () => {
       `const url = 'https://x.test/${COUNTRY}';`,
     ]) {
       expect({ snippet, caughtBy: caughtBy(snippet) }).toEqual({ snippet, caughtBy: [] });
+    }
+  });
+});
+
+/**
+ * DX-329 (D3, §6.2, PATTERNS W9): la web no valida ni normaliza teléfonos; lo
+ * hace la API con una sola versión de metadatos, y la web pinta su formato.
+ * - Ningún fichero de la web (`src/`, `e2e/`, `scripts/` y la raíz) importa la
+ *   librería de teléfonos, en ninguna forma (`from`, `import`, `import()`,
+ *   `require`, `export … from`), y `package.json` no la declara.
+ * - Ningún fichero de producción agrupa un teléfono por su indicativo: ni un
+ *   patrón que empiece por `^\+` y una cifra (literal o en `new RegExp`), ni
+ *   la función retirada que lo hacía.
+ * - Los nombres de las regiones de numeración salen solo de
+ *   `lib/locations/phone-regions.ts`: nadie más importa su copia de la lista.
+ * Se mira el código sin comentarios. El nombre de la librería se compone para
+ * que este fichero no lo contenga.
+ */
+const PHONE_LIBRARY_NAME = 'libphone' + 'number';
+const PHONE_LIBRARY = `${PHONE_LIBRARY_NAME}-js`;
+const ROOT = join(SRC, '..');
+const PHONE_REGIONS_LIB = 'lib/locations/phone-regions.ts';
+const RETIRED_PHONE_FORMATTER = 'format' + 'E164';
+
+/** Un `from`, `import`, `import()` o `require()` del paquete o de una de sus rutas. */
+const PHONE_LIBRARY_IMPORT = new RegExp(
+  String.raw`(?:\bfrom|\bimport|\brequire)\s*\(?\s*(['"\`])${PHONE_LIBRARY}(?:\/[^'"\`\n]*)?\1`,
+  'g',
+);
+/**
+ * Un patrón de teléfono que empieza por `^\+` y una cifra (`\d` o un
+ * indicativo escrito): en un literal `/…/` o en el texto de un `new RegExp`.
+ */
+const CALLING_CODE_GROUP = new RegExp(
+  String.raw`\/\^\\\+(?:\\d|\d)|(['"\`])\^\\\\\+(?:\\\\d|\d)|\b${RETIRED_PHONE_FORMATTER}\b`,
+  'g',
+);
+const IMPORTS_PHONE_REGION_LIST = /(?:from\s*|import\s*\(\s*|require\s*\(\s*)['"][^'"]*phone-regions-list\.json['"]/g;
+
+const phoneLibraryImportHits = (code: string): number[] => matchLines(code, PHONE_LIBRARY_IMPORT);
+const callingCodeGroupHits = (code: string): number[] => matchLines(code, CALLING_CODE_GROUP);
+const phoneRegionListHits = (code: string): number[] => matchLines(code, IMPORTS_PHONE_REGION_LIST);
+
+/** Todo el código de la web: `src/`, `e2e/`, `scripts/` y los ficheros de la raíz. */
+function webCodeFiles(): string[] {
+  const code = /\.(?:ts|tsx|js|jsx|mjs|cjs)$/;
+  const tree = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return tree(path);
+      return code.test(entry.name) ? [path] : [];
+    });
+  const rootFiles = readdirSync(ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && code.test(entry.name))
+    .map((entry) => join(ROOT, entry.name));
+  return [...tree(SRC), ...tree(E2E), ...tree(join(ROOT, 'scripts')), ...rootFiles];
+}
+
+describe(`teléfono con ${PHONE_LIBRARY_NAME} (DX-329)`, () => {
+  const production = sourceFiles(SRC).filter(scanned);
+
+  it(`no web file imports ${PHONE_LIBRARY}`, () => {
+    const files = webCodeFiles();
+    const rels = files.map((file) => relative(ROOT, file).split(sep).join('/'));
+    expect(rels).toEqual(
+      expect.arrayContaining([
+        `src/${PHONE_REGIONS_LIB}`,
+        'src/architecture/no-location-fallbacks.test.ts',
+        'e2e/location-phone-region.spec.ts',
+        'scripts/check-api-reference-sync.mjs',
+        'playwright.config.ts',
+      ]),
+    );
+    expect(countryOffenders(files, phoneLibraryImportHits)).toEqual([]);
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as Record<string, unknown>;
+    const declared = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'].flatMap(
+      (field) => Object.keys((pkg[field] as Record<string, string> | undefined) ?? {}),
+    );
+    expect(declared).not.toContain(PHONE_LIBRARY);
+  });
+
+  it('no production file groups a phone by calling code', () => {
+    expect(production.map((file) => relative(SRC, file).split(sep).join('/'))).toEqual(
+      expect.arrayContaining([
+        PHONE_REGIONS_LIB,
+        'lib/patients/communication-api.ts',
+        'components/patients/patient-communication-section.tsx',
+      ]),
+    );
+    expect(countryOffenders(production, callingCodeGroupHits)).toEqual([]);
+  });
+
+  it('phone region names come only from lib/locations/phone-regions.ts', () => {
+    const importers = production
+      .filter((file) => countryOffenders([file], phoneRegionListHits).length > 0)
+      .map((file) => relative(SRC, file).split(sep).join('/'));
+    expect(importers).toEqual([PHONE_REGIONS_LIB]);
+  });
+
+  it('the phone patterns catch each form and skip neutral text', () => {
+    /** Cada guarda que atrapa `snippet`, como si fuera un fichero de producción. */
+    const caughtBy = (snippet: string): string[] => {
+      const code = withoutComments(snippet);
+      return (
+        [
+          ['import', phoneLibraryImportHits(code).length > 0],
+          ['group', callingCodeGroupHits(code).length > 0],
+          ['list', phoneRegionListHits(code).length > 0],
+        ] as const
+      ).flatMap(([guard, hit]) => (hit ? [guard] : []));
+    };
+    for (const [snippet, guard] of [
+      [`import { parsePhoneNumber } from '${PHONE_LIBRARY}';`, 'import'],
+      [`import {\n  isValidPhoneNumber,\n} from "${PHONE_LIBRARY}/max";`, 'import'],
+      [`import '${PHONE_LIBRARY}';`, 'import'],
+      [`const lib = await import('${PHONE_LIBRARY}');`, 'import'],
+      [`const lib = require(\`${PHONE_LIBRARY}/min\`);`, 'import'],
+      [`export { AsYouType } from '${PHONE_LIBRARY}';`, 'import'],
+      [String.raw`const co = /^\+57(\d{3})(\d{3})(\d{4})$/.exec(e164);`, 'group'],
+      [String.raw`const any = /^\+\d{1,3}/;`, 'group'],
+      [String.raw`const es = new RegExp('^\\+34(\\d{3})');`, 'group'],
+      [String.raw`const cc = new RegExp("^\\+\\d+");`, 'group'],
+      [`export function ${RETIRED_PHONE_FORMATTER}(e164: string): string {}`, 'group'],
+      [`{${RETIRED_PHONE_FORMATTER}(data.phoneE164)}`, 'group'],
+      [`import list from './phone-regions-list.json';`, 'list'],
+      [`const list = await import('@/lib/locations/phone-regions-list.json');`, 'list'],
+      [`const list = require("../locations/phone-regions-list.json");`, 'list'],
+    ] as const) {
+      expect({ snippet, caught: caughtBy(snippet).includes(guard) }).toEqual({ snippet, caught: true });
+    }
+    for (const snippet of [
+      'phoneRegionLabel(code)',
+      "phoneRegion: 'Prefijo telefónico por defecto',",
+      String.raw`const callingCode = /^\+?(\d+)$/.exec(key)?.[1];`,
+      "import { phoneRegionLabel, searchPhoneRegions } from '@/lib/locations/phone-regions';",
+      `// import { parsePhoneNumber } from '${PHONE_LIBRARY}';`,
+      `/** ${RETIRED_PHONE_FORMATTER} se retiró en DX-329. */`,
+      "await expect(block).toContainText('+58 412 1234567');",
+      `const ${RETIRED_PHONE_FORMATTER}Retired = true;`,
+    ]) {
+      expect({ snippet, caughtBy: caughtBy(snippet) }).toEqual({ snippet, caughtBy: [] });
+    }
+  });
+});
+
+/**
+ * DX-368: ningún texto visible pone de ejemplo un teléfono, una moneda, una
+ * dirección o una ciudad de un país. El teléfono pide el indicativo sin dar
+ * uno («Con indicativo internacional (+…).»); la moneda, el código ISO 4217.
+ * Los documentos los guarda DX-327 (arriba) y las monedas entre comillas,
+ * GLOBAL-G1 (al principio). Recorre lo mismo que G1: `src/` sin tests,
+ * fixtures, `schema.d.ts` ni líneas de comentario, y deja las claves de
+ * `ZONE_CITY_LABELS`, que rotulan una zona elegida.
+ */
+/** Un teléfono con indicativo real: `+57 601…`, `+34612…`, `+57…`. */
+const PHONE_EXAMPLE = /(?<![\w+\\])\+[1-9]\d{0,2}(?:[\s-]?\d{2,}|…|\.\.\.)/;
+/** Un literal que es solo un teléfono nacional sin indicativo: `'310 000 0001'`, `"612 34 56 78"` (no fechas ni importes). */
+const NATIONAL_PHONE_EXAMPLE = /['"`>]\s*\(?\d{3}\)?(?: \d{2,4}){2,}\s*['"`<]/;
+/** Monedas de la región y las que salieron de ejemplo, tras «p. ej.» o «por ejemplo». */
+const CURRENCY_FOR_EXAMPLE =
+  /(?:p\.\s*ej\.|por ejemplo|ej\.)[:,]?\s*[«"'(]?\d*[\s.,\d]*(?:COP|USD|EUR|VES|MXN|ARS|CLP|PEN|BRL|BOB|PYG|UYU|GTQ|CRC|DOP|GBP)\b/i;
+/** Dirección con número a la colombiana o similar: `Calle 1 # 2-3`, `Cra 15 #90-20`. */
+const ADDRESS_EXAMPLE =
+  /\b(?:Calle|Carrera|Cra|Cl|Kr|Avenida|Av|Diagonal|Dg|Transversal|Tv)\.?\s*\d+[A-Za-z]?\s*(?:#|N[°º.o]\.?)\s*\d/i;
+/** Ciudades que eran ejemplo de dirección o de hora (con tilde: no son ids IANA). */
+const CITY_EXAMPLE = /Bogotá|Medellín/;
+
+function countryExampleHit(line: string): boolean {
+  if (COMMENT_LINE.test(line) || ZONE_LABEL_KEY.test(line)) return false;
+  return [PHONE_EXAMPLE, NATIONAL_PHONE_EXAMPLE, CURRENCY_FOR_EXAMPLE, ADDRESS_EXAMPLE, CITY_EXAMPLE].some((pattern) =>
+    pattern.test(line),
+  );
+}
+
+describe('arquitectura: textos sin ejemplos de un país (DX-368)', () => {
+  it('src/ shows no phone, currency, address or city of one country as an example', () => {
+    const files = sourceFiles(SRC).filter(scanned);
+    expect(files.length).toBeGreaterThan(300);
+    const found = files.flatMap((path) =>
+      readFileSync(path, 'utf8')
+        .split('\n')
+        .flatMap((line, i) => (countryExampleHit(line) ? [`${relative(SRC, path)}:${i + 1}: ${line.trim()}`] : [])),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('the example patterns catch each retired form and skip neutral text', () => {
+    for (const line of [
+      "  hint: 'Con indicativo de país, p. ej. +57 601 555 0101',",
+      "    'El paciente no tiene un teléfono con indicativo de país (p. ej. +57…). Agrégalo en su ficha.',",
+      '  placeholder="+34 612 34 56 78"',
+      '  placeholder="612 34 56 78"',
+      "  phonePlaceholder: '310 000 0001',",
+      '  <span>(601) 555 0101</span>',
+      "  currencyHint: 'Código de 3 letras (p. ej. COP).',",
+      "  hint: 'Por ejemplo, 150.000 COP.',",
+      "  addressPlaceholder: 'Calle 1 # 2-3',",
+      "  addressPlaceholder: 'Cra 15 #90-20',",
+      '  <p>Un abono a las 20:00 en Bogotá cuenta ese día.</p>',
+    ]) {
+      expect({ line, caught: countryExampleHit(line) }).toEqual({ line, caught: true });
+    }
+    for (const line of [
+      "  hint: 'Con indicativo internacional (+…).',",
+      "  currencyHint: 'Código ISO 4217 de 3 letras.',",
+      "  codeHintCreate: 'Corto y único, p. ej. EXO o CIR-3M. No se puede cambiar después.',",
+      "  emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',",
+      "  'America/Bogota': 'Bogotá',",
+      '  // (medianoche UTC sería la tarde del día anterior en Bogotá).',
+      '   * siempre en USD). Mientras no se sabe la moneda',
+      '  const co = /^\\+57(\\d{3})(\\d{3})(\\d{4})$/.exec(e164);',
+      "  mobileInvalidHint: 'No sirve para WhatsApp: revisa el número o escríbelo con + y su indicativo.',",
+      "  label: 'Mejora: +20 % frente al periodo anterior',",
+      "  const day = '2026-10-17';",
+      "  const amount = '1 500 000';",
+    ]) {
+      expect({ line, caught: countryExampleHit(line) }).toEqual({ line, caught: false });
     }
   });
 });
