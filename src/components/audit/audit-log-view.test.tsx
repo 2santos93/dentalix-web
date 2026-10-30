@@ -545,6 +545,13 @@ describe('AuditLogView', () => {
     expect(
       await screen.findByText('La fecha final no puede ser anterior a la inicial.'),
     ).toBeInTheDocument();
+    // DX-362: con el error, las fechas siguen diciendo en qué zona se cuentan los días.
+    const error = screen.getByText('La fecha final no puede ser anterior a la inicial.');
+    const hint = screen.getByText(/^Horas y días en la hora de Bogotá/);
+    for (const label of ['Desde', 'Hasta']) {
+      const ids = screen.getByLabelText(label).getAttribute('aria-describedby')?.split(' ') ?? [];
+      expect(ids).toEqual(expect.arrayContaining([error.closest('[id]')!.id, hint.id]));
+    }
     expect(mockedList.mock.calls.length).toBeLessThanOrEqual(calls + 1);
     expect(mockedList).not.toHaveBeenLastCalledWith(
       'tok',

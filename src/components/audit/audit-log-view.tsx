@@ -290,11 +290,16 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
     filters.to !== '';
   const patientName = items.find((e) => e.patient)?.patient?.fullName ?? copy.patientFallback;
   const zoneHint = clock && reference ? auditZoneHint(reference, clock, now) : null;
-  const dateDescribedBy = invalidRange
-    ? rangeErrorId
-    : [zoneHint ? zoneHintId : null, !filters.from && !filters.to ? hintId : null]
-        .filter(Boolean)
-        .join(' ') || undefined;
+  // La zona describe las fechas siempre, también junto al error del rango: el
+  // día que se corrige se sigue contando en esa zona.
+  const dateDescribedBy =
+    [
+      invalidRange ? rangeErrorId : null,
+      zoneHint ? zoneHintId : null,
+      !invalidRange && !filters.from && !filters.to ? hintId : null,
+    ]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   return (
     <div className="flex flex-col gap-3">
