@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
@@ -11,21 +10,15 @@ import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { RegionalReviewNotice } from '@/components/locations/regional-review-notice';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { activeSedeCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
-import { formatCurrency } from '@/lib/format/currency';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { zoneCityLabel } from '@/lib/format/date';
-import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DateRangePicker } from '@/components/ui/date-picker';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/shared/form-field';
-import { EmptyState } from '@/components/shared/empty-state';
+import { AsyncSection } from '@/components/shared/async-section';
 import { CurrencySelect } from '@/components/shared/currency-select';
-import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { DashboardSkeleton, LowStock, PeriodSummary, UpcomingAppointments } from './dashboard-sections';
 
 // Copy as constants (i18n-ready, es-first) — matches
 // treatment-plans-tab.tsx / agenda-view.tsx convention until next-intl
@@ -45,21 +38,6 @@ const copy = {
   rangeInvalid: 'La fecha "Hasta" debe ser igual o posterior a la fecha "Desde".',
   // DX-097: los días del período son los del calendario de la sede.
   zoneNote: (timeZone: string) => `Días en hora de ${zoneCityLabel(timeZone)}.`,
-  incomesHeading: 'Ingresos del período',
-  incomesCount: (count: number) => `${count} ${count === 1 ? 'abono' : 'abonos'}`,
-  byCurrencyHeading: 'Desglose por moneda',
-  lowStockHeading: 'Bajo stock',
-  lowStockCount: (count: number) => `${count} ${count === 1 ? 'ítem' : 'ítems'}`,
-  emptyLowStockTitle: 'No hay ítems en bajo stock.',
-  emptyLowStockDescription: 'Todo el inventario está por encima de su mínimo.',
-  colItem: 'Ítem',
-  colStock: 'Stock',
-  colMinStock: 'Mínimo',
-  colUnit: 'Unidad',
-  upcomingHeading: 'Próximas citas',
-  emptyUpcomingTitle: 'No hay citas próximas.',
-  emptyUpcomingDescription: 'Las próximas citas agendadas aparecerán aquí.',
-  patientCountHeading: '# Pacientes',
 };
 
 interface DashboardViewProps {
@@ -197,43 +175,47 @@ export function DashboardView({ token }: DashboardViewProps) {
   }, [token, from, to, currency, reloadKey, rangeInvalid]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       {/* Aviso D5 (G1 §7): solo ADMIN, hasta confirmar cada sede activa. */}
       <RegionalReviewNotice token={token} />
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-4 p-4">
-          <FormField htmlFor="dashboard-period" label={copy.periodLabel}>
-            <DateRangePicker
-              id="dashboard-period"
-              value={from && to ? { from, to } : null}
-              onChange={(range) => {
-                // Un extremo a medio escribir deja el periodo vacío: no hay consulta hasta completarlo.
-                setFrom(range?.from ?? '');
-                setTo(range?.to ?? '');
-              }}
-              presets
-              startLabel={copy.fromLabel}
-              endLabel={copy.toLabel}
-              isInvalid={rangeInvalid}
-              aria-describedby={rangeInvalid ? 'dashboard-range-error' : undefined}
-            />
-          </FormField>
-          <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-44">
-            <CurrencySelect
-              id="dashboard-currency"
-              token={token}
-              value={currency}
-              onChange={setCurrency}
-              placeholder={currency ? undefined : copy.currencyPlaceholder}
-            />
-          </FormField>
-          {timeZone ? (
-            <p className="basis-full text-sm text-muted" data-testid="dashboard-zone-note" title={timeZone}>
-              {copy.zoneNote(timeZone)}
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
+      {/* Barra de filtros en línea (sin tarjeta): periodo + moneda, y la nota de
+          alcance a la derecha. En móvil cada control ocupa la fila. */}
+      <div className="flex flex-col gap-y-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-3">
+        <FormField htmlFor="dashboard-period" label={copy.periodLabel} className="w-full sm:w-auto">
+          <DateRangePicker
+            id="dashboard-period"
+            value={from && to ? { from, to } : null}
+            onChange={(range) => {
+              // Un extremo a medio escribir deja el periodo vacío: no hay consulta hasta completarlo.
+              setFrom(range?.from ?? '');
+              setTo(range?.to ?? '');
+            }}
+            presets
+            startLabel={copy.fromLabel}
+            endLabel={copy.toLabel}
+            isInvalid={rangeInvalid}
+            aria-describedby={rangeInvalid ? 'dashboard-range-error' : undefined}
+          />
+        </FormField>
+        <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-full sm:w-56">
+          <CurrencySelect
+            id="dashboard-currency"
+            token={token}
+            value={currency}
+            onChange={setCurrency}
+            placeholder={currency ? undefined : copy.currencyPlaceholder}
+          />
+        </FormField>
+        {timeZone ? (
+          <p
+            className="text-sm text-muted sm:ml-auto sm:flex sm:min-h-10 sm:items-center"
+            data-testid="dashboard-zone-note"
+            title={timeZone}
+          >
+            {copy.zoneNote(timeZone)}
+          </p>
+        ) : null}
+      </div>
 
       {rangeInvalid ? (
         <InlineError id="dashboard-range-error">{copy.rangeInvalid}</InlineError>
@@ -245,188 +227,40 @@ export function DashboardView({ token }: DashboardViewProps) {
         <p role="status" className="text-sm text-muted">
           {copy.chooseCurrency}
         </p>
-      ) : loading ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Skeleton className="h-40" role="status" aria-label={copy.loading} />
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-        </div>
-      ) : error ? (
-        <SectionError
-          description={error}
+      ) : (
+        <AsyncSection
+          loading={loading}
+          error={error}
           onRetry={() => setReloadKey((k) => k + 1)}
-        />
-      ) : data ? (
-        <div className="grid items-start gap-4 lg:grid-cols-3">
-          {/* Left rail: the period's headline figures, read as a clinical
-              summary strip rather than billboard hero cards. */}
-          <div className="flex flex-col gap-4">
-            <IncomesCard incomes={data.incomes} />
-            <PatientCountCard patientCount={data.patientCount} />
-          </div>
-          {/* Content column: the record-like sections that carry real rows. */}
-          <div className="flex flex-col gap-4 lg:col-span-2">
-            <UpcomingAppointmentsCard
-              upcomingAppointments={data.upcomingAppointments}
-              staffNames={staffNames}
-              timeOf={(start) => (fmt && timeZone ? fmt.time(new Date(start), timeZone) : NO_SEDE_FORMAT)}
-            />
-            <LowStockCard lowStockItems={data.lowStockItems} />
-          </div>
-        </div>
-      ) : null}
+          skeleton={<DashboardSkeleton label={copy.loading} />}
+        >
+          {data ? (
+            <div className="flex flex-col gap-8">
+              <PeriodSummary
+                incomes={data.incomes}
+                patientCount={data.patientCount}
+                from={from}
+                to={to}
+                fmt={fmt}
+              />
+              {/* 12 columnas en escritorio ancho: citas (7) + bajo stock (5); una columna debajo. */}
+              <div className="grid items-start gap-8 xl:grid-cols-12 xl:gap-6">
+                <div className="xl:col-span-7">
+                  <UpcomingAppointments
+                    appointments={data.upcomingAppointments}
+                    staffNames={staffNames}
+                    timeZone={timeZone}
+                    fmt={fmt}
+                  />
+                </div>
+                <div className="xl:col-span-5">
+                  <LowStock lowStockItems={data.lowStockItems} fmt={fmt} />
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </AsyncSection>
+      )}
     </div>
-  );
-}
-
-function IncomesCard({ incomes }: { incomes: Dashboard['incomes'] }) {
-  const byCurrencyEntries = Object.entries(incomes.byCurrency);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{copy.incomesHeading}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1">
-        <p className="text-2xl font-semibold tracking-tight text-ink tabular-nums">
-          {formatCurrency(incomes.totalConverted, incomes.currency)}
-        </p>
-        <p className="text-sm text-muted">{copy.incomesCount(incomes.count)}</p>
-        {byCurrencyEntries.length > 0 && (
-          <div className="mt-3 flex flex-col gap-1.5 border-t border-hairline pt-3">
-            <p className="t-label uppercase text-muted">{copy.byCurrencyHeading}</p>
-            <ul className="flex flex-col gap-1">
-              {byCurrencyEntries.map(([cur, amount]) => (
-                <li key={cur} className="flex items-center justify-between text-sm text-ink">
-                  <span className="text-muted">{cur}</span>
-                  <span className="font-medium tabular-nums">{formatCurrency(amount, cur)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function LowStockCard({ lowStockItems }: { lowStockItems: Dashboard['lowStockItems'] }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{copy.lowStockHeading}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <p className="text-sm font-medium text-muted">{copy.lowStockCount(lowStockItems.count)}</p>
-        {lowStockItems.items.length === 0 ? (
-          <EmptyState
-            role="status"
-            title={copy.emptyLowStockTitle}
-            description={copy.emptyLowStockDescription}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <caption className="sr-only">{copy.lowStockHeading}</caption>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>{copy.colItem}</TableHead>
-                  <TableHead>{copy.colStock}</TableHead>
-                  <TableHead>{copy.colMinStock}</TableHead>
-                  <TableHead>{copy.colUnit}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lowStockItems.items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell className="tabular-nums">{item.stock}</TableCell>
-                    <TableCell className="tabular-nums">{item.minStock}</TableCell>
-                    <TableCell className="text-muted">{item.unit}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function UpcomingAppointmentsCard({
-  upcomingAppointments,
-  staffNames,
-  timeOf,
-}: {
-  upcomingAppointments: Dashboard['upcomingAppointments'];
-  staffNames: Record<string, string>;
-  /** DX-378: la hora con el reloj de la sede. */
-  timeOf: (start: string) => string;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <Link href="/agenda" className="hover:text-primary hover:underline">
-            {copy.upcomingHeading}
-          </Link>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {upcomingAppointments.length === 0 ? (
-          <EmptyState
-            role="status"
-            title={copy.emptyUpcomingTitle}
-            description={copy.emptyUpcomingDescription}
-          />
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {upcomingAppointments.map((appointment) => {
-              // Nombre joinado en la cita; cae al id crudo solo si la API no
-              // pudo resolverlo (misma convención que `patientLabel` de la agenda).
-              const patientLabel =
-                [appointment.patientFirstName, appointment.patientLastName]
-                  .filter(Boolean)
-                  .join(' ')
-                  .trim() || appointment.patientId;
-              const providerLabel = staffNames[appointment.providerId] ?? appointment.providerId;
-              return (
-                <li
-                  key={appointment.id}
-                  className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-ink">{timeOf(appointment.start)}</span>
-                    <span className="text-xs text-muted">
-                      {patientLabel} · {providerLabel}
-                    </span>
-                  </div>
-                  <StatusBadge kind="appointment" status={appointment.status} />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function PatientCountCard({ patientCount }: { patientCount: number }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <Link href="/patients" className="hover:text-primary hover:underline">
-            {copy.patientCountHeading}
-          </Link>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-semibold tracking-tight text-ink tabular-nums">{patientCount}</p>
-        <p className="mt-1 text-sm text-muted">registrados en la clínica</p>
-      </CardContent>
-    </Card>
   );
 }

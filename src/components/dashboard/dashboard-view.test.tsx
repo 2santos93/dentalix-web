@@ -207,12 +207,15 @@ describe('DashboardView', () => {
     mockedListLocations.mockResolvedValue([sede('America/Bogota')]);
   });
 
-  it('renders the 4 cards (incomes, low stock, upcoming appointments, patient count) with fetched data', async () => {
+  it('renders the period summary strip, upcoming appointments and low stock with fetched data', async () => {
     mockedGetDashboard.mockResolvedValue(dashboard());
 
     render(<DashboardView token="tok" />);
 
-    await screen.findByText('Ingresos del período');
+    await screen.findByRole('heading', { name: 'Resumen del período' });
+    // The headline says which currency it is in, and how other currencies got there.
+    expect(screen.getByText('Ingresos en USD')).toBeInTheDocument();
+    expect(screen.getByText(/convertidos a USD con la tasa del día de cada pago/)).toBeInTheDocument();
     // Incomes: totalConverted formatted as currency (Intl.NumberFormat('es', {style:'currency'})) + count + byCurrency breakdown.
     // `getByText`'s default normalizer collapses the formatter's non-breaking
     // space (U+00A0, between the amount and the "US$" symbol) into a plain
@@ -225,31 +228,36 @@ describe('DashboardView', () => {
       .replace(/ /g, ' ');
     expect(screen.getByText(totalFormatted)).toBeInTheDocument();
     expect(screen.getByText('12 abonos')).toBeInTheDocument();
-    // Scoped to the "Desglose por moneda" breakdown — the currency <select>
-    // (IMP-10) also renders "COP"/"USD" as option text, so an unscoped
-    // `getByText` would match more than one element.
-    const byCurrencySection = screen.getByText('Desglose por moneda').closest('div') as HTMLElement;
+    // Scoped to the per-currency breakdown — the currency <select> (IMP-10)
+    // also renders "COP"/"USD" as option text.
+    const byCurrencySection = screen.getByTestId('dashboard-by-currency');
+    expect(within(byCurrencySection).getByText('Cobrado por moneda')).toBeInTheDocument();
     expect(within(byCurrencySection).getByText('COP')).toBeInTheDocument();
     expect(within(byCurrencySection).getByText('USD')).toBeInTheDocument();
 
-    // Low stock: count + item rows. `getByText('Bajo stock')` would match
-    // twice (the card heading AND the table's sr-only caption) — scope to
-    // the heading role.
-    expect(screen.getByRole('heading', { name: 'Bajo stock' })).toBeInTheDocument();
-    expect(screen.getByText('2 ítems')).toBeInTheDocument();
-    expect(screen.getByText('Guantes de nitrilo')).toBeInTheDocument();
-    expect(screen.getByText('Anestesia')).toBeInTheDocument();
+    // Low stock: count in the header + labelled rows (Stock/Mínimo/Faltan,
+    // never bare numbers) with the deficit computed from stock and minimum.
+    const lowStock = screen.getByRole('region', { name: 'Bajo stock' });
+    expect(within(lowStock).getByText('2 ítems')).toBeInTheDocument();
+    const gloves = within(lowStock).getByText('Guantes de nitrilo').closest('li') as HTMLElement;
+    expect(gloves).toHaveTextContent('Stock 1');
+    expect(gloves).toHaveTextContent('Mínimo 5');
+    expect(gloves).toHaveTextContent('Faltan 4');
+    expect(within(lowStock).getByText('Anestesia')).toBeInTheDocument();
 
     // Upcoming appointments: at least one row with a status badge, and the
     // patient/provider names resolved (see the dedicated name-resolution
     // test below for the fallback-to-id case).
-    expect(screen.getByText('Próximas citas')).toBeInTheDocument();
-    expect(screen.getByText('Confirmada')).toBeInTheDocument();
-    await screen.findByText(/María López/);
+    const upcoming = screen.getByRole('region', { name: 'Próximas citas' });
+    expect(within(upcoming).getByText('Confirmada')).toBeInTheDocument();
+    await within(upcoming).findByText(/María López/);
+    // Grouped by the sede's day: 24/07 is neither today nor tomorrow (frozen 15/08).
+    expect(within(upcoming).getByRole('heading', { name: /24 de julio/i })).toBeInTheDocument();
 
     // Patient count.
-    expect(screen.getByText('# Pacientes')).toBeInTheDocument();
-    expect(screen.getByText('42')).toBeInTheDocument();
+    const patients = screen.getByTestId('dashboard-patients');
+    expect(within(patients).getByText('Pacientes registrados')).toBeInTheDocument();
+    expect(within(patients).getByText('42')).toBeInTheDocument();
   });
 
   it('names the patient from the appointment itself (no /patients lookup) and the provider from staff', async () => {
@@ -377,10 +385,10 @@ describe('DashboardView', () => {
     render(<DashboardView token="tok" />);
 
     expect(screen.getByRole('status', { name: /cargando panel/i })).toBeInTheDocument();
-    expect(screen.queryByText('# Pacientes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pacientes registrados')).not.toBeInTheDocument();
 
     pending.resolve(dashboard());
-    await screen.findByText('# Pacientes');
+    await screen.findByText('Pacientes registrados');
     expect(screen.queryByRole('status', { name: /cargando panel/i })).not.toBeInTheDocument();
   });
 
@@ -389,7 +397,7 @@ describe('DashboardView', () => {
 
     render(<DashboardView token="tok" />);
 
-    await screen.findByText('# Pacientes');
+    await screen.findByText('Pacientes registrados');
     expect(screen.getByText('0 abonos')).toBeInTheDocument();
     expect(screen.getByText('No hay ítems en bajo stock.')).toBeInTheDocument();
     expect(screen.getByText('No hay citas próximas.')).toBeInTheDocument();
@@ -404,12 +412,12 @@ describe('DashboardView', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No tienes acceso a este panel.');
-    expect(screen.queryByText('# Pacientes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pacientes registrados')).not.toBeInTheDocument();
 
     mockedGetDashboard.mockResolvedValueOnce(dashboard());
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
 
-    await screen.findByText('# Pacientes');
+    await screen.findByText('Pacientes registrados');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
@@ -425,25 +433,53 @@ describe('DashboardView', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/desde.*hasta|hasta.*desde/i);
-    expect(screen.queryByText('# Pacientes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pacientes registrados')).not.toBeInTheDocument();
     expect(mockedGetDashboard).not.toHaveBeenCalled();
   });
 
-  it('links "Próximas citas" to /agenda and "# Pacientes" to /patients', async () => {
+  it('links each section to its screen and each appointment row to the patient record', async () => {
     mockedGetDashboard.mockResolvedValue(dashboard());
 
     render(<DashboardView token="tok" />);
-    await screen.findByText('# Pacientes');
+    await screen.findByText('Pacientes registrados');
 
-    const agendaLink = screen.getByRole('link', { name: 'Próximas citas' });
-    expect(agendaLink).toHaveAttribute('href', '/agenda');
-
-    const patientsLink = screen.getByRole('link', { name: '# Pacientes' });
-    expect(patientsLink).toHaveAttribute('href', '/patients');
-
-    // "Bajo stock" has no inventory route in this app yet — it must NOT be
-    // rendered as a link.
+    expect(screen.getByRole('link', { name: 'Ver agenda' })).toHaveAttribute('href', '/agenda');
+    expect(screen.getByRole('link', { name: 'Ver pacientes' })).toHaveAttribute('href', '/patients');
+    expect(screen.getByRole('link', { name: 'Ver inventario' })).toHaveAttribute('href', '/inventory');
+    // No appointment route exists: the row opens the patient's record.
+    expect(screen.getByRole('link', { name: 'María López' })).toHaveAttribute('href', `/patients/${PATIENT_ID}`);
+    // Headings stay headings, not links.
     expect(screen.queryByRole('link', { name: 'Bajo stock' })).not.toBeInTheDocument();
+  });
+
+  it('labels upcoming days «Hoy» and «Mañana» in the sede\'s calendar', async () => {
+    mockedGetDashboard.mockResolvedValue(
+      dashboard({
+        upcomingAppointments: [
+          { ...dashboard().upcomingAppointments[0], id: 'a', start: '2026-08-15T20:00:00.000Z', end: '2026-08-15T20:30:00.000Z' },
+          // 03:00Z del 16 son las 22:00 del 15 en Bogotá: sigue siendo «Hoy».
+          { ...dashboard().upcomingAppointments[0], id: 'b', start: '2026-08-16T03:00:00.000Z', end: '2026-08-16T03:30:00.000Z' },
+          { ...dashboard().upcomingAppointments[0], id: 'c', start: '2026-08-16T14:00:00.000Z', end: '2026-08-16T14:30:00.000Z' },
+        ],
+      }),
+    );
+
+    render(<DashboardView token="tok" />);
+    const upcoming = await screen.findByRole('region', { name: 'Próximas citas' });
+    const days = within(upcoming).getAllByRole('heading', { level: 3 });
+    expect(days.map((d) => d.textContent)).toEqual([expect.stringMatching(/^Hoy/), expect.stringMatching(/^Mañana/)]);
+    expect(within(upcoming).getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('says the income total is all in one currency when there is no other', async () => {
+    mockedGetDashboard.mockResolvedValue(
+      dashboard({
+        incomes: { ...dashboard().incomes, currency: 'COP', totalConverted: 500000, byCurrency: { COP: 500000 } },
+      }),
+    );
+    render(<DashboardView token="tok" />);
+    expect(await screen.findByText('Todos cobrados en COP.')).toBeInTheDocument();
+    expect(screen.queryByTestId('dashboard-by-currency')).not.toBeInTheDocument();
   });
 });
 

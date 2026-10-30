@@ -8,8 +8,8 @@ import { PageHeader } from '@/components/shared/page-header';
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  title: 'Dashboard',
-  description: 'Resumen de ingresos, inventario, agenda y pacientes de tu clínica.',
+  title: 'Inicio',
+  description: 'Lo cobrado en el período, las próximas citas y lo que falta reponer en el inventario.',
   checkingSession: 'Verificando sesión…',
 };
 

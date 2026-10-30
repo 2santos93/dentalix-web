@@ -27,15 +27,14 @@ import { sedeTime } from './support/clock';
  *     `userId` from `GET /staff` (`POST /appointments`).
  * ...then loads `/dashboard` (default period = current month..today,
  * inclusive "Hasta" thanks to `addOneDayIso`; default currency COP) and
- * asserts each of the 4 cards renders the seeded data:
- *   - "Ingresos del período": the abono's total (Intl `es`/COP-formatted,
- *     same formatter as `DashboardView`'s `currencyFormatter`) and "1 abono";
- *   - "Bajo stock": "1 ítem" and the seeded item's name;
- *   - "Próximas citas": the seeded appointment's formatted time, its
- *     "Agendada" status badge, and the resolved patient name (the card now
- *     looks up `patientNames`/`staffNames` and renders "{patient} · {provider}",
- *     falling back to the raw id only when a name lookup misses);
- *   - "# Pacientes": exactly 1 (brand-new clinic, only patient we created).
+ * asserts each section renders the seeded data:
+ *   - «Resumen del período» → «Ingresos en COP»: the abono's total (Intl
+ *     `es`/COP-formatted, as `formatCurrency`) and "1 abono";
+ *   - «Bajo stock»: "1 ítem" in the header, the seeded item's name and its
+ *     labelled deficit ("Faltan 5");
+ *   - «Próximas citas»: the seeded appointment's formatted time, its
+ *     "Agendada" status badge, and the patient name linking to the record;
+ *   - «Pacientes registrados»: exactly 1 (brand-new clinic, only patient we created).
  *
  * OFFLINE by design: the abono's currency (COP) equals the dashboard's
  * default query currency (COP), so `GetPaymentsTotalsUseCase` ->
@@ -97,7 +96,7 @@ const paymentAmount = 250;
 // (the sede's) timezone — not Node's (see support/clock.ts).
 const formatTime = sedeTime;
 
-test('dashboard: aggregated cards render seeded payment income, low-stock item, upcoming appointment and patient count', async ({
+test('dashboard: summary, upcoming appointments and low stock render seeded payment income, low-stock item, upcoming appointment and patient count', async ({
   page,
 }) => {
   const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
@@ -244,12 +243,12 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   // default currency USD -> covers today's abono; USD->USD passthrough, no
   // exchange call) ---
   await page.goto(`${origin}/dashboard`);
-  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible();
 
-  // Wait past the loading skeleton into the real card grid.
-  await expect(page.getByRole('heading', { name: 'Ingresos del período' })).toBeVisible({ timeout: 10_000 });
+  // Wait past the loading skeleton into the summary strip.
+  await expect(page.getByRole('heading', { name: 'Resumen del período' })).toBeVisible({ timeout: 10_000 });
 
-  // --- "Ingresos del período": total + count ---
+  // --- «Ingresos en COP»: total + count ---
   // Format the expected amount with the browser's own Intl and the app's
   // options (two fixed decimals, as `formatCurrency` since DX-098).
   const expectedIncome = await page.evaluate(
@@ -262,31 +261,28 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
       }).format(amount),
     paymentAmount,
   );
-  const incomesHeading = page.getByRole('heading', { name: 'Ingresos del período' });
-  const incomesCard = incomesHeading.locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
-  await expect(incomesCard.getByText(expectedIncome, { exact: true }).first()).toBeVisible();
-  await expect(incomesCard.getByText('1 abono', { exact: true })).toBeVisible();
+  const incomes = page.getByTestId('dashboard-incomes');
+  await expect(incomes.getByText('Ingresos en COP', { exact: true })).toBeVisible();
+  await expect(incomes.getByText(expectedIncome, { exact: true }).first()).toBeVisible();
+  await expect(incomes.getByText('1 abono', { exact: true })).toBeVisible();
 
-  // --- "Bajo stock": count + seeded item name ---
-  const lowStockHeading = page.getByRole('heading', { name: 'Bajo stock' });
-  const lowStockCard = lowStockHeading.locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
-  await expect(lowStockCard.getByText('1 ítem', { exact: true })).toBeVisible();
-  await expect(lowStockCard.getByText(inventoryItemName, { exact: true })).toBeVisible();
-
-  // --- "Próximas citas": the seeded appointment (time + status badge +
-  // patient-id fallback, since v1 shows the id, not the resolved name) ---
-  const upcomingHeading = page.getByRole('heading', { name: 'Próximas citas' });
-  const upcomingCard = upcomingHeading.locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
-  await expect(upcomingCard.getByText(formatTime(appointmentStart), { exact: true })).toBeVisible();
-  // The card now resolves the real patient name (and provider), rendered as
-  // "{patient} · {provider}" in one node — substring-match the patient name.
-  await expect(upcomingCard.getByText(`${patientFirstName} ${patientLastName}`)).toBeVisible();
-  await expect(upcomingCard.getByText('Agendada', { exact: true })).toBeVisible();
-
-  // --- "# Pacientes": exactly the one patient we created ---
-  const patientCountHeading = page.getByRole('heading', { name: '# Pacientes' });
-  const patientCountCard = patientCountHeading.locator(
-    'xpath=ancestor::div[contains(@class,"rounded-xl")][1]',
+  // --- «Bajo stock»: count in the header + seeded item, labelled values ---
+  const lowStock = page.getByRole('region', { name: 'Bajo stock' });
+  await expect(lowStock.getByText('1 ítem', { exact: true })).toBeVisible();
+  await expect(lowStock.getByText(inventoryItemName, { exact: true })).toBeVisible();
+  await expect(lowStock.getByRole('listitem').filter({ hasText: inventoryItemName })).toContainText(
+    `Faltan ${inventoryMinStock}`,
   );
-  await expect(patientCountCard.getByText('1', { exact: true })).toBeVisible();
+
+  // --- «Próximas citas»: the seeded appointment (time + status + patient) ---
+  const upcoming = page.getByRole('region', { name: 'Próximas citas' });
+  await expect(upcoming.getByText(formatTime(appointmentStart), { exact: true })).toBeVisible();
+  await expect(
+    upcoming.getByRole('link', { name: `${patientFirstName} ${patientLastName}` }),
+  ).toHaveAttribute('href', `/patients/${patient.id}`);
+  await expect(upcoming.getByText('Agendada', { exact: true })).toBeVisible();
+
+  // --- «Pacientes registrados»: exactly the one patient we created ---
+  const patients = page.getByTestId('dashboard-patients');
+  await expect(patients.getByText('1', { exact: true })).toBeVisible();
 });
