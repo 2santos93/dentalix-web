@@ -27,6 +27,8 @@ const copy = {
   amount: 'Valor',
   method: 'Método',
   methodFallback: 'Sin especificar',
+  // DX-377: referencia del pago, si la tiene.
+  reference: 'Referencia',
   paidOn: 'Fecha del abono',
   concept: 'Concepto',
   // DX-262: abono contra el saldo migrado (sin plan).
@@ -189,8 +191,13 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           </div>
         ) : null}
         <Field label={copy.method}>
-          {payment.method ? PAYMENT_METHOD_LABELS[payment.method] : copy.methodFallback}
+          {payment.paymentMethodName ?? (payment.method ? PAYMENT_METHOD_LABELS[payment.method] : copy.methodFallback)}
         </Field>
+        {payment.reference ? (
+          <Field label={copy.reference}>
+            <span className="font-mono">{payment.reference}</span>
+          </Field>
+        ) : null}
         <Field label={copy.paidOn}>
           <span className="tabular-nums">{formatCivilDate(payment.paidOn)}</span>
         </Field>

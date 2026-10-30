@@ -207,7 +207,7 @@ async function flow(page: Page, request: Parameters<typeof apiPost>[0], width: n
     timeout: 10_000,
   });
   await payDialog.getByLabel('Importe').fill('40.000');
-  await payDialog.getByLabel('Método').selectOption('CASH');
+  await payDialog.getByLabel('Método').selectOption({ label: 'Efectivo' });
   await expectNoHorizontalScroll(page);
   await payDialog.getByRole('button', { name: 'Registrar abono' }).click();
   await expect(payDialog).toBeHidden({ timeout: 10_000 });

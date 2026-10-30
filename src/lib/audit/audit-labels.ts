@@ -120,6 +120,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // alta de la clínica en el registro (el resourceId es la clínica).
   STAFF_INVITATION: 'Invitación al personal',
   CLINIC: 'Clínica',
+  PAYMENT_METHOD: 'Medio de pago',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

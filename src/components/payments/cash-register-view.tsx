@@ -79,6 +79,8 @@ const copy = {
   summaryTitle: 'Resumen del período',
   byCurrency: 'Por moneda',
   byMethod: 'Por método',
+  // DX-377: referencia del pago bajo su medio.
+  referenceLabel: (reference: string) => `Ref. ${reference}`,
   paymentsCount: (n: number) => `${n} ${n === 1 ? 'abono' : 'abonos'}`,
   tableLabel: 'Abonos del período',
   colDate: 'Fecha',
@@ -120,9 +122,6 @@ type MethodFilter = PaymentMethod | 'ALL';
 
 const PERIOD_CHOICES: PeriodChoice[] = ['today', 'week', 'month', 'custom'];
 
-function methodLabel(method: PaymentMethod | null): string {
-  return method ? PAYMENT_METHOD_LABELS[method] : copy.methodNone;
-}
 
 function rangeError(range: CashRange): string | null {
   if (!range.from || !range.to) return copy.invalidRangeEmpty;
@@ -462,11 +461,16 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         <TableCell data-label={copy.colMethod}>
                           {payment.method ? (
                             <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
-                              {PAYMENT_METHOD_LABELS[payment.method]}
+                              {payment.paymentMethod?.name ?? PAYMENT_METHOD_LABELS[payment.method]}
                             </Badge>
                           ) : (
                             <span className="text-muted">{copy.methodNone}</span>
                           )}
+                          {payment.reference ? (
+                            <span className="mt-1 block font-mono text-xs text-muted">
+                              {copy.referenceLabel(payment.reference)}
+                            </span>
+                          ) : null}
                         </TableCell>
                         <TableCell data-label={copy.colLocation}>{payment.location.name}</TableCell>
                         <TableCell
@@ -621,10 +625,11 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
           ))}
         </SummaryList>
         <SummaryList label={copy.byMethod} className="max-sm:border-t max-sm:border-hairline">
-          {summary.byMethod.map((row) => (
+          {/* DX-377: por medio de pago de la clínica y moneda. */}
+          {summary.byPaymentMethod.map((row) => (
             <SummaryRow
-              key={`${row.method ?? 'none'}-${row.currency}`}
-              label={methodLabel(row.method)}
+              key={`${row.paymentMethodId ?? 'none'}-${row.currency}`}
+              label={row.name ?? copy.methodNone}
               meta={`${row.currency} · ${copy.paymentsCount(row.count)}`}
               value={formatCurrency(row.total, row.currency)}
             />
