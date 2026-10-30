@@ -53,7 +53,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/anamnesis/public-anamnesis-view.tsx': PUBLIC_PAGE,
   'components/appointments/public-confirmation-view.tsx': PUBLIC_PAGE,
   'components/reminders/public-reminder-opt-out-view.tsx': PUBLIC_PAGE,
-  'components/audit/audit-log-view.tsx': ZONE_24H,
   'components/cash-sessions/cash-session-report.tsx': ZONE_24H,
   'components/cash-sessions/cash-shifts-view.tsx': ZONE_24H,
   'lib/clinical/medical-alerts.ts': ZONE_24H,
@@ -99,7 +98,7 @@ const PENDING: Readonly<Record<string, string>> = {
   'lib/treatment-plans/plan-options.ts': STAMP,
 };
 
-/** Las pantallas de DX-378: no pueden volver a la lista. */
+/** Las pantallas de DX-378 (y las migradas después): no pueden volver a la lista. */
 const MIGRATED = [
   'components/appointments/agenda-view.tsx',
   'components/appointments/appointment-display.tsx',
@@ -121,6 +120,8 @@ const MIGRATED = [
   'components/discounts/discount-report-view.tsx',
   'components/expenses/expenses-view.tsx',
   'components/expenses/expenses-summary-view.tsx',
+  // DX-362: el registro de auditoría, con la zona de la pantalla y su desfase en cada hora.
+  'components/audit/audit-log-view.tsx',
 ];
 
 /**

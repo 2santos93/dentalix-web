@@ -1,10 +1,12 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuditLogView } from './audit-log-view';
 import { ApiError } from '@/lib/api/client';
 import { listAuditEvents, type AuditEvent, type AuditEventsPage } from '@/lib/audit/audit-api';
 import { listStaff } from '@/lib/staff/staff-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { listLocations } from '@/lib/locations/locations-api';
+import { setActiveLocationId } from '@/lib/locations/location-store';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/audit/audit-api', () => ({
   ...jest.requireActual('../../lib/audit/audit-api'),
@@ -21,9 +23,34 @@ const mockedList = listAuditEvents as jest.MockedFunction<typeof listAuditEvents
 const mockedStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
+// DX-362: una clínica con sedes en tres zonas. Jest corre con TZ=UTC, que no es
+// la de ninguna: una hora con la zona del navegador no pasaría.
+const bogota = clinicLocation({
+  id: 'bogota',
+  name: 'Bogotá',
+  timeZone: 'America/Bogota',
+  locale: 'es-CO',
+  hourCycle: 'h12',
+});
+const berlin = clinicLocation({
+  id: 'berlin',
+  name: 'Berlín',
+  timeZone: 'Europe/Berlin',
+  locale: 'es-ES',
+  hourCycle: 'h23',
+});
+const newYork = clinicLocation({
+  id: 'nueva-york',
+  name: 'Nueva York',
+  timeZone: 'America/New_York',
+  locale: 'en-US',
+  hourCycle: 'h12',
+});
+const SEDES = [bogota, berlin, newYork];
+
 const view: AuditEvent = {
   id: 'ev-1',
-  // 22:30 del 15/10 en Bogotá; 05:30 del 16/10 en Madrid.
+  // 22:30 del 15/10 en Bogotá; 05:30 del 16/10 en Berlín; 23:30 en Nueva York.
   occurredAt: '2026-10-16T03:30:00.000Z',
   action: 'VIEW',
   resourceType: 'MEDICAL_HISTORY',
@@ -43,7 +70,8 @@ const failedLogin: AuditEvent = {
   occurredAt: '2026-10-16T03:30:00.000Z',
   action: 'LOGIN_FAILED',
   resourceType: 'SESSION',
-  timeZone: 'Europe/Madrid',
+  // Un inicio de sesión no tiene sede: la API manda la zona de la principal.
+  timeZone: 'America/Bogota',
   actor: null,
   patient: null,
 };
@@ -61,6 +89,8 @@ beforeEach(() => {
   mockedList.mockReset();
   mockedStaff.mockReset();
   mockedLocations.mockReset();
+  mockedLocations.mockResolvedValue(SEDES);
+  setActiveLocationId(null);
   mockedStaff.mockResolvedValue([
     { userId: 'u-dent', fullName: 'Dra. Laura Gómez', email: 'l@x.co', role: 'DENTIST', locationIds: null },
     { userId: 'u-rec', fullName: 'Rosa Recepción', email: 'r@x.co', role: 'RECEPTION', locationIds: null },
@@ -68,13 +98,14 @@ beforeEach(() => {
 });
 
 describe('AuditLogView', () => {
-  it('pinta cada evento con la hora en la zona de su sede, usuario, rol, acción, recurso, paciente e IP', async () => {
+  it('pinta cada evento con su hora y su zona, usuario, rol, acción, recurso, paciente e IP', async () => {
     mockedList.mockResolvedValue(page());
     render(<AuditLogView token="tok" />);
 
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, first, second] = within(table).getAllByRole('row');
-    expect(within(first).getByText('15/10/2026 22:30')).toBeInTheDocument();
+    expect(within(first).getByText('15/10/2026 10:30 p. m.')).toBeInTheDocument();
+    expect(within(first).getByText('UTC−5')).toBeInTheDocument();
     expect(within(first).getByText('Dra. Laura Gómez')).toBeInTheDocument();
     expect(within(first).getByText('Odontólogo/a')).toBeInTheDocument();
     expect(within(first).getByText('Consulta')).toBeInTheDocument();
@@ -84,8 +115,9 @@ describe('AuditLogView', () => {
       '/patients/pat-1',
     );
     expect(within(first).getByText('203.0.113.7')).toBeInTheDocument();
-    // Otra sede, otra zona.
-    expect(within(second).getByText('16/10/2026 05:30')).toBeInTheDocument();
+    // Sin sede (un inicio de sesión): la misma hora y la misma zona, sin otra hora.
+    expect(within(second).getByText('15/10/2026 10:30 p. m.')).toBeInTheDocument();
+    expect(within(second).queryByText(/^En /)).not.toBeInTheDocument();
     expect(within(second).getByText('Inicio de sesión fallido')).toBeInTheDocument();
     expect(within(second).getByText('Usuario no identificado')).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledWith('tok', { limit: 50 });
@@ -279,8 +311,8 @@ describe('AuditLogView', () => {
     expect(
       within(password).getByText('Cambió su contraseña y cerró sus demás sesiones'),
     ).toBeInTheDocument();
-    // Ninguna fila trae sedes concretas: no se piden las sedes.
-    expect(mockedLocations).not.toHaveBeenCalled();
+    // Las sedes (el reloj de la pantalla) se piden una sola vez.
+    expect(mockedLocations).toHaveBeenCalledTimes(1);
   });
 
   const CENTRO = '3f1c2a10-0000-4000-8000-000000000001';
@@ -299,7 +331,7 @@ describe('AuditLogView', () => {
   };
 
   it('DX-359: las sedes de los accesos van por su nombre; una borrada se cuenta, sin su id', async () => {
-    mockedLocations.mockResolvedValue([{ id: CENTRO, name: 'Centro' } as ClinicLocation]);
+    mockedLocations.mockResolvedValue([clinicLocation({ id: CENTRO, name: 'Centro' })]);
     mockedList.mockResolvedValue(page({ items: [accepted] }));
     render(<AuditLogView token="tok" />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
@@ -313,16 +345,92 @@ describe('AuditLogView', () => {
     expect(mockedLocations).toHaveBeenCalledTimes(1);
   });
 
-  it('DX-359: si las sedes no cargan, se cuentan (nunca se pinta un id)', async () => {
-    mockedLocations.mockRejectedValue(new ApiError(500, 'boom'));
+  it('DX-362: si las sedes no cargan, «Falta un dato de la sede» con reintento: nunca otra zona ni otro formato', async () => {
+    mockedLocations.mockRejectedValueOnce(new ApiError(500, 'boom')).mockResolvedValue(SEDES);
     mockedList.mockResolvedValue(page({ items: [accepted] }));
     render(<AuditLogView token="tok" />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Falta un dato de la sede');
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    // Sin reloj no se pide nada: no se puede pintar.
+    expect(mockedList).not.toHaveBeenCalled();
+    await userEvent.click(within(alert).getByRole('button', { name: 'Reintentar' }));
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
-    await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
     expect(
-      within(table).getByText('Invitación aceptada · Rol: Asistente · Sedes: 2 sedes'),
+      within(table).getByText('Invitación aceptada · Rol: Asistente · Sedes: 2 sedes que ya no existen'),
     ).toBeInTheDocument();
     expect(table).not.toHaveTextContent(CENTRO);
+  });
+
+  it('DX-362: a la sede de la pantalla le falta el formato: aviso de la sede, sin ninguna hora', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'bogota', hourCycle: null })]);
+    mockedList.mockResolvedValue(page());
+    render(<AuditLogView token="tok" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Falta un dato de la sede');
+    expect(screen.queryByText(/UTC/)).not.toBeInTheDocument();
+  });
+
+  it('DX-362: mientras carga el reloj de la sede, esqueleto y ninguna consulta', async () => {
+    mockedLocations.mockReturnValue(new Promise(() => {}));
+    mockedList.mockResolvedValue(page());
+    render(<AuditLogView token="tok" />);
+    await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Cargando' })).toBeInTheDocument();
+    expect(mockedList).not.toHaveBeenCalled();
+  });
+
+  it('DX-362: el mismo instante en tres sedes se lee igual; la hora de su sede, debajo', async () => {
+    mockedList.mockResolvedValue(
+      page({
+        items: [
+          { ...view, id: 'ev-bog', locationId: 'bogota', timeZone: 'America/Bogota' },
+          { ...view, id: 'ev-ber', locationId: 'berlin', timeZone: 'Europe/Berlin' },
+          { ...view, id: 'ev-ny', locationId: 'nueva-york', timeZone: 'America/New_York' },
+        ],
+      }),
+    );
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    const [, bog, ber, ny] = within(table).getAllByRole('row');
+    for (const row of [bog, ber, ny]) {
+      const time = within(row).getByText('15/10/2026 10:30 p. m.');
+      expect(time.closest('time')).toHaveAttribute('dateTime', '2026-10-16T03:30:00.000Z');
+      expect(within(row).getByText('UTC−5')).toBeInTheDocument();
+    }
+    expect(within(bog).queryByText(/^En /)).not.toBeInTheDocument();
+    expect(within(ber).getByText('En Berlín: 16/10/2026 05:30 UTC+2')).toBeInTheDocument();
+    expect(within(ny).getByText('En Nueva York: 10/15/2026 11:30 p. m. UTC−4')).toBeInTheDocument();
+  });
+
+  it('DX-362: el orden visible es el de la API (por instante), cronológico en la hora de la pantalla', async () => {
+    mockedList.mockResolvedValue(
+      page({
+        items: [
+          // Más reciente primero; en su propia zona Berlín parecería «la más tarde».
+          { ...view, id: 'a', occurredAt: '2026-10-16T05:00:00.000Z', locationId: 'nueva-york', timeZone: 'America/New_York' },
+          { ...view, id: 'b', occurredAt: '2026-10-16T04:00:00.000Z', locationId: 'bogota', timeZone: 'America/Bogota' },
+          { ...view, id: 'c', occurredAt: '2026-10-16T03:00:00.000Z', locationId: 'berlin', timeZone: 'Europe/Berlin' },
+        ],
+      }),
+    );
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    const times = within(table)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => row.querySelector('time')?.textContent);
+    expect(times).toEqual(['16/10/2026 12:00 a. m.', '15/10/2026 11:00 p. m.', '15/10/2026 10:00 p. m.']);
+  });
+
+  it('DX-362: junto a los filtros dice con qué zona se leen las horas y los días, y el orden', async () => {
+    mockedList.mockResolvedValue(page());
+    render(<AuditLogView token="tok" />);
+    await screen.findByRole('table');
+    const hint = screen.getByText(/^Horas y días en la hora de Bogotá \(America\/Bogota, UTC−5\)\. Lo más reciente, arriba\.$/);
+    for (const label of ['Desde', 'Hasta']) {
+      expect(screen.getByLabelText(label).getAttribute('aria-describedby')).toContain(hint.id);
+    }
   });
 
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {
@@ -375,7 +483,7 @@ describe('AuditLogView', () => {
     );
   });
 
-  it('las fechas se interpretan en la zona de la clínica (días completos, ambos incluidos)', async () => {
+  it('las fechas se interpretan en la zona de la pantalla (días completos, ambos incluidos)', async () => {
     mockedList.mockResolvedValue(page());
     render(<AuditLogView token="tok" />);
     await screen.findByRole('table');
@@ -390,23 +498,41 @@ describe('AuditLogView', () => {
     );
   });
 
-  it('audit view waits for the zone', async () => {
-    // La primera página tarda: las fechas se escriben antes de saber la zona.
-    let resolveFirst: (value: AuditEventsPage) => void = () => {};
-    mockedList.mockReturnValueOnce(new Promise((resolve) => (resolveFirst = resolve)));
-    mockedList.mockResolvedValue(page({ timeZone: 'Asia/Tokyo' }));
+  it('DX-362: con otra sede activa, las horas y los días van en su zona (Berlín)', async () => {
+    setActiveLocationId('berlin');
+    mockedList.mockResolvedValue(page({ items: [{ ...view, locationId: 'bogota' }] }));
     render(<AuditLogView token="tok" />);
-    await userEvent.type(screen.getByLabelText('Desde'), '2026-10-01');
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    expect(within(table).getByText('16/10/2026 05:30')).toBeInTheDocument();
+    expect(within(table).getByText('UTC+2')).toBeInTheDocument();
+    expect(within(table).getByText('En Bogotá: 15/10/2026 10:30 p. m. UTC−5')).toBeInTheDocument();
+    expect(screen.getByText(/^Horas y días en la hora de Berlín \(Europe\/Berlin, UTC[+−]\d\)/)).toBeInTheDocument();
 
-    // Se pide solo la zona y luego la consulta con fechas en la zona de la API
-    // (Tokio, UTC+9: el día empieza a las 15:00 UTC del anterior).
+    // Berlín pasa a UTC+1 el 25/10: cada día se cuenta con su propio desfase.
+    await userEvent.type(screen.getByLabelText('Desde'), '2026-10-24');
+    await userEvent.type(screen.getByLabelText('Hasta'), '2026-10-25');
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith('tok', { limit: 50, from: '2026-09-30T15:00:00.000Z' }),
+      expect(mockedList).toHaveBeenLastCalledWith('tok', {
+        limit: 50,
+        from: '2026-10-23T22:00:00.000Z',
+        to: '2026-10-25T23:00:00.000Z',
+      }),
     );
-    expect(mockedList).toHaveBeenCalledWith('tok', { limit: 1 });
     // Nunca con otra zona: ninguna consulta con el día contado en Bogotá.
-    expect(mockedList).not.toHaveBeenCalledWith('tok', expect.objectContaining({ from: '2026-10-01T05:00:00.000Z' }));
-    resolveFirst(page());
+    expect(mockedList).not.toHaveBeenCalledWith('tok', expect.objectContaining({ from: '2026-10-24T05:00:00.000Z' }));
+  });
+
+  it('DX-362: al cambiar de sede activa sigue su zona y vuelve a la primera página', async () => {
+    mockedList.mockResolvedValue(page({ nextCursor: 'c-2' }));
+    render(<AuditLogView token="tok" />);
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith('tok', { limit: 50, cursor: 'c-2' }));
+
+    act(() => setActiveLocationId('berlin'));
+    expect(await screen.findByText(/^Horas y días en la hora de Berlín/)).toBeInTheDocument();
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith('tok', { limit: 50 }));
+    expect(await screen.findAllByText('16/10/2026 05:30')).not.toHaveLength(0);
   });
 
   it('un rango invertido se explica junto a las fechas y no se consulta', async () => {

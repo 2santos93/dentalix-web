@@ -320,12 +320,6 @@ export function staffDetail(
   return parts.join(' · ');
 }
 
-/** Si algún lado de `staffAccess` trae sedes concretas (hacen falta sus nombres). */
-export function hasStaffLocationIds(metadata: AuditMetadata): boolean {
-  const { before, after } = metadata.staffAccess ?? {};
-  return [before, after].some((side) => Array.isArray(side?.locationIds) && side.locationIds.length > 0);
-}
-
 const CASH_SESSION_REASONS: Record<string, string> = {
   CASH_SESSION_CLOSED: 'Cierre de caja',
   CASH_SESSION_REOPENED: 'Reapertura de caja',
