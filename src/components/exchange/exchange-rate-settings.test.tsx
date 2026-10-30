@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { ExchangeRateSettingsView, exchangeRateCopy, rateFormCopy } from './exchange-rate-settings';
 import {
   getExchangeRateSettings,
@@ -41,6 +41,9 @@ const mockedRegister = jest.mocked(registerManualExchangeRate);
 const mockedCurrencies = jest.mocked(listCurrencies);
 const copy = exchangeRateCopy;
 const fmt = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+const AUTO = { source: 'AUTOMATIC', manualSince: null, baseCurrency: 'USD' } as const;
+const MANUAL = { source: 'MANUAL', manualSince: '2026-10-30', baseCurrency: 'USD' } as const;
+const rateLabel = rateFormCopy.rate('USD');
 
 const ves: ManualExchangeRate = {
   id: 'r-ves',
@@ -80,7 +83,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   });
 
   it('si falla la carga, error de sección con reintento que vuelve a pedir', async () => {
-    mockedGet.mockRejectedValueOnce(new ApiError(500, 'boom')).mockResolvedValueOnce({ source: 'AUTOMATIC' });
+    mockedGet.mockRejectedValueOnce(new ApiError(500, 'boom')).mockResolvedValueOnce(AUTO);
     mockedList.mockResolvedValue([]);
     const user = setupUser();
     renderView();
@@ -92,7 +95,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   });
 
   it('sin tasas: estado vacío con «Registrar tasa» y la nota de la fuente automática', async () => {
-    mockedGet.mockResolvedValue({ source: 'AUTOMATIC' });
+    mockedGet.mockResolvedValue(AUTO);
     mockedList.mockResolvedValue([]);
     renderView();
     expect(await screen.findByText(copy.emptyTitle)).toBeInTheDocument();
@@ -101,7 +104,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   });
 
   it('lista las últimas tasas con fecha, moneda, tasa y autor en el formato de la sede', async () => {
-    mockedGet.mockResolvedValue({ source: 'MANUAL' });
+    mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([ves]);
     renderView();
     const table = await screen.findByRole('table', { name: copy.ratesHeading });
@@ -111,12 +114,16 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(row).toHaveTextContent(fmt.number(36.12345678, { min: 0, max: 8 }));
     expect(row).toHaveTextContent('Dra. Admin');
     expect(screen.queryByText(copy.ratesAutomaticNote)).not.toBeInTheDocument();
+    // La fuente manual dice desde qué día rige, en el formato de la sede.
+    expect(screen.getByTestId('exchange-rate-source')).toHaveTextContent(
+      copy.manualSince(fmt.civilDate('2026-10-30')),
+    );
   });
 
   it('cambia la fuente a manual en un modal accesible', async () => {
-    mockedGet.mockResolvedValue({ source: 'AUTOMATIC' });
+    mockedGet.mockResolvedValue(AUTO);
     mockedList.mockResolvedValue([]);
-    mockedSave.mockResolvedValue({ source: 'MANUAL' });
+    mockedSave.mockResolvedValue(MANUAL);
     const user = setupUser();
     renderView();
     await user.click(await screen.findByRole('button', { name: copy.change }));
@@ -125,23 +132,30 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     await user.click(within(dialog).getByRole('radio', { name: /Manual/ }));
     await user.click(within(dialog).getByRole('button', { name: copy.save }));
     await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', 'MANUAL'));
-    expect(await screen.findByTestId('exchange-rate-source')).toHaveTextContent('Manual');
+    expect(await screen.findByTestId('exchange-rate-source')).toHaveTextContent(
+      copy.manualSince(fmt.civilDate('2026-10-30')),
+    );
     expect(screen.getByText(copy.sourceSaved)).toBeInTheDocument();
   });
 
-  it('registra la tasa del día: hoy de la sede por defecto y coma decimal', async () => {
-    mockedGet.mockResolvedValue({ source: 'MANUAL' });
+  it('registra la tasa del día: hoy de la sede por defecto y como máximo, coma decimal y sin la moneda base', async () => {
+    mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([]);
     mockedRegister.mockResolvedValue({ ...ves, id: 'r-new', date: '2026-10-30', rate: 36.5 });
     const user = setupUser();
     renderView();
     await user.click(await screen.findByRole('button', { name: copy.register }));
     const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
-    expect(within(dialog).getByLabelText(rateFormCopy.date)).toHaveValue('2026-10-30');
+    const date = within(dialog).getByLabelText(rateFormCopy.date);
+    expect(date).toHaveValue('2026-10-30');
+    // Hoy de la sede es el máximo: el selector no ofrece días futuros.
+    expect(date).toHaveAttribute('max', '2026-10-30');
     const select = within(dialog).getByLabelText(rateFormCopy.currency);
     await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
+    // La moneda base (la da la API) no se ofrece.
+    expect(within(select).queryByRole('option', { name: /Dólar/ })).not.toBeInTheDocument();
     await user.selectOptions(select, 'VES');
-    await user.type(within(dialog).getByLabelText(rateFormCopy.rate), '36,5');
+    await user.type(within(dialog).getByLabelText(rateLabel), '36,5');
     await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
     await waitFor(() =>
       expect(mockedRegister).toHaveBeenCalledWith('tok', { date: '2026-10-30', currency: 'VES', rate: 36.5 }),
@@ -150,44 +164,41 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(screen.getByText(copy.rateSaved('VES'))).toBeInTheDocument();
   });
 
-  it('valida en el modal antes de enviar: moneda, tasa y día futuro', async () => {
-    mockedGet.mockResolvedValue({ source: 'MANUAL' });
+  it('valida en el modal antes de enviar: moneda y tasa', async () => {
+    mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([]);
     const user = setupUser();
     renderView();
     await user.click(await screen.findByRole('button', { name: copy.register }));
     const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
-    // jsdom no escribe en un <input type="date"> con el teclado.
-    fireEvent.change(within(dialog).getByLabelText(rateFormCopy.date), { target: { value: '2026-10-31' } });
-    await user.type(within(dialog).getByLabelText(rateFormCopy.rate), '0');
+    await user.type(within(dialog).getByLabelText(rateLabel), '0');
     await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
-    expect(await within(dialog).findByText(rateFormCopy.dateFuture)).toBeInTheDocument();
-    expect(within(dialog).getByText(rateFormCopy.currencyMissing)).toBeInTheDocument();
+    expect(await within(dialog).findByText(rateFormCopy.currencyMissing)).toBeInTheDocument();
     expect(within(dialog).getByText(RATE_INPUT_COPY.notPositive)).toBeInTheDocument();
-    expect(within(dialog).getByLabelText(rateFormCopy.rate)).toHaveAttribute('aria-invalid', 'true');
+    expect(within(dialog).getByLabelText(rateLabel)).toHaveAttribute('aria-invalid', 'true');
     expect(mockedRegister).not.toHaveBeenCalled();
   });
 
-  it('un 400 de la API con `field` va junto a su campo (la moneda base)', async () => {
-    mockedGet.mockResolvedValue({ source: 'MANUAL' });
+  it('un 400 de la API con `field` va junto a su campo', async () => {
+    mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([]);
-    const base = 'USD es la moneda base de las tasas: su tasa siempre es 1 y no se registra.';
-    mockedRegister.mockRejectedValue(new ApiError(400, base, { field: 'currency' }));
+    const tooBig = 'La tasa tiene que ser un número mayor que 0, con hasta 8 decimales y menos de 10.000.000.';
+    mockedRegister.mockRejectedValue(new ApiError(400, tooBig, { field: 'rate' }));
     const user = setupUser();
     renderView();
     await user.click(await screen.findByRole('button', { name: copy.register }));
     const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
     const select = within(dialog).getByLabelText(rateFormCopy.currency);
-    await waitFor(() => expect(within(select).getByRole('option', { name: /Dólar/ })).toBeInTheDocument());
-    await user.selectOptions(select, 'USD');
-    await user.type(within(dialog).getByLabelText(rateFormCopy.rate), '1');
+    await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
+    await user.selectOptions(select, 'VES');
+    await user.type(within(dialog).getByLabelText(rateLabel), '1');
     await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
-    expect(await within(dialog).findByText(base)).toBeInTheDocument();
-    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(await within(dialog).findByText(tooBig)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(rateLabel)).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('un 409 (ya hay tasa ese día) se enseña arriba del modal con el texto de la API', async () => {
-    mockedGet.mockResolvedValue({ source: 'MANUAL' });
+    mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([]);
     const conflict = 'Ya hay una tasa registrada para esa moneda en ese día. Por ahora no se puede cambiar.';
     mockedRegister.mockRejectedValue(new ApiError(409, conflict));
@@ -198,14 +209,19 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     const select = within(dialog).getByLabelText(rateFormCopy.currency);
     await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
     await user.selectOptions(select, 'VES');
-    await user.type(within(dialog).getByLabelText(rateFormCopy.rate), '40');
+    await user.type(within(dialog).getByLabelText(rateLabel), '40');
     await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
     expect(await within(dialog).findByText(conflict)).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: rateFormCopy.title })).toBeInTheDocument();
   });
 
   it('ningún texto de la pantalla nombra un país ni un banco central', () => {
-    const texts = JSON.stringify({ exchangeRateCopy, rateFormCopy, RATE_INPUT_COPY });
+    const texts = JSON.stringify({
+      exchangeRateCopy,
+      rateFormCopy,
+      RATE_INPUT_COPY,
+      fns: [copy.ratesHint('USD'), copy.colRate('USD'), rateFormCopy.rateHint('USD'), copy.manualSince('30/10/2026')],
+    });
     expect(texts).not.toMatch(/venezuela|colombia|españa|méxico|banco central|bcv|estadounidense/i);
   });
 });

@@ -10,6 +10,7 @@ import {
   parseRateInput,
   registerManualExchangeRate,
   saveExchangeRateSettings,
+  type ExchangeRateSettings,
   type ExchangeRateSource,
   type ManualExchangeRate,
 } from '@/lib/exchange/exchange-settings-api';
@@ -34,18 +35,21 @@ export const exchangeRateCopy = {
   sourceHints: {
     AUTOMATIC: 'La tasa del día la da un proveedor de tasas de cambio. Es la opción con la que empieza toda clínica.',
     MANUAL:
-      'La clínica registra cada día la tasa de cada moneda. Un día sin tasa registrada, los abonos en esa moneda quedan sin tasa: no se usa la de otro día.',
+      'Desde el día en que se elige, la clínica registra cada día la tasa de cada moneda. Un día sin tasa registrada, los abonos en esa moneda quedan sin tasa: no se usa la de otro día. Los días anteriores siguen con la tasa automática.',
   } satisfies Record<ExchangeRateSource, string>,
+  /** Con la fecha en el formato de la sede; sin formato, sin fecha (R11). */
+  manualSince: (date: string | null) => (date ? `Manual desde el ${date}` : 'Manual'),
   change: 'Cambiar',
   sourceDialogTitle: 'Cambiar de dónde sale la tasa',
   sourceDialogDescription:
-    'Se aplica desde ya a los saldos y totales de todas las sedes. Los abonos ya cobrados no cambian. El cambio queda en la auditoría.',
+    'Con la manual, la tasa registrada rige desde hoy: los abonos de días anteriores siguen con la tasa automática y sus saldos no cambian. Si vuelves a la automática, todos los días, también los del periodo manual, se convierten con la tasa automática. El cambio queda en la auditoría.',
   sourceLegend: 'Fuente de la tasa',
   save: 'Guardar',
   sourceSaved: 'Fuente de la tasa guardada.',
   sourceSaveError: 'No pudimos guardar la fuente de la tasa. Intenta de nuevo.',
   ratesHeading: 'Tasas manuales',
-  ratesHint: 'Unidades de cada moneda por 1 USD, por día. Una tasa registrada no se puede cambiar.',
+  ratesHint: (base: string) =>
+    `Unidades de cada moneda por 1 ${base}, por día. Se usan desde el día en que la clínica pasó a manual. Una tasa registrada no se puede cambiar.`,
   ratesAutomaticNote:
     'Con la fuente automática estas tasas no se usan. Puedes dejar la de hoy registrada antes de cambiar a manual.',
   register: 'Registrar tasa',
@@ -53,7 +57,7 @@ export const exchangeRateCopy = {
   emptyDescription: 'Registra la tasa del día de cada moneda en la que cobra la clínica.',
   colDate: 'Fecha',
   colCurrency: 'Moneda',
-  colRate: 'Tasa por 1 USD',
+  colRate: (base: string) => `Tasa por 1 ${base}`,
   colAuthor: 'Registrada por',
   unknownAuthor: 'Usuario no disponible',
   noFormat: '—',
@@ -70,8 +74,8 @@ export const rateFormCopy = {
   date: 'Fecha',
   currency: 'Moneda',
   currencyPlaceholder: 'Elige una moneda',
-  rate: 'Tasa por 1 USD',
-  rateHint: 'Cuántas unidades de la moneda equivalen a 1 USD, con hasta 8 decimales. Por ejemplo, 36,5.',
+  rate: (base: string) => `Tasa por 1 ${base}`,
+  rateHint: (base: string) => `Cuántas unidades de la moneda equivalen a 1 ${base}, con hasta 8 decimales. Por ejemplo, 36,5.`,
   ratePlaceholder: 'Por ejemplo, 36,5',
   submit: 'Registrar tasa',
   dateMissing: 'Elige el día de la tasa.',
@@ -84,8 +88,7 @@ const copy = exchangeRateCopy;
 /** El rango que acepta la API. */
 const DATE_MIN = '2000-01-01';
 
-interface LoadedState {
-  source: ExchangeRateSource;
+interface LoadedState extends ExchangeRateSettings {
   rates: ManualExchangeRate[];
 }
 
@@ -121,7 +124,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
     Promise.all([getExchangeRateSettings(token), listManualExchangeRates(token)])
       .then(([settings, rates]) => {
         if (cancelled) return;
-        setState({ source: settings.source, rates });
+        setState({ ...settings, rates });
         setLoadError(null);
       })
       .catch((err: unknown) => {
@@ -195,7 +198,9 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
             <ArrowLeftRight aria-hidden className="mt-0.5 size-5 shrink-0 text-muted" />
             <div className="min-w-0">
               <p data-testid="exchange-rate-source" className="font-medium text-ink">
-                {copy.sourceLabels[state.source]}
+                {state.source === 'MANUAL'
+                  ? copy.manualSince(state.manualSince && fmt ? fmt.civilDate(state.manualSince) : null)
+                  : copy.sourceLabels[state.source]}
               </p>
               <p className="mt-1 text-sm text-muted">{copy.sourceHints[state.source]}</p>
             </div>
@@ -224,7 +229,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
             <h2 id={ratesHeadingId} className="text-lg font-semibold text-ink">
               {copy.ratesHeading}
             </h2>
-            <p className="text-sm text-muted">{copy.ratesHint}</p>
+            <p className="text-sm text-muted">{copy.ratesHint(state.baseCurrency)}</p>
             {state.source === 'AUTOMATIC' ? <p className="text-sm text-muted">{copy.ratesAutomaticNote}</p> : null}
           </div>
           {state.rates.length > 0 ? registerButton : null}
@@ -244,7 +249,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
                 <TableRow className="hover:bg-transparent">
                   <TableHead>{copy.colDate}</TableHead>
                   <TableHead>{copy.colCurrency}</TableHead>
-                  <TableHead className="text-right">{copy.colRate}</TableHead>
+                  <TableHead className="text-right">{copy.colRate(state.baseCurrency)}</TableHead>
                   <TableHead>{copy.colAuthor}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -257,7 +262,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
                     <TableCell className="font-medium text-ink max-sm:text-right" data-label={copy.colCurrency}>
                       <Badge variant="muted">{rate.currency}</Badge>
                     </TableCell>
-                    <TableCell className="text-right text-ink tabular-nums" data-label={copy.colRate}>
+                    <TableCell className="text-right text-ink tabular-nums" data-label={copy.colRate(state.baseCurrency)}>
                       {rateText(rate.rate, fmt)}
                     </TableCell>
                     <TableCell className="text-muted max-sm:text-right" data-label={copy.colAuthor}>
@@ -278,8 +283,8 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           onOpenChange={setSourceOpen}
           token={token}
           current={state.source}
-          onSaved={(source) => {
-            setState((prev) => (prev ? { ...prev, source } : prev));
+          onSaved={(saved) => {
+            setState((prev) => (prev ? { ...prev, ...saved } : prev));
             setNotice(copy.sourceSaved);
           }}
         />
@@ -290,6 +295,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           open={rateOpen}
           onOpenChange={setRateOpen}
           token={token}
+          baseCurrency={state.baseCurrency}
           onSaved={(rate) => {
             setState((prev) => (prev ? { ...prev, rates: sortRates([rate, ...prev.rates]) } : prev));
             setNotice(copy.rateSaved(rate.currency));
@@ -310,7 +316,7 @@ interface SourceModalProps {
   onOpenChange: (open: boolean) => void;
   token: string;
   current: ExchangeRateSource;
-  onSaved: (source: ExchangeRateSource) => void;
+  onSaved: (saved: ExchangeRateSettings) => void;
 }
 
 /** Cada apertura parte de la fuente guardada: el padre lo monta con una `key` por apertura. */
@@ -330,7 +336,7 @@ function SourceModal({ open, onOpenChange, token, current, onSaved }: SourceModa
     setError(null);
     try {
       const saved = await saveExchangeRateSettings(token, draft);
-      onSaved(saved.source);
+      onSaved(saved);
       onOpenChange(false);
     } catch (err) {
       setError(apiErrorMessage(err, copy.sourceSaveError));
@@ -392,6 +398,8 @@ const RATE_FORM_ID = 'manual-rate-form';
 const rateInputId = (field: RateField) => `${RATE_FORM_ID}-${field}`;
 
 interface RateFormModalProps {
+  /** Moneda base de las tasas (la da la API): no se ofrece y nombra la tasa. */
+  baseCurrency: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
@@ -401,12 +409,11 @@ interface RateFormModalProps {
 /**
  * Alta de una tasa manual. La fecha por defecto es hoy en la zona de la sede
  * y no admite días futuros (la API vuelve a comprobarlo); la moneda sale de la
- * lista de monedas (la base de las tasas la rechaza la API, con su mensaje
- * junto al campo). Un 400 con `field` va junto a su
- * campo; el 409 (ya hay una tasa ese día) arriba del modal. El padre lo monta
+ * lista de monedas sin la moneda base, que da la API. Un 400 con `field` va
+ * junto a su campo; el 409 (ya hay una tasa ese día) arriba del modal. El padre lo monta
  * con una `key` por apertura.
  */
-export function RateFormModal({ open, onOpenChange, token, onSaved }: RateFormModalProps) {
+export function RateFormModal({ open, onOpenChange, token, baseCurrency, onSaved }: RateFormModalProps) {
   const timeZone = readyTimeZone(useSedeTimeZone(token));
   const today = timeZone ? sedeToday(timeZone) : null;
   const [date, setDate] = useState<string | null>(null);
@@ -487,6 +494,7 @@ export function RateFormModal({ open, onOpenChange, token, onSaved }: RateFormMo
           type="date"
           value={dateValue}
           min={DATE_MIN}
+          max={today ?? undefined}
           onChange={(e) => {
             setDate(e.target.value);
             clearError('date');
@@ -499,6 +507,7 @@ export function RateFormModal({ open, onOpenChange, token, onSaved }: RateFormMo
       </FormField>
       <FormField htmlFor={rateInputId('currency')} label={rateFormCopy.currency} error={errors.currency}>
         <CurrencySelect
+          exclude={[baseCurrency]}
           id={rateInputId('currency')}
           token={token}
           value={currency}
@@ -515,9 +524,9 @@ export function RateFormModal({ open, onOpenChange, token, onSaved }: RateFormMo
       </FormField>
       <FormField
         htmlFor={rateInputId('rate')}
-        label={rateFormCopy.rate}
+        label={rateFormCopy.rate(baseCurrency)}
         error={errors.rate}
-        hint={rateFormCopy.rateHint}
+        hint={rateFormCopy.rateHint(baseCurrency)}
         hintId={`${rateInputId('rate')}-hint`}
       >
         <Input
