@@ -235,7 +235,7 @@ for (const viewport of VIEWPORTS) {
     await expect(notice.getByRole('link', { name: 'Registrar la tasa en Ajustes › Tasa de cambio' })).toHaveCount(0);
     const toManual = notice.getByRole('link', { name: 'Pasar a tasa manual en Ajustes › Tasa de cambio' });
     await expect(toManual).toBeVisible();
-    await expect(notice).toContainText('desde el día del cambio');
+    await expect(notice).toContainText('servirá de respaldo a estos abonos si el proveedor no la da');
     await expectNoHorizontalScroll(page);
     const violations = await axeInBothThemes(page, notice);
     expect(violations.light).toEqual([]);
