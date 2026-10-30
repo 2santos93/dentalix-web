@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import {
+  ArrowLeftRight,
   BadgePercent,
   BellRing,
   Building2,
@@ -35,6 +36,7 @@ import { canManagePostOpTemplates } from '@/lib/postop/postop-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
+import { canManageExchangeRates } from '@/lib/exchange/exchange-settings-api';
 import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
 import { canManageDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { canManagePatientSettings } from '@/lib/patients/patient-settings-api';
@@ -162,6 +164,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Cómo se abre y se cierra la caja por turno.',
         icon: Wallet,
         visible: canManageCashSessions,
+      },
+      // DX-374.
+      {
+        href: '/settings/tasa-de-cambio',
+        label: 'Tasa de cambio',
+        description: 'Si la tasa del día la da un proveedor o la registra la clínica, y las tasas registradas.',
+        icon: ArrowLeftRight,
+        visible: canManageExchangeRates,
       },
       // DX-204.
       {
