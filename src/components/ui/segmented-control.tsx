@@ -17,8 +17,9 @@ export interface SegmentedControlProps<V extends string> {
   value: V;
   onValueChange: (value: V) => void;
   options: readonly SegmentedOption<V>[];
-  /** Nombre del grupo para lectores de pantalla («Vista del calendario»). */
-  'aria-label': string;
+  /** Nombre del grupo para lectores de pantalla («Vista del calendario»); o `aria-labelledby`. */
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
   size?: 'sm' | 'md';
   /** En móvil ocupa todo el ancho y reparte los segmentos; desde `sm` vuelve a su ancho natural. */
   fullWidthOnMobile?: boolean;
@@ -30,6 +31,12 @@ export interface SegmentedControlProps<V extends string> {
    * controles que las pruebas e2e ya buscan como botón («Día», «Lista», «Hoy»).
    */
   semantics?: 'radio' | 'toggle';
+  /**
+   * `auto`: las flechas eligen (por defecto con `radio`). `manual`: las flechas
+   * solo mueven el foco y Enter/Espacio eligen (por defecto con `toggle`; úsalo
+   * con `radio` cuando elegir abre una confirmación, como la dentición).
+   */
+  activation?: 'auto' | 'manual';
   disabled?: boolean;
   className?: string;
   id?: string;
@@ -50,10 +57,12 @@ export function SegmentedControl<V extends string>({
   size = 'md',
   fullWidthOnMobile = false,
   semantics = 'radio',
+  activation,
   disabled = false,
   className,
   id,
   'aria-label': ariaLabel,
+  'aria-labelledby': labelledBy,
   'data-testid': testId,
 }: SegmentedControlProps<V>) {
   const refs = React.useRef(new Map<V, HTMLButtonElement>());
@@ -72,8 +81,8 @@ export function SegmentedControl<V extends string>({
           : (Math.max(index, 0) + delta + enabled.length) % enabled.length;
     const next = enabled[nextIndex].value;
     refs.current.get(next)?.focus();
-    // Radio: las flechas eligen (APG). Toggle: solo mueven el foco; Enter/Espacio eligen.
-    if (semantics === 'radio' && next !== value) onValueChange(next);
+    // Automática: las flechas eligen (APG radio). Manual: solo mueven el foco; Enter/Espacio eligen.
+    if ((activation ?? (semantics === 'radio' ? 'auto' : 'manual')) === 'auto' && next !== value) onValueChange(next);
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, current: V) {
@@ -97,6 +106,7 @@ export function SegmentedControl<V extends string>({
       id={id}
       role={isRadio ? 'radiogroup' : 'group'}
       aria-label={ariaLabel}
+      aria-labelledby={labelledBy}
       aria-disabled={disabled || undefined}
       data-testid={testId}
       className={cn(

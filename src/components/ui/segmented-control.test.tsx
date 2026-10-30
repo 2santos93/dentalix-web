@@ -98,3 +98,28 @@ describe('SegmentedControl', () => {
     expect(screen.getByRole('radiogroup').className).toContain('w-full');
   });
 });
+
+describe('SegmentedControl — activación manual con radio', () => {
+  it('las flechas mueven el foco sin elegir; Espacio elige', async () => {
+    const user = userEvent.setup();
+    const onChange = jest.fn();
+    render(
+      <SegmentedControl
+        aria-label="Dentición"
+        activation="manual"
+        value="p"
+        onValueChange={onChange}
+        options={[
+          { value: 'p', label: 'Permanente' },
+          { value: 'm', label: 'Mixta' },
+        ]}
+      />,
+    );
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('radio', { name: 'Mixta' })).toHaveFocus();
+    expect(onChange).not.toHaveBeenCalled();
+    await user.keyboard(' ');
+    expect(onChange).toHaveBeenCalledWith('m');
+  });
+});
