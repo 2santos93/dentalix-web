@@ -23,6 +23,7 @@ import {
   implantSearchDetail,
   isPatientOptOut,
   staffLoginDetail,
+  staffDetail,
   cashSessionDetail,
   scheduleChangeDetail,
   cancellationDetail,
@@ -448,6 +449,7 @@ function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: bool
     communicationDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
     staffLoginDetail(event.metadata) ??
+    staffDetail(event.metadata) ??
     cashSessionDetail(event.metadata) ??
     scheduleChangeDetail(event.metadata) ??
     cancellationDetail(event.metadata) ??
