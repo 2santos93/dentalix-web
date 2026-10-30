@@ -14,6 +14,47 @@ export const paymentRateCopy = {
 };
 
 /**
+ * Una cotización entre la moneda de un abono y la de su destino: las dos en
+ * unidades por 1 de la moneda base, como las da la fuente de la clínica (la
+ * misma forma que la tasa congelada de un abono, DX-375, y que la lectura de
+ * `GET /exchange/rates`).
+ */
+export interface RateQuote {
+  /** Moneda de destino (la del plan). */
+  currency: string;
+  /** Unidades de la moneda del abono por 1 de la base. */
+  fromPerBase: number;
+  /** Unidades de `currency` por 1 de la base. */
+  toPerBase: number;
+}
+
+/**
+ * «1 USD = 4.000,00 COP»: con la moneda mayor a la izquierda, para que la
+ * cifra nunca sea un 0,000… ilegible. `money` pinta un importe con su moneda.
+ */
+export function ratePairLabel(
+  paymentCurrency: string,
+  rate: RateQuote,
+  money: (amount: number, currency: string) => string,
+): string {
+  // Unidades de la moneda del abono por 1 de la moneda de destino.
+  const paymentPerTarget = rate.fromPerBase / rate.toPerBase;
+  return paymentPerTarget >= 1
+    ? `1 ${rate.currency} = ${money(paymentPerTarget, paymentCurrency)}`
+    : `1 ${paymentCurrency} = ${money(1 / paymentPerTarget, rate.currency)}`;
+}
+
+/**
+ * El abono en la moneda de destino con una cotización: abono → base →
+ * destino, redondeado a céntimos solo al final. La misma cuenta que hace la
+ * API al congelar la tasa (`convertWithQuote`), así la previsualización del
+ * cobro coincide céntimo a céntimo con lo que guarda.
+ */
+export function convertWithRate(amount: number, rate: Pick<RateQuote, 'fromPerBase' | 'toPerBase'>): number {
+  return Math.round((amount / rate.fromPerBase) * rate.toPerBase * 100) / 100;
+}
+
+/**
  * La tasa que congeló un abono (DX-375), legible: «1 USD = COP 4.000,00» con
  * la moneda mayor a la izquierda, sale de las dos tasas por unidad base que
  * guardó, la fuente y el día. Cifra y día con el formato de la sede y el
@@ -26,11 +67,6 @@ export function frozenRateLabel(
 ): string | null {
   const rate = payment.frozenRate;
   if (!rate) return null;
-  // Unidades de la moneda del abono por 1 de la moneda de destino.
-  const paymentPerTarget = rate.fromPerBase / rate.toPerBase;
-  const pair =
-    paymentPerTarget >= 1
-      ? `1 ${rate.currency} = ${sedeMoney(paymentPerTarget, payment.currency, fmt)}`
-      : `1 ${payment.currency} = ${sedeMoney(1 / paymentPerTarget, rate.currency, fmt)}`;
+  const pair = ratePairLabel(payment.currency, rate, (amount, currency) => sedeMoney(amount, currency, fmt));
   return paymentRateCopy.frozen(pair, paymentRateCopy.source[rate.source], sedeCivilDate(rate.date, fmt));
 }
