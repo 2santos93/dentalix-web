@@ -9,6 +9,13 @@
  * UTC. Genuine instants (appointment times, server timestamps) are shown in the
  * user's local timezone; civil dates (a birthday, the day a payment was made)
  * are shown exactly as they were picked.
+ *
+ * DX-378: las pantallas pintan horas y fechas con la zona y el formato de la
+ * sede (`SedeClock`/`RegionalFormat`). `formatTime`, `formatDate`,
+ * `formatDateTime`, `formatTimeInZone`, `formatDateTimeInZone` y
+ * `formatDateLabel` quedan para las pantallas aún sin migrar que lista
+ * `src/architecture/sede-clock-guard.test.ts`; la prueba falla si otra los
+ * importa.
  */
 
 import { UI_LANGUAGE } from '@/lib/format/regional-format';
