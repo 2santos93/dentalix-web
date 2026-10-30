@@ -6,6 +6,7 @@ import {
   wallInstant,
   wallMinuteOfDay,
   wallWeekRange,
+  zoneOffsetMinutes,
 } from './wall-clock';
 
 // Jest corre con TZ=UTC: las zonas de estas pruebas son siempre otras, así que
@@ -133,5 +134,24 @@ describe('wallDayRange / wallWeekRange', () => {
       from: '2026-10-25T11:00:00.000Z',
       to: '2026-11-01T10:59:59.999Z',
     });
+  });
+});
+
+describe('zoneOffsetMinutes (DX-362)', () => {
+  it('is the offset of the zone at that instant, not the browser one', () => {
+    expect(zoneOffsetMinutes('2026-10-27T19:30:00Z', CARACAS)).toBe(-4 * 60);
+    expect(zoneOffsetMinutes(new Date('2026-10-27T19:30:00Z'), 'UTC')).toBe(0);
+    expect(zoneOffsetMinutes('2026-10-27T19:30:00Z', 'Asia/Kolkata')).toBe(5 * 60 + 30);
+  });
+
+  it('follows the daylight saving change of the zone', () => {
+    // Madrid pasa de UTC+2 a UTC+1 el 25/10/2026 a las 01:00 UTC.
+    expect(zoneOffsetMinutes('2026-10-25T00:59:00Z', MADRID)).toBe(120);
+    expect(zoneOffsetMinutes('2026-10-25T01:00:00Z', MADRID)).toBe(60);
+    expect(zoneOffsetMinutes('2026-10-27T11:00:00Z', AUCKLAND)).toBe(13 * 60);
+  });
+
+  it('ignores the seconds of the instant', () => {
+    expect(zoneOffsetMinutes('2026-10-27T19:30:59.999Z', CARACAS)).toBe(-4 * 60);
   });
 });

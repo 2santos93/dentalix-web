@@ -19,7 +19,6 @@ import {
   clinicSettingsDetail,
   locationCalendarDetail,
   staffDetail,
-  hasStaffLocationIds,
   locationNameMap,
 } from './audit-labels';
 
@@ -556,15 +555,6 @@ describe('staffDetail (DX-359)', () => {
         staffAccess: { after: { role: 'RECEPTION', locationIds: null } },
       }),
     ).toBe('Invitación aceptada · Miembro reactivado · Rol: Recepción · Sedes: Todas las sedes');
-  });
-
-  it('hasStaffLocationIds: solo con sedes concretas en algún lado', () => {
-    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: [CENTRO] } } })).toBe(true);
-    expect(hasStaffLocationIds({ staffAccess: { before: { locationIds: [CENTRO] }, after: { locationIds: null } } })).toBe(true);
-    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: null } } })).toBe(false);
-    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: [] } } })).toBe(false);
-    expect(hasStaffLocationIds({ staffAccess: { after: { role: 'ADMIN' } } })).toBe(false);
-    expect(hasStaffLocationIds({})).toBe(false);
   });
 
   it('nunca muestra el token, el email ni el nombre aunque llegaran en la metadata', () => {

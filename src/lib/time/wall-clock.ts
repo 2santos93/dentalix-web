@@ -41,6 +41,18 @@ export function civilWeekStart(day: string): string {
 }
 
 /**
+ * Desfase de `timeZone` respecto de UTC en ese instante, en minutos (Bogotá
+ * −300, Berlín +60 o +120 según el horario de verano): el reloj de pared leído
+ * como UTC menos el instante, sin sus segundos.
+ */
+export function zoneOffsetMinutes(instant: Date | string, timeZone: string): number {
+  const ms = toDate(instant).getTime();
+  const p = wallParts(new Date(ms), timeZone);
+  const floored = ms - (((ms % MS_PER_MINUTE) + MS_PER_MINUTE) % MS_PER_MINUTE);
+  return (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - floored) / MS_PER_MINUTE;
+}
+
+/**
  * Instante en que el reloj de `timeZone` marca el minuto `minute` (0–1440;
  * 1440 = las 00:00 del día siguiente) del día civil `day`. Con un cambio de
  * horario, la misma regla que `Temporal` (`disambiguation: 'compatible'`):
@@ -61,12 +73,7 @@ export function wallInstant(day: string, minute: number, timeZone: string): Date
   const noon = civilNoonUtc(day);
   // El minuto leído como si la zona fuera UTC.
   const asUtc = Date.UTC(noon.getUTCFullYear(), noon.getUTCMonth(), noon.getUTCDate(), 0, minute);
-  // Desfase de la zona en un instante: (reloj de pared leído como UTC) − instante.
-  const offsetAt = (instant: number): number => {
-    const p = wallParts(new Date(instant), timeZone);
-    const floored = instant - (((instant % MS_PER_MINUTE) + MS_PER_MINUTE) % MS_PER_MINUTE);
-    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - floored;
-  };
+  const offsetAt = (instant: number): number => zoneOffsetMinutes(new Date(instant), timeZone) * MS_PER_MINUTE;
   const DAY_MS = MINUTES_PER_DAY * MS_PER_MINUTE;
   const before = offsetAt(asUtc - DAY_MS);
   const after = offsetAt(asUtc + DAY_MS);

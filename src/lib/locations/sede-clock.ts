@@ -52,6 +52,21 @@ export function locationClock(
 }
 
 /**
+ * La sede de la pantalla: la activa; en «Todas las sedes» (o con una activa
+ * que ya no está), la principal (la activa más antigua, R6). La lista llega de
+ * la API ordenada por antigüedad.
+ */
+export function screenLocation(
+  locations: readonly ClinicLocation[],
+  activeLocationId: string | null,
+): ClinicLocation | undefined {
+  return (
+    (activeLocationId ? locations.find((l) => l.id === activeLocationId) : undefined) ??
+    locations.find((l) => l.isActive)
+  );
+}
+
+/**
  * El reloj de la pantalla: el de la sede `locationId` si se pide una; si no,
  * el de la sede activa; en «Todas las sedes» (o con una activa que ya no
  * está), el de la principal (la activa más antigua, R6), la misma regla que
@@ -63,9 +78,7 @@ export function sedeClockFor(
   locationId?: string | null,
 ): { status: 'ready'; clock: AgendaClock } | SedeClockError {
   const byId = (id: string | null | undefined) => (id ? locations.find((l) => l.id === id) : undefined);
-  const screen = locationId
-    ? byId(locationId)
-    : (byId(activeLocationId) ?? locations.find((l) => l.isActive));
+  const screen = locationId ? byId(locationId) : screenLocation(locations, activeLocationId);
   if (!screen) {
     return locationId
       ? { status: 'error', kind: 'locale', message: SEDE_LOCALE_ERROR, locationId }
