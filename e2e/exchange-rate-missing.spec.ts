@@ -213,9 +213,16 @@ for (const viewport of VIEWPORTS) {
   test(`ADMIN con fuente automática: el aviso dice que la tasa del proveedor aún no está y explica pasar a manual (${viewport.name})`, async ({
     page,
   }) => {
+    // Solo cuentan los errores por leer la fuente (403 de /exchange/settings):
+    // el 404 de un plan sin plan de pagos es la respuesta normal de esa ruta.
     const errors: string[] = [];
     page.on('console', (msg) => {
-      if (msg.type() === 'error') errors.push(msg.text());
+      if (msg.type() !== 'error') return;
+      if (/\/treatment-plans\/[^/]+\/payment-plan(\?|$)/.test(msg.location().url) && msg.text().includes('404')) return;
+      errors.push(`${msg.text()} ${msg.location().url}`);
+    });
+    page.on('response', (res) => {
+      if (res.url().includes('/exchange/settings') && res.status() >= 400) errors.push(`${res.status()} ${res.url()}`);
     });
     await page.setViewportSize(viewport);
     await loginAs(page, autoOrigin, autoAdminEmail, password);

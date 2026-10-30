@@ -29,7 +29,7 @@ export const ratePreviewCopy = {
       ? 'No cuenta 1 abono anterior «sin tasa»: lo pendiente real será menor cuando se registre su tasa.'
       : `No cuenta ${n} abonos anteriores «sin tasa»: lo pendiente real será menor cuando se registre su tasa.`,
   missing: (currency: string, date: string) =>
-    `No hay tasa de ${currency} para el ${date}: el abono se guarda igual y queda «sin tasa» hasta que se registre la tasa de ese día.`,
+    `No hay tasa de ${currency} para el ${date}: el abono se guarda igual y queda «sin tasa» hasta que haya tasa de ese día.`,
 };
 const copy = ratePreviewCopy;
 

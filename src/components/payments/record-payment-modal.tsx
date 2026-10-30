@@ -44,7 +44,7 @@ export const recordPaymentCopy = {
   recorded: (amount: string, date: string, plan: string) => `Abono registrado: ${amount} · ${date} · ${plan}.`,
   // DX-375: sin tasa de su día el abono se guarda igual, pero el saldo no lo
   // cuenta todavía (el plan lo enseña con su aviso).
-  recordedWithoutRate: 'Quedó sin tasa de cambio de su día: el saldo no lo cuenta hasta que se registre la tasa.',
+  recordedWithoutRate: 'Quedó sin tasa de cambio de su día: el saldo no lo cuenta hasta que haya tasa de ese día.',
   // DX-262: destino del abono cuando el paciente trae saldo migrado.
   target: 'Abonar a',
   targetPlan: 'Un plan de tratamiento',

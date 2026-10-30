@@ -47,7 +47,7 @@ export function useExchangeRates(token: string, date: string, active: boolean): 
         },
         (error: unknown) => {
           if (cancelled) return;
-          setResult({ key, failed: error instanceof ApiError && error.status === 500 ? 'unavailable' : 'error' });
+          setResult({ key, failed: isRateUnavailable(error) ? 'unavailable' : 'error' });
         },
       );
     }, RATES_DEBOUNCE_MS);
@@ -61,4 +61,10 @@ export function useExchangeRates(token: string, date: string, active: boolean): 
   if (!result || result.key !== key) return { status: 'loading' };
   if ('failed' in result) return { status: result.failed, retry: () => setReloadKey((k) => k + 1) };
   return { status: 'ready', rates: result.rates };
+}
+
+// SEC-054: un día sin tasa (fuente automática sin snapshot ni proveedor) es un
+// 503 `EXCHANGE_RATE_UNAVAILABLE`, no un fallo: la tasa aún no está.
+function isRateUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && (error.code === 'EXCHANGE_RATE_UNAVAILABLE' || error.status === 503);
 }

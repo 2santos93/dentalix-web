@@ -547,11 +547,13 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
   });
 
-  // DX-386: con la fuente automática, un día sin tasa en caché y sin
-  // proveedor responde 500 (la API no lo distingue de otro fallo): no es «no
-  // se pudo consultar», es que la tasa aún no está.
+  // DX-386/SEC-054: con la fuente automática, un día sin tasa en caché y sin
+  // proveedor responde 503 EXCHANGE_RATE_UNAVAILABLE: no es «no se pudo
+  // consultar», es que la tasa aún no está.
   it('si el servidor no tiene aún la tasa del proveedor lo dice como aviso, no como fallo, y deja guardar', async () => {
-    mockedRates.mockRejectedValue(new ApiError(500, 'Internal server error'));
+    mockedRates.mockRejectedValue(
+      new ApiError(503, 'No hay tasa de cambio disponible para esa fecha.', { code: 'EXCHANGE_RATE_UNAVAILABLE' }),
+    );
     mockedRecord.mockResolvedValue(
       savedPayment({ amount: 1825, currency: 'VES', treatmentPlanId: 'plan-usd', exchangeRateStatus: 'MISSING' }),
     );
@@ -572,6 +574,14 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+  });
+
+  it('un error del servidor (500) dice que no se pudo consultar, no que la tasa aún no está', async () => {
+    mockedRates.mockRejectedValue(new ApiError(500, 'Internal server error'));
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await waitFor(() => expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.error));
+    expect(preview(dialog)).not.toHaveTextContent(/aún no está disponible/);
   });
 
   it('un fallo de red sigue diciendo que no se pudo consultar', async () => {
