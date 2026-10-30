@@ -10,6 +10,7 @@ import { presetRange } from '@/lib/payments/cash-period';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { RegionalReviewNotice } from '@/components/locations/regional-review-notice';
+import { RateBacklogNotice } from '@/components/payments/rate-backlog-notice';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { activeSedeCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
 import { formatCurrency } from '@/lib/format/currency';
@@ -218,6 +219,8 @@ export function DashboardView({ token }: DashboardViewProps) {
     <div className="flex flex-col gap-6">
       {/* Aviso D5 (G1 §7): solo ADMIN, hasta confirmar cada sede activa. */}
       <RegionalReviewNotice token={token} />
+      {/* DX-380: solo ADMIN, mientras haya abonos sin tasa de más de 24 h. */}
+      <RateBacklogNotice token={token} />
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4 p-4">
           <FormField htmlFor="dashboard-from" label={copy.fromLabel}>

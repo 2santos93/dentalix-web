@@ -2580,6 +2580,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/rate-backlog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Abonos sin tasa desde hace más de 24 h (DX-380, solo ADMIN)
+         * @description Abonos vivos de la clínica que siguen sin base de imputación o sin su tasa congelada pasadas 24 h: el barrido los reintenta con backoff (1 min, 5, 30, 2 h, 24 h). Registrar la tasa del día en Ajustes › Tasa de cambio, corregirla o cambiar la fuente adelanta el reintento al barrido siguiente. Sin datos del abono ni del paciente.
+         */
+        get: operations["PaymentRateBacklogController_backlog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/payment-plan": {
         parameters: {
             query?: never;
@@ -10124,6 +10144,19 @@ export interface components {
             /** @description Las líneas de antes de guardar */
             previous: components["schemas"]["PreviousAllocationLineDto"][];
         };
+        PaymentRateBacklogDto: {
+            /**
+             * @description Abonos vivos de la clínica que llevan más de 24 h sin tasa (0: no hay aviso)
+             * @example 3
+             */
+            count: number;
+            /**
+             * Format: date-time
+             * @description Desde cuándo espera el más antiguo (UTC; la web lo enseña como día de la sede), o null si count es 0
+             * @example 2026-10-28T14:05:00.000Z
+             */
+            oldestSince: string | null;
+        };
         CreatePaymentPlanDto: {
             /**
              * @description Número de cuotas, entero >= 1 y <= 600
@@ -12110,6 +12143,15 @@ export interface components {
             delayMs: number;
             /** @description Con retraso: más de 2 periodos sin correr, o nunca sincronizada */
             overdue: boolean;
+            /** @description DX-380: una sola ejecución a la vez (no encola un tick mientras el anterior siga PENDING o RUNNING) */
+            singleton: boolean;
+            /** @description DX-380: ticks saltados porque el anterior seguía en curso (0 si la tarea no está sincronizada) */
+            skippedCount: number;
+            /**
+             * Format: date-time
+             * @description DX-380: el último tick saltado, o null
+             */
+            lastSkippedAt: string | null;
         };
         JobsStatsDto: {
             /**
@@ -21357,6 +21399,32 @@ export interface operations {
             };
             /** @description Saldo migrado, plan rechazado o cancelado, sin tasa para la fecha del abono, o la imputación cambió (expectedVersion) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentRateBacklogController_backlog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRateBacklogDto"];
+                };
+            };
+            /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
