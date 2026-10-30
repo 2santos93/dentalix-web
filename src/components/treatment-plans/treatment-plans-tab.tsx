@@ -82,10 +82,11 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { cn } from '@/lib/utils';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { formatDateTime } from '@/lib/format/date';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
@@ -341,8 +342,8 @@ const copy = {
   allocationAction: 'Imputación',
   // Con varios abonos, «Imputación, Imputación…» no dice de cuál: el lector
   // oye también el recibo (o el importe, si no tiene serie).
-  allocationActionContext: (payment: Payment) =>
-    ` del abono ${payment.receiptNumber ?? formatCurrency(payment.amount, payment.currency)}`,
+  allocationActionContext: (payment: Payment, fmt: RegionalFormat | null) =>
+    ` del abono ${payment.receiptNumber ?? sedeMoney(payment.amount, payment.currency, fmt)}`,
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
 
@@ -461,6 +462,8 @@ interface ItemsTableProps {
     selectedIds: ReadonlySet<string>;
     onToggle: (itemId: string, checked: boolean) => void;
   };
+  /** DX-386: formato de la sede para «Cobrado» y «Pendiente»; `null` mientras carga («—»). */
+  fmt: RegionalFormat | null;
 }
 
 /**
@@ -796,6 +799,7 @@ function ItemsTable({
   markDoneOnly = false,
   itemBalances,
   selection,
+  fmt,
 }: ItemsTableProps) {
   // SEC-050: el ítem de un cargo vigente no se quita, no cambia de estado ni
   // entra en «Descuento %».
@@ -874,7 +878,7 @@ function ItemsTable({
                     {formatCurrency(item.price, currency)}
                     <ItemDiscountLine item={item} currency={currency} />
                   </TableCell>
-                  {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} /> : null}
+                  {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} fmt={fmt} /> : null}
                   <TableCell>
                     <div className="flex flex-col items-start gap-1.5">
                       <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
@@ -971,7 +975,7 @@ function ItemsTable({
               </p>
               {itemBalances?.has(item.id) ? (
                 <div className="mt-1">
-                  <ItemPaidLine item={itemBalances.get(item.id)} currency={currency} />
+                  <ItemPaidLine item={itemBalances.get(item.id)} currency={currency} fmt={fmt} />
                 </div>
               ) : null}
               <div className="mt-1">
@@ -1041,7 +1045,7 @@ interface PaymentsListProps {
   manualPaymentIds?: ReadonlySet<string>;
   /** DX-051: abre «Imputar abono»; solo ADMIN y en un plan que se cobra. */
   onAllocate?: (paymentId: string, trigger: HTMLElement) => void;
-  /** DX-375/DX-378: formato de la sede para la tasa congelada; `null` mientras carga («—»). */
+  /** DX-375/DX-378/DX-386: formato de la sede para importe, día y tasa congelada; `null` mientras carga («—»). */
   fmt: RegionalFormat | null;
 }
 
@@ -1087,7 +1091,7 @@ function PaymentsList({
               const voiding = voidingPaymentId === payment.id;
               return (
                 <TableRow key={payment.id}>
-                  <TableCell>{formatCivilDate(payment.paidOn)}</TableCell>
+                  <TableCell>{sedeCivilDate(payment.paidOn, fmt)}</TableCell>
                   <TableCell className="tabular-nums">
                     {payment.receiptNumber ?? (
                       <span className="text-muted">{copy.paymentReceiptLegacy}</span>
@@ -1095,7 +1099,7 @@ function PaymentsList({
                   </TableCell>
                   <TableCell className="font-medium">
                     <span className="inline-flex flex-wrap items-center gap-2">
-                      {formatCurrency(payment.amount, payment.currency)}
+                      {sedeMoney(payment.amount, payment.currency, fmt)}
                       {manualPaymentIds?.has(payment.id) ? (
                         <Badge variant="muted">{copy.manualAllocation}</Badge>
                       ) : null}
@@ -1130,7 +1134,7 @@ function PaymentsList({
                           onClick={(e) => onAllocate(payment.id, e.currentTarget)}
                         >
                           {copy.allocationAction}
-                          <span className="sr-only">{copy.allocationActionContext(payment)}</span>
+                          <span className="sr-only">{copy.allocationActionContext(payment, fmt)}</span>
                         </Button>
                       ) : null}
                       <Separator orientation="vertical" className="h-5" />
@@ -1160,7 +1164,7 @@ function PaymentsList({
           return (
             <li key={payment.id} className="p-4">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-ink tabular-nums">{formatCivilDate(payment.paidOn)}</span>
+                <span className="font-medium text-ink tabular-nums">{sedeCivilDate(payment.paidOn, fmt)}</span>
                 {payment.method ? (
                   <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
                     {PAYMENT_METHOD_LABELS[payment.method]}
@@ -1170,7 +1174,7 @@ function PaymentsList({
                 )}
               </div>
               <p className="mt-2 flex flex-wrap items-center gap-2 font-medium text-ink tabular-nums">
-                {formatCurrency(payment.amount, payment.currency)}
+                {sedeMoney(payment.amount, payment.currency, fmt)}
                 {manualPaymentIds?.has(payment.id) ? (
                   <Badge variant="muted">{copy.manualAllocation}</Badge>
                 ) : null}
@@ -1199,7 +1203,7 @@ function PaymentsList({
                       onClick={(e) => onAllocate(payment.id, e.currentTarget)}
                     >
                       {copy.allocationAction}
-                      <span className="sr-only">{copy.allocationActionContext(payment)}</span>
+                      <span className="sr-only">{copy.allocationActionContext(payment, fmt)}</span>
                     </Button>
                   ) : null}
                 </div>
@@ -2541,6 +2545,7 @@ export function TreatmentPlansTab({
                   }
                   onVoidFee={role === 'ADMIN' ? setFeeToVoid : undefined}
                   itemBalances={itemBalances}
+                  fmt={sedeFmt}
                   locked={signed}
                   closed={closed}
                   markDoneOnly={planDetail?.status === 'COMPLETED'}
@@ -2672,6 +2677,7 @@ export function TreatmentPlansTab({
                                   paymentsWithoutRate: planBalance.paymentsWithoutRate.length,
                                 }}
                                 date={paymentDate}
+                                fmt={sedeFmt}
                               />
                             ) : null}
 

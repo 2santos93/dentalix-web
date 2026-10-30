@@ -2114,7 +2114,7 @@ export interface paths {
         };
         /**
          * Tasas de un día para la clínica, según su fuente (DX-374)
-         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor.
+         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo).
          */
         get: operations["ExchangeController_rates"];
         put?: never;
@@ -20041,7 +20041,7 @@ export interface operations {
     ExchangeController_rates: {
         parameters: {
             query: {
-                /** @description Historical day to fetch USD-base rates for (YYYY-MM-DD). */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista). Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor entre el alta de la clínica (o su primer abono, lo anterior) y hoy en la zona de sus sedes: fuera de ahí, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -20058,6 +20058,27 @@ export interface operations {
                     "application/json": components["schemas"]["RatesResponseDto"];
                 };
             };
+            /** @description Fecha que no existe (`EXCHANGE_RATE_DATE_INVALID` o el mensaje de validación de `date`) o día sin tasa guardada fuera de la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     ExchangeController_convert: {
@@ -20068,7 +20089,7 @@ export interface operations {
                 from: string;
                 /** @description Código ISO 4217 de 3 letras. */
                 to: string;
-                /** @description Historical day whose rate applies to this conversion (YYYY-MM-DD). */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista). Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor entre el alta de la clínica (o su primer abono, lo anterior) y hoy en la zona de sus sedes: fuera de ahí, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -20085,8 +20106,22 @@ export interface operations {
                     "application/json": components["schemas"]["ConvertResponseDto"];
                 };
             };
-            /** @description Moneda sin tasa ese día: «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español */
+            /** @description Fecha que no existe (`EXCHANGE_RATE_DATE_INVALID` o el mensaje de validación de `date`) o día sin tasa guardada fuera de la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

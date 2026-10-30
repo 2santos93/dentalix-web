@@ -132,8 +132,10 @@ async function payInVes(page: Page, amount: string, day: string, rateText: strin
 
   const preview = dialog.getByTestId('rp-rate-preview');
   await expect(preview).toContainText('Equivalente en USD');
-  await expect(preview).toContainText(/50,00\sUS\$/);
-  await expect(preview).toContainText(`Tasa: 1 USD = ${rateText} VES · automática · ${ddmmyyyy(day)}`);
+  // DX-386: con el formato de la sede y el código ISO, como la tasa congelada.
+  await expect(preview).toContainText(/USD\s50,00/);
+  await expect(preview).not.toContainText('US$');
+  await expect(preview).toContainText(`Tasa: 1 USD = VES ${rateText} · automática · ${ddmmyyyy(day)}`);
   await expect(preview).toContainText(pending);
   await expectNoHorizontalScroll(page);
 
@@ -149,10 +151,10 @@ for (const [index, viewport] of VIEWPORTS.entries()) {
     await loginAs(page, origin, adminEmail, password);
     if (index === 0) {
       // 1.825 VES a 36,5 = 50 USD (ayer); el plan de 1.000 USD queda en 950.
-      await payInVes(page, '1825', YESTERDAY, '36,50', /Pendiente tras el abono\s*950,00\sUS\$/);
+      await payInVes(page, '1825', YESTERDAY, '36,50', /Pendiente tras el abono\s*USD\s950,00/);
     } else {
       // 2.000 VES a 40 = 50 USD (hoy); queda en 900.
-      await payInVes(page, '2000', TODAY, '40,00', /Pendiente tras el abono\s*900,00\sUS\$/);
+      await payInVes(page, '2000', TODAY, '40,00', /Pendiente tras el abono\s*USD\s900,00/);
     }
   });
 }

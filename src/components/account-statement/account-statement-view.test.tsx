@@ -359,7 +359,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       expect.any(String),
     );
     expect(money((await screen.findByText(/abono registrado/i)).textContent)).toMatch(
-      /50\.000,00 COP/,
+      /COP 50\.000,00/,
     );
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
     // DX-150: avisa a la ficha para releer la marca de saldo y la cobranza.
