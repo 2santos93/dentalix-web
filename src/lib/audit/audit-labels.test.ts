@@ -19,6 +19,8 @@ import {
   clinicSettingsDetail,
   locationCalendarDetail,
   staffDetail,
+  hasStaffLocationIds,
+  locationNameMap,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -423,6 +425,7 @@ describe('staffDetail (DX-359)', () => {
     ['CLINIC_REGISTERED', 'Clínica registrada'],
     ['OWN_NAME_CHANGED', 'Cambió su propio nombre'],
     ['SESSIONS_REVOKED', 'Cambió su contraseña y cerró sus demás sesiones'],
+    ['LOCATIONS_CHANGED', 'Sedes del miembro cambiadas'],
   ])('%s → %s', (reason, label) => {
     expect(staffDetail({ reason })).toBe(label);
   });
@@ -474,13 +477,104 @@ describe('staffDetail (DX-359)', () => {
     ).toBe('Datos del miembro cambiados · Nombre · Rol: Recepción → Asistente');
   });
 
-  it('sin sedes y un rol desconocido no rompen el texto', () => {
+  it('sin los nombres de las sedes, las cuenta ([] = ninguna)', () => {
     expect(
       staffDetail({
         reason: 'STAFF_UPDATED',
         staffAccess: { before: { locationIds: [] }, after: { locationIds: ['a', 'b', 'c'] } },
       }),
     ).toBe('Datos del miembro cambiados · Sedes: ninguna sede → 3 sedes');
+  });
+
+  const CENTRO = '3f1c2a10-0000-4000-8000-000000000001';
+  const NORTE = '3f1c2a10-0000-4000-8000-000000000002';
+  const BORRADA = '3f1c2a10-0000-4000-8000-0000000000ff';
+  const names = locationNameMap([
+    { id: NORTE, name: 'Sede Norte' },
+    { id: CENTRO.toUpperCase(), name: 'Centro' },
+  ]);
+
+  it('con los nombres de las sedes, las dice por su nombre (en orden) y nunca su id', () => {
+    const text = staffDetail(
+      {
+        reason: 'STAFF_UPDATED',
+        changedFields: ['locationIds'],
+        staffAccess: { before: { locationIds: [NORTE, CENTRO] }, after: { locationIds: null } },
+      },
+      names,
+    );
+    expect(text).toBe('Datos del miembro cambiados · Sedes: Centro, Sede Norte → Todas las sedes');
+  });
+
+  it('una sede que ya no existe se cuenta aparte, sin su id', () => {
+    const one = staffDetail(
+      { reason: 'INVITATION_ACCEPTED', staffAccess: { after: { role: 'DENTIST', locationIds: [CENTRO, BORRADA] } } },
+      names,
+    );
+    expect(one).toBe('Invitación aceptada · Rol: Odontólogo/a · Sedes: Centro, 1 sede que ya no existe');
+    expect(one).not.toContain(BORRADA);
+    expect(
+      staffDetail(
+        { reason: 'INVITATION_ACCEPTED', staffAccess: { after: { locationIds: [BORRADA, `${BORRADA.slice(0, -1)}e`] } } },
+        names,
+      ),
+    ).toBe('Invitación aceptada · Sedes: 2 sedes que ya no existen');
+  });
+
+  it('null y [] se distinguen también con nombres', () => {
+    expect(
+      staffDetail(
+        { reason: 'STAFF_UPDATED', staffAccess: { before: { locationIds: [] }, after: { locationIds: null } } },
+        names,
+      ),
+    ).toBe('Datos del miembro cambiados · Sedes: ninguna sede → Todas las sedes');
+  });
+
+  it('con solo el lado de antes dice que es el valor anterior', () => {
+    expect(
+      staffDetail({ reason: 'STAFF_UPDATED', staffAccess: { before: { role: 'DENTIST', locationIds: [CENTRO] } } }, names),
+    ).toBe('Datos del miembro cambiados · Rol: antes Odontólogo/a · Sedes: antes Centro');
+  });
+
+  it('un rol desconocido no se pinta en crudo', () => {
+    expect(
+      staffDetail({
+        reason: 'STAFF_UPDATED',
+        staffAccess: {
+          before: { role: 'DENTIST' },
+          after: { role: 'SUPERVISOR' as unknown as 'ADMIN' },
+        },
+      }),
+    ).toBe('Datos del miembro cambiados · Rol: Odontólogo/a → rol no reconocido');
+  });
+
+  it('la aceptación que reactiva una membresía lo dice', () => {
+    expect(
+      staffDetail({
+        reason: 'INVITATION_ACCEPTED',
+        statusChange: { from: 'INACTIVE', to: 'ACTIVE' },
+        staffAccess: { after: { role: 'RECEPTION', locationIds: null } },
+      }),
+    ).toBe('Invitación aceptada · Miembro reactivado · Rol: Recepción · Sedes: Todas las sedes');
+  });
+
+  it('hasStaffLocationIds: solo con sedes concretas en algún lado', () => {
+    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: [CENTRO] } } })).toBe(true);
+    expect(hasStaffLocationIds({ staffAccess: { before: { locationIds: [CENTRO] }, after: { locationIds: null } } })).toBe(true);
+    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: null } } })).toBe(false);
+    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: [] } } })).toBe(false);
+    expect(hasStaffLocationIds({ staffAccess: { after: { role: 'ADMIN' } } })).toBe(false);
+    expect(hasStaffLocationIds({})).toBe(false);
+  });
+
+  it('nunca muestra el token, el email ni el nombre aunque llegaran en la metadata', () => {
+    const text = staffDetail({
+      reason: 'INVITATION_SENT',
+      changedFields: ['fullName'],
+      params: { token: 'tok-secreto', email: 'ana@example.com' },
+      staffAccess: { after: { role: 'ASSISTANT' } },
+    } as Parameters<typeof staffDetail>[0]);
+    expect(text).toBe('Invitación enviada · Rol: Asistente');
   });
 
   it('null para otra reason o sin reason', () => {

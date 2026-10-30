@@ -24,6 +24,9 @@ import {
   isPatientOptOut,
   staffLoginDetail,
   staffDetail,
+  hasStaffLocationIds,
+  locationNameMap,
+  type LocationNames,
   cashSessionDetail,
   scheduleChangeDetail,
   cancellationDetail,
@@ -36,6 +39,7 @@ import {
   anamnesisDetail,
 } from '@/lib/audit/audit-labels';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
+import { listLocations } from '@/lib/locations/locations-api';
 import { formatDateTimeInZone, zonedDayStart } from '@/lib/format/date';
 import { isValidRange, MAX_RANGE_DAYS } from '@/lib/payments/cash-period';
 import { Card } from '@/components/ui/card';
@@ -256,6 +260,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
     filters.from !== '' ||
     filters.to !== '';
   const patientName = items.find((e) => e.patient)?.patient?.fullName ?? copy.patientFallback;
+  const locationNames = useLocationNames(token, items.some((e) => hasStaffLocationIds(e.metadata)));
 
   return (
     <div className="flex flex-col gap-3">
@@ -399,7 +404,12 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
               </TableHeader>
               <TableBody>
                 {items.map((event) => (
-                  <AuditRow key={event.id} event={event} showPatient={!patientId} />
+                  <AuditRow
+                    key={event.id}
+                    event={event}
+                    showPatient={!patientId}
+                    locationNames={locationNames}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -444,12 +454,45 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
   );
 }
 
-function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: boolean }) {
+/**
+ * DX-359: nombres de las sedes para los accesos del personal (`staffAccess`
+ * solo trae ids). Se piden una vez y solo si alguna fila los necesita; si no
+ * cargan, `null` y las sedes se cuentan (nunca se pinta un id).
+ */
+function useLocationNames(token: string, needed: boolean): LocationNames | null {
+  const [names, setNames] = useState<LocationNames | null>(null);
+  const loaded = names !== null;
+  useEffect(() => {
+    if (!token || !needed || loaded) return;
+    let cancelled = false;
+    listLocations(token)
+      .then((locations) => {
+        if (!cancelled) setNames(locationNameMap(locations));
+      })
+      .catch(() => {
+        // Sin nombres: el detalle cuenta las sedes.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, needed, loaded]);
+  return names;
+}
+
+function AuditRow({
+  event,
+  showPatient,
+  locationNames,
+}: {
+  event: AuditEvent;
+  showPatient: boolean;
+  locationNames: LocationNames | null;
+}) {
   const detail =
     communicationDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
     staffLoginDetail(event.metadata) ??
-    staffDetail(event.metadata) ??
+    staffDetail(event.metadata, locationNames) ??
     cashSessionDetail(event.metadata) ??
     scheduleChangeDetail(event.metadata) ??
     cancellationDetail(event.metadata) ??

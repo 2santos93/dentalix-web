@@ -4,6 +4,7 @@ import { AuditLogView } from './audit-log-view';
 import { ApiError } from '@/lib/api/client';
 import { listAuditEvents, type AuditEvent, type AuditEventsPage } from '@/lib/audit/audit-api';
 import { listStaff } from '@/lib/staff/staff-api';
+import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 
 jest.mock('../../lib/audit/audit-api', () => ({
   ...jest.requireActual('../../lib/audit/audit-api'),
@@ -12,9 +13,13 @@ jest.mock('../../lib/audit/audit-api', () => ({
 jest.mock('../../lib/staff/staff-api', () => ({
   listStaff: jest.fn(),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn(),
+}));
 
 const mockedList = listAuditEvents as jest.MockedFunction<typeof listAuditEvents>;
 const mockedStaff = listStaff as jest.MockedFunction<typeof listStaff>;
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
 const view: AuditEvent = {
   id: 'ev-1',
@@ -55,6 +60,7 @@ function page(overrides: Partial<AuditEventsPage> = {}): AuditEventsPage {
 beforeEach(() => {
   mockedList.mockReset();
   mockedStaff.mockReset();
+  mockedLocations.mockReset();
   mockedStaff.mockResolvedValue([
     { userId: 'u-dent', fullName: 'Dra. Laura Gómez', email: 'l@x.co', role: 'DENTIST', locationIds: null },
     { userId: 'u-rec', fullName: 'Rosa Recepción', email: 'r@x.co', role: 'RECEPTION', locationIds: null },
@@ -273,6 +279,50 @@ describe('AuditLogView', () => {
     expect(
       within(password).getByText('Cambió su contraseña y cerró sus demás sesiones'),
     ).toBeInTheDocument();
+    // Ninguna fila trae sedes concretas: no se piden las sedes.
+    expect(mockedLocations).not.toHaveBeenCalled();
+  });
+
+  const CENTRO = '3f1c2a10-0000-4000-8000-000000000001';
+  const BORRADA = '3f1c2a10-0000-4000-8000-0000000000ff';
+  const accepted: AuditEvent = {
+    ...view,
+    id: 'ev-12',
+    action: 'CREATE',
+    resourceType: 'STAFF_MEMBER',
+    resourceId: 'user-3',
+    patient: null,
+    metadata: {
+      reason: 'INVITATION_ACCEPTED',
+      staffAccess: { after: { role: 'ASSISTANT', locationIds: [CENTRO, BORRADA] } },
+    },
+  };
+
+  it('DX-359: las sedes de los accesos van por su nombre; una borrada se cuenta, sin su id', async () => {
+    mockedLocations.mockResolvedValue([{ id: CENTRO, name: 'Centro' } as ClinicLocation]);
+    mockedList.mockResolvedValue(page({ items: [accepted] }));
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    expect(
+      await within(table).findByText(
+        'Invitación aceptada · Rol: Asistente · Sedes: Centro, 1 sede que ya no existe',
+      ),
+    ).toBeInTheDocument();
+    expect(table).not.toHaveTextContent(CENTRO);
+    expect(table).not.toHaveTextContent(BORRADA);
+    expect(mockedLocations).toHaveBeenCalledTimes(1);
+  });
+
+  it('DX-359: si las sedes no cargan, se cuentan (nunca se pinta un id)', async () => {
+    mockedLocations.mockRejectedValue(new ApiError(500, 'boom'));
+    mockedList.mockResolvedValue(page({ items: [accepted] }));
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
+    expect(
+      within(table).getByText('Invitación aceptada · Rol: Asistente · Sedes: 2 sedes'),
+    ).toBeInTheDocument();
+    expect(table).not.toHaveTextContent(CENTRO);
   });
 
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {

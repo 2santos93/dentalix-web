@@ -278,7 +278,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
 
       {sourceKey !== null ? (
         <SourceModal
-          key={sourceKey}
+          key={`source-${sourceKey}`}
           open={sourceOpen}
           onOpenChange={setSourceOpen}
           token={token}
@@ -291,7 +291,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
       ) : null}
       {rateKey !== null ? (
         <RateFormModal
-          key={rateKey}
+          key={`rate-${rateKey}`}
           open={rateOpen}
           onOpenChange={setRateOpen}
           token={token}

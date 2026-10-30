@@ -216,24 +216,53 @@ const STAFF_REASONS: Record<string, string> = {
   CLINIC_REGISTERED: 'Clínica registrada',
   OWN_NAME_CHANGED: 'Cambió su propio nombre',
   SESSIONS_REVOKED: 'Cambió su contraseña y cerró sus demás sesiones',
+  // PUT /staff/:userId/locations (anterior a DX-359): sin antes ni después.
+  LOCATIONS_CHANGED: 'Sedes del miembro cambiadas',
 };
 
 type StaffAccessSide = NonNullable<NonNullable<AuditMetadata['staffAccess']>['after']>;
 
-/** Sedes de un lado de `staffAccess`: solo trae ids, así que se cuentan (null = todas). */
-function locationsLabel(ids: string[] | null | undefined): string {
+/**
+ * Nombres de las sedes de la clínica por id (en minúsculas, como los guarda la
+ * auditoría), para decir las sedes de `staffAccess` por su nombre.
+ */
+export type LocationNames = ReadonlyMap<string, string>;
+
+export function locationNameMap(locations: readonly { id: string; name: string }[]): LocationNames {
+  return new Map(locations.map((l) => [l.id.toLowerCase(), l.name]));
+}
+
+/**
+ * Sedes de un lado de `staffAccess` (null = todas). Con los nombres de las
+ * sedes, por su nombre; una que ya no está en la clínica (borrada) se cuenta
+ * aparte, nunca con su id. Sin los nombres (no cargaron), se cuentan.
+ */
+function locationsLabel(ids: string[] | null | undefined, names: LocationNames | null): string {
   if (ids === null || ids === undefined) return 'Todas las sedes';
   if (ids.length === 0) return 'ninguna sede';
-  return ids.length === 1 ? '1 sede' : `${ids.length} sedes`;
+  if (!names) return ids.length === 1 ? '1 sede' : `${ids.length} sedes`;
+  const known: string[] = [];
+  let missing = 0;
+  for (const id of ids) {
+    const name = names.get(id.toLowerCase());
+    if (name === undefined) missing += 1;
+    else known.push(name);
+  }
+  known.sort((a, b) => a.localeCompare(b, 'es'));
+  if (missing > 0) {
+    known.push(missing === 1 ? '1 sede que ya no existe' : `${missing} sedes que ya no existen`);
+  }
+  return known.join(', ');
 }
 
 const STAFF_ACCESS_FIELDS: {
   key: keyof StaffAccessSide;
   label: string;
-  value: (side: StaffAccessSide) => string;
+  value: (side: StaffAccessSide, names: LocationNames | null) => string;
 }[] = [
-  { key: 'role', label: 'Rol', value: (s) => (s.role ? ROLE_LABELS[s.role] ?? s.role : 'sin rol') },
-  { key: 'locationIds', label: 'Sedes', value: (s) => locationsLabel(s.locationIds) },
+  // Un rol que esta versión de la web no conoce no se pinta en crudo.
+  { key: 'role', label: 'Rol', value: (s) => (s.role ? ROLE_LABELS[s.role] ?? 'rol no reconocido' : 'sin rol') },
+  { key: 'locationIds', label: 'Sedes', value: (s, names) => locationsLabel(s.locationIds, names) },
   {
     key: 'professionalLicense',
     label: 'Registro profesional',
@@ -249,30 +278,51 @@ const STAFF_ACCESS_FIELDS: {
 /**
  * DX-359: qué se hizo con una invitación, un miembro, la clínica o la propia
  * cuenta, y los accesos que trae `staffAccess` («Datos del miembro cambiados ·
- * Rol: Asistente → Odontólogo/a · Sedes: 1 sede → Todas las sedes»). Con los
- * dos lados, antes → después; con uno (una alta), su valor. El nombre solo se
- * nombra («Nombre»): su valor nunca viaja. null si el evento no es de personal.
+ * Rol: Asistente → Odontólogo/a · Sedes: Centro → Todas las sedes»). Con los
+ * dos lados, antes → después; con solo el de después (una alta), su valor; con
+ * solo el de antes, «antes …». Las sedes van por nombre si llegan
+ * `locationNames` (si no, se cuentan). El nombre del miembro solo se nombra
+ * («Nombre»): su valor nunca viaja. null si el evento no es de personal.
  */
-export function staffDetail(metadata: AuditMetadata): string | null {
+export function staffDetail(
+  metadata: AuditMetadata,
+  locationNames: LocationNames | null = null,
+): string | null {
   const what = metadata.reason ? STAFF_REASONS[metadata.reason] : undefined;
   if (!what) return null;
   const parts = [what];
   if (metadata.reason === 'STAFF_UPDATED' && metadata.changedFields?.includes('fullName')) {
     parts.push('Nombre');
   }
+  // Aceptar una invitación puede devolver de alta una membresía desactivada.
+  if (
+    metadata.reason === 'INVITATION_ACCEPTED' &&
+    metadata.statusChange?.from === 'INACTIVE' &&
+    metadata.statusChange.to === 'ACTIVE'
+  ) {
+    parts.push('Miembro reactivado');
+  }
   const { before, after } = metadata.staffAccess ?? {};
   for (const field of STAFF_ACCESS_FIELDS) {
     const inBefore = before !== undefined && Object.hasOwn(before, field.key);
     const inAfter = after !== undefined && Object.hasOwn(after, field.key);
     if (inBefore && inAfter) {
-      parts.push(`${field.label}: ${field.value(before)} → ${field.value(after)}`);
+      parts.push(
+        `${field.label}: ${field.value(before, locationNames)} → ${field.value(after, locationNames)}`,
+      );
     } else if (inAfter) {
-      parts.push(`${field.label}: ${field.value(after)}`);
+      parts.push(`${field.label}: ${field.value(after, locationNames)}`);
     } else if (inBefore) {
-      parts.push(`${field.label}: ${field.value(before)}`);
+      parts.push(`${field.label}: antes ${field.value(before, locationNames)}`);
     }
   }
   return parts.join(' · ');
+}
+
+/** Si algún lado de `staffAccess` trae sedes concretas (hacen falta sus nombres). */
+export function hasStaffLocationIds(metadata: AuditMetadata): boolean {
+  const { before, after } = metadata.staffAccess ?? {};
+  return [before, after].some((side) => Array.isArray(side?.locationIds) && side.locationIds.length > 0);
 }
 
 const CASH_SESSION_REASONS: Record<string, string> = {
