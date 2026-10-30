@@ -11,7 +11,7 @@ import {
   type PaymentMethodKind,
 } from '@/lib/payments/payment-methods-api';
 import { FormModal } from '@/components/shared/form-modal';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 
 export const paymentMethodFormCopy = {
@@ -22,6 +22,8 @@ export const paymentMethodFormCopy = {
   name: 'Nombre',
   namePlaceholder: 'Por ejemplo, Pago móvil',
   kind: 'Tipo base',
+  kindLockedHint:
+    'Es un medio inicial: su tipo base no cambia. Si necesitas otro tipo, crea un medio nuevo.',
   requiresReference: 'Pide referencia',
   requiresReferenceHint:
     'El abono con este medio exige el número de referencia del pago, y la caja avisa si se repite.',
@@ -33,7 +35,7 @@ export const paymentMethodFormCopy = {
 const copy = paymentMethodFormCopy;
 
 const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg';
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-60';
 
 interface PaymentMethodFormModalProps {
   open: boolean;
@@ -61,12 +63,22 @@ export function PaymentMethodFormModal({
   const [requiresReference, setRequiresReference] = useState(method?.requiresReference ?? true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const nameRef = React.useRef<HTMLInputElement>(null);
+  // Un medio inicial lo usan los clientes anteriores por su método: la API no
+  // deja cambiar su tipo base (DX-377).
+  const kindLocked = !!method?.legacyMethod;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setNameError(null);
     const trimmed = name.trim();
-    if (trimmed === '' || trimmed.length > 60) return setError(copy.invalidName);
+    if (trimmed === '' || trimmed.length > 60) {
+      setNameError(copy.invalidName);
+      nameRef.current?.focus();
+      return;
+    }
     setSubmitting(true);
     try {
       const input = { name: trimmed, kind, requiresReference };
@@ -93,20 +105,33 @@ export function PaymentMethodFormModal({
       submitting={submitting}
       error={error}
     >
-      <FormField htmlFor="pm-name" label={copy.name}>
+      <FormField htmlFor="pm-name" label={copy.name} error={nameError}>
         <Input
           id="pm-name"
+          ref={nameRef}
+          aria-invalid={nameError ? true : undefined}
+          aria-describedby={nameError ? fieldErrorId('pm-name') : undefined}
           value={name}
           maxLength={60}
           placeholder={copy.namePlaceholder}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (nameError) setNameError(null);
+          }}
           required
         />
       </FormField>
-      <FormField htmlFor="pm-kind" label={copy.kind}>
+      <FormField
+        htmlFor="pm-kind"
+        label={copy.kind}
+        hint={kindLocked ? copy.kindLockedHint : undefined}
+        hintId={kindLocked ? 'pm-kind-hint' : undefined}
+      >
         <select
           id="pm-kind"
           value={kind}
+          disabled={kindLocked}
+          aria-describedby={kindLocked ? 'pm-kind-hint' : undefined}
           onChange={(e) => setKind(e.target.value as PaymentMethodKind)}
           className={fieldClass}
         >

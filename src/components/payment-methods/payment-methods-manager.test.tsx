@@ -99,4 +99,29 @@ describe('PaymentMethodsManager (DX-377)', () => {
     await user.click(screen.getAllByRole('button', { name: 'Desactivar «Efectivo»' })[0]);
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'pm-cash', { active: false }));
   });
+  it('un medio inicial no cambia de tipo base: el selector está desactivado y explica por qué', async () => {
+    const user = setupUser();
+    render(<PaymentMethodsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Medios de pago' });
+    await user.click(screen.getAllByRole('button', { name: 'Editar «Efectivo»' })[0]);
+    const dialog = await screen.findByRole('dialog');
+    const kind = within(dialog).getByLabelText('Tipo base');
+    expect(kind).toBeDisabled();
+    expect(kind).toHaveAccessibleDescription(/medio inicial/i);
+  });
+
+  it('nombre vacío: el error va en el campo (aria-invalid) y no se envía', async () => {
+    const user = setupUser();
+    render(<PaymentMethodsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Medios de pago' });
+    await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
+    const dialog = await screen.findByRole('dialog');
+    const nameInput = within(dialog).getByLabelText('Nombre');
+    await user.type(nameInput, '   ');
+    await user.click(within(dialog).getByRole('button', { name: 'Crear medio' }));
+    expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+    expect(nameInput).toHaveAccessibleDescription('Escribe un nombre (hasta 60 caracteres).');
+    expect(nameInput).toHaveFocus();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
 });
