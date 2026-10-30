@@ -7327,7 +7327,7 @@ export interface components {
             anestheticId: string;
             /** @example 1.5 */
             carpules: number;
-            /** @description Peso anotado en el sillón (kg). Sin él, el de la anamnesis vigente o el ya usado en esta evolución. */
+            /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
             weightKg?: number;
         };
         AnesthesiaCheckDto: {
@@ -7346,7 +7346,7 @@ export interface components {
             anestheticId: string;
             /** @example 1.5 */
             carpules: number;
-            /** @description Peso anotado en el sillón (kg). Sin él, el de la anamnesis vigente o el ya usado en esta evolución. */
+            /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
             weightKg?: number;
             technique: components["schemas"]["AnesthesiaTechnique"];
             /** @description Zona o dientes FDI */

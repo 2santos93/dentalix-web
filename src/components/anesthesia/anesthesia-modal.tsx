@@ -63,6 +63,10 @@ export const anesthesiaCopy = {
   weight: 'Peso del paciente (kg)',
   weightHintMissing: 'Sin peso no se puede calcular la dosis máxima.',
   weightHintRequired: 'Menor de 12 años: anota el peso antes de guardar.',
+  weightHintUsing: (kg: number, source: 'ANAMNESIS' | 'ENTERED' | null) =>
+    `Sin anotarlo se usan ${formatDecimal(kg)} kg${
+      source === 'ENTERED' ? ' (pesado en esta evolución)' : source === 'ANAMNESIS' ? ' (de la anamnesis)' : ''
+    }. Si lo has pesado hoy, anótalo.`,
   weightInvalid: 'Escribe el peso en kg (por ejemplo 18,5).',
   weightRequired: 'Anota el peso: en menores de 12 años la dosis máxima se calcula por peso.',
   anestheticRequired: 'Elige el anestésico.',
@@ -246,10 +250,16 @@ export function AnesthesiaModal({
   const blocking = preview?.summary.alerts.some((a) => a.severity === 'BLOCKING') ?? false;
   const entryState = load.kind === 'ready' ? load.entry : null;
   const weightRequired = preview?.weightRequired ?? entryState?.weightRequired ?? false;
-  const showWeight =
-    weightText !== '' ||
-    weightRequired ||
-    (preview ? preview.summary.weightKg === null : entryState?.summary.weightKg === null);
+  // El peso siempre se puede anotar: el de la anamnesis puede ser antiguo y
+  // en un niño cambia el máximo. La pista dice qué peso se usa si no se anota.
+  const usedWeightKg = preview ? preview.summary.weightKg : (entryState?.summary.weightKg ?? null);
+  const weightHint = weightRequired
+    ? anesthesiaCopy.weightHintRequired
+    : usedWeightKg === null
+      ? anesthesiaCopy.weightHintMissing
+      : weightText.trim() === ''
+        ? anesthesiaCopy.weightHintUsing(usedWeightKg, preview?.weightSource ?? null)
+        : undefined;
 
   const handleLoadSamples = useCallback(async () => {
     setLoadingSamples(true);
@@ -491,13 +501,12 @@ export function AnesthesiaModal({
               />
             </FormField>
           ) : null}
-          {showWeight ? (
-            <FormField
-              htmlFor={`${id}-weight`}
-              label={anesthesiaCopy.weight}
-              hint={weightRequired ? anesthesiaCopy.weightHintRequired : anesthesiaCopy.weightHintMissing}
-              error={errors.weight}
-            >
+          <FormField
+            htmlFor={`${id}-weight`}
+            label={anesthesiaCopy.weight}
+            hint={weightHint}
+            error={errors.weight}
+          >
               <Input
                 id={`${id}-weight`}
                 inputMode="decimal"
@@ -508,8 +517,7 @@ export function AnesthesiaModal({
                 onChange={(e) => setWeightText(e.target.value)}
                 {...fieldProps('weight', `${id}-weight`)}
               />
-            </FormField>
-          ) : null}
+          </FormField>
         </div>
         {renderPreview()}
       </fieldset>

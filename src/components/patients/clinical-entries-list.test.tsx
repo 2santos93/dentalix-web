@@ -424,4 +424,11 @@ describe('ClinicalEntriesList', () => {
     expect(screen.getAllByText('Acumulado 204 mg · 146 % del máximo').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /anestesia de la evolución/i }).length).toBeGreaterThan(0);
   });
+
+  it('DX-307: si la anestesia no carga lo dice, para que no parezca que no la hubo', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientAnesthesia as jest.Mock).mockRejectedValueOnce(new Error('red'));
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(await screen.findByText(/no pudimos cargar la anestesia registrada/i)).toBeInTheDocument();
+  });
 });

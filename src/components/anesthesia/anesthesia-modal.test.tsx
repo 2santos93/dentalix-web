@@ -215,6 +215,25 @@ describe('AnesthesiaModal (DX-307)', () => {
     expect(mocked.record.mock.calls[0][3]).toHaveProperty('weightKg', 18.5);
   });
 
+  it('con peso de la anamnesis el campo sigue ahí para anotar el pesado hoy, y dice qué peso se usa', async () => {
+    const user = userEvent.setup();
+    mocked.check.mockImplementation(async (_t, _p, _e, input) =>
+      input.weightKg
+        ? checkResult({ weightKg: input.weightKg, totalMg: 68, percent: 45 }, { weightSource: 'ENTERED' })
+        : checkResult({ weightKg: 20, totalMg: 68, percent: 34 }),
+    );
+    mocked.record.mockResolvedValue({} as never);
+    renderModal();
+    await fill(user, '1');
+    const weight = await screen.findByLabelText(anesthesiaCopy.weight);
+    expect(await screen.findByText(anesthesiaCopy.weightHintUsing(20, 'ANAMNESIS'))).toBeInTheDocument();
+    await user.type(weight, '15');
+    await waitFor(() => expect(mocked.check).toHaveBeenLastCalledWith('t', 'p1', 'e1', expect.objectContaining({ weightKg: 15 })));
+    await user.click(screen.getByRole('button', { name: anesthesiaCopy.submit }));
+    await waitFor(() => expect(mocked.record).toHaveBeenCalled());
+    expect(mocked.record.mock.calls[0][3]).toHaveProperty('weightKg', 15);
+  });
+
   it('carpules inválidos: no previsualiza y el formulario dice por qué', async () => {
     const user = userEvent.setup();
     renderModal();

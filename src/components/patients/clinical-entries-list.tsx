@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { AlertTriangle, Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listClinicalEntries,
@@ -64,6 +64,9 @@ const copy = {
       ? `Acumulado ${formatDecimal(mg)} mg · dosis máxima no calculada: falta el peso`
       : `Acumulado ${formatDecimal(mg)} mg · ${percent} % del máximo`,
   anesthesiaOverride: 'Confirmado con motivo:',
+  anesthesiaLoadError:
+    'No pudimos cargar la anestesia registrada en las evoluciones. Ábrela con «Anestesia» en cada evolución o reintenta.',
+  retry: 'Reintentar',
   tooth: (fdi: string) => `diente ${fdi}`,
 };
 
@@ -108,6 +111,9 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
   // DX-307: anestesia de todas las evoluciones (fail soft) y modal abierto.
   const [anesthesia, setAnesthesia] = useState<AnesthesiaAdministration[]>([]);
   const [anesthesiaFor, setAnesthesiaFor] = useState<ClinicalEntry | null>(null);
+  // Si falla, se dice: una lista sin anestesia no debe parecer «no la hubo».
+  const [anesthesiaFailed, setAnesthesiaFailed] = useState(false);
+  const [anesthesiaReload, setAnesthesiaReload] = useState(0);
   const role = getTokenRole(token);
   const canRecordAnesthesia = role === 'DENTIST' || role === 'ADMIN';
 
@@ -156,15 +162,17 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
     // y el modal «Anestesia» la vuelve a pedir.
     listPatientAnesthesia(token, patientId)
       .then((data) => {
-        if (!cancelled) setAnesthesia(data ?? []);
+        if (cancelled) return;
+        setAnesthesia(data ?? []);
+        setAnesthesiaFailed(false);
       })
       .catch(() => {
-        /* fail soft — el modal la carga con su propio estado de error */
+        if (!cancelled) setAnesthesiaFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [token, patientId, reloadKey]);
+  }, [token, patientId, reloadKey, anesthesiaReload]);
 
   const anesthesiaByEntry = useMemo(() => {
     const map = new Map<string, AnesthesiaAdministration[]>();
@@ -360,6 +368,24 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         emptyTitle={copy.empty}
         emptyDescription={copy.emptyHint}
       >
+        {anesthesiaFailed ? (
+          <div
+            role="status"
+            className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-ink"
+          >
+            <AlertTriangle aria-hidden className="size-4 shrink-0 text-warning" />
+            <span className="min-w-0 flex-1">{copy.anesthesiaLoadError}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="min-h-11 sm:min-h-0"
+              onClick={() => setAnesthesiaReload((k) => k + 1)}
+            >
+              {copy.retry}
+            </Button>
+          </div>
+        ) : null}
         {/* Desktop table. `md:table` y no `md:block`: `display:block` sobre una
             `<table>` descarta la maquetación de tabla en el motor de layout
             aunque los roles sobrevivan. */}
