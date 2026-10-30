@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { STATUS_LABELS } from '@/components/appointments/appointment-display';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
@@ -19,7 +18,7 @@ import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/shared/form-field';
@@ -60,24 +59,6 @@ const copy = {
   emptyUpcomingTitle: 'No hay citas próximas.',
   emptyUpcomingDescription: 'Las próximas citas agendadas aparecerán aquí.',
   patientCountHeading: '# Pacientes',
-};
-
-type AppointmentStatus = Dashboard['upcomingAppointments'][number]['status'];
-
-// Same semantic-token convention as `treatment-plans-tab.tsx`'s
-// `ITEM_STATUS_BADGE_VARIANT` / `day-agenda.tsx`'s `STATUS_BADGE_CLASSES`:
-// nothing-has-happened-yet statuses are neutral, CONFIRMED maps to the
-// brand/primary token, COMPLETED to success, CANCELLED to danger, NO_SHOW to
-// warning (attention-worthy but not an error).
-const STATUS_BADGE_VARIANT: Record<AppointmentStatus, BadgeProps['variant']> = {
-  SCHEDULED: 'muted',
-  CONFIRMED: 'default',
-  COMPLETED: 'success',
-  CANCELLED: 'danger',
-  NO_SHOW: 'warning',
-  ARRIVED: 'outline',
-  IN_CHAIR: 'default',
-  READY_FOR_CHECKOUT: 'success',
 };
 
 interface DashboardViewProps {
@@ -422,9 +403,7 @@ function UpcomingAppointmentsCard({
                       {patientLabel} · {providerLabel}
                     </span>
                   </div>
-                  <Badge variant={STATUS_BADGE_VARIANT[appointment.status]}>
-                    {STATUS_LABELS[appointment.status]}
-                  </Badge>
+                  <StatusBadge kind="appointment" status={appointment.status} />
                 </li>
               );
             })}

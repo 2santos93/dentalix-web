@@ -16,7 +16,7 @@ import {
 } from '@/lib/implants/implants-api';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -162,7 +162,7 @@ export function PatientImplantsTab({
               {kind} · {implant.manufacturer}
               {implant.system ? ` ${implant.system}` : ''}
             </span>
-            {voided ? <Badge variant="danger">{copy.voided}</Badge> : null}
+            {voided ? <StatusBadge kind="clinicalRecord" status="VOIDED" /> : null}
           </div>
           <dl
             className={cn(

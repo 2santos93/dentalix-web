@@ -24,6 +24,7 @@ import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fi
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -293,7 +294,7 @@ export function AnamnesisReviewView({
         </div>
       ) : !pending ? (
         <div className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface p-6">
-          <Badge variant="muted">{SUBMISSION_STATUS_LABELS[submission.status]}</Badge>
+          <StatusBadge kind="anamnesisSubmission" status={submission.status} />
           <p className="text-sm text-muted">
             {copy.reviewed(
               SUBMISSION_STATUS_LABELS[submission.status],

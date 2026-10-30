@@ -1,15 +1,12 @@
 'use client';
 import * as React from 'react';
 import { Download } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/format/currency';
-import {
-  STATUS_LABELS,
+import { 
   isInProgress,
-  type ImportBatch,
-  type ImportStatus,
-} from '@/lib/patient-imports/patient-imports-api';
+  type ImportBatch} from '@/lib/patient-imports/patient-imports-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeNumber } from '@/lib/format/sede-number';
 
@@ -35,16 +32,6 @@ const copy = {
   balancesAmbiguous: (n: number, shown: string) =>
     `${shown} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes. Corrige las fichas repetidas.`,
   consent: 'Recuerda pedir la autorización de datos a los pacientes importados: su ficha la marca pendiente.',
-};
-
-export const STATUS_VARIANT: Record<ImportStatus, 'success' | 'warning' | 'danger' | 'muted' | 'secondary'> = {
-  VALIDATED: 'muted',
-  QUEUED: 'secondary',
-  RUNNING: 'secondary',
-  COMPLETED: 'success',
-  FAILED: 'danger',
-  UNDONE: 'muted',
-  EXPIRED: 'muted',
 };
 
 /** Avance y resultado de un lote confirmado (DX-107). */
@@ -75,7 +62,7 @@ export function ImportProgress({
         <h2 id={headingId} tabIndex={-1} className="min-w-0 break-words text-lg font-semibold text-ink focus:outline-none">
           {copy.title(batch.fileName)}
         </h2>
-        <Badge variant={STATUS_VARIANT[batch.status]}>{STATUS_LABELS[batch.status]}</Badge>
+        <StatusBadge kind="patientImport" status={batch.status} />
       </div>
       <div className="flex flex-col gap-1.5">
         <progress

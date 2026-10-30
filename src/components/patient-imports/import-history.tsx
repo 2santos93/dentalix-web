@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { History } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -10,18 +10,16 @@ import { Pagination } from '@/components/shared/pagination';
 import { notifyError } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatDateTime } from '@/lib/format/date';
-import {
-  STATUS_LABELS,
+import { 
   downloadErrorsCsv,
   isInProgress,
   errorsFileName,
   listImports,
   undoBalances,
   undoImport,
-  type ImportBatch,
+  type ImportBatch
 } from '@/lib/patient-imports/patient-imports-api';
 import { saveCsv } from '@/lib/files/save-csv';
-import { STATUS_VARIANT } from './import-progress';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeNumber } from '@/lib/format/sede-number';
 
@@ -215,7 +213,7 @@ export function ImportHistory({
             <li key={b.id} className="flex flex-col gap-2 border-b border-hairline p-4 last:border-0">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <span className="min-w-0 break-all font-medium text-ink">{b.fileName}</span>
-                <Badge variant={STATUS_VARIANT[b.status]}>{STATUS_LABELS[b.status]}</Badge>
+                <StatusBadge kind="patientImport" status={b.status} />
               </div>
               <p className="tabular-nums text-muted">
                 {historyCopy.meta(formatDateTime(b.confirmedAt ?? b.createdAt), b.createdBy.fullName)}

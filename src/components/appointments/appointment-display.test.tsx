@@ -55,20 +55,14 @@ describe('appointment-display (shared day/week agenda helpers)', () => {
     expect(patientLabel({ ...appointment, patientLastName: 'García' })).toBe('García');
   });
 
-  it('gives each of the five statuses a distinct semantic-token color class (no raw color utilities)', () => {
-    const statuses: AppointmentStatus[] = [
-      'SCHEDULED',
-      'CONFIRMED',
-      'COMPLETED',
-      'CANCELLED',
-      'NO_SHOW',
-    ];
-    const classSets = statuses.map((s) => STATUS_BADGE_CLASSES[s]);
-    expect(new Set(classSets).size).toBe(5);
-    for (const cls of classSets) {
+  it('derives every status color from the status tone map — never the tenant accent nor raw colors', () => {
+    for (const cls of Object.values(STATUS_BADGE_CLASSES)) {
+      expect(cls).not.toMatch(/primary/);
       expect(cls).not.toMatch(/-(red|blue|green|amber|yellow|violet|emerald|orange)-\d/);
       expect(cls).not.toMatch(/#[0-9a-fA-F]{3,8}/);
     }
+    // Hecho, no asistió y confirmada se distinguen por tono.
+    expect(new Set([STATUS_BADGE_CLASSES.COMPLETED, STATUS_BADGE_CLASSES.NO_SHOW, STATUS_BADGE_CLASSES.CONFIRMED]).size).toBe(3);
   });
 
   it('has an es label for every status', () => {
@@ -85,10 +79,11 @@ describe('appointment-display (shared day/week agenda helpers)', () => {
     }
   });
 
-  it('StatusBadge renders the status label with its badge class', () => {
+  it('StatusBadge renders the status label with the tone of the shared map', () => {
     render(<StatusBadge status="CONFIRMED" />);
     const badge = screen.getByTestId('appointment-status-badge');
     expect(badge).toHaveTextContent(STATUS_LABELS.CONFIRMED);
-    expect(badge.className).toContain(STATUS_BADGE_CLASSES.CONFIRMED);
+    expect(badge.className).toContain('bg-info-subtle');
+    expect(badge.className).not.toContain('primary');
   });
 });

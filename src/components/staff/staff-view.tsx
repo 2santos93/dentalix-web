@@ -8,9 +8,8 @@ import { toast } from 'sonner';
 import {
   listStaffDirectory,
   type ClinicRole,
-  type InvitationEmailDelivery,
   type StaffDirectoryEntry,
-  type StaffDirectoryStatus,
+  type StaffDirectoryStatus
 } from '@/lib/staff/staff-api';
 import {
   createInvitation,
@@ -22,7 +21,7 @@ import { Plus, Send, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -157,25 +156,6 @@ const STATUS_OPTIONS: { value: StaffDirectoryStatus; label: string }[] = [
 // Verde solo para "Aceptado": es el único estado que significa "esta persona ya
 // trabaja aquí". Pendiente es ámbar (algo por hacer) e inactivo es neutro (no
 // es un error, solo alguien que ya no está).
-const STATUS_BADGE: Record<
-  StaffDirectoryStatus,
-  { label: string; variant: 'success' | 'warning' | 'secondary' }
-> = {
-  ACTIVE: { label: copy.statusActive, variant: 'success' },
-  PENDING: { label: copy.statusPending, variant: 'warning' },
-  INACTIVE: { label: copy.statusInactive, variant: 'secondary' },
-};
-
-// Estado del correo de una invitación (DX-088). Rojo solo si falló: es lo único
-// que pide hacer algo (reenviar); pendiente y enviado son informativos.
-const EMAIL_DELIVERY_BADGE: Record<
-  InvitationEmailDelivery,
-  { label: string; variant: 'muted' | 'danger' }
-> = {
-  SENT: { label: 'Correo: Enviado', variant: 'muted' },
-  PENDING: { label: 'Correo: Pendiente', variant: 'muted' },
-  FAILED: { label: 'Correo: Falló', variant: 'danger' },
-};
 
 /**
  * Mientras alguna invitación de la página tiene el correo pendiente, la lista
@@ -576,7 +556,6 @@ export function StaffView({ token }: StaffViewProps) {
               </TableHeader>
               <TableBody>
                 {entries.map((entry) => {
-                  const badge = STATUS_BADGE[entry.status];
                   const isMember = entry.kind === 'MEMBER';
                   const busy = busyId === entry.id;
                   return (
@@ -609,11 +588,9 @@ export function StaffView({ token }: StaffViewProps) {
                       </TableCell>
                       <TableCell data-label={copy.colStatus}>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <Badge variant={badge.variant}>{badge.label}</Badge>
+                          <StatusBadge kind="staff" status={entry.status} />
                           {entry.kind === 'INVITATION' && entry.emailDelivery ? (
-                            <Badge variant={EMAIL_DELIVERY_BADGE[entry.emailDelivery].variant}>
-                              {EMAIL_DELIVERY_BADGE[entry.emailDelivery].label}
-                            </Badge>
+                            <StatusBadge kind="invitationEmail" status={entry.emailDelivery} />
                           ) : null}
                         </div>
                       </TableCell>

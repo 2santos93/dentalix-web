@@ -22,18 +22,13 @@ import {
   statementCopy,
   voidedDetail,
 } from '@/lib/account-statement/presentation';
-import {
-  INSTALLMENT_STATUS_BADGE_VARIANT,
-  INSTALLMENT_STATUS_LABELS,
-} from '@/lib/payment-plans/installment-status';
-import { PLAN_STATUS_BADGE_VARIANT, PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import { planQuotePrintHref } from '@/lib/treatment-plans/plan-quote-api';
-import { PAYMENT_METHOD_BADGE_VARIANT } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate } from '@/lib/format/date';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -496,12 +491,7 @@ function StatementBody({
                       {formatCurrency(inst.outstanding, inst.currency)}
                     </TableCell>
                     <TableCell data-label={copy.colStatus}>
-                      <Badge
-                        variant={INSTALLMENT_STATUS_BADGE_VARIANT[inst.status]}
-                        data-testid="installment-status"
-                      >
-                        {INSTALLMENT_STATUS_LABELS[inst.status]}
-                      </Badge>
+                      <StatusBadge kind="installment" status={inst.status} data-testid="installment-status" />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -541,9 +531,9 @@ function StatementBody({
                     </TableCell>
                     <TableCell data-label={copy.colMethod}>
                       {m.method ? (
-                        <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[m.method]}>
+                        <StatusBadge kind="paymentMethod" status={m.method}>
                           {methodLabel(m.method)}
-                        </Badge>
+                        </StatusBadge>
                       ) : (
                         <span className="text-muted">{methodLabel(null)}</span>
                       )}
@@ -656,9 +646,7 @@ function PlanRows({
         </TableCell>
         <TableCell data-label={copy.colStatus}>
           <span className="inline-flex flex-wrap items-center gap-2">
-            <Badge variant={PLAN_STATUS_BADGE_VARIANT[plan.status]}>
-              {PLAN_STATUS_LABELS[plan.status]}
-            </Badge>
+            <StatusBadge kind="treatmentPlan" status={plan.status} />
             {!plan.countsTowardsBalance ? (
               <span className="text-xs text-muted">{statementCopy.notCounted}</span>
             ) : null}

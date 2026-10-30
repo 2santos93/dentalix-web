@@ -12,7 +12,7 @@ import {
   type AppointmentReminders,
 } from '@/lib/reminders/reminders-api';
 import { SectionError } from '@/components/errors/section-error';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const copy = {
@@ -48,15 +48,6 @@ function shortDateTime(iso: string | null, clock: SedeClock | null): string {
   const instant = new Date(iso);
   return `${clock.fmt.dayMonth(instant, clock.timeZone)} ${clock.fmt.time(instant, clock.timeZone)}`;
 }
-
-const BADGE: Record<AppointmentReminderItem['state'], BadgeProps['variant']> = {
-  SENT: 'success',
-  FAILED: 'danger',
-  PENDING: 'muted',
-  SENDING: 'muted',
-  SKIPPED: 'warning',
-  MISSED: 'muted',
-};
 
 function stateLabel(item: AppointmentReminderItem, clock: SedeClock | null): string {
   switch (item.state) {
@@ -161,9 +152,9 @@ export function AppointmentRemindersPanel({ token, appointmentId, clock }: Appoi
                 className="flex flex-col gap-1 py-2 first:pt-0 last:pb-0"
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <Badge variant={item.emailDelivery === 'FAILED' ? 'danger' : BADGE[item.state]}>
+                  <StatusBadge kind="reminder" status={item.emailDelivery === 'FAILED' ? 'FAILED' : item.state}>
                     {stateLabel(item, clock)}
-                  </Badge>
+                  </StatusBadge>
                   <span className="text-sm tabular-nums text-ink">{leadHoursLabel(item.leadHours)}</span>
                 </div>
                 {item.state === 'SENT' && item.sentToResponsible && (

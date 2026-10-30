@@ -3,15 +3,14 @@ import * as React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Save, Trash2 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
-import {
-  PERIO_STATUS_LABELS,
+import { 
   deletePerioExam,
   finalizePerioExam,
   getPerioExam,
   savePerioMeasures,
   type PerioExamDetail,
   type PerioSite,
-  perioErrorMessage,
+  perioErrorMessage
 } from '@/lib/perio/perio-api';
 import {
   EMPTY_SITE,
@@ -30,7 +29,7 @@ import { formatCivilDate } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineError } from '@/components/errors/inline-error';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PerioChart } from './perio-chart';
@@ -362,9 +361,7 @@ export function PerioExamEditor({
                   <h2 className="text-lg font-semibold text-ink">
                     {copy.heading(formatCivilDate(exam.examDate))}
                   </h2>
-                  <Badge variant={exam.status === 'FINAL' ? 'success' : 'warning'}>
-                    {PERIO_STATUS_LABELS[exam.status]}
-                  </Badge>
+                  <StatusBadge kind="perioExam" status={exam.status} />
                 </div>
                 <p className="text-sm text-muted">{copy.by(exam.providerName)}</p>
                 {exam.notes ? <p className="max-w-[68ch] text-sm text-ink">{exam.notes}</p> : null}

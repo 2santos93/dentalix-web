@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { MapPin, Armchair, CalendarClock } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
-  PUNCTUALITY_CLASSES,
   inClinicCount,
   inClinicFormat,
   punctualityLabel,
@@ -34,6 +33,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { cn } from '@/lib/utils';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 export const inClinicCopy = {
   title: 'En clínica',
@@ -304,14 +304,9 @@ function InClinicGroup({
                       </p>
                     ) : null}
                   </div>
-                  <span
-                    className={cn(
-                      'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums',
-                      PUNCTUALITY_CLASSES[item.punctuality],
-                    )}
-                  >
+                  <StatusBadge kind="punctuality" status={item.punctuality} className="tabular-nums">
                     {inClinicCopy.minutes[group](item.minutesInStatus)}
-                  </span>
+                  </StatusBadge>
                 </div>
                 <ReservedElsewhereNotice item={item} runner={runner} onRetry={onRetry} />
                 <PatientFlowActions

@@ -1,3 +1,4 @@
+import { statusLabels } from '@/lib/status/tones';
 import { apiFetch, apiFetchText } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -28,15 +29,7 @@ export function canImportPatients(role: ClinicRole | null): boolean {
 export { MAX_IMPORT_BYTES } from './import-upload-routes';
 export const IMPORT_ACCEPT = '.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-export const STATUS_LABELS: Record<ImportStatus, string> = {
-  VALIDATED: 'Validado, sin importar',
-  QUEUED: 'En cola',
-  RUNNING: 'Importando',
-  COMPLETED: 'Importado',
-  FAILED: 'Con errores',
-  UNDONE: 'Deshecho',
-  EXPIRED: 'Caducado',
-};
+export const STATUS_LABELS: Record<ImportStatus, string> = statusLabels('patientImport');
 
 export const ISSUE_KIND_LABELS: Record<ImportIssue['kind'], string> = {
   ERROR: 'Error',

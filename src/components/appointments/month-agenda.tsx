@@ -5,6 +5,7 @@ import { civilDateLabel } from '@/lib/format/date';
 import { sedeTime, type AgendaClock } from '@/lib/locations/sede-clock';
 import { wallDay } from '@/lib/time/wall-clock';
 import { patientLabel } from './appointment-display';
+import { statusTone, TONE_CLASSES } from '@/lib/status/tones';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { SectionError } from '@/components/errors/section-error';
 
@@ -20,18 +21,8 @@ const copy = {
     `${long} · ${count === 0 ? 'sin citas' : count === 1 ? '1 cita' : `${count} citas`}`,
 };
 
-// One neutral-safe dot color per status (semantic tokens only — never a raw
-// color utility). Mirrors STATUS_BADGE_CLASSES' hue assignment.
-const STATUS_DOT: Record<AppointmentStatus, string> = {
-  SCHEDULED: 'bg-muted',
-  CONFIRMED: 'bg-primary',
-  COMPLETED: 'bg-success',
-  CANCELLED: 'bg-danger',
-  NO_SHOW: 'bg-warning',
-  ARRIVED: 'bg-ink',
-  IN_CHAIR: 'bg-primary',
-  READY_FOR_CHECKOUT: 'bg-success',
-};
+// Punto por estado: el tono del mapa único (`@/lib/status/tones`), nunca el acento.
+const statusDot = (s: AppointmentStatus) => TONE_CLASSES[statusTone('appointment', s)].dot;
 
 interface MonthAgendaProps {
   /** Appointments across the whole visible grid range (see `monthGridRange`). */
@@ -176,7 +167,7 @@ export function MonthAgenda({
                     data-testid="month-appointment"
                     className="relative flex min-h-12 min-w-0 items-center justify-center gap-1 rounded text-[11px] leading-tight text-ink md:justify-start md:bg-surface-2 md:px-1"
                   >
-                    <span aria-hidden className={`hidden h-1.5 w-1.5 shrink-0 rounded-full md:inline ${STATUS_DOT[a.status]}`} />
+                    <span aria-hidden className={`hidden h-1.5 w-1.5 shrink-0 rounded-full md:inline ${statusDot(a.status)}`} />
                     <span className="hidden shrink-0 tabular-nums text-muted md:inline">{sedeTime(a.start, clock.of(a.locationId))}</span>
                     <span className="hidden min-w-0 flex-1 truncate md:inline">{patientLabel(a, patientNames)}</span>
                     <MedicalAlertIndicator
@@ -184,7 +175,7 @@ export function MonthAgenda({
                       patientName={patientLabel(a, patientNames)}
                       className="pointer-events-auto md:mr-1"
                     />
-                    <span aria-hidden className={`absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full md:hidden ${STATUS_DOT[a.status]}`} />
+                    <span aria-hidden className={`absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full md:hidden ${statusDot(a.status)}`} />
                   </span>
                 ))}
                 {overflow > 0 && (

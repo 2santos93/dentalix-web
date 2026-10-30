@@ -20,7 +20,6 @@ import {
   type CashRange,
 } from '@/lib/payments/cash-period';
 import {
-  PAYMENT_METHOD_BADGE_VARIANT,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHOD_OPTIONS,
 } from '@/lib/payments/payment-method';
@@ -29,7 +28,7 @@ import { formatCivilDate, formatDate, zoneCityLabel } from '@/lib/format/date';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Input } from '@/components/ui/input';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -461,9 +460,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         </TableCell>
                         <TableCell data-label={copy.colMethod}>
                           {payment.method ? (
-                            <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
-                              {PAYMENT_METHOD_LABELS[payment.method]}
-                            </Badge>
+                            <StatusBadge kind="paymentMethod" status={payment.method} />
                           ) : (
                             <span className="text-muted">{copy.methodNone}</span>
                           )}

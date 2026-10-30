@@ -1139,7 +1139,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               >
                 <Armchair aria-hidden /> {copy.inClinicButton}
                 {inClinicTotal ? (
-                  <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold tabular-nums text-primary">
+                  <span className="rounded-full bg-surface-active px-1.5 text-xs font-semibold tabular-nums text-ink">
                     {inClinicTotal}
                   </span>
                 ) : null}
@@ -1155,7 +1155,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             >
               <ListTodo aria-hidden /> {copy.waitlistButton}
               {waitlistCount ? (
-                <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold tabular-nums text-primary">
+                <span className="rounded-full bg-surface-active px-1.5 text-xs font-semibold tabular-nums text-ink">
                   {waitlistCount}
                 </span>
               ) : null}

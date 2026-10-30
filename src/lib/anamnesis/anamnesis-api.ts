@@ -1,3 +1,4 @@
+import { statusLabels } from '@/lib/status/tones';
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -16,13 +17,7 @@ export type PublicAnamnesis = Schemas['PublicAnamnesisDto'];
 export type AnamnesisQuestionnaire = Schemas['AnamnesisQuestionnaireDto'];
 
 /** Estados en la ficha y en la bandeja. */
-export const SUBMISSION_STATUS_LABELS: Record<AnamnesisSubmissionStatus, string> = {
-  PENDING_PATIENT: 'Esperando al paciente',
-  SUBMITTED: 'Anamnesis pendiente de revisión',
-  ACCEPTED: 'Aceptada',
-  REJECTED: 'Rechazada',
-  EXPIRED: 'Caducada o anulada',
-};
+export const SUBMISSION_STATUS_LABELS: Record<AnamnesisSubmissionStatus, string> = statusLabels('anamnesisSubmission');
 
 /** Ver la bandeja y las respuestas: CLINICAL_ROLES en la API (recepción no). */
 export function canSeeAnamnesisInbox(role: ClinicRole | null): boolean {

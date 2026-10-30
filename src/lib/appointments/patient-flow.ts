@@ -138,13 +138,6 @@ export function punctualityLabel(p: Punctuality): string {
   return PUNCTUALITY_LABELS[p];
 }
 
-/** Verde / naranja / rojo: tinte semántico + texto oscuro (DESIGN.md, chips). */
-export const PUNCTUALITY_CLASSES: Record<Punctuality, string> = {
-  ON_TIME: 'border-success/40 bg-success-subtle text-ink',
-  LATE: 'border-warning/40 bg-warning-subtle text-ink',
-  VERY_LATE: 'border-danger/40 bg-danger-subtle text-ink',
-};
-
 export function inClinicCount(view: Pick<InClinicView, 'waiting' | 'inChair' | 'readyForCheckout'>): number {
   return view.waiting.length + view.inChair.length + view.readyForCheckout.length;
 }

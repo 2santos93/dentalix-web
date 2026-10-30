@@ -18,7 +18,7 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { notifyError } from '@/components/errors/notify';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { RegisterDomainModal } from './register-domain-modal';
 
@@ -65,13 +65,6 @@ const copy = {
   removeOther: 'Sale de la lista y el dominio queda libre. Puedes volver a añadirlo cuando quieras.',
   removeConfirm: 'Eliminar dominio',
   removeError: 'No pudimos eliminar el dominio.',
-};
-
-const STATE_BADGE: Record<TenantDomainState, BadgeProps['variant']> = {
-  PENDING: 'warning',
-  EXPIRED: 'muted',
-  VERIFIED: 'success',
-  DISABLED: 'danger',
 };
 
 interface DomainsManagerProps {
@@ -237,7 +230,7 @@ export function DomainsManager({ token, allowed }: DomainsManagerProps) {
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <span className="min-w-0 font-medium break-all">{d.host}</span>
-                  <Badge variant={STATE_BADGE[d.status]}>{copy.state[d.status]}</Badge>
+                  <StatusBadge kind="tenantDomain" status={d.status} />
                 </div>
                 <p className="text-muted">{copy.detail[d.status](d)}</p>
                 {canVerify ? <TxtRecord domain={d} /> : null}

@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 export const WANTS_EARLIER_LABEL = 'Adelantar si hay hueco';
 
@@ -16,17 +16,9 @@ export function WantsEarlierChip({
 }) {
   if (!wantsEarlier) return null;
   return (
-    <span
-      data-testid="wants-earlier-chip"
-      title={WANTS_EARLIER_LABEL}
-      className={cn(
-        // Sobre el color del tipo de cita, fondo de superficie: el texto
-        // mantiene el contraste en claro y en oscuro.
-        'inline-flex max-w-full items-center rounded-full border border-primary/40 bg-surface px-2 py-0.5 text-xs font-medium text-primary',
-        className,
-      )}
-    >
+    // Una marca informativa, no un estado: tono info, nunca el acento de la clínica.
+    <Badge variant="info" data-testid="wants-earlier-chip" title={WANTS_EARLIER_LABEL} className={className}>
       <span className="min-w-0 truncate">{WANTS_EARLIER_LABEL}</span>
-    </span>
+    </Badge>
   );
 }

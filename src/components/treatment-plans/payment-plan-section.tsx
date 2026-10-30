@@ -10,7 +10,7 @@ import {
 } from '@/lib/payment-plans/payment-plan-api';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatePaymentPlanModal } from '@/components/payment-plans/create-payment-plan-modal';
@@ -22,10 +22,6 @@ import { formatCivilDate } from '@/lib/format/date';
 // would make an inline `Intl.NumberFormat` throw during render and take this
 // whole subtree down (~8 money cells here). See `formatCurrency`'s own doc.
 import { formatCurrency } from '@/lib/format/currency';
-import {
-  INSTALLMENT_STATUS_BADGE_VARIANT,
-  INSTALLMENT_STATUS_LABELS,
-} from '@/lib/payment-plans/installment-status';
 
 const copy = {
   heading: 'Plan de pagos',
@@ -289,9 +285,7 @@ function InstallmentsTable({ plan, currency }: { plan: PaymentPlan; currency: st
                 <TableCell className="text-right tabular-nums">{formatCurrency(r.amount, currency)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatCurrency(r.covered, currency)}</TableCell>
                 <TableCell>
-                  <Badge variant={INSTALLMENT_STATUS_BADGE_VARIANT[r.status]}>
-                    {INSTALLMENT_STATUS_LABELS[r.status]}
-                  </Badge>
+                  <StatusBadge kind="installment" status={r.status} />
                 </TableCell>
               </TableRow>
             ))}
@@ -306,9 +300,7 @@ function InstallmentsTable({ plan, currency }: { plan: PaymentPlan; currency: st
             <Card className="p-4">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-ink tabular-nums">{copy.colSeq === '#' ? `#${r.label}` : r.label}</span>
-                <Badge variant={INSTALLMENT_STATUS_BADGE_VARIANT[r.status]}>
-                  {INSTALLMENT_STATUS_LABELS[r.status]}
-                </Badge>
+                <StatusBadge kind="installment" status={r.status} />
               </div>
               <p className="mt-1 text-sm text-muted tabular-nums">{formatCivilDate(r.dueDate)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">

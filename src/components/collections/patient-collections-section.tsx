@@ -11,12 +11,10 @@ import {
 } from '@/lib/collections/collections-api';
 import {
   CHANNEL_LABELS,
-  OUTCOME_LABELS,
-  PROMISE_STATUS_BADGE,
-  PROMISE_STATUS_LABELS,
+  OUTCOME_LABELS
 } from '@/lib/collections/presentation';
 import { AsyncSection } from '@/components/shared/async-section';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CollectionNoteDialog } from './collection-note-dialog';
@@ -142,7 +140,7 @@ export function PatientCollectionsSection({
                 {promises.map((p) => (
                   <li key={p.id} className="flex min-w-0 flex-col gap-1 px-4 py-3 text-sm" data-testid="promise-row">
                     <span className="flex flex-wrap items-center gap-2">
-                      <Badge variant={PROMISE_STATUS_BADGE[p.status]}>{PROMISE_STATUS_LABELS[p.status]}</Badge>
+                      <StatusBadge kind="paymentPromise" status={p.status} />
                       <span className="font-medium tabular-nums text-ink">
                         {collectionsCopy.promiseLine(formatCurrency(p.amount, p.currency), formatCivilDate(p.dueDate))}
                       </span>

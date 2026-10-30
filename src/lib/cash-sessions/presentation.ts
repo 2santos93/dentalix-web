@@ -1,18 +1,17 @@
-import type { BadgeProps } from '@/components/ui/badge';
+import { statusLabel } from '@/lib/status/tones';
 import { formatCurrency } from '@/lib/format/currency';
 import type { CashSessionSummary } from './cash-sessions-api';
 
 /** Estado de un turno para el chip: abierta, cerrada o reabierta (abierta otra vez). */
-export function sessionStatusLabel(session: Pick<CashSessionSummary, 'status' | 'reopenCount'>): string {
-  if (session.status === 'CLOSED') return 'Cerrada';
-  return session.reopenCount > 0 ? 'Reabierta' : 'Abierta';
+export function sessionStatusKey(
+  session: Pick<CashSessionSummary, 'status' | 'reopenCount'>,
+): 'OPEN' | 'REOPENED' | 'CLOSED' {
+  if (session.status === 'CLOSED') return 'CLOSED';
+  return session.reopenCount > 0 ? 'REOPENED' : 'OPEN';
 }
 
-export function sessionStatusVariant(
-  session: Pick<CashSessionSummary, 'status' | 'reopenCount'>,
-): BadgeProps['variant'] {
-  if (session.status === 'CLOSED') return 'muted';
-  return session.reopenCount > 0 ? 'warning' : 'success';
+export function sessionStatusLabel(session: Pick<CashSessionSummary, 'status' | 'reopenCount'>): string {
+  return statusLabel('cashSession', sessionStatusKey(session));
 }
 
 /** «50.000,00 COP · 10,00 USD», o «Sin fondo». */

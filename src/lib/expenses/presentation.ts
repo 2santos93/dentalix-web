@@ -1,5 +1,5 @@
 import { civilDateLabel } from '@/lib/format/date';
-import type { BadgeProps } from '@/components/ui/badge';
+import { statusLabels } from '@/lib/status/tones';
 import type { SingleFileRules } from '@/lib/files/upload-single-file';
 import type { Expense, ExpenseStatus, ExpenseStatusFilter } from './expenses-api';
 
@@ -11,19 +11,8 @@ export const EXPENSE_VOID_REASON_MAX = 500;
 export const EXPENSE_CATEGORY_NAME_MIN = 2;
 export const EXPENSE_CATEGORY_NAME_MAX = 60;
 
-export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, string> = {
-  PENDING: 'Pendiente',
-  PARTIAL: 'Parcial',
-  PAID: 'Pagado',
-  VOIDED: 'Anulado',
-};
-
-export const EXPENSE_STATUS_VARIANT: Record<ExpenseStatus, BadgeProps['variant']> = {
-  PENDING: 'warning',
-  PARTIAL: 'secondary',
-  PAID: 'success',
-  VOIDED: 'muted',
-};
+/** Etiquetas; tono y etiqueta en `@/lib/status/tones` (`StatusBadge kind="expense"`). */
+export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, string> = statusLabels('expense');
 
 export const EXPENSE_OVERDUE_LABEL = 'Vencido';
 

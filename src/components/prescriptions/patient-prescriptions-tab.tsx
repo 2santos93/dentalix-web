@@ -14,6 +14,7 @@ import {
 import { formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -117,9 +118,7 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
   function status(rx: Prescription) {
     return (
       <div className="flex flex-wrap gap-1">
-        <Badge variant={rx.status === 'VOIDED' ? 'danger' : 'success'}>
-          {rx.status === 'VOIDED' ? copy.voided : copy.issued}
-        </Badge>
+        <StatusBadge kind="prescription" status={rx.status} />
         {rx.allergyOverride ? <Badge variant="warning">{copy.allergyConfirmed}</Badge> : null}
       </div>
     );
