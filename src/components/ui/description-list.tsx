@@ -41,10 +41,20 @@ export interface DescriptionItemProps {
   /** Ocupa toda la fila (notas, direcciones largas). */
   wide?: boolean;
   className?: string;
+  /** Clases extra del valor (p. ej. tono de aviso o énfasis de un total). */
+  valueClassName?: string;
   'data-testid'?: string;
 }
 
-export function DescriptionItem({ label, children, numeric = false, wide = false, className, ...props }: DescriptionItemProps) {
+export function DescriptionItem({
+  label,
+  children,
+  numeric = false,
+  wide = false,
+  className,
+  valueClassName,
+  ...props
+}: DescriptionItemProps) {
   return (
     <div
       className={cn(
@@ -57,7 +67,7 @@ export function DescriptionItem({ label, children, numeric = false, wide = false
       {...props}
     >
       <dt className="t-overline group-data-[layout=inline]/dl:pt-px">{label}</dt>
-      <dd className={cn('min-w-0 break-words text-sm text-ink', numeric && 't-data')}>{children}</dd>
+      <dd className={cn('min-w-0 break-words text-sm text-ink', numeric && 't-data', valueClassName)}>{children}</dd>
     </div>
   );
 }

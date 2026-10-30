@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LocationFormModal } from './location-form-modal';
 import { needsRegionalReview } from './regional-review-notice';
+import { DescriptionItem } from '@/components/ui/description-list';
 
 export const locationsListCopy = {
   // La página ya se titula «Sedes»: la sección no lo repite.
@@ -256,9 +257,12 @@ function Detail({ label, value, usable = true }: { label: string; value: string 
   // Un valor guardado que no se puede usar se enseña tal cual, en tono de aviso.
   const text = value === null ? copy.missing : usable ? value : copy.unusable(value);
   return (
-    <div className="flex min-w-0 flex-col">
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className={value !== null && usable ? 'truncate text-ink' : 'break-words text-warning-text'}>{text}</dd>
-    </div>
+    <DescriptionItem
+      label={label}
+      className="gap-0"
+      valueClassName={value !== null && usable ? 'truncate' : 'text-warning-text'}
+    >
+      {text}
+    </DescriptionItem>
   );
 }
