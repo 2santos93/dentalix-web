@@ -238,7 +238,8 @@ describe('InClinicPanel (DX-200)', () => {
     setActiveLocationId(null);
     mockedLocations.mockResolvedValue([sede('loc-1'), sede('loc-2')]);
     render(<Harness role="ADMIN" />);
-    expect(await screen.findByText('Elige una sede')).toBeInTheDocument();
+    expect(await screen.findByText('Elige una sede para ver quién está en la clínica.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Elegir sede' })).toBeInTheDocument();
     expect(mockedGet).not.toHaveBeenCalled();
   });
 

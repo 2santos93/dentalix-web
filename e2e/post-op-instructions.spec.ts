@@ -1,4 +1,5 @@
 import { test, expect, type BrowserContext, type Locator, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -232,7 +233,7 @@ for (const viewport of VIEWPORTS) {
 
     await page.goto(`${origin}/agenda`);
     await page.getByRole('button', { name: /^Día$/ }).click();
-    await page.getByLabel('Fecha', { exact: true }).fill(slot.day);
+    await fillDate(page, 'Fecha', slot.day);
     await page
       .getByRole('button', { name: new RegExp(`Detalle de la cita de ${slot.label}`) })
       .locator('visible=true')

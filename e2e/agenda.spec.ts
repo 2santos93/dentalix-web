@@ -1,4 +1,5 @@
 import { test, expect } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
@@ -124,7 +125,7 @@ for (const browserClock of ['23:30', '06:00']) {
     // presentación en «Lista» (la tabla con el estado editable por fila).
     await page.getByRole('button', { name: 'Lista', exact: true }).click();
     // La agenda abre en el "hoy" del navegador; se salta al día ancla.
-    await page.getByLabel('Fecha', { exact: true }).fill(anchorDay);
+    await fillDate(page, 'Fecha', anchorDay);
 
     // Brand-new clinic/provider/day -> nothing scheduled yet.
     await expect(page.getByRole('status').filter({ hasText: 'No hay citas para este día.' })).toBeVisible({
@@ -199,7 +200,7 @@ for (const browserClock of ['23:30', '06:00']) {
     // el día vuelve a ser el "hoy" del navegador.
     await page.getByRole('button', { name: 'Día', exact: true }).click();
     await page.getByRole('button', { name: 'Lista', exact: true }).click();
-    await page.getByLabel('Fecha', { exact: true }).fill(anchorDay);
+    await fillDate(page, 'Fecha', anchorDay);
 
     const appointmentRowAfterReload = page.locator('table tr', { hasText: appointmentReason });
     await expect(appointmentRowAfterReload).toBeVisible({ timeout: 10_000 });

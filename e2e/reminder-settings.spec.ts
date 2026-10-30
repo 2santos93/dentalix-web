@@ -1,4 +1,5 @@
 import { test, expect } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -144,7 +145,7 @@ test('el detalle de una cita enseña sus recordatorios pendientes', async ({ pag
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  await fillDate(page, 'Fecha', day);
   const row = page.locator('table tr', { hasText: `Carolina ${patientLastName}` });
   await expect(row).toBeVisible({ timeout: 10_000 });
   await row.getByRole('button', { name: /Detalle de la cita de 10:00–10:30/ }).click();
