@@ -21138,7 +21138,7 @@ export interface operations {
     ExchangeController_rates: {
         parameters: {
             query: {
-                /** @description Día de la tasa (AAAA-MM-DD, un día que exista). Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor entre el alta de la clínica (o su primer abono, lo anterior) y hoy en la zona de sus sedes: fuera de ahí, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -21155,7 +21155,7 @@ export interface operations {
                     "application/json": components["schemas"]["RatesResponseDto"];
                 };
             };
-            /** @description Fecha que no existe (`EXCHANGE_RATE_DATE_INVALID` o el mensaje de validación de `date`) o día sin tasa guardada fuera de la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
+            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21186,7 +21186,7 @@ export interface operations {
                 from: string;
                 /** @description Código ISO 4217 de 3 letras. */
                 to: string;
-                /** @description Día de la tasa (AAAA-MM-DD, un día que exista). Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor entre el alta de la clínica (o su primer abono, lo anterior) y hoy en la zona de sus sedes: fuera de ahí, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -21203,7 +21203,7 @@ export interface operations {
                     "application/json": components["schemas"]["ConvertResponseDto"];
                 };
             };
-            /** @description Fecha que no existe (`EXCHANGE_RATE_DATE_INVALID` o el mensaje de validación de `date`) o día sin tasa guardada fuera de la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
+            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
             400: {
                 headers: {
                     [name: string]: unknown;
