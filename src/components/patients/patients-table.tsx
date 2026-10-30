@@ -11,6 +11,8 @@ import {
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
+import { Avatar } from '@/components/ui/avatar';
+import { initials } from '@/lib/format/initials';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -31,10 +33,6 @@ const copy = {
 
 function fullName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
-}
-
-function initials(patient: Patient): string {
-  return `${patient.firstName[0] ?? ''}${patient.lastName[0] ?? ''}`.toUpperCase();
 }
 
 interface PatientsTableProps {
@@ -107,9 +105,7 @@ export function PatientsTable({
                     href={`/patients/${patient.id}`}
                     className="flex items-center gap-3 font-medium text-ink hover:text-primary"
                   >
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {initials(patient)}
-                    </span>
+                    <Avatar size="sm" initials={initials(patient.firstName, patient.lastName)} />
                     {fullName(patient)}
                   </Link>
                 </TableCell>
@@ -136,9 +132,7 @@ export function PatientsTable({
               href={`/patients/${patient.id}`}
               className="flex items-center gap-3 font-medium text-ink hover:text-primary"
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                {initials(patient)}
-              </span>
+              <Avatar initials={initials(patient.firstName, patient.lastName)} />
               {fullName(patient)}
             </Link>
             <dl className="mt-3 flex flex-col gap-1.5 text-sm text-muted">
