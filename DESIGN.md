@@ -250,6 +250,37 @@ inputs, small cards), **12px** (lg — cards and panels), pill for status chips 
 - **Error:** danger border + a message that names the problem and the fix.
 - **Disabled:** reduced opacity, no pointer.
 
+### Form Controls
+Every control a person fills in comes from `src/components/ui/`. They are real native
+elements, restyled, never re-implemented: the OS picker on phones, the keyboard behaviour
+people already know, and `selectOption`/`check()` in e2e all keep working.
+- **`NativeSelect`** — `<select>` on `fieldClass` with a drawn chevron; `size="sm"` (32px)
+  for dense toolbars, 44px on touch either way. `className` lays out the wrapper. Long or
+  dynamic lists (patients, catalog) are a combobox, not a select.
+- **`Textarea`** — `fieldClass`, 80px minimum, resizes vertically; `autoGrow` for notes and
+  reasons that should grow with the text.
+- **`Checkbox`** — 16px box (20px on touch), 4px radius, `border-input` boundary; checked =
+  accent fill + check, `indeterminate` = dash. `label` + `description` make the whole row the
+  target (44px on touch); the name is the label, the description is the description.
+- **`RadioGroup`** + **`RadioOption`** / **`RadioCard`** — a `fieldset role="radiogroup"`
+  with a `legend`. Cards (the 12 h / 24 h choice) are for options that need a line of
+  explanation: selected = `primary-border` + `primary-subtle`. The group's hint and error
+  reach every option.
+- **`Switch`** — `<input type="checkbox" role="switch">`, 36×20 track, for settings that
+  apply at once. Off is a solid `border-input` track you can see; on is the accent. A choice
+  that waits for a Save button is a `Checkbox`.
+
+All of them plug into the error ladder the same way (rung 4): `NativeSelect` and `Textarea`
+sit inside `FormField` with `id`, `aria-invalid` and `aria-describedby={fieldErrorId(id)}`;
+`Checkbox` and `RadioGroup` take `error` and render the same `InlineError` with the same id.
+
+**The Raw Control Rule.** No `<select>`, `<textarea>`, `type="checkbox"` or `type="radio"`
+outside `src/components/ui/`. A jest guard (`form-controls-guard.test.ts`) enforces it as a
+ratchet: `form-controls-allowlist.json` freezes the files that still had raw controls when
+the primitives landed (246 in 118 files). A new file with one, or a listed file with one
+more, fails CI; so does a listed count that has dropped without the list dropping with it.
+Each migration wave shrinks the list in the same commit. The goal is `{}`.
+
 ### Money Fields
 Every amount a person types goes through `<MoneyInput>` (`src/components/shared/money-input.tsx`)
 and is read with `parseMoneyInput(text, currency)` (`src/lib/format/money.ts`). No screen
