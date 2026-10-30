@@ -19,6 +19,7 @@ import {
 // (generada) y `src/shared/money/currency-decimals.ts`. Si la API la regenera,
 // se copia aquí el mismo conjunto `minorUnits = 0` (R7).
 import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
+import cldr47CurrencyFractions from './__fixtures__/cldr-47-currency-fractions.fixture.json';
 
 const RULES: DiscountRules = {
   maxPercentByRole: { ADMIN: 100, DENTIST: 10, ASSISTANT: 0, RECEPTION: 0 },
@@ -125,7 +126,7 @@ describe('referencia del descuento y prestaciones sin descuento (DX-105)', () =>
 });
 
 describe('ZERO_DECIMAL_CURRENCIES (GLOBAL-G1, R7)', () => {
-  it('zero-decimal set matches the ISO snapshot', () => {
+  it('zero-decimal set matches the reviewed CLDR 47 policy snapshot', () => {
     const expected = new Set([...iso4217ZeroDecimal.previousSet, ...iso4217ZeroDecimal.minorUnitsZero]);
     expect([...ZERO_DECIMAL_CURRENCIES].sort()).toEqual([...expected].sort());
     // El conjunto anterior sigue dentro, y el de la API tiene 29 códigos.
@@ -133,13 +134,37 @@ describe('ZERO_DECIMAL_CURRENCIES (GLOBAL-G1, R7)', () => {
       expect(ZERO_DECIMAL_CURRENCIES.has(code)).toBe(true);
     }
     expect(ZERO_DECIMAL_CURRENCIES.size).toBe(29);
-    // La copia coincide con CLDR (la fuente de `minorUnits` en la API).
+    // Independent official CLDR 47 extraction, not the host's Intl/ICU data.
+    // Newer ICU gives RSD 2 digits; the reviewed API/web policy retains 0.
+    // This is a versioned CLDR policy, not a claim about current ISO minor units.
+    const cldrDigits: Record<string, number> = cldr47CurrencyFractions.digits;
     for (const code of iso4217ZeroDecimal.minorUnitsZero) {
-      const digits = new Intl.NumberFormat('en', { style: 'currency', currency: code }).resolvedOptions()
-        .maximumFractionDigits;
-      expect([code, digits]).toEqual([code, 0]);
+      expect([code, cldrDigits[code]]).toEqual([code, 0]);
     }
     expect(currencyDecimals('vnd')).toBe(0);
     expect(currencyDecimals('EUR')).toBe(2);
+  });
+
+  it.each([...new Set([...iso4217ZeroDecimal.previousSet, ...iso4217ZeroDecimal.minorUnitsZero])])(
+    '%s retains whole-unit discount rounding and role caps under the CLDR 47 policy',
+    (code) => {
+      expect(currencyDecimals(code)).toBe(0);
+      expect(currencyDecimals(code.toLowerCase())).toBe(0);
+      expect(discountForPercent(123.45, 7.5, code, 10)).toBe(9);
+      expect(discountForPercent(123.45, 7.5, code, 7.5)).toBe(9);
+      expect(discountForPercent(123.45, 7.5, code, 7)).toBe(8);
+    },
+  );
+
+  it('RSD retains reviewed whole-dinar rounding and cap truncation, distinct from cents', () => {
+    // 123.45 * 7.5% = 9.25875: policy rounds to 9 RSD, versus 9.26 in cents.
+    expect(discountForPercent(123.45, 7.5, 'RSD', 10)).toBe(9);
+    expect(discountForPercent(123.45, 7.5, 'EUR', 10)).toBe(9.26);
+    // At the 7.5% role cap, cent rounding would exceed the cap and truncates.
+    expect(discountForPercent(123.45, 7.5, 'RSD', 7.5)).toBe(9);
+    expect(discountForPercent(123.45, 7.5, 'EUR', 7.5)).toBe(9.25);
+    // At 7%, the maximum 8.6415 truncates to 8 RSD (8.64 in cents).
+    expect(discountForPercent(123.45, 7.5, 'RSD', 7)).toBe(8);
+    expect(discountForPercent(123.45, 7.5, 'EUR', 7)).toBe(8.64);
   });
 });
