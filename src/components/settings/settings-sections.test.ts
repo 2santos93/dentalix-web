@@ -21,10 +21,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 22 pantallas de ajustes, cada una una sola vez', () => {
+  it('ADMIN ve las 23 pantallas de ajustes, cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(22);
-    expect(new Set(hrefs).size).toBe(22);
+    expect(hrefs).toHaveLength(23);
+    expect(new Set(hrefs).size).toBe(23);
   });
 
   it('ADMIN sees «Nombres de documentos» right after «Mayoría de edad»; other roles do not', () => {
