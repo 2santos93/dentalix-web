@@ -2581,6 +2581,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/{id}/split-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cobro dividido en varias formas de pago con un solo recibo (DX-390)
+         * @description De 2 a 5 líneas (medio, moneda, importe y referencia), el mismo día. Cada línea es un abono con las reglas de siempre: su medio (referencia obligatoria y aviso de repetida, DX-377), su moneda (tasa congelada del día, DX-375) y su caja (el efectivo entra en la caja abierta de quien cobra, en su moneda, DX-027). Todas se registran en UNA transacción, con UN recibo numerado que lleva todas las líneas y el total en la moneda del plan: si una línea falla, no queda ninguna. Una Idempotency-Key para el cobro entero. Para un solo medio, `POST /treatment-plans/:id/payments`. Anular una línea (`DELETE /payments/:id`) anula el cobro entero y su recibo.
+         */
+        post: operations["PaymentsController_createSplit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/opening-balances/{id}/payments": {
         parameters: {
             query?: never;
@@ -10124,6 +10144,13 @@ export interface components {
             /** @description Solo en la respuesta del alta: ids de los abonos con la misma referencia y medio que se confirmaron con motivo. */
             duplicateReferenceOf?: string[];
             notes: string | null;
+            /**
+             * Format: uuid
+             * @description DX-390: el cobro dividido del abono (el id de su línea 1, que lleva el recibo único); null en un abono de una sola forma de pago.
+             */
+            splitId: string | null;
+            /** @description DX-390: número de la línea en su cobro dividido (1–5). */
+            splitLine: number | null;
             /** Format: uuid */
             createdById: string | null;
             /** Format: date-time */
@@ -10131,7 +10158,7 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             /**
-             * @description Número del recibo de caja (DX-136): serie de la sede y consecutivo. null en los abonos anteriores a la numeración («sin serie»; su recibo conserva la referencia antigua REC-xxxxxxxx).
+             * @description Número del recibo de caja (DX-136): serie de la sede y consecutivo. null en los abonos anteriores a la numeración («sin serie»; su recibo conserva la referencia antigua REC-xxxxxxxx). DX-390: todas las líneas de un cobro dividido llevan el número de su recibo único.
              * @example NOR-000123
              */
             receiptNumber: string | null;
@@ -10141,6 +10168,50 @@ export interface components {
             frozenRate: components["schemas"]["FrozenExchangeRateDto"] | null;
             /** @description DX-375: la tasa del abono. NOT_NEEDED: está en la moneda de su destino. FROZEN: congeló su tasa al registrarse (o el barrido, si se cobró sin tasa) y saldos y totales la usan siempre, aunque la tasa cambie después. MISSING: «sin tasa»: no había tasa de su día; no cuenta en el saldo del plan hasta que se registre (Ajustes › Tasa de cambio) y el barrido de cada minuto la congele. LEGACY: anterior a la tasa congelada y aún sin congelar: se convierte con la tasa de su día, como antes, hasta que el barrido la congele. */
             exchangeRateStatus: components["schemas"]["PaymentExchangeRateStatus"];
+        };
+        SplitPaymentLineDto: {
+            /** @example 50 */
+            amount: number;
+            /** @description Código ISO 4217 de la línea (puede ser otra que la del plan). */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description Medio de pago ACTIVO de la clínica (GET /payment-methods). Obligatorio en cada línea.
+             */
+            paymentMethodId: string;
+            /** @description Referencia de la línea: obligatoria si su medio la pide (400) y con el aviso de repetida de DX-377 (409 `PAYMENT_REFERENCE_DUPLICATE` con `line`, la línea desde 0). */
+            reference?: string;
+            /** @description Motivo para confirmar la referencia repetida de esta línea. */
+            duplicateReferenceReason?: string;
+        };
+        RecordSplitPaymentDto: {
+            /**
+             * @description El día civil `YYYY-MM-DD` (o un instante con `Z` o desfase) de TODO el cobro, como en un abono (DX-097).
+             * @example 2026-10-30
+             */
+            paidAt: string;
+            lines: components["schemas"]["SplitPaymentLineDto"][];
+            /** @description Confirma que el total, si supera lo pendiente del plan, deja el excedente como saldo a favor (sin ella, 409 `SPLIT_PAYMENT_EXCEEDS_BALANCE`). */
+            confirmCreditBalance?: boolean;
+            notes?: string;
+        };
+        SplitPaymentDto: {
+            /**
+             * Format: uuid
+             * @description Id del cobro: el de su línea 1 (la del recibo).
+             */
+            id: string;
+            /**
+             * @description El número del recibo único del cobro (DX-136).
+             * @example NOR-000123
+             */
+            receiptNumber: string | null;
+            /** @description Moneda del plan: la del total. */
+            planCurrency: string;
+            /** @description Suma de las líneas en la moneda del plan, cada una con su tasa congelada (DX-375); null si alguna quedó «sin tasa». */
+            total: number | null;
+            /** @description Un abono por línea, en orden (`splitLine`). */
+            payments: components["schemas"]["PaymentDto"][];
         };
         PaymentWithoutRateDto: {
             /** Format: uuid */
@@ -10251,6 +10322,36 @@ export interface components {
              */
             equivalentAmount: number | null;
         };
+        ReceiptSplitViewLineDto: {
+            /**
+             * Format: uuid
+             * @description El abono de la línea.
+             */
+            paymentId: string;
+            line: number;
+            /** @example 50 */
+            amount: number;
+            /** @description Código ISO 4217 de la línea. */
+            currency: string;
+            /** @enum {string|null} */
+            method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            paymentMethodName: string | null;
+            reference: string | null;
+            /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
+            equivalentAmount: number | null;
+            /** @description Como `exchangeRate` del recibo, para esta línea. */
+            exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
+        };
+        ReceiptSplitTotalDto: {
+            /** @description Moneda del plan. */
+            currency: string;
+            /** @description null si alguna línea está «sin tasa». */
+            amount: number | null;
+        };
+        ReceiptSplitDto: {
+            lines: components["schemas"]["ReceiptSplitViewLineDto"][];
+            total: components["schemas"]["ReceiptSplitTotalDto"];
+        };
         ReceiptClinicDto: {
             /** @example Clínica Demo */
             name: string;
@@ -10339,6 +10440,28 @@ export interface components {
             /** @example Recepción Demo */
             fullName: string;
         };
+        ReceiptSplitLineDto: {
+            /**
+             * Format: uuid
+             * @description El abono de la línea.
+             */
+            paymentId: string;
+            line: number;
+            /** @example 50 */
+            amount: number;
+            /** @description Código ISO 4217 de la línea. */
+            currency: string;
+            /** @enum {string|null} */
+            method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            paymentMethodName: string | null;
+            reference: string | null;
+            /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
+            equivalentAmount: number | null;
+        };
+        ReceiptSnapshotSplitDto: {
+            lines: components["schemas"]["ReceiptSplitLineDto"][];
+            total: components["schemas"]["ReceiptSplitTotalDto"];
+        };
         ReceiptSnapshotDto: {
             /** @enum {number} */
             version: 1;
@@ -10356,6 +10479,8 @@ export interface components {
             planBalance: components["schemas"]["ReceiptPlanBalanceDto"] | null;
             /** @description Quién cobró. */
             cashier: components["schemas"]["ReceiptCashierDto"] | null;
+            /** @description DX-390: las formas de pago del cobro dividido y su total al emitir; ausente o null en un abono suelto (`payment` es entonces su línea 1). */
+            split?: components["schemas"]["ReceiptSnapshotSplitDto"] | null;
             /** @example Este documento no es factura */
             legalNotice: string;
         };
@@ -10379,8 +10504,10 @@ export interface components {
             /** Format: date-time */
             voidedAt: string | null;
             voidReason: string | null;
-            /** @description DX-376: la tasa del abono y su equivalente en la moneda de su destino; null si el abono está en esa moneda. */
+            /** @description DX-376: la tasa del abono y su equivalente en la moneda de su destino; null si el abono está en esa moneda o es un cobro dividido (DX-390: cada línea lleva la suya en `split`). */
             exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
+            /** @description DX-390: el cobro dividido del recibo (todas sus formas de pago, cada una con su tasa congelada, y el total en la moneda del plan); null en un abono suelto. El recibo de cualquier línea es el del cobro. */
+            split: components["schemas"]["ReceiptSplitDto"] | null;
             /** @description Foto inmutable al emitir (en los «sin serie», los datos de hoy). */
             snapshot: components["schemas"]["ReceiptSnapshotDto"];
         };
@@ -21830,6 +21957,60 @@ export interface operations {
                 content?: never;
             };
             /** @description La Idempotency-Key ya se usó con otro plan u otro cuerpo (DX-109): genera una clave nueva. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentsController_createSplit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordSplitPaymentDto"];
+            };
+        };
+        responses: {
+            /** @description El cobro, con su recibo y un abono por línea. Repetir la MISMA petición con la misma Idempotency-Key devuelve el cobro original. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SplitPaymentDto"];
+                };
+            };
+            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otro plan, otro cuerpo o un abono suelto: genera una clave nueva. */
             422: {
                 headers: {
                     [name: string]: unknown;
