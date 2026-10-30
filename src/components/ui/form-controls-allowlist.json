@@ -15,9 +15,6 @@
     "select": 2,
     "checkbox": 2
   },
-  "src/components/appointments/appointment-display.tsx": {
-    "select": 1
-  },
   "src/components/appointments/appointment-form.tsx": {
     "select": 2,
     "checkbox": 1
