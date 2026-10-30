@@ -121,6 +121,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   STAFF_INVITATION: 'Invitación al personal',
   CLINIC: 'Clínica',
   PAYMENT_METHOD: 'Medio de pago',
+  ANESTHETIC_PRODUCT: 'Catálogo de anestésicos',
+  ANESTHESIA_ADMINISTRATION: 'Anestesia de evolución',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

@@ -1128,6 +1128,144 @@ export interface paths {
         patch: operations["ClinicalNoteTemplatesController_update"];
         trace?: never;
     };
+    "/api/v1/anesthetics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Catálogo de anestésicos de la clínica
+         * @description Activos por nombre; con `includeInactive=true`, también los desactivados. Valores de ayuda: no sustituyen la ficha técnica del fabricante.
+         */
+        get: operations["AnestheticsController_list"];
+        put?: never;
+        /** Añadir un anestésico al catálogo */
+        post: operations["AnestheticsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/anesthetics/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cargar anestésicos sugeridos
+         * @description Crea los 5 anestésicos de ejemplo (lidocaína, articaína, mepivacaína, prilocaína y bupivacaína, con dosis máximas de referencia editables) que la clínica aún no tiene, y devuelve los creados. Repetirlo no duplica nada.
+         */
+        post: operations["AnestheticsController_loadSamples"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/anesthetics/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar o desactivar un anestésico
+         * @description Lo ya registrado no cambia: cada anestesia copió los valores del catálogo.
+         */
+        patch: operations["AnestheticsController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/anesthesia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anestesia registrada en las evoluciones del paciente (ficha) */
+        get: operations["AnesthesiaController_listByPatient"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/anesthesia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anestesia de una evolución y su acumulado frente al máximo */
+        get: operations["AnesthesiaController_listByEntry"];
+        put?: never;
+        /**
+         * Registra anestesia local en la evolución (inalterable)
+         * @description El servidor calcula los mg, el acumulado de la evolución y la fracción del máximo por peso. Al llegar al 100 % (o con alergia a anestésicos) responde 409 salvo `overrideReason`, que queda sellado y auditado.
+         */
+        post: operations["AnesthesiaController_record"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/anesthesia/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Previsualiza la dosis acumulada con un anestésico más
+         * @description No guarda nada. Lee la anamnesis vigente (peso y alergias) y lo ya registrado en la evolución.
+         */
+        post: operations["AnesthesiaController_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/anesthesia/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** No permitido: la anestesia no se edita */
+        put: operations["AnesthesiaController_rejectPut"];
+        post?: never;
+        /** No permitido: la anestesia no se borra */
+        delete: operations["AnesthesiaController_rejectDelete"];
+        options?: never;
+        head?: never;
+        /** No permitido: la anestesia no se edita */
+        patch: operations["AnesthesiaController_rejectPatch"];
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/tooth-records": {
         parameters: {
             query?: never;
@@ -4839,7 +4977,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -7053,6 +7191,222 @@ export interface components {
             prompts?: components["schemas"]["NotePromptInputDto"][];
             /** @description false = desactivarla (sale del selector) */
             active?: boolean;
+        };
+        AnestheticProductDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Lidocaína 2 % con epinefrina 1:100.000 */
+            name: string;
+            /** @example Lidocaína */
+            activeIngredient: string;
+            /**
+             * @description Concentración en %
+             * @example 2
+             */
+            concentrationPct: number;
+            /** @example Epinefrina 1:100.000 */
+            vasoconstrictor: string | null;
+            /** @example 1.8 */
+            mlPerCarpule: number;
+            /** @example 7 */
+            maxMgPerKg: number;
+            /**
+             * @description Tope absoluto en mg
+             * @example 500
+             */
+            maxAbsoluteMg: number;
+            /** @example LIDOCAINE_2_EPI */
+            sampleCode: string | null;
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateAnestheticProductDto: {
+            name: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor?: string | null;
+            mlPerCarpule: number;
+            maxMgPerKg: number;
+            maxAbsoluteMg: number;
+        };
+        UpdateAnestheticProductDto: {
+            name?: string;
+            activeIngredient?: string;
+            concentrationPct?: number;
+            vasoconstrictor?: string | null;
+            mlPerCarpule?: number;
+            maxMgPerKg?: number;
+            maxAbsoluteMg?: number;
+            /** @description false = desactivado (no se borra) */
+            active?: boolean;
+        };
+        /** @enum {string} */
+        AnesthesiaTechnique: "INFILTRATION" | "NERVE_BLOCK" | "INTRALIGAMENTARY" | "INTRAPULPAL" | "INTRAOSSEOUS";
+        DoseAlertDto: {
+            /** @example DOSE_OVER_MAX */
+            code: string;
+            /** @enum {string} */
+            severity: "BLOCKING" | "INFO";
+            message: string;
+            source: string;
+        };
+        AnesthesiaAdministrationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: uuid */
+            anestheticId: string;
+            anestheticName: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor: string | null;
+            mlPerCarpule: number;
+            maxMgPerKg: number;
+            maxAbsoluteMg: number;
+            carpules: number;
+            doseMg: number;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            site: string | null;
+            lot: string | null;
+            /** Format: date-time */
+            administeredAt: string;
+            weightKg: number | null;
+            /** @enum {string|null} */
+            weightSource: "ANAMNESIS" | "ENTERED" | null;
+            cumulativeMg: number;
+            cumulativePercent: number | null;
+            safetyRulesVersion: string;
+            safetyAlerts: components["schemas"]["DoseAlertDto"][];
+            overrideReason: string | null;
+            /** Format: uuid */
+            authorId: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AnestheticDoseDto: {
+            name: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            carpules: number;
+            mg: number;
+            maxMg: number | null;
+            percent: number | null;
+        };
+        AnesthesiaDoseSummaryDto: {
+            /** @example ANESTHESIA_DOSE_V1 */
+            rulesVersion: string;
+            weightKg: number | null;
+            /** @description mg acumulados de la evolución */
+            totalMg: number;
+            byAnesthetic: components["schemas"]["AnestheticDoseDto"][];
+            /** @description Suma de las fracciones de cada máximo, en %; null sin peso */
+            percent: number | null;
+            /** @enum {string} */
+            level: "OK" | "WARNING" | "EXCEEDED" | "NO_WEIGHT";
+            alerts: components["schemas"]["DoseAlertDto"][];
+        };
+        EntryAnesthesiaDto: {
+            records: components["schemas"]["AnesthesiaAdministrationDto"][];
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+            ageYears: number | null;
+            weightRequired: boolean;
+        };
+        AnesthesiaDoseCheckDto: {
+            /**
+             * Format: uuid
+             * @description Anestésico del catálogo
+             */
+            anestheticId: string;
+            /** @example 1.5 */
+            carpules: number;
+            /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
+            weightKg?: number;
+        };
+        AnesthesiaCheckDto: {
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+            ageYears: number | null;
+            /** @enum {string|null} */
+            weightSource: "ANAMNESIS" | "ENTERED" | null;
+            /** @description Menor de 12 años sin peso: hay que anotarlo */
+            weightRequired: boolean;
+        };
+        RecordAnesthesiaDto: {
+            /**
+             * Format: uuid
+             * @description Anestésico del catálogo
+             */
+            anestheticId: string;
+            /** @example 1.5 */
+            carpules: number;
+            /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
+            weightKg?: number;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            /** @description Zona o dientes FDI */
+            site?: string;
+            /** @description Lote del carpule */
+            lot?: string;
+            /**
+             * Format: date-time
+             * @description Hora de la administración; por defecto, ahora
+             */
+            administeredAt?: string;
+            /** @description Motivo con el que se confirma superar la dosis máxima o un aviso de alergia. Sin él, 409. */
+            overrideReason?: string;
+        };
+        RecordedAnesthesiaDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: uuid */
+            anestheticId: string;
+            anestheticName: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor: string | null;
+            mlPerCarpule: number;
+            maxMgPerKg: number;
+            maxAbsoluteMg: number;
+            carpules: number;
+            doseMg: number;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            site: string | null;
+            lot: string | null;
+            /** Format: date-time */
+            administeredAt: string;
+            weightKg: number | null;
+            /** @enum {string|null} */
+            weightSource: "ANAMNESIS" | "ENTERED" | null;
+            cumulativeMg: number;
+            cumulativePercent: number | null;
+            safetyRulesVersion: string;
+            safetyAlerts: components["schemas"]["DoseAlertDto"][];
+            overrideReason: string | null;
+            /** Format: uuid */
+            authorId: string;
+            /** Format: date-time */
+            createdAt: string;
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+        };
+        AnesthesiaConflictDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @description Mensaje en español con los avisos */
+            message: string;
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+            safetyAlerts: components["schemas"]["DoseAlertDto"][];
         };
         CreateToothRecordDto: {
             /**
@@ -17328,6 +17682,334 @@ export interface operations {
             };
             /** @description Ya existe una plantilla con ese nombre */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnestheticsController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también los desactivados (Ajustes) */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"][];
+                };
+            };
+        };
+    };
+    AnestheticsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAnestheticProductDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"];
+                };
+            };
+            /** @description Valores fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay uno con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnestheticsController_loadSamples: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"][];
+                };
+            };
+        };
+    };
+    AnestheticsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAnestheticProductDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"];
+                };
+            };
+            /** @description No es de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay uno con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_listByPatient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnesthesiaAdministrationDto"][];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_listByEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryAnesthesiaDto"];
+                };
+            };
+            /** @description Paciente o evolución no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordAnesthesiaDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordedAnesthesiaDto"];
+                };
+            };
+            /** @description Carpules, peso, hora futura, anestésico desactivado o menor de 12 años sin peso */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, evolución o anestésico no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnesthesiaConflictDto"];
+                };
+            };
+        };
+    };
+    AnesthesiaController_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnesthesiaDoseCheckDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnesthesiaCheckDto"];
+                };
+            };
+            /** @description Carpules o peso inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, evolución o anestésico no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_rejectPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: unknown;
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_rejectDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: unknown;
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_rejectPatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: unknown;
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
