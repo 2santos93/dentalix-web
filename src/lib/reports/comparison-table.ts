@@ -1,4 +1,5 @@
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { moneyWithCode } from '@/lib/format/sede-number';
 import type { ComparisonRow, CurrencyMetric, KpiDefinition, KpiKey, LocationsComparison, Metric } from './reports-api';
 
 /** Columna por la que se ordena: la sede o un indicador. */
@@ -82,7 +83,7 @@ export function formatMetric(
 ): string {
   if (value === null) return '—';
   // Sin moneda, el importe sin símbolo (nunca una moneda de reserva).
-  if (unit === 'MONEY') return currency ? fmt.money(value, currency) : fmt.number(value, { min: 2, max: 2 });
+  if (unit === 'MONEY') return currency ? moneyWithCode(value, currency, fmt) : fmt.number(value, { min: 2, max: 2 });
   if (unit === 'PERCENT') return fmt.percent(value, 2);
   return fmt.number(value, { max: 0 });
 }

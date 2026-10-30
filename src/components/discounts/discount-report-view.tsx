@@ -8,6 +8,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { moneyWithCode } from '@/lib/format/sede-number';
 import { firstOfMonth } from '@/lib/format/date';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
@@ -141,12 +142,12 @@ function DiscountSummary({
             <div className="min-w-0">
               <dt className="t-label text-muted">{discountReportCopy.totalDiscount}</dt>
               <dd className="truncate font-medium tabular-nums text-ink">
-                {fmt.money(total.discount, total.currency)}
+                {moneyWithCode(total.discount, total.currency, fmt)}
               </dd>
             </div>
             <div className="min-w-0">
               <dt className="t-label text-muted">{discountReportCopy.gross}</dt>
-              <dd className="truncate tabular-nums text-ink">{fmt.money(total.gross, total.currency)}</dd>
+              <dd className="truncate tabular-nums text-ink">{moneyWithCode(total.gross, total.currency, fmt)}</dd>
             </div>
             <div className="min-w-0">
               <dt className="t-label text-muted">{discountReportCopy.percentOfGross}</dt>
@@ -167,7 +168,7 @@ function DiscountSummary({
             <div className="min-w-0">
               <dt className="t-label text-muted">{discountReportCopy.agreementReduction}</dt>
               <dd className="truncate font-medium tabular-nums text-ink">
-                {fmt.money(total.reduction, total.currency)}
+                {moneyWithCode(total.reduction, total.currency, fmt)}
               </dd>
             </div>
           </dl>
@@ -201,11 +202,11 @@ function AmountCell({
       {item.discount > 0 || !agreement ? (
         <>
           <span className="block font-medium tabular-nums text-ink">
-            −{fmt.money(item.discount, item.currency)}
+            −{moneyWithCode(item.discount, item.currency, fmt)}
           </span>
           <span className="block text-xs tabular-nums text-muted">
             {discountReportCopy.ofPrice(
-              fmt.money(item.price + item.priceReduction, item.currency),
+              moneyWithCode(item.price + item.priceReduction, item.currency, fmt),
               fmt.percent(item.percent, 2),
             )}
           </span>
@@ -213,7 +214,7 @@ function AmountCell({
       ) : null}
       {item.priceReduction > 0 ? (
         <span className="block text-xs tabular-nums text-muted">
-          {discountReportCopy.priceReduced(fmt.money(item.price, item.currency))}
+          {discountReportCopy.priceReduced(moneyWithCode(item.price, item.currency, fmt))}
         </span>
       ) : null}
       {agreement && withAgreement ? (
@@ -226,9 +227,9 @@ function AmountCell({
 function agreementLine(item: DiscountReportItem, fmt: RegionalFormat): string {
   return discountReportCopy.agreementLine(
     item.agreementName ?? '',
-    fmt.money(item.agreementReduction, item.currency),
+    moneyWithCode(item.agreementReduction, item.currency, fmt),
     fmt.percent(item.agreementPercent, 2),
-    fmt.money(item.basePrice ?? 0, item.currency),
+    moneyWithCode(item.basePrice ?? 0, item.currency, fmt),
   );
 }
 

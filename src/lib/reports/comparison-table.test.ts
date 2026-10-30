@@ -67,7 +67,9 @@ describe('tabla de «Comparar sedes» (DX-014)', () => {
     expect(formatMetric('PERCENT', 33.33, co)).toBe('33,33%');
     expect(formatMetric('COUNT', 1234, co)).toBe('1.234');
     expect(formatMetric('PERCENT', null, co)).toBe('—');
-    expect(formatMetric('MONEY', 120000, co, 'COP')).toMatch(/120\.000,00/);
+    // DX-378: el código de la moneda, nunca «$» (producto bimonetario).
+    expect(formatMetric('MONEY', 120000, co, 'COP')).toBe('COP\u00a0120.000,00');
+    expect(formatMetric('MONEY', 120000, co, 'USD')).toBe('USD\u00a0120.000,00');
     // Sin moneda: el importe sin símbolo, sin espacio delante.
     expect(formatMetric('MONEY', 120000, co)).toBe('120.000,00');
     expect(formatChange(20, 'PERCENT', co)).toBe('+20%');

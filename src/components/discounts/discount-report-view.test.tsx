@@ -123,7 +123,7 @@ describe('DiscountReportView (DX-204)', () => {
     render(<DiscountReportView token="tok" />);
     const summary = await screen.findByTestId('discount-total-COP');
     expect(within(summary).getByText('15%')).toBeInTheDocument();
-    expect(within(summary).getByText(/180,000\.00/)).toBeInTheDocument();
+    expect(within(summary).getByText(/^COP\s180,000\.00$/)).toBeInTheDocument();
     expect(within(screen.getByTestId('discount-row')).getByText(/^\d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument();
   });
 

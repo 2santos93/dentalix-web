@@ -300,8 +300,8 @@ for (const viewport of [
       row!.expensesTotal,
     );
     const toggle = table.getByRole('button', {
-      // DX-378 (FE-078): el importe con el formato de la sede (es-CO: «$ 44.210,00»).
-      name: new RegExp(`^Ver gastos por categoría de .+, ${row!.locationName}: \\S*\\s?${totalText.replace(/\./g, '\\.')}`),
+      // DX-378 (FE-078): separadores de la sede (es-CO) y siempre el código de la moneda, nunca «$».
+      name: new RegExp(`^Ver gastos por categoría de .+, ${row!.locationName}: COP\\s${totalText.replace(/\./g, '\\.')}`),
     });
     await expect(toggle).toBeVisible();
     if (narrow) await expectNoHorizontalScroll(page);

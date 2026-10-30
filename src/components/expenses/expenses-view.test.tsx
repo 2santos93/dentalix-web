@@ -89,7 +89,8 @@ describe('ExpensesView (DX-274)', () => {
     render(<ExpensesView token="tok" />);
     const row = await screen.findByTestId('expense-row');
     expect(await within(row).findByText('10/20/2026')).toBeInTheDocument();
-    expect(within(row).getByText(/150,000\.00/)).toBeInTheDocument();
+    // El código de la moneda, nunca «$» (producto bimonetario).
+    expect(within(row).getByText(/^COP\s150,000\.00$/)).toBeInTheDocument();
   });
 
   it('carga el mes en curso hasta hoy y pinta la fila con su estado y el recuento', async () => {

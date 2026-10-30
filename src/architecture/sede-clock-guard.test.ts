@@ -19,6 +19,10 @@ import ts from 'typescript';
  *    `toLocale(Date|Time)?String` con un locale literal (`'es'`, `"en-US"`…):
  *    el formato lo da la sede; las palabras, `UI_LANGUAGE` dentro de
  *    `lib/format`.
+ * 3. Nadie pinta un importe con `RegionalFormat.money` (`fmt.money(…)`): da el
+ *    símbolo local («$», «US$», «Bs.S»), ambiguo en un producto bimonetario.
+ *    Los importes con el formato de la sede llevan siempre el código ISO:
+ *    `sedeMoney`/`moneyWithCode` de `@/lib/format/sede-number`.
  */
 const SRC = join(__dirname, '..');
 const FORMAT_DATE_MODULES = new Set(['@/lib/format/date']);
@@ -141,12 +145,20 @@ function parse(fileName: string, text: string): ts.SourceFile {
   return ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 }
 
+/** `@/lib/format/date`, o el mismo módulo por ruta relativa (`../format/date`). */
+function isFormatDateModule(specifier: string, fileName: string): boolean {
+  if (FORMAT_DATE_MODULES.has(specifier)) return true;
+  if (!specifier.startsWith('.')) return false;
+  const resolved = relative(SRC, join(fileName, '..', specifier)).split(sep).join('/');
+  return resolved === 'lib/format/date' || resolved === 'lib/format/date.ts';
+}
+
 /** Los helpers sin sede que importa el fichero (o `*` si importa el módulo entero). */
 function sedelessImports(source: ts.SourceFile): string[] {
   const found: string[] = [];
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
-    if (!FORMAT_DATE_MODULES.has(statement.moduleSpecifier.text)) continue;
+    if (!isFormatDateModule(statement.moduleSpecifier.text, source.fileName)) continue;
     const bindings = statement.importClause?.namedBindings;
     if (bindings && ts.isNamespaceImport(bindings)) found.push('*');
     if (bindings && ts.isNamedImports(bindings)) {
@@ -175,6 +187,24 @@ function literalLocaleCalls(source: ts.SourceFile): string[] {
         const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
         found.push(`${line + 1}: ${node.getText(source).split('\n')[0]}`);
       }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+/** Importes con el símbolo de la moneda: `fmt.money(…)`, `clock.fmt.money(…)`. */
+function symbolMoneyCalls(source: ts.SourceFile): string[] {
+  const found: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'money'
+    ) {
+      const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+      found.push(`${line + 1}: ${node.getText(source).split('\n')[0]}`);
     }
     ts.forEachChild(node, visit);
   };
@@ -217,6 +247,11 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('no amount is painted with the currency symbol (fmt.money) outside lib/format: always the ISO code', () => {
+    const offenders = files.flatMap(({ rel, source }) => symbolMoneyCalls(source).map((hit) => `${rel}:${hit}`));
+    expect(offenders).toEqual([]);
+  });
+
   it('the scan covers components, app and lib, and skips lib/format and tests', () => {
     const rels = files.map((f) => f.rel);
     expect(rels).toEqual(
@@ -237,6 +272,14 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
     expect(imports("import * as dates from '@/lib/format/date';")).toEqual(['*']);
     expect(imports("import { civilDateLabel, firstOfMonth } from '@/lib/format/date';")).toEqual([]);
     expect(imports("import { sedeTime } from '@/lib/locations/sede-clock';")).toEqual([]);
+    const relativeImports = (file: string, code: string) => sedelessImports(parse(join(SRC, file), code));
+    expect(relativeImports('lib/appointments/x.ts', "import { formatTime } from '../format/date';")).toEqual(['formatTime']);
+    expect(relativeImports('lib/format/x.ts', "import { formatDate } from './date';")).toEqual(['formatDate']);
+    expect(relativeImports('lib/appointments/x.ts', "import { formatTime } from './date';")).toEqual([]);
+
+    const money = (code: string) => symbolMoneyCalls(parse('x.tsx', code)).length;
+    expect(money('fmt.money(1, "USD"); clock.fmt.money(1, c);')).toBe(2);
+    expect(money('sedeMoney(1, "USD", fmt); moneyWithCode(1, c, fmt); formatCurrency(1, c);')).toBe(0);
 
     const locales = (code: string) => literalLocaleCalls(parse('x.tsx', code)).length;
     expect(locales("new Intl.NumberFormat('es', { maximumFractionDigits: 2 });")).toBe(1);
