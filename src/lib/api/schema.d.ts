@@ -6056,7 +6056,7 @@ export interface components {
         CoveragePayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             type: components["schemas"]["PayerType"];
             active: boolean;
@@ -6143,7 +6143,7 @@ export interface components {
         PayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             type: components["schemas"]["PayerType"];
             active: boolean;
@@ -6167,7 +6167,7 @@ export interface components {
         AssignedAgreementPayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             type: components["schemas"]["PayerType"];
         };
@@ -6236,7 +6236,7 @@ export interface components {
         AgreementPayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             /** @description SEC-047: con un pagador externo, asignar el convenio exige una cobertura viva del paciente con él; OTHER (cortesía, empleados…) solo lo asigna ADMIN. */
             type: components["schemas"]["PayerType"];
@@ -6244,7 +6244,7 @@ export interface components {
         AgreementPriceListDto: {
             /** Format: uuid */
             id: string;
-            /** @example Lista Sanitas 2026 */
+            /** @example Lista de precios 2026 */
             name: string;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -6252,7 +6252,7 @@ export interface components {
         AgreementDto: {
             /** Format: uuid */
             id: string;
-            /** @example Convenio Sanitas */
+            /** @example Convenio de empresa */
             name: string;
             payer: components["schemas"]["AgreementPayerDto"];
             kind: components["schemas"]["AgreementKind"];
