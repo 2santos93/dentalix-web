@@ -162,7 +162,9 @@ test('the patient list shows the international format and the stored text, witho
   await expect(table.getByText(LONG_INTERNATIONAL, { exact: true })).toBeVisible();
   await expect(table.getByText(UNREADABLE, { exact: true })).toBeVisible();
   await expect(table.getByText(NATIONAL, { exact: true })).toHaveCount(0);
-  await shot(page, 'phone-international-list', table.getByText(LONG_INTERNATIONAL, { exact: true }));
+  // A 390 px la tabla está oculta (display: none) y `getByRole('table')` ya no
+  // la encuentra: se apunta al número visible en cada ancho (fila o tarjeta).
+  await shot(page, 'phone-international-list', page.getByText(LONG_INTERNATIONAL, { exact: true }).filter({ visible: true }));
 
   await page.setViewportSize(VIEWPORTS[1]);
   const card = page.getByText(UNREADABLE, { exact: true }).filter({ visible: true });
