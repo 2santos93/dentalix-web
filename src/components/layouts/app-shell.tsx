@@ -32,6 +32,7 @@ import {
 } from '@/lib/ui/sidebar-store';
 import { cn } from '@/lib/utils';
 import { SessionLocationsProvider } from '@/lib/locations/session-locations';
+import { SedeDateLocaleProvider } from '@/components/locations/sede-date-locale-provider';
 import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
 import { useAnamnesisInboxCount } from '@/components/anamnesis/use-anamnesis-inbox-count';
@@ -141,7 +142,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return <SessionLocationsProvider token={token}>
     <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
-      <AppShellContent>{children}</AppShellContent>
+      <SedeDateLocaleProvider token={token}>
+        <AppShellContent>{children}</AppShellContent>
+      </SedeDateLocaleProvider>
     </InClinicProvider>
   </SessionLocationsProvider>;
 }

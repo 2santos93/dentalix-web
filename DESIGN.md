@@ -284,6 +284,36 @@ shows that field's error, the preview stays silent so the message is not read tw
 A filter (e.g. Cartera's minimum balance) uses the same parser but no preview: nothing
 is saved.
 
+### Dates and times
+No native `<input type="date">`, `type="time"` or `type="datetime-local"`: the browser paints
+them in ITS language, not the clinic's — a Spanish receptionist on an English Chrome sees
+`mm/dd/yyyy` and 04/05 changes month. In a clinical record that is a patient-safety bug. Use
+the primitives in `src/components/ui` (react-aria segmented fields); a jest guard
+(`src/architecture/native-date-input-guard.test.ts`) fails CI on a new native one, and its
+allowlist of not-yet-migrated files only shrinks.
+
+- **Which one:** a date the person already knows (birth date, a document's issue date) →
+  `DateField`, typed only, no calendar. Birth date adds `showAge` («26 años» next to it) as
+  instant verification. A date to schedule or filter → `DatePicker` (typed segments + calendar
+  button; popover on desktop, bottom sheet under 640px). A period → `DateRangePicker` («Desde –
+  Hasta» in one field, range calendar, optional `presets`: Hoy · Últimos 7 días · Este mes · Mes
+  anterior). A clock time → `TimeField` (12/24 h from the sede).
+- **ISO in, ISO out:** `value` is `'YYYY-MM-DD'` (`'HH:mm'` for time; `{ from, to }` for a
+  range) or `null`, `onChange` returns the same. `name` (`startName`/`endName`) renders a hidden
+  input with the ISO value so `<form>`/`FormData` keep working. `min`/`max` are ISO too.
+- **Locale from the clinic, never the browser:** `SedeDateLocaleProvider` (in the app shell)
+  feeds the active sede's `locale`, `hourCycle` and time zone to every field: segment order
+  (`dd/mm/aaaa` in Spanish), first weekday, and which day is «today». Without a provider the
+  fields fall back to `es`, never to the browser's language.
+- **Labels:** inside `FormField`, pass `id={htmlFor}`; the field names itself with
+  `aria-labelledby={fieldLabelId(id)}`. Outside one, pass `label`. Invalid state with
+  `isInvalid` or `aria-invalid` (danger border, like every field).
+- **Look:** the segment group is a `fieldClass` field (border-input, accent focus halo, danger
+  when invalid, 44px on touch). Calendar cells 40px (44px coarse), today = accent ring,
+  selected = solid accent, outside-month muted.
+- **E2E:** segments have no `.fill()`. Use `fillDate` / `fillDateRange` / `fillTime` from
+  `e2e/support/dates.ts`; they type per segment, so any locale order works.
+
 ### Cards / Containers
 - **Corner:** 12px. **Background:** surface. **Border:** 1px border token. **Shadow:** none at rest.
 - **Padding:** 24px (16px on mobile). No nested cards; use hairline sections inside instead.

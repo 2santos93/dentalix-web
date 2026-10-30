@@ -20,7 +20,7 @@ import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { DateRangePicker } from '@/components/ui/date-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/shared/form-field';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -32,6 +32,7 @@ import { InlineError } from '@/components/errors/inline-error';
 // treatment-plans-tab.tsx / agenda-view.tsx convention until next-intl
 // wiring lands.
 const copy = {
+  periodLabel: 'Periodo',
   fromLabel: 'Desde',
   toLabel: 'Hasta',
   currencyLabel: 'Moneda',
@@ -220,22 +221,20 @@ export function DashboardView({ token }: DashboardViewProps) {
       <RegionalReviewNotice token={token} />
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4 p-4">
-          <FormField htmlFor="dashboard-from" label={copy.fromLabel}>
-            <Input
-              id="dashboard-from"
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-auto"
-            />
-          </FormField>
-          <FormField htmlFor="dashboard-to" label={copy.toLabel}>
-            <Input
-              id="dashboard-to"
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-auto"
+          <FormField htmlFor="dashboard-period" label={copy.periodLabel}>
+            <DateRangePicker
+              id="dashboard-period"
+              value={from && to ? { from, to } : null}
+              onChange={(range) => {
+                // Un extremo a medio escribir deja el periodo vacío: no hay consulta hasta completarlo.
+                setFrom(range?.from ?? '');
+                setTo(range?.to ?? '');
+              }}
+              presets
+              startLabel={copy.fromLabel}
+              endLabel={copy.toLabel}
+              isInvalid={rangeInvalid}
+              aria-describedby={rangeInvalid ? 'dashboard-range-error' : undefined}
             />
           </FormField>
           <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-44">
@@ -256,7 +255,7 @@ export function DashboardView({ token }: DashboardViewProps) {
       </Card>
 
       {rangeInvalid ? (
-        <InlineError>{copy.rangeInvalid}</InlineError>
+        <InlineError id="dashboard-range-error">{copy.rangeInvalid}</InlineError>
       ) : zone.status === 'error' && (!from || !to) ? (
         <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
       ) : !currency && currencyUnknown ? (
