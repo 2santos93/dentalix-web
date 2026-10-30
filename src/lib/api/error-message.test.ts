@@ -25,6 +25,9 @@ describe('isHumanSpanish — heurística de idioma', () => {
     // DX-233: 409 del modo estricto y 400 del solape entre sedes.
     'Fuera del horario del profesional en Sede Norte (jueves 22/10: 14:00–19:00). La clínica no permite citar fuera del horario del profesional.',
     'Fuera del horario del profesional: no trabaja en Sede Norte el jueves 22/10. La clínica no permite citar fuera del horario del profesional.',
+    // SEC-050 y DX-382: los 409 de «Anular cargo».
+    'El cargo ya está cobrado: los abonos de «Cargos administrativos» lo cubren. Anula antes el abono y después el cargo.',
+    'Hay abonos sin convertir; registra la tasa del día antes de anular',
   ])('reconoce como español: %s', (msg) => {
     expect(isHumanSpanish(msg)).toBe(true);
   });
