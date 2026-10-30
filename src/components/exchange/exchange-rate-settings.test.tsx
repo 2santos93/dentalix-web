@@ -288,6 +288,33 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(await within(dialog).findByText(inUse)).toBeInTheDocument();
   });
 
+  // Revisión DX-375: tras el 409 la lista deja de ofrecer «Corregir» en esa
+  // fila (al cerrar el modal no se puede volver a intentar en vano).
+  it('tras el 409 «en uso», la fila pasa a «Usada en abonos»', async () => {
+    mockedGet.mockResolvedValue(MANUAL);
+    mockedList.mockResolvedValue([ves]);
+    const inUse = 'Esta tasa ya la usa al menos un abono y no se puede cambiar.';
+    mockedCorrect.mockRejectedValue(new ApiError(409, inUse, { code: 'MANUAL_EXCHANGE_RATE_IN_USE' }));
+    const user = setupUser();
+    renderView();
+    await user.click(
+      await screen.findByRole('button', {
+        name: copy.correctFor('VES', fmt.civilDate('2026-10-29')),
+      }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.clear(within(dialog).getByLabelText(rateLabel));
+    await user.type(within(dialog).getByLabelText(rateLabel), '37');
+    await user.click(within(dialog).getByRole('button', { name: correctRateCopy.submit }));
+    expect(await within(dialog).findByText(inUse)).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const table = screen.getByRole('table', { name: copy.ratesHeading });
+    const row = within(table).getAllByRole('row')[1];
+    expect(row).toHaveTextContent(copy.inUse);
+    expect(within(row).queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('ningún texto de la pantalla nombra un país ni un banco central', () => {
     const texts = JSON.stringify({
       exchangeRateCopy,

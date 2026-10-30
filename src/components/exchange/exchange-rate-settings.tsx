@@ -381,6 +381,11 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
             );
             setNotice(copy.rateCorrected(saved.currency));
           }}
+          onInUse={(id) =>
+            setState((prev) =>
+              prev ? { ...prev, rates: prev.rates.map((r) => (r.id === id ? { ...r, inUse: true } : r)) } : prev,
+            )
+          }
         />
       ) : null}
     </div>
@@ -396,6 +401,8 @@ interface CorrectRateModalProps {
   /** El día de la tasa en el formato de la sede. */
   dateLabel: string;
   onSaved: (rate: ManualExchangeRate) => void;
+  /** Un abono la usó entretanto (409): la lista deja de ofrecer corregirla. */
+  onInUse: (id: string) => void;
 }
 
 /**
@@ -411,6 +418,7 @@ function CorrectRateModal({
   rate,
   dateLabel,
   onSaved,
+  onInUse,
 }: CorrectRateModalProps) {
   const [text, setText] = useState(() => String(rate.rate).replace('.', ','));
   const [error, setError] = useState<string | null>(null);
@@ -438,6 +446,9 @@ function CorrectRateModal({
         setError(message);
         document.getElementById(inputId)?.focus();
         return;
+      }
+      if (err instanceof ApiError && err.status === 409 && err.code === 'MANUAL_EXCHANGE_RATE_IN_USE') {
+        onInUse(rate.id);
       }
       setFormError(message);
     } finally {
