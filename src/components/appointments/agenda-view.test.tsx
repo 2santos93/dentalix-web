@@ -21,6 +21,25 @@ import { getRoster } from '@/lib/locations/provider-schedule-api';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 
 /** DX-295: el estado se elige abriendo la lista y pulsando una opción. */
+/**
+ * La fecha de la barra es un `DatePicker` (segmentos dd/mm/aaaa del locale de
+ * la sede, nunca un `<input type="date">`): se escribe segmento a segmento.
+ */
+async function goToDate(user: ReturnType<typeof userEvent.setup>, iso: string) {
+  const group = screen.getByRole('group', { name: /^fecha$/i });
+  const [y, m, d] = iso.split('-');
+  await user.click(within(group).getAllByRole('spinbutton')[0]);
+  await user.keyboard(`${d}${m}${y}`);
+}
+
+/** El día ISO que muestra la fecha de la barra. */
+function agendaDate(): string {
+  const group = screen.getByRole('group', { name: /^fecha$/i });
+  const read = (type: string) =>
+    group.querySelector(`[role="spinbutton"][data-type="${type}"]`)?.getAttribute('aria-valuenow') ?? '';
+  return `${read('year').padStart(4, '0')}-${read('month').padStart(2, '0')}-${read('day').padStart(2, '0')}`;
+}
+
 async function pickStatus(user: ReturnType<typeof userEvent.setup>, trigger: HTMLElement, label: string) {
   await user.click(trigger);
   await user.click(screen.getByRole('option', { name: label }));
@@ -288,9 +307,7 @@ describe('AgendaView', () => {
     await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
 
     mockedListAppointments.mockClear();
-    const dateInput = screen.getByLabelText(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, '2026-03-10');
+    await goToDate(user, '2026-03-10');
 
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     const params = mockedListAppointments.mock.calls.at(-1)![1];
@@ -537,8 +554,7 @@ describe('AgendaView', () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListStaff).toHaveBeenCalled());
 
-    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
-    const selectedDate = dateInput.value;
+    const selectedDate = agendaDate();
 
     // The form lives in a modal now — closed until "Nueva cita" is clicked.
     expect(screen.queryByRole('form', { name: /agendar cita/i })).not.toBeInTheDocument();
@@ -554,6 +570,44 @@ describe('AgendaView', () => {
     expect(formDateInput.value).toBe(selectedDate);
   });
 
+  describe('teléfono (≤ 767 px)', () => {
+    const original = window.matchMedia;
+    beforeEach(() => {
+      window.matchMedia = ((query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      })) as unknown as typeof window.matchMedia;
+    });
+    afterEach(() => {
+      window.matchMedia = original;
+    });
+
+    it('abre en Día · Lista con el profesional de cada cita; el Mes es de puntos con la lista del día debajo', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([apt1]);
+      const user = userEvent.setup();
+
+      await renderAgenda(<AgendaView token="tok" />);
+      expect(screen.getByRole('button', { name: /^día$/i })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /^lista$/i })).toHaveAttribute('aria-pressed', 'true');
+      const list = await screen.findByRole('list', { name: /agenda del día/i });
+      expect(within(list).getByText(/Dra\. Ana Ríos/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^mes$/i }));
+      await goToDate(user, '2026-03-10');
+      const day = await screen.findByRole('button', { name: '10 de marzo · 1 cita' });
+      await user.click(day);
+      // Sin hoja: la lista del día elegido va debajo del calendario.
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      const selected = screen.getByRole('region', { name: /10 de marzo/ });
+      expect(selected).toHaveTextContent('1 cita');
+      expect(within(selected).getByRole('list', { name: /agenda del día/i })).toBeInTheDocument();
+      expect(screen.queryAllByTestId('medical-alert-indicator')).toHaveLength(0);
+    });
+  });
+
   it('defaults to Mes (calendar) view; switching to Semana fetches the week range and renders WeekAgenda', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
@@ -565,9 +619,7 @@ describe('AgendaView', () => {
     expect(screen.getByRole('button', { name: /^mes$/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /^semana$/i })).toHaveAttribute('aria-pressed', 'false');
 
-    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, '2026-03-11');
+    await goToDate(user, '2026-03-11');
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     mockedListAppointments.mockClear();
@@ -635,9 +687,7 @@ describe('AgendaView', () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, '2026-03-11');
+    await goToDate(user, '2026-03-11');
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     await user.click(screen.getByRole('button', { name: /^semana$/i }));
@@ -651,7 +701,7 @@ describe('AgendaView', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /^día$/i })).toHaveAttribute('aria-pressed', 'true'),
     );
-    expect(dateInput.value).toBe('2026-03-09');
+    expect(agendaDate()).toBe('2026-03-09');
     // Back in Día view (columnas por profesional, DX-121) — with no
     // appointments mocked for this test, each column's empty state confirms
     // it's the one rendering (WeekAgenda has no such copy).
@@ -668,9 +718,7 @@ describe('AgendaView', () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, '2026-03-11');
+    await goToDate(user, '2026-03-11');
     await user.click(screen.getByRole('button', { name: /^semana$/i }));
     await screen.findByLabelText(/agenda de la semana/i);
 
@@ -703,9 +751,7 @@ describe('AgendaView', () => {
     const user = userEvent.setup();
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, '2026-03-11');
+    await goToDate(user, '2026-03-11');
     await user.click(screen.getByRole('button', { name: /^semana$/i }));
     await screen.findByLabelText(/agenda de la semana/i);
     expect(screen.getByTestId('medical-alert-indicator')).toHaveAttribute('data-severity', 'critical');
@@ -734,9 +780,7 @@ describe('AgendaView', () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, '2026-03-11');
+    await goToDate(user, '2026-03-11');
     await user.click(screen.getByRole('button', { name: /^semana$/i }));
     await screen.findByLabelText(/agenda de la semana/i);
 
@@ -795,9 +839,7 @@ describe('AgendaView', () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
-    const dateInput = screen.getByLabelText(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, day);
+    await goToDate(user, day);
 
     const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
     await user.click(detail);
@@ -825,9 +867,7 @@ describe('AgendaView', () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
-    const dateInput = screen.getByLabelText(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, day);
+    await goToDate(user, day);
 
     const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
     await user.click(detail);
@@ -864,9 +904,7 @@ describe('AgendaView', () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
-    const dateInput = screen.getByLabelText(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, day);
+    await goToDate(user, day);
 
     const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
     await user.click(detail);
@@ -916,9 +954,7 @@ describe('AgendaView', () => {
     await renderAgenda(<AgendaView token={receptionToken} />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
-    const dateInput = screen.getByLabelText(/^fecha$/i);
-    await user.clear(dateInput);
-    await user.type(dateInput, day);
+    await goToDate(user, day);
     const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
     await user.click(detail);
 
@@ -1029,9 +1065,7 @@ describe('AgendaView', () => {
       );
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       await user.click(screen.getByRole('button', { name: /^día$/i }));
-      const dateInput = screen.getByLabelText(/^fecha$/i);
-      await user.clear(dateInput);
-      await user.type(dateInput, day);
+      await goToDate(user, day);
 
       await user.click(await screen.findByRole('button', { name: 'Mover a… la cita de María' }));
       await user.selectOptions(screen.getByLabelText('Profesional', { selector: '#move-provider' }), 'staff-2');
@@ -1274,9 +1308,7 @@ describe('AgendaView', () => {
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token={token} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
-      await user.clear(dateInput);
-      await user.type(dateInput, '2026-03-11');
+      await goToDate(user, '2026-03-11');
       await user.click(screen.getByRole('button', { name: /^semana$/i }));
       await screen.findByLabelText(/agenda de la semana/i);
       await user.click(screen.getByTestId('week-grid-appointment'));
@@ -1308,9 +1340,7 @@ describe('AgendaView', () => {
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token={token} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
-      await user.clear(dateInput);
-      await user.type(dateInput, '2026-03-11');
+      await goToDate(user, '2026-03-11');
       await user.click(screen.getByRole('button', { name: /^semana$/i }));
       await screen.findByLabelText(/agenda de la semana/i);
       await user.click(screen.getByTestId('week-grid-appointment'));

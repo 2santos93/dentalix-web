@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -82,7 +83,9 @@ async function shoot(page: Page, name: string, width: number): Promise<void> {
 async function openAgenda(page: Page, view: 'Mes' | 'Día' | 'Semana', day: string): Promise<void> {
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: view, exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  // En el teléfono el Día abre en «Lista»; la prueba empieza por las columnas.
+  if (view === 'Día') await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+  await fillDate(page, 'Fecha', day);
 }
 
 test.beforeAll(async ({ request }) => {

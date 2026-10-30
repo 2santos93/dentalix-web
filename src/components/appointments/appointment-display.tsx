@@ -65,6 +65,19 @@ export function patientLabel(
   return patientNames?.[appointment.patientId] ?? appointment.patientId;
 }
 
+/**
+ * Nombre corto para los chips del Mes: primer nombre + inicial del primer
+ * apellido («Laura C.»). En una celda de ~110 px el nombre completo se
+ * truncaba a dos letras («Is…»); el corto se lee entero. El nombre completo
+ * sigue en el detalle, en la lista del día y en el nombre accesible.
+ */
+export function patientShortLabel(appointment: Appointment, patientNames?: Record<string, string>): string {
+  const first = appointment.patientFirstName?.trim().split(/\s+/)[0];
+  const last = appointment.patientLastName?.trim();
+  if (first) return last ? `${first} ${last.charAt(0).toLocaleUpperCase('es')}.` : first;
+  return patientLabel(appointment, patientNames);
+}
+
 /** Chip de estado de la cita (solo lectura) — agenda del día y de la semana. */
 export function StatusBadge({ status }: { status: AppointmentStatus }) {
   return (

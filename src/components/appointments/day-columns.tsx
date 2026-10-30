@@ -48,6 +48,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { cn } from '@/lib/utils';
+import { statusTone, TONE_CLASSES } from '@/lib/status/tones';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -641,8 +642,20 @@ export function DayColumns({
                           >
                             {patient}
                           </span>
-                          <span className="w-full truncate text-xs">
-                            {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
+                          {/* El fondo es el color del tipo; el estado, su punto de
+                              tono (nunca el acento) + la etiqueta. */}
+                          <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
+                            <span
+                              aria-hidden
+                              data-testid="day-column-status-dot"
+                              className={cn(
+                                'size-2 shrink-0 rounded-full ring-1 ring-surface',
+                                TONE_CLASSES[statusTone('appointment', a.status)].dot,
+                              )}
+                            />
+                            <span className="min-w-0 truncate">
+                              {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
+                            </span>
                           </span>
                           <OverdueChip balance={a.balance} compact />
                           {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}

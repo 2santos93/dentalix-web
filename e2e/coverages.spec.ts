@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
@@ -342,7 +343,7 @@ test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda 
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(slot.day);
+  await fillDate(page, 'Fecha', slot.day);
 
   const card = page.getByTestId('day-column-appointment').filter({ hasText: `Camila ${lastName}` });
   await expect(card).toBeVisible({ timeout: 15_000 });

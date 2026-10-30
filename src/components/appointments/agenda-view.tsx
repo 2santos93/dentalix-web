@@ -48,7 +48,7 @@ import {
   ProviderColumnsPicker,
 } from '@/components/appointments/provider-columns-picker';
 import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
-import { MonthAgenda } from '@/components/appointments/month-agenda';
+import { AgendaStatusLegend, MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { AppointmentMedicalAlerts } from '@/components/clinical/appointment-medical-alerts';
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
@@ -81,7 +81,7 @@ import {
   patientLabel,
 } from '@/components/appointments/appointment-display';
 import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair } from 'lucide-react';
-import { InClinicPanel, inClinicCopy } from '@/components/appointments/in-clinic-panel';
+import { InClinicPanel, focusLocationSwitcher, inClinicCopy } from '@/components/appointments/in-clinic-panel';
 import {
   dismissReservedToasts,
   PatientFlowActions,
@@ -95,6 +95,8 @@ import {
 } from '@/lib/appointments/patient-flow';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import {
   Dialog,
   DialogContent,
@@ -211,10 +213,6 @@ const copy = {
 };
 
 
-// Native <select> styled to match the Input atom (kept native for a11y/tests).
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
-
 type ViewMode = 'month' | 'day' | 'week';
 /** DX-121: la vista Día se ve en columnas por profesional (por defecto) o en lista. */
 type DayLayout = 'columns' | 'list';
@@ -238,7 +236,13 @@ function defaultColumnIds(staff: StaffMember[], activeLocationId: string | null)
   return pool.slice(0, MAX_PROVIDER_COLUMNS).map((s) => s.userId);
 }
 
-const VIEW_MODES: ViewMode[] = ['month', 'day', 'week'];
+// Orden de granularidad, del panorama al detalle.
+const VIEW_MODES: ViewMode[] = ['month', 'week', 'day'];
+
+/** Teléfono: Día en lista por defecto y Mes como calendario de puntos (critique-ops §1, research §1.4). */
+const PHONE_QUERY = '(max-width: 767px)';
+/** Desde aquí «En clínica» y «Pendientes» van en una columna fija junto a la agenda. */
+const SIDE_PANEL_QUERY = '(min-width: 1280px)';
 const VIEW_LABEL: Record<ViewMode, string> = {
   month: copy.monthView,
   day: copy.dayView,
@@ -282,65 +286,27 @@ function addMinutesToTime(hhmm: string, mins: number): string {
 }
 
 /**
- * Contextual date navigation shown above each view (Mes/Día/Semana): a
- * ‹ › stepper (whose stride is the view's own unit), a "Hoy" reset, and the
- * current period's label. Replaces the old raw date input that used to sit in
- * the toolbar — navigation now belongs with the view it drives.
+ * Salto a una fecha (DatePicker de la sede: dd/mm/aaaa, nunca el formato del
+ * navegador). Lo que se escribe a medias no mueve la agenda: solo un día
+ * completo; al cambiar el día desde fuera (‹ ›, Hoy), el campo se alinea.
  */
-function DateNav({
-  label,
-  prevLabel,
-  nextLabel,
-  date,
-  onPrev,
-  onNext,
-  onToday,
-  onDateChange,
-}: {
-  label: string;
-  prevLabel: string;
-  nextLabel: string;
-  date: string;
-  onPrev: () => void;
-  onNext: () => void;
-  onToday: () => void;
-  onDateChange: (date: string) => void;
-}) {
-  // Lo que se escribe en el campo: vacío o a medio escribir no cambia el día
-  // de la agenda (no es un día civil); al cambiar el día desde fuera, se alinea.
-  const [draft, setDraft] = useState(date);
+function AgendaDateField({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(date);
   const [shown, setShown] = useState(date);
   if (date !== shown) {
     setShown(date);
     setDraft(date);
   }
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex items-center gap-1">
-        <Button type="button" variant="outline" size="sm" aria-label={prevLabel} onClick={onPrev}>
-          <ChevronLeft />
-        </Button>
-        <Button type="button" variant="outline" size="sm" aria-label={nextLabel} onClick={onNext}>
-          <ChevronRight />
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={onToday}>
-          Hoy
-        </Button>
-        {/* Compact jump-to-date, contextual to the view (moved out of the old
-            fat toolbar) — for reaching a far date without stepping. */}
-        <input
-          type="date"
-          aria-label={copy.dateLabel}
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            if (isCivilDay(e.target.value)) onDateChange(e.target.value);
-          }}
-          className={cn(fieldClass, 'ml-1 h-8 w-auto px-2.5 py-1 text-sm')}
-        />
-      </div>
-      <p className="text-sm font-semibold text-ink first-letter:uppercase">{label}</p>
-    </div>
+    <DatePicker
+      aria-label={copy.dateLabel}
+      value={draft}
+      onChange={(next) => {
+        setDraft(next);
+        if (next && isCivilDay(next)) onDateChange(next);
+      }}
+      className="w-[10.5rem] shrink-0"
+    />
   );
 }
 
@@ -412,12 +378,17 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     today = sedeToday(timeZone);
     setTodayIn({ timeZone, day: today });
   }
-  // Mes (calendar) | Día | Semana. 'month' is the default landing view: a
-  // month grid of all providers' appointments; picking a day reveals its full
-  // list + the new-appointment flow below (see the `viewMode === 'month'`
-  // branch). 'day'/'week' keep the original single-provider agenda.
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
-  const [dayLayout, setDayLayout] = useState<DayLayout>('columns');
+  // Mes (calendar) | Semana | Día. Sin una elección explícita, la vista de
+  // partida depende del ancho: en escritorio y tablet, el Mes (todas las
+  // citas de la clínica; elegir un día abre su lista en un panel); en el
+  // teléfono, el Día en lista (hora · paciente · profesional · estado), que es
+  // lo que se lee con el pulgar (research §1.4). Elegir una vista o una
+  // presentación la fija para el resto de la sesión de la pantalla.
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [pickedView, setPickedView] = useState<ViewMode | null>(null);
+  const [pickedDayLayout, setPickedDayLayout] = useState<DayLayout | null>(null);
+  const viewMode: ViewMode = pickedView ?? (phone ? 'day' : 'month');
+  const dayLayout: DayLayout = pickedDayLayout ?? (phone ? 'list' : 'columns');
   // `null` = todavía la selección por defecto (se deriva del personal).
   const [pickedColumnIds, setPickedColumnIds] = useState<string[] | null>(null);
   // Horario de la sede activa (sombreado de la vista en columnas). Best-effort:
@@ -444,17 +415,18 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [removingBlockPending, setRemovingBlockPending] = useState(false);
   const [waitlistReloadKey, setWaitlistReloadKey] = useState(0);
   const waitlist = useWaitlist(token, waitlistReloadKey);
-  // Desde 1400 px la lista va en un panel lateral fijo; por debajo, en un
+  // Desde 1280 px la lista va en un panel lateral fijo; por debajo, en un
   // cajón. Se monta UNA sola de las dos (revisión H4).
-  const wide = useMediaQuery('(min-width: 1400px)');
+  const wide = useMediaQuery(SIDE_PANEL_QUERY);
   const waitlistCount = waitlist.loading || waitlist.error ? null : waitlist.total;
   const [waitlistOpen, setWaitlistOpen] = useState(false);
-  // DX-200: panel «En clínica» (lateral desde 1400 px; si no, en un cajón).
+  // DX-200: panel «En clínica» (lateral desde 1280 px; si no, en un cajón).
   // Se relee al cambiar un estado en la agenda, además de su sondeo.
   const [inClinicReloadKey, setInClinicReloadKey] = useState(0);
   const requestLocations = useSessionLocations(token);
   const inClinic = useInClinic(token, { reloadKey: inClinicReloadKey });
   const [inClinicOpen, setInClinicOpen] = useState(false);
+  const chooseLocationOnClose = useRef(false);
   const inClinicTotal = inClinic.view ? inClinicCount(inClinic.view) : null;
   // DX-210: el hueco libre (o la cita recién cancelada) a ocupar.
   const [fillSlot, setFillSlot] = useState<OpeningSlot | null>(null);
@@ -821,7 +793,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   /** `WeekTimeGrid`'s `onSelectDay` — jumps the day selector to the clicked column and switches back to Día view, mirroring a calendar "drill in" interaction. */
   function handleSelectDay(date: string) {
     setSelectedDate(date);
-    setViewMode('day');
+    setPickedView('day');
     setDetailAppointment(null);
   }
 
@@ -902,13 +874,14 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
    * stays put, nothing pushes the page. */
   function handleSelectMonthDay(date: string) {
     setSelectedDate(date);
-    setDayPanelOpen(true);
+    // En el teléfono la lista del día va debajo del calendario (sin hoja).
+    if (!phone) setDayPanelOpen(true);
   }
 
   /** Segmented "Vista" control — switches view and clears any open detail;
    * leaving Mes also closes the day panel. */
   function selectView(mode: ViewMode) {
-    setViewMode(mode);
+    setPickedView(mode);
     setDetailAppointment(null);
     if (mode !== 'month') setDayPanelOpen(false);
   }
@@ -1074,47 +1047,116 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   // «Mover a…» elige la fecha y la hora en el reloj de la sede de la cita.
   const movingClock = movingAppointment ? clock.of(movingAppointment.locationId) : null;
 
+  // La navegación del periodo, según la vista: ‹ › avanzan su unidad.
+  const nav =
+    viewMode === 'month'
+      ? {
+          label: monthLabel(selectedDate),
+          prevLabel: copy.prevMonth,
+          nextLabel: copy.nextMonth,
+          step: (d: number) => addMonths(selectedDate, d),
+        }
+      : viewMode === 'week'
+        ? {
+            label: weekRangeLabel(selectedDate),
+            prevLabel: copy.prevWeek,
+            nextLabel: copy.nextWeek,
+            step: (d: number) => addCivilDays(selectedDate, 7 * d),
+          }
+        : {
+            label: longDayLabel(selectedDate),
+            prevLabel: copy.prevDay,
+            nextLabel: copy.nextDay,
+            step: (d: number) => addCivilDays(selectedDate, d),
+          };
+
+  const counterClass = 'rounded-full bg-surface-active px-1.5 text-xs font-semibold tabular-nums text-ink';
+
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-5',
-        wide && 'grid grid-cols-[minmax(0,1fr)_20rem] items-start gap-6',
-      )}
-    >
-      <div className="flex min-w-0 flex-col gap-5">
-        {/* Lean control row: view segmented control + compact provider filter on
-            the left, the single primary action on the right. Date navigation is
-            contextual (below, with the calendar) — no fat toolbar card, no date
-            input that duplicates the "Nueva cita" form. */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <SegmentedControl
-              semantics="toggle"
-              aria-label={copy.viewLabel}
-              value={viewMode}
-              onValueChange={selectView}
-              options={VIEW_MODES.map((m) => ({ value: m, label: VIEW_LABEL[m] }))}
+    <div className="flex flex-col gap-5">
+      {/* Barra de la agenda. Fila 1: vista · ‹ › Hoy · fecha · periodo, y a la
+          derecha las dos acciones. Fila 2: el filtro de profesional (con su
+          etiqueta visible), la presentación del Día y, sin panel lateral,
+          «En clínica» y «Pendientes». Se parte en filas limpias a 900 y 390. */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <SegmentedControl
+            semantics="toggle"
+            fullWidthOnMobile
+            aria-label={copy.viewLabel}
+            value={viewMode}
+            onValueChange={selectView}
+            options={VIEW_MODES.map((m) => ({ value: m, label: VIEW_LABEL[m] }))}
+          />
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={nav.prevLabel}
+                onClick={() => setSelectedDate(nav.step(-1))}
+              >
+                <ChevronLeft />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={nav.nextLabel}
+                onClick={() => setSelectedDate(nav.step(1))}
+              >
+                <ChevronRight />
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setSelectedDate(today)}>
+                {copy.todayBtn}
+              </Button>
+            </div>
+            <AgendaDateField date={selectedDate} onDateChange={setSelectedDate} />
+          </div>
+          <h2 className="t-title min-w-0 text-ink first-letter:uppercase" data-testid="agenda-period">
+            {nav.label}
+          </h2>
+          <div className="ml-auto flex shrink-0 gap-2">
+            {/* En el teléfono «Bloquear horario» baja, como icono con su
+                nombre, a la fila de «En clínica» y «Pendientes»: así «Nueva
+                cita» cabe junto al periodo. */}
+            {canWriteBlocks && !phone ? (
+              <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
+                <CalendarOff aria-hidden /> {copy.blockSchedule}
+              </Button>
+            ) : null}
+            <Button type="button" onClick={openNewAppointment}>
+              <Plus /> {copy.newAppointment}
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          {staffError ? (
+            <FieldError
+              label={copy.staffFieldError}
+              onRetry={() => setStaffReloadKey((k) => k + 1)}
+              className="h-10"
             />
-            {staffError ? (
-              <FieldError
-                label={copy.staffFieldError}
-                onRetry={() => setStaffReloadKey((k) => k + 1)}
-                className="h-9"
-              />
-            ) : columnsMode ? (
-              <ProviderColumnsPicker
-                staff={staff}
-                selected={columnIds}
-                onChange={setPickedColumnIds}
-                disabled={staffLoading || staff.length === 0}
-              />
-            ) : (
-              <select
-                aria-label={copy.providerLabel}
+          ) : columnsMode ? (
+            <ProviderColumnsPicker
+              staff={staff}
+              selected={columnIds}
+              onChange={setPickedColumnIds}
+              disabled={staffLoading || staff.length === 0}
+            />
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
+              <label htmlFor="agenda-provider" className="t-label shrink-0 text-muted">
+                {copy.providerLabel}
+              </label>
+              <NativeSelect
+                id="agenda-provider"
                 disabled={staffLoading}
                 value={providerId}
                 onChange={(e) => setProviderId(e.target.value)}
-                className={cn(fieldClass, 'h-9 w-auto min-w-[11rem] text-sm')}
+                className="min-w-0 sm:w-56"
               >
                 <option value="">{copy.allProviders}</option>
                 {staff.map((s) => (
@@ -1122,12 +1164,25 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     {s.fullName}
                   </option>
                 ))}
-              </select>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* DX-200: «En clínica», en un cajón sin panel lateral. */}
-            {!wide ? (
+              </NativeSelect>
+            </div>
+          )}
+          {viewMode === 'day' ? (
+            <SegmentedControl
+              semantics="toggle"
+              size="sm"
+              aria-label={copy.dayLayoutLabel}
+              value={dayLayout}
+              onValueChange={setPickedDayLayout}
+              options={[
+                { value: 'columns' as const, label: copy.dayColumns },
+                { value: 'list' as const, label: copy.dayList },
+              ]}
+            />
+          ) : null}
+          {!wide ? (
+            <div className="flex w-full gap-2 sm:ml-auto sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
+              {/* DX-200: «En clínica», en un cajón sin panel lateral. */}
               <Button
                 type="button"
                 variant="secondary"
@@ -1142,60 +1197,53 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 }}
               >
                 <Armchair aria-hidden /> {copy.inClinicButton}
-                {inClinicTotal ? (
-                  <span className="rounded-full bg-surface-active px-1.5 text-xs font-semibold tabular-nums text-ink">
-                    {inClinicTotal}
-                  </span>
-                ) : null}
+                {inClinicTotal ? <span className={counterClass}>{inClinicTotal}</span> : null}
               </Button>
-            ) : null}
-            {/* DX-122: en pantallas sin panel lateral, los pendientes van en un cajón. */}
-            {!wide ? (
-            <Button
-              type="button"
-              variant="secondary"
-              aria-label={waitlistCount === null ? copy.waitlistButton : copy.waitlistButtonCount(waitlistCount)}
-              onClick={() => setWaitlistOpen(true)}
-            >
-              <ListTodo aria-hidden /> {copy.waitlistButton}
-              {waitlistCount ? (
-                <span className="rounded-full bg-surface-active px-1.5 text-xs font-semibold tabular-nums text-ink">
-                  {waitlistCount}
-                </span>
+              {/* DX-122: en pantallas sin panel lateral, los pendientes van en un cajón. */}
+              <Button
+                type="button"
+                variant="secondary"
+                aria-label={waitlistCount === null ? copy.waitlistButton : copy.waitlistButtonCount(waitlistCount)}
+                onClick={() => setWaitlistOpen(true)}
+              >
+                <ListTodo aria-hidden /> {copy.waitlistButton}
+                {waitlistCount ? <span className={counterClass}>{waitlistCount}</span> : null}
+              </Button>
+              {canWriteBlocks && phone ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="flex-none!"
+                  title={copy.blockSchedule}
+                  onClick={() => setShowBlockDialog(true)}
+                >
+                  <CalendarOff aria-hidden />
+                  <span className="sr-only">{copy.blockSchedule}</span>
+                </Button>
               ) : null}
-            </Button>
-            ) : null}
-            {canWriteBlocks ? (
-              <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
-                <CalendarOff aria-hidden /> {copy.blockSchedule}
-              </Button>
-            ) : null}
-            <Button type="button" onClick={openNewAppointment}>
-              <Plus /> {copy.newAppointment}
-            </Button>
-          </div>
+            </div>
+          ) : null}
         </div>
+      </div>
 
+      <div
+        className={cn(
+          'flex flex-col gap-5',
+          wide && 'grid grid-cols-[minmax(0,1fr)_18rem] items-start gap-6',
+        )}
+      >
+      <div className="flex min-w-0 flex-col gap-4">
         {appointmentsRefreshing && (
           <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
             {copy.refreshing}
           </p>
         )}
 
-        {/* The active view, full width — nothing renders below it, so the page
-            never grows a second scroll region. The day detail lives in a sheet. */}
+        {/* The active view, full width. The day detail lives in a sheet (on
+            the phone, the month's selected day is listed under the calendar). */}
         {viewMode === 'month' ? (
           <div className="flex flex-col gap-3">
-            <DateNav
-              label={monthLabel(selectedDate)}
-              prevLabel={copy.prevMonth}
-              nextLabel={copy.nextMonth}
-              date={selectedDate}
-              onDateChange={setSelectedDate}
-              onPrev={() => setSelectedDate(addMonths(selectedDate, -1))}
-              onNext={() => setSelectedDate(addMonths(selectedDate, 1))}
-              onToday={() => setSelectedDate(today)}
-            />
             <MonthAgenda
               appointments={appointments}
               clock={clock}
@@ -1206,20 +1254,37 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               loading={appointmentsLoading}
               error={appointmentsLoadError}
               onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+              compact={phone}
             />
+            <AgendaStatusLegend showAlert={!phone} />
+            {phone ? (
+              <section aria-labelledby="agenda-selected-day" className="flex flex-col gap-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 id="agenda-selected-day" className="t-title text-ink first-letter:uppercase">
+                    {longDayLabel(selectedDate)}
+                  </h3>
+                  <span className="t-caption tabular-nums text-muted">
+                    {copy.dayCount(selectedDayAppointments.length)}
+                  </span>
+                </div>
+                <DayAgenda
+                  appointments={selectedDayAppointments}
+                  clock={clock}
+                  loading={appointmentsLoading}
+                  error={appointmentsLoadError}
+                  onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+                  onStatusChange={handleStatusChange}
+                  role={role}
+                  updatingId={updatingId}
+                  onSelectAppointment={openAppointmentDetail}
+                  renderActions={renderFlowActions}
+                  providerName={staffName}
+                />
+              </section>
+            ) : null}
           </div>
         ) : viewMode === 'week' ? (
           <div className="flex flex-col gap-3">
-            <DateNav
-              label={weekRangeLabel(selectedDate)}
-              prevLabel={copy.prevWeek}
-              nextLabel={copy.nextWeek}
-              date={selectedDate}
-              onDateChange={setSelectedDate}
-              onPrev={() => setSelectedDate(addCivilDays(selectedDate, -7))}
-              onNext={() => setSelectedDate(addCivilDays(selectedDate, 7))}
-              onToday={() => setSelectedDate(today)}
-            />
             {/* `WeekTimeGrid` is purely presentational (no loading/error props,
                 unlike `DayAgenda`) — mirror `DayAgenda`'s own loading/error
                 branches here so Semana still surfaces the feedback the grid
@@ -1239,7 +1304,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 appointments={appointments}
                 clock={clock}
                 weekStart={civilWeekStart(selectedDate)}
-                  onSelectDay={handleSelectDay}
+                onSelectDay={handleSelectDay}
                 onSelectSlot={handleSelectSlot}
                 onSelectAppointment={(a) => setDetailAppointment(a)}
                 blocks={weekBlocks}
@@ -1247,31 +1312,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 selectedProviderId={providerId || null}
               />
             )}
+            <AgendaStatusLegend />
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <DateNav
-              label={longDayLabel(selectedDate)}
-              prevLabel={copy.prevDay}
-              nextLabel={copy.nextDay}
-              date={selectedDate}
-              onDateChange={setSelectedDate}
-              onPrev={() => setSelectedDate(addCivilDays(selectedDate, -1))}
-              onNext={() => setSelectedDate(addCivilDays(selectedDate, 1))}
-              onToday={() => setSelectedDate(today)}
-            />
-            <SegmentedControl
-              semantics="toggle"
-              size="sm"
-              className="self-start"
-              aria-label={copy.dayLayoutLabel}
-              value={dayLayout}
-              onValueChange={setDayLayout}
-              options={[
-                { value: 'columns' as const, label: copy.dayColumns },
-                { value: 'list' as const, label: copy.dayList },
-              ]}
-            />
             {columnsMode && offToday.length > 0 ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <span className="text-muted">{copy.hiddenProviders(offToday.length)}</span>
@@ -1298,6 +1342,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 updatingId={updatingId}
                 onSelectAppointment={openAppointmentDetail}
                 renderActions={renderFlowActions}
+                providerName={staffName}
               />
             ) : !staffLoading && !staffError && columnProviders.length === 0 ? (
               <p role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center text-sm text-muted">
@@ -1442,6 +1487,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 updatingId={updatingId}
                 onSelectAppointment={openAppointmentDetail}
                 renderActions={renderFlowActions}
+                providerName={staffName}
               />
             </SheetBody>
             <SheetFooter>
@@ -1627,11 +1673,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
         </Sheet>
       </div>
 
-      {/* DX-122: panel lateral fijo junto a la agenda (≥ 1400 px: a 1440 deja sitio a la tabla del día). */}
+      {/* DX-122: panel lateral fijo junto a la agenda (≥ 1280 px). */}
       {wide ? (
         <aside
           aria-label={`${inClinicCopy.title} · ${waitlistCopy.title}`}
-          className="sticky top-0 flex max-h-[calc(100dvh-4rem)] flex-col gap-8 overflow-y-auto"
+          className="sticky top-4 flex max-h-[calc(100dvh-6rem)] flex-col gap-6 divide-y divide-border-subtle overflow-y-auto overscroll-contain [&>*+*]:pt-6"
         >
           <InClinicPanel state={inClinic} role={role} runner={flow} />
           <WaitlistPanel
@@ -1663,15 +1709,33 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           </SheetContent>
         </Sheet>
       )}
+      </div>
       {!wide ? (
         <Sheet open={inClinicOpen} onOpenChange={setInClinicOpen}>
-          <SheetContent className="top-0 h-dvh max-h-none rounded-none border-t-0 sm:w-[26rem]">
+          <SheetContent
+            className="top-0 h-dvh max-h-none rounded-none border-t-0 sm:w-[26rem]"
+            onCloseAutoFocus={(event) => {
+              // «Elegir sede»: al cerrar la hoja, el foco va al selector de sede.
+              if (!chooseLocationOnClose.current) return;
+              chooseLocationOnClose.current = false;
+              event.preventDefault();
+              focusLocationSwitcher();
+            }}
+          >
             <SheetHeader className="sr-only">
               <SheetTitle>{inClinicCopy.title}</SheetTitle>
               <SheetDescription>{copy.inClinicSheetDescription}</SheetDescription>
             </SheetHeader>
             <SheetBody className="pt-14">
-              <InClinicPanel state={inClinic} role={role} runner={flow} />
+              <InClinicPanel
+                state={inClinic}
+                role={role}
+                runner={flow}
+                onChooseLocation={() => {
+                  chooseLocationOnClose.current = true;
+                  setInClinicOpen(false);
+                }}
+              />
             </SheetBody>
           </SheetContent>
         </Sheet>

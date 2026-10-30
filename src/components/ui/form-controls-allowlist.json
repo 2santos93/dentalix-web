@@ -12,7 +12,6 @@
     "radio": 1
   },
   "src/components/appointments/agenda-view.tsx": {
-    "select": 2,
     "checkbox": 2
   },
   "src/components/appointments/appointment-form.tsx": {

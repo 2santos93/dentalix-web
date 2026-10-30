@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
@@ -80,7 +81,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   // DX-121: el Día abre en columnas; la fila con estado está en «Lista».
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  await fillDate(page, 'Fecha', day);
 
   const row = page.locator('table tr', { hasText: `Camila Confirma${suffix}` });
   await expect(row).toBeVisible({ timeout: 10_000 });
@@ -129,7 +130,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   // DX-121: el Día abre en columnas; la fila con estado está en «Lista».
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  await fillDate(page, 'Fecha', day);
   await expect(row.getByRole('combobox', { name: /Estado de la cita de/ })).toHaveText('Agendada', { timeout: 10_000 });
 
   // Segundo clic: confirmar.
@@ -147,7 +148,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   // DX-121: el Día abre en columnas; la fila con estado está en «Lista».
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  await fillDate(page, 'Fecha', day);
   await expect(row.getByRole('combobox', { name: /Estado de la cita de/ })).toHaveText('Confirmada', { timeout: 10_000 });
   await expect(row.getByText('Confirmación pendiente')).toHaveCount(0);
 });

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -181,7 +182,7 @@ test('agenda Día: en la sede B el lunes no sale (con «Mostrar todos»); en la 
   await useSede(page, sedeBId);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(MONDAY);
+  await fillDate(page, 'Fecha', MONDAY);
 
   const ximena = page.locator(`[data-testid="day-column"][data-provider-id="${dentistId}"]`);
   await expect(page.getByText('1 profesional no atiende este día en esta sede.')).toBeVisible({ timeout: 15_000 });
@@ -194,7 +195,7 @@ test('agenda Día: en la sede B el lunes no sale (con «Mostrar todos»); en la 
   await useSede(page, sedeAId);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(MONDAY);
+  await fillDate(page, 'Fecha', MONDAY);
   await expect(ximena).toHaveCount(1, { timeout: 15_000 });
   await expect(page.getByText(/no atiende este día en esta sede/)).toBeHidden();
   await expect(page.locator('[data-testid="day-column-header"]').filter({ hasText: dentist.fullName })).toContainText(
@@ -243,7 +244,7 @@ test('una cita fuera de su horario se agenda con el aviso; «Buscar hueco» en l
   await useSede(page, sedeAId);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(plusDays(MONDAY, 1));
+  await fillDate(page, 'Fecha', plusDays(MONDAY, 1));
 
   // Martes en la sede A: no trabaja. Se cita igual (Mostrar todos) y avisa.
   await page.getByRole('checkbox', { name: 'Mostrar todos' }).check({ timeout: 15_000 });

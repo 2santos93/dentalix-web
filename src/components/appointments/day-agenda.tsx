@@ -29,6 +29,7 @@ const copy = {
   colTime: 'Hora',
   colPatient: 'Paciente',
   colReason: 'Motivo',
+  colProvider: 'Profesional',
   colStatus: 'Estado',
   reasonFallback: '—',
   heading: 'Agenda del día',
@@ -82,6 +83,12 @@ interface DayAgendaProps {
   renderActions?: (appointment: Appointment) => ReactNode;
   /** DX-273: rol del usuario; de «Completada» solo salen ADMIN y DENTIST. */
   role?: ClinicRole | null;
+  /**
+   * Nombre del profesional de la cita. Con él, la lista dice quién atiende
+   * (columna en la tabla, línea en la tarjeta): en el teléfono la lista es la
+   * agenda de toda la clínica.
+   */
+  providerName?: (providerId: string) => string | undefined;
 }
 
 function DetailButton({
@@ -167,6 +174,7 @@ export function DayAgenda({
   onSelectAppointment,
   renderActions,
   role,
+  providerName,
 }: DayAgendaProps) {
   if (loading) {
     return (
@@ -227,6 +235,11 @@ export function DayAgenda({
               <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
                 {copy.colPatient}
               </th>
+              {providerName && (
+                <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+                  {copy.colProvider}
+                </th>
+              )}
               <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
                 {copy.colReason}
               </th>
@@ -266,6 +279,11 @@ export function DayAgenda({
                     </span>
                     {renderActions?.(appointment)}
                   </td>
+                  {providerName && (
+                    <td className="px-4 py-3 text-ink">
+                      {providerName(appointment.providerId) ?? copy.reasonFallback}
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-muted">
                     {appointment.reason ?? copy.reasonFallback}
                   </td>
@@ -324,7 +342,11 @@ export function DayAgenda({
                   size="default"
                 />
               </p>
-              <p className="mt-0.5 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
+              <p className="mt-0.5 text-muted">
+                {[providerName?.(appointment.providerId), appointment.reason ?? copy.reasonFallback]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
               <ConfirmationBadge appointment={appointment} className="mt-2" />
               <OverdueChip balance={appointment.balance} className="mt-2" />
               <CoverageChip coverage={appointment.coverage} compact className="mt-2" />

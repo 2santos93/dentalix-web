@@ -237,13 +237,15 @@ export function WeekTimeGrid({
                     onClick={() => onSelectAppointment(a)}
                     className={`h-full w-full overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${hasMedicalAlert ? 'pr-6' : ''} ${STATUS_BADGE_CLASSES[a.status]}`}
                   >
-                    <span className="flex items-center gap-1 font-medium">
+                    {/* El paciente primero (lo que se busca en una columna de
+                        ~100 px); debajo, estado (icono + etiqueta del tono) y hora. */}
+                    <span className="block truncate font-semibold">{patient}</span>
+                    <span className="flex min-w-0 items-center gap-1">
                       <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />
-                      <span className="truncate">{range}</span>
+                      <span className="truncate tabular-nums">{range}</span>
                       <ConfirmationBadge appointment={a} compact />
                       <CoverageMarker coverage={a.coverage} srText />
                     </span>
-                    <span className="block truncate">{patient}</span>
                     {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
                     <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
                     {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}

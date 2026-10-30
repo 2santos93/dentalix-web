@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -138,14 +139,16 @@ function backdateAnaHistory(): void {
 async function openDay(page: Page, day: string) {
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  // En el teléfono el Día abre en «Lista»; aquí se prueban las columnas.
+  await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+  await fillDate(page, 'Fecha', day);
 }
 
 function card(page: Page, firstName: string): Locator {
   return page.getByTestId('day-column-appointment').filter({ hasText: `${firstName} ${last}` });
 }
 
-test('DX-264 Mes: tres alertas, +1 más, teclado y toque a 390/1440 claro y oscuro', async ({ page }) => {
+test('DX-264 Mes: solo la marca de la alerta crítica, +1 más y el panel del día a 1440; puntos y lista del día a 390 (claro y oscuro)', async ({ page }) => {
   test.setTimeout(120_000);
   test.skip(!process.env.E2E_DATABASE_URL, 'Requiere la BD e2e aislada para fechar la anamnesis');
   backdateAnaHistory();
@@ -183,58 +186,45 @@ test('DX-264 Mes: tres alertas, +1 más, teclado y toque a 390/1440 claro y oscu
   for (const appointment of body) expect(appointment).not.toHaveProperty('notes');
   expect(JSON.stringify(body)).not.toContain('Nota privada de cita DX264');
   const day = page.getByTestId('calendar-day').filter({ has: page.locator(`[data-testid="month-appointment"]`) }).and(page.locator(`[data-date="${tomorrow}"]`));
-  for (const width of [390, 1440]) {
+  for (const width of [1440, 390]) {
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.emulateMedia({ colorScheme });
+      if (width === 390) {
+        // K4: en el teléfono el Mes es de puntos (uno por cita, hasta 3): ni
+        // texto ni iconos en la celda. Tocar el día lista sus citas debajo,
+        // con las tres alertas (premedicación, anamnesis caducada, sin anamnesis).
+        await expect(day.getByTestId('month-appointment')).toHaveCount(3);
+        await expect(day.getByTestId('medical-alert-indicator')).toHaveCount(0);
+        await day.getByRole('button', { name: /citas$/ }).click();
+        const list = page.getByRole('list', { name: 'Agenda del día' }).filter({ visible: true });
+        await expect(list.getByRole('listitem')).toHaveCount(4);
+        await expect(list.getByTestId('medical-alert-indicator')).toHaveCount(3);
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+        await expectNoHorizontalScroll(page);
+        await shot(page, `agenda-mes-alertas-${width}-${colorScheme}`);
+        continue;
+      }
       await expect(day.getByTestId('month-appointment')).toHaveCount(3);
       await expect(day.getByText('+1 más', { exact: true })).toBeVisible();
-      const icons = day.getByTestId('medical-alert-indicator');
-      await expect(icons).toHaveCount(3);
-      const labels = ['Requiere premedicación', 'Anamnesis caducada', 'Sin anamnesis'];
-      for (let i = 0; i < labels.length; i++) {
-        const icon = icons.nth(i);
-        await expect(icon).toHaveAccessibleDescription(new RegExp(labels[i]));
-        await page.mouse.move(0, 0);
-        await day.getByRole('button', { name: /citas$/ }).focus();
-        await page.keyboard.press('Escape');
-        await icon.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
-        const touchHits = await icon.evaluate((el) => {
-          const r = el.getBoundingClientRect();
-          const x = (r.left + r.right) / 2;
-          const y = (r.top + r.bottom) / 2;
-          return [[-21.5, -21.5], [21.5, -21.5], [-21.5, 21.5], [21.5, 21.5]].map(([dx, dy]) =>
-            document.elementFromPoint(x + dx, y + dy)?.closest('[data-testid="medical-alert-indicator"]') === el,
-          );
-        });
-        expect(touchHits, `${width}/${colorScheme}/alerta ${i}`).toEqual([true, true, true, true]);
-        await icon.click();
-        const popover = page.getByTestId('medical-alert-popover');
-        await expect(popover).toContainText(labels[i]);
-        const box = await popover.boundingBox();
-        expect(box!.x).toBeGreaterThanOrEqual(0);
-        expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-        await page.keyboard.press('Escape');
-      }
-      await icons.first().focus();
-      await expect(page.getByTestId('medical-alert-popover')).toContainText(labels[0]);
-      await page.keyboard.press('Escape');
-      await expect(icons.first()).toBeFocused();
+      // K4: en el Mes solo la alerta crítica deja marca (12 px, no un botón:
+      // la celda es el objetivo); la anamnesis caducada o ausente vive en el
+      // Día, la Semana y el detalle. La marca lleva su texto para lectores.
+      await expect(day.getByTestId('medical-alert-indicator')).toHaveCount(0);
+      const marker = day.getByTestId('month-alert-marker');
+      await expect(marker).toHaveCount(1);
+      await expect(marker).toContainText('Requiere premedicación');
+      await expect(day.getByTestId('month-appointment').filter({ has: marker })).toContainText(/Jorge \S\./);
       expect(await day.locator('button button').count()).toBe(0);
       await expectNoHorizontalScroll(page);
-      const contained = await day.evaluate((cell) => {
-        const c = cell.getBoundingClientRect();
-        return [...cell.querySelectorAll('[data-testid="medical-alert-indicator"]')].every((el) => {
-          const r = el.getBoundingClientRect();
-          const center = (r.left + r.right) / 2;
-          return center - 22 >= c.left && center + 22 <= c.right;
-        });
-      });
-      expect(contained).toBe(true);
+      // Con el teclado: la celda abre el panel del día con las tres alertas.
       await page.mouse.move(0, 0);
       await day.getByRole('button', { name: /citas$/ }).focus();
+      await page.keyboard.press('Enter');
+      const panel = page.getByRole('dialog');
+      await expect(panel.getByTestId('medical-alert-indicator')).toHaveCount(3);
       await page.keyboard.press('Escape');
-      await expect(page.getByTestId('medical-alert-popover')).toBeHidden();
+      await expect(panel).toBeHidden();
       await day.scrollIntoViewIfNeeded();
       await shot(page, `agenda-mes-alertas-${width}-${colorScheme}`);
       if (QA) await day.screenshot({ path: path.join(QA_DIR, `agenda-mes-celda-${width}-${colorScheme}.png`), animations: 'disabled' });

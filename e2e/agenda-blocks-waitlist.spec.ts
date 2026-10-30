@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { confirmCancellation } from './support/cancellation';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
@@ -104,7 +105,7 @@ function column(page: Page, name: string): Locator {
 async function openDay(page: Page, day: string) {
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  await fillDate(page, 'Fecha', day);
   await expect(page.getByTestId('day-column').first()).toBeVisible({ timeout: 15_000 });
 }
 
