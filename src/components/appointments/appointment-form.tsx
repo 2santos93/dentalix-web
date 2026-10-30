@@ -31,6 +31,7 @@ import { civilWeekday } from '@/lib/time/civil-day';
 import { wallInstant } from '@/lib/time/wall-clock';
 import { UserPlus, Loader2, Search, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import {
   Dialog,
   DialogContent,
@@ -763,14 +764,10 @@ export function AppointmentForm({
         const name = staff.find((s) => s.userId === providerId)?.fullName ?? '';
         const ranges = sedeMinuteRanges(providerDay.ranges ?? [], clock.fmt);
         return (
-          <p
-            role="status"
-            data-testid="provider-off-schedule"
-            className="rounded-lg border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-ink"
-          >
+          <Callout tone="warning" role="status" data-testid="provider-off-schedule">
             {copy.providerOffSchedule(name, ranges)}{' '}
             {providerDay.strict ? copy.providerOffScheduleStrict : copy.providerOffScheduleAllowed}
-          </p>
+          </Callout>
         );
       })()}
       {validationError && <InlineError>{validationError}</InlineError>}

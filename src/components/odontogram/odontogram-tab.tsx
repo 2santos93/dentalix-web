@@ -32,6 +32,7 @@ import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catal
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { formatCivilDate } from '@/lib/format/date';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Callout } from '@/components/ui/callout';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Input } from '@/components/ui/input';
@@ -411,12 +412,9 @@ export function OdontogramTab({
         </div>
 
         {shownAsOf ? (
-          <p
-            role="status"
-            className="rounded-lg border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-ink"
-          >
+          <Callout tone="warning" role="status">
             {copy.asOfNotice(formatCivilDate(`${shownAsOf}T00:00:00.000Z`))}
-          </p>
+          </Callout>
         ) : null}
 
         {/* The chart and its key read as one object: the field, then its

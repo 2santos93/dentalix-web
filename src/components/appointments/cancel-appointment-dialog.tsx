@@ -1,7 +1,6 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   updateAppointment,
@@ -32,6 +31,7 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Label } from '@/components/ui/label';
+import { Callout } from '@/components/ui/callout';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 
@@ -350,14 +350,9 @@ function NoticeLine({
   }
   if (warning) {
     return (
-      <p
-        role="alert"
-        data-testid="late-cancellation-warning"
-        className="flex items-start gap-2 rounded-lg bg-warning-subtle px-3 py-2 text-sm font-medium text-ink"
-      >
-        <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
-        <span>{warning}</span>
-      </p>
+      <Callout tone="warning" role="alert" data-testid="late-cancellation-warning">
+        {warning}
+      </Callout>
     );
   }
   if (byKind === null) return null;

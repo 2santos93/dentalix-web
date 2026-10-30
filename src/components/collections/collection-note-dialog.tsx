@@ -15,6 +15,7 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { cn } from '@/lib/utils';
+import { Callout } from '@/components/ui/callout';
 
 export const noteDialogCopy = {
   title: 'Registrar gestión',
@@ -140,10 +141,9 @@ export function CollectionNoteDialog({ open, onOpenChange, token, patient, onSav
         </FormField>
       </div>
       <FormField htmlFor="cn-text" label={noteDialogCopy.text} error={errors.text}>
-        <p id="cn-text-warning-text" className="flex items-start gap-1.5 rounded-lg bg-warning-subtle px-3 py-2 text-xs text-warning-text">
-          <ShieldAlert aria-hidden className="mt-px size-4 shrink-0" />
+        <Callout id="cn-text-warning-text" tone="warning" role="note" icon={ShieldAlert}>
           {noteDialogCopy.clinicalWarning}
-        </p>
+        </Callout>
         <textarea
           id="cn-text"
           value={text}
