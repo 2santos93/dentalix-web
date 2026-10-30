@@ -18982,7 +18982,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentMethodDto"];
                 };
             };
-            /** @description Campo inválido */
+            /** @description Campo inválido, o cambio del tipo base de un medio inicial (DX-377). */
             400: {
                 headers: {
                     [name: string]: unknown;
