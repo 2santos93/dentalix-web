@@ -215,7 +215,10 @@ export interface paths {
         };
         get: operations["StaffInvitationsController_list"];
         put?: never;
-        /** Invita a una persona: crea la invitación y encola el email con el enlace (se envía en segundo plano) */
+        /**
+         * Invita a una persona: crea la invitación y encola el email con el enlace (se envía en segundo plano)
+         * @description Queda en la auditoría (CREATE de STAFF_INVITATION con el rol; la pendiente que sustituye, como VOID INVITATION_REPLACED).
+         */
         post: operations["StaffInvitationsController_create"];
         delete?: never;
         options?: never;
@@ -232,7 +235,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reenvía una invitación pendiente: token nuevo (el anterior deja de servir), 7 días más y un email nuevo */
+        /**
+         * Reenvía una invitación pendiente: token nuevo (el anterior deja de servir), 7 días más y un email nuevo
+         * @description Queda en la auditoría (UPDATE de STAFF_INVITATION, INVITATION_RESENT), sin el token.
+         */
         post: operations["StaffInvitationsController_resend"];
         delete?: never;
         options?: never;
@@ -250,6 +256,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /**
+         * Retira una invitación pendiente (su enlace deja de servir)
+         * @description Queda en la auditoría (VOID de STAFF_INVITATION, INVITATION_REVOKED).
+         */
         delete: operations["StaffInvitationsController_remove"];
         options?: never;
         head?: never;
@@ -303,6 +313,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Cambia tu nombre
+         * @description Solo con sesión de clínica. Queda en su auditoría (OWN_NAME_CHANGED) sin el valor del nombre; sin evento si no cambia.
+         */
         patch: operations["MeController_updateName"];
         trace?: never;
     };
@@ -315,6 +329,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Cambia tu contraseña y cierra tus demás sesiones
+         * @description Queda auditado (PASSWORD_CHANGE): en la clínica de la sesión o, con sesión de plataforma, en platform_audit_events. Solo el hecho: ni la contraseña ni su hash.
+         */
         post: operations["MeController_changePassword"];
         delete?: never;
         options?: never;
@@ -1412,9 +1430,17 @@ export interface paths {
         get: operations["StaffController_detail"];
         put?: never;
         post?: never;
+        /**
+         * Desactiva un miembro (baja lógica de su membresía)
+         * @description Queda en la auditoría (STAFF_DEACTIVATED) con el estado antes y después.
+         */
         delete: operations["StaffController_remove"];
         options?: never;
         head?: never;
+        /**
+         * Cambia nombre, rol, registro profesional o especialidad de un miembro
+         * @description Queda en la auditoría (STAFF_UPDATED) con los campos cambiados y, salvo el nombre, su valor anterior y nuevo. Ascender a ADMIN le da todas las sedes.
+         */
         patch: operations["StaffController_update"];
         trace?: never;
     };
@@ -1427,6 +1453,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Reactiva un miembro desactivado
+         * @description Queda en la auditoría (STAFF_REACTIVATED) con el estado antes y después.
+         */
         post: operations["StaffController_reactivate"];
         delete?: never;
         options?: never;
@@ -3492,7 +3522,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Inicia el alta del MFA: genera un secreto (pendiente hasta confirmarlo) y devuelve el otpauth URI */
+        /**
+         * Inicia el alta del MFA: genera un secreto (pendiente hasta confirmarlo) y devuelve el otpauth URI
+         * @description Queda en platform_audit_events (MFA_ENROLLMENT_STARTED) sin el secreto ni el URI.
+         */
         post: operations["PlatformMfaController_start"];
         delete?: never;
         options?: never;
@@ -3509,7 +3542,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirma el alta con un código de la app y activa el MFA */
+        /**
+         * Confirma el alta con un código de la app y activa el MFA
+         * @description Queda en platform_audit_events (MFA_ENABLED) sin el código ni el secreto.
+         */
         post: operations["PlatformMfaController_confirm"];
         delete?: never;
         options?: never;
@@ -4689,9 +4725,9 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
+        AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -4835,6 +4871,17 @@ export interface components {
             before: components["schemas"]["AuditHealthRegistrationSideDto"];
             after: components["schemas"]["AuditHealthRegistrationSideDto"];
         };
+        AuditStaffAccessSideDto: {
+            role?: components["schemas"]["ClinicRole"];
+            /** @description Sedes permitidas; `null` = todas. */
+            locationIds?: string[] | null;
+            professionalLicense?: string | null;
+            professionalSpecialty?: string | null;
+        };
+        AuditStaffAccessChangeDto: {
+            before?: components["schemas"]["AuditStaffAccessSideDto"];
+            after?: components["schemas"]["AuditStaffAccessSideDto"];
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -4864,6 +4911,8 @@ export interface components {
             cancellation?: components["schemas"]["AuditCancellationDto"];
             /** @description DX-319: nº de registro sanitario de una sede y si sale en los documentos, antes y después (dato público de la sede, nunca de un paciente). */
             healthRegistration?: components["schemas"]["AuditHealthRegistrationChangeDto"];
+            /** @description DX-359: accesos de un miembro antes y después (rol, sedes, nº de registro profesional, especialidad): solo lo que cambió, o un lado en un alta (invitación, aceptación, registro). Nunca el nombre, el email ni nada de la contraseña. */
+            staffAccess?: components["schemas"]["AuditStaffAccessChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -14443,6 +14492,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description No hay una invitación pendiente con ese id en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PublicInvitationsController_getByToken: {
@@ -14544,6 +14600,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MyProfileDto"];
                 };
+            };
+            /** @description Sin sesión de clínica */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -17786,7 +17849,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Desactivado */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Miembro no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Es tu propia cuenta o el último ADMIN */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17817,6 +17895,20 @@ export interface operations {
                     "application/json": components["schemas"]["StaffMemberDto"];
                 };
             };
+            /** @description Miembro no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Degradaría al último ADMIN */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     StaffController_reactivate: {
@@ -17837,6 +17929,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StaffMemberDto"];
                 };
+            };
+            /** @description No hay membresía desactivada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
