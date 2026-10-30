@@ -1,7 +1,7 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
-import ts from 'typescript';
-import { COUNTRIES } from '@/lib/locations/countries';
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
+import ts from "typescript";
+import { COUNTRIES } from "@/lib/locations/countries";
 
 /**
  * GLOBAL-G1 (spec §9 web, R2, R5): ningún código de la web deduce la moneda o
@@ -15,7 +15,7 @@ import { COUNTRIES } from '@/lib/locations/countries';
  * líneas de comentario y sin las claves de `ZONE_CITY_LABELS`
  * (`lib/format/date.ts`), que pintan una zona elegida y no la sustituyen.
  */
-const SRC = join(__dirname, '..');
+const SRC = join(__dirname, "..");
 /**
  * Una etiqueta regional: idioma con región (`es-CO`, `es-419`), con escritura
  * (`zh-Hant`, `sr-Latn`) o con las dos (`zh-Hant-TW`). Un idioma solo (`'es'`,
@@ -41,40 +41,57 @@ function sourceFiles(dir: string): string[] {
 }
 
 function scanned(path: string): boolean {
-  const rel = relative(SRC, path).split(sep).join('/');
+  const rel = relative(SRC, path).split(sep).join("/");
   if (/\.test\./.test(rel)) return false;
-  if (rel.startsWith('lib/test/')) return false;
+  if (rel.startsWith("lib/test/")) return false;
   // Generado desde el OpenAPI de la API: sus `example` no son valores de reserva.
-  if (rel === 'lib/api/schema.d.ts') return false;
-  if (/fixture/.test(rel.split('/').pop() ?? '')) return false;
+  if (rel === "lib/api/schema.d.ts") return false;
+  if (/fixture/.test(rel.split("/").pop() ?? "")) return false;
   return true;
 }
 
 function hits(path: string): string[] {
-  return readFileSync(path, 'utf8')
-    .split('\n')
+  return readFileSync(path, "utf8")
+    .split("\n")
     .map((line, i) => ({ line, n: i + 1 }))
-    .filter(({ line }) => FORBIDDEN.test(line) && !ZONE_LABEL_KEY.test(line) && !COMMENT_LINE.test(line))
+    .filter(
+      ({ line }) =>
+        FORBIDDEN.test(line) &&
+        !ZONE_LABEL_KEY.test(line) &&
+        !COMMENT_LINE.test(line),
+    )
     .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`);
 }
 
-describe('arquitectura: sin moneda ni zona de reserva (GLOBAL-G1)', () => {
+describe("arquitectura: sin moneda ni zona de reserva (GLOBAL-G1)", () => {
   const files = sourceFiles(SRC).filter(scanned);
 
-  it('src/ has no COUNTRY_CURRENCY, DEFAULT_SEDE_TIME_ZONE, Bogotá, COP or USD fallbacks', () => {
+  it("src/ has no COUNTRY_CURRENCY, DEFAULT_SEDE_TIME_ZONE, Bogotá, COP or USD fallbacks", () => {
     expect(files.flatMap(hits)).toEqual([]);
   });
 
-  it('the scan covers the screens of this unit and skips fixtures', () => {
-    const rels = files.map((f) => relative(SRC, f).split(sep).join('/'));
-    expect(rels).toEqual(expect.arrayContaining(['components/dashboard/dashboard-view.tsx', 'lib/format/date.ts']));
-    expect(rels.some((r) => r.startsWith('lib/test/') || r.includes('.test.') || r.includes('fixture'))).toBe(false);
+  it("the scan covers the screens of this unit and skips fixtures", () => {
+    const rels = files.map((f) => relative(SRC, f).split(sep).join("/"));
+    expect(rels).toEqual(
+      expect.arrayContaining([
+        "components/dashboard/dashboard-view.tsx",
+        "lib/format/date.ts",
+      ]),
+    );
+    expect(
+      rels.some(
+        (r) =>
+          r.startsWith("lib/test/") ||
+          r.includes(".test.") ||
+          r.includes("fixture"),
+      ),
+    ).toBe(false);
   });
 
-  it('the pattern catches every quote style and the locale/UTC fallbacks', () => {
+  it("the pattern catches every quote style and the locale/UTC fallbacks", () => {
     for (const line of [
       `currency ?? "COP"`,
-      'x = `USD`',
+      "x = `USD`",
       "c = 'EUR'",
       "zone ?? 'UTC'",
       "zone || 'UTC'",
@@ -105,37 +122,38 @@ const HOUR_CYCLE_LITERAL = new RegExp(
   String.raw`hourCycle\s*:\s*['"\`]h(?:11|12|23|24)['"\`]|${FALLBACK}['"\`]h(?:11|12|23|24)['"\`]`,
 );
 const LOCALE_EXEMPT: Record<string, RegExp> = {
-  'lib/format/date.ts': /.*/,
-  'lib/format/regional-format.ts': /^\s*dateFormatter\('en-US', \{$/,
+  "lib/format/date.ts": /.*/,
+  "lib/format/regional-format.ts": /^\s*dateFormatter\('en-US', \{$/,
 };
 
 function regionalHits(path: string): string[] {
-  const rel = relative(SRC, path).split(sep).join('/');
+  const rel = relative(SRC, path).split(sep).join("/");
   const exempt = LOCALE_EXEMPT[rel];
-  const inFormat = rel.startsWith('lib/format/');
-  return readFileSync(path, 'utf8')
-    .split('\n')
+  const inFormat = rel.startsWith("lib/format/");
+  return readFileSync(path, "utf8")
+    .split("\n")
     .map((line, i) => ({ line, n: i + 1 }))
     .filter(({ line }) => !COMMENT_LINE.test(line))
     .filter(
       ({ line }) =>
-        (REGIONAL_LOCALE.test(line) && !exempt?.test(line)) || (!inFormat && HOUR_CYCLE_LITERAL.test(line)),
+        (REGIONAL_LOCALE.test(line) && !exempt?.test(line)) ||
+        (!inFormat && HOUR_CYCLE_LITERAL.test(line)),
     )
     .map(({ line, n }) => `${rel}:${n}: ${line.trim()}`);
 }
 
-describe('arquitectura: sin formato regional ni reloj fijos (G1-B)', () => {
+describe("arquitectura: sin formato regional ni reloj fijos (G1-B)", () => {
   const files = sourceFiles(SRC).filter(scanned);
 
-  it('architecture: no regional locale literal in src outside lib/format/date.ts', () => {
+  it("architecture: no regional locale literal in src outside lib/format/date.ts", () => {
     expect(files.flatMap(regionalHits)).toEqual([]);
   });
 
-  it('the patterns catch every quote style, Intl and toLocale calls and clock literals', () => {
+  it("the patterns catch every quote style, Intl and toLocale calls and clock literals", () => {
     for (const line of [
       "value.toLocaleString('es-CO')",
       'new Intl.DateTimeFormat("ja-JP", {',
-      'const locale = `de-DE`;',
+      "const locale = `de-DE`;",
       "    'fr-FR',",
       "new Intl.NumberFormat('es-419')",
       "locale = 'zh-Hant'",
@@ -147,27 +165,44 @@ describe('arquitectura: sin formato regional ni reloj fijos (G1-B)', () => {
     for (const line of [
       "      hourCycle: 'h23',",
       'hourCycle ?? "h12"',
-      'f({ hourCycle: `h11` })',
+      "f({ hourCycle: `h11` })",
       "regionalFormat({ locale, hourCycle: hourCycle || 'h23' })",
-      'cycle || `h12`',
+      "cycle || `h12`",
     ]) {
       expect([line, HOUR_CYCLE_LITERAL.test(line)]).toEqual([line, true]);
     }
-    expect(REGIONAL_LOCALE.test("toLocaleDateString('es', options)")).toBe(false);
+    expect(REGIONAL_LOCALE.test("toLocaleDateString('es', options)")).toBe(
+      false,
+    );
     expect(REGIONAL_LOCALE.test("const UI_LANGUAGE = 'es';")).toBe(false);
-    expect(REGIONAL_LOCALE.test("import x from '@/lib/format/date';")).toBe(false);
-    expect(REGIONAL_LOCALE.test('regionalFormat({ locale: view.locale, hourCycle: view.hourCycle })')).toBe(false);
-    expect(HOUR_CYCLE_LITERAL.test('regionalFormat({ locale, hourCycle })')).toBe(false);
+    expect(REGIONAL_LOCALE.test("import x from '@/lib/format/date';")).toBe(
+      false,
+    );
+    expect(
+      REGIONAL_LOCALE.test(
+        "regionalFormat({ locale: view.locale, hourCycle: view.hourCycle })",
+      ),
+    ).toBe(false);
+    expect(
+      HOUR_CYCLE_LITERAL.test("regionalFormat({ locale, hourCycle })"),
+    ).toBe(false);
   });
 
-  it('the exemptions are only the neutral formatters of lib/format', () => {
-    const date = files.find((f) => relative(SRC, f).split(sep).join('/') === 'lib/format/date.ts');
+  it("the exemptions are only the neutral formatters of lib/format", () => {
+    const date = files.find(
+      (f) => relative(SRC, f).split(sep).join("/") === "lib/format/date.ts",
+    );
     expect(date).toBeDefined();
-    expect(readFileSync(date!, 'utf8')).toMatch(/'en-US'/);
-    const helper = readFileSync(join(SRC, 'lib/format/regional-format.ts'), 'utf8');
-    expect(helper.split('\n').filter((l) => REGIONAL_LOCALE.test(l) && !COMMENT_LINE.test(l))).toEqual([
-      "    dateFormatter('en-US', {",
-    ]);
+    expect(readFileSync(date!, "utf8")).toMatch(/'en-US'/);
+    const helper = readFileSync(
+      join(SRC, "lib/format/regional-format.ts"),
+      "utf8",
+    );
+    expect(
+      helper
+        .split("\n")
+        .filter((l) => REGIONAL_LOCALE.test(l) && !COMMENT_LINE.test(l)),
+    ).toEqual(["    dateFormatter('en-US', {"]);
   });
 });
 
@@ -179,25 +214,28 @@ describe('arquitectura: sin formato regional ni reloj fijos (G1-B)', () => {
 const COUNTRY_WORD = /countr(?:y|ies)/i;
 
 function locationCalendarFiles(): string[] {
-  const lib = readdirSync(join(SRC, 'lib/locations'))
+  const lib = readdirSync(join(SRC, "lib/locations"))
     .filter((name) => /^location-calendar.*\.ts$/.test(name))
-    .map((name) => join(SRC, 'lib/locations', name));
-  const screens = join(SRC, 'components/location-calendar');
+    .map((name) => join(SRC, "lib/locations", name));
+  const screens = join(SRC, "components/location-calendar");
   const components = existsSync(screens) ? sourceFiles(screens) : [];
   return [...lib, ...components].filter(scanned);
 }
 
-describe('arquitectura: calendario de la sede sin país (DX-316)', () => {
-  it('location calendar files never mention a country', () => {
+describe("arquitectura: calendario de la sede sin país (DX-316)", () => {
+  it("location calendar files never mention a country", () => {
     const files = locationCalendarFiles();
-    const rels = files.map((f) => relative(SRC, f).split(sep).join('/'));
+    const rels = files.map((f) => relative(SRC, f).split(sep).join("/"));
     expect(rels).toEqual(
-      expect.arrayContaining(['lib/locations/location-calendar.ts', 'lib/locations/location-calendar-api.ts']),
+      expect.arrayContaining([
+        "lib/locations/location-calendar.ts",
+        "lib/locations/location-calendar-api.ts",
+      ]),
     );
-    expect(rels.some((r) => r.includes('.test.'))).toBe(false);
+    expect(rels.some((r) => r.includes(".test."))).toBe(false);
     const mentions = files.flatMap((path) =>
-      readFileSync(path, 'utf8')
-        .split('\n')
+      readFileSync(path, "utf8")
+        .split("\n")
         .map((line, i) => ({ line, n: i + 1 }))
         .filter(({ line }) => COUNTRY_WORD.test(line))
         .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
@@ -205,11 +243,18 @@ describe('arquitectura: calendario de la sede sin país (DX-316)', () => {
     expect(mentions).toEqual([]);
   });
 
-  it('the country pattern catches singular, plural and any case, not the Spanish copy', () => {
-    for (const line of ['countryCode', '// Country', 'const COUNTRIES = []', 'byCountries(x)']) {
+  it("the country pattern catches singular, plural and any case, not the Spanish copy", () => {
+    for (const line of [
+      "countryCode",
+      "// Country",
+      "const COUNTRIES = []",
+      "byCountries(x)",
+    ]) {
       expect([line, COUNTRY_WORD.test(line)]).toEqual([line, true]);
     }
-    expect(COUNTRY_WORD.test('Dentalix no trae los festivos de ningún país.')).toBe(false);
+    expect(
+      COUNTRY_WORD.test("Dentalix no trae los festivos de ningún país."),
+    ).toBe(false);
   });
 });
 
@@ -224,32 +269,37 @@ describe('arquitectura: calendario de la sede sin país (DX-316)', () => {
  * impresión y el perfil del personal (antes «en Colombia, RETHUS…; en España,
  * nº de colegiado»).
  */
-const PRESCRIPTION_LEGACY_LAYOUT = 'lib/prescriptions/legacy-prescription-layout.ts';
+const PRESCRIPTION_LEGACY_LAYOUT =
+  "lib/prescriptions/legacy-prescription-layout.ts";
 const PRESCRIPTION_SCREENS = [
-  'app/(app)/settings/recetas/page.tsx',
-  'app/print/patients/[id]/prescriptions/[prescriptionId]/page.tsx',
-  'components/staff/staff-member-profile.tsx',
+  "app/(app)/settings/recetas/page.tsx",
+  "app/print/patients/[id]/prescriptions/[prescriptionId]/page.tsx",
+  "components/staff/staff-member-profile.tsx",
 ];
 /** Códigos de país en mayúsculas (`'CO'`, `ES:`) y normas o autoridades nacionales. */
-const NATIONAL_TERM = /\b(?:CO|ES)\b|colegiado|DNI\/NIE|AEMPS|CIMA|Decreto|Dec\. 780|RD 1718|España|Colombia/;
+const NATIONAL_TERM =
+  /\b(?:CO|ES)\b|colegiado|DNI\/NIE|AEMPS|CIMA|Decreto|Dec\. 780|RD 1718|España|Colombia/;
 
 function nationalTermHit(line: string): boolean {
   return COUNTRY_WORD.test(line) || NATIONAL_TERM.test(line);
 }
 
 function prescriptionFiles(): string[] {
-  return [join(SRC, 'components/prescriptions'), join(SRC, 'lib/prescriptions')]
+  return [join(SRC, "components/prescriptions"), join(SRC, "lib/prescriptions")]
     .flatMap(sourceFiles)
     .concat(PRESCRIPTION_SCREENS.map((rel) => join(SRC, rel)))
     .filter(scanned)
-    .filter((path) => relative(SRC, path).split(sep).join('/') !== PRESCRIPTION_LEGACY_LAYOUT);
+    .filter(
+      (path) =>
+        relative(SRC, path).split(sep).join("/") !== PRESCRIPTION_LEGACY_LAYOUT,
+    );
 }
 
-describe('arquitectura: receta sin país (DX-324)', () => {
-  it('prescription files never mention a country outside the legacy layout', () => {
+describe("arquitectura: receta sin país (DX-324)", () => {
+  it("prescription files never mention a country outside the legacy layout", () => {
     const mentions = prescriptionFiles().flatMap((path) =>
-      readFileSync(path, 'utf8')
-        .split('\n')
+      readFileSync(path, "utf8")
+        .split("\n")
         .map((line, i) => ({ line, n: i + 1 }))
         .filter(({ line }) => nationalTermHit(line))
         .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
@@ -257,34 +307,43 @@ describe('arquitectura: receta sin país (DX-324)', () => {
     expect(mentions).toEqual([]);
   });
 
-  it('the prescription scan covers the document, the modal, the client and the other DX-324 screens, skips the legacy layout and catches national terms', () => {
-    const rels = prescriptionFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+  it("the prescription scan covers the document, the modal, the client and the other DX-324 screens, skips the legacy layout and catches national terms", () => {
+    const rels = prescriptionFiles().map((f) =>
+      relative(SRC, f).split(sep).join("/"),
+    );
     expect(rels).toEqual(
       expect.arrayContaining([
-        'components/prescriptions/prescription-document.tsx',
-        'components/prescriptions/new-prescription-modal.tsx',
-        'lib/prescriptions/prescriptions-api.ts',
-        'lib/prescriptions/prescription-layout.ts',
-        'lib/prescriptions/prescription-format.ts',
+        "components/prescriptions/prescription-document.tsx",
+        "components/prescriptions/new-prescription-modal.tsx",
+        "lib/prescriptions/prescriptions-api.ts",
+        "lib/prescriptions/prescription-layout.ts",
+        "lib/prescriptions/prescription-format.ts",
         ...PRESCRIPTION_SCREENS,
       ]),
     );
-    for (const rel of PRESCRIPTION_SCREENS) expect([rel, existsSync(join(SRC, rel))]).toEqual([rel, true]);
+    for (const rel of PRESCRIPTION_SCREENS)
+      expect([rel, existsSync(join(SRC, rel))]).toEqual([rel, true]);
     expect(rels).not.toContain(PRESCRIPTION_LEGACY_LAYOUT);
-    expect(rels.some((r) => r.includes('.test.'))).toBe(false);
+    expect(rels.some((r) => r.includes(".test."))).toBe(false);
     for (const line of [
       "const country = rx.country ?? 'CO';",
       "{ CO: 'Documento', ES: 'DNI/NIE' }",
       "'Nº de colegiado'",
-      'Real Decreto 1718/2010, art. 3',
-      'Ficha técnica en la CIMA de la AEMPS',
-      'En España cada receta lleva un solo medicamento',
-      '(Colombia)',
-      'type ClinicCountry',
+      "Real Decreto 1718/2010, art. 3",
+      "Ficha técnica en la CIMA de la AEMPS",
+      "En España cada receta lleva un solo medicamento",
+      "(Colombia)",
+      "type ClinicCountry",
     ]) {
       expect([line, nationalTermHit(line)]).toEqual([line, true]);
     }
-    for (const line of ["title: 'Receta'", "documentLabel: 'Documento'", 'MUTUA_ES', 'VALUES', 'Nº de registro profesional']) {
+    for (const line of [
+      "title: 'Receta'",
+      "documentLabel: 'Documento'",
+      "MUTUA_ES",
+      "VALUES",
+      "Nº de registro profesional",
+    ]) {
       expect([line, nationalTermHit(line)]).toEqual([line, false]);
     }
   });
@@ -295,15 +354,16 @@ describe('arquitectura: receta sin país (DX-324)', () => {
  * (deprecated) solo para la web anterior. La web nueva no lo lee en ningún
  * sitio; la fase 2 lo retira.
  */
-const ISSUER_COUNTRY_READ = /issuer\w*\??\.country\b|\{[^}]*\bcountry\b[^}]*\}\s*=\s*\w*issuer/i;
+const ISSUER_COUNTRY_READ =
+  /issuer\w*\??\.country\b|\{[^}]*\bcountry\b[^}]*\}\s*=\s*\w*issuer/i;
 
-describe('arquitectura: la web no lee el país deprecated del emisor (DX-324)', () => {
-  it('no source file reads issuer.country', () => {
+describe("arquitectura: la web no lee el país deprecated del emisor (DX-324)", () => {
+  it("no source file reads issuer.country", () => {
     const mentions = sourceFiles(SRC)
       .filter(scanned)
       .flatMap((path) =>
-        readFileSync(path, 'utf8')
-          .split('\n')
+        readFileSync(path, "utf8")
+          .split("\n")
           .map((line, i) => ({ line, n: i + 1 }))
           .filter(({ line }) => ISSUER_COUNTRY_READ.test(line))
           .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
@@ -311,11 +371,20 @@ describe('arquitectura: la web no lee el país deprecated del emisor (DX-324)', 
     expect(mentions).toEqual([]);
   });
 
-  it('the issuer pattern catches property reads and destructuring, not the prescription country', () => {
-    for (const line of ['issuer.country', 'issuer?.country', 'data.issuer.country', 'const { country } = issuer;']) {
+  it("the issuer pattern catches property reads and destructuring, not the prescription country", () => {
+    for (const line of [
+      "issuer.country",
+      "issuer?.country",
+      "data.issuer.country",
+      "const { country } = issuer;",
+    ]) {
       expect([line, ISSUER_COUNTRY_READ.test(line)]).toEqual([line, true]);
     }
-    for (const line of ['rx.country', 'issuer.locationName', 'issuer.countryless']) {
+    for (const line of [
+      "rx.country",
+      "issuer.locationName",
+      "issuer.countryless",
+    ]) {
       expect([line, ISSUER_COUNTRY_READ.test(line)]).toEqual([line, false]);
     }
   });
@@ -328,28 +397,32 @@ describe('arquitectura: la web no lee el país deprecated del emisor (DX-324)', 
  * códigos antiguos es el normalizador legado. Solo producción: los tests
  * `legacy …` los usan a propósito.
  */
-const PAYER_LEGACY_NORMALIZER = 'lib/payers/legacy-payer-type.ts';
+const PAYER_LEGACY_NORMALIZER = "lib/payers/legacy-payer-type.ts";
 const PAYER_SCREENS = [
-  'lib/patients/member-number.ts',
-  'lib/patients/agreement-eligibility.ts',
-  'components/agreements/agreements-manager.tsx',
-  'components/patients/coverage-dialog.tsx',
-  'components/patients/patient-coverage-section.tsx',
-  'app/(app)/settings/pagadores/page.tsx',
-  'components/settings/settings-sections.ts',
+  "lib/patients/member-number.ts",
+  "lib/patients/agreement-eligibility.ts",
+  "components/agreements/agreements-manager.tsx",
+  "components/patients/coverage-dialog.tsx",
+  "components/patients/patient-coverage-section.tsx",
+  "app/(app)/settings/pagadores/page.tsx",
+  "components/settings/settings-sections.ts",
 ];
-const LEGACY_PAYER_TERM = /\b(?:MUTUA_ES|PREPAGADA_CO|EPS_CO|EMPRESA|OTRO)\b|\bEPS\b|[Mm]utua|[Pp]repagada/;
+const LEGACY_PAYER_TERM =
+  /\b(?:MUTUA_ES|PREPAGADA_CO|EPS_CO|EMPRESA|OTRO)\b|\bEPS\b|[Mm]utua|[Pp]repagada/;
 
 function payerTermHit(line: string): boolean {
   return nationalTermHit(line) || LEGACY_PAYER_TERM.test(line);
 }
 
 function payerFiles(): string[] {
-  return [join(SRC, 'components/payers'), join(SRC, 'lib/payers')]
+  return [join(SRC, "components/payers"), join(SRC, "lib/payers")]
     .flatMap(sourceFiles)
     .concat(PAYER_SCREENS.map((rel) => join(SRC, rel)))
     .filter(scanned)
-    .filter((path) => relative(SRC, path).split(sep).join('/') !== PAYER_LEGACY_NORMALIZER);
+    .filter(
+      (path) =>
+        relative(SRC, path).split(sep).join("/") !== PAYER_LEGACY_NORMALIZER,
+    );
 }
 
 /**
@@ -362,7 +435,7 @@ const LEGACY_PAYER_CODE =
 const REAL_PAYER_NAMES = /\bSura EPS\b/g;
 
 function legacyPayerCodeHit(line: string): boolean {
-  return LEGACY_PAYER_CODE.test(line.replace(REAL_PAYER_NAMES, ''));
+  return LEGACY_PAYER_CODE.test(line.replace(REAL_PAYER_NAMES, ""));
 }
 
 /**
@@ -380,36 +453,40 @@ const PAYER_TYPE_COMPARISON = new RegExp(
     String.raw`[!=]==?\s*${QUOTED(PAYER_ONLY_CODE)}`,
     String.raw`${QUOTED(PAYER_ONLY_CODE)}\s*[!=]==?`,
     String.raw`\bcase\s+${QUOTED(PAYER_ONLY_CODE)}`,
-    String.raw`${PAYER_TYPE_SUBJECT}\s*[!=]==?\s*${QUOTED('OTHER')}`,
-    String.raw`${QUOTED('OTHER')}\s*[!=]==?\s*[\w.?]*\b(?:type|payerType)\b`,
-  ].join('|'),
+    String.raw`${PAYER_TYPE_SUBJECT}\s*[!=]==?\s*${QUOTED("OTHER")}`,
+    String.raw`${QUOTED("OTHER")}\s*[!=]==?\s*[\w.?]*\b(?:type|payerType)\b`,
+  ].join("|"),
 );
 
 /** Producción de todo `src`, con el contrato, sin `lib/payers` si se pide. */
-function allPayerScanFiles({ withPayersLib }: { withPayersLib: boolean }): string[] {
+function allPayerScanFiles({
+  withPayersLib,
+}: {
+  withPayersLib: boolean;
+}): string[] {
   return sourceFiles(SRC).filter((path) => {
-    const rel = relative(SRC, path).split(sep).join('/');
+    const rel = relative(SRC, path).split(sep).join("/");
     if (rel === PAYER_LEGACY_NORMALIZER) return false;
-    if (!withPayersLib && rel.startsWith('lib/payers/')) return false;
-    return scanned(path) || rel === 'lib/api/schema.d.ts';
+    if (!withPayersLib && rel.startsWith("lib/payers/")) return false;
+    return scanned(path) || rel === "lib/api/schema.d.ts";
   });
 }
 
 function lineHits(paths: string[], hit: (line: string) => boolean): string[] {
   return paths.flatMap((path) =>
-    readFileSync(path, 'utf8')
-      .split('\n')
+    readFileSync(path, "utf8")
+      .split("\n")
       .map((line, i) => ({ line, n: i + 1 }))
       .filter(({ line }) => hit(line))
       .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
   );
 }
 
-describe('arquitectura: pagadores sin país (DX-326)', () => {
-  it('payer files never mention a country or a legacy payer type outside the legacy normalizer', () => {
+describe("arquitectura: pagadores sin país (DX-326)", () => {
+  it("payer files never mention a country or a legacy payer type outside the legacy normalizer", () => {
     const mentions = payerFiles().flatMap((path) =>
-      readFileSync(path, 'utf8')
-        .split('\n')
+      readFileSync(path, "utf8")
+        .split("\n")
         .map((line, i) => ({ line, n: i + 1 }))
         .filter(({ line }) => payerTermHit(line))
         .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
@@ -417,78 +494,91 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
     expect(mentions).toEqual([]);
   });
 
-  it('the payer scan covers the payer screens and skips the legacy normalizer', () => {
-    const rels = payerFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+  it("the payer scan covers the payer screens and skips the legacy normalizer", () => {
+    const rels = payerFiles().map((f) => relative(SRC, f).split(sep).join("/"));
     expect(rels).toEqual(
       expect.arrayContaining([
-        'components/payers/payer-form-modal.tsx',
-        'components/payers/payers-manager.tsx',
-        'lib/payers/payer-type.ts',
-        'lib/payers/payers-api.ts',
+        "components/payers/payer-form-modal.tsx",
+        "components/payers/payers-manager.tsx",
+        "lib/payers/payer-type.ts",
+        "lib/payers/payers-api.ts",
         ...PAYER_SCREENS,
       ]),
     );
-    for (const rel of PAYER_SCREENS) expect([rel, existsSync(join(SRC, rel))]).toEqual([rel, true]);
+    for (const rel of PAYER_SCREENS)
+      expect([rel, existsSync(join(SRC, rel))]).toEqual([rel, true]);
     expect(rels).not.toContain(PAYER_LEGACY_NORMALIZER);
-    expect(rels.some((r) => r.includes('.test.'))).toBe(false);
+    expect(rels.some((r) => r.includes(".test."))).toBe(false);
     for (const line of [
       "type: 'EPS_CO',",
       "label: 'Mutua (España)',",
-      'PAYER_COUNTRY_LABELS[type]',
-      'country: payer.country,',
-      'Aseguradoras, EPS y demás entidades',
+      "PAYER_COUNTRY_LABELS[type]",
+      "country: payer.country,",
+      "Aseguradoras, EPS y demás entidades",
     ]) {
       expect([line, payerTermHit(line)]).toEqual([line, true]);
     }
-    for (const line of ["label: 'Aseguradora',", "type: 'OTHER',", 'PUBLIC_SYSTEM']) {
+    for (const line of [
+      "label: 'Aseguradora',",
+      "type: 'OTHER',",
+      "PUBLIC_SYSTEM",
+    ]) {
       expect([line, payerTermHit(line)]).toEqual([line, false]);
     }
   });
 
-  it('no production file in src names a legacy payer code or a payer country label', () => {
-    expect(lineHits(allPayerScanFiles({ withPayersLib: true }), legacyPayerCodeHit)).toEqual([]);
-  });
-
-  it('no production file outside lib/payers compares a payer type with a literal', () => {
+  it("no production file in src names a legacy payer code or a payer country label", () => {
     expect(
-      lineHits(allPayerScanFiles({ withPayersLib: false }), (line) => PAYER_TYPE_COMPARISON.test(line)),
+      lineHits(allPayerScanFiles({ withPayersLib: true }), legacyPayerCodeHit),
     ).toEqual([]);
   });
 
-  it('the src-wide payer scans cover all production, the contract, and skip the normalizer and tests', () => {
-    const all = allPayerScanFiles({ withPayersLib: true }).map((f) => relative(SRC, f).split(sep).join('/'));
+  it("no production file outside lib/payers compares a payer type with a literal", () => {
+    expect(
+      lineHits(allPayerScanFiles({ withPayersLib: false }), (line) =>
+        PAYER_TYPE_COMPARISON.test(line),
+      ),
+    ).toEqual([]);
+  });
+
+  it("the src-wide payer scans cover all production, the contract, and skip the normalizer and tests", () => {
+    const all = allPayerScanFiles({ withPayersLib: true }).map((f) =>
+      relative(SRC, f).split(sep).join("/"),
+    );
     expect(all).toEqual(
       expect.arrayContaining([
-        'lib/api/schema.d.ts',
-        'lib/payers/payer-type.ts',
-        'components/patients/agreement-dialog.tsx',
-        'components/patients/patients-view.tsx',
-        'components/payers/payer-form-modal.tsx',
+        "lib/api/schema.d.ts",
+        "lib/payers/payer-type.ts",
+        "components/patients/agreement-dialog.tsx",
+        "components/patients/patients-view.tsx",
+        "components/payers/payer-form-modal.tsx",
       ]),
     );
     expect(all).not.toContain(PAYER_LEGACY_NORMALIZER);
-    expect(all.some((r) => r.includes('.test.'))).toBe(false);
-    const outside = allPayerScanFiles({ withPayersLib: false }).map((f) => relative(SRC, f).split(sep).join('/'));
-    expect(outside.some((r) => r.startsWith('lib/payers/'))).toBe(false);
-    expect(outside).toContain('components/payers/payer-form-modal.tsx');
+    expect(all.some((r) => r.includes(".test."))).toBe(false);
+    const outside = allPayerScanFiles({ withPayersLib: false }).map((f) =>
+      relative(SRC, f).split(sep).join("/"),
+    );
+    expect(outside.some((r) => r.startsWith("lib/payers/"))).toBe(false);
+    expect(outside).toContain("components/payers/payer-form-modal.tsx");
 
     for (const line of [
       "if (payer.type === 'EPS_CO') {",
       "label: 'Prepagada (Colombia)',",
       "'OTRO': 'OTHER',",
-      'const labels = PAYER_COUNTRY_LABELS;',
-      'country: PayerCountry;',
-      'Aseguradora (España)',
-      'Aseguradoras, EPS y demás',
-      'Mutua',
-      'prepagadas',
+      "const labels = PAYER_COUNTRY_LABELS;",
+      "country: PayerCountry;",
+      "Aseguradora (España)",
+      "Aseguradoras, EPS y demás",
+      "Mutua",
+      "prepagadas",
     ]) {
       expect([line, legacyPayerCodeHit(line)]).toEqual([line, true]);
     }
     for (const line of [
-      '/** @example Convenio Sura EPS */',
+      "/** @example Convenio Sura EPS */",
       "type: 'OTHER',",
-      'mutuamente',
+      "mutuamente",
       "country: 'CO'",
     ]) {
       expect([line, legacyPayerCodeHit(line)]).toEqual([line, false]);
@@ -513,7 +603,7 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
       "docType === 'OTHER'",
       "{ value: 'OTHER', label: 'Otro' },",
       "type: 'INSURER',",
-      'return normalized === null || EXTERNAL[normalized];',
+      "return normalized === null || EXTERNAL[normalized];",
     ]) {
       expect([line, PAYER_TYPE_COMPARISON.test(line)]).toEqual([line, false]);
     }
@@ -535,14 +625,16 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
  * solo valen dentro de un `test('legacy …')`, de una función `legacy…` o de
  * un fichero `legacy-*`.
  */
-const DOC_TYPE_LEGACY_NORMALIZER = 'lib/patients/legacy-doc-type.ts';
+const DOC_TYPE_LEGACY_NORMALIZER = "lib/patients/legacy-doc-type.ts";
 // DX-324 (R12): `PRESCRIPTION_LEGACY_LAYOUT` congela los rótulos de las recetas anteriores.
 const LEGACY_FILES = [DOC_TYPE_LEGACY_NORMALIZER, PRESCRIPTION_LEGACY_LAYOUT];
 // DX-312 (R8, R10): copia byte a byte de la lista generada en la API; `scripts/check-api-reference-sync.mjs` la vigila.
-const COUNTRY_LIST_COPY = 'lib/locations/iso3166-countries.json';
-const COUNTRY_DOCUMENT = /[Cc][ée]dula|[Tt]arjeta de identidad|[Ee]xtranjer[ií]a|\b(?:CC|TI|CE)\b|INVIMA/;
+const COUNTRY_LIST_COPY = "lib/locations/iso3166-countries.json";
+const COUNTRY_DOCUMENT =
+  /[Cc][ée]dula|[Tt]arjeta de identidad|[Ee]xtranjer[ií]a|\b(?:CC|TI|CE)\b|INVIMA/;
 /** Siglas de documentos de otros países: en cualquier caja, como palabra. */
-const COUNTRY_DOCUMENT_ACRONYM = /\b(?:NIT|NIF|RIF|DNI|NIE|RUT|CURP|CPF|RUC|CUIL|CUIT|NUIP)\b/i;
+const COUNTRY_DOCUMENT_ACRONYM =
+  /\b(?:NIT|NIF|RIF|DNI|NIE|RUT|CURP|CPF|RUC|CUIL|CUIT|NUIP)\b/i;
 
 function namesCountryDocument(line: string): boolean {
   return COUNTRY_DOCUMENT.test(line) || COUNTRY_DOCUMENT_ACRONYM.test(line);
@@ -553,16 +645,22 @@ function namesCountryDocument(line: string): boolean {
  * ticket que la quita. Cualquier otra coincidencia se arregla, no se añade
  * aquí.
  */
-const COUNTRY_DOCUMENT_LINE_EXCEPTIONS: readonly { file: string; line: string; until: string }[] = [
+const COUNTRY_DOCUMENT_LINE_EXCEPTIONS: readonly {
+  file: string;
+  line: string;
+  until: string;
+}[] = [
   {
-    file: 'components/payments/payment-receipt-document.tsx',
-    line: 'taxId: (value: string) => `NIT/NIF ${value}`,',
-    until: 'DX-019',
+    file: "components/payments/payment-receipt-document.tsx",
+    line: "taxId: (value: string) => `NIT/NIF ${value}`,",
+    until: "DX-019",
   },
 ];
 
 function isLineException(rel: string, line: string): boolean {
-  return COUNTRY_DOCUMENT_LINE_EXCEPTIONS.some((e) => e.file === rel && e.line === line.trim());
+  return COUNTRY_DOCUMENT_LINE_EXCEPTIONS.some(
+    (e) => e.file === rel && e.line === line.trim(),
+  );
 }
 
 function documentScanFiles(dir: string = SRC): string[] {
@@ -570,29 +668,37 @@ function documentScanFiles(dir: string = SRC): string[] {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) return documentScanFiles(path);
     if (!/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name)) return [];
-    const rel = relative(SRC, path).split(sep).join('/');
-    if (/\.(test|spec)\./.test(rel) || rel.startsWith('lib/test/')) return [];
-    return LEGACY_FILES.includes(rel) || rel === COUNTRY_LIST_COPY ? [] : [path];
+    const rel = relative(SRC, path).split(sep).join("/");
+    if (/\.(test|spec)\./.test(rel) || rel.startsWith("lib/test/")) return [];
+    return LEGACY_FILES.includes(rel) || rel === COUNTRY_LIST_COPY
+      ? []
+      : [path];
   });
 }
 
 /** Cada línea del texto que nombra un documento de un país, comentarios incluidos. */
 function countryDocumentHits(rel: string, text: string): string[] {
   return text
-    .split('\n')
+    .split("\n")
     .map((line, i) => ({ line, n: i + 1 }))
-    .filter(({ line }) => namesCountryDocument(line) && !isLineException(rel, line))
+    .filter(
+      ({ line }) => namesCountryDocument(line) && !isLineException(rel, line),
+    )
     .map(({ line, n }) => `${rel}:${n}: ${line.trim()}`);
 }
 
-const E2E = join(SRC, '..', 'e2e');
+const E2E = join(SRC, "..", "e2e");
 
 /** Todo `e2e/` salvo los ficheros `legacy-*`. */
 function e2eScanFiles(dir: string = E2E): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) return e2eScanFiles(path);
-    if (!/\.(ts|json|csv|ics)$/.test(entry.name) || /^legacy[-.]/.test(entry.name)) return [];
+    if (
+      !/\.(ts|json|csv|ics)$/.test(entry.name) ||
+      /^legacy[-.]/.test(entry.name)
+    )
+      return [];
     return [path];
   });
 }
@@ -604,9 +710,16 @@ const LEGACY_NAME = /^legacy/i;
  * `test.describe`, `.only`, `.skip`…) y de cada función o constante `legacy…`.
  */
 function legacyLineRanges(rel: string, text: string): [number, number][] {
-  const source = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const source = ts.createSourceFile(
+    rel,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
   const ranges: [number, number][] = [];
-  const lineOf = (pos: number) => source.getLineAndCharacterOfPosition(pos).line + 1;
+  const lineOf = (pos: number) =>
+    source.getLineAndCharacterOfPosition(pos).line + 1;
   const visit = (node: ts.Node) => {
     let legacy = false;
     if (ts.isCallExpression(node)) {
@@ -615,12 +728,26 @@ function legacyLineRanges(rel: string, text: string): [number, number][] {
       legacy =
         /^test\b/.test(callee) &&
         title !== undefined &&
-        (ts.isStringLiteral(title) || ts.isNoSubstitutionTemplateLiteral(title) || ts.isTemplateExpression(title)) &&
-        LEGACY_NAME.test((ts.isTemplateExpression(title) ? title.head.text : title.text).trim());
-    } else if (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) {
-      legacy = node.name !== undefined && ts.isIdentifier(node.name) && LEGACY_NAME.test(node.name.text);
+        (ts.isStringLiteral(title) ||
+          ts.isNoSubstitutionTemplateLiteral(title) ||
+          ts.isTemplateExpression(title)) &&
+        LEGACY_NAME.test(
+          (ts.isTemplateExpression(title)
+            ? title.head.text
+            : title.text
+          ).trim(),
+        );
+    } else if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isVariableDeclaration(node)
+    ) {
+      legacy =
+        node.name !== undefined &&
+        ts.isIdentifier(node.name) &&
+        LEGACY_NAME.test(node.name.text);
     }
-    if (legacy) ranges.push([lineOf(node.getStart(source)), lineOf(node.getEnd())]);
+    if (legacy)
+      ranges.push([lineOf(node.getStart(source)), lineOf(node.getEnd())]);
     else ts.forEachChild(node, visit);
   };
   visit(source);
@@ -629,162 +756,209 @@ function legacyLineRanges(rel: string, text: string): [number, number][] {
 
 /** Lo que nombra un documento de un país en un fichero de `e2e/` fuera de lo `legacy`. */
 function e2eCountryDocumentHits(rel: string, text: string): string[] {
-  const ranges = rel.endsWith('.ts') ? legacyLineRanges(rel, text) : [];
+  const ranges = rel.endsWith(".ts") ? legacyLineRanges(rel, text) : [];
   return text
-    .split('\n')
+    .split("\n")
     .map((line, i) => ({ line, n: i + 1 }))
-    .filter(({ line, n }) => namesCountryDocument(line) && !ranges.some(([a, b]) => n >= a && n <= b))
+    .filter(
+      ({ line, n }) =>
+        namesCountryDocument(line) &&
+        !ranges.some(([a, b]) => n >= a && n <= b),
+    )
     .map(({ line, n }) => `${rel}:${n}: ${line.trim()}`);
 }
 
-describe('arquitectura: tipos de documento sin país (DX-327)', () => {
-  it('no UI text says Cédula, TI, CE or another country\'s document acronym outside the legacy files', () => {
+describe("arquitectura: tipos de documento sin país (DX-327)", () => {
+  it("no UI text says Cédula, TI, CE or another country's document acronym outside the legacy files", () => {
     const mentions = documentScanFiles().flatMap((path) =>
-      countryDocumentHits(relative(SRC, path).split(sep).join('/'), readFileSync(path, 'utf8')),
+      countryDocumentHits(
+        relative(SRC, path).split(sep).join("/"),
+        readFileSync(path, "utf8"),
+      ),
     );
     expect(mentions).toEqual([]);
   });
 
-  it('only the country list copy is skipped, and it is skipped only for its country codes', () => {
+  it("only the country list copy is skipped, and it is skipped only for its country codes", () => {
     expect(existsSync(join(SRC, COUNTRY_LIST_COPY))).toBe(true);
-    const rels = documentScanFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+    const rels = documentScanFiles().map((f) =>
+      relative(SRC, f).split(sep).join("/"),
+    );
     expect(rels).not.toContain(COUNTRY_LIST_COPY);
-    expect(rels).toEqual(expect.arrayContaining(['lib/locations/iana-zone-names.json', 'lib/locations/countries.ts']));
-    const hits = countryDocumentHits(COUNTRY_LIST_COPY, readFileSync(join(SRC, COUNTRY_LIST_COPY), 'utf8'));
+    expect(rels).toEqual(
+      expect.arrayContaining([
+        "lib/locations/iana-zone-names.json",
+        "lib/locations/countries.ts",
+      ]),
+    );
+    const hits = countryDocumentHits(
+      COUNTRY_LIST_COPY,
+      readFileSync(join(SRC, COUNTRY_LIST_COPY), "utf8"),
+    );
     expect(hits.every((h) => /: "code": "[A-Z]{2}",$/.test(h))).toBe(true);
   });
 
-  it('every named line exception still exists, so a closed ticket takes its exception with it', () => {
+  it("every named line exception still exists, so a closed ticket takes its exception with it", () => {
     for (const e of COUNTRY_DOCUMENT_LINE_EXCEPTIONS) {
-      const lines = readFileSync(join(SRC, e.file), 'utf8').split('\n').map((l) => l.trim());
-      expect([e.file, e.until, lines.includes(e.line)]).toEqual([e.file, e.until, true]);
+      const lines = readFileSync(join(SRC, e.file), "utf8")
+        .split("\n")
+        .map((l) => l.trim());
+      expect([e.file, e.until, lines.includes(e.line)]).toEqual([
+        e.file,
+        e.until,
+        true,
+      ]);
       expect(namesCountryDocument(e.line)).toBe(true);
     }
   });
 
-  it('no e2e test names a country document outside a legacy test, function or file', () => {
+  it("no e2e test names a country document outside a legacy test, function or file", () => {
     const mentions = e2eScanFiles().flatMap((path) =>
-      e2eCountryDocumentHits(relative(E2E, path).split(sep).join('/'), readFileSync(path, 'utf8')),
+      e2eCountryDocumentHits(
+        relative(E2E, path).split(sep).join("/"),
+        readFileSync(path, "utf8"),
+      ),
     );
     expect(mentions).toEqual([]);
   });
 
-  it('the e2e scan covers the specs and fixtures, and only legacy tests, functions and files may name a country document', () => {
-    const rels = e2eScanFiles().map((f) => relative(E2E, f).split(sep).join('/'));
+  it("the e2e scan covers the specs and fixtures, and only legacy tests, functions and files may name a country document", () => {
+    const rels = e2eScanFiles().map((f) =>
+      relative(E2E, f).split(sep).join("/"),
+    );
     expect(rels).toEqual(
       expect.arrayContaining([
-        'patient-import.spec.ts',
-        'document-types.spec.ts',
-        'allowed-skips.json',
-        'fixtures/holidays-12.ics',
+        "patient-import.spec.ts",
+        "document-types.spec.ts",
+        "allowed-skips.json",
+        "fixtures/holidays-12.ics",
       ]),
     );
-    expect(rels.some((r) => r.startsWith('support/'))).toBe(true);
+    expect(rels.some((r) => r.startsWith("support/"))).toBe(true);
     // Hoy esos dos specs sí nombran «CC» y «Cédula», dentro de lo legacy.
-    const importSpec = readFileSync(join(E2E, 'patient-import.spec.ts'), 'utf8');
-    expect(importSpec.split('\n').some(namesCountryDocument)).toBe(true);
+    const importSpec = readFileSync(
+      join(E2E, "patient-import.spec.ts"),
+      "utf8",
+    );
+    expect(importSpec.split("\n").some(namesCountryDocument)).toBe(true);
 
     const synthetic = [
       "test('legacy CSV con CC', async () => {",
       "  const csv = 'Tipo Doc;Cédula';",
-      '});',
+      "});",
       "test.describe(`legacy ${name}: RUT`, () => {",
       "  test('dentro', () => expect('DNI').toBeTruthy());",
-      '});',
-      'function legacyCsv() {',
+      "});",
+      "function legacyCsv() {",
       "  return 'CC;1';",
-      '}',
+      "}",
       "test('alta con NIT', async () => {",
       "  await page.fill('#doc', 'CC 1');",
-      '});',
-      '// un comentario con Cédula',
+      "});",
+      "// un comentario con Cédula",
       "test(`alta ${'legacy'} con dni`, () => {});",
-    ].join('\n');
-    expect(e2eCountryDocumentHits('synthetic.spec.ts', synthetic)).toEqual([
+    ].join("\n");
+    expect(e2eCountryDocumentHits("synthetic.spec.ts", synthetic)).toEqual([
       "synthetic.spec.ts:10: test('alta con NIT', async () => {",
       "synthetic.spec.ts:11: await page.fill('#doc', 'CC 1');",
-      'synthetic.spec.ts:13: // un comentario con Cédula',
+      "synthetic.spec.ts:13: // un comentario con Cédula",
       "synthetic.spec.ts:14: test(`alta ${'legacy'} con dni`, () => {});",
     ]);
   });
 
-  it('the document scan covers schema.d.ts, fixtures and comments and skips only the legacy files, and its pattern catches each legacy form', () => {
-    const rels = documentScanFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+  it("the document scan covers schema.d.ts, fixtures and comments and skips only the legacy files, and its pattern catches each legacy form", () => {
+    const rels = documentScanFiles().map((f) =>
+      relative(SRC, f).split(sep).join("/"),
+    );
     expect(rels).toEqual(
       expect.arrayContaining([
-        'lib/api/schema.d.ts',
-        'components/treatment-plans/plan-quote-fixture.ts',
-        'components/patients/agreement-fixtures.ts',
-        'components/patients/patient-record-header.tsx',
-        'components/implants/register-implant-modal.tsx',
-        'components/payments/payment-receipt-document.tsx',
-        'lib/patients/doc-type.ts',
+        "lib/api/schema.d.ts",
+        "components/treatment-plans/plan-quote-fixture.ts",
+        "components/patients/agreement-fixtures.ts",
+        "components/patients/patient-record-header.tsx",
+        "components/implants/register-implant-modal.tsx",
+        "components/payments/payment-receipt-document.tsx",
+        "lib/patients/doc-type.ts",
       ]),
     );
     for (const legacy of LEGACY_FILES) {
       expect(rels).not.toContain(legacy);
       expect(existsSync(join(SRC, legacy))).toBe(true);
     }
-    expect(rels.some((r) => /\.(test|spec)\./.test(r) || r.startsWith('lib/test/'))).toBe(false);
+    expect(
+      rels.some((r) => /\.(test|spec)\./.test(r) || r.startsWith("lib/test/")),
+    ).toBe(false);
 
     // Control sintético: los comentarios y la JSDoc cuentan como texto.
     const synthetic = [
-      '/**',
-      ' * Documento del paciente.',
-      ' * @example CC 123',
-      ' */',
-      'const a = 1; // CC 1002',
+      "/**",
+      " * Documento del paciente.",
+      " * @example CC 123",
+      " */",
+      "const a = 1; // CC 1002",
       "const b = 'NATIONAL_ID';",
       "const c = 'rif: J-1';",
-    ].join('\n');
-    expect(countryDocumentHits('synthetic.ts', synthetic)).toEqual([
-      'synthetic.ts:3: * @example CC 123',
-      'synthetic.ts:5: const a = 1; // CC 1002',
+    ].join("\n");
+    expect(countryDocumentHits("synthetic.ts", synthetic)).toEqual([
+      "synthetic.ts:3: * @example CC 123",
+      "synthetic.ts:5: const a = 1; // CC 1002",
       "synthetic.ts:7: const c = 'rif: J-1';",
     ]);
     // La excepción es la línea exacta de su fichero, no la sigla.
-    const receipt = 'components/payments/payment-receipt-document.tsx';
-    expect(countryDocumentHits(receipt, '  taxId: (value: string) => `NIT/NIF ${value}`,')).toEqual([]);
-    expect(countryDocumentHits(receipt, "  taxIdLabel: 'NIT',")).toEqual([`${receipt}:1: taxIdLabel: 'NIT',`]);
-    expect(countryDocumentHits('other.tsx', 'taxId: (value: string) => `NIT/NIF ${value}`,')).toHaveLength(1);
+    const receipt = "components/payments/payment-receipt-document.tsx";
+    expect(
+      countryDocumentHits(
+        receipt,
+        "  taxId: (value: string) => `NIT/NIF ${value}`,",
+      ),
+    ).toEqual([]);
+    expect(countryDocumentHits(receipt, "  taxIdLabel: 'NIT',")).toEqual([
+      `${receipt}:1: taxIdLabel: 'NIT',`,
+    ]);
+    expect(
+      countryDocumentHits(
+        "other.tsx",
+        "taxId: (value: string) => `NIT/NIF ${value}`,",
+      ),
+    ).toHaveLength(1);
     for (const line of [
-      'Cédula de ciudadanía',
-      'cedula de extranjería',
-      'Tarjeta de identidad',
+      "Cédula de ciudadanía",
+      "cedula de extranjería",
+      "Tarjeta de identidad",
       "docType: 'TI'",
-      'CE 123',
-      'Registro sanitario INVIMA',
-      'marcado CE',
-      'NIT/NIF 900123456-7',
-      'RIF J-12345678-9',
-      'dni del paciente',
-      'Nie: X1234567L',
-      'RUT 12.345.678-5',
-      'curp',
-      '(CPF)',
-      'RUC 20123456789',
-      'cuil',
-      'CUIT: 20-1',
-      'Nuip',
+      "CE 123",
+      "Registro sanitario INVIMA",
+      "marcado CE",
+      "NIT/NIF 900123456-7",
+      "RIF J-12345678-9",
+      "dni del paciente",
+      "Nie: X1234567L",
+      "RUT 12.345.678-5",
+      "curp",
+      "(CPF)",
+      "RUC 20123456789",
+      "cuil",
+      "CUIT: 20-1",
+      "Nuip",
       "label: 'Rif'",
     ]) {
       expect([line, namesCountryDocument(line)]).toEqual([line, true]);
     }
     for (const line of [
       "docType: 'NATIONAL_ID'",
-      'Documento nacional',
-      'Registro sanitario o certificación del producto',
-      'Certificación',
-      'ACCEPTED',
-      'CERT-2019',
-      'Identificación fiscal',
-      'unit',
-      'definite',
-      'route',
-      'niños',
-      'truthy',
-      'nitrogen',
-      'para ti',
+      "Documento nacional",
+      "Registro sanitario o certificación del producto",
+      "Certificación",
+      "ACCEPTED",
+      "CERT-2019",
+      "Identificación fiscal",
+      "unit",
+      "definite",
+      "route",
+      "niños",
+      "truthy",
+      "nitrogen",
+      "para ti",
     ]) {
       expect([line, namesCountryDocument(line)]).toEqual([line, false]);
     }
@@ -794,40 +968,62 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
    * §6.8 (API y web): un solo resolvedor del nombre visible y un solo mapa de
    * nombres genéricos, los de `lib/patients/doc-type.ts`.
    */
-  const DOC_TYPE_LIB = 'lib/patients/doc-type.ts';
-  const NAME_RESOLVED_BY_HAND = /DOC_TYPE_LABEL\[|docTypeName(?:NationalId|Passport|ResidencePermit|TaxId|Other)\b/;
-  const LABEL_MAP = /\b(?:const|let)\s+DOC_TYPE_LABELS?\b|PASSPORT:\s*'Pasaporte'/;
+  const DOC_TYPE_LIB = "lib/patients/doc-type.ts";
+  const NAME_RESOLVED_BY_HAND =
+    /DOC_TYPE_LABEL\[|docTypeName(?:NationalId|Passport|ResidencePermit|TaxId|Other)\b/;
+  const LABEL_MAP =
+    /\b(?:const|let)\s+DOC_TYPE_LABELS?\b|PASSPORT:\s*'Pasaporte'/;
 
   function productionHits(pattern: RegExp): string[] {
     return documentScanFiles()
-      .filter((path) => relative(SRC, path).split(sep).join('/') !== DOC_TYPE_LIB)
+      .filter(
+        (path) => relative(SRC, path).split(sep).join("/") !== DOC_TYPE_LIB,
+      )
       .flatMap((path) =>
-        readFileSync(path, 'utf8')
-          .split('\n')
+        readFileSync(path, "utf8")
+          .split("\n")
           .map((line, i) => ({ line, n: i + 1 }))
           .filter(({ line }) => pattern.test(line))
           .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
       );
   }
 
-  it('architecture: one document type name resolver', () => {
+  it("architecture: one document type name resolver", () => {
     expect(productionHits(NAME_RESOLVED_BY_HAND)).toEqual([]);
-    expect(readFileSync(join(SRC, DOC_TYPE_LIB), 'utf8')).toMatch(NAME_RESOLVED_BY_HAND);
-    for (const line of ['label={DOC_TYPE_LABEL[type]}', 'tenant.docTypeNameNationalId', 'docTypeNameOther ?? x']) {
+    expect(readFileSync(join(SRC, DOC_TYPE_LIB), "utf8")).toMatch(
+      NAME_RESOLVED_BY_HAND,
+    );
+    for (const line of [
+      "label={DOC_TYPE_LABEL[type]}",
+      "tenant.docTypeNameNationalId",
+      "docTypeNameOther ?? x",
+    ]) {
       expect([line, NAME_RESOLVED_BY_HAND.test(line)]).toEqual([line, true]);
     }
-    for (const line of ['documentTypeName(type, null, names)', 'dto.docTypeName', 'genericDocTypeName(type)']) {
+    for (const line of [
+      "documentTypeName(type, null, names)",
+      "dto.docTypeName",
+      "genericDocTypeName(type)",
+    ]) {
       expect([line, NAME_RESOLVED_BY_HAND.test(line)]).toEqual([line, false]);
     }
   });
 
-  it('architecture: one document label map', () => {
+  it("architecture: one document label map", () => {
     expect(productionHits(LABEL_MAP)).toEqual([]);
-    expect(readFileSync(join(SRC, DOC_TYPE_LIB), 'utf8')).toMatch(LABEL_MAP);
-    for (const line of ['const DOC_TYPE_LABELS = {', "  PASSPORT: 'Pasaporte',", 'let DOC_TYPE_LABEL = x']) {
+    expect(readFileSync(join(SRC, DOC_TYPE_LIB), "utf8")).toMatch(LABEL_MAP);
+    for (const line of [
+      "const DOC_TYPE_LABELS = {",
+      "  PASSPORT: 'Pasaporte',",
+      "let DOC_TYPE_LABEL = x",
+    ]) {
       expect([line, LABEL_MAP.test(line)]).toEqual([line, true]);
     }
-    expect(LABEL_MAP.test("import { DOC_TYPE_LABEL } from '@/lib/patients/doc-type';")).toBe(false);
+    expect(
+      LABEL_MAP.test(
+        "import { DOC_TYPE_LABEL } from '@/lib/patients/doc-type';",
+      ),
+    ).toBe(false);
   });
 });
 
@@ -841,61 +1037,93 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
  * `*fixture*`, `lib/api/schema.d.ts` (generado), la copia de la lista de
  * países (datos generados) y la receta legada de R12 (W13).
  */
-const COUNTRY_LABEL_CODE = /COUNTRY_LABELS|COUNTRY_NAMES|ClinicCountry|phoneCountryName/;
+const COUNTRY_LABEL_CODE =
+  /COUNTRY_LABELS|COUNTRY_NAMES|ClinicCountry|phoneCountryName/;
 const COUNTRY_NAME = /colombi|espa[ñn]a|venezuel/i;
 const COUNTRY_NAME_EXCEPTIONS = [COUNTRY_LIST_COPY, PRESCRIPTION_LEGACY_LAYOUT];
-const COUNTRY_NAMES_LIB = 'lib/locations/countries.ts';
-const REGIONAL_FIELDS = 'components/locations/regional-settings-fields.tsx';
+const COUNTRY_NAMES_LIB = "lib/locations/countries.ts";
+const REGIONAL_FIELDS = "components/locations/regional-settings-fields.tsx";
 
 function withoutMarks(text: string): string {
-  return text.normalize('NFD').replace(/\p{M}/gu, '');
+  return text.normalize("NFD").replace(/\p{M}/gu, "");
 }
 
 function namesCountryOutsideList(line: string): boolean {
-  return (!COMMENT_LINE.test(line) && COUNTRY_LABEL_CODE.test(line)) || COUNTRY_NAME.test(withoutMarks(line));
+  return (
+    (!COMMENT_LINE.test(line) && COUNTRY_LABEL_CODE.test(line)) ||
+    COUNTRY_NAME.test(withoutMarks(line))
+  );
 }
 
 function countryNameScanFiles(dir: string = SRC): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) return countryNameScanFiles(path);
-    if (!/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name) || !scanned(path)) return [];
-    return COUNTRY_NAME_EXCEPTIONS.includes(relative(SRC, path).split(sep).join('/')) ? [] : [path];
+    if (
+      !/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name) ||
+      !scanned(path)
+    )
+      return [];
+    return COUNTRY_NAME_EXCEPTIONS.includes(
+      relative(SRC, path).split(sep).join("/"),
+    )
+      ? []
+      : [path];
   });
 }
 
 /** Un `import`, `import()` o `require` de la copia de la lista de países. */
-const IMPORTS_COUNTRY_LIST = /(?:from\s*|import\s*\(\s*|require\s*\(\s*)['"][^'"]*iso3166-countries\.json['"]/;
+const IMPORTS_COUNTRY_LIST =
+  /(?:from\s*|import\s*\(\s*|require\s*\(\s*)['"][^'"]*iso3166-countries\.json['"]/;
 
-describe('arquitectura: país de la sede libre (DX-312)', () => {
-  it('no production file names a country label map, ClinicCountry or a country name outside the shared list', () => {
-    expect(lineHits(countryNameScanFiles(), namesCountryOutsideList)).toEqual([]);
+describe("arquitectura: país de la sede libre (DX-312)", () => {
+  it("no production file names a country label map, ClinicCountry or a country name outside the shared list", () => {
+    expect(lineHits(countryNameScanFiles(), namesCountryOutsideList)).toEqual(
+      [],
+    );
   });
 
-  it('the country name scan covers production, and skips only tests, the generated files and the named exceptions', () => {
-    const rels = countryNameScanFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+  it("the country name scan covers production, and skips only tests, the generated files and the named exceptions", () => {
+    const rels = countryNameScanFiles().map((f) =>
+      relative(SRC, f).split(sep).join("/"),
+    );
     expect(rels).toEqual(
       expect.arrayContaining([
         COUNTRY_NAMES_LIB,
         REGIONAL_FIELDS,
-        'components/locations/locations-list.tsx',
-        'components/patients/patient-communication-section.tsx',
-        'lib/patients/communication-api.ts',
-        'lib/money/README.md',
+        "components/locations/locations-list.tsx",
+        "components/patients/patient-communication-section.tsx",
+        "lib/patients/communication-api.ts",
+        "lib/money/README.md",
       ]),
     );
     for (const rel of COUNTRY_NAME_EXCEPTIONS) {
-      expect([rel, existsSync(join(SRC, rel)), rels.includes(rel)]).toEqual([rel, true, false]);
+      expect([rel, existsSync(join(SRC, rel)), rels.includes(rel)]).toEqual([
+        rel,
+        true,
+        false,
+      ]);
     }
-    expect(rels).not.toContain('lib/api/schema.d.ts');
-    expect(rels.some((r) => r.startsWith('lib/test/') || r.includes('.test.') || r.includes('fixture'))).toBe(false);
+    expect(rels).not.toContain("lib/api/schema.d.ts");
+    expect(
+      rels.some(
+        (r) =>
+          r.startsWith("lib/test/") ||
+          r.includes(".test.") ||
+          r.includes("fixture"),
+      ),
+    ).toBe(false);
   });
 
-  it('country names come only from lib/locations/countries.ts', () => {
+  it("country names come only from lib/locations/countries.ts", () => {
     const importers = sourceFiles(SRC)
       .filter(scanned)
-      .filter((path) => readFileSync(path, 'utf8').split('\n').some((line) => IMPORTS_COUNTRY_LIST.test(line)))
-      .map((path) => relative(SRC, path).split(sep).join('/'));
+      .filter((path) =>
+        readFileSync(path, "utf8")
+          .split("\n")
+          .some((line) => IMPORTS_COUNTRY_LIST.test(line)),
+      )
+      .map((path) => relative(SRC, path).split(sep).join("/"));
     expect(importers).toEqual([COUNTRY_NAMES_LIB]);
     for (const line of [
       "import countries from '@/lib/locations/iso3166-countries.json';",
@@ -905,32 +1133,44 @@ describe('arquitectura: país de la sede libre (DX-312)', () => {
     ]) {
       expect([line, IMPORTS_COUNTRY_LIST.test(line)]).toEqual([line, true]);
     }
-    for (const line of ["import { countryName } from '@/lib/locations/countries';", '// iso3166-countries.json']) {
+    for (const line of [
+      "import { countryName } from '@/lib/locations/countries';",
+      "// iso3166-countries.json",
+    ]) {
       expect([line, IMPORTS_COUNTRY_LIST.test(line)]).toEqual([line, false]);
     }
   });
 
-  it('the location country copy no longer mentions the prescription or phones', () => {
-    const hint = /countryHint:\s*'([^']*)'/.exec(readFileSync(join(SRC, REGIONAL_FIELDS), 'utf8'))?.[1];
+  it("the location country copy no longer mentions the prescription or phones", () => {
+    const hint = /countryHint:\s*'([^']*)'/.exec(
+      readFileSync(join(SRC, REGIONAL_FIELDS), "utf8"),
+    )?.[1];
     expect(hint).toBeDefined();
-    expect(withoutMarks(hint ?? '').toLowerCase()).not.toMatch(/receta|telefono|indicativo/);
+    expect(withoutMarks(hint ?? "").toLowerCase()).not.toMatch(
+      /receta|telefono|indicativo/,
+    );
   });
 
-  it('the country patterns catch each form and skip neutral text', () => {
+  it("the country patterns catch each form and skip neutral text", () => {
     for (const line of [
-      'label={COUNTRY_LABELS[c]}',
-      'const COUNTRY_NAMES = new Map();',
-      'type ClinicCountry = string;',
-      'phoneCountryName(code)',
+      "label={COUNTRY_LABELS[c]}",
+      "const COUNTRY_NAMES = new Map();",
+      "type ClinicCountry = string;",
+      "phoneCountryName(code)",
       "'ESPAÑA'",
-      'en Espana',
-      '// Colombia y España',
-      ' * Sede en Venezuela',
-      'colombiano',
+      "en Espana",
+      "// Colombia y España",
+      " * Sede en Venezuela",
+      "colombiano",
     ]) {
       expect([line, namesCountryOutsideList(line)]).toEqual([line, true]);
     }
-    for (const line of ["country: 'País',", 'countryName(code)', '// ClinicCountry desapareció en DX-312', 'Escribe el nombre o el código del país']) {
+    for (const line of [
+      "country: 'País',",
+      "countryName(code)",
+      "// ClinicCountry desapareció en DX-312",
+      "Escribe el nombre o el código del país",
+    ]) {
       expect([line, namesCountryOutsideList(line)]).toEqual([line, false]);
     }
   });
@@ -950,7 +1190,7 @@ describe('arquitectura: país de la sede libre (DX-312)', () => {
  * valores. Un alias sin «country» en el nombre
  * (`const c = location.country; c === 'VE'`) no se ve.
  */
-const COUNTRY = 'coun' + 'try';
+const COUNTRY = "coun" + "try";
 const COUNTRY_RULE_EXCEPTIONS = [PRESCRIPTION_LEGACY_LAYOUT];
 
 /** Una expresión con «country»: `country`, `location.countryCode`, `x?.country`. */
@@ -959,7 +1199,7 @@ const C = `[\\w$.?!()\\[\\]]*${COUNTRY}[\\w$]*(?:\\??\\.[\\w$]+|\\(\\))*`;
 const L = (group: number): string => `(['"\`])[^'"\`\\n]{1,40}\\${group}`;
 /** `typeof país` compara el tipo, no el país. */
 const C_OPERAND = `(?<!typeof\\s+)${C}`;
-const countryPattern = (source: string): RegExp => new RegExp(source, 'gi');
+const countryPattern = (source: string): RegExp => new RegExp(source, "gi");
 const COUNTRY_COMPARE = countryPattern(
   `(?:${C_OPERAND}\\s*[!=]==?\\s*${L(1)})|(?:${L(2)}\\s*[!=]==?\\s*${C_OPERAND})`,
 );
@@ -977,11 +1217,15 @@ const COUNTRY_GET = countryPattern(`(\\b[\\w$]+)\\??\\.get\\(\\s*${C}\\s*\\)`);
  * línea, `Set`, `Object.keys(T)`, expresión regular): se mira el argumento
  * entero, no el receptor.
  */
-const MEMBERSHIP_CALL = /(\b[\w$]+)?\s*\??\.(?:includes|has|test|indexOf|some|find)\s*\(/g;
-const isCountryAllowList = (receiver: string): boolean => /^countries$/i.test(receiver);
-const ISO_CODES: ReadonlySet<string> = new Set(COUNTRIES.map((country) => country.code));
+const MEMBERSHIP_CALL =
+  /(\b[\w$]+)?\s*\??\.(?:includes|has|test|indexOf|some|find)\s*\(/g;
+const isCountryAllowList = (receiver: string): boolean =>
+  /^countries$/i.test(receiver);
+const ISO_CODES: ReadonlySet<string> = new Set(
+  COUNTRIES.map((country) => country.code),
+);
 
-const CLOSING: Record<string, string> = { '(': ')', '{': '}', '[': ']' };
+const CLOSING: Record<string, string> = { "(": ")", "{": "}", "[": "]" };
 
 /** Lo que encierra el `(`, `{` o `[` de `start` (equilibrado). */
 function enclosed(text: string, start: number): string {
@@ -1006,7 +1250,7 @@ function enclosed(text: string, start: number): string {
 const withoutComments = (text: string): string =>
   text.replace(
     /'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\[\s\S]|[^`\\])*`|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
-    (token) => (token.startsWith('/') ? token.replace(/[^\n]/g, ' ') : token),
+    (token) => (token.startsWith("/") ? token.replace(/[^\n]/g, " ") : token),
   );
 
 /** Línea (desde 1) de cada coincidencia de `pattern` (con `g`) en `text`. */
@@ -1015,15 +1259,18 @@ const matchLines = (
   pattern: RegExp,
   accept: (match: RegExpExecArray) => boolean = () => true,
 ): number[] =>
-  [...text.matchAll(pattern)].filter(accept).map((match) => text.slice(0, match.index).split('\n').length);
+  [...text.matchAll(pattern)]
+    .filter(accept)
+    .map((match) => text.slice(0, match.index).split("\n").length);
 
-const compareHits = (code: string): number[] => matchLines(code, COUNTRY_COMPARE);
+const compareHits = (code: string): number[] =>
+  matchLines(code, COUNTRY_COMPARE);
 /** `switch (…country…) {` con un `case` de dos letras antes de otro `switch` anidado. */
 const switchHits = (code: string): number[] =>
   matchLines(code, /\bswitch\s*\(/g, (match) => {
     const headStart = match.index + match[0].length - 1;
     const head = enclosed(code, headStart);
-    if (!new RegExp(COUNTRY, 'i').test(head)) return false;
+    if (!new RegExp(COUNTRY, "i").test(head)) return false;
     const after = code.slice(headStart + head.length + 2);
     const brace = /^\s*\{/.exec(after);
     if (!brace) return false;
@@ -1039,7 +1286,9 @@ const lookupHits = (code: string): number[] => [
       MEMBERSHIP_CALL,
       (match) =>
         !(match[1] && isCountryAllowList(match[1])) &&
-        new RegExp(COUNTRY, 'i').test(enclosed(code, match.index + match[0].length - 1)),
+        new RegExp(COUNTRY, "i").test(
+          enclosed(code, match.index + match[0].length - 1),
+        ),
     ),
   ]),
 ];
@@ -1050,91 +1299,122 @@ const lookupHits = (code: string): number[] => [
  */
 const countryKeyedHits = (code: string): number[] =>
   matchLines(code, /\{[^{}]*\}/g, ([object]) => {
-    const keys = [...object.matchAll(/(?:^|[,{])\s*['"]?([\w$]+)['"]?\s*:(?!:)/g)].map((key) => key[1]);
-    const isoKeys = new Set(keys.map((key) => key.toUpperCase()).filter((key) => ISO_CODES.has(key)));
-    return keys.length >= 2 && keys.every((key) => /^[A-Za-z]{2}$/.test(key)) && isoKeys.size >= 2;
+    const keys = [
+      ...object.matchAll(/(?:^|[,{])\s*['"]?([\w$]+)['"]?\s*:(?!:)/g),
+    ].map((key) => key[1]);
+    const isoKeys = new Set(
+      keys.map((key) => key.toUpperCase()).filter((key) => ISO_CODES.has(key)),
+    );
+    return (
+      keys.length >= 2 &&
+      keys.every((key) => /^[A-Za-z]{2}$/.test(key)) &&
+      isoKeys.size >= 2
+    );
   });
 
 /** `fichero:línea` de cada coincidencia de `hits` sobre el código sin comentarios. */
-const countryOffenders = (files: string[], hits: (code: string) => number[]): string[] =>
+const countryOffenders = (
+  files: string[],
+  hits: (code: string) => number[],
+): string[] =>
   files.flatMap((file) =>
-    hits(withoutComments(readFileSync(file, 'utf8'))).map((line) => `${relative(SRC, file)}:${line}`),
+    hits(withoutComments(readFileSync(file, "utf8"))).map(
+      (line) => `${relative(SRC, file)}:${line}`,
+    ),
   );
 
-describe('arquitectura: la web no decide por el país (DX-312, R3)', () => {
+describe("arquitectura: la web no decide por el país (DX-312, R3)", () => {
   const ruled = sourceFiles(SRC)
     .filter(scanned)
-    .filter((file) => !COUNTRY_RULE_EXCEPTIONS.includes(relative(SRC, file).split(sep).join('/')));
+    .filter(
+      (file) =>
+        !COUNTRY_RULE_EXCEPTIONS.includes(
+          relative(SRC, file).split(sep).join("/"),
+        ),
+    );
 
-  it('no production file compares a country with a literal, in either order and any case', () => {
+  it("no production file compares a country with a literal, in either order and any case", () => {
     expect(ruled.length).toBeGreaterThan(500);
     expect(countryOffenders(ruled, compareHits)).toEqual([]);
   });
 
-  it('no production file switches on a country with a two-letter case', () => {
+  it("no production file switches on a country with a two-letter case", () => {
     expect(countryOffenders(ruled, switchHits)).toEqual([]);
   });
 
-  it('no production file looks a country up in a list, a table or a string method', () => {
+  it("no production file looks a country up in a list, a table or a string method", () => {
     expect(countryOffenders(ruled, lookupHits)).toEqual([]);
   });
 
-  it('no production file keys an object by country codes', () => {
+  it("no production file keys an object by country codes", () => {
     expect(countryOffenders(ruled, countryKeyedHits)).toEqual([]);
   });
 
-  it('the scan covers the location screens and skips tests, lib/test and the named exception', () => {
-    const rels = ruled.map((f) => relative(SRC, f).split(sep).join('/'));
+  it("the scan covers the location screens and skips tests, lib/test and the named exception", () => {
+    const rels = ruled.map((f) => relative(SRC, f).split(sep).join("/"));
     expect(rels).toEqual(
-      expect.arrayContaining([COUNTRY_NAMES_LIB, REGIONAL_FIELDS, 'components/shared/country-combobox.tsx']),
+      expect.arrayContaining([
+        COUNTRY_NAMES_LIB,
+        REGIONAL_FIELDS,
+        "components/shared/country-combobox.tsx",
+      ]),
     );
     for (const rel of COUNTRY_RULE_EXCEPTIONS) {
-      expect([rel, existsSync(join(SRC, rel)), rels.includes(rel)]).toEqual([rel, true, false]);
+      expect([rel, existsSync(join(SRC, rel)), rels.includes(rel)]).toEqual([
+        rel,
+        true,
+        false,
+      ]);
       // La excepción sigue haciendo falta: la receta legada busca su maqueta por país.
       expect(countryOffenders([join(SRC, rel)], lookupHits)).not.toEqual([]);
     }
     // El helper de prueba sí compara con un literal: queda fuera por ser `lib/test/**`.
-    expect(rels.some((r) => r.startsWith('lib/test/') || r.includes('.test.'))).toBe(false);
+    expect(
+      rels.some((r) => r.startsWith("lib/test/") || r.includes(".test.")),
+    ).toBe(false);
   });
 
-  it('the country patterns catch each form and skip neutral text', () => {
+  it("the country patterns catch each form and skip neutral text", () => {
     /** Cada guarda que atrapa `snippet`, como si fuera un fichero de producción. */
     const caughtBy = (snippet: string): string[] => {
       const code = withoutComments(snippet);
       return (
         [
-          ['compare', compareHits(code).length > 0],
-          ['switch', switchHits(code).length > 0],
-          ['lookup', lookupHits(code).length > 0],
-          ['keys', countryKeyedHits(code).length > 0],
+          ["compare", compareHits(code).length > 0],
+          ["switch", switchHits(code).length > 0],
+          ["lookup", lookupHits(code).length > 0],
+          ["keys", countryKeyedHits(code).length > 0],
         ] as const
       ).flatMap(([guard, hit]) => (hit ? [guard] : []));
     };
     const LOC = `location.${COUNTRY}`;
     for (const [snippet, guard] of [
-      [`if ('VE' === ${LOC}) {}`, 'compare'],
-      [`if (${LOC} === 've') {}`, 'compare'],
-      [`${COUNTRY} == "VE"`, 'compare'],
-      [`${COUNTRY} !== \`VE\``, 'compare'],
-      [`{values.${COUNTRY} === 'VE' ? <BolivarHint /> : null}`, 'compare'],
-      [`['VE', 'CO'].includes(${LOC})`, 'lookup'],
-      [`['VE','CO'].indexOf(${COUNTRY})`, 'lookup'],
-      [`${LOC}.startsWith('V')`, 'lookup'],
-      [`TABLE[${LOC}Code]`, 'lookup'],
-      [`${COUNTRY}Code in CODES`, 'lookup'],
-      [`CURRENCY_BY_COUNTRY.get(${LOC})`, 'lookup'],
-      [`ALLOWED.includes(${LOC})`, 'lookup'],
-      [`new Set(['VE', 'CO']).has(${COUNTRY})`, 'lookup'],
-      [`Object.keys(TABLE).includes(${COUNTRY})`, 'lookup'],
-      [`/^(VE|CO)$/.test(${COUNTRY})`, 'lookup'],
-      [`RULES.some((code) => code === ${LOC})`, 'lookup'],
-      [`switch (norm(${LOC})) {\n  case 'VE':\n    break;\n}`, 'switch'],
-      [`switch (${LOC}) {\n  case 've':\n    break;\n}`, 'switch'],
-      [`const t = { VE: 'VES', CO: 'COP' };`, 'keys'],
-      [`const t = { ve: 'VES', co: 'COP' };`, 'keys'],
-      [`const t = { 'VE': 1, "CO": 2 };`, 'keys'],
+      [`if ('VE' === ${LOC}) {}`, "compare"],
+      [`if (${LOC} === 've') {}`, "compare"],
+      [`${COUNTRY} == "VE"`, "compare"],
+      [`${COUNTRY} !== \`VE\``, "compare"],
+      [`{values.${COUNTRY} === 'VE' ? <BolivarHint /> : null}`, "compare"],
+      [`['VE', 'CO'].includes(${LOC})`, "lookup"],
+      [`['VE','CO'].indexOf(${COUNTRY})`, "lookup"],
+      [`${LOC}.startsWith('V')`, "lookup"],
+      [`TABLE[${LOC}Code]`, "lookup"],
+      [`${COUNTRY}Code in CODES`, "lookup"],
+      [`CURRENCY_BY_COUNTRY.get(${LOC})`, "lookup"],
+      [`ALLOWED.includes(${LOC})`, "lookup"],
+      [`new Set(['VE', 'CO']).has(${COUNTRY})`, "lookup"],
+      [`Object.keys(TABLE).includes(${COUNTRY})`, "lookup"],
+      [`/^(VE|CO)$/.test(${COUNTRY})`, "lookup"],
+      [`RULES.some((code) => code === ${LOC})`, "lookup"],
+      [`switch (norm(${LOC})) {\n  case 'VE':\n    break;\n}`, "switch"],
+      [`switch (${LOC}) {\n  case 've':\n    break;\n}`, "switch"],
+      [`const t = { VE: 'VES', CO: 'COP' };`, "keys"],
+      [`const t = { ve: 'VES', co: 'COP' };`, "keys"],
+      [`const t = { 'VE': 1, "CO": 2 };`, "keys"],
     ]) {
-      expect({ snippet, caught: caughtBy(snippet).includes(guard as never) }).toEqual({ snippet, caught: true });
+      expect({
+        snippet,
+        caught: caughtBy(snippet).includes(guard as never),
+      }).toEqual({ snippet, caught: true });
     }
     for (const snippet of [
       `switch (status) {\n  case 'OK':\n    return true;\n}`,
@@ -1151,7 +1431,10 @@ describe('arquitectura: la web no decide por el país (DX-312, R3)', () => {
       `if (typeof ${COUNTRY} !== 'string') {}`,
       `const url = 'https://x.test/${COUNTRY}';`,
     ]) {
-      expect({ snippet, caughtBy: caughtBy(snippet) }).toEqual({ snippet, caughtBy: [] });
+      expect({ snippet, caughtBy: caughtBy(snippet) }).toEqual({
+        snippet,
+        caughtBy: [],
+      });
     }
   });
 });
@@ -1167,6 +1450,8 @@ describe('arquitectura: la web no decide por el país (DX-312, R3)', () => {
  */
 /** Un teléfono con indicativo real: `+57 601…`, `+34612…`, `+57…`. */
 const PHONE_EXAMPLE = /(?<![\w+\\])\+[1-9]\d{0,2}(?:[\s-]?\d{2,}|…|\.\.\.)/;
+/** Un literal que es solo un teléfono nacional sin indicativo: `'310 000 0001'`, `"612 34 56 78"` (no fechas ni importes). */
+const NATIONAL_PHONE_EXAMPLE = /['"`>]\s*\(?\d{3}\)?(?: \d{2,4}){2,}\s*['"`<]/;
 /** Monedas de la región y las que salieron de ejemplo, tras «p. ej.» o «por ejemplo». */
 const CURRENCY_FOR_EXAMPLE =
   /(?:p\.\s*ej\.|por ejemplo|ej\.)[:,]?\s*[«"'(]?\d*[\s.,\d]*(?:COP|USD|EUR|VES|MXN|ARS|CLP|PEN|BRL|BOB|PYG|UYU|GTQ|CRC|DOP|GBP)\b/i;
@@ -1178,33 +1463,49 @@ const CITY_EXAMPLE = /Bogotá|Medellín/;
 
 function countryExampleHit(line: string): boolean {
   if (COMMENT_LINE.test(line) || ZONE_LABEL_KEY.test(line)) return false;
-  return [PHONE_EXAMPLE, CURRENCY_FOR_EXAMPLE, ADDRESS_EXAMPLE, CITY_EXAMPLE].some((pattern) => pattern.test(line));
+  return [
+    PHONE_EXAMPLE,
+    NATIONAL_PHONE_EXAMPLE,
+    CURRENCY_FOR_EXAMPLE,
+    ADDRESS_EXAMPLE,
+    CITY_EXAMPLE,
+  ].some((pattern) => pattern.test(line));
 }
 
-describe('arquitectura: textos sin ejemplos de un país (DX-368)', () => {
-  it('src/ shows no phone, currency, address or city of one country as an example', () => {
+describe("arquitectura: textos sin ejemplos de un país (DX-368)", () => {
+  it("src/ shows no phone, currency, address or city of one country as an example", () => {
     const files = sourceFiles(SRC).filter(scanned);
     expect(files.length).toBeGreaterThan(300);
     const found = files.flatMap((path) =>
-      readFileSync(path, 'utf8')
-        .split('\n')
-        .flatMap((line, i) => (countryExampleHit(line) ? [`${relative(SRC, path)}:${i + 1}: ${line.trim()}`] : [])),
+      readFileSync(path, "utf8")
+        .split("\n")
+        .flatMap((line, i) =>
+          countryExampleHit(line)
+            ? [`${relative(SRC, path)}:${i + 1}: ${line.trim()}`]
+            : [],
+        ),
     );
     expect(found).toEqual([]);
   });
 
-  it('the example patterns catch each retired form and skip neutral text', () => {
+  it("the example patterns catch each retired form and skip neutral text", () => {
     for (const line of [
       "  hint: 'Con indicativo de país, p. ej. +57 601 555 0101',",
       "    'El paciente no tiene un teléfono con indicativo de país (p. ej. +57…). Agrégalo en su ficha.',",
       '  placeholder="+34 612 34 56 78"',
+      '  placeholder="612 34 56 78"',
+      "  phonePlaceholder: '310 000 0001',",
+      "  <span>(601) 555 0101</span>",
       "  currencyHint: 'Código de 3 letras (p. ej. COP).',",
       "  hint: 'Por ejemplo, 150.000 COP.',",
       "  addressPlaceholder: 'Calle 1 # 2-3',",
       "  addressPlaceholder: 'Cra 15 #90-20',",
-      '  <p>Un abono a las 20:00 en Bogotá cuenta ese día.</p>',
+      "  <p>Un abono a las 20:00 en Bogotá cuenta ese día.</p>",
     ]) {
-      expect({ line, caught: countryExampleHit(line) }).toEqual({ line, caught: true });
+      expect({ line, caught: countryExampleHit(line) }).toEqual({
+        line,
+        caught: true,
+      });
     }
     for (const line of [
       "  hint: 'Con indicativo internacional (+…).',",
@@ -1212,13 +1513,18 @@ describe('arquitectura: textos sin ejemplos de un país (DX-368)', () => {
       "  codeHintCreate: 'Corto y único, p. ej. EXO o CIR-3M. No se puede cambiar después.',",
       "  emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',",
       "  'America/Bogota': 'Bogotá',",
-      '  // (medianoche UTC sería la tarde del día anterior en Bogotá).',
-      '   * siempre en USD). Mientras no se sabe la moneda',
-      '  const co = /^\\+57(\\d{3})(\\d{3})(\\d{4})$/.exec(e164);',
+      "  // (medianoche UTC sería la tarde del día anterior en Bogotá).",
+      "   * siempre en USD). Mientras no se sabe la moneda",
+      "  const co = /^\\+57(\\d{3})(\\d{3})(\\d{4})$/.exec(e164);",
       "  mobileInvalidHint: 'No sirve para WhatsApp: revisa el número o escríbelo con + y su indicativo.',",
       "  label: 'Mejora: +20 % frente al periodo anterior',",
+      "  const day = '2026-10-17';",
+      "  const amount = '1 500 000';",
     ]) {
-      expect({ line, caught: countryExampleHit(line) }).toEqual({ line, caught: false });
+      expect({ line, caught: countryExampleHit(line) }).toEqual({
+        line,
+        caught: false,
+      });
     }
   });
 });
