@@ -3,6 +3,7 @@ import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDate, formatDateTime } from '@/lib/format/date';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
+import { paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
 import type { PaymentReceipt, ReceiptPrintFormat } from '@/lib/payments/payment-receipts-api';
 
 // Copy en español (i18n-ready), como el resto de documentos imprimibles.
@@ -39,6 +40,11 @@ const copy = {
   // Revisión N1 / QA D2: sin plan, lo que queda del saldo migrado.
   openingBalanceAfter: 'Saldo pendiente tras este abono',
   balanceUnavailable: 'No disponible',
+  // DX-376: abono en otra moneda que la del plan, con la tasa que congeló.
+  rateTerm: 'Tasa de cambio',
+  equivalent: (currency: string) => `Equivalente en ${currency}`,
+  rateApplied: (pair: string, source: string, date: string) => `Tasa aplicada: ${pair} (${source}, ${date})`,
+  rateMissing: 'Tasa aplicada: sin tasa de cambio de su día. El equivalente se calcula cuando se registre.',
   cashier: 'Recibió',
   signature: 'Firma y sello',
 };
@@ -63,6 +69,12 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
   const { snapshot } = receipt;
   const { clinic, location, patient, payment, plan, planBalance, cashier } = snapshot;
   const narrow = format === '80mm';
+  // DX-376: la tasa congelada del abono (DX-375), no la del día: reimprimir da
+  // la misma. Un abono anterior aún sin congelar (LEGACY) no imprime tasa.
+  const exchange = receipt.exchangeRate;
+  const frozen = exchange?.status === 'FROZEN' && exchange.rate && exchange.equivalentAmount !== null
+    ? { rate: exchange.rate, equivalent: exchange.equivalentAmount }
+    : null;
 
   return (
     <article
@@ -155,6 +167,27 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
             {formatCurrency(payment.amount, payment.currency)}
           </span>
         </Field>
+        {frozen ? (
+          <Field label={copy.equivalent(frozen.rate.currency)}>
+            <span className={cn('font-semibold tabular-nums', receipt.voided && 'line-through')}>
+              {formatCurrency(frozen.equivalent, frozen.rate.currency)}
+            </span>
+          </Field>
+        ) : null}
+        {frozen || exchange?.status === 'MISSING' ? (
+          <div data-testid="receipt-rate" className={cn('min-w-0 text-xs text-[#4b5563]', !narrow && 'sm:col-span-2')}>
+            <dt className="sr-only">{copy.rateTerm}</dt>
+            <dd className="break-words tabular-nums">
+              {frozen
+                ? copy.rateApplied(
+                    ratePairLabel(payment.currency, frozen.rate, (amount, currency) => formatCurrency(amount, currency)),
+                    paymentRateCopy.source[frozen.rate.source],
+                    formatCivilDate(frozen.rate.date),
+                  )
+                : copy.rateMissing}
+            </dd>
+          </div>
+        ) : null}
         <Field label={copy.method}>
           {payment.method ? PAYMENT_METHOD_LABELS[payment.method] : copy.methodFallback}
         </Field>

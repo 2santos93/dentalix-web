@@ -118,6 +118,8 @@ import { MarkDoneModal } from './mark-done-modal';
 import { VoidCancellationFeeModal, voidFeeCopy } from '@/components/appointments/fee-reason-modal';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
 import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
+import { PaymentRatePreview } from '@/components/payments/payment-rate-preview';
+import { useExchangeRates } from '@/components/payments/use-exchange-rates';
 import { frozenRateLabel, paymentRateCopy } from '@/lib/payments/payment-rate';
 
 // El pliegue «Abonos y saldo»: destino estable del foco cuando un modal de un
@@ -1625,6 +1627,15 @@ export function TreatmentPlansTab({
     getTokenAllowedLocationIds(token),
   );
 
+  // DX-376: cobrar en otra moneda que la del plan enseña, antes de guardar, la
+  // tasa del día del abono, cuánto cubre y lo que queda pendiente.
+  const paymentInOtherCurrency =
+    planDetail !== null && paymentCurrency !== '' && paymentCurrency !== planDetail.currency;
+  const paymentRates = useExchangeRates(token, paymentDate, showPaymentForm && paymentInOtherCurrency);
+  const parsedPaymentAmount = paymentCurrency ? parseMoneyInput(paymentAmount, paymentCurrency) : null;
+  const previewPaymentAmount =
+    parsedPaymentAmount?.ok && parsedPaymentAmount.value > 0 ? parsedPaymentAmount.value : null;
+
   function refreshPlansInPlace(): Promise<void> {
     setRefreshing(true);
     return listPlans(token, patientId)
@@ -2649,6 +2660,20 @@ export function TreatmentPlansTab({
                                 />
                               </FormField>
                             </div>
+
+                            {paymentInOtherCurrency && planDetail && planBalance ? (
+                              <PaymentRatePreview
+                                state={paymentRates}
+                                amount={previewPaymentAmount}
+                                paymentCurrency={paymentCurrency}
+                                planCurrency={planDetail.currency}
+                                planBalance={{
+                                  balance: planBalance.balance,
+                                  paymentsWithoutRate: planBalance.paymentsWithoutRate.length,
+                                }}
+                                date={paymentDate}
+                              />
+                            ) : null}
 
                             <div className="grid gap-4 sm:grid-cols-2">
                               <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel}>

@@ -9728,6 +9728,22 @@ export interface components {
              */
             reason: string;
         };
+        /**
+         * @description FROZEN: congeló su tasa (rate y equivalentAmount presentes). MISSING: «sin tasa» de su día. LEGACY: anterior a la tasa congelada y aún sin congelar.
+         * @enum {string}
+         */
+        ReceiptExchangeRateStatus: "FROZEN" | "MISSING" | "LEGACY";
+        ReceiptExchangeRateDto: {
+            /** @description FROZEN: congeló su tasa (rate y equivalentAmount presentes). MISSING: «sin tasa» de su día. LEGACY: anterior a la tasa congelada y aún sin congelar. */
+            status: components["schemas"]["ReceiptExchangeRateStatus"];
+            /** @description La tasa congelada (moneda de destino, fuente y día); null si no la congeló. */
+            rate: components["schemas"]["FrozenExchangeRateDto"] | null;
+            /**
+             * @description El abono en la moneda de destino (`rate.currency`) con la tasa congelada, redondeado a céntimos; null sin tasa.
+             * @example 50
+             */
+            equivalentAmount: number | null;
+        };
         ReceiptClinicDto: {
             /** @example Clínica Demo */
             name: string;
@@ -9852,6 +9868,8 @@ export interface components {
             /** Format: date-time */
             voidedAt: string | null;
             voidReason: string | null;
+            /** @description DX-376: la tasa del abono y su equivalente en la moneda de su destino; null si el abono está en esa moneda. */
+            exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
             /** @description Foto inmutable al emitir (en los «sin serie», los datos de hoy). */
             snapshot: components["schemas"]["ReceiptSnapshotDto"];
         };

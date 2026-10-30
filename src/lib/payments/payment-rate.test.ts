@@ -1,5 +1,5 @@
 import { regionalFormat } from '@/lib/format/regional-format';
-import { frozenRateLabel, paymentRateCopy } from './payment-rate';
+import { convertWithRate, frozenRateLabel, paymentRateCopy, quoteFromRates } from './payment-rate';
 import type { Payment } from './payments-api';
 
 const frozen = (over: Partial<NonNullable<Payment['frozenRate']>> = {}): Pick<Payment, 'currency' | 'frozenRate'> => ({
@@ -61,5 +61,33 @@ describe('frozenRateLabel (DX-375)', () => {
 
   it('los textos no nombran un país ni un banco central', () => {
     expect(JSON.stringify(paymentRateCopy)).not.toMatch(/venezuela|colombia|banco central|bcv/i);
+  });
+});
+
+describe('quoteFromRates (DX-376: la misma tasa que congela la API)', () => {
+  const day = (rates: Record<string, number>) => ({ base: 'USD', rates });
+
+  it('redondea las tasas a 8 decimales, lo que guarda la columna al congelar (DX-375)', () => {
+    // Con un fallo de la caché el proveedor puede dar más decimales: la API los
+    // recorta a 8 antes de convertir, así que la previsualización también.
+    const quote = quoteFromRates(day({ VES: 36.123456789 }), 'VES', 'USD');
+    expect(quote).toEqual({ currency: 'USD', fromPerBase: 36.12345679, toPerBase: 1 });
+  });
+
+  it('el equivalente con esa tasa coincide céntimo a céntimo con el que congela la API', () => {
+    // La API convierte con 0,12345678 (8 decimales): 10.000 → 81.000,01. Con la
+    // tasa cruda saldría 81.000,00: un céntimo distinto del que se guarda.
+    const quote = quoteFromRates(day({ XAU: 0.123456785 }), 'XAU', 'USD');
+    expect(convertWithRate(10000, quote!)).toBe(81000.01);
+  });
+
+  it('la moneda base vale 1 aunque no venga en `rates`', () => {
+    expect(quoteFromRates(day({ COP: 4000 }), 'COP', 'USD')).toEqual({ currency: 'USD', fromPerBase: 4000, toPerBase: 1 });
+    expect(quoteFromRates(day({ COP: 4000 }), 'USD', 'COP')).toEqual({ currency: 'COP', fromPerBase: 1, toPerBase: 4000 });
+  });
+
+  it('una moneda ausente, o una tasa que redondea a 0 con 8 decimales, es «sin tasa» (como la API)', () => {
+    expect(quoteFromRates(day({ COP: 4000 }), 'VES', 'USD')).toBeNull();
+    expect(quoteFromRates(day({ XYZ: 0.000000001 }), 'XYZ', 'USD')).toBeNull();
   });
 });

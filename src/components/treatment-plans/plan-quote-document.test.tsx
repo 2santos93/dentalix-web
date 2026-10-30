@@ -197,3 +197,33 @@ describe('PlanQuoteDocument (DX-012)', () => {
     });
   });
 });
+
+describe('DX-376: segunda moneda opcional al imprimir', () => {
+  const SECOND = {
+    currency: 'USD',
+    fromPerBase: 4000,
+    toPerBase: 1,
+    source: 'MANUAL' as const,
+    date: '2026-10-30',
+  };
+
+  it('añade el total en la 2.ª moneda con la tasa, su fuente, su fecha y la frase de importe orientativo', () => {
+    render(<PlanQuoteDocument quote={planQuoteFixture()} secondCurrency={SECOND} />);
+    const totals = screen.getByTestId('quote-totals');
+    expect(text(within(totals).getByTestId('quote-second-total'))).toContain('Total orientativo (USD)825,00 US$');
+    const note = text(screen.getByTestId('quote-second-currency'));
+    expect(note).toContain('Tasa: 1 USD = 4000,00 COP (manual, 30/10/2026).');
+    expect(note).toContain('El importe en USD es orientativo y se calcula con la tasa del día del pago.');
+  });
+
+  it('sin 2.ª moneda el presupuesto no cambia', () => {
+    render(<PlanQuoteDocument quote={planQuoteFixture()} />);
+    expect(screen.queryByTestId('quote-second-total')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('quote-second-currency')).not.toBeInTheDocument();
+  });
+
+  it('ningún texto nombra un país ni un banco central', () => {
+    render(<PlanQuoteDocument quote={planQuoteFixture()} secondCurrency={SECOND} />);
+    expect(text(screen.getByTestId('quote-second-currency'))).not.toMatch(/venezuela|colombia|bcv|banco central/i);
+  });
+});
