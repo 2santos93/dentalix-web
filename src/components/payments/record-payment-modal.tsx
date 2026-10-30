@@ -1,13 +1,8 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import {
-  recordOpeningBalancePayment,
-  recordPayment,
-  type PaymentMethod,
-} from '@/lib/payments/payments-api';
+import { recordOpeningBalancePayment, recordPayment } from '@/lib/payments/payments-api';
 import type { AccountStatementOpeningBalance } from '@/lib/account-statement/account-statement-api';
-import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from '@/lib/payments/payment-method';
 import { recordPaymentErrorMessage } from '@/lib/payments/payment-errors';
 import { statementCopy } from '@/lib/account-statement/presentation';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
@@ -26,6 +21,12 @@ import { PaymentRatePreview, ratePreviewCopy, type PreviewPlanBalance } from './
 import { usePlanBalance } from './use-plan-balance';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import {
+  PaymentMethodSelect,
+  PaymentReferenceFields,
+  paymentMethodFieldsCopy,
+  usePaymentMethodFields,
+} from './payment-method-fields';
 
 // Copy como constantes (i18n-ready).
 export const recordPaymentCopy = {
@@ -36,8 +37,6 @@ export const recordPaymentCopy = {
   submit: 'Registrar abono',
   amount: 'Importe',
   currency: 'Moneda',
-  method: 'Método',
-  methodNone: 'Sin especificar',
   date: 'Fecha de pago',
   invalidAmount: 'Escribe un importe mayor que 0.',
   invalidDate: 'Elige la fecha de pago.',
@@ -78,7 +77,6 @@ interface FormState {
   amount: string;
   /** `''` = la moneda del plan elegido. */
   currency: string;
-  method: PaymentMethod | '';
   date: string;
 }
 
@@ -89,7 +87,6 @@ function initialForm(today: string): FormState {
     planId: '',
     amount: '',
     currency: '',
-    method: '',
     date: today,
   };
 }
@@ -143,6 +140,8 @@ export function RecordPaymentModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
+  // DX-377: medio de la clínica, referencia y aviso de referencia repetida.
+  const methodFields = usePaymentMethodFields(token, open);
 
   // Si la persona aún no tocó la fecha, sigue a «hoy» de la sede cuando llega
   // su zona (DX-097).
@@ -163,6 +162,7 @@ export function RecordPaymentModal({
       setIdempotencyKey(crypto.randomUUID());
       setError(null);
       setAmountError(null);
+      methodFields.reset();
     }
   }
 
@@ -198,6 +198,7 @@ export function RecordPaymentModal({
     setForm((f) => ({ ...f, ...next }));
   }
 
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!plan && !opening) return;
@@ -223,13 +224,18 @@ export function RecordPaymentModal({
     // guarda al mediodía de la sede, así cae en ese día de caja en su zona
     // (medianoche UTC sería la tarde del día anterior en Bogotá).
     const paidAt = form.date;
+    const methodCheck = methodFields.validate();
+    if (!methodCheck.ok) {
+      if (methodCheck.formError) setError(methodCheck.formError);
+      return;
+    }
     setSubmitting(true);
     try {
       const body = {
         amount,
         currency,
         paidAt,
-        ...(form.method ? { method: form.method } : {}),
+        ...methodFields.body(),
       };
       const saved = opening
         ? await recordOpeningBalancePayment(token, opening.id, body, idempotencyKey)
@@ -255,6 +261,7 @@ export function RecordPaymentModal({
     } catch (err) {
       // La clave NO cambia: el reintento de este mismo abono la reusa y el
       // servidor lo deduplica en vez de cobrar dos veces.
+      if (methodFields.catchDuplicate(err)) return;
       setError(recordPaymentErrorMessage(err));
     } finally {
       setSubmitting(false);
@@ -268,7 +275,7 @@ export function RecordPaymentModal({
       title={copy.title}
       description={openings.length > 0 ? copy.descriptionWithOpenings : copy.description}
       onSubmit={handleSubmit}
-      submitLabel={copy.submit}
+      submitLabel={methodFields.duplicate ? paymentMethodFieldsCopy.duplicateSubmit : copy.submit}
       submitting={submitting}
       submitDisabled={plan === null && opening === null}
       error={error}
@@ -364,21 +371,7 @@ export function RecordPaymentModal({
                 />
               ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField htmlFor="rp-method" label={copy.method}>
-                  <select
-                    id="rp-method"
-                    value={form.method}
-                    onChange={(e) => patch({ method: e.target.value as PaymentMethod | '' })}
-                    className={fieldClass}
-                  >
-                    <option value="">{copy.methodNone}</option>
-                    {PAYMENT_METHOD_OPTIONS.map((method) => (
-                      <option key={method} value={method}>
-                        {PAYMENT_METHOD_LABELS[method]}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
+                <PaymentMethodSelect fields={methodFields} id="rp-method" />
                 <FormField htmlFor="rp-date" label={copy.date}>
                   {zone.status === 'error' && !dateTouched ? (
                     <SedeConfigError kind="timeZone" variant="field" retryId="rp-date" onRetry={zone.retry} />
@@ -396,6 +389,7 @@ export function RecordPaymentModal({
                   )}
                 </FormField>
               </div>
+              <PaymentReferenceFields fields={methodFields} idPrefix="rp" />
             </>
           ) : null}
         </>

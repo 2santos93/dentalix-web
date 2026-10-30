@@ -133,6 +133,22 @@ jest.mock('../../lib/exchange/exchange-api', () => ({
   getExchangeRates: jest.fn().mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: { COP: 4000 } }),
 }));
 // Recibo de caja (DX-136): el diálogo pide el recibo a la API.
+// DX-377: medios de pago activos de la clínica (el formulario de abono).
+jest.mock('../../lib/payments/payment-methods-api', () => ({
+  ...jest.requireActual('../../lib/payments/payment-methods-api'),
+  listPaymentMethods: jest.fn().mockResolvedValue([
+    {
+      id: 'pm-mobile',
+      name: 'Pago móvil',
+      kind: 'DIGITAL',
+      active: true,
+      requiresReference: true,
+      legacyMethod: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ]),
+}));
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
   getPaymentReceipt: jest.fn(),
@@ -280,6 +296,10 @@ const payment1: Payment = {
   paidAt: '2026-01-05T00:00:00.000Z',
   paidOn: '2026-01-05',
   method: 'CASH',
+  paymentMethodId: null,
+  paymentMethodName: null,
+  reference: null,
+  duplicateReferenceReason: null,
   notes: null,
   createdById: null,
   createdAt: '2026-01-05T00:00:00.000Z',
@@ -903,6 +923,46 @@ describe('TreatmentPlansTab', () => {
     await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mockedListPayments).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(expectedCurrencyText(updatedBalance.paid))).toBeInTheDocument();
+  });
+
+  it('DX-377: el abono del plan usa los medios de la clínica, exige la referencia y confirma la repetida con motivo', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([]);
+    mockedRecordPayment
+      .mockRejectedValueOnce(
+        new ApiError(409, 'Esta referencia ya se usó con este medio de pago en otro abono de los últimos 90 días.', {
+          code: 'PAYMENT_REFERENCE_DUPLICATE',
+        }),
+      )
+      .mockResolvedValueOnce({ ...payment1, id: 'pay-2' });
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+    await user.type(screen.getByLabelText(/^monto$/i), '100');
+    const method = screen.getByLabelText<HTMLSelectElement>(/^método$/i);
+    await waitFor(() => expect(method.querySelector('option[value="pm-mobile"]')).not.toBeNull());
+    await user.selectOptions(method, 'pm-mobile');
+
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+    expect(await screen.findByText('Este medio de pago pide la referencia del pago.')).toBeInTheDocument();
+    expect(mockedRecordPayment).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('Referencia (obligatoria)'), '0412 555');
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+    expect(await screen.findByText(/Esta referencia ya se usó/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Motivo para registrarla igualmente'), 'Dos cuotas');
+    await user.click(screen.getByRole('button', { name: 'Registrar igualmente' }));
+
+    await waitFor(() => expect(mockedRecordPayment).toHaveBeenCalledTimes(2));
+    const [first, second] = mockedRecordPayment.mock.calls;
+    expect(first[2]).toEqual(expect.objectContaining({ paymentMethodId: 'pm-mobile', reference: '0412 555' }));
+    expect(second[2]).toEqual(expect.objectContaining({ duplicateReferenceReason: 'Dos cuotas' }));
+    // El reintento confirmado es el mismo abono: misma Idempotency-Key.
+    expect(second[3]).toBe(first[3]);
   });
 
   it('"Anular" on an abono calls voidPayment then refreshes balance + list in place', async () => {

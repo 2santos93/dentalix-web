@@ -188,7 +188,7 @@ for (const viewport of [
     await expect(dialog).toContainText(/El abono supera lo pendiente del saldo migrado: quedan COP\s100\.000,00/);
 
     await dialog.getByLabel('Importe').fill('40000');
-    await dialog.getByLabel('Método').selectOption('CASH');
+    await dialog.getByLabel('Método').selectOption({ label: 'Efectivo' });
     await submit.click();
     await expect(dialog).toBeHidden({ timeout: 10_000 });
     await expect(page.getByRole('status').filter({ hasText: 'Abono registrado' })).toBeVisible();
