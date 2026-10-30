@@ -94,7 +94,7 @@ test('escritorio (1440 px): las barras del teléfono no se ven y el sidebar mide
   for (const path of ROUTES) {
     await page.goto(`${origin}${path}`);
     const sidebar = page.locator('aside');
-    await expect(sidebar.getByRole('link', { name: 'Dashboard' })).toBeVisible({ timeout: 30_000 });
+    await expect(sidebar.getByRole('link', { name: 'Inicio' })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('banner')).toBeHidden();
     await expect(page.getByTestId('bottom-tab-bar')).toBeHidden();
     const width = await sidebar.evaluate((el) => el.getBoundingClientRect().width);

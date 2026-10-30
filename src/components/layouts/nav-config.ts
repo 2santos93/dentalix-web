@@ -54,8 +54,7 @@ export interface NavGroup {
 const DASHBOARD: NavItem = {
   // DASHBOARD_ROLES: dato financiero agregado, solo gestión.
   href: '/dashboard',
-  label: 'Dashboard',
-  tabLabel: 'Inicio',
+  label: 'Inicio',
   icon: LayoutDashboard,
   roles: ['ADMIN'],
 };

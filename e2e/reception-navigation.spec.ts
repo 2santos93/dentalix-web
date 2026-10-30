@@ -66,7 +66,7 @@ test('RECEPTION no ve el menú de catálogo ni las pestañas clínicas del pacie
   await expect(nav.getByRole('link', { name: 'Caja' })).toBeVisible({ timeout: 10_000 });
   await expect(nav.getByRole('link', { name: 'Pacientes' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Agenda' })).toBeVisible();
-  for (const hidden of ['Catálogo', 'Inventario', 'Dashboard', 'Personal']) {
+  for (const hidden of ['Catálogo', 'Inventario', 'Inicio', 'Personal']) {
     await expect(page.getByRole('link', { name: hidden, exact: true }), hidden).toHaveCount(0);
   }
 

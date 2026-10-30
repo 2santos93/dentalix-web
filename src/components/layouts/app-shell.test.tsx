@@ -83,7 +83,7 @@ describe('AppShell', () => {
   const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
     ADMIN: {
       visible: [
-        'Dashboard',
+        'Inicio',
         'Pacientes',
         'Agenda',
         'Caja',
@@ -100,15 +100,15 @@ describe('AppShell', () => {
     },
     DENTIST: {
       visible: ['Pacientes', 'Agenda', 'Catálogo'],
-      hidden: ['Dashboard', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      hidden: ['Inicio', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
     },
     ASSISTANT: {
       visible: ['Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
-      hidden: ['Dashboard', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes'],
+      hidden: ['Inicio', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes'],
     },
     RECEPTION: {
       visible: ['Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos'],
-      hidden: ['Dashboard', 'Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      hidden: ['Inicio', 'Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
     },
   };
   it.each(Object.keys(ROLE_NAV))('el menú de %s solo enseña lo que su rol puede abrir', async (role) => {
@@ -260,7 +260,7 @@ describe('AppShell', () => {
 
     it('ADMIN ve los cinco grupos en el orden de la SPEC, con Ajustes en Administración', async () => {
       const nav = sidebarFor('ADMIN');
-      await nav.findByRole('link', { name: 'Dashboard' });
+      await nav.findByRole('link', { name: 'Inicio' });
       expect(groupsOf(nav)).toEqual([
         [null, ['/dashboard', '/agenda', '/patients']],
         ['Atención', ['/presupuestos', '/anamnesis-por-revisar']],
@@ -404,8 +404,8 @@ describe('AppShell', () => {
   // A4: paleta de comandos.
   describe('A4: paleta de comandos', () => {
     it.each([
-      ['ADMIN', ['Dashboard', 'Caja', 'Personal', 'Ajustes'], [] as string[]],
-      ['RECEPTION', ['Agenda', 'Caja', 'Presupuestos', 'Ajustes'], ['Dashboard', 'Personal', 'Inventario', 'Auditoría']],
+      ['ADMIN', ['Inicio', 'Caja', 'Personal', 'Ajustes'], [] as string[]],
+      ['RECEPTION', ['Agenda', 'Caja', 'Presupuestos', 'Ajustes'], ['Inicio', 'Personal', 'Inventario', 'Auditoría']],
     ])('%s: ⌘K la abre y «Ir a» solo lista lo que su rol puede abrir', async (role, visible, hidden) => {
       const user = userEvent.setup();
       mockAccessToken = tokenForRole(role);
@@ -434,7 +434,7 @@ describe('AppShell', () => {
           <p>contenido</p>
         </AppShell>,
       );
-      await screen.findAllByRole('link', { name: 'Dashboard' });
+      await screen.findAllByRole('link', { name: 'Inicio' });
       await user.keyboard('{Control>}k{/Control}');
       const palette = within(await screen.findByTestId('command-palette'));
       const input = palette.getByRole('combobox');
