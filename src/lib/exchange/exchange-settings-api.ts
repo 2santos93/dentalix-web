@@ -46,6 +46,18 @@ export function registerManualExchangeRate(
   });
 }
 
+/**
+ * DX-375: corrige la tasa de una tasa manual que ningún abono usó (el día y la
+ * moneda no cambian). Una ya usada responde 409 `MANUAL_EXCHANGE_RATE_IN_USE`.
+ */
+export function correctManualExchangeRate(token: string, id: string, rate: number): Promise<ManualExchangeRate> {
+  return apiFetch<ManualExchangeRate>(`/exchange/manual-rates/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: { rate },
+    token,
+  });
+}
+
 /** Los mismos límites que la API: > 0, hasta 8 decimales y menos de 10.000.000. */
 export const RATE_INPUT_COPY = {
   missing: 'Escribe la tasa.',

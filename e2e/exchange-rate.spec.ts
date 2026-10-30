@@ -162,7 +162,7 @@ test('registering the same currency twice the same day keeps the modal open with
   const dialog = await fillRate(page, '0,95');
   await dialog.getByRole('button', { name: 'Registrar tasa' }).click();
   await expect(
-    dialog.getByText('Ya hay una tasa registrada para esa moneda en ese día. Por ahora no se puede cambiar.'),
+    dialog.getByText('Ya hay una tasa registrada para esa moneda en ese día. Si ningún abono la usó, corrígela en la lista.'),
   ).toBeVisible();
   await expect(dialog).toBeVisible();
 });

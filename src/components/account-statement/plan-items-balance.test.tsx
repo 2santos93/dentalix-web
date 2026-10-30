@@ -4,9 +4,17 @@ import { PlanItemsBalance } from './plan-items-balance';
 import { getPlanBalance, type PlanBalance } from '@/lib/payments/payments-api';
 import { ApiError } from '@/lib/api/client';
 import { formatCurrency } from '@/lib/format/currency';
+import { tokenForRole } from '@/lib/test/data-consents';
+import { withoutRateCopy } from '@/components/payments/without-rate-notice';
 
 jest.mock('../../lib/payments/payments-api', () => ({
   getPlanBalance: jest.fn(),
+}));
+// DX-378: el aviso «sin tasa» pinta importe y día con el formato de la sede
+// (fixture explícito es-CO).
+jest.mock('../../lib/locations/locations-api', () => ({
+  ...jest.requireActual('../../lib/locations/locations-api'),
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
 }));
 
 const mockedBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
@@ -22,6 +30,7 @@ function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {
     paid: 120,
     balance: 30,
     paymentsCount: 1,
+    paymentsWithoutRate: [],
     allocated: 120,
     unallocated: 0,
     unconvertedPaymentsCount: 0,
@@ -118,6 +127,36 @@ it('unconverted notice explains abonos without a rate, in singular or plural', a
   expect(
     await screen.findByText('1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.'),
   ).toBeInTheDocument();
+});
+
+// DX-375: los abonos «sin tasa» no cuentan en el saldo; el aviso lo dice,
+// con la lista y el camino a Ajustes › Tasa de cambio según el rol, y sustituye
+// a la nota de «sin convertir» (son los mismos abonos).
+it('abonos sin tasa: aviso con la lista y, para recepción, a quién pedir la tasa', async () => {
+  mockedBalance.mockResolvedValue(
+    balanceFixture({
+      unconvertedPaymentsCount: 1,
+      paymentsWithoutRate: [{ paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' }],
+    }),
+  );
+  render(<PlanItemsBalance token={tokenForRole('RECEPTION')} planId="plan-1" />);
+  const notice = (await screen.findByText(withoutRateCopy.title(1))).closest('[role="status"]');
+  expect(await within(notice as HTMLElement).findByText('USD 50,00 del 30/10/2026')).toBeInTheDocument();
+  expect(notice).toHaveTextContent(withoutRateCopy.otherRoles);
+  expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
+});
+
+it('abonos sin tasa: al ADMIN le enlaza a Ajustes › Tasa de cambio', async () => {
+  mockedBalance.mockResolvedValue(
+    balanceFixture({
+      paymentsWithoutRate: [{ paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' }],
+    }),
+  );
+  render(<PlanItemsBalance token={tokenForRole('ADMIN')} planId="plan-1" />);
+  expect(await screen.findByRole('link', { name: withoutRateCopy.adminLink })).toHaveAttribute(
+    'href',
+    '/settings/tasa-de-cambio',
+  );
 });
 
 it('cancelled plan shows no amounts to charge and the unallocated figure', async () => {

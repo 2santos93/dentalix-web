@@ -84,6 +84,8 @@ import { notifyError } from '@/components/errors/notify';
 import { cn } from '@/lib/utils';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
@@ -115,6 +117,8 @@ import { PriceQuoteLine, itemPriceOriginText } from './price-quote-line';
 import { MarkDoneModal } from './mark-done-modal';
 import { VoidCancellationFeeModal, voidFeeCopy } from '@/components/appointments/fee-reason-modal';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
+import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
+import { frozenRateLabel, paymentRateCopy } from '@/lib/payments/payment-rate';
 
 // El pliegue «Abonos y saldo»: destino estable del foco cuando un modal de un
 // abono se cierra y la fila que lo abrió ya no existe.
@@ -647,6 +651,28 @@ function RegisterImplantLink({
 }
 
 /**
+ * DX-375: «Sin tasa» junto al importe de un abono que no tenía tasa de su día
+ * (el saldo no lo cuenta todavía). El motivo va en texto para lectores de
+ * pantalla, no solo en el color.
+ */
+function PaymentMissingRateBadge({ payment }: { payment: Payment }) {
+  if (payment.exchangeRateStatus !== 'MISSING') return null;
+  return (
+    <Badge variant="warning">
+      {paymentRateCopy.missing}
+      <span className="sr-only">: {paymentRateCopy.missingHelp}</span>
+    </Badge>
+  );
+}
+
+/** DX-375: la tasa que congeló un abono en otra moneda, bajo su importe, con el formato de la sede (DX-378). */
+function PaymentFrozenRate({ payment, fmt }: { payment: Payment; fmt: RegionalFormat | null }) {
+  const label = frozenRateLabel(payment, fmt);
+  if (!label) return null;
+  return <span className="mt-0.5 block text-xs font-normal text-muted tabular-nums">{label}</span>;
+}
+
+/**
  * Las cuatro cifras del plan en UNA fila etiquetada, no en tarjetas.
  *
  * Antes esta pantalla mostraba «Total» en su propia franja y luego tres
@@ -662,10 +688,12 @@ function RegisterImplantLink({
  * el paciente pregunta en voz alta.
  */
 function PlanMoneySummary({
+  token,
   total,
   currency,
   balance,
 }: {
+  token: string;
   total: number;
   currency: string;
   balance: PlanBalance | null;
@@ -723,7 +751,12 @@ function PlanMoneySummary({
           </div>
         ))}
       </dl>
-      {balance && balance.unconvertedPaymentsCount > 0 ? (
+      {/* DX-375: los abonos «sin tasa» no cuentan en Pagado ni en Saldo; el
+          aviso lo dice junto a las cifras (y cómo resolverlo) en vez de la
+          nota de «sin convertir», que habla de los mismos abonos. */}
+      {balance && balance.paymentsWithoutRate.length > 0 ? (
+        <WithoutRateNotice token={token} payments={balance.paymentsWithoutRate} />
+      ) : balance && balance.unconvertedPaymentsCount > 0 ? (
         <p className="text-sm text-muted">{allocationCopy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>
       ) : null}
     </>
@@ -1006,6 +1039,8 @@ interface PaymentsListProps {
   manualPaymentIds?: ReadonlySet<string>;
   /** DX-051: abre «Imputar abono»; solo ADMIN y en un plan que se cobra. */
   onAllocate?: (paymentId: string, trigger: HTMLElement) => void;
+  /** DX-375/DX-378: formato de la sede para la tasa congelada; `null` mientras carga («—»). */
+  fmt: RegionalFormat | null;
 }
 
 /** Desktop table + mobile cards for the abonos list — same responsive split as `ItemsTable`. */
@@ -1017,6 +1052,7 @@ function PaymentsList({
   billable = true,
   manualPaymentIds,
   onAllocate,
+  fmt,
 }: PaymentsListProps) {
   if (payments.length === 0) {
     return (
@@ -1061,7 +1097,9 @@ function PaymentsList({
                       {manualPaymentIds?.has(payment.id) ? (
                         <Badge variant="muted">{copy.manualAllocation}</Badge>
                       ) : null}
+                      <PaymentMissingRateBadge payment={payment} />
                     </span>
+                    <PaymentFrozenRate payment={payment} fmt={fmt} />
                   </TableCell>
                   <TableCell>
                     {payment.method ? (
@@ -1134,7 +1172,9 @@ function PaymentsList({
                 {manualPaymentIds?.has(payment.id) ? (
                   <Badge variant="muted">{copy.manualAllocation}</Badge>
                 ) : null}
+                <PaymentMissingRateBadge payment={payment} />
               </p>
+              <PaymentFrozenRate payment={payment} fmt={fmt} />
               <p className="mt-1 text-sm text-muted tabular-nums">
                 {copy.paymentReceiptMobile(payment.receiptNumber)}
               </p>
@@ -1228,6 +1268,8 @@ export function TreatmentPlansTab({
   // DX-097: la fecha por defecto del abono es hoy en la zona de la sede. Sin
   // su zona, la fecha empieza vacía (nunca se cuenta en otra zona).
   const sedeZone = useSedeTimeZone(token);
+  // DX-375/DX-378: la tasa congelada de cada abono, con el formato de la sede.
+  const sedeFmt = readyFormat(useSedeFormat(token));
   // DX-051: saldo y abonos solo para los roles de cobro (los mismos
   // PAYMENT_ROLES que la API). DENTIST y ASSISTANT no ven datos de pago: ni se
   // piden (serían 403 y un toast en cada acción) ni se pinta su sección.
@@ -2375,6 +2417,7 @@ export function TreatmentPlansTab({
                     bajo el encabezado «Plan de pagos», que es lo que las
                     distingue. Ninguna cifra desapareció. */}
                 <PlanMoneySummary
+                  token={token}
                   total={planDetail.total ?? 0}
                   currency={planDetail.currency}
                   balance={planBalance}
@@ -2677,6 +2720,7 @@ export function TreatmentPlansTab({
                               billable={billable}
                               manualPaymentIds={manualPaymentIds}
                               onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
+                              fmt={sedeFmt}
                             />
                           </Disclosure>
 

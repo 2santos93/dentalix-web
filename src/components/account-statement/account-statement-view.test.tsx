@@ -333,6 +333,9 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       createdAt: '2026-10-16T12:00:00.000Z',
       updatedAt: '2026-10-16T12:00:00.000Z',
       receiptNumber: 'PRI-000007',
+      exchangeRateCurrency: 'COP',
+      frozenRate: null,
+      exchangeRateStatus: 'NOT_NEEDED',
     });
     const user = userEvent.setup();
     const onChanged = jest.fn();
@@ -457,6 +460,7 @@ describe('cobrado por ítem de cada plan (DX-051)', () => {
     paid: 1200000,
     balance: 1800000,
     paymentsCount: 2,
+    paymentsWithoutRate: [],
     allocated: 1200000,
     unallocated: 0,
     unconvertedPaymentsCount: 0,

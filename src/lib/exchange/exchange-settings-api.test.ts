@@ -8,6 +8,7 @@ import {
   listManualExchangeRates,
   parseRateInput,
   RATE_INPUT_COPY,
+  correctManualExchangeRate,
   registerManualExchangeRate,
   saveExchangeRateSettings,
 } from './exchange-settings-api';
@@ -61,6 +62,16 @@ describe('exchange-settings-api', () => {
     expect(String(url)).toMatch(/\/exchange\/manual-rates$/);
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({ date: '2026-10-30', currency: 'VES', rate: 36.5 });
+  });
+
+  // DX-375: corregir una tasa que ningún abono usó (la usada es 409).
+  it('correctManualExchangeRate: PUT /exchange/manual-rates/:id solo con la tasa', async () => {
+    const spy = mockFetch({ id: 'r 1' });
+    await correctManualExchangeRate('tok', 'r 1', 36.75);
+    const [url, init] = spy.mock.calls[0];
+    expect(String(url)).toMatch(/\/exchange\/manual-rates\/r%201$/);
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string)).toEqual({ rate: 36.75 });
   });
 
   describe('parseRateInput', () => {

@@ -5,6 +5,7 @@ import { ArrowLeftRight, Lock, Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
+  correctManualExchangeRate,
   getExchangeRateSettings,
   listManualExchangeRates,
   parseRateInput,
@@ -15,6 +16,7 @@ import {
   type ManualExchangeRate,
 } from '@/lib/exchange/exchange-settings-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeCivilDate } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -42,14 +44,14 @@ export const exchangeRateCopy = {
   change: 'Cambiar',
   sourceDialogTitle: 'Cambiar de dónde sale la tasa',
   sourceDialogDescription:
-    'Con la manual, la tasa registrada rige desde hoy: los abonos de días anteriores siguen con la tasa automática y sus saldos no cambian. Si vuelves a la automática, todos los días, también los del periodo manual, se convierten con la tasa automática. El cambio queda en la auditoría.',
+    'Con la manual, la tasa registrada rige desde hoy. Cada abono conserva la tasa con la que se registró, así que cambiar de fuente no mueve ningún saldo ya calculado; los abonos que estén sin tasa la toman de la fuente nueva. El cambio queda en la auditoría.',
   sourceLegend: 'Fuente de la tasa',
   save: 'Guardar',
   sourceSaved: 'Fuente de la tasa guardada.',
   sourceSaveError: 'No pudimos guardar la fuente de la tasa. Intenta de nuevo.',
   ratesHeading: 'Tasas manuales',
   ratesHint: (base: string) =>
-    `Unidades de cada moneda por 1 ${base}, por día. Se usan desde el día en que la clínica pasó a manual. Una tasa registrada no se puede cambiar.`,
+    `Unidades de cada moneda por 1 ${base}, por día. Se usan desde el día en que la clínica pasó a manual. Una tasa se puede corregir hasta que algún abono la use.`,
   ratesAutomaticNote:
     'Con la fuente automática estas tasas no se usan. Puedes dejar la de hoy registrada antes de cambiar a manual.',
   register: 'Registrar tasa',
@@ -59,6 +61,17 @@ export const exchangeRateCopy = {
   colCurrency: 'Moneda',
   colRate: (base: string) => `Tasa por 1 ${base}`,
   colAuthor: 'Registrada por',
+  colActions: 'Acciones',
+  // DX-375: una tasa que ya congeló algún abono no se cambia.
+  inUse: 'Usada en abonos',
+  inUseHelp: 'Ya la usa al menos un abono: no se puede cambiar.',
+  correct: 'Corregir',
+  /** Lo que completa «Corregir» para lectores de pantalla. */
+  correctContext: (currency: string, date: string) => ` la tasa de ${currency} del ${date}`,
+  /** Nombre accesible: empieza por el texto visible (WCAG 2.5.3). */
+  correctFor: (currency: string, date: string) =>
+    `${exchangeRateCopy.correct}${exchangeRateCopy.correctContext(currency, date)}`,
+  rateCorrected: (currency: string) => `Tasa de ${currency} corregida.`,
   unknownAuthor: 'Usuario no disponible',
   noFormat: '—',
   rateSaved: (currency: string) => `Tasa de ${currency} registrada.`,
@@ -70,7 +83,8 @@ export const exchangeRateCopy = {
 
 export const rateFormCopy = {
   title: 'Registrar tasa',
-  description: 'Una tasa registrada no se puede cambiar: revisa el día, la moneda y el valor antes de guardar.',
+  description:
+    'Revisa el día, la moneda y el valor antes de guardar: en cuanto un abono use la tasa, ya no se podrá corregir.',
   date: 'Fecha',
   currency: 'Moneda',
   currencyPlaceholder: 'Elige una moneda',
@@ -82,6 +96,15 @@ export const rateFormCopy = {
   dateFuture: 'Ese día aún no ha llegado en la sede.',
   currencyMissing: 'Elige la moneda.',
   genericError: 'No pudimos registrar la tasa. Intenta de nuevo.',
+};
+
+// DX-375: corregir una tasa que ningún abono usó.
+export const correctRateCopy = {
+  title: (currency: string, date: string) => `Corregir la tasa de ${currency} del ${date}`,
+  description:
+    'Solo se puede corregir mientras ningún abono la use. Los abonos que la usen después se convierten con la tasa corregida. Queda en la auditoría.',
+  submit: 'Guardar tasa',
+  genericError: 'No pudimos corregir la tasa. Intenta de nuevo.',
 };
 
 const copy = exchangeRateCopy;
@@ -113,6 +136,11 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
   const [sourceOpen, setSourceOpen] = useState(false);
   const [rateKey, setRateKey] = useState<number | null>(null);
   const [rateOpen, setRateOpen] = useState(false);
+  const [correcting, setCorrecting] = useState<{
+    rate: ManualExchangeRate;
+    key: number;
+  } | null>(null);
+  const [correctOpen, setCorrectOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const fmt = readyFormat(useSedeFormat(token));
   const sourceHeadingId = useId();
@@ -251,6 +279,9 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
                   <TableHead>{copy.colCurrency}</TableHead>
                   <TableHead className="text-right">{copy.colRate(state.baseCurrency)}</TableHead>
                   <TableHead>{copy.colAuthor}</TableHead>
+                  <TableHead>
+                    <span className="sr-only">{copy.colActions}</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -267,6 +298,35 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
                     </TableCell>
                     <TableCell className="text-muted max-sm:text-right" data-label={copy.colAuthor}>
                       {rate.createdBy.fullName ?? copy.unknownAuthor}
+                    </TableCell>
+                    {/* Sin `data-label`: en la tarjeta móvil la acción se lee sola. */}
+                    <TableCell className="text-right">
+                      {rate.inUse ? (
+                        <Badge variant="muted" title={copy.inUseHelp}>
+                          {copy.inUse}
+                          <span className="sr-only">: {copy.inUseHelp}</span>
+                        </Badge>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="max-sm:min-h-11"
+                          onClick={() => {
+                            setNotice('');
+                            setCorrecting((prev) => ({
+                              rate,
+                              key: (prev?.key ?? 0) + 1,
+                            }));
+                            setCorrectOpen(true);
+                          }}
+                        >
+                          {copy.correct}
+                          <span className="sr-only">
+                            {copy.correctContext(rate.currency, sedeCivilDate(rate.date, fmt))}
+                          </span>
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -302,7 +362,135 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           }}
         />
       ) : null}
+      {correcting ? (
+        <CorrectRateModal
+          key={`correct-${correcting.key}`}
+          open={correctOpen}
+          onOpenChange={setCorrectOpen}
+          token={token}
+          baseCurrency={state.baseCurrency}
+          rate={correcting.rate}
+          dateLabel={sedeCivilDate(correcting.rate.date, fmt)}
+          onSaved={(saved) => {
+            setState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    rates: prev.rates.map((r) => (r.id === saved.id ? saved : r)),
+                  }
+                : prev,
+            );
+            setNotice(copy.rateCorrected(saved.currency));
+          }}
+          onInUse={(id) =>
+            setState((prev) =>
+              prev ? { ...prev, rates: prev.rates.map((r) => (r.id === id ? { ...r, inUse: true } : r)) } : prev,
+            )
+          }
+        />
+      ) : null}
     </div>
+  );
+}
+
+interface CorrectRateModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  token: string;
+  baseCurrency: string;
+  rate: ManualExchangeRate;
+  /** El día de la tasa en el formato de la sede. */
+  dateLabel: string;
+  onSaved: (rate: ManualExchangeRate) => void;
+  /** Un abono la usó entretanto (409): la lista deja de ofrecer corregirla. */
+  onInUse: (id: string) => void;
+}
+
+/**
+ * DX-375: corrige el valor de una tasa que ningún abono usó; el día y la
+ * moneda no cambian (van en el título). Si un abono la usó entretanto, el 409
+ * de la API va arriba del modal. El padre lo monta con una `key` por apertura.
+ */
+function CorrectRateModal({
+  open,
+  onOpenChange,
+  token,
+  baseCurrency,
+  rate,
+  dateLabel,
+  onSaved,
+  onInUse,
+}: CorrectRateModalProps) {
+  const [text, setText] = useState(() => String(rate.rate).replace('.', ','));
+  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const inputId = `${RATE_FORM_ID}-correct`;
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFormError(null);
+    const parsed = parseRateInput(text);
+    if (!parsed.ok) {
+      setError(parsed.error);
+      document.getElementById(inputId)?.focus();
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const saved = await correctManualExchangeRate(token, rate.id, parsed.value);
+      onSaved(saved);
+      onOpenChange(false);
+    } catch (err) {
+      const message = apiErrorMessage(err, correctRateCopy.genericError);
+      if (err instanceof ApiError && err.status === 400 && err.field === 'rate') {
+        setError(message);
+        document.getElementById(inputId)?.focus();
+        return;
+      }
+      if (err instanceof ApiError && err.status === 409 && err.code === 'MANUAL_EXCHANGE_RATE_IN_USE') {
+        onInUse(rate.id);
+      }
+      setFormError(message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <FormModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title={correctRateCopy.title(rate.currency, dateLabel)}
+      description={correctRateCopy.description}
+      onSubmit={handleSubmit}
+      submitLabel={correctRateCopy.submit}
+      submitting={submitting}
+      error={formError}
+    >
+      <FormField
+        htmlFor={inputId}
+        label={rateFormCopy.rate(baseCurrency)}
+        error={error ?? undefined}
+        hint={rateFormCopy.rateHint(baseCurrency)}
+        hintId={`${inputId}-hint`}
+      >
+        <Input
+          id={inputId}
+          inputMode="decimal"
+          autoComplete="off"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            setError(null);
+          }}
+          aria-required
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? fieldErrorId(inputId) : `${inputId}-hint`}
+          className="max-sm:min-h-11 tabular-nums"
+        />
+      </FormField>
+    </FormModal>
   );
 }
 

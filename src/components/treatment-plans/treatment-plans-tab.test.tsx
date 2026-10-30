@@ -27,7 +27,14 @@ import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { getPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
-import { BALANCE_WITHOUT_ALLOCATIONS, ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
+import {
+  BALANCE_WITHOUT_ALLOCATIONS,
+  ITEM_WITHOUT_DISCOUNT,
+  PAYMENT_IN_PLAN_CURRENCY,
+  PLAN_WITHOUT_OPTIONS,
+} from './plan-fixture';
+import { withoutRateCopy } from '@/components/payments/without-rate-notice';
+import { paymentRateCopy } from '@/lib/payments/payment-rate';
 import { getPriceQuote, type PriceQuote } from '@/lib/patients/patient-agreement-api';
 import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import { listStaff } from '@/lib/appointments/staff-api';
@@ -267,6 +274,7 @@ const payment1: Payment = {
   createdAt: '2026-01-05T00:00:00.000Z',
   updatedAt: '2026-01-05T00:00:00.000Z',
   receiptNumber: 'PRI-000001',
+  ...PAYMENT_IN_PLAN_CURRENCY,
 };
 
 const balance1: PlanBalance = {
@@ -677,6 +685,49 @@ describe('TreatmentPlansTab', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mockedRemoveItem).not.toHaveBeenCalled();
     expect(within(table).getByText('11')).toBeInTheDocument();
+  });
+
+  // DX-375: cada abono en otra moneda dice con qué tasa se congeló, o que
+  // sigue «sin tasa».
+  it('cada abono en otra moneda enseña su tasa congelada o «Sin tasa»', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([
+      {
+        ...payment1,
+        id: 'pay-cop',
+        amount: 200000,
+        currency: 'COP',
+        exchangeRateCurrency: 'USD',
+        exchangeRateStatus: 'FROZEN',
+        frozenRate: {
+          currency: 'USD',
+          fromPerBase: 4000,
+          toPerBase: 1,
+          source: 'MANUAL',
+          date: '2026-01-05',
+        },
+      },
+      {
+        ...payment1,
+        id: 'pay-ves',
+        amount: 365,
+        currency: 'VES',
+        exchangeRateCurrency: 'USD',
+        exchangeRateStatus: 'MISSING',
+      },
+    ]);
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+    const paymentsTable = await openPaymentsTable(user);
+
+    expect(
+      // DX-378: con el formato de la sede (es-CO del fixture) y el código ISO.
+      await within(paymentsTable).findByText(/Tasa congelada: 1 USD = COP\s4\.000,00 · manual · 05\/01\/2026/),
+    ).toBeInTheDocument();
+    expect(within(paymentsTable).getByText(paymentRateCopy.missing)).toBeInTheDocument();
   });
 
   it('cancelling the "anular abono" confirmation leaves the abono alone — voidPayment is never called', async () => {
@@ -2458,8 +2509,37 @@ describe('TreatmentPlansTab', () => {
       ).toBeInTheDocument();
     });
 
+    // DX-375: el saldo de arriba no cuenta los abonos «sin tasa»: el aviso
+    // lo dice junto a las cifras, con el enlace a Ajustes › Tasa de cambio.
+    it('abonos sin tasa: el aviso va junto al saldo y enlaza a Ajustes › Tasa de cambio', async () => {
+      mockedGetPlanBalance.mockResolvedValue({
+        ...balanceWithItems,
+        unconvertedPaymentsCount: 1,
+        paymentsWithoutRate: [
+          {
+            paymentId: 'p9',
+            amount: 150000,
+            currency: 'COP',
+            paidOn: '2026-10-30',
+          },
+        ],
+      });
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+
+      const notice = await screen.findByText(withoutRateCopy.title(1));
+      expect(notice.closest('[role="status"]')).toHaveTextContent('30/10/2026');
+      expect(screen.getByRole('link', { name: withoutRateCopy.adminLink })).toHaveAttribute(
+        'href',
+        '/settings/tasa-de-cambio',
+      );
+      expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
+    });
+
     it('unconverted notice for a single abono reads in singular, and is absent at 0', async () => {
-      mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, unconvertedPaymentsCount: 1 });
+      mockedGetPlanBalance.mockResolvedValue({
+        ...balanceWithItems,
+        unconvertedPaymentsCount: 1,
+      });
       const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
       expect(
         await screen.findByText('1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.'),

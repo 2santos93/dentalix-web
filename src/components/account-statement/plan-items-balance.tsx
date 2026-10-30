@@ -8,6 +8,7 @@ import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ItemBillableValue, ItemPaidValue, ItemPendingValue } from '@/components/treatment-plans/item-paid-cell';
+import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
 
 const planItemsBalanceCopy = {
   table: 'Cobrado por ítem del plan',
@@ -132,8 +133,11 @@ export function PlanItemsBalance({ token, planId }: { token: string; planId: str
             </dl>
           ) : null}
           {/* Sin él, Cobrado + Sin imputar no llega a lo «Abonado» del plan y
-              nada lo explica. */}
-          {balance.unconvertedPaymentsCount > 0 ? (
+              nada lo explica. DX-375: si son abonos «sin tasa», el aviso lo
+              dice (y cómo resolverlo) en vez de la nota. */}
+          {balance.paymentsWithoutRate.length > 0 ? (
+            <WithoutRateNotice token={token} payments={balance.paymentsWithoutRate} />
+          ) : balance.unconvertedPaymentsCount > 0 ? (
             <p className="text-sm text-muted">{allocationCopy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>
           ) : null}
         </div>

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { RecordPaymentModal } from './record-payment-modal';
+import { RecordPaymentModal, recordPaymentCopy } from './record-payment-modal';
 import { ApiError } from '@/lib/api/client';
 import { recordOpeningBalancePayment, recordPayment } from '@/lib/payments/payments-api';
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
@@ -76,6 +76,9 @@ function savedPayment(
     createdAt: '2026-10-16T12:00:00.000Z',
     updatedAt: '2026-10-16T12:00:00.000Z',
     receiptNumber: 'PRI-000001',
+    exchangeRateCurrency: 'COP',
+    frozenRate: null,
+    exchangeRateStatus: 'NOT_NEEDED',
     ...overrides,
   };
 }
@@ -208,6 +211,30 @@ it('consumers render SedeConfigError without a zone', async () => {
   await waitFor(() =>
     expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toMatch(/^\d{4}-\d{2}-\d{2}$/),
   );
+});
+
+// DX-375: sin tasa del día la API guarda el abono «sin tasa»; el aviso lo dice
+// para que nadie crea que el saldo ya lo cuenta.
+it('un abono guardado sin tasa lo dice en el aviso', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  mockedRecord.mockResolvedValue(
+    savedPayment({
+      amount: 50,
+      currency: 'USD',
+      exchangeRateStatus: 'MISSING',
+    }),
+  );
+  const { onRecorded } = renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+
+  await user.type(within(dialog).getByLabelText('Importe'), '50');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+  expect(onRecorded.mock.calls[0][0]).toMatch(/^Abono registrado: 50,00\sUS\$ · .+\. /);
+  expect(onRecorded.mock.calls[0][0]).toContain(recordPaymentCopy.recordedWithoutRate);
 });
 
 it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', async () => {
