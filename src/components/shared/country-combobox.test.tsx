@@ -300,12 +300,38 @@ describe('CountryCombobox with phone regions (DX-329, spec §6.3)', () => {
       screen.getByRole('option', { name: 'Sin prefijo por defecto' }),
     ]);
     expect(input).toHaveAttribute('aria-activedescendant', screen.getAllByRole('option')[0].id);
-    // Se encuentra escribiendo su texto, y no aparece al buscar un indicativo.
+    // Solo con la lista entera: al escribir no aparece.
     await user.clear(input);
-    await user.type(input, 'sin pre');
-    expect(optionNames()).toEqual(['Sin prefijo por defecto']);
-    await user.clear(input);
+    expect(optionNames()[0]).toBe('Sin prefijo por defecto');
     await user.type(input, '58');
     expect(optionNames()).not.toContain('Sin prefijo por defecto');
+  });
+
+  it('typing a code or name never highlights the none option first', async () => {
+    const { user, input, onChange } = setupPhone();
+    // «de» está dentro de «Sin prefijo por defecto»: el código exacto va primero y se elige.
+    await user.clear(input);
+    await user.type(input, 'de');
+    expect(optionNames()[0]).toBe(phoneRegionLabel('DE'));
+    expect(optionNames()).not.toContain('Sin prefijo por defecto');
+    await user.keyboard('{Enter}');
+    expect(onChange).toHaveBeenLastCalledWith('DE');
+    expect(input).toHaveValue(phoneRegionLabel('DE'));
+
+    await user.clear(input);
+    await user.type(input, 'p');
+    expect(optionNames()).not.toContain('Sin prefijo por defecto');
+    await user.keyboard('{Enter}');
+    expect(onChange).not.toHaveBeenCalledWith(COMBOBOX_NONE);
+    expect(onChange).toHaveBeenLastCalledWith(searchPhoneRegions('p')[0].code);
+  });
+
+  it('the result count leaves out the none row', async () => {
+    const { user, input } = setupPhone();
+    await user.clear(input);
+    await user.type(input, '+44');
+    const regions = searchPhoneRegions('+44').length;
+    expect(screen.getByRole('status')).toHaveTextContent(phoneRegionComboboxCopy.results(regions));
+    expect(screen.getAllByRole('option')).toHaveLength(regions);
   });
 });

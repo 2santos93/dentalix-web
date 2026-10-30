@@ -1,5 +1,5 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import { LocationFormModal } from './location-form-modal';
+import { LocationFormModal, phoneRegionFollowsCountry } from './location-form-modal';
 import { createLocation, updateLocationSettings, type ClinicLocation } from '@/lib/locations/locations-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { browserCountry, browserHourCycle, browserLocale, browserTimeZone } from '@/lib/locations/regional-settings';
@@ -72,7 +72,8 @@ const NO_PREFIX = 'Sin prefijo por defecto';
 async function choosePrefix(user: ReturnType<typeof setupUser>, dialog: HTMLElement, query: string, label: string) {
   const field = within(dialog).getByLabelText(PREFIX);
   await user.clear(field);
-  await user.type(field, query);
+  // «Sin prefijo por defecto» solo sale con la lista entera: sin consulta, basta con vaciar el campo.
+  if (query !== '') await user.type(field, query);
   await user.click(within(dialog).getByRole('option', { name: label }));
 }
 
@@ -625,7 +626,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       view = setup();
       await fillCreate(view.dialog, view.user);
       await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'VE');
-      await choosePrefix(view.user, view.dialog, 'sin', NO_PREFIX);
+      await choosePrefix(view.user, view.dialog, '', NO_PREFIX);
       await view.user.click(within(view.dialog).getByRole('button', { name: 'Crear sede' }));
       await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(2));
       expect(mockedCreate.mock.calls[1][1]).toHaveProperty('defaultPhoneRegion', null);
@@ -663,6 +664,11 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
       await currenciesLoaded(view.dialog);
 
+      // Ni aunque el país cambie dos veces.
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'CO');
+      expect(prefix).toHaveValue(phoneRegionLabel('VE'));
+      expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
+
       // Sin prefijo guardado: tampoco.
       cleanup();
       view = setup(clinicLocation({ country: 'CO', defaultPhoneRegion: null }));
@@ -671,6 +677,24 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
       expect(prefix).toHaveValue(NO_PREFIX);
       expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
+      await currenciesLoaded(view.dialog);
+    });
+
+    it('editing keeps the stored prefix when the country is cleared', async () => {
+      const sede = clinicLocation({ country: 'CO', defaultPhoneRegion: 'CO' });
+      // Sin país no se propone nada: queda lo guardado, no «Sin prefijo».
+      expect(phoneRegionFollowsCountry(sede, '')).toBe(false);
+      expect(phoneRegionFollowsCountry(sede, 'CO')).toBe(false);
+      expect(phoneRegionFollowsCountry(sede, 'ES')).toBe(true);
+      expect(phoneRegionFollowsCountry(null, '')).toBe(true);
+      // El combobox no deja el país vacío: borrarlo y salir vuelve al último elegido, y el prefijo con él.
+      const view = setup(sede);
+      const prefix = within(view.dialog).getByLabelText(PREFIX);
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
+      await view.user.clear(within(view.dialog).getByLabelText('País'));
+      await view.user.tab();
+      expect(within(view.dialog).getByLabelText('País')).toHaveValue(countryName('ES'));
+      expect(prefix).toHaveValue(phoneRegionLabel('ES'));
       await currenciesLoaded(view.dialog);
     });
 
@@ -686,7 +710,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       cleanup();
       view = setup(sede);
       await currenciesLoaded(view.dialog);
-      await choosePrefix(view.user, view.dialog, 'sin', NO_PREFIX);
+      await choosePrefix(view.user, view.dialog, '', NO_PREFIX);
       await view.user.click(within(view.dialog).getByRole('button', { name: 'Guardar sede' }));
       await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
       expect(mockedUpdate.mock.calls[1][2]).toHaveProperty('defaultPhoneRegion', null);

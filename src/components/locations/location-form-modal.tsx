@@ -112,6 +112,21 @@ function suggestedPhoneRegion(country: string): string | null {
   return isPhoneRegion(country) ? country : null;
 }
 
+/**
+ * Si el prefijo, sin tocar, sigue al país (spec §6.3): en el alta, siempre; en
+ * la edición, solo si el guardado era el del país guardado y el país es otro.
+ * Un país vacío no propone nada: en la edición se queda lo guardado.
+ */
+export function phoneRegionFollowsCountry(location: ClinicLocation | null, country: string): boolean {
+  if (location === null) return true;
+  return (
+    country !== '' &&
+    location.defaultPhoneRegion !== null &&
+    location.defaultPhoneRegion === location.country &&
+    country !== location.country
+  );
+}
+
 const formatPhoneRegion = (region: PhoneRegionOption) => phoneRegionLabel(region.code) ?? region.code;
 
 function initialRegional(location: ClinicLocation | null, suggested: RegionalSuggestions): RegionalSettingsValues {
@@ -154,18 +169,13 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
   // Spec §6.3: en el alta, el prefijo sigue al país hasta que se toca. En la
   // edición se pinta el guardado, y solo si era el del país guardado se
   // propone el del país nuevo cuando este cambia.
-  const phoneRegionFollowsCountry =
-    !phoneRegionTouched &&
-    (location === null ||
-      (location.defaultPhoneRegion !== null &&
-        location.defaultPhoneRegion === location.country &&
-        regional.country !== location.country));
+  const followsCountry = !phoneRegionTouched && phoneRegionFollowsCountry(location, regional.country);
   const phoneRegion = phoneRegionTouched
     ? chosenPhoneRegion
-    : phoneRegionFollowsCountry
+    : followsCountry
       ? suggestedPhoneRegion(regional.country)
       : (location?.defaultPhoneRegion ?? null);
-  const phoneRegionSuggested = phoneRegionFollowsCountry && regional.country !== '';
+  const phoneRegionSuggested = followsCountry && regional.country !== '';
   const phoneRegionHint = phoneRegionSuggested
     ? `${copy.phoneRegionSuggested} ${copy.phoneRegionHint}`
     : copy.phoneRegionHint;

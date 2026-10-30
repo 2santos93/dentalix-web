@@ -100,13 +100,14 @@ export function CountryCombobox<T extends ComboboxOption = CountryOption>({
   const statusId = `${id}-status`;
   const optionId = (code: string) => `${id}-option-${code}`;
 
-  /** La opción «ninguno» va primero con la lista entera, o si lo escrito está en su texto. */
+  /**
+   * La opción «ninguno» va primero solo con la lista entera: mientras se
+   * escribe no aparece, así lo escrito («de», «p») nunca la resalta por
+   * delante del código o el nombre que se busca.
+   */
   function itemsFor(text: string): Item[] {
-    const key = countrySearchKey(text);
     const none =
-      noneOption && (key === '' || countrySearchKey(noneOption.label).includes(key))
-        ? [{ code: COMBOBOX_NONE, label: noneOption.label }]
-        : [];
+      noneOption && countrySearchKey(text) === '' ? [{ code: COMBOBOX_NONE, label: noneOption.label }] : [];
     return [...none, ...search(text).map((option) => ({ code: option.code, label: formatOption(option) }))];
   }
 
@@ -194,7 +195,7 @@ export function CountryCombobox<T extends ComboboxOption = CountryOption>({
     open && query !== null && query.trim() !== ''
       ? results.length === 0
         ? copy.noMatch
-        : copy.results(results.length)
+        : copy.results(results.filter((item) => item.code !== COMBOBOX_NONE).length)
       : '';
 
   return (
