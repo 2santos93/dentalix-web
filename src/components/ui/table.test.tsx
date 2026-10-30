@@ -99,4 +99,25 @@ describe('Table apilada en móvil', () => {
       expect(screen.queryByRole('region')).not.toBeInTheDocument();
     });
   });
+
+  it('stack={false} (tabla de comparación) no se apila: la cabecera se ve en el teléfono', () => {
+    render(
+      <Table aria-label="Caja" stack={false}>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Paciente</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell>Ana</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    );
+    const table = screen.getByRole('table', { name: 'Caja' });
+    expect(table).not.toHaveClass('max-sm:block');
+    expect(table.querySelector('thead')).not.toHaveClass('max-sm:sr-only');
+    expect(screen.getByText('Ana')).not.toHaveClass('max-sm:flex');
+  });
 });
