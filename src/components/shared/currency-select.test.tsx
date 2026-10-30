@@ -28,6 +28,13 @@ describe('CurrencySelect', () => {
     });
   });
 
+  it('exclude leaves those codes out of the options (DX-374: the base of the rates)', async () => {
+    render(<CurrencySelect id="cur" token="tok" value="" placeholder="Elige la moneda" exclude={['USD']} onChange={() => {}} />);
+    const el = screen.getByRole('combobox') as HTMLSelectElement;
+    await waitFor(() => expect(Array.from(el.options).map((o) => o.value)).toContain('COP'));
+    expect(Array.from(el.options).map((o) => o.value)).not.toContain('USD');
+  });
+
   it('with a loader (no session) reads the list from it and never from GET /currencies', async () => {
     const loader = jest.fn().mockResolvedValue([{ code: 'JPY', name: 'Yen japonés', symbol: '¥' }]);
     render(<CurrencySelect id="cur" loader={loader} value="" placeholder="Elige la moneda" onChange={() => {}} />);

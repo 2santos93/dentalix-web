@@ -13,9 +13,10 @@ import { API_URL } from './support/urls';
  *
  *  1. Una clínica nueva está en «Automática», sin tasas manuales (estado
  *     vacío), y la entrada sale en el índice de Ajustes del ADMIN.
- *  2. El ADMIN pasa a «Manual» en un modal y registra la tasa de hoy de una
- *     moneda (coma decimal): sale en la lista y la lectura de tasas del día
- *     (API) la devuelve con la fuente MANUAL.
+ *  2. El ADMIN pasa a «Manual» en un modal (rige desde hoy: «Manual desde
+ *     el …») y registra la tasa de hoy de una moneda (coma decimal, sin la
+ *     moneda base en el selector): sale en la lista y la lectura de tasas del
+ *     día (API) la devuelve con la fuente MANUAL.
  *  3. Registrar otra vez la misma moneda el mismo día: el modal dice el 409 en
  *     español y no cierra.
  *  4. RECEPCIÓN no ve la entrada y por URL ve el aviso de permisos.
@@ -78,8 +79,11 @@ async function fillRate(page: Page, rate: string): Promise<Locator> {
   const dialog = page.getByRole('dialog', { name: 'Registrar tasa' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Fecha')).toHaveValue(sedeToday());
+  await expect(dialog.getByLabel('Fecha')).toHaveAttribute('max', sedeToday());
   const currency = dialog.getByLabel('Moneda');
   await expect(currency.locator(`option[value="${CURRENCY}"]`)).toHaveCount(1, { timeout: 15_000 });
+  // La moneda base de las tasas (la da la API) no se ofrece.
+  await expect(currency.locator('option[value="USD"]')).toHaveCount(0);
   await currency.selectOption(CURRENCY);
   await dialog.getByLabel('Tasa por 1 USD').fill(rate);
   return dialog;
@@ -132,7 +136,8 @@ test('the ADMIN switches to manual, registers today’s rate and the day’s rat
   await shoot(page, 'dx374-modal-fuente', sourceDialog);
   await sourceDialog.getByRole('button', { name: 'Guardar' }).click();
   await expect(sourceDialog).toBeHidden();
-  await expect(page.getByTestId('exchange-rate-source')).toHaveText('Manual');
+  // Rige desde hoy: los abonos de días anteriores siguen con la automática.
+  await expect(page.getByTestId('exchange-rate-source')).toHaveText(/^Manual desde el \S+$/);
 
   const rateDialog = await fillRate(page, '0,91');
   await page.setViewportSize(VIEWPORTS[1]);
