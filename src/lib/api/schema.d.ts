@@ -5413,6 +5413,8 @@ export interface components {
             /** @enum {string} */
             sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             email: string | null;
             address: string | null;
             countryCode: string | null;
@@ -5530,6 +5532,8 @@ export interface components {
             /** @enum {string} */
             sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             email: string | null;
             address: string | null;
             countryCode: string | null;
@@ -5691,6 +5695,8 @@ export interface components {
             /** @enum {string} */
             sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             email: string | null;
             address: string | null;
             countryCode: string | null;
@@ -5935,6 +5941,8 @@ export interface components {
             docNumber: string | null;
             email: string | null;
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
         };
         /** @enum {string} */
         ResponsibleRelationship: "MOTHER" | "FATHER" | "LEGAL_GUARDIAN" | "GRANDPARENT" | "SIBLING" | "SPOUSE" | "CHILD" | "OTHER";
@@ -5955,6 +5963,8 @@ export interface components {
             docNumber: string | null;
             email: string | null;
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             relationship: components["schemas"]["ResponsibleRelationship"];
             isPayer: boolean;
             receivesNotices: boolean;
@@ -6494,6 +6504,8 @@ export interface components {
             showHealthRegistrationNumber: boolean;
             /** @description DX-222: teléfono de la sede o null. */
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. */
             defaultPhoneRegion: string | null;
             isActive: boolean;
