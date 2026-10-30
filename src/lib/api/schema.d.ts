@@ -2122,7 +2122,7 @@ export interface paths {
         get: operations["ExchangeSettingsController_settings"];
         /**
          * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
-         * @description DX-374. Aplica desde la siguiente lectura de tasas (saldos, totales, conversiones); los abonos ya cobrados no cambian. Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después. Si nada cambia, 200 sin evento de auditoría.
+         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
          */
         put: operations["ExchangeSettingsController_updateClinicSettings"];
         post?: never;
@@ -2147,7 +2147,7 @@ export interface paths {
         put?: never;
         /**
          * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
-         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL (se puede dejar registrada antes de cambiarla). Una tasa ya registrada para ese día y moneda no se sobrescribe.
+         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). Una tasa ya registrada para ese día y moneda no se sobrescribe.
          */
         post: operations["ExchangeSettingsController_register"];
         delete?: never;
@@ -9169,7 +9169,24 @@ export interface components {
         };
         ExchangeRateSettingsDto: {
             /**
-             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa».
+             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
+             * @example MANUAL
+             */
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil (sede principal) desde el que rige la fuente MANUAL: los días anteriores se convierten con la tasa automática. Null con AUTOMATIC.
+             * @example 2026-10-30
+             */
+            manualSince: string | null;
+            /**
+             * @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia.
+             * @example USD
+             */
+            baseCurrency: string;
+        };
+        UpdateExchangeRateSettingsDto: {
+            /**
+             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
              * @example MANUAL
              */
             source: components["schemas"]["ExchangeRateSource"];
@@ -20015,7 +20032,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ExchangeRateSettingsDto"];
+                "application/json": components["schemas"]["UpdateExchangeRateSettingsDto"];
             };
         };
         responses: {
