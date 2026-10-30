@@ -15,7 +15,7 @@ const LANDING_ROUTE_FILES = ['app/page.tsx', 'app/layout.tsx'];
 
 /** Nombres de regímenes de protección de datos y salud, y leyes o decretos con número. */
 export const LAW_NAME =
-  /\b(?:habeas\s+data|lgpd|gdpr|rgpd|hipaa|ccpa|lopdgdd|lopd|lfpdppp|pipeda)\b|\b(?:ley|decreto|reglamento)\s+(?:org[aá]nica\s+|\(ue\)\s+)?(?:n\.?[º°o]\s*)?\d/i;
+  /\b(?:h[aá]beas\s+data|lgpd|gdpr|rgpd|hipaa|ccpa|lopdgdd|lopd|lfpdppp|pipeda)\b|\b(?:ley|decreto|reglamento)\s+(?:org[aá]nica\s+|estatutaria\s+|\(ue\)\s+)?(?:n\.?[º°o]\s*)?\d/i;
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -53,6 +53,8 @@ describe('arquitectura: landing sin leyes ni regímenes (DX-369)', () => {
       'Decreto 1377 de 2013',
       'hipaa-ready',
       'Cumple la LOPDGDD',
+      'Hábeas Data',
+      'Ley Estatutaria 1581 de 2012',
     ]) {
       expect({ text, caught: LAW_NAME.test(text) }).toEqual({ text, caught: true });
     }
