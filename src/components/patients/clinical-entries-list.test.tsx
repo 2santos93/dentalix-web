@@ -7,6 +7,7 @@ import {
   createClinicalEntryAddendum,
 } from '@/lib/patients/clinical-api';
 import { listStaff } from '@/lib/staff/staff-api';
+import { listPatientAnesthesia } from '@/lib/anesthesia/anesthesia-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — use a relative path (same convention as the other tests).
@@ -23,6 +24,11 @@ jest.mock('../../lib/patients/clinical-api', () => ({
 // El autor de cada evolución se resuelve contra el personal de la clínica.
 jest.mock('../../lib/staff/staff-api', () => ({
   listStaff: jest.fn(),
+}));
+// DX-307: la anestesia de las evoluciones se pide aparte (fail soft).
+jest.mock('../../lib/anesthesia/anesthesia-api', () => ({
+  ...jest.requireActual('../../lib/anesthesia/anesthesia-api'),
+  listPatientAnesthesia: jest.fn().mockResolvedValue([]),
 }));
 // DX-170: el modal «Nueva evolución» pide las plantillas al abrirse.
 jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
@@ -377,5 +383,45 @@ describe('ClinicalEntriesList', () => {
       expect(await within(dialog).findByText(/evolución no encontrada/i)).toBeInTheDocument();
       expect(within(dialog).getByLabelText(/texto de la adenda/i)).toHaveValue('Texto');
     });
+  });
+
+  it('DX-307: la anestesia registrada sale bajo su evolución con el acumulado', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientAnesthesia as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'an-1',
+        patientId: 'p1',
+        clinicalEntryId: 'ce-2',
+        locationId: null,
+        anestheticId: 'a1',
+        anestheticName: 'Articaína 4 %',
+        activeIngredient: 'Articaína',
+        concentrationPct: 4,
+        vasoconstrictor: null,
+        mlPerCarpule: 1.7,
+        maxMgPerKg: 7,
+        maxAbsoluteMg: 500,
+        carpules: 3,
+        doseMg: 204,
+        technique: 'NERVE_BLOCK',
+        site: '85',
+        lot: 'L-1',
+        administeredAt: '2026-02-01T15:00:00.000Z',
+        weightKg: 20,
+        weightSource: 'ANAMNESIS',
+        cumulativeMg: 204,
+        cumulativePercent: 146,
+        safetyRulesVersion: 'ANESTHESIA_DOSE_V1',
+        safetyAlerts: [],
+        overrideReason: 'Exodoncia compleja',
+        authorId: 'u1',
+        createdAt: '2026-02-01T15:00:00.000Z',
+      },
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    const lists = await screen.findAllByRole('list', { name: /anestesia local de la evolución/i });
+    expect(lists[0]).toHaveTextContent('Articaína 4 % · 3 carp. · 204 mg · Troncular · 85 · Lote L-1');
+    expect(screen.getAllByText('Acumulado 204 mg · 146 % del máximo').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /anestesia de la evolución/i }).length).toBeGreaterThan(0);
   });
 });

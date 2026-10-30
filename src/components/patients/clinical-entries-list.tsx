@@ -16,6 +16,15 @@ import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Button } from '@/components/ui/button';
+import { AnesthesiaModal } from '@/components/anesthesia/anesthesia-modal';
+import {
+  TECHNIQUE_LABELS,
+  formatDecimal,
+  listPatientAnesthesia,
+  type AnesthesiaAdministration,
+} from '@/lib/anesthesia/anesthesia-api';
+import { sedeTime } from '@/lib/locations/sede-clock';
+import { getTokenRole } from '@/lib/auth/token-role';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -44,6 +53,17 @@ const copy = {
   diagnosesLabel: (entryDate: string) => `Diagnósticos de la evolución del ${entryDate}`,
   principal: 'Principal',
   related: 'Relacionado',
+  // DX-307: anestesia local registrada en la evolución.
+  anesthesia: 'Anestesia',
+  anesthesiaFor: (entryDate: string) => `Anestesia de la evolución del ${entryDate}`,
+  anesthesiaLabel: (entryDate: string) => `Anestesia local de la evolución del ${entryDate}`,
+  anesthesiaLine: (r: AnesthesiaAdministration) =>
+    `${r.anestheticName} · ${formatDecimal(r.carpules)} carp. · ${formatDecimal(r.doseMg)} mg · ${TECHNIQUE_LABELS[r.technique]}${r.site ? ` · ${r.site}` : ''}${r.lot ? ` · Lote ${r.lot}` : ''}`,
+  anesthesiaTotal: (mg: number, percent: number | null) =>
+    percent === null
+      ? `Acumulado ${formatDecimal(mg)} mg · dosis máxima no calculada: falta el peso`
+      : `Acumulado ${formatDecimal(mg)} mg · ${percent} % del máximo`,
+  anesthesiaOverride: 'Confirmado con motivo:',
   tooth: (fdi: string) => `diente ${fdi}`,
 };
 
@@ -85,6 +105,11 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
   const [reloadKey, setReloadKey] = useState(0);
   // Evolución a la que se le está añadiendo una adenda (modal abierto).
   const [addendumFor, setAddendumFor] = useState<ClinicalEntry | null>(null);
+  // DX-307: anestesia de todas las evoluciones (fail soft) y modal abierto.
+  const [anesthesia, setAnesthesia] = useState<AnesthesiaAdministration[]>([]);
+  const [anesthesiaFor, setAnesthesiaFor] = useState<ClinicalEntry | null>(null);
+  const role = getTokenRole(token);
+  const canRecordAnesthesia = role === 'DENTIST' || role === 'ADMIN';
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +149,76 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Fail soft como el personal: sin esta lista la evolución se sigue viendo
+    // y el modal «Anestesia» la vuelve a pedir.
+    listPatientAnesthesia(token, patientId)
+      .then((data) => {
+        if (!cancelled) setAnesthesia(data ?? []);
+      })
+      .catch(() => {
+        /* fail soft — el modal la carga con su propio estado de error */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, patientId, reloadKey]);
+
+  const anesthesiaByEntry = useMemo(() => {
+    const map = new Map<string, AnesthesiaAdministration[]>();
+    for (const record of anesthesia) {
+      map.set(record.clinicalEntryId, [...(map.get(record.clinicalEntryId) ?? []), record]);
+    }
+    return map;
+  }, [anesthesia]);
+
+  /** DX-307: anestesia registrada, con el acumulado del último registro. */
+  function renderAnesthesia(entry: ClinicalEntry) {
+    const records = anesthesiaByEntry.get(entry.id) ?? [];
+    if (records.length === 0) return null;
+    const last = records[records.length - 1];
+    return (
+      <div className="mt-2 flex flex-col gap-1">
+        <ul
+          aria-label={copy.anesthesiaLabel(formatCivilDate(entry.entryDate))}
+          className="flex flex-col gap-1"
+        >
+          {records.map((r) => (
+            <li key={r.id} className="text-sm text-ink">
+              <span className="text-xs font-medium text-muted">{copy.anesthesia} </span>
+              <span className="tabular-nums">{sedeTime(r.administeredAt, clock)}</span>{' '}
+              <span className="tabular-nums">{copy.anesthesiaLine(r)}</span>
+              {r.overrideReason ? (
+                <span className="block text-xs text-muted">
+                  {copy.anesthesiaOverride} {r.overrideReason}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs tabular-nums text-muted">
+          {copy.anesthesiaTotal(last.cumulativeMg, last.cumulativePercent)}
+        </p>
+      </div>
+    );
+  }
+
+  function renderAnesthesiaButton(entry: ClinicalEntry) {
+    return (
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="min-h-11 sm:min-h-0"
+        aria-label={copy.anesthesiaFor(formatCivilDate(entry.entryDate))}
+        onClick={() => setAnesthesiaFor(entry)}
+      >
+        {copy.anesthesia}
+      </Button>
+    );
+  }
 
   const staffById = useMemo(
     () => new Map(staff.map((member) => [member.userId, member.fullName])),
@@ -299,12 +394,16 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
                 <td className="whitespace-pre-line px-4 py-3 text-ink">
                   {entry.notes}
                   {renderDiagnoses(entry)}
+                  {renderAnesthesia(entry)}
                   {renderAddenda(entry)}
                 </td>
                 {/* Subordinado: es la procedencia del asiento, no su contenido. */}
                 <td className="px-4 py-3 align-top text-muted">
                   <p>{recordLine(entry.performedById, entry.createdAt)}</p>
-                  <div className="mt-2">{renderAddButton(entry)}</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {renderAnesthesiaButton(entry)}
+                    {renderAddButton(entry)}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -325,11 +424,13 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
               <p className="mt-1 text-muted">{entry.reason ?? copy.reasonFallback}</p>
               <p className="mt-2 whitespace-pre-line break-words text-ink">{entry.notes}</p>
               {renderDiagnoses(entry)}
+              {renderAnesthesia(entry)}
               {renderAddenda(entry)}
               <p className="mt-3 border-t border-hairline pt-2 text-xs text-muted">
                 {recordLine(entry.performedById, entry.createdAt)}
               </p>
               <div className="mt-2 flex flex-col items-start gap-2">
+                {renderAnesthesiaButton(entry)}
                 {renderAddButton(entry)}
               </div>
             </div>
@@ -348,6 +449,23 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
           entryId={addendumFor.id}
           entryDateLabel={formatCivilDate(addendumFor.entryDate)}
           onCreated={handleAddendumCreated}
+        />
+      ) : null}
+
+      {anesthesiaFor ? (
+        <AnesthesiaModal
+          open
+          onOpenChange={(open) => {
+            if (!open) setAnesthesiaFor(null);
+          }}
+          token={token}
+          patientId={patientId}
+          entryId={anesthesiaFor.id}
+          entryDateLabel={formatCivilDate(anesthesiaFor.entryDate)}
+          canRecord={canRecordAnesthesia}
+          canManageCatalog={role === 'ADMIN'}
+          clock={clock}
+          onRecorded={(record) => setAnesthesia((prev) => [...prev, record])}
         />
       ) : null}
 
