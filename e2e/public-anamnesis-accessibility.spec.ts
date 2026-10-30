@@ -3,6 +3,8 @@ import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { publicAnamnesisFixture } from './support/public-anamnesis-fixture';
 
+test.use({ viewport: { width: 390, height: 844 } });
+
 const endpoint = '**/api/v1/public/medical-history/*';
 
 async function fixture(page: Page, color = '#0E7490') {
