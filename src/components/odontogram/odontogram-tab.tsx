@@ -433,7 +433,7 @@ export function OdontogramTab({
         {shownAsOf ? (
           <p
             role="status"
-            className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
+            className="rounded-lg border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-ink"
           >
             {copy.asOfNotice(formatCivilDate(`${shownAsOf}T00:00:00.000Z`))}
           </p>

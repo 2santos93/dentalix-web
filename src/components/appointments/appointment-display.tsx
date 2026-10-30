@@ -49,9 +49,9 @@ export function AppointmentStatusLabel({ status, compact = false }: { status: Ap
 export const STATUS_BADGE_CLASSES: Record<AppointmentStatus, string> = {
   SCHEDULED: 'border-muted bg-muted/10 text-ink',
   CONFIRMED: 'border-primary bg-primary/10 text-ink',
-  COMPLETED: 'border-success bg-success/10 text-ink',
-  CANCELLED: 'border-danger bg-danger/10 text-ink',
-  NO_SHOW: 'border-warning bg-warning/10 text-ink',
+  COMPLETED: 'border-success bg-success-subtle text-ink',
+  CANCELLED: 'border-danger bg-danger-subtle text-ink',
+  NO_SHOW: 'border-warning bg-warning-subtle text-ink',
   // DX-200: en la clínica. En espera, tinta (está aquí, nada clínico aún); en
   // el sillón, el acento; listo para cobrar, el éxito sin relleno (casi hecho).
   ARRIVED: 'border-ink/40 bg-surface-2 text-ink',
@@ -121,7 +121,7 @@ export function ConfirmationBadge({
   const label = CONFIRMATION_INDICATOR_LABELS[indicator];
   const tone =
     indicator === 'callback'
-      ? 'border-warning bg-warning/10 text-warning'
+      ? 'border-warning bg-warning-subtle text-warning-text'
       : 'border-border bg-surface-2 text-muted';
   if (compact) {
     return (
@@ -129,7 +129,7 @@ export function ConfirmationBadge({
         data-testid="appointment-confirmation-indicator"
         data-indicator={indicator}
         title={label}
-        className={cn('inline-flex items-center', indicator === 'callback' ? 'text-warning' : 'text-muted', className)}
+        className={cn('inline-flex items-center', indicator === 'callback' ? 'text-warning-text' : 'text-muted', className)}
       >
         <Icon aria-hidden className="size-3" />
         <span className="sr-only">{label}</span>

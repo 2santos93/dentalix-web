@@ -147,7 +147,7 @@ export function WorkingWeekdaysForm({ token, locationId, initial, onSaved }: Wor
         </Link>
       </p>
       {/* Región viva siempre montada: el texto entra al guardar y se anuncia. */}
-      <p role="status" className={saved && !message ? 'flex items-center gap-1 text-sm text-success' : 'sr-only'}>
+      <p role="status" className={saved && !message ? 'flex items-center gap-1 text-sm text-success-text' : 'sr-only'}>
         {saved && !message ? (
           <>
             <CheckCircle2 aria-hidden className="size-4" />

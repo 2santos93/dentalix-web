@@ -239,7 +239,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
           <p className="tabular-nums text-ink">{copy.charged(money(fee.amount, fee.currency) ?? '')}</p>
           <p className="text-muted">{copy.chargedHint}</p>
           {fee.itemMismatch && fee.itemAmount !== null ? (
-            <p role="status" className="text-warning">
+            <p role="status" className="text-warning-text">
               {copy.mismatch(money(fee.itemAmount, fee.currency) ?? '', money(fee.amount, fee.currency) ?? '')}
             </p>
           ) : null}

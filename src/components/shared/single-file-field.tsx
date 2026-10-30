@@ -207,7 +207,7 @@ export function SingleFileField({
             <span className="flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted">
               {formatFileSize(file.size, fmt)}
               {state.status === 'done' ? (
-                <span className="inline-flex items-center gap-1 text-success">
+                <span className="inline-flex items-center gap-1 text-success-text">
                   <CheckCircle2 aria-hidden className="size-3.5" />
                   {singleFileFieldCopy.uploaded}
                 </span>

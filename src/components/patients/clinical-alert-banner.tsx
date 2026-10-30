@@ -141,7 +141,7 @@ export function ClinicalAlertBanner({ token, patientId }: ClinicalAlertBannerPro
   const lines = buildAlertLines(data);
 
   return (
-    <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-danger">
+    <div role="alert" className="rounded-lg border border-danger/30 bg-danger-subtle p-3 text-danger-text">
       <div className="flex items-center gap-2 font-semibold">
         <TriangleAlert className="h-5 w-5" aria-hidden="true" />
         {copy.title}

@@ -284,10 +284,10 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
 
       {/* Avisos de la última anulación y del último cobro: fuera de
           AsyncSection para que la recarga no los borre. */}
-      <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={voiding.notice ? 'text-sm text-success-text' : 'sr-only'}>
         {voiding.notice}
       </p>
-      <p role="status" className={chargeNotice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={chargeNotice ? 'text-sm text-success-text' : 'sr-only'}>
         {chargeNotice}
       </p>
 
@@ -787,13 +787,13 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
         <Figure label={copy.balance} testId="balance" emphasis>
           {formatCurrency(Math.abs(row.balance), row.currency)}
           {inFavor ? (
-            <span className="ml-1 text-xs font-normal text-success">{statementCopy.inFavor}</span>
+            <span className="ml-1 text-xs font-normal text-success-text">{statementCopy.inFavor}</span>
           ) : null}
         </Figure>
         <Figure
           label={copy.overdue}
           testId="overdue"
-          className={hasOverdue ? 'bg-danger/5 text-danger' : undefined}
+          className={hasOverdue ? 'bg-danger-subtle text-danger-text' : undefined}
         >
           {hasOverdue ? (
             <>

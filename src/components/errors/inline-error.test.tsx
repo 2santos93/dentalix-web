@@ -24,9 +24,9 @@ describe('InlineError', () => {
 
   it('variant="summary" añade la caja de resumen; "inline" (por defecto) no', () => {
     const { rerender } = render(<InlineError>Correo inválido</InlineError>);
-    expect(screen.getByRole('alert')).not.toHaveClass('rounded-lg', 'border', 'bg-danger/10');
+    expect(screen.getByRole('alert')).not.toHaveClass('rounded-lg', 'border', 'bg-danger-subtle');
 
     rerender(<InlineError variant="summary">No pudimos guardar</InlineError>);
-    expect(screen.getByRole('alert')).toHaveClass('rounded-lg', 'border', 'bg-danger/10');
+    expect(screen.getByRole('alert')).toHaveClass('rounded-lg', 'border', 'bg-danger-subtle');
   });
 });

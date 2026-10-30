@@ -213,7 +213,7 @@ export function CloseCashSessionModal({
                       data-testid="row-difference"
                       className={cn(
                         'flex h-10 shrink-0 items-center justify-end whitespace-nowrap text-sm font-medium tabular-nums sm:min-w-28',
-                        diff === 0 ? 'text-success' : 'text-danger',
+                        diff === 0 ? 'text-success-text' : 'text-danger-text',
                       )}
                     >
                       <span className="sr-only">{copy.difference}: </span>

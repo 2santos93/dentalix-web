@@ -140,7 +140,7 @@ export function WeekTimeGrid({
                 <span
                   key={block.id}
                   data-testid="week-block-chip"
-                  className="mt-1 block truncate rounded border border-dashed border-warning/50 bg-warning/10 px-1 text-[0.6875rem] font-medium text-ink"
+                  className="mt-1 block truncate rounded border border-dashed border-warning/50 bg-warning-subtle px-1 text-[0.6875rem] font-medium text-ink"
                 >
                   {labelOf(block)}
                 </span>
@@ -194,7 +194,7 @@ export function WeekTimeGrid({
                     data-testid="week-schedule-block"
                     role="note"
                     aria-label={copy.blockAria(labelOf(block))}
-                    className="pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 bg-warning/10 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]"
+                    className="pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 bg-warning-subtle [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]"
                     style={{
                       top: (band.start / SLOT_MINUTES) * ROW_HEIGHT_PX,
                       height: ((band.end - band.start) / SLOT_MINUTES) * ROW_HEIGHT_PX,

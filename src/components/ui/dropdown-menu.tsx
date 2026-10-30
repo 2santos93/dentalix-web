@@ -63,7 +63,7 @@ function DropdownMenuItem({
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted',
         destructive &&
-          'data-[highlighted]:bg-danger/10 data-[highlighted]:text-danger [&_svg]:data-[highlighted]:text-danger',
+          'data-[highlighted]:bg-danger-subtle data-[highlighted]:text-danger-text [&_svg]:data-[highlighted]:text-danger-text',
         className,
       )}
       {...props}

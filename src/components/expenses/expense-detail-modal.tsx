@@ -418,7 +418,7 @@ export function ExpenseDetailModal({
           </DialogDescription>
         </DialogHeader>
         {actionError ? <InlineError variant="summary">{actionError}</InlineError> : null}
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
         {body}

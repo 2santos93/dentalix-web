@@ -209,8 +209,8 @@ export function PatientRecordHeader({
                     data-testid="record-medical-alert"
                     className={
                       alertSeverity === 'critical'
-                        ? 'inline-flex items-center gap-1.5 text-sm font-semibold text-danger'
-                        : 'inline-flex items-center gap-1.5 text-sm font-medium text-warning'
+                        ? 'inline-flex items-center gap-1.5 text-sm font-semibold text-danger-text'
+                        : 'inline-flex items-center gap-1.5 text-sm font-medium text-warning-text'
                     }
                   >
                     <MedicalAlertIndicator

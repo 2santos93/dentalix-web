@@ -2495,7 +2495,7 @@ export function TreatmentPlansTab({
                     {copy.acceptedDiscountNotice}
                   </p>
                 ) : null}
-                <p role="status" className={bulkNotice ? 'text-sm text-success' : 'sr-only'}>
+                <p role="status" className={bulkNotice ? 'text-sm text-success-text' : 'sr-only'}>
                   {bulkNotice}
                 </p>
 
@@ -2860,7 +2860,7 @@ export function TreatmentPlansTab({
                         ) : null}
                         {/* SEC-041: aviso, no bloqueo; la API decide con el
                             tope del rol. */}
-                        <p id="tp-price-below-catalog" role="status" className="text-xs text-warning">
+                        <p id="tp-price-below-catalog" role="status" className="text-xs text-warning-text">
                           {addBelowCatalog && addEffective && addCatalogPrice !== null && selectedPlan ? (
                             <>
                               <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>

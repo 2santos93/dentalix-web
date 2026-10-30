@@ -17,8 +17,8 @@ const copy = {
 };
 
 const TREND_CLASS = {
-  BETTER: 'text-success',
-  WORSE: 'text-danger',
+  BETTER: 'text-success-text',
+  WORSE: 'text-danger-text',
   EQUAL: 'text-muted',
 } as const;
 
@@ -58,7 +58,7 @@ export function MetricValue({
     <span className={cn('flex flex-col gap-0.5', align === 'end' ? 'items-end text-right' : 'items-start')}>
       <span className="whitespace-nowrap font-medium tabular-nums text-ink">{value}</span>
       {metric.previousUnattributed && previous !== null ? (
-        <span data-testid="not-compared" className="whitespace-nowrap text-xs text-warning">
+        <span data-testid="not-compared" className="whitespace-nowrap text-xs text-warning-text">
           <span aria-hidden>{copy.notCompared}*</span>
           <span className="sr-only">{copy.notComparedSr(previousText)}</span>
         </span>

@@ -439,7 +439,7 @@ function WaitingForYouCount({
       aria-hidden
       data-testid="waiting-for-you-count"
       className={cn(
-        'inline-flex items-center justify-center rounded-full border border-danger/40 bg-danger/10 text-xs font-semibold tabular-nums text-danger',
+        'inline-flex items-center justify-center rounded-full border border-danger/40 bg-danger-subtle text-xs font-semibold tabular-nums text-danger-text',
         variant === 'full' && 'ml-auto px-2 py-0.5',
         variant === 'rail' && 'min-w-5 px-1',
         variant === 'inline' && 'min-w-5 px-1.5',
@@ -461,7 +461,7 @@ function InboxCount({ count, variant }: { count: number; variant: 'full' | 'rail
       aria-hidden
       data-testid="anamnesis-inbox-count"
       className={cn(
-        'inline-flex min-w-5 items-center justify-center rounded-full bg-warning/15 px-1.5 text-xs font-semibold tabular-nums text-ink',
+        'inline-flex min-w-5 items-center justify-center rounded-full bg-warning-subtle px-1.5 text-xs font-semibold tabular-nums text-ink',
         variant === 'full' && 'ml-auto',
         variant === 'rail' && 'absolute right-0 -top-1',
       )}

@@ -241,7 +241,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
         className="flex flex-col gap-8"
         {...(tabs ? { role: 'tabpanel', id: tabs.panelId, 'aria-labelledby': tabs.tabId } : {})}
       >
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
 
@@ -350,7 +350,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
                         <TableCell
                           className={cn(
                             'text-right font-medium tabular-nums',
-                            item.differences.some((d) => d.amount !== 0) ? 'text-danger' : 'text-ink',
+                            item.differences.some((d) => d.amount !== 0) ? 'text-danger-text' : 'text-ink',
                           )}
                           data-label={copy.colDifference}
                         >
@@ -497,7 +497,7 @@ function CurrentSessionCard({
             <p className="text-sm text-muted tabular-nums">{copy.outflowsCount(session.outflows.length)}</p>
           ) : null}
           {current.settings.requireOpenSession ? (
-            <p className="mt-1 text-sm text-warning">{copy.requireOpen}</p>
+            <p className="mt-1 text-sm text-warning-text">{copy.requireOpen}</p>
           ) : null}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -545,7 +545,7 @@ function CurrentSessionCard({
                     {PAYMENT_METHOD_LABELS[line.method]}{' '}
                     <span className="text-xs text-muted">{line.currency}</span>
                   </span>
-                  <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger' : 'text-ink')}>
+                  <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger-text' : 'text-ink')}>
                     {formatCurrency(line.expected, line.currency)}
                   </span>
                 </li>

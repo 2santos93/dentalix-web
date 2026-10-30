@@ -109,7 +109,7 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
     const missing = ratePerBase(state.rates, paymentCurrency) === null ? paymentCurrency : planCurrency;
     return (
       <p className="mt-1 flex items-start gap-2">
-        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
         <span>{copy.missing(missing, formatCivilDate(date))}</span>
       </p>
     );
@@ -152,7 +152,7 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
       {planBalance === 'error' ? <p className="text-muted">{copy.pendingUnavailable}</p> : null}
       {typeof planBalance === 'object' && planBalance.paymentsWithoutRate > 0 ? (
         <p className="mt-1 flex items-start gap-2">
-          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
           <span>{copy.pendingWithoutRate(planBalance.paymentsWithoutRate)}</span>
         </p>
       ) : null}

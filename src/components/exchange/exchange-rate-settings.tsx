@@ -246,7 +246,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
             {copy.change}
           </Button>
         </div>
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
       </section>

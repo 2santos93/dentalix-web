@@ -163,13 +163,13 @@ export function ScheduleRoster({ token, today }: ScheduleRosterProps) {
                             <span
                               className={cn(
                                 'text-xs tabular-nums',
-                                e.kind === 'override-off' ? 'text-warning' : 'text-ink',
+                                e.kind === 'override-off' ? 'text-warning-text' : 'text-ink',
                               )}
                             >
                               {e.text}
                             </span>
                             {e.override ? (
-                              <span className="mt-0.5 rounded-full bg-warning/10 px-1.5 text-[0.6875rem] font-medium text-warning">
+                              <span className="mt-0.5 rounded-full bg-warning-subtle px-1.5 text-[0.6875rem] font-medium text-warning-text">
                                 {copy.override}
                               </span>
                             ) : null}

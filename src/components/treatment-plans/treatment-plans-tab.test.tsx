@@ -946,7 +946,7 @@ describe('TreatmentPlansTab', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  // Error-states ladder (Task 8): each `text-danger` site classified by what
+  // Error-states ladder (Task 8): each `text-danger-text` site classified by what
   // the user can still do — see task-8-report.md for the full table.
   describe('DX-109: planes no cobrables o cerrados', () => {
     it('un plan rechazado deshabilita «Registrar abono» con el motivo, no ofrece plan de cuotas y congela los ítems', async () => {

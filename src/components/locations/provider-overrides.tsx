@@ -183,7 +183,7 @@ export function ProviderOverrides({
                   </span>
                   <span className="min-w-0 text-sm text-ink">
                     {o.locationName} ·{' '}
-                    <span className={o.off ? 'text-warning' : 'tabular-nums'}>
+                    <span className={o.off ? 'text-warning-text' : 'tabular-nums'}>
                       {o.off ? copy.offLabel : describeRanges(o.ranges)}
                     </span>
                   </span>

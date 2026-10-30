@@ -111,7 +111,7 @@ export function PlatformMfaCard({ token }: { token: string }) {
       <div className="flex min-w-0 items-start gap-3">
         <ShieldCheck
           aria-hidden
-          className={status.enabled ? 'mt-0.5 size-5 shrink-0 text-success' : 'mt-0.5 size-5 shrink-0 text-warning'}
+          className={status.enabled ? 'mt-0.5 size-5 shrink-0 text-success-text' : 'mt-0.5 size-5 shrink-0 text-warning-text'}
         />
         <div className="min-w-0">
           <h2 className="font-medium text-ink">{copy.title}</h2>
@@ -123,12 +123,12 @@ export function PlatformMfaCard({ token }: { token: string }) {
           {status.enabled &&
           status.breakGlassAvailableAt &&
           new Date(status.breakGlassAvailableAt).getTime() > Date.now() ? (
-            <p className="mt-1 text-sm text-warning">
+            <p className="mt-1 text-sm text-warning-text">
               {copy.pendingCooldown(formatDateTime(status.breakGlassAvailableAt))}
             </p>
           ) : null}
           {justEnabled ? (
-            <p role="status" className="mt-2 flex items-center gap-1.5 text-sm font-medium text-success">
+            <p role="status" className="mt-2 flex items-center gap-1.5 text-sm font-medium text-success-text">
               <CheckCircle2 className="size-4" aria-hidden /> {copy.done}
             </p>
           ) : null}

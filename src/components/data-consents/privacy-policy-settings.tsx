@@ -218,7 +218,7 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
               {checks.map((c) => (
                 <li
                   key={c.element}
-                  className={cn('flex items-center gap-2', c.present ? 'text-success' : 'text-danger')}
+                  className={cn('flex items-center gap-2', c.present ? 'text-success-text' : 'text-danger-text')}
                 >
                   {c.present ? <Check className="size-4" aria-hidden /> : <X className="size-4" aria-hidden />}
                   <span className="text-ink">{c.label}</span>

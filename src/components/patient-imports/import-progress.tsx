@@ -108,18 +108,18 @@ export function ImportProgress({
             </p>
           ) : null}
           {batch.balances.progress.skipped > 0 ? (
-            <p className="text-warning">{copy.balancesSkipped(batch.balances.progress.skipped, n(batch.balances.progress.skipped))}</p>
+            <p className="text-warning-text">{copy.balancesSkipped(batch.balances.progress.skipped, n(batch.balances.progress.skipped))}</p>
           ) : null}
           {batch.balances.progress.existing > 0 ? (
-            <p className="text-warning">{copy.balancesExisting(batch.balances.progress.existing, n(batch.balances.progress.existing))}</p>
+            <p className="text-warning-text">{copy.balancesExisting(batch.balances.progress.existing, n(batch.balances.progress.existing))}</p>
           ) : null}
           {batch.balances.progress.ambiguous > 0 ? (
-            <p className="text-warning">{copy.balancesAmbiguous(batch.balances.progress.ambiguous, n(batch.balances.progress.ambiguous))}</p>
+            <p className="text-warning-text">{copy.balancesAmbiguous(batch.balances.progress.ambiguous, n(batch.balances.progress.ambiguous))}</p>
           ) : null}
         </div>
       ) : null}
       {active ? <p className="text-sm text-muted">{copy.working}</p> : null}
-      {batch.status === 'FAILED' ? <p className="text-sm text-danger">{copy.failedNote}</p> : null}
+      {batch.status === 'FAILED' ? <p className="text-sm text-danger-text">{copy.failedNote}</p> : null}
       {batch.status === 'COMPLETED' && progress.createdCount > 0 ? (
         <p className="text-sm text-muted">{copy.consent}</p>
       ) : null}

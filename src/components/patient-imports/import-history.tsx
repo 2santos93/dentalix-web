@@ -221,7 +221,7 @@ export function ImportHistory({
                 {historyCopy.meta(formatDateTime(b.confirmedAt ?? b.createdAt), b.createdBy.fullName)}
               </p>
               {b.balances && b.balances.progress.ambiguous > 0 ? (
-                <p className="text-warning">{historyCopy.ambiguous(b.balances.progress.ambiguous, n(b.balances.progress.ambiguous))}</p>
+                <p className="text-warning-text">{historyCopy.ambiguous(b.balances.progress.ambiguous, n(b.balances.progress.ambiguous))}</p>
               ) : null}
               <p className="tabular-nums text-ink">
                 {b.status === 'UNDONE'

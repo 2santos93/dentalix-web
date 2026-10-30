@@ -172,8 +172,8 @@ describe('ToothTimeline', () => {
     const items = await screen.findAllByRole('listitem');
 
     // COMPLETED -> success tint; PLANNED -> warning tint (status only, never decoration).
-    expect(within(items[0]).getByText('Completado').className).toContain('text-success');
-    expect(within(items[1]).getByText('Planificado').className).toContain('text-warning');
+    expect(within(items[0]).getByText('Completado').className).toContain('text-success-text');
+    expect(within(items[1]).getByText('Planificado').className).toContain('text-warning-text');
 
     // `newer` has no notes: no em-dash placeholder row.
     expect(within(items[0]).queryByText('—')).not.toBeInTheDocument();

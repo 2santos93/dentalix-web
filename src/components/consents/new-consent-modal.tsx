@@ -446,7 +446,7 @@ export function NewConsentModal({
                 </div>
               </fieldset>
               {minor && signerType === 'PATIENT' && responsibles ? (
-                <p role="status" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+                <p role="status" className="rounded-lg bg-warning-subtle px-3 py-2 text-sm text-warning-text">
                   {copy.minorWarning(responsibles.majorityAge)}
                 </p>
               ) : null}

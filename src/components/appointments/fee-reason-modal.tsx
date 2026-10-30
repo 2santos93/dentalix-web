@@ -152,7 +152,7 @@ export function FeeReasonModal({
         />
         <div className="flex items-start justify-between gap-3 text-xs">
           {fieldError ? (
-            <p id={fieldErrorId(reasonId)} role="alert" className="text-sm text-danger">
+            <p id={fieldErrorId(reasonId)} role="alert" className="text-sm text-danger-text">
               {fieldError}
             </p>
           ) : (

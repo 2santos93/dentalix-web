@@ -159,9 +159,9 @@ function CancellationPolicyNotice({
         <div
           role="note"
           data-testid="public-late-cancellation"
-          className="flex items-start gap-2 rounded-lg bg-warning/15 px-3 py-2 text-sm text-ink"
+          className="flex items-start gap-2 rounded-lg bg-warning-subtle px-3 py-2 text-sm text-ink"
         >
-          <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <p className="font-semibold">{copy.lateTitle(policy.noticeHours)}</p>
             <p>{copy.lateMessage}</p>

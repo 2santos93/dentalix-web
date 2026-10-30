@@ -168,7 +168,7 @@ export function PublicAnamnesisView({ linkToken }: { linkToken: string }) {
               >
                 <span
                   aria-hidden
-                  className="mb-1 flex size-10 items-center justify-center rounded-full bg-success/10 text-success"
+                  className="mb-1 flex size-10 items-center justify-center rounded-full bg-success-subtle text-success-text"
                 >
                   <CheckCircle2 className="size-5" />
                 </span>

@@ -28,11 +28,11 @@ export function AttendanceBadge({
         'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums',
         // Sobre el color del tipo de cita, superficie y texto de aviso (AA); con
         // el fondo teñido, texto en tinta (el tono de aviso no llega a 4,5:1).
-        compact ? 'border border-warning/40 bg-surface text-warning' : 'bg-warning/15 text-ink',
+        compact ? 'border border-warning/40 bg-surface text-warning-text' : 'bg-warning-subtle text-ink',
         className,
       )}
     >
-      {compact ? null : <CalendarX2 aria-hidden className="size-3.5 shrink-0 text-warning" />}
+      {compact ? null : <CalendarX2 aria-hidden className="size-3.5 shrink-0 text-warning-text" />}
       <span className="min-w-0 truncate">{text}</span>
     </span>
   );

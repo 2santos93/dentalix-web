@@ -516,7 +516,7 @@ export function DayColumns({
                         aria-label={aria}
                         className={cn(
                           'pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]',
-                          block.allowsBooking ? 'bg-warning/5' : 'bg-warning/10',
+                          block.allowsBooking ? 'bg-warning-subtle' : 'bg-warning-subtle',
                         )}
                         style={{
                           top: offsetFromMinute(band.start, span),
@@ -730,7 +730,7 @@ export function DayColumns({
         <p className="flex items-center gap-2 text-xs text-muted">
           <span
             aria-hidden
-            className="inline-block size-3 rounded-sm border border-dashed border-warning/50 bg-warning/10"
+            className="inline-block size-3 rounded-sm border border-dashed border-warning/50 bg-warning-subtle"
           />
           {copy.blockLegend}
         </p>

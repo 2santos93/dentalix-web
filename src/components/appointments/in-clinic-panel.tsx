@@ -356,7 +356,7 @@ function ReservedElsewhereNotice({
       role="group"
       aria-label={reservationCopy.noticeTitle}
       data-testid="reserved-elsewhere"
-      className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-ink"
+      className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning-subtle px-3 py-2 text-ink"
     >
       {reserved.map((r) => {
         const label = reservedItemLabel(r);
@@ -366,7 +366,7 @@ function ReservedElsewhereNotice({
         return (
           <div key={r.planItemId} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2">
-              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
               <div className="min-w-0">
                 <p className="text-sm font-medium break-words">{label}</p>
                 <p className="text-xs break-words">{reservedElsewhereMessage(r)}</p>

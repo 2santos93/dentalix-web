@@ -258,7 +258,7 @@ function Detail({ label, value, usable = true }: { label: string; value: string 
   return (
     <div className="flex min-w-0 flex-col">
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className={value !== null && usable ? 'truncate text-ink' : 'break-words text-warning'}>{text}</dd>
+      <dd className={value !== null && usable ? 'truncate text-ink' : 'break-words text-warning-text'}>{text}</dd>
     </div>
   );
 }

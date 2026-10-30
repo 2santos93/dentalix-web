@@ -1,51 +1,117 @@
 /*
- * Dentalix design tokens — "The Clinical Record" (see DESIGN.md).
- * A cool clinical paper base + graphite ink + a single tokenized accent
- * (clinical teal-blue). Identity lives in the system — spacing, type, hairline
- * structure — never in the accent hue, so any tenant `--color-primary` stays
- * cohesive. Primary is teal-700 (#0E7490) so white button text meets WCAG AA.
- * Tenants override --color-primary at runtime (see layout.tsx); the rest of the
- * system stays cohesive in light and dark.
+ * Dentalix design tokens v2 — "The Clinical Record" (see DESIGN.md → Colors).
+ *
+ * Authored in OKLCH (noted per token) and shipped as hex so every browser in
+ * the field — including old Android WebViews — paints the same value. Neutrals
+ * are a cool slate (hue 250–258, very low chroma); the one accent is clinical
+ * teal (hue 223) and is tenant-overridable; four semantic hues carry status.
+ *
+ * Every text pair below is ≥ 4.5:1 and every control boundary ≥ 3:1, in light
+ * and dark (WCAG 2.x; the computation lives in the UX System v2 spec evidence).
+ *
+ * A tenant's brand color replaces the whole `--color-primary*` family at SSR
+ * (`src/lib/color/accent.ts`, injected by the root layout). Nothing else in
+ * the system depends on the accent hue, so any clinic color stays cohesive.
+ *
+ * Legacy names (`bg`, `surface-2`, `hairline`, `success-text` …) are kept as
+ * aliases at the bottom of each block while screens migrate to v2 names.
  */
 :root {
-  --color-primary: #0E7490; /* clinical teal-blue — AA with white */
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  --color-canvas: #F7F9FC; /* oklch(.982 .004 250) app background */
+  --color-surface: #FFFFFF; /* cards, panels, rows, inputs */
+  --color-surface-sunken: #F1F5F8; /* oklch(.968 .006 250) table header, hovered row, quiet fill */
+  --color-surface-active: #E8EDF3; /* oklch(.945 .009 250) selected row, pressed */
+
+  /* ── Lines ────────────────────────────────────────────────────────────── */
+  --color-border-subtle: #E5E9EE; /* oklch(.932 .008 250) rules inside tables and lists */
+  --color-border: #D8DFE6; /* oklch(.900 .012 250) structure: cards, sections */
+  --color-border-input: #838D98; /* oklch(.640 .020 250) control boundary — 3.36:1 */
+
+  /* ── Text ─────────────────────────────────────────────────────────────── */
+  --color-ink: #151C26; /* oklch(.225 .022 258) — 17.1:1 on surface */
+  --color-muted: #5B6472; /* oklch(.500 .025 258) — 5.99 surface / 5.11 active */
+  --color-faint: #6D7582; /* oklch(.560 .022 258) — placeholder, meta — 4.65 */
+
+  /* ── Accent (tenant-overridable family) ───────────────────────────────── */
+  --color-primary: #0E7490; /* oklch(.520 .094 223) solid fill — 5.36 with white */
   --color-primary-fg: #FFFFFF;
-  --color-accent: #0E7490; /* accent == primary; the one tokenized hue */
-  --color-bg: #F7F9FC; /* cool clinical paper canvas */
-  --color-surface: #FFFFFF; /* cards, panels, rows */
-  --color-surface-2: #F1F5F9; /* insets, table headers, hovered rows, quiet fills */
-  --color-ink: #0F172A; /* graphite ink — primary text */
-  --color-muted: #64748B; /* slate — secondary text, labels, meta (AA on paper) */
-  --color-border: #E2E8F0; /* standard 1px dividers and control strokes */
-  --color-hairline: #EEF2F7; /* lightest rule — in-table / in-list separation */
-  --color-success: #15803D;
-  /* Small text on the success tint needs a stronger ink than the fill. */
-  --color-success-text: #166534;
-  --color-warning: #B45309;
-  --color-danger: #BE123C;
-  --color-danger-fg: #FFFFFF; /* text on the solid danger (destructive confirm) */
+  --color-primary-hover: #06637C; /* oklch(.465 .085 223) */
+  --color-primary-text: #06637C; /* links, active nav label — 6.79 surface */
+  --color-primary-subtle: #E5F6FC; /* oklch(.962 .020 223) selected / active bg */
+  --color-primary-subtle-text: #10556A; /* 7.45 on subtle */
+  --color-primary-border: #B2D8E7; /* oklch(.860 .045 223) */
 
-  /* Elevation — flat by default; depth only for real overlays / hover state. */
-  --shadow-overlay: 0 8px 28px -8px rgb(15 23 42 / 0.18);
-  --shadow-lift: 0 1px 2px rgb(15 23 42 / 0.06);
+  /* ── Semantic (fixed — never tenant colors) ───────────────────────────── */
+  --color-success: #287C42; /* oklch(.52 .12 150) */
+  --color-success-fg: #FFFFFF;
+  --color-success-subtle: #E5F9E8;
+  --color-success-text: #1C5F31; /* 7.00 on subtle */
+  --color-warning: #EFA831; /* oklch(.78 .15 75) — ink on it, never white */
+  --color-warning-fg: #151C26;
+  --color-warning-subtle: #FEF3DD;
+  --color-warning-text: #834B14; /* 6.41 on subtle */
+  --color-danger: #C52C2A; /* oklch(.54 .19 27) */
+  --color-danger-fg: #FFFFFF;
+  --color-danger-subtle: #FEEEEE;
+  --color-danger-text: #A92321; /* 6.36 on subtle */
+  --color-info: #2D6AC1; /* oklch(.53 .15 258) */
+  --color-info-fg: #FFFFFF;
+  --color-info-subtle: #ECF3FE;
+  --color-info-text: #1A52A1; /* 6.77 on subtle */
+
+  /* ── Elevation — flat by default; depth only for real overlays ────────── */
+  --shadow-overlay: 0 12px 32px -12px rgb(21 28 38 / 0.22), 0 2px 6px -2px rgb(21 28 38 / 0.08);
+  --shadow-lift: 0 1px 2px rgb(21 28 38 / 0.06);
+
+  /* ── Legacy aliases (v1 names) ────────────────────────────────────────── */
+  --color-bg: var(--color-canvas);
+  --color-surface-2: var(--color-surface-sunken);
+  --color-hairline: var(--color-border-subtle);
+  --color-accent: var(--color-primary);
 }
-.dark {
-  --color-primary: #2CC0D6; /* lighter clinical teal — AA as text on dark surfaces */
-  --color-primary-fg: #052730; /* deep teal-ink on the light primary (buttons) */
-  --color-accent: #2CC0D6;
-  --color-bg: #0B111F; /* deep cool graphite canvas */
-  --color-surface: #131C2E; /* raised clinical surface */
-  --color-surface-2: #1C2740; /* insets, table headers, hovered rows */
-  --color-ink: #E7EDF7; /* soft paper ink */
-  --color-muted: #94A3B8; /* slate — AA on the dark surface */
-  --color-border: #283549; /* 1px dividers and control strokes */
-  --color-hairline: #1C2740; /* lightest rule on dark */
-  --color-success: #4ADE80;
-  --color-success-text: #4ADE80;
-  --color-warning: #FBBF24;
-  --color-danger: #FB7185;
-  --color-danger-fg: #2B0A12; /* white on #FB7185 is 2.7:1; deep rose-ink passes AA */
 
-  --shadow-overlay: 0 10px 34px -8px rgb(0 0 0 / 0.55);
-  --shadow-lift: 0 1px 2px rgb(0 0 0 / 0.35);
+.dark {
+  /* Surfaces rise in lightness instead of casting shadows. */
+  --color-canvas: #0B0F14; /* oklch(.165 .014 258) */
+  --color-surface-sunken: #0E1219; /* oklch(.182 .015 258) */
+  --color-surface: #13171F; /* oklch(.205 .016 258) */
+  --color-surface-active: #1D232C; /* oklch(.255 .019 258) */
+
+  --color-border-subtle: #1F252D; /* oklch(.262 .017 258) */
+  --color-border: #292F39; /* oklch(.305 .019 258) */
+  --color-border-input: #676F7C; /* oklch(.540 .022 258) — 3.54 surface */
+
+  --color-ink: #EEF0F4; /* 15.7 on surface */
+  --color-muted: #A2AAB6; /* 7.63 surface / 6.72 active */
+  --color-faint: #89919D; /* 5.65 surface */
+
+  /* In dark mode every solid fill takes dark ink: white on light teal fails. */
+  --color-primary: #3DB6CF; /* oklch(.720 .110 215) */
+  --color-primary-fg: #0B0F14; /* 8.05 */
+  --color-primary-hover: #62C8DF;
+  --color-primary-text: #62C8DF; /* 9.23 surface */
+  --color-primary-subtle: #092F39;
+  --color-primary-subtle-text: #8CD8EB; /* 8.89 */
+  --color-primary-border: #194F5D;
+
+  --color-success: #53BE70;
+  --color-success-fg: #0B0F14;
+  --color-success-subtle: #152D1A;
+  --color-success-text: #89DA9B;
+  --color-warning: #F5AE39;
+  --color-warning-fg: #0B0F14;
+  --color-warning-subtle: #3B260C;
+  --color-warning-text: #F7C56D;
+  --color-danger: #F66D67;
+  --color-danger-fg: #0B0F14;
+  --color-danger-subtle: #421C19;
+  --color-danger-text: #F8A9A2;
+  --color-info: #74A6EF;
+  --color-info-fg: #0B0F14;
+  --color-info-subtle: #192941;
+  --color-info-text: #A0C6FF;
+
+  --shadow-overlay: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-lift: 0 1px 2px rgb(0 0 0 / 0.4);
 }

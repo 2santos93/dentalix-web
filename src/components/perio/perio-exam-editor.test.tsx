@@ -216,9 +216,9 @@ describe('PerioExamEditor', () => {
     const shallow = within(upper).getByRole('textbox', {
       name: 'Sondaje 16 B',
     });
-    expect(deep).toHaveClass('text-danger');
+    expect(deep).toHaveClass('text-danger-text');
     expect(deep).toHaveAttribute('data-danger', 'true');
-    expect(shallow).not.toHaveClass('text-danger');
+    expect(shallow).not.toHaveClass('text-danger-text');
     // NIC del 16 MB: 5 + 2.
     const calRow = within(upper)
       .getAllByRole('row')

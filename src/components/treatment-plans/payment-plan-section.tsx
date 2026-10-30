@@ -210,7 +210,7 @@ function PaymentPlanSummary({ plan, currency }: { plan: PaymentPlan; currency: s
           </span>
         </span>
         {plan.overdueCount > 0 ? (
-          <span className="font-medium text-danger">
+          <span className="font-medium text-danger-text">
             {copy.overdue}: {plan.overdueCount} · {formatCurrency(plan.overdueAmount, currency)}
           </span>
         ) : null}

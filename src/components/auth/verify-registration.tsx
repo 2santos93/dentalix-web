@@ -67,7 +67,7 @@ export function VerifyRegistration({ verifyToken }: { verifyToken: string }) {
   if (loginHref) {
     return (
       <div role="status" className="flex flex-col gap-3">
-        <CheckCircle2 className="size-8 text-success" aria-hidden="true" />
+        <CheckCircle2 className="size-8 text-success-text" aria-hidden="true" />
         <h2 className="text-lg font-semibold text-ink">{copy.doneTitle}</h2>
         <p className="text-sm text-muted">{copy.doneBody}</p>
         <Button asChild size="lg" className="mt-1 w-full">

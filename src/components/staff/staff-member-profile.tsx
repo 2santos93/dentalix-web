@@ -492,7 +492,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
               )}
               {blockedMinutes !== null ? (
                 <div className="mt-1 flex flex-col gap-3 border-t border-hairline pt-4">
-                  <p className="flex items-start gap-1.5 text-sm text-warning">
+                  <p className="flex items-start gap-1.5 text-sm text-warning-text">
                     <LockKeyhole className="mt-0.5 size-4 shrink-0" aria-hidden />
                     <span>{copy.loginBlocked(blockedMinutes)}</span>
                   </p>

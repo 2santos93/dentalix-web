@@ -83,7 +83,7 @@ export function BreakGlassStep({
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
       <p
         role="note"
-        className="flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm font-medium text-warning"
+        className="flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning-subtle px-3 py-2 text-sm font-medium text-warning-text"
       >
         <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
         <span>{copy.notice}</span>

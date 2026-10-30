@@ -146,7 +146,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
     expect(rows).toHaveLength(2);
     expect(within(rows[0]).getByText('COP')).toBeInTheDocument();
     expect(within(rows[1]).getByText('USD')).toBeInTheDocument();
-    expect(within(rows[1]).getByText(/150,00/)).toHaveClass('text-danger');
+    expect(within(rows[1]).getByText(/150,00/)).toHaveClass('text-danger-text');
     // Ningún importe es la suma de las dos monedas (5.000.100 / 1.349.850 / …).
     expect(screen.queryByText(/5\.000\.100|1\.349\.850|3\.500\.250/)).not.toBeInTheDocument();
     expect(screen.getByText(/nunca se suman ni se convierten/)).toBeInTheDocument();

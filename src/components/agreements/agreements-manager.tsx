@@ -34,7 +34,7 @@ import { AGREEMENT_KIND_LABELS } from './agreement-labels';
 function InternalPayerNote({ agreement }: { agreement: Agreement }) {
   if (isExternalPayer(agreement.payer.type)) return null;
   return (
-    <span className="mt-1 flex items-start gap-1.5 text-xs text-warning">
+    <span className="mt-1 flex items-start gap-1.5 text-xs text-warning-text">
       <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
       <span>{copy.internalPayer}</span>
     </span>

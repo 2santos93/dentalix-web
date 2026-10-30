@@ -62,7 +62,7 @@ export function ForgotPasswordForm() {
     return (
       <div role="status" className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <MailCheck className="size-5 shrink-0 text-success" aria-hidden />
+          <MailCheck className="size-5 shrink-0 text-success-text" aria-hidden />
           <h2 className="text-lg font-semibold text-ink">{copy.sentTitle}</h2>
         </div>
         <p className="text-sm text-muted">{sentMessage}</p>

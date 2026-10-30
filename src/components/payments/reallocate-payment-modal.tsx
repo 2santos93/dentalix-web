@@ -367,7 +367,7 @@ export function ReallocatePaymentModal({
                                       {fieldError}
                                     </InlineError>
                                   ) : overItem ? (
-                                    <p id={overItemId} className="text-xs text-danger tabular-nums">
+                                    <p id={overItemId} className="text-xs text-danger-text tabular-nums">
                                       {copy.overItem(formatCurrency(item.free, data.planCurrency))}
                                     </p>
                                   ) : null}
@@ -381,7 +381,7 @@ export function ReallocatePaymentModal({
 
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div
-                        className={cn('flex flex-col gap-0.5 text-sm tabular-nums', over ? 'text-danger' : 'text-ink')}
+                        className={cn('flex flex-col gap-0.5 text-sm tabular-nums', over ? 'text-danger-text' : 'text-ink')}
                       >
                         <p className="font-medium">
                           {copy.footer(

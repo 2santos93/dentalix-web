@@ -437,7 +437,7 @@ function CandidateRow({
           {c.offeredForSlot ? <Badge variant="warning">{fillOpeningCopy.offered}</Badge> : null}
         </div>
         {c.whatsappBlocked ? (
-          <p className="text-warning">
+          <p className="text-warning-text">
             {c.whatsappBlockedReason === 'NO_OPT_IN'
               ? fillOpeningCopy.whatsappNoOptIn
               : fillOpeningCopy.whatsappBlocked}

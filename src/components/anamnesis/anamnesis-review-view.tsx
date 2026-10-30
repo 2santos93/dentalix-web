@@ -97,7 +97,7 @@ function DiffRow({ entry }: { entry: HistoryDiffEntry }) {
         <p className="break-words font-medium text-ink">
           {entry.label}
           {entry.affirmative && (
-            <span className="ml-2 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
+            <span className="ml-2 rounded-full bg-danger-subtle px-2 py-0.5 text-xs font-semibold text-danger-text">
               {copy.yes}
             </span>
           )}
@@ -283,7 +283,7 @@ export function AnamnesisReviewView({
           className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface p-6"
         >
           <p className="flex items-center gap-2 text-base font-semibold text-ink">
-            <CheckCircle2 aria-hidden className="size-5 text-success" />
+            <CheckCircle2 aria-hidden className="size-5 text-success-text" />
             {result.status === 'ACCEPTED' ? copy.acceptedTitle : copy.rejectedTitle}
           </p>
           {result.status === 'ACCEPTED' && <p className="text-sm text-muted">{copy.acceptedText}</p>}
@@ -309,11 +309,11 @@ export function AnamnesisReviewView({
             aria-labelledby={`${ids}-alerts`}
             className={cn(
               'flex flex-col gap-2 rounded-xl border p-4 sm:p-6',
-              alerts.length > 0 ? 'border-danger/40 bg-danger/5' : 'border-border bg-surface',
+              alerts.length > 0 ? 'border-danger/40 bg-danger-subtle' : 'border-border bg-surface',
             )}
           >
             <h2 id={`${ids}-alerts`} className="flex items-center gap-2 text-base font-semibold text-ink">
-              {alerts.length > 0 && <AlertTriangle aria-hidden className="size-5 text-danger" />}
+              {alerts.length > 0 && <AlertTriangle aria-hidden className="size-5 text-danger-text" />}
               {alerts.length > 0 ? copy.alertsTitle : copy.noAlerts}
             </h2>
             {alerts.length > 0 && (

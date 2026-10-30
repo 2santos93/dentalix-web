@@ -39,9 +39,9 @@ export function WithoutRateNotice({ token, payments }: { token: string; payments
   return (
     <div
       role="status"
-      className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-ink"
+      className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-subtle px-3 py-2 text-sm text-ink"
     >
-      <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+      <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{withoutRateCopy.title(payments.length)}</p>
         <p>{withoutRateCopy.body}</p>

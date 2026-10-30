@@ -2,29 +2,56 @@
 @import "../styles/tokens.css";
 
 @theme inline {
-  /* Fonts — map the loaded Geist faces onto Tailwind's sans/mono so the app
-     actually renders in Geist (the design system's single UI family) instead
-     of the system stack. */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+  /* Fonts — Inter variable (opsz axis) is the single UI family; numbers use
+     its tabular figures. Mono is the system stack: only code-like values. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
-    monospace;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  --color-primary: var(--color-primary);
-  --color-primary-foreground: var(--color-primary-fg);
-  --color-accent: var(--color-accent);
-  --color-bg: var(--color-bg);
+  /* Surfaces & lines */
+  --color-canvas: var(--color-canvas);
   --color-surface: var(--color-surface);
-  --color-surface-2: var(--color-surface-2);
+  --color-surface-sunken: var(--color-surface-sunken);
+  --color-surface-active: var(--color-surface-active);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-border: var(--color-border);
+  --color-border-input: var(--color-border-input);
+  /* Text */
   --color-ink: var(--color-ink);
   --color-muted: var(--color-muted);
-  --color-border: var(--color-border);
-  --color-hairline: var(--color-hairline);
+  --color-faint: var(--color-faint);
+  /* Accent family (tenant-overridable) */
+  --color-primary: var(--color-primary);
+  --color-primary-foreground: var(--color-primary-fg);
+  --color-primary-fg: var(--color-primary-fg);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-text: var(--color-primary-text);
+  --color-primary-subtle: var(--color-primary-subtle);
+  --color-primary-subtle-text: var(--color-primary-subtle-text);
+  --color-primary-border: var(--color-primary-border);
+  /* Semantic */
   --color-success: var(--color-success);
+  --color-success-fg: var(--color-success-fg);
+  --color-success-subtle: var(--color-success-subtle);
   --color-success-text: var(--color-success-text);
   --color-warning: var(--color-warning);
+  --color-warning-fg: var(--color-warning-fg);
+  --color-warning-subtle: var(--color-warning-subtle);
+  --color-warning-text: var(--color-warning-text);
   --color-danger: var(--color-danger);
   --color-danger-foreground: var(--color-danger-fg);
+  --color-danger-fg: var(--color-danger-fg);
+  --color-danger-subtle: var(--color-danger-subtle);
+  --color-danger-text: var(--color-danger-text);
+  --color-info: var(--color-info);
+  --color-info-fg: var(--color-info-fg);
+  --color-info-subtle: var(--color-info-subtle);
+  --color-info-text: var(--color-info-text);
+  /* Legacy aliases (v1) — migrate to the names above */
+  --color-accent: var(--color-accent);
+  --color-bg: var(--color-bg);
+  --color-surface-2: var(--color-surface-2);
+  --color-hairline: var(--color-hairline);
 
   /* Elevation vocabulary — only overlays and hover state carry shadow. */
   --shadow-overlay: var(--shadow-overlay);
@@ -38,50 +65,110 @@
  * component classes so Tailwind utilities can still override per call site.
  */
 @layer base {
+  html {
+    /* Inter: tailed l so I / l / 1 never collide in names, IDs and doses;
+       text optical sizes at UI sizes, display forms on headings. */
+    font-feature-settings: "cv05" 1;
+    font-optical-sizing: auto;
+    -webkit-text-size-adjust: 100%;
+  }
   body {
-    font-size: 0.9375rem;
-    line-height: 1.55;
+    font-size: 0.875rem; /* 14px desktop UI */
+    line-height: 1.43;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  /* Touch: one step larger body, and 16px in fields so iOS never zooms on
+     focus. Applies to phones and tablets alike (pointer, not width). */
+  @media (pointer: coarse) {
+    body {
+      font-size: 0.9375rem;
+      line-height: 1.47;
+    }
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea {
+      font-size: 1rem;
+    }
+  }
+  /* Tables, and anything marked numeric, align figures. */
+  table,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+  ::selection {
+    background: var(--color-primary-subtle);
+    color: var(--color-primary-subtle-text);
   }
 }
 
 @layer components {
+  /* Type scale v2 (DESIGN.md → Typography). Roles, not sizes. */
   .t-display {
-    font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2rem);
-    font-weight: 640;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.022em;
     text-wrap: balance;
   }
+  @media (min-width: 1024px) {
+    .t-display {
+      font-size: 1.75rem;
+      line-height: 1.2857;
+    }
+  }
   .t-title {
-    font-size: 1.125rem;
-    font-weight: 620;
-    line-height: 1.3;
-    letter-spacing: -0.01em;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: -0.011em;
     text-wrap: balance;
   }
   .t-body {
-    font-size: 0.9375rem;
+    font-size: inherit;
     font-weight: 400;
-    line-height: 1.55;
+    line-height: inherit;
   }
   .t-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.385;
+  }
+  .t-caption {
     font-size: 0.75rem;
-    font-weight: 560;
-    line-height: 1.2;
-    letter-spacing: 0.02em;
+    font-weight: 500;
+    line-height: 1.333;
+    color: var(--color-muted);
+  }
+  /* Small-caps-like column/group heading: muted, tracked, sentence case. */
+  .t-overline {
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.333;
+    letter-spacing: 0.01em;
+    color: var(--color-muted);
   }
   /* Numbers, dates, tooth numbers, money, IDs — tabular so columns align. */
   .t-data,
   .tnum {
     font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum" 1, "cv01" 1;
   }
   .t-data {
-    font-size: 0.9375rem;
     font-weight: 500;
-    line-height: 1.4;
+  }
+  /* Record numbers, documents, lots: slashed zero so O/0 never collide. */
+  .t-id {
+    font-variant-numeric: tabular-nums slashed-zero;
+  }
+
+  /* The one focus ring: 2px accent-text with a 2px gap, ≥3:1 on both themes. */
+  .focus-ring {
+    outline: none;
+  }
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--color-primary-text);
+    outline-offset: 2px;
   }
 
   /*

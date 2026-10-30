@@ -253,12 +253,12 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
           </div>
         ) : null}
 
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
 
         {rangeError ? (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-sm text-danger-text">
             {rangeError}
           </p>
         ) : null}
@@ -356,7 +356,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                           </TableCell>
                           <TableCell
                             data-label={expensesSummaryCopy.colNet}
-                            className={cn('text-right font-medium tabular-nums', row.net < 0 && 'text-danger')}
+                            className={cn('text-right font-medium tabular-nums', row.net < 0 && 'text-danger-text')}
                           >
                             {sedeMoney(row.net, row.currency, fmt)}
                           </TableCell>

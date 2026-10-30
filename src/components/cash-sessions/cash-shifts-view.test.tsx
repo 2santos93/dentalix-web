@@ -187,7 +187,7 @@ describe('CashShiftsView (DX-027)', () => {
     });
     mockedList.mockResolvedValue(page([]));
     render(<CashShiftsView token={token} />);
-    expect(await screen.findByText(/-20\.?000,00/)).toHaveClass('text-danger');
+    expect(await screen.findByText(/-20\.?000,00/)).toHaveClass('text-danger-text');
   });
 
   it('si la lista falla, la caja actual sigue a mano y la lista se reintenta', async () => {

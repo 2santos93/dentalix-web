@@ -242,7 +242,7 @@ export function ToothTimeline({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="-ml-2 h-8 text-muted hover:text-danger"
+                      className="-ml-2 h-8 text-muted hover:text-danger-text"
                       aria-label={copy.voidActionFor(label, date)}
                       onClick={() => setVoiding({ id: record.id, label: copy.recordLabel(label, date) })}
                     >

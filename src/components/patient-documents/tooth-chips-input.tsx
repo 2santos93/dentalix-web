@@ -129,7 +129,7 @@ export function ToothChipsInput({
           className={cn(fieldClass, 'h-11 w-24 min-w-0 flex-1 tabular-nums sm:h-10 sm:flex-none')}
         />
       </div>
-      <p id={hintId} className={cn('text-xs', error ? 'text-danger' : 'text-muted')} role={error ? 'alert' : undefined}>
+      <p id={hintId} className={cn('text-xs', error ? 'text-danger-text' : 'text-muted')} role={error ? 'alert' : undefined}>
         {error ?? copy.hint}
       </p>
     </div>

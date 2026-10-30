@@ -225,7 +225,7 @@ export function PerioChart({
                   'h-7 w-6 rounded-sm bg-transparent text-center text-xs tabular-nums text-ink',
                   'focus:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary',
                   'aria-disabled:cursor-not-allowed aria-disabled:text-muted',
-                  danger && 'font-semibold text-danger',
+                  danger && 'font-semibold text-danger-text',
                 )}
               />
             </td>
@@ -283,8 +283,8 @@ export function PerioChart({
               className={cn(
                 siteCell(index),
                 'h-6 text-center text-[11px] tabular-nums text-muted',
-                trend === 'better' && 'font-semibold text-success',
-                trend === 'worse' && 'font-semibold text-danger',
+                trend === 'better' && 'font-semibold text-success-text',
+                trend === 'worse' && 'font-semibold text-danger-text',
               )}
             >
               {before ?? ''}

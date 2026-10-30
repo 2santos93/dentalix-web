@@ -123,7 +123,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
     });
     render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     const list = await screen.findByRole('list', { name: 'Recordatorios de la cita' });
-    expect(within(list).getByText('Falló el envío')).toHaveClass('text-danger');
+    expect(within(list).getByText('Falló el envío')).toHaveClass('text-danger-text');
     expect(list).toHaveTextContent('El recordatorio no pudo enviarse tras agotar los intentos.');
     expect(list).not.toHaveTextContent('Pendiente');
     expect(list).not.toHaveTextContent('sale el');

@@ -56,7 +56,7 @@ export function PlanQuoteActions({ token, patientId, plan, role, onAccepted }: P
     <div className="flex flex-col gap-3">
       {acceptance ? (
         <div role="status" className="flex items-start gap-2 text-sm">
-          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
+          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success-text" />
           <p>
             <span className="font-medium text-ink tabular-nums">
               {copy.acceptedBy(acceptance.signerName, formatDateTime(acceptance.acceptedAt))}

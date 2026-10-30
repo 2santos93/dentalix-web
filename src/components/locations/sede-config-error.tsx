@@ -104,7 +104,7 @@ export function SedeConfigError({
         )}
       >
         <span className="flex flex-1 items-start gap-2 text-ink">
-          <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
+          <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-text" />
           <span id={descriptionId}>{description ?? sedeConfigErrorCopy[kind]}</span>
         </span>
         <span className="flex flex-wrap gap-2">

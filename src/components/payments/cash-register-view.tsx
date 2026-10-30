@@ -385,7 +385,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
 
         {/* Aviso de la última anulación: fuera de AsyncSection para que la
             recarga no lo borre. */}
-        <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={voiding.notice ? 'text-sm text-success-text' : 'sr-only'}>
           {voiding.notice}
         </p>
 

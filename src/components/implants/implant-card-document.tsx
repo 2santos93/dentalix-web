@@ -117,7 +117,7 @@ export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: Reg
                     {item.kindLabel} · {copy.tooth} <span className="tabular-nums">{item.toothNumber}</span>
                   </p>
                   {item.voided ? (
-                    <span className="rounded-full border border-danger px-2 text-xs font-semibold text-danger">
+                    <span className="rounded-full border border-danger px-2 text-xs font-semibold text-danger-text">
                       {copy.voided}
                     </span>
                   ) : null}

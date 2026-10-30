@@ -233,7 +233,7 @@ export function PatientResponsiblePartiesSection({
             {copy.noticesTo(recipient.name, recipient.email)}
           </p>
         ) : data.minor && data.parties.length === 0 ? (
-          <p className="text-sm text-warning">{copy.minorNoResponsible(data.majorityAge)}</p>
+          <p className="text-sm text-warning-text">{copy.minorNoResponsible(data.majorityAge)}</p>
         ) : null}
 
         {familyPatients.length > 0 ? (
@@ -295,7 +295,7 @@ export function PatientResponsiblePartiesSection({
           </Button>
         ) : null}
       </div>
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
       {content()}

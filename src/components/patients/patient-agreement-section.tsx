@@ -291,7 +291,7 @@ export function PatientAgreementSection({
       <h3 id={`${ids}-heading`} className="text-base font-semibold text-ink">
         {copy.heading}
       </h3>
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
       {content()}

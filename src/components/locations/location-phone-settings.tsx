@@ -197,7 +197,7 @@ function LocationPhoneRow({
             {error}
           </InlineError>
         ) : saved ? (
-          <p role="status" className="flex items-center gap-1 text-xs text-success">
+          <p role="status" className="flex items-center gap-1 text-xs text-success-text">
             <CheckCircle2 aria-hidden className="size-3.5" />
             {copy.saved}
           </p>

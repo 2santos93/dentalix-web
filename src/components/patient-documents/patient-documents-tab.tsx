@@ -494,7 +494,7 @@ export function PatientDocumentsTab({
           <p className="text-sm text-muted">{item.status === 'converting' ? copy.converting : copy.waiting}</p>
         ) : null}
 
-        {item.teethInvalid && editable ? <p className="text-sm text-danger">{copy.fixTeeth}</p> : null}
+        {item.teethInvalid && editable ? <p className="text-sm text-danger-text">{copy.fixTeeth}</p> : null}
 
         {item.status === 'uploading' || item.status === 'done' ? (
           <div

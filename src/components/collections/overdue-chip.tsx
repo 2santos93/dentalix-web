@@ -26,10 +26,10 @@ export function OverdueChip({
       data-testid="overdue-chip"
       title={text}
       className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-warning tabular-nums',
+        'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-warning-text tabular-nums',
         // Sobre el color del tipo de cita, un fondo de superficie para que el
         // texto mantenga el contraste en claro y en oscuro.
-        compact ? 'border border-warning/40 bg-surface' : 'bg-warning/15',
+        compact ? 'border border-warning/40 bg-surface' : 'bg-warning-subtle',
         className,
       )}
     >

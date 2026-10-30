@@ -247,7 +247,7 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
                       </TableCell>
                       <TableCell
                         data-label={copy.colExpected}
-                        className={cn('text-right font-medium tabular-nums', row.expected < 0 && 'text-danger')}
+                        className={cn('text-right font-medium tabular-nums', row.expected < 0 && 'text-danger-text')}
                       >
                         {money(row.expected)}
                       </TableCell>
@@ -258,7 +258,7 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
                         data-label={copy.colDifference}
                         className={cn(
                           'text-right font-semibold tabular-nums',
-                          row.difference !== null && row.difference !== 0 && 'text-danger',
+                          row.difference !== null && row.difference !== 0 && 'text-danger-text',
                         )}
                       >
                         {money(row.difference)}
@@ -346,7 +346,7 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
                   {copy.colReason}: {p.voidReason ?? '—'} · {copy.colVoidedBy}: {p.voidedBy?.fullName ?? '—'}
                   {p.voidedAt ? ` · ${when(p.voidedAt)}` : ''}
                 </p>
-                {p.bookedAsAdjustment ? <p className="text-xs text-warning">{copy.bookedElsewhere}</p> : null}
+                {p.bookedAsAdjustment ? <p className="text-xs text-warning-text">{copy.bookedElsewhere}</p> : null}
               </li>
             ))}
           </ul>
@@ -504,7 +504,7 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
                   {copy.colVoidedBy}: {o.voidedBy?.fullName ?? '—'}
                   {o.voidedAt ? ` · ${when(o.voidedAt)}` : ''}
                 </p>
-                {o.bookedAsAdjustment ? <p className="text-xs text-warning">{copy.outflowBookedElsewhere}</p> : null}
+                {o.bookedAsAdjustment ? <p className="text-xs text-warning-text">{copy.outflowBookedElsewhere}</p> : null}
               </li>
             ))}
           </ul>
@@ -543,7 +543,7 @@ function AdjustmentList({
                   {PAYMENT_METHOD_LABELS[a.method]} · {a.currency}
                 </span>
               </span>
-              <span className={cn('font-semibold tabular-nums', a.amount < 0 && 'text-danger')}>
+              <span className={cn('font-semibold tabular-nums', a.amount < 0 && 'text-danger-text')}>
                 {formatCurrency(a.amount, a.currency)}
               </span>
             </div>

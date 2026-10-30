@@ -88,7 +88,7 @@ const ATTRIBUTION_SENSITIVE: ReadonlySet<string> = new Set(['production', 'colle
  */
 function UnattributedMark() {
   return (
-    <span aria-hidden data-testid="unattributed-mark" className="font-semibold text-warning">
+    <span aria-hidden data-testid="unattributed-mark" className="font-semibold text-warning-text">
       *
     </span>
   );
@@ -364,7 +364,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
         </Button>
       </div>
 
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
 
@@ -404,9 +404,9 @@ export function LocationsComparisonView({ token }: { token: string }) {
               {unattributed ? (
                 <p
                   role="note"
-                  className="flex max-w-[80ch] items-start gap-1.5 self-start rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
+                  className="flex max-w-[80ch] items-start gap-1.5 self-start rounded-lg border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-ink"
                 >
-                  <span aria-hidden className="font-semibold text-warning">
+                  <span aria-hidden className="font-semibold text-warning-text">
                     *
                   </span>
                   <span>{locationsComparisonCopy.unattributedNote}</span>

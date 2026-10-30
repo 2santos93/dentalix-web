@@ -119,7 +119,7 @@ export function PatientCollectionsSection({
         </div>
       </div>
 
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
 
@@ -153,7 +153,7 @@ export function PatientCollectionsSection({
                     </span>
                     {/* Si se volvió a cumplir con otro abono, ya no aplica. */}
                     {p.reopenedAt && p.status !== 'KEPT' ? (
-                      <span className="text-xs text-warning tabular-nums">
+                      <span className="text-xs text-warning-text tabular-nums">
                         {collectionsCopy.reopened(formatDateTime(p.reopenedAt))}
                       </span>
                     ) : null}

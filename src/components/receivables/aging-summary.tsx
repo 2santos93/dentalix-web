@@ -63,7 +63,7 @@ function CurrencyTotals({ total }: { total: AgingTotal }) {
             <dd
               className={cn(
                 'truncate font-medium tabular-nums',
-                bucket === 'over90' && total.buckets.over90 > 0 ? 'text-danger' : 'text-ink',
+                bucket === 'over90' && total.buckets.over90 > 0 ? 'text-danger-text' : 'text-ink',
               )}
             >
               {formatCurrency(total.buckets[bucket], total.currency)}
@@ -74,7 +74,7 @@ function CurrencyTotals({ total }: { total: AgingTotal }) {
       {total.credit > 0 ? (
         <p className="mt-2 text-xs text-muted">
           {copy.credit}{' '}
-          <span className="font-medium tabular-nums text-success">
+          <span className="font-medium tabular-nums text-success-text">
             {formatCurrency(total.credit, total.currency)}
           </span>
           {' · '}

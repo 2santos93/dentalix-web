@@ -25,7 +25,7 @@ export function CoverageMarker({
   if (!text) return null;
   return (
     <span data-testid="coverage-marker" title={text} className={cn('inline-flex shrink-0', className)}>
-      <ShieldAlert aria-hidden className="size-3.5 text-warning" />
+      <ShieldAlert aria-hidden className="size-3.5 text-warning-text" />
       {srText ? <span className="sr-only">{text}</span> : null}
     </span>
   );
@@ -53,8 +53,8 @@ export function CoverageChip({
       data-testid="coverage-chip"
       title={text}
       className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-warning tabular-nums',
-        compact ? 'border border-warning/40 bg-surface' : 'bg-warning/15',
+        'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-warning-text tabular-nums',
+        compact ? 'border border-warning/40 bg-surface' : 'bg-warning-subtle',
         className,
       )}
     >

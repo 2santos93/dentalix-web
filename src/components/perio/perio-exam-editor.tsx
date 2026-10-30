@@ -399,7 +399,7 @@ export function PerioExamEditor({
                       setConfirmDelete(true);
                     }}
                     disabled={busy}
-                    className="w-full text-danger sm:w-auto"
+                    className="w-full text-danger-text sm:w-auto"
                   >
                     <Trash2 aria-hidden />
                     {copy.deleteDraft}
@@ -421,14 +421,14 @@ export function PerioExamEditor({
 
             <div aria-live="polite" className="text-sm">
               {dirty ? (
-                <p className="font-medium text-warning">{copy.unsaved}</p>
+                <p className="font-medium text-warning-text">{copy.unsaved}</p>
               ) : savedNotice ? (
-                <p className="text-success">{copy.saved}</p>
+                <p className="text-success-text">{copy.saved}</p>
               ) : null}
             </div>
             {actionError ? <InlineError variant="summary">{actionError}</InlineError> : null}
             {notice ? (
-              <p role="status" className="text-sm font-medium text-warning">
+              <p role="status" className="text-sm font-medium text-warning-text">
                 {notice}
               </p>
             ) : null}
@@ -577,8 +577,8 @@ function IndicesPanel({
                     better === null
                       ? 'text-xs text-muted'
                       : better
-                        ? 'text-xs text-success'
-                        : 'text-xs text-danger'
+                        ? 'text-xs text-success-text'
+                        : 'text-xs text-danger-text'
                   }
                 >
                   {copy.indicesPrevious}: {formatIndex(before, fmt, row.percent)}
