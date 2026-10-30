@@ -21,6 +21,8 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
 import { useBillablePlans } from './use-billable-plans';
 import { usePaymentLocationHint } from './use-payment-location-hint';
+import { useExchangeRates } from './use-exchange-rates';
+import { PaymentRatePreview, ratePreviewCopy } from './payment-rate-preview';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 
@@ -51,6 +53,8 @@ export const recordPaymentCopy = {
   openingPending: (pending: string) => `Pendiente: ${pending}`,
   overPending: (pending: string) =>
     `El abono supera lo pendiente del saldo migrado: quedan ${pending}.`,
+  // DX-376: previsualización del cobro en otra moneda que la del plan.
+  preview: ratePreviewCopy,
 };
 const copy = recordPaymentCopy;
 
@@ -169,6 +173,12 @@ export function RecordPaymentModal({
   const plan = opening ? null : (plans.find((p) => p.id === form.planId) ?? plans[0] ?? null);
   // El abono a un saldo migrado va siempre en su moneda.
   const currency = opening ? opening.currency : form.currency || plan?.currency || '';
+  // DX-376: cobrar en otra moneda que la del plan enseña, antes de guardar, la
+  // tasa del día del abono y cuánto cubre (un saldo migrado va en su moneda).
+  const otherCurrency = plan !== null && currency !== '' && currency !== plan.currency;
+  const rates = useExchangeRates(token, form.date, open && otherCurrency);
+  const parsedAmount = currency ? parseMoneyInput(form.amount, currency) : null;
+  const previewAmount = parsedAmount?.ok && parsedAmount.value > 0 ? parsedAmount.value : null;
 
   function patch(next: Partial<FormState>) {
     setForm((f) => ({ ...f, ...next }));
@@ -327,6 +337,16 @@ export function RecordPaymentModal({
                   />
                 </FormField>
               </div>
+              {otherCurrency && plan ? (
+                <PaymentRatePreview
+                  state={rates}
+                  amount={previewAmount}
+                  paymentCurrency={currency}
+                  planCurrency={plan.currency}
+                  planBalance={plan.balance}
+                  date={form.date}
+                />
+              ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField htmlFor="rp-method" label={copy.method}>
                   <select

@@ -6,6 +6,7 @@ import { recordOpeningBalancePayment, recordPayment } from '@/lib/payments/payme
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { getExchangeRates } from '@/lib/exchange/exchange-api';
 
 jest.mock('../../lib/payments/payments-api', () => ({
   recordPayment: jest.fn(),
@@ -15,6 +16,9 @@ jest.mock('../../lib/payments/billable-plans-api', () => ({
   ...jest.requireActual('../../lib/payments/billable-plans-api'),
   listBillablePlans: jest.fn(),
 }));
+jest.mock('../../lib/exchange/exchange-api', () => ({
+  getExchangeRates: jest.fn(),
+}));
 jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
@@ -22,6 +26,7 @@ jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
     { code: 'COP', name: 'Peso colombiano', symbol: '$' },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
+    { code: 'VES', name: 'Bolívar', symbol: 'Bs' },
   ]),
 }));
 
@@ -31,6 +36,7 @@ const mockedRecordOpening = recordOpeningBalancePayment as jest.MockedFunction<
 >;
 const mockedList = listBillablePlans as jest.MockedFunction<typeof listBillablePlans>;
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+const mockedRates = getExchangeRates as jest.MockedFunction<typeof getExchangeRates>;
 
 const copPlan: BillablePlan = {
   id: 'plan-cop',
@@ -89,6 +95,8 @@ beforeEach(() => {
   mockedList.mockReset();
   mockedLocations.mockReset();
   mockedLocations.mockResolvedValue([clinicLocation()]);
+  mockedRates.mockReset();
+  mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { COP: 4000, VES: 36.5 } });
 });
 
 const opening = {
@@ -432,5 +440,112 @@ describe('DX-262: abono contra el saldo migrado', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
     expect(await within(dialog).findByText(/supera lo pendiente/)).toBeInTheDocument();
     expect(mockedRecordOpening).not.toHaveBeenCalled();
+  });
+});
+
+describe('DX-376: cobro en otra moneda que la del plan', () => {
+  async function openUsdPlan() {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue([usdPlan]);
+    const utils = renderModal();
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByLabelText('Plan');
+    // La lista de monedas llega aparte.
+    await within(dialog).findByRole('option', { name: /Bolívar/ });
+    return { user, dialog, ...utils };
+  }
+  const preview = (dialog: HTMLElement) => within(dialog).getByTestId('rp-rate-preview');
+
+  it('antes de guardar enseña el equivalente en la moneda del plan, la tasa con su fecha y su fuente, y lo pendiente tras el abono', async () => {
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD50,00 US$'));
+    const date = (within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value;
+    expect(mockedRates).toHaveBeenCalledWith('tok', date);
+    const [y, m, d] = date.split('-');
+    const text = money(preview(dialog).textContent);
+    expect(text).toContain(`Tasa: 1 USD = 36,50 VES · automática · ${d}/${m}/${y}`);
+    expect(text).toContain('Pendiente tras el abono450,00 US$');
+  });
+
+  it('cambiar la fecha pide la tasa de ese día', async () => {
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.clear(within(dialog).getByLabelText('Fecha de pago'));
+    await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
+    await waitFor(() => expect(mockedRates).toHaveBeenLastCalledWith('tok', '2026-10-01'));
+  });
+
+  it('sin importe enseña la tasa e invita a escribirlo', async () => {
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('1 USD = 36,50 VES'));
+    expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.typeAmount);
+  });
+
+  it('mientras consulta la tasa lo dice', async () => {
+    mockedRates.mockReturnValue(new Promise(() => {}));
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    expect(await within(dialog).findByText(recordPaymentCopy.preview.loading)).toBeInTheDocument();
+  });
+
+  it('si la consulta falla lo dice con reintento y deja guardar', async () => {
+    mockedRates.mockRejectedValueOnce(new Error('red'));
+    mockedRecord.mockResolvedValue(savedPayment({ amount: 1825, currency: 'VES', treatmentPlanId: 'plan-usd' }));
+    const { user, dialog, onRecorded } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+
+    const retry = await within(dialog).findByRole('button', { name: recordPaymentCopy.preview.retry });
+    expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.error);
+    await user.click(retry);
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD50,00 US$'));
+
+    mockedRates.mockRejectedValueOnce(new Error('red'));
+    await user.clear(within(dialog).getByLabelText('Fecha de pago'));
+    await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
+    await within(dialog).findByRole('button', { name: recordPaymentCopy.preview.retry });
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+  });
+
+  it('sin tasa del día lo dice y deja guardar: el abono queda «sin tasa»', async () => {
+    mockedRates.mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: {} });
+    mockedRecord.mockResolvedValue(
+      savedPayment({ amount: 1825, currency: 'VES', treatmentPlanId: 'plan-usd', exchangeRateStatus: 'MISSING' }),
+    );
+    const { user, dialog, onRecorded } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+
+    await waitFor(() => expect(preview(dialog)).toHaveTextContent(/no hay tasa de VES para el/i));
+    expect(preview(dialog)).toHaveTextContent(/se guarda igual y queda «sin tasa»/);
+    expect(preview(dialog)).not.toHaveTextContent(/equivalente/i);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() =>
+      expect(mockedRecord).toHaveBeenCalledWith(
+        'tok',
+        'plan-usd',
+        expect.objectContaining({ amount: 1825, currency: 'VES' }),
+        expect.any(String),
+      ),
+    );
+    expect(onRecorded.mock.calls[0][0]).toContain(recordPaymentCopy.recordedWithoutRate);
+  });
+
+  it('en la moneda del plan no enseña previsualización ni consulta la tasa', async () => {
+    const { user, dialog } = await openUsdPlan();
+    await user.type(within(dialog).getByLabelText('Importe'), '50');
+    expect(within(dialog).queryByTestId('rp-rate-preview')).not.toBeInTheDocument();
+    expect(mockedRates).not.toHaveBeenCalled();
+  });
+
+  it('ningún texto de la previsualización nombra un país ni un banco central', () => {
+    const all = JSON.stringify(recordPaymentCopy.preview);
+    expect(all).not.toMatch(/venezuela|colombia|bcv|banco central/i);
   });
 });

@@ -121,6 +121,10 @@ jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn(),
 }));
+// DX-376: la previsualización del cobro en otra moneda pide las tasas del día.
+jest.mock('../../lib/exchange/exchange-api', () => ({
+  getExchangeRates: jest.fn().mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: { COP: 4000 } }),
+}));
 // Recibo de caja (DX-136): el diálogo pide el recibo a la API.
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
@@ -850,6 +854,12 @@ describe('TreatmentPlansTab', () => {
     await user.selectOptions(currencySelect, 'COP');
 
     await user.type(screen.getByLabelText(/^monto$/i), '25000');
+
+    // DX-376: antes de guardar, lo que cubre en la moneda del plan y con qué tasa.
+    const preview = await screen.findByTestId('rp-rate-preview');
+    await waitFor(() => expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Equivalente en USD6,25 US$'));
+    expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Pendiente tras el abono79.993,75 US$');
+    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Tasa: 1 USD = 4000,00 COP · manual · \d{2}\/\d{2}\/\d{4}/);
 
     const newPayment = { ...payment1, id: 'pay-2', amount: 25000, currency: 'COP' };
     const updatedBalance = { ...balance1, paid: balance1.paid + 25000, balance: balance1.balance - 25000 };
