@@ -154,7 +154,7 @@ export function WeekTimeGrid({
             i % 2 === 0 ? (
               <div
                 key={i}
-                className="whitespace-nowrap pr-1 text-right text-xs text-muted"
+                className="whitespace-nowrap pr-1 text-right text-xs tabular-nums text-muted"
                 style={{ height: ROW_HEIGHT_PX * 2 }}
               >
                 {sedeMinute(i * SLOT_MINUTES, clock.fmt)}

@@ -28,7 +28,8 @@ import { addCivilDays, wallDay, wallMinuteOfDay } from "@/lib/time/wall-clock";
 /**
  * «Agendar visita»: los huecos, la fecha mínima y la hora que se propone
  * van en el reloj de la sede de la visita (DX-378), nunca en el del navegador.
- */export function ScheduleVisitDialog({
+ */
+export function ScheduleVisitDialog({
   token,
   patientId,
   locationId,
