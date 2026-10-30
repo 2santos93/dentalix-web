@@ -90,6 +90,18 @@ describe('PlanQuotePrintView (DX-012)', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'Reintentar la consulta de la tasa' }));
       expect(await screen.findByTestId('quote-second-total')).toBeInTheDocument();
     });
+
+    it('sin la zona de la sede no se queda «consultando» para siempre: lo dice con reintento', async () => {
+      mockedGet.mockResolvedValue(planQuoteFixture());
+      jest.mocked(listLocations).mockRejectedValue(new Error('red'));
+      renderView();
+      await screen.findByTestId('quote-header');
+      await screen.findByRole('option', { name: /Dólar/ });
+      await userEvent.selectOptions(screen.getByLabelText('Segunda moneda (opcional)'), 'USD');
+      expect(await screen.findByText(/zona horaria de la sede/i)).toBeInTheDocument();
+      expect(screen.queryByText('Consultando la tasa de hoy…')).not.toBeInTheDocument();
+      expect(mockedRates).not.toHaveBeenCalled();
+    });
   });
 
   it('muestra la carga, pinta el documento y abre el diálogo de impresión una vez', async () => {

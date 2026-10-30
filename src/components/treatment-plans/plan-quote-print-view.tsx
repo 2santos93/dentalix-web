@@ -13,6 +13,8 @@ import { FieldError } from '@/components/errors/field-error';
 import { useExchangeRates, type ExchangeRatesState } from '@/components/payments/use-exchange-rates';
 import { ratePreviewCopy } from '@/components/payments/payment-rate-preview';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
 
 const copy = {
   toolbar: 'Acciones del presupuesto',
@@ -41,12 +43,13 @@ function secondCurrencyOf(
   date: string,
 ): { value: QuoteSecondCurrency } | { missing: string } | null {
   if (state.status !== 'ready') return null;
-  const { base, source, rates } = state.rates;
-  const perBase = (code: string): number | undefined => (code === base ? 1 : rates[code]);
-  const fromPerBase = perBase(planCurrency);
-  const toPerBase = perBase(second);
-  if (fromPerBase === undefined) return { missing: planCurrency };
-  if (toPerBase === undefined) return { missing: second };
+  // La misma tasa que congelaría un abono de hoy (8 decimales, DX-375).
+  const quote = quoteFromRates(state.rates, planCurrency, second);
+  if (quote === null) {
+    return { missing: ratePerBase(state.rates, planCurrency) === null ? planCurrency : second };
+  }
+  const { fromPerBase, toPerBase } = quote;
+  const { source } = state.rates;
   return { value: { currency: second, fromPerBase, toPerBase, source, date } };
 }
 
@@ -81,7 +84,8 @@ export function PlanQuotePrintView({
   const forbidden = !allowed || deniedByApi;
   // DX-376: la tasa es la de hoy en la sede; sin zona no se pide ninguna.
   const [second, setSecond] = useState('');
-  const timeZone = readyTimeZone(useSedeTimeZone(token));
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
   const today = timeZone ? sedeToday(timeZone) : '';
   const rates = useExchangeRates(token, today, second !== '' && data !== null);
   const secondResult = data && second ? secondCurrencyOf(rates, data.currency, second, today) : null;
@@ -162,7 +166,9 @@ export function PlanQuotePrintView({
       </div>
       {data && second ? (
         <div role="status" aria-live="polite" className="px-4 pt-3 text-sm text-ink print:hidden">
-          {rates.status === 'loading' || (rates.status === 'idle' && !today) ? (
+          {zone.status === 'error' ? (
+            <SedeConfigError kind="timeZone" variant="note" onRetry={zone.retry} />
+          ) : rates.status === 'loading' || (rates.status === 'idle' && !today) ? (
             <p className="text-muted">{copy.secondLoading}</p>
           ) : rates.status === 'error' ? (
             <FieldError
