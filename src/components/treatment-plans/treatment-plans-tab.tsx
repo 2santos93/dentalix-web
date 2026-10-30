@@ -29,7 +29,6 @@ import {
   recordPayment,
   voidPayment,
   type Payment,
-  type PaymentMethod,
   type PlanBalance,
   type PlanItemBalance,
   type RecordPaymentInput,
@@ -64,8 +63,13 @@ import { ToothPicker } from '@/components/odontogram/tooth-picker';
 import {
   PAYMENT_METHOD_BADGE_VARIANT,
   PAYMENT_METHOD_LABELS,
-  PAYMENT_METHOD_OPTIONS,
 } from '@/lib/payments/payment-method';
+import {
+  PaymentMethodSelect,
+  PaymentReferenceFields,
+  paymentMethodFieldsCopy,
+  usePaymentMethodFields,
+} from '@/components/payments/payment-method-fields';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
@@ -312,7 +316,6 @@ const copy = {
   paymentCurrencyLabel: 'Moneda',
   paymentDateLabel: 'Fecha',
   paymentMethodLabel: 'Método',
-  paymentMethodEmptyOption: 'Sin especificar',
   paymentNotesLabel: 'Notas',
   addPaymentSubmit: 'Registrar abono',
   addPaymentSubmitting: 'Registrando…',
@@ -1368,6 +1371,9 @@ export function TreatmentPlansTab({
   const paymentIdempotencyKeyRef = useRef<string | null>(null);
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  // DX-377: medio de la clínica, referencia y aviso de repetida (el mismo que
+  // «Registrar abono»).
+  const paymentMethodFields = usePaymentMethodFields(token, showPaymentForm);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentCurrency, setPaymentCurrency] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
@@ -1377,7 +1383,6 @@ export function TreatmentPlansTab({
     setPrevSedeTimeZone(sedeTimeZone);
     if (sedeTimeZone && paymentDate === '') setPaymentDate(sedeToday(sedeTimeZone));
   }
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [addPaymentSubmitting, setAddPaymentSubmitting] = useState(false);
   const [addPaymentValidationError, setAddPaymentValidationError] = useState<string | null>(null);
@@ -1588,7 +1593,7 @@ export function TreatmentPlansTab({
     setPaymentAmount('');
     setPaymentCurrency('');
     setPaymentDate('');
-    setPaymentMethod('');
+    paymentMethodFields.reset();
     setPaymentNotes('');
     setAddPaymentValidationError(null);
     setPaymentAmountError(null);
@@ -1904,7 +1909,7 @@ export function TreatmentPlansTab({
     setPaymentCurrency(planDetail?.currency ?? '');
     // DX-097: hoy en la zona de la sede, no en la del navegador.
     setPaymentDate(sedeTimeZone ? sedeToday(sedeTimeZone) : '');
-    setPaymentMethod('');
+    paymentMethodFields.reset();
     setPaymentNotes('');
     setAddPaymentValidationError(null);
     setPaymentAmountError(null);
@@ -1939,6 +1944,11 @@ export function TreatmentPlansTab({
       setAddPaymentValidationError(copy.invalidPaymentDate);
       return;
     }
+    const methodCheck = paymentMethodFields.validate();
+    if (!methodCheck.ok) {
+      if (methodCheck.formError) setAddPaymentValidationError(methodCheck.formError);
+      return;
+    }
 
     setAddPaymentSubmitting(true);
     try {
@@ -1947,7 +1957,7 @@ export function TreatmentPlansTab({
         currency: currencyValue,
         // DX-097: el DÍA elegido; la API lo guarda al mediodía de la sede.
         paidAt: paymentDate,
-        ...(paymentMethod ? { method: paymentMethod } : {}),
+        ...paymentMethodFields.body(),
         ...(paymentNotes.trim() ? { notes: paymentNotes.trim() } : {}),
       };
       // Defensive: if the form was somehow submitted without an open-time key,
@@ -1959,13 +1969,15 @@ export function TreatmentPlansTab({
       // Success → rotate: the next abono is a genuinely different payment.
       paymentIdempotencyKeyRef.current = crypto.randomUUID();
       setPaymentAmount('');
-      setPaymentMethod('');
+      paymentMethodFields.reset();
       setPaymentNotes('');
       setShowPaymentForm(false);
       await refreshBalanceAndPayments();
     } catch (err) {
       // Key intentionally NOT rotated here: a retry of this same click must
       // reuse it so the backend dedups instead of double-charging.
+      // DX-377: la referencia repetida se avisa junto al campo y pide motivo.
+      if (paymentMethodFields.catchDuplicate(err)) return;
       // Un 400 técnico (importe/moneda) se dice en español (apiErrorMessage).
       setAddPaymentError(apiErrorMessage(err, copy.genericAddPaymentError));
     } finally {
@@ -2629,7 +2641,9 @@ export function TreatmentPlansTab({
                             onOpenChange={setShowPaymentForm}
                             title={copy.registerPayment}
                             onSubmit={handleAddPayment}
-                            submitLabel={copy.addPaymentSubmit}
+                            submitLabel={
+                              paymentMethodFields.duplicate ? paymentMethodFieldsCopy.duplicateSubmit : copy.addPaymentSubmit
+                            }
                             submitting={addPaymentSubmitting}
                             error={addPaymentValidationError ?? addPaymentError}
                             size="lg"
@@ -2700,22 +2714,14 @@ export function TreatmentPlansTab({
                                 )}
                               </FormField>
 
-                              <FormField htmlFor="tp-payment-method" label={copy.paymentMethodLabel}>
-                                <select
-                                  id="tp-payment-method"
-                                  value={paymentMethod}
-                                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | '')}
-                                  className={fieldClass}
-                                >
-                                  <option value="">{copy.paymentMethodEmptyOption}</option>
-                                  {PAYMENT_METHOD_OPTIONS.map((method) => (
-                                    <option key={method} value={method}>
-                                      {PAYMENT_METHOD_LABELS[method]}
-                                    </option>
-                                  ))}
-                                </select>
-                              </FormField>
+                              <PaymentMethodSelect
+                                fields={paymentMethodFields}
+                                id="tp-payment-method"
+                                label={copy.paymentMethodLabel}
+                              />
                             </div>
+
+                            <PaymentReferenceFields fields={paymentMethodFields} idPrefix="tp-payment" />
 
                             <FormField htmlFor="tp-payment-notes" label={copy.paymentNotesLabel}>
                               <textarea

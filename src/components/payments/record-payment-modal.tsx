@@ -3,9 +3,6 @@ import * as React from 'react';
 import { useState } from 'react';
 import { recordOpeningBalancePayment, recordPayment } from '@/lib/payments/payments-api';
 import type { AccountStatementOpeningBalance } from '@/lib/account-statement/account-statement-api';
-import { ApiError } from '@/lib/api/client';
-import { apiErrorMessage } from '@/lib/api/error-message';
-import { PAYMENT_REFERENCE_DUPLICATE } from '@/lib/payments/payment-methods-api';
 import { recordPaymentErrorMessage } from '@/lib/payments/payment-errors';
 import { statementCopy } from '@/lib/account-statement/presentation';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
@@ -24,7 +21,12 @@ import { PaymentRatePreview, ratePreviewCopy, type PreviewPlanBalance } from './
 import { usePlanBalance } from './use-plan-balance';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
-import { usePaymentMethods } from './use-payment-methods';
+import {
+  PaymentMethodSelect,
+  PaymentReferenceFields,
+  paymentMethodFieldsCopy,
+  usePaymentMethodFields,
+} from './payment-method-fields';
 
 // Copy como constantes (i18n-ready).
 export const recordPaymentCopy = {
@@ -35,22 +37,6 @@ export const recordPaymentCopy = {
   submit: 'Registrar abono',
   amount: 'Importe',
   currency: 'Moneda',
-  method: 'Método',
-  methodNone: 'Sin especificar',
-  // DX-377: medios de la clínica, referencia y aviso de referencia repetida.
-  methodsLoading: 'Cargando medios de pago…',
-  methodsError: 'No pudimos cargar los medios de pago.',
-  methodsRetry: 'Reintentar',
-  reference: 'Referencia',
-  referenceRequired: 'Referencia (obligatoria)',
-  referenceHint: 'El número de operación que da el pagador.',
-  referenceMissing: 'Este medio de pago pide la referencia del pago.',
-  duplicateReason: 'Motivo para registrarla igualmente',
-  duplicateReasonHint: 'Queda guardado con el abono y en la auditoría.',
-  duplicateReasonMissing: 'Escribe el motivo para registrar la referencia repetida.',
-  duplicateSubmit: 'Registrar igualmente',
-  duplicateFallback:
-    'Esta referencia ya se usó con este medio de pago en otro abono reciente. Revisa el pago o confirma con un motivo.',
   date: 'Fecha de pago',
   invalidAmount: 'Escribe un importe mayor que 0.',
   invalidDate: 'Elige la fecha de pago.',
@@ -91,10 +77,6 @@ interface FormState {
   amount: string;
   /** `''` = la moneda del plan elegido. */
   currency: string;
-  /** DX-377: medio de la clínica; `''` = sin especificar. */
-  paymentMethodId: string;
-  reference: string;
-  duplicateReason: string;
   date: string;
 }
 
@@ -105,9 +87,6 @@ function initialForm(today: string): FormState {
     planId: '',
     amount: '',
     currency: '',
-    paymentMethodId: '',
-    reference: '',
-    duplicateReason: '',
     date: today,
   };
 }
@@ -161,10 +140,8 @@ export function RecordPaymentModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
-  const [referenceError, setReferenceError] = useState<string | null>(null);
-  // DX-377: mensaje del 409 de referencia repetida; con él se pide el motivo.
-  const [duplicate, setDuplicate] = useState<string | null>(null);
-  const paymentMethods = usePaymentMethods(token, open);
+  // DX-377: medio de la clínica, referencia y aviso de referencia repetida.
+  const methodFields = usePaymentMethodFields(token, open);
 
   // Si la persona aún no tocó la fecha, sigue a «hoy» de la sede cuando llega
   // su zona (DX-097).
@@ -185,8 +162,7 @@ export function RecordPaymentModal({
       setIdempotencyKey(crypto.randomUUID());
       setError(null);
       setAmountError(null);
-      setReferenceError(null);
-      setDuplicate(null);
+      methodFields.reset();
     }
   }
 
@@ -218,18 +194,10 @@ export function RecordPaymentModal({
   const parsedAmount = currency ? parseMoneyInput(form.amount, currency) : null;
   const previewAmount = parsedAmount?.ok && parsedAmount.value > 0 ? parsedAmount.value : null;
 
-  const selectedMethod = paymentMethods.methods.find((m) => m.id === form.paymentMethodId) ?? null;
-
   function patch(next: Partial<FormState>) {
     setForm((f) => ({ ...f, ...next }));
   }
 
-  /** Cambiar el medio o la referencia retira el aviso de repetida. */
-  function patchReference(next: Partial<FormState>) {
-    patch({ ...next, duplicateReason: '' });
-    setReferenceError(null);
-    setDuplicate(null);
-  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -256,14 +224,9 @@ export function RecordPaymentModal({
     // guarda al mediodía de la sede, así cae en ese día de caja en su zona
     // (medianoche UTC sería la tarde del día anterior en Bogotá).
     const paidAt = form.date;
-    const reference = form.reference.trim();
-    if (selectedMethod?.requiresReference && reference === '') {
-      setReferenceError(copy.referenceMissing);
-      return;
-    }
-    const duplicateReason = form.duplicateReason.trim();
-    if (duplicate && duplicateReason === '') {
-      setError(copy.duplicateReasonMissing);
+    const methodCheck = methodFields.validate();
+    if (!methodCheck.ok) {
+      if (methodCheck.formError) setError(methodCheck.formError);
       return;
     }
     setSubmitting(true);
@@ -272,9 +235,7 @@ export function RecordPaymentModal({
         amount,
         currency,
         paidAt,
-        ...(selectedMethod ? { paymentMethodId: selectedMethod.id } : {}),
-        ...(selectedMethod && reference ? { reference } : {}),
-        ...(duplicate && duplicateReason ? { duplicateReferenceReason: duplicateReason } : {}),
+        ...methodFields.body(),
       };
       const saved = opening
         ? await recordOpeningBalancePayment(token, opening.id, body, idempotencyKey)
@@ -300,10 +261,7 @@ export function RecordPaymentModal({
     } catch (err) {
       // La clave NO cambia: el reintento de este mismo abono la reusa y el
       // servidor lo deduplica en vez de cobrar dos veces.
-      if (err instanceof ApiError && err.code === PAYMENT_REFERENCE_DUPLICATE) {
-        setDuplicate(apiErrorMessage(err, copy.duplicateFallback));
-        return;
-      }
+      if (methodFields.catchDuplicate(err)) return;
       setError(recordPaymentErrorMessage(err));
     } finally {
       setSubmitting(false);
@@ -317,7 +275,7 @@ export function RecordPaymentModal({
       title={copy.title}
       description={openings.length > 0 ? copy.descriptionWithOpenings : copy.description}
       onSubmit={handleSubmit}
-      submitLabel={duplicate ? copy.duplicateSubmit : copy.submit}
+      submitLabel={methodFields.duplicate ? paymentMethodFieldsCopy.duplicateSubmit : copy.submit}
       submitting={submitting}
       submitDisabled={plan === null && opening === null}
       error={error}
@@ -413,33 +371,7 @@ export function RecordPaymentModal({
                 />
               ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField htmlFor="rp-method" label={copy.method}>
-                  {paymentMethods.status === 'error' ? (
-                    <p className="flex flex-wrap items-center gap-2 text-sm text-danger" role="alert">
-                      {copy.methodsError}
-                      <button type="button" className="font-medium underline" onClick={paymentMethods.retry}>
-                        {copy.methodsRetry}
-                      </button>
-                    </p>
-                  ) : (
-                    <select
-                      id="rp-method"
-                      value={form.paymentMethodId}
-                      disabled={paymentMethods.status === 'loading'}
-                      onChange={(e) => patchReference({ paymentMethodId: e.target.value })}
-                      className={fieldClass}
-                    >
-                      <option value="">
-                        {paymentMethods.status === 'loading' ? copy.methodsLoading : copy.methodNone}
-                      </option>
-                      {paymentMethods.methods.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </FormField>
+                <PaymentMethodSelect fields={methodFields} id="rp-method" />
                 <FormField htmlFor="rp-date" label={copy.date}>
                   {zone.status === 'error' && !dateTouched ? (
                     <SedeConfigError kind="timeZone" variant="field" retryId="rp-date" onRetry={zone.retry} />
@@ -457,40 +389,7 @@ export function RecordPaymentModal({
                   )}
                 </FormField>
               </div>
-              {selectedMethod ? (
-                <FormField
-                  htmlFor="rp-reference"
-                  label={selectedMethod.requiresReference ? copy.referenceRequired : copy.reference}
-                  hint={copy.referenceHint}
-                  error={referenceError}
-                >
-                  <Input
-                    id="rp-reference"
-                    value={form.reference}
-                    maxLength={60}
-                    autoComplete="off"
-                    aria-required={selectedMethod.requiresReference || undefined}
-                    onChange={(e) => patchReference({ reference: e.target.value })}
-                    aria-invalid={referenceError ? true : undefined}
-                    aria-describedby={referenceError ? fieldErrorId('rp-reference') : undefined}
-                    className="font-mono"
-                  />
-                </FormField>
-              ) : null}
-              {duplicate ? (
-                <div role="alert" className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3">
-                  <p className="text-sm text-ink">{duplicate}</p>
-                  <FormField htmlFor="rp-duplicate-reason" label={copy.duplicateReason} hint={copy.duplicateReasonHint}>
-                    <Input
-                      id="rp-duplicate-reason"
-                      value={form.duplicateReason}
-                      maxLength={300}
-                      onChange={(e) => patch({ duplicateReason: e.target.value })}
-                      required
-                    />
-                  </FormField>
-                </div>
-              ) : null}
+              <PaymentReferenceFields fields={methodFields} idPrefix="rp" />
             </>
           ) : null}
         </>
