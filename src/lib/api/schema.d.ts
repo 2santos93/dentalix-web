@@ -2407,6 +2407,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Caja en CSV: abonos del período con medio y referencia
+         * @description Mismos filtros que `GET /payments` (período, método y medio) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Moneda, Importe.
+         */
+        get: operations["PaymentsController_listCashCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/payments": {
         parameters: {
             query?: never;
@@ -9601,9 +9621,9 @@ export interface components {
              * @description Medio de pago ACTIVO del catálogo de la clínica (GET /payment-methods).
              */
             paymentMethodId?: string;
-            /** @description Referencia del pago. Obligatoria si el medio la pide (400). Se compara sin espacios y en mayúsculas: si el mismo medio ya la tiene en un abono vivo de ±90 días, 409 `PAYMENT_REFERENCE_DUPLICATE` con `matches`. */
+            /** @description Referencia del pago. Obligatoria si el medio la pide (400). Se compara sin espacios, puntos ni guiones y en mayúsculas (DX-395: «123-456», «123.456» y «123 456» son la misma): si el mismo medio ya la tiene en un abono vivo de ±90 días, 409 `PAYMENT_REFERENCE_DUPLICATE` con `matches`. Más de 60 caracteres: 400 en español. */
             reference?: string;
-            /** @description Motivo para confirmar una referencia repetida tras el 409. Se guarda en el abono; la auditoría registra la confirmación y los abonos repetidos. */
+            /** @description Motivo para confirmar una referencia repetida tras el 409. Se guarda en el abono; la auditoría registra la confirmación y los abonos repetidos. Más de 300 caracteres: 400 en español. */
             duplicateReferenceReason?: string;
             notes?: string;
         };
@@ -10363,6 +10383,12 @@ export interface components {
             /** @example 1800000 */
             balance: number;
         };
+        AccountStatementPaymentMethodRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Pago móvil */
+            name: string;
+        };
         AccountStatementLocationRefDto: {
             /** Format: uuid */
             id: string;
@@ -10395,8 +10421,18 @@ export interface components {
             amount: number;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
-            /** @enum {string|null} */
+            /**
+             * @description Método antiguo, derivado del tipo base del medio (un medio digital es TRANSFER). Para mostrar, usar `paymentMethod.name`.
+             * @enum {string|null}
+             */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @description DX-395: medio de pago de la clínica con que se cobró (también los propios, como «Pago móvil»). Un abono de una réplica anterior sin medio lleva el medio inicial de su método; `null` si no tiene método. */
+            paymentMethod: components["schemas"]["AccountStatementPaymentMethodRefDto"] | null;
+            /**
+             * @description DX-395: referencia del pago tal como se tecleó, o `null`. Solo la ven los roles de cobro (este endpoint) y el paciente en su estado de cuenta.
+             * @example ABC 123
+             */
+            reference: string | null;
             location: components["schemas"]["AccountStatementLocationRefDto"];
             /**
              * Format: uuid
@@ -20849,6 +20885,8 @@ export interface operations {
                 to: string;
                 /** @description Solo abonos de este método. Sin él, todos los métodos. */
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+                /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
+                paymentMethodId?: string;
                 page?: number;
                 pageSize?: number;
             };
@@ -20869,7 +20907,53 @@ export interface operations {
                     "application/json": components["schemas"]["CashPaymentsResponseDto"];
                 };
             };
-            /** @description Fecha inválida, from > to, período de más de 366 días, método desconocido o sede ajena a la clínica */
+            /** @description Fecha inválida, from > to, período de más de 366 días, método desconocido, medio de pago de otra clínica o sede ajena a la clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentsController_listCashCsv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (YYYY-MM-DD), inclusive, en la zona horaria de la sede de cada abono (la de su horario; con varias sedes en zonas distintas, cada una corta el día a su medianoche). */
+                from: string;
+                /** @description Último día del período (YYYY-MM-DD), inclusive (hasta la medianoche del día siguiente en la zona de la sede). Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
+                to: string;
+                /** @description Solo abonos de este método. Sin él, todos los métodos. */
+                method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+                /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
+                paymentMethodId?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin cabecera: todas las sedes de la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período no válido, medio de otra clínica o más de 10 000 abonos */
             400: {
                 headers: {
                     [name: string]: unknown;

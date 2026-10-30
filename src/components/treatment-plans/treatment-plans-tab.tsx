@@ -1944,11 +1944,9 @@ export function TreatmentPlansTab({
       setAddPaymentValidationError(copy.invalidPaymentDate);
       return;
     }
-    const methodCheck = paymentMethodFields.validate();
-    if (!methodCheck.ok) {
-      if (methodCheck.formError) setAddPaymentValidationError(methodCheck.formError);
-      return;
-    }
+    // DX-395: la referencia o el motivo que faltan se marcan en su campo,
+    // que recibe el foco.
+    if (!paymentMethodFields.validate()) return;
 
     setAddPaymentSubmitting(true);
     try {
@@ -2647,6 +2645,7 @@ export function TreatmentPlansTab({
                             submitting={addPaymentSubmitting}
                             error={addPaymentValidationError ?? addPaymentError}
                             size="lg"
+                            touchTargets
                           >
                             {/* Va antes de los campos: la sede a la que se
                                 atribuye el abono se lee ANTES de escribir el

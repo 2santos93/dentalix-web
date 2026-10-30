@@ -104,6 +104,7 @@ export function PaymentMethodFormModal({
       submitLabel={editing ? copy.save : copy.create}
       submitting={submitting}
       error={error}
+      touchTargets
     >
       <FormField htmlFor="pm-name" label={copy.name} error={nameError}>
         <Input
@@ -118,7 +119,9 @@ export function PaymentMethodFormModal({
             setName(e.target.value);
             if (nameError) setNameError(null);
           }}
-          required
+          // DX-395: sin `required` nativo (su globo sale en el idioma del
+          // navegador); el formulario valida con su propio mensaje.
+          aria-required
         />
       </FormField>
       <FormField

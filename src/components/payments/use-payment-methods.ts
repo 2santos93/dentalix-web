@@ -4,16 +4,22 @@ import { listPaymentMethods, type ClinicPaymentMethod } from '@/lib/payments/pay
 
 export interface PaymentMethodsState {
   status: 'loading' | 'ready' | 'error';
-  /** Solo los activos (los que se pueden elegir al cobrar). */
+  /** Los activos (los que se pueden elegir al cobrar), o todos con `includeInactive`. */
   methods: ClinicPaymentMethod[];
   retry: () => void;
 }
 
 /**
- * DX-377: los medios de pago activos de la clínica, mientras `enabled`. Cada
- * reintento es una lectura nueva; la respuesta de una anterior se descarta.
+ * DX-377: los medios de pago activos de la clínica, mientras `enabled`; con
+ * `includeInactive` (DX-395, el filtro de Caja) también los desactivados,
+ * que conservan sus abonos. Cada reintento es una lectura nueva; la
+ * respuesta de una anterior se descarta.
  */
-export function usePaymentMethods(token: string, enabled: boolean): PaymentMethodsState {
+export function usePaymentMethods(
+  token: string,
+  enabled: boolean,
+  { includeInactive = false }: { includeInactive?: boolean } = {},
+): PaymentMethodsState {
   const [generation, setGeneration] = useState(0);
   const [result, setResult] = useState<
     { key: number; methods: ClinicPaymentMethod[] } | { key: number; failed: true } | null
@@ -22,7 +28,7 @@ export function usePaymentMethods(token: string, enabled: boolean): PaymentMetho
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    listPaymentMethods(token).then(
+    listPaymentMethods(token, includeInactive ? { includeInactive } : {}).then(
       (methods) => {
         if (!cancelled) setResult({ key: generation, methods });
       },
@@ -33,7 +39,7 @@ export function usePaymentMethods(token: string, enabled: boolean): PaymentMetho
     return () => {
       cancelled = true;
     };
-  }, [token, enabled, generation]);
+  }, [token, enabled, includeInactive, generation]);
 
   const retry = () => setGeneration((g) => g + 1);
   if (!result || result.key !== generation) return { status: 'loading', methods: [], retry };

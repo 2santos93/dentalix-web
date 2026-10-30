@@ -1,4 +1,4 @@
-import { voidedDetail } from './presentation';
+import { movementMethodLabel, voidedDetail } from './presentation';
 
 describe('voidedDetail', () => {
   it('«Anulado por X: motivo» para un abono anulado con autor y motivo', () => {
@@ -23,5 +23,32 @@ describe('voidedDetail', () => {
 
   it('un abono activo no lleva detalle', () => {
     expect(voidedDetail({ voided: false, voidedBy: null, voidReason: null })).toBeNull();
+  });
+});
+
+describe('movementMethodLabel (DX-395)', () => {
+  it('«Pago móvil · Ref. ABC 123»: el medio de la clínica y la referencia', () => {
+    expect(
+      movementMethodLabel({
+        method: 'TRANSFER',
+        paymentMethod: { id: 'pm', name: 'Pago móvil' },
+        reference: 'ABC 123',
+      }),
+    ).toBe('Pago móvil · Ref. ABC 123');
+  });
+
+  it('sin referencia, solo el medio', () => {
+    expect(
+      movementMethodLabel({
+        method: 'CASH',
+        paymentMethod: { id: 'pm', name: 'Efectivo' },
+        reference: null,
+      }),
+    ).toBe('Efectivo');
+  });
+
+  it('sin medio (respuesta anterior), el método; sin método, «Sin método»', () => {
+    expect(movementMethodLabel({ method: 'CARD', paymentMethod: null, reference: null })).toBe('Tarjeta');
+    expect(movementMethodLabel({ method: null, paymentMethod: null, reference: null })).toBe('Sin método');
   });
 });
