@@ -401,9 +401,15 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [providerId, setProviderId] = useState('');
 
   const [selectedDate, setSelectedDate] = useState(() => sedeToday(timeZone));
-  // Today in the sede — stable across renders (set once) so the calendar's
-  // "today" highlight and the "Hoy" button never drift mid-session.
-  const [today] = useState(() => sedeToday(timeZone));
+  // Today in the sede — stable across renders so the calendar's "today"
+  // highlight and the "Hoy" button never drift mid-session; recomputed only
+  // when the sede of the screen changes to one in another zone (DX-378).
+  const [todayIn, setTodayIn] = useState(() => ({ timeZone, day: sedeToday(timeZone) }));
+  let today = todayIn.day;
+  if (todayIn.timeZone !== timeZone) {
+    today = sedeToday(timeZone);
+    setTodayIn({ timeZone, day: today });
+  }
   // Mes (calendar) | Día | Semana. 'month' is the default landing view: a
   // month grid of all providers' appointments; picking a day reveals its full
   // list + the new-appointment flow below (see the `viewMode === 'month'`

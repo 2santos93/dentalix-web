@@ -18,6 +18,7 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listOpeningCandidates } from '@/lib/appointments/opening-candidates';
 import { getRoster } from '@/lib/locations/provider-schedule-api';
+import { setActiveLocationId } from '@/lib/locations/location-store';
 
 /** DX-295: el estado se elige abriendo la lista y pulsando una opción. */
 async function pickStatus(user: ReturnType<typeof userEvent.setup>, trigger: HTMLElement, label: string) {
@@ -1555,6 +1556,33 @@ describe('AgendaView con el reloj de la sede (DX-378)', () => {
     // El día 10 de Caracas, no el del navegador.
     expect(params.from).toBe('2026-03-10T04:00:00.000Z');
     expect(params.to).toBe('2026-03-11T03:59:59.999Z');
+  });
+
+  it('al cambiar a una sede de otra zona, «Hoy» es el día de la nueva sede (no el de la anterior)', async () => {
+    // 16:00 UTC: día 10 en Caracas, ya día 11 en Kiritimati (UTC+14).
+    mockedListLocations.mockResolvedValue([
+      caracasSede({ id: 'loc-1' }),
+      caracasSede({ id: 'loc-2', name: 'Sede Kiritimati', timeZone: 'Pacific/Kiritimati' }),
+    ]);
+    mockedListAppointments.mockResolvedValue([]);
+    setActiveLocationId('loc-1');
+    try {
+      const user = userEvent.setup();
+      await renderAgenda(<AgendaView token="tok" />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await waitFor(() =>
+        expect(mockedListAppointments.mock.calls.at(-1)![1].from).toBe(wallDayRange('2026-03-10', 'America/Caracas').from),
+      );
+      setActiveLocationId('loc-2');
+      await user.click(await screen.findByRole('button', { name: 'Hoy' }));
+      await waitFor(() =>
+        expect(mockedListAppointments.mock.calls.at(-1)![1].from).toBe(
+          wallDayRange('2026-03-11', 'Pacific/Kiritimati').from,
+        ),
+      );
+    } finally {
+      setActiveLocationId(null);
+    }
   });
 
   it('sin el reloj de la sede no pinta la agenda con el del navegador: «Falta un dato de la sede» con Reintentar', async () => {
