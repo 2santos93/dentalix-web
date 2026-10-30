@@ -234,7 +234,7 @@ for (const viewport of VIEWPORTS) {
     await page.getByRole('button', { name: /^Día$/ }).click();
     await page.getByLabel('Fecha', { exact: true }).fill(slot.day);
     await page
-      .getByRole('button', { name: new RegExp(`Detalle de la cita de ${slot.label}`) })
+      .getByRole('button', { name: new RegExp(`^${slot.label}.*Detalle de la cita`) })
       .locator('visible=true')
       .first()
       .click();

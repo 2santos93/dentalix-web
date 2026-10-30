@@ -1,8 +1,11 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { getAnamnesisInboxSummary } from '@/lib/anamnesis/anamnesis-api';
 import { AppShell } from './app-shell';
 import { getInClinic } from '@/lib/appointments/patient-flow';
 
+jest.mock('../../lib/anamnesis/anamnesis-api', () => ({ getAnamnesisInboxSummary: jest.fn().mockResolvedValue({ submitted: 0 }) }));
 let mockPathname = '/patients';
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
@@ -49,6 +52,19 @@ describe('AppShell', () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockAccessToken = 'T';
+    jest.mocked(getAnamnesisInboxSummary).mockResolvedValue({ submitted: 0 });
+  });
+
+  it('DX-297 separates the visible anamnesis label and badge in expanded and rail navigation', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
+    jest.mocked(getAnamnesisInboxSummary).mockResolvedValue({ submitted: 12 });
+    const view = render(<AppShell><h1>Synthetic</h1></AppShell>);
+    await waitFor(() => expect(screen.getAllByTestId('anamnesis-inbox-count')[0]).toHaveTextContent('12'));
+    const snapshots = [{ html: view.container.innerHTML, selector: 'a[href="/anamnesis-por-revisar"]' }];
+    await userEvent.click(screen.getByRole('button', { name: 'Colapsar menú' }));
+    snapshots.push({ html: view.container.innerHTML, selector: 'a[href="/anamnesis-por-revisar"]' });
+    auditRenderedControls(snapshots);
+    expect(screen.getAllByRole('link', { name: 'Anamnesis por revisar · 12' })).toHaveLength(2);
   });
 
   // La caja es dato financiero: PAYMENT_ROLES en la API (ADMIN + RECEPTION).

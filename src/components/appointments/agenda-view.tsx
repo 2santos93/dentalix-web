@@ -193,7 +193,7 @@ const copy = {
   removeBlockError: 'No pudimos quitar el bloqueo. Intenta de nuevo.',
   blockRemoved: 'Bloqueo quitado.',
   waitlistButton: 'Pendientes',
-  waitlistButtonCount: (n: number) => `Pendientes por agendar: ${n}`,
+  waitlistButtonCount: (n: number) => `Pendientes ${n} · por agendar`,
   waitlistSheetDescription: 'Pacientes que cancelaron o no vinieron, para volver a darles cita.',
   // DX-200: panel «En clínica».
   inClinicButton: 'En clínica',
@@ -1137,7 +1137,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   setInClinicOpen(true);
                 }}
               >
-                <Armchair aria-hidden /> {copy.inClinicButton}
+                <Armchair aria-hidden /> {copy.inClinicButton}{' '}
                 {inClinicTotal ? (
                   <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold tabular-nums text-primary">
                     {inClinicTotal}
@@ -1153,7 +1153,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               aria-label={waitlistCount === null ? copy.waitlistButton : copy.waitlistButtonCount(waitlistCount)}
               onClick={() => setWaitlistOpen(true)}
             >
-              <ListTodo aria-hidden /> {copy.waitlistButton}
+              <ListTodo aria-hidden /> {copy.waitlistButton}{' '}
               {waitlistCount ? (
                 <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold tabular-nums text-primary">
                   {waitlistCount}

@@ -4,6 +4,7 @@ import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import { overdueChipText } from '@/lib/collections/presentation';
 import { CoverageMarker } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
+import { attendanceBadgeText } from '@/lib/cancellations/cancellation';
 import { medicalAlertSeverity, medicalAlertSummary } from '@/lib/clinical/medical-alerts';
 import { coverageChipText } from '@/lib/patients/coverage-presentation';
 import * as React from 'react';
@@ -59,8 +60,7 @@ const copy = {
   newAppointmentFor: (name: string) => `Nueva cita con ${name}`,
   moveTo: 'Mover a…',
   moveToFor: (patient: string) => `Mover a… la cita de ${patient}`,
-  detailFor: (range: string, patient: string, provider: string) =>
-    `Detalle de la cita de ${range} · ${patient} · ${provider}`,
+  detailFor: (provider: string) => `Detalle de la cita · ${provider}`,
   closedHours: 'Fuera del horario de la sede',
   providerOffHours: 'Fuera del horario del profesional en esta sede',
   providerNotHere: 'No atiende en esta sede este día',
@@ -623,13 +623,17 @@ export function DayColumns({
                         <button
                           type="button"
                           aria-label={[
-                            copy.detailFor(range, patient, p.fullName),
-                            STATUS_LABELS[a.status],
+                            // Keep the visible card words together before supplementary context.
+                            range,
+                            wantsEarlier ? WANTS_EARLIER_LABEL : null,
+                            patient,
                             a.appointmentType?.name,
+                            STATUS_LABELS[a.status],
                             overdueChipText(a.balance),
+                            attendanceBadgeText(a.attendance),
+                            copy.detailFor(p.fullName),
                             coverageChipText(a.coverage),
                             medicalAlertSummary(a.medicalAlerts),
-                            wantsEarlier ? WANTS_EARLIER_LABEL : null,
                           ]
                             .filter(Boolean)
                             .join(' · ')}
@@ -645,19 +649,19 @@ export function DayColumns({
                               vencida (DX-153) van en la fila de la hora para
                               seguir viéndose en las citas de 30 min. */}
                           <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
-                            <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>
+                            <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>{' '}
                             <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
                             <CoverageMarker coverage={a.coverage} />
-                          </span>
+                          </span>{' '}
                           <span
                             className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
                           >
                             {patient}
-                          </span>
+                          </span>{' '}
                           <span className="w-full truncate text-xs">
                             {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
-                          </span>
-                          <OverdueChip balance={a.balance} compact />
+                          </span>{' '}
+                          <OverdueChip balance={a.balance} compact />{' '}
                           {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
                           <AttendanceBadge counts={a.attendance} compact />
                         </button>

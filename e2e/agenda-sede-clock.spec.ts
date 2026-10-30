@@ -131,13 +131,13 @@ test('la agenda (día, semana, mes y detalle) pinta la hora de la sede en 12 h, 
     await openAgenda(page, 'Día', futureDay);
     const card = page.getByTestId('day-column-appointment').filter({ hasText: futurePatient });
     await expect(card).toContainText(range, { timeout: 15_000 });
-    await expect(page.getByRole('button', { name: new RegExp(`^Detalle de la cita de ${range}`) })).toBeVisible();
+    await expect(page.getByRole('button', { name: new RegExp(`^${range}.*Detalle de la cita`) })).toBeVisible();
     await expect(page.getByText('3:00 p. m.', { exact: true }).first()).toBeAttached();
     await expectNoHorizontalScroll(page);
     await shoot(page, 'agenda-dia-columnas', viewport.width);
 
     // Detalle: la misma hora.
-    await card.getByRole('button', { name: new RegExp(`^Detalle de la cita de ${range}`) }).click();
+    await card.getByRole('button', { name: new RegExp(`^${range}.*Detalle de la cita`) }).click();
     const sheet = page.getByRole('dialog', { name: futurePatient });
     await expect(sheet).toContainText(range);
     await page.keyboard.press('Escape');

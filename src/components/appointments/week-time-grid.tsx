@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef } from 'react';
+import { attendanceBadgeText } from '@/lib/cancellations/cancellation';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import {
@@ -13,6 +14,7 @@ import {
 import {
   ConfirmationBadge,
   STATUS_LABELS,
+  STATUS_SHORT_LABELS,
   AppointmentStatusLabel,
   STATUS_BADGE_CLASSES,
   patientLabel,
@@ -233,19 +235,25 @@ export function WeekTimeGrid({
                     type="button"
                     data-testid="week-grid-appointment"
                     data-id={a.id}
-                    aria-label={[range, patient, STATUS_LABELS[a.status], a.appointmentType?.name, overdueChipText(a.balance), coverageChipText(a.coverage), confirmationIndicator(a) ? CONFIRMATION_INDICATOR_LABELS[confirmationIndicator(a)!] : null].filter(Boolean).join(' · ')}
+                    aria-label={[
+                      heightPx < 60 ? STATUS_SHORT_LABELS[a.status] : STATUS_LABELS[a.status],
+                      range, patient, overdueChipText(a.balance), attendanceBadgeText(a.attendance),
+                      heightPx < 60 ? STATUS_LABELS[a.status] : null,
+                      a.appointmentType?.name, coverageChipText(a.coverage),
+                      confirmationIndicator(a) ? CONFIRMATION_INDICATOR_LABELS[confirmationIndicator(a)!] : null,
+                    ].filter(Boolean).join(' · ')}
                     onClick={() => onSelectAppointment(a)}
                     className={`h-full w-full overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${hasMedicalAlert ? 'pr-6' : ''} ${STATUS_BADGE_CLASSES[a.status]}`}
                   >
                     <span className="flex items-center gap-1 font-medium">
-                      <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />
+                      <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />{' '}
                       <span className="truncate">{range}</span>
                       <ConfirmationBadge appointment={a} compact />
                       <CoverageMarker coverage={a.coverage} srText />
-                    </span>
-                    <span className="block truncate">{patient}</span>
+                    </span>{' '}
+                    <span className="block truncate">{patient}</span>{' '}
                     {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
-                    <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
+                    <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />{' '}
                     {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
                     <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />
                   </button>

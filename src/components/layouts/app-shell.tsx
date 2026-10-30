@@ -309,7 +309,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               )}
             >
               <Icon className="size-4 shrink-0" />
-              {!collapsed && label}
+              {!collapsed && `${label} `}
               {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
                 <InboxCount count={anamnesisCount} variant={collapsed ? 'rail' : 'full'} />
               )}

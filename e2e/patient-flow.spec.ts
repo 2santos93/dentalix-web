@@ -293,8 +293,8 @@ test('DX-242: axe Día/Semana/En clínica 390/1440 claro/oscuro', async ({page},
     };
     await page.getByRole('button', {name:'Día', exact:true}).click();
     if (width === 390) await page.getByRole('group', {name:'Profesional visible'}).getByRole('button', {name:'Odontóloga Estados QA', exact:true}).click();
-    await expect(page.getByRole('button', {name:/Detalle.*Estado 1 QA/})).toBeVisible();
-    await page.getByRole('button', {name:/Detalle.*Estado 1 QA/}).scrollIntoViewIfNeeded();
+    await expect(page.getByRole('button', {name:/Estado 1 QA.*Detalle de la cita/})).toBeVisible();
+    await page.getByRole('button', {name:/Estado 1 QA.*Detalle de la cita/}).scrollIntoViewIfNeeded();
     await check('dia');
     await page.getByRole('button', {name:'Semana', exact:true}).click();
     for (const [i,id] of qaIds.entries()) {

@@ -1,3 +1,5 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
+import { getInClinic } from '@/lib/appointments/patient-flow';
 import type { ReactElement } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -115,6 +117,11 @@ jest.mock('../../lib/locations/provider-schedule-api', () => ({
 jest.mock('../../lib/appointments/opening-candidates', () => ({
   ...jest.requireActual('../../lib/appointments/opening-candidates'),
   listOpeningCandidates: jest.fn(),
+}));
+
+jest.mock('../../lib/appointments/patient-flow', () => ({
+  ...jest.requireActual('../../lib/appointments/patient-flow'),
+  getInClinic: jest.fn().mockRejectedValue(new Error('Synthetic unavailable')),
 }));
 
 const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
@@ -237,6 +244,29 @@ describe('AgendaView', () => {
       leadHours: [48, 2],
       items: [],
     });
+  });
+
+  it('DX-297 audits drawer counts with the visible phrase before extra scheduling context', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([]);
+    jest.mocked(listWaitlist).mockResolvedValueOnce({ items: [], total: 2, page: 1, pageSize: 50 });
+    jest.mocked(getInClinic).mockResolvedValueOnce({
+      date: '2026-03-10', locationId: 'loc-1', timeZone: 'UTC', locale: 'en', hourCycle: 'h23', now: '2026-03-10T12:00:00Z', scope: 'LOCATION',
+      waiting: [1, 2, 3].map(n => ({
+        appointmentId: `synthetic-${n}`, patientId: `patient-${n}`, patientFirstName: 'Ana', patientLastName: 'Ríos',
+        providerId: 'staff-1', providerName: 'Dra. Ana Ríos', start: '2026-03-10T09:00:00Z', end: '2026-03-10T09:30:00Z',
+        status: 'ARRIVED', arrivedAt: '2026-03-10T08:50:00Z', seatedAt: null, readyForCheckoutAt: null,
+        minutesInStatus: 10, waitedMinutes: 10, punctuality: 'ON_TIME', planItemsReservedElsewhere: [],
+        medicalAlerts: { hasCriticalAlert: false, requiresPremedication: false, anamnesisStatus: 'CURRENT', alerts: [], anamnesisReviewedAt: null },
+      })), inChair: [], readyForCheckout: [],
+    });
+    const view = await renderAgenda(<AgendaView token="tok" />);
+    const pending = await screen.findByRole('button', { name: /Pendientes.*2/ });
+    const inClinic = await screen.findByRole('button', { name: 'En clínica: 3' });
+    expect(inClinic).toHaveTextContent('En clínica 3');
+    auditRenderedControls([{ html: view.container.innerHTML, selector: 'button[aria-label^="Pendientes"], button[aria-label^="En clínica"]' }]);
+    expect(pending).toHaveAccessibleName('Pendientes 2 · por agendar');
+    jest.mocked(getInClinic).mockRejectedValue(new Error('Synthetic unavailable'));
   });
 
   it('cuando falla la carga de profesionales, el filtro se sustituye por el error en su sitio', async () => {
@@ -799,7 +829,7 @@ describe('AgendaView', () => {
     await user.clear(dateInput);
     await user.type(dateInput, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     expect(await screen.findByTestId('coverage-detail-line')).toHaveTextContent(expected);
@@ -829,7 +859,7 @@ describe('AgendaView', () => {
     await user.clear(dateInput);
     await user.type(dateInput, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     await screen.findByLabelText(/estado/i);
@@ -868,7 +898,7 @@ describe('AgendaView', () => {
     await user.clear(dateInput);
     await user.type(dateInput, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     // Tras generar, el refresh trae la cita ya marcada como pendiente.
@@ -919,7 +949,7 @@ describe('AgendaView', () => {
     const dateInput = screen.getByLabelText(/^fecha$/i);
     await user.clear(dateInput);
     await user.type(dateInput, day);
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     expect(await screen.findByRole('region', { name: 'Indicaciones' })).toBeInTheDocument();

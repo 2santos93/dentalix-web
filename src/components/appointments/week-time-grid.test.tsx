@@ -1,3 +1,4 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WeekTimeGrid } from './week-time-grid';
@@ -277,6 +278,34 @@ it('DX-378: el día, la fila y la hora de cada cita salen del reloj de la sede (
   expect(monday).toContainElement(card);
   expect(tuesday).not.toContainElement(card);
   expect(card.parentElement).toHaveStyle({ top: `${((22 * 60 + 30) / SLOT_MINUTES) * ROW_HEIGHT_PX}px` });
-  expect(card).toHaveAccessibleName(/^10:30 p\. m\. – 11:00 p\. m\./);
+  expect(card).toHaveAccessibleName(/^Agend\. · 10:30 p\. m\. – 11:00 p\. m\./);
   expect(screen.getByText('9:00 a. m.')).toBeInTheDocument();
+});
+
+
+it('DX-297 audits all full and compact visible statuses while retaining clinical context', () => {
+  const snapshots = [];
+  for (const status of ['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const) {
+    for (const minutes of [15, 90]) {
+      const view = render(<WeekTimeGrid clock={CLOCK} weekStart={WEEK_START}
+        appointments={[appointment({ id: 'audit', status, patientFirstName: 'Ana', patientLastName: 'García',
+          end: minutes === 15 ? '2026-03-09T09:15:00.000Z' : '2026-03-09T10:30:00.000Z',
+          appointmentType: { id: 'type', name: 'Endodoncia', durationMinutes: minutes, color: '#0E7490' },
+          balance: { hasOverdue: true, overdueDays: 40 }, attendance: { noShows: 2, lateCancellations: 1 },
+          coverage: { status: 'EXPIRED', payerName: 'Synthetic payer', planName: null, validTo: '2026-01-01' },
+          confirmationSentAt: '2026-03-01T00:00:00.000Z',
+        })]} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} />);
+      const card = screen.getByTestId('week-grid-appointment');
+      const labels = { SCHEDULED: 'Agendada', CONFIRMED: 'Confirmada', COMPLETED: 'Completada', CANCELLED: 'Cancelada', NO_SHOW: 'No asistió', ARRIVED: 'En espera', IN_CHAIR: 'En sillón', READY_FOR_CHECKOUT: 'Listo para cobrar' };
+      expect(card).toHaveAccessibleName(expect.stringContaining(labels[status]));
+      expect(card).toHaveAccessibleName(/Endodoncia/);
+      expect(card).toHaveAccessibleName(/Cobertura vencida/);
+      expect(card).toHaveAccessibleName(/Saldo vencido · 40 días/);
+      expect(card).toHaveAccessibleName(/2 inasistencias · 1 cancelación tardía/);
+      if (status === 'SCHEDULED') expect(card).toHaveAccessibleName(/Confirmación pendiente/);
+      snapshots.push({ html: view.container.innerHTML, selector: '[data-testid="week-grid-appointment"]' });
+      view.unmount();
+    }
+  }
+  auditRenderedControls(snapshots);
 });
