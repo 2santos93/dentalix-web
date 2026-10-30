@@ -255,7 +255,8 @@ The primary action sits with the controls it is used beside, not over the title:
 
 Vertical rhythm on a list page is deliberately uneven: 32px between the header and the
 rest — the page's largest interval — then 12px inside the bar → count → table → pagination
-block, which reads as one gesture. Tables collapse to stacked labeled cards below `sm`.
+block, which reads as one gesture. Lists render through `DataList` (see Components → Tables):
+a real table from `sm` up, compact two-line cards on phones.
 
 ## Elevation & Depth
 
@@ -524,7 +525,25 @@ that shares its fetch — those two look interchangeable and are not.
 
 ### Tables
 - **Header:** surface-2, label type, muted. **Rows:** hairline separators, 44px min height,
-  hover = surface-2. **Numbers:** right-aligned, tabular. Collapse to stacked labeled cards below `sm`.
+  hover = surface-2. **Numbers:** right-aligned, tabular.
+- **Lists use `DataList`** (`components/ui/data-list.tsx`): one column declaration, rendered as a
+  real `<table>` from `sm` (640px) up and as a `<ul>` of compact cards on phones — two markups
+  chosen by `matchMedia`, only one mounted (no duplicate DOM; without `matchMedia` — server,
+  jsdom — the table renders). Each column declares its phone role with `mobile`:
+  - `primary` — line 1, left, ink 15px/600 (one per list; defaults to the first column);
+  - `trailing` — line 1, right: the key value (amount, time, age; tabular) or the status badge;
+  - `meta` (default) — line 2, muted 13px, values joined with « · », blanks skipped (return
+    `null` from `mobileCell`, never «—»);
+  - `hidden` — off the card (it lives on the record). **Never hide money.**
+  With `getRowHref`/`onRowClick` the whole card is the tap target (≥56px) with a trailing
+  chevron, and on desktop the primary cell's link is stretched over the row (one link per row
+  for screen readers). Row actions go in `rowActions` → the `RowActions` «⋯» menu, outside the
+  card's link; never a labelled «ACCIONES» row or column of buttons. `leading` puts an avatar or
+  icon before the primary cell; `showFrom` drops low-value columns on a narrow tablet.
+- **Comparison tables** (read down a column: caja del día, reportes, perio) opt out with
+  `phone="scroll"`: the table stays a table on phones, scrolls sideways inside its frame with
+  the first column sticky. A bare `Table` keeps the legacy stacked labelled cards below `sm`
+  (`stack={false}` turns that off); new lists don't use it.
 - **Exception — rows with a muted support line** (the `/settings` index, DX-282): hover = bg
   (Cool Paper), not surface-2. Muted on surface-2 is 4.34:1 and fails AA for body text; on bg
   it is 4.51:1. Rows whose secondary text is muted use bg on hover; rows of ink only keep surface-2.
@@ -562,8 +581,10 @@ screen it opens; a group with no visible entries disappears.
   `aria-label` + `title`); it can be expanded for the moment without changing the desktop
   preference.
 - **Phone (<768px):**
-  - *Top app bar* (56px + `env(safe-area-inset-top)`): clinic brand left, compact sede
-    switcher (icon-only under 380px), search button (opens the palette), account avatar. It
+  - *Top app bar* (56px + `env(safe-area-inset-top)`): clinic brand left (it gets the width),
+    sede switcher as a 44px pill — map-pin + short label («Norte», «Todas», max ~6.5rem) over an
+    invisible native select, accessible name «Sede: {full name}» — search button (opens the
+    palette), account avatar. It
     does **not** repeat the page title — the page's H1 is the title.
   - *Bottom tab bar* (56px row inside a container padded with `env(safe-area-inset-bottom)`):
     four role-based destinations + «Más», icon 20px + label always visible. ADMIN: Inicio,

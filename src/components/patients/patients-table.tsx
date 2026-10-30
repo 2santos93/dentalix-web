@@ -1,38 +1,118 @@
-import Link from 'next/link';
+'use client';
 import type { Patient } from '@/lib/patients/patients-api';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Avatar } from '@/components/ui/avatar';
 import { initials } from '@/lib/format/initials';
+import { ageFrom } from '@/lib/patients/age';
+import { COVERAGE_EXPIRED_LABEL } from '@/lib/patients/coverage-presentation';
+import type { SedeClock } from '@/lib/locations/sede-clock';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
+  label: 'Pacientes',
   loading: 'Cargando pacientes…',
   empty: 'No hay pacientes registrados todavía.',
   emptyHint: 'Crea el primer paciente para empezar a gestionar su historia.',
   noMatches: 'Ningún paciente coincide con la búsqueda.',
   noMatchesHint: 'Revisa el nombre o el número de documento.',
   noPayerMatches: 'Ningún paciente tiene cobertura con ese pagador.',
-  noPayerMatchesHint: 'Elige «Todos los pagadores» para ver el listado completo.',
+  noPayerMatchesHint: 'Elige «Todas» en Cobertura para ver el listado completo.',
   colName: 'Nombre',
   colDoc: 'Documento',
+  colAge: 'Edad',
   colPhone: 'Teléfono',
-  colEmail: 'Correo electrónico',
-  docFallback: '—',
+  colCoverage: 'Cobertura',
+  colLastAttention: 'Última atención',
+  age: (years: number) => (years === 1 ? '1 año' : `${years} años`),
+  pendingStart: 'pendiente de inicio',
+  fallback: '—',
 };
 
 function fullName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
+}
+
+function ageText(patient: Patient): string | null {
+  const years = ageFrom(patient.birthDate);
+  return years === null ? null : copy.age(years);
+}
+
+/** «Sura EPS», «Sura EPS · Cobertura vencida»; nada sin cobertura. */
+function coverageText(patient: Patient): string | null {
+  const c = patient.coverage;
+  if (!c || c.status === 'NONE' || !c.payerName) return null;
+  if (c.status === 'EXPIRED') return `${c.payerName} · ${COVERAGE_EXPIRED_LABEL.toLowerCase()}`;
+  if (c.status === 'NOT_STARTED') return `${c.payerName} · ${copy.pendingStart}`;
+  return c.payerName;
+}
+
+function Muted({ children }: { children: React.ReactNode }) {
+  return <span className="text-muted">{children}</span>;
+}
+
+function columns(clock: SedeClock | null): DataListColumn<Patient>[] {
+  return [
+    {
+      id: 'name',
+      header: copy.colName,
+      mobile: 'primary',
+      cell: fullName,
+    },
+    {
+      id: 'doc',
+      header: copy.colDoc,
+      cell: (p) =>
+        p.docNumber ? <span className="t-id text-muted">{p.docNumber}</span> : <Muted>{copy.fallback}</Muted>,
+      mobileCell: (p) => (p.docNumber ? <span className="t-id">{p.docNumber}</span> : null),
+    },
+    {
+      id: 'age',
+      header: copy.colAge,
+      mobile: 'trailing',
+      numeric: true,
+      cell: (p) => <span className="text-muted">{ageText(p) ?? copy.fallback}</span>,
+      // La edad orienta pero no compite con el nombre: muted en la tarjeta.
+      mobileCell: (p) => {
+        const text = ageText(p);
+        return text ? <span className="text-muted">{text}</span> : null;
+      },
+    },
+    {
+      id: 'phone',
+      header: copy.colPhone,
+      cell: (p) => <span className="whitespace-nowrap text-muted tabular-nums">{p.phone ?? copy.fallback}</span>,
+      mobileCell: (p) => p.phone,
+    },
+    {
+      id: 'coverage',
+      header: copy.colCoverage,
+      mobile: 'hidden',
+      showFrom: 'lg',
+      cell: (p) => {
+        const text = coverageText(p);
+        if (!text) return <Muted>{copy.fallback}</Muted>;
+        return (
+          <span className={p.coverage?.status === 'EXPIRED' ? 'text-danger-text' : 'text-muted'}>{text}</span>
+        );
+      },
+    },
+    {
+      id: 'lastAttention',
+      header: copy.colLastAttention,
+      mobile: 'hidden',
+      showFrom: 'lg',
+      numeric: true,
+      cell: (p) => (
+        <span className="text-muted">
+          {p.lastAttentionAt && clock
+            ? clock.fmt.date(new Date(p.lastAttentionAt), clock.timeZone)
+            : copy.fallback}
+        </span>
+      ),
+    },
+  ];
 }
 
 interface PatientsTableProps {
@@ -46,112 +126,45 @@ interface PatientsTableProps {
    * `filtered`.
    */
   payerOnly?: boolean;
+  /** Reloj de la sede para «Última atención»; sin él la columna dice «—». */
+  clock?: SedeClock | null;
 }
 
+/**
+ * Lista de pacientes sobre `DataList`: tabla en tablet y escritorio, tarjeta
+ * compacta de dos líneas en el teléfono (nombre + edad / documento ·
+ * teléfono). Solo columnas que ya trae `GET /patients`: próxima cita y saldo
+ * no llegan en la lista (ver el informe K2).
+ */
 export function PatientsTable({
   patients,
   loading,
   filtered = false,
   payerOnly = false,
+  clock = null,
 }: PatientsTableProps) {
-  if (loading) {
-    return (
-      <Card className="overflow-hidden p-2">
-        <span role="status" className="sr-only">
-          {copy.loading}
-        </span>
-        <div className="flex flex-col gap-2 p-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
-      </Card>
-    );
-  }
-
-  if (patients.length === 0) {
-    // "Todavía no hay pacientes" y "la búsqueda no encuentra ninguno" son
-    // cosas distintas: la primera invita a crear el primero, la segunda diría
-    // una falsedad si repitiera esa invitación.
-    return (
-      <EmptyState
-        role="status"
-        title={payerOnly ? copy.noPayerMatches : filtered ? copy.noMatches : copy.empty}
-        description={
-          payerOnly ? copy.noPayerMatchesHint : filtered ? copy.noMatchesHint : copy.emptyHint
-        }
-      />
-    );
-  }
-
   return (
-    <>
-      {/* Desktop table */}
-      <Card className="hidden overflow-hidden p-0 md:block">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>{copy.colName}</TableHead>
-              <TableHead>{copy.colDoc}</TableHead>
-              <TableHead>{copy.colPhone}</TableHead>
-              <TableHead>{copy.colEmail}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {patients.map((patient) => (
-              <TableRow key={patient.id}>
-                <TableCell data-label={copy.colName}>
-                  <Link
-                    href={`/patients/${patient.id}`}
-                    className="flex items-center gap-3 font-medium text-ink hover:text-primary"
-                  >
-                    <Avatar size="sm" initials={initials(patient.firstName, patient.lastName)} />
-                    {fullName(patient)}
-                  </Link>
-                </TableCell>
-                <TableCell className="text-muted" data-label={copy.colDoc}>
-                  {patient.docNumber ?? copy.docFallback}
-                </TableCell>
-                <TableCell className="text-muted" data-label={copy.colPhone}>
-                  {patient.phone ?? copy.docFallback}
-                </TableCell>
-                <TableCell className="text-muted" data-label={copy.colEmail}>
-                  {patient.email ?? copy.docFallback}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-
-      {/* Mobile cards */}
-      <div className="flex flex-col gap-3 md:hidden">
-        {patients.map((patient) => (
-          <Card key={patient.id} className="p-4">
-            <Link
-              href={`/patients/${patient.id}`}
-              className="flex items-center gap-3 font-medium text-ink hover:text-primary"
-            >
-              <Avatar initials={initials(patient.firstName, patient.lastName)} />
-              {fullName(patient)}
-            </Link>
-            <dl className="mt-3 flex flex-col gap-1.5 text-sm text-muted">
-              <div className="flex justify-between gap-2">
-                <dt>{copy.colDoc}</dt>
-                <dd className="text-ink">{patient.docNumber ?? copy.docFallback}</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt>{copy.colPhone}</dt>
-                <dd className="text-ink">{patient.phone ?? copy.docFallback}</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt>{copy.colEmail}</dt>
-                <dd className="text-ink">{patient.email ?? copy.docFallback}</dd>
-              </div>
-            </dl>
-          </Card>
-        ))}
-      </div>
-    </>
+    <DataList
+      label={copy.label}
+      rows={patients}
+      columns={columns(clock)}
+      getRowKey={(p) => p.id}
+      getRowHref={(p) => `/patients/${p.id}`}
+      leading={(p) => <Avatar size="sm" initials={initials(p.firstName, p.lastName)} />}
+      loading={loading}
+      loadingLabel={copy.loading}
+      // "Todavía no hay pacientes" y "la búsqueda no encuentra ninguno" son
+      // cosas distintas: la primera invita a crear el primero, la segunda diría
+      // una falsedad si repitiera esa invitación.
+      empty={
+        <EmptyState
+          role="status"
+          title={payerOnly ? copy.noPayerMatches : filtered ? copy.noMatches : copy.empty}
+          description={
+            payerOnly ? copy.noPayerMatchesHint : filtered ? copy.noMatchesHint : copy.emptyHint
+          }
+        />
+      }
+    />
   );
 }

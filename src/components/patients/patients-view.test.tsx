@@ -134,12 +134,12 @@ describe('PatientsView', () => {
   });
 
   describe('filtro por pagador (DX-153)', () => {
-    it('ofrece «Todos los pagadores» y los pagadores activos', async () => {
+    it('ofrece «Todas» y los pagadores activos, con la etiqueta visible «Cobertura»', async () => {
       render(<PatientsView token="tok" />);
-      const select = await screen.findByRole('combobox', { name: 'Filtrar por pagador' });
+      const select = await screen.findByRole('combobox', { name: 'Cobertura' });
       await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
       const options = within(select).getAllByRole('option');
-      expect(options[0]).toHaveTextContent('Todos los pagadores');
+      expect(options[0]).toHaveTextContent('Todas');
       expect(options[0]).toHaveValue('');
       expect(options[1]).toHaveTextContent('Sura EPS');
       expect(mockedPayers).toHaveBeenCalledWith('tok');
@@ -149,7 +149,7 @@ describe('PatientsView', () => {
       const user = setupUser();
       render(<PatientsView token="tok" />);
       await screen.findByText('1 paciente');
-      const select = screen.getByRole('combobox', { name: 'Filtrar por pagador' });
+      const select = screen.getByRole('combobox', { name: 'Cobertura' });
       await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
 
       mockedList.mockClear();
@@ -164,7 +164,7 @@ describe('PatientsView', () => {
       const user = setupUser();
       render(<PatientsView token="tok" />);
       await screen.findByText('1 paciente');
-      const select = screen.getByRole('combobox', { name: 'Filtrar por pagador' });
+      const select = screen.getByRole('combobox', { name: 'Cobertura' });
       await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
       await user.selectOptions(select, 'py1');
       mockedList.mockClear();
@@ -176,7 +176,7 @@ describe('PatientsView', () => {
       const user = setupUser();
       render(<PatientsView token="tok" />);
       await screen.findByText('1 paciente');
-      const select = screen.getByRole('combobox', { name: 'Filtrar por pagador' });
+      const select = screen.getByRole('combobox', { name: 'Cobertura' });
       await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
       mockedList.mockResolvedValue(page([]));
       await user.selectOptions(select, 'py2');
@@ -198,12 +198,12 @@ describe('PatientsView', () => {
       ) as HTMLElement;
       expect(status).toBeInTheDocument();
       expect(
-        screen.queryByRole('combobox', { name: 'Filtrar por pagador' }),
+        screen.queryByRole('combobox', { name: 'Cobertura' }),
       ).not.toBeInTheDocument();
 
       await user.click(within(status).getByRole('button', { name: /reintentar/i }));
       expect(
-        await screen.findByRole('combobox', { name: 'Filtrar por pagador' }),
+        await screen.findByRole('combobox', { name: 'Cobertura' }),
       ).toBeInTheDocument();
     });
   });

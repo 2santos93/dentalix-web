@@ -282,9 +282,6 @@
   "src/components/patients/patient-retention-section.tsx": {
     "select": 1
   },
-  "src/components/patients/patients-view.tsx": {
-    "select": 1
-  },
   "src/components/patients/responsible-party-dialog.tsx": {
     "select": 2,
     "checkbox": 1,
