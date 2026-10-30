@@ -166,6 +166,10 @@ for (const viewport of VIEWPORTS) {
     await fillVitals(dialog, 'AWAKE');
     await dialog.getByRole('checkbox', { name: /Indicaciones postoperatorias entregadas/ }).check();
     await expect(dialog.getByLabel('Se entrega a')).toHaveValue('Laura Ortiz');
+    // Las tomas las anotó el propio operador: quién monitorizó se elige a mano.
+    const monitor = dialog.getByLabel('Quién monitorizó');
+    await expect(monitor).toHaveValue('');
+    await monitor.selectOption({ index: 1 });
     await dialog.getByRole('button', { name: 'Firmar egreso' }).click();
     await expect(dialog.getByText('Egreso firmado. La hoja queda cerrada.')).toBeVisible({ timeout: 10_000 });
     await expect(dialog.getByRole('button', { name: 'Registrar toma' })).toHaveCount(0);

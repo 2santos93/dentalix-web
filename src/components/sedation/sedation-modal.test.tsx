@@ -35,6 +35,29 @@ const STAFF = [
   { userId: 'u-rec', fullName: 'Paola Recepción', email: 'p@x.co', role: 'RECEPTION' as const, locationIds: null },
 ];
 
+// Revisión: otra asistente va ANTES en la lista; no debe salir por defecto.
+const STAFF_TWO_ASSISTANTS = [
+  { userId: 'u-otra', fullName: 'Ana Otra', email: 'o@x.co', role: 'ASSISTANT' as const, locationIds: null },
+  ...STAFF,
+];
+
+function intraBy(authorId: string, name = 'Luis Pérez') {
+  return {
+    id: `v-${authorId}`,
+    phase: 'INTRA' as const,
+    takenAt: '2026-10-30T15:10:00.000Z',
+    spo2: 98,
+    heartRate: 90,
+    systolic: 100,
+    diastolic: 65,
+    respiratoryRate: 18,
+    etco2: null,
+    sedationLevel: 'MINIMAL' as const,
+    author: { id: authorId, name },
+    createdAt: '2026-10-30T15:10:00.000Z',
+  };
+}
+
 function renderModal(props: Partial<React.ComponentProps<typeof SedationModal>> = {}) {
   const onSaved = jest.fn();
   render(
@@ -225,11 +248,15 @@ describe('SedationModal (DX-407)', () => {
 
   it('egreso en sedación moderada con el operador como monitor: pide justificación y envía criterios y monitor', async () => {
     const user = userEvent.setup();
-    mocked.entry.mockResolvedValue({ template: platformTemplate(), sheet: checkedSheet({ status: 'IN_PROGRESS' }) });
+    mocked.entry.mockResolvedValue({
+      template: platformTemplate(),
+      sheet: checkedSheet({ status: 'IN_PROGRESS', vitals: [intraBy('u-asis')] }),
+    });
     mocked.discharge.mockResolvedValue(checkedSheet({ status: 'DISCHARGED' }));
-    renderModal();
+    renderModal({ staff: STAFF_TWO_ASSISTANTS });
     await user.click(await screen.findByRole('radio', { name: sedationCopy.actions.DISCHARGE }));
-    // Por defecto monitoriza la asistente; recepción no aparece.
+    // Por defecto, quien registró las tomas (no la primera asistente de la
+    // lista); recepción no aparece.
     const monitor = screen.getByLabelText(sedationCopy.monitor);
     expect(monitor).toHaveValue('u-asis');
     expect(within(monitor).queryByText('Paola Recepción')).not.toBeInTheDocument();
@@ -250,6 +277,52 @@ describe('SedationModal (DX-407)', () => {
       instructionsDelivered: true,
       criteria: expect.arrayContaining([{ code: 'HYDRATION', met: true }]),
     });
+  });
+
+  it('egreso sin tomas de otra persona: no da por monitor a nadie que no se elija', async () => {
+    const user = userEvent.setup();
+    mocked.entry.mockResolvedValue({ template: platformTemplate(), sheet: checkedSheet({ status: 'IN_PROGRESS' }) });
+    renderModal({ staff: STAFF_TWO_ASSISTANTS });
+    await user.click(await screen.findByRole('radio', { name: sedationCopy.actions.DISCHARGE }));
+    const monitor = screen.getByLabelText(sedationCopy.monitor);
+    expect(monitor).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: sedationCopy.submit.DISCHARGE }));
+    expect(await screen.findByText(sedationCopy.monitorRequired)).toBeInTheDocument();
+    expect(monitor).toHaveAttribute('aria-invalid', 'true');
+    expect(mocked.discharge).not.toHaveBeenCalled();
+  });
+
+  it('409 (otro firmó el egreso a la vez): lo dice y recarga la hoja', async () => {
+    const user = userEvent.setup();
+    const closed = checkedSheet({
+      status: 'DISCHARGED',
+      discharge: {
+        id: 'dc-1',
+        criteria: platformTemplate().dischargeCriteria.map((c) => ({ ...c, met: true })),
+        aldreteScore: null,
+        vitalsId: 'v-9',
+        dischargedAt: '2026-10-30T16:00:00.000Z',
+        handedOverToName: 'Laura Ortiz',
+        handedOverToRelationship: 'Madre',
+        instructionsDelivered: true,
+        operator: { id: 'u-otro', name: 'Dr. Otro' },
+        monitor: { id: 'u-asis', name: 'Luis Pérez' },
+        sameMonitorJustification: null,
+        createdAt: '2026-10-30T16:00:00.000Z',
+      },
+    });
+    mocked.entry
+      .mockResolvedValueOnce({ template: platformTemplate(), sheet: checkedSheet({ status: 'IN_PROGRESS' }) })
+      .mockResolvedValueOnce({ template: platformTemplate(), sheet: closed });
+    mocked.vitals.mockRejectedValue(
+      new ApiError(409, 'La hoja de sedación ya tiene el egreso firmado: no admite más registros.'),
+    );
+    renderModal();
+    await user.click(await screen.findByRole('radio', { name: sedationCopy.actions.VITALS }));
+    await user.click(screen.getByRole('button', { name: sedationCopy.submit.VITALS }));
+    expect(await screen.findByText(/ya tiene el egreso firmado/)).toBeInTheDocument();
+    expect(await screen.findByText(sedationCopy.closed)).toBeInTheDocument();
+    expect(mocked.entry).toHaveBeenCalledTimes(2);
   });
 
   it('con el egreso firmado la hoja es de solo lectura', async () => {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClinicalEntriesList } from './clinical-entries-list';
 import {
@@ -520,6 +520,39 @@ describe('ClinicalEntriesList', () => {
     expect(
       screen.getAllByRole('button', { name: /hoja de sedación de la evolución/i }).length,
     ).toBeGreaterThan(0);
+  });
+
+  it('DX-407: el aviso de la ficha se recalcula con la hora: una hoja que iba en hora al cargar avisa al pasar el intervalo', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick', 'setImmediate'] });
+    try {
+      mockedList.mockResolvedValue(entries);
+      (listPatientSedation as jest.Mock).mockResolvedValueOnce([
+        checkedSheet({
+          status: 'IN_PROGRESS',
+          watch: {
+            intervalMinutes: 5,
+            active: true,
+            startedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+            lastTakenAt: null,
+            nextDueAt: new Date(Date.now() + 60_000).toISOString(),
+            overdue: false,
+            overdueMinutes: 0,
+            missedIntervals: 0,
+          },
+        }),
+      ]);
+      render(<ClinicalEntriesList token="token" patientId="p1" />);
+      expect(
+        (await screen.findAllByText('Moderada (consciente) · ASA II · En curso')).length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByText('Pasó el intervalo de constantes sin toma')).not.toBeInTheDocument();
+      act(() => {
+        jest.advanceTimersByTime(2 * 60_000);
+      });
+      expect(screen.getAllByText('Pasó el intervalo de constantes sin toma').length).toBeGreaterThan(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('DX-407: si las hojas de sedación no cargan lo dice', async () => {

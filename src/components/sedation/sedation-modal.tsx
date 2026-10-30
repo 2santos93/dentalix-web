@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Clock } from 'lucide-react';
+import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   AGENT_KIND_LABELS,
@@ -153,6 +154,7 @@ export const sedationCopy = {
   instructions: 'Indicaciones postoperatorias entregadas y explicadas',
   monitor: 'Quién monitorizó',
   chooseMonitor: 'Elige a quien monitorizó',
+  monitorRequired: 'Elige a quien monitorizó: firma el egreso contigo.',
   sameMonitor: 'En sedación moderada quien monitoriza no debería ser el operador: justifícalo.',
   sameMonitorLabel: 'Justificación (operador = monitor)',
   operator: 'Operador (firma)',
@@ -325,8 +327,17 @@ export function SedationModal({
 
   const monitors = useMemo(() => staff.filter((m) => CLINICAL.includes(m.role)), [staff]);
 
-  const defaultMonitor =
-    monitors.find((m) => m.role === 'ASSISTANT')?.userId ?? userId ?? monitors[0]?.userId ?? '';
+  // Por defecto, quien registró la última toma (si no es el operador): es
+  // quien monitorizó. Nunca «la primera asistente de la lista»: el egreso
+  // firmaría a nombre de alguien que quizá ni estaba. Sin tomas de otra
+  // persona, se elige a mano.
+  const defaultMonitor = useMemo(() => {
+    const ids = new Set(monitors.map((m) => m.userId));
+    const last = [...(sheet?.vitals ?? [])]
+      .reverse()
+      .find((v) => v.author.id !== userId && ids.has(v.author.id));
+    return last?.author.id ?? '';
+  }, [monitors, sheet, userId]);
 
   function reset(next: Action | null) {
     setChosen(next);
@@ -455,6 +466,10 @@ export function SedationModal({
         setErrors(bad);
         if (Object.keys(bad).length > 0) return null;
         const monitorId = t('monitor', defaultMonitor);
+        if (!monitorId) {
+          setErrors({ ...bad, monitor: sedationCopy.monitorRequired });
+          return null;
+        }
         const justification = t('sameMonitor').trim();
         return dischargeSedation(token, patientId, entryId, {
           criteria: template.dischargeCriteria.map((c) => ({ code: c.code, met: f(`crit-${c.code}`) })),
@@ -486,6 +501,9 @@ export function SedationModal({
       reset(null);
     } catch (err) {
       setFormError(apiErrorMessage(err, { fallback: sedationCopy.genericError, maxLength: 1200 }));
+      // 409: la hoja cambió por otro lado (p. ej. otro firmó el egreso a la
+      // vez): se recarga para enseñar la de verdad junto al aviso.
+      if (err instanceof ApiError && err.status === 409) setReloadKey((k) => k + 1);
     } finally {
       setSubmitting(false);
     }
@@ -1009,8 +1027,14 @@ export function SedationModal({
           {textInput('handedRel', sedationCopy.handedOverRelationship, 60, s.escortRelationship ?? '')}
         </div>
         {checkbox('instructions', sedationCopy.instructions)}
-        <FormField htmlFor={`${id}-monitor`} label={sedationCopy.monitor}>
-          <select id={`${id}-monitor`} value={monitorId} onChange={setT('monitor')} className={selectClass}>
+        <FormField htmlFor={`${id}-monitor`} label={sedationCopy.monitor} error={errors.monitor}>
+          <select
+            id={`${id}-monitor`}
+            value={monitorId}
+            onChange={setT('monitor')}
+            className={selectClass}
+            {...fieldProps('monitor')}
+          >
             <option value="">{sedationCopy.chooseMonitor}</option>
             {monitors.map((m) => (
               <option key={m.userId} value={m.userId}>

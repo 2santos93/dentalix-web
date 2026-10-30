@@ -29,6 +29,7 @@ import { SedationModal } from '@/components/sedation/sedation-modal';
 import {
   GRADE_LABELS,
   STATUS_LABELS,
+  liveOverdue,
   listPatientSedation,
   type SedationSheet,
 } from '@/lib/sedation/sedation-api';
@@ -215,6 +216,16 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
     [sedation],
   );
 
+  // El aviso «va tarde» se recalcula con la hora (cada 30 s mientras haya una
+  // sedación en curso): el `watch` del servidor es el del momento de cargar.
+  const [sedationNow, setSedationNow] = useState(() => new Date());
+  const anySedationActive = sedation.some((s) => s.watch.active);
+  useEffect(() => {
+    if (!anySedationActive) return;
+    const timer = setInterval(() => setSedationNow(new Date()), 30_000);
+    return () => clearInterval(timer);
+  }, [anySedationActive]);
+
   /** DX-407: grado, ASA y estado de la hoja; si va tarde, lo dice. */
   function renderSedation(entry: ClinicalEntry) {
     const sheet = sedationByEntry.get(entry.id);
@@ -223,7 +234,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
       <p className="mt-2 text-sm text-ink">
         <span className="text-xs font-medium text-muted">{copy.sedation} </span>
         {copy.sedationLine(sheet)}
-        {sheet.watch.overdue ? (
+        {liveOverdue(sheet.watch, sedationNow).overdue ? (
           <span className="block text-xs font-medium text-danger">{copy.sedationOverdue}</span>
         ) : null}
       </p>
