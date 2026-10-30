@@ -69,4 +69,10 @@ describe('billablePlanLabel', () => {
       '50,00 COP a favor',
     );
   });
+
+  it('pinta el saldo con el formateador que recibe (DX-386: el de la sede, con el código ISO)', () => {
+    const money = (amount: number, currency: string) => `${currency} ${amount}`;
+    expect(billablePlanLabel(plan, money)).toBe('Plan del 01/08/2026 · Aceptado · Saldo COP 1800000');
+    expect(billablePlanLabel({ ...plan, balance: -50 }, money)).toContain('COP 50 a favor');
+  });
 });

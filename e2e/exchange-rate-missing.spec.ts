@@ -5,6 +5,8 @@ import { loginAs } from './support/auth';
 import { axeInBothThemes } from './support/axe';
 import { expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
+import { moneyWithCode } from '../src/lib/format/sede-number';
 import { API_URL } from './support/urls';
 
 /**
@@ -17,6 +19,10 @@ import { API_URL } from './support/urls';
  *     cambio, donde la tasa se registra y queda corregible (nadie la usó).
  *  2. RECEPCIÓN, estado de cuenta › «Ver por ítem»: el mismo aviso, sin enlace
  *     y diciendo que lo pida a un administrador.
+ *  3. DX-386, otra clínica con la fuente AUTOMÁTICA y sin tasa del proveedor
+ *     (la suite no tiene clave): el aviso del ADMIN no invita a registrar una
+ *     tasa manual; dice que la del proveedor aún no está y explica pasar a
+ *     manual. El importe del abono va con el código ISO de la sede.
  *  A 1440 y 390 px (sin desplazamiento lateral) y axe en claro y oscuro.
  */
 const rawSuffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -31,6 +37,11 @@ let origin: string;
 let adminEmail: string;
 let receptionEmail: string;
 let patientId: string;
+let autoOrigin: string;
+let autoAdminEmail: string;
+let autoPatientId: string;
+/** DX-386: el abono con el formato de la sede y el código ISO («COP 200.000,00»). */
+const PAYMENT_TEXT = moneyWithCode(200000, LOCAL, regionalFormat(E2E_REGION));
 
 /** Hoy en la zona de la sede de e2e. */
 function sedeToday(): string {
@@ -52,10 +63,45 @@ async function patch(request: APIRequestContext, session: ApiSession, path: stri
   expect(res.ok(), `PATCH ${path} falló: ${await res.text()}`).toBeTruthy();
 }
 
+/** Un paciente con un plan en USD y un abono de hoy en la moneda de la sede, que la API guarda «sin tasa». */
+async function seedPlanWithoutRate(request: APIRequestContext, admin: ApiSession, suffix: string): Promise<string> {
+  const patient = await apiPost<{ id: string }>(request, admin, '/patients', {
+    firstName: 'Ana',
+    lastName: `SinTasa${suffix.slice(0, 6)}`,
+    docType: 'NATIONAL_ID',
+    docNumber: `ST${suffix}`.slice(0, 20),
+    sex: 'F',
+  });
+  const catalog = await apiPost<{ id: string }>(request, admin, '/catalog/items', {
+    code: `st-${suffix}`,
+    kind: 'PROCEDURE',
+    labelEs: `Corona-${suffix}`,
+    color: '#3366CC',
+    defaultPrice: 1000,
+  });
+  const plan = await apiPost<{ id: string }>(request, admin, `/patients/${patient.id}/treatment-plans`, {
+    currency: 'USD',
+  });
+  const item = await apiPost<{ id: string }>(request, admin, `/treatment-plans/${plan.id}/items`, {
+    toothNumber: '11',
+    catalogItemId: catalog.id,
+  });
+  await patch(request, admin, `/treatment-plans/${plan.id}/items/${item.id}`, { status: 'ACCEPTED' });
+  const payment = await apiPost<{ exchangeRateStatus: string }>(
+    request,
+    admin,
+    `/treatment-plans/${plan.id}/payments`,
+    { amount: 200000, currency: LOCAL, paidAt: sedeToday(), method: 'CASH' },
+  );
+  expect(payment.exchangeRateStatus, 'el abono debía quedar «sin tasa»').toBe('MISSING');
+  return patient.id;
+}
+
 test.beforeAll(async ({ playwright }) => {
   const suffix = `${rawSuffix.slice(0, 10)}${randomUUID().slice(0, 6)}`;
   adminEmail = `admin.sintasa.${suffix}@example.com`;
   receptionEmail = `recepcion.sintasa.${suffix}@example.com`;
+  autoAdminEmail = `admin.sintasa.auto.${suffix}@example.com`;
   const request = await playwright.request.newContext();
   try {
     const admin = await registerClinicViaApi(request, {
@@ -75,43 +121,26 @@ test.beforeAll(async ({ playwright }) => {
     // Tasa manual desde hoy y ninguna registrada: el abono de hoy en la moneda
     // de la sede no tiene tasa.
     await put(request, admin, '/exchange/settings', { source: 'MANUAL' });
-    const patient = await apiPost<{ id: string }>(request, admin, '/patients', {
-      firstName: 'Ana',
-      lastName: `SinTasa${suffix.slice(0, 6)}`,
-      docType: 'NATIONAL_ID',
-      docNumber: `ST${suffix}`.slice(0, 20),
-      sex: 'F',
+    patientId = await seedPlanWithoutRate(request, admin, suffix);
+
+    // DX-386: la fuente con la que empieza toda clínica (automática); sin
+    // clave del proveedor en la suite, el día queda sin tasa.
+    const autoAdmin = await registerClinicViaApi(request, {
+      subdomain: `sintasa-auto-${suffix}`,
+      clinicName: `Clinica Sin Tasa Auto ${suffix}`,
+      fullName: 'Dra Auto',
+      email: autoAdminEmail,
+      password,
     });
-    patientId = patient.id;
-    const catalog = await apiPost<{ id: string }>(request, admin, '/catalog/items', {
-      code: `st-${suffix}`,
-      kind: 'PROCEDURE',
-      labelEs: `Corona-${suffix}`,
-      color: '#3366CC',
-      defaultPrice: 1000,
-    });
-    const plan = await apiPost<{ id: string }>(request, admin, `/patients/${patient.id}/treatment-plans`, {
-      currency: 'USD',
-    });
-    const item = await apiPost<{ id: string }>(request, admin, `/treatment-plans/${plan.id}/items`, {
-      toothNumber: '11',
-      catalogItemId: catalog.id,
-    });
-    await patch(request, admin, `/treatment-plans/${plan.id}/items/${item.id}`, { status: 'ACCEPTED' });
-    const payment = await apiPost<{ exchangeRateStatus: string }>(
-      request,
-      admin,
-      `/treatment-plans/${plan.id}/payments`,
-      { amount: 200000, currency: LOCAL, paidAt: sedeToday(), method: 'CASH' },
-    );
-    expect(payment.exchangeRateStatus).toBe('MISSING');
+    autoOrigin = autoAdmin.origin;
+    autoPatientId = await seedPlanWithoutRate(request, autoAdmin, `a${suffix}`);
   } finally {
     await request.dispose();
   }
 });
 
-async function openPlanTab(page: Page) {
-  await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
+async function openPlanTab(page: Page, at = origin, patient = patientId) {
+  await page.goto(`${at}/patients/${patient}?tab=treatment-plans`);
   const panel = page.locator('#tabpanel-treatment-plans');
   await expect(panel.getByText('1 abono sin tasa')).toBeVisible({ timeout: 15_000 });
   return panel;
@@ -135,6 +164,8 @@ for (const viewport of VIEWPORTS) {
     const fold = panel.getByRole('button', { name: /^Abonos y saldo/ });
     if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
     await expect(panel.getByText(/^Sin tasa/).locator('visible=true').first()).toBeVisible();
+    // DX-386: el importe del abono con el código ISO y el formato de la sede, sin símbolo.
+    await expect(panel.getByText(PAYMENT_TEXT).locator('visible=true').first()).toBeVisible();
 
     await notice.getByRole('link', { name: 'Registrar la tasa en Ajustes › Tasa de cambio' }).click();
     await expect(page).toHaveURL(/\/settings\/tasa-de-cambio$/);
@@ -173,7 +204,40 @@ test('RECEPCIÓN: «Ver por ítem» avisa «sin tasa» sin enlace y dice a quié
   await toggle.click();
   const notice = statement.getByRole('status').filter({ hasText: '1 abono sin tasa' });
   await expect(notice).toBeVisible({ timeout: 15_000 });
-  await expect(notice).toContainText('Pide a un administrador que registre la tasa de ese día');
+  await expect(notice).toContainText('pide a un administrador que revise la tasa de cambio de ese día');
   await expect(notice.getByRole('link')).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 });
+
+for (const viewport of VIEWPORTS) {
+  test(`ADMIN con fuente automática: el aviso dice que la tasa del proveedor aún no está y explica pasar a manual (${viewport.name})`, async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+    await page.setViewportSize(viewport);
+    await loginAs(page, autoOrigin, autoAdminEmail, password);
+    const panel = await openPlanTab(page, autoOrigin, autoPatientId);
+    const notice = panel.getByRole('status').filter({ hasText: '1 abono sin tasa' });
+    await expect(notice).toContainText('La tasa del proveedor aún no está disponible; reintentamos solos', {
+      timeout: 15_000,
+    });
+    await expect(notice).toContainText(PAYMENT_TEXT);
+    await expect(notice.getByRole('link', { name: 'Registrar la tasa en Ajustes › Tasa de cambio' })).toHaveCount(0);
+    const toManual = notice.getByRole('link', { name: 'Pasar a tasa manual en Ajustes › Tasa de cambio' });
+    await expect(toManual).toBeVisible();
+    await expect(notice).toContainText('desde el día del cambio');
+    await expectNoHorizontalScroll(page);
+    const violations = await axeInBothThemes(page, notice);
+    expect(violations.light).toEqual([]);
+    expect(violations.dark).toEqual([]);
+    // Ningún 403 ni otro error en la consola por leer la fuente.
+    expect(errors).toEqual([]);
+
+    await toManual.click();
+    await expect(page).toHaveURL(/\/settings\/tasa-de-cambio$/);
+    await expect(page.getByTestId('exchange-rate-source')).toHaveText('Automática');
+  });
+}

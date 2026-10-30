@@ -3,9 +3,10 @@ import Link from 'next/link';
 import { TriangleAlert } from 'lucide-react';
 import type { components } from '@/lib/api/schema';
 import { getTokenRole } from '@/lib/auth/token-role';
-import { canManageExchangeRates } from '@/lib/exchange/exchange-settings-api';
+import { canManageExchangeRates, type ExchangeRateSettings } from '@/lib/exchange/exchange-settings-api';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { useExchangeRateSettings, type ExchangeRateSettingsState } from './use-exchange-rate-settings';
 
 export type PaymentWithoutRate = components['schemas']['PaymentWithoutRateDto'];
 
@@ -17,16 +18,42 @@ export const withoutRateCopy = {
   title: (n: number) => (n === 1 ? '1 abono sin tasa' : `${n} abonos sin tasa`),
   body: 'El saldo todavía no los cuenta: falta la tasa de cambio de su día.',
   item: (amount: string, date: string) => `${amount} del ${date}`,
+  // Fuente manual (ADMIN): la tasa la registra la clínica.
   adminLink: 'Registrar la tasa en Ajustes › Tasa de cambio',
   adminHint: 'En cuanto la registres, el saldo los cuenta en un minuto.',
-  otherRoles: 'Pide a un administrador que registre la tasa de ese día en Ajustes › Tasa de cambio.',
+  // DX-386: con la fuente automática (o un día anterior al paso a manual) la
+  // tasa la da el proveedor: registrar una manual no sirve.
+  automatic: 'La tasa del proveedor aún no está disponible; reintentamos solos y el saldo los cuenta en cuanto llegue.',
+  switchToManualLink: 'Pasar a tasa manual en Ajustes › Tasa de cambio',
+  switchToManualHint:
+    'Solo si no puedes esperar: con la tasa manual la clínica registra la de cada día desde el día del cambio; los días anteriores siguen con la del proveedor.',
+  // ADMIN sin la fuente (no se pudo leer): no se da por hecha ninguna.
+  settingsLink: 'Revisar la tasa en Ajustes › Tasa de cambio',
+  // El resto de roles no puede leer la fuente: texto válido para las dos.
+  otherRoles: 'Si no se resuelve, pide a un administrador que revise la tasa de cambio de ese día.',
 };
+
+const linkClass =
+  'inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:min-h-0';
+
+/**
+ * De dónde sale la tasa del día de cada abono: manual desde `manualSince`
+ * (si la clínica está en manual), del proveedor en cualquier otro caso — la
+ * misma regla con la que la API congela la tasa (DX-374).
+ */
+function rateDays(payments: PaymentWithoutRate[], settings: ExchangeRateSettings) {
+  const since = settings.source === 'MANUAL' ? settings.manualSince : null;
+  const manual = since !== null ? payments.filter((p) => p.paidOn >= since).length : 0;
+  return { manual: manual > 0, provider: manual < payments.length };
+}
 
 /**
  * Aviso «sin tasa» (DX-375) donde se ve el saldo: los abonos en otra moneda
  * que no tenían tasa de su día se guardaron, pero el saldo no los cuenta hasta
- * que se registre la tasa (y el barrido la congele). Al ADMIN le enlaza a
- * Ajustes › Tasa de cambio; al resto le dice a quién pedírselo. No es un error
+ * que haya tasa (y el barrido la congele). Al ADMIN le dice qué hacer según
+ * la fuente de la clínica (DX-386: registrar la manual, o esperar al
+ * proveedor y, si no puede, pasar a manual); al resto, un texto que vale para
+ * las dos y a quién pedírselo, sin leer la fuente (solo ADMIN). No es un error
  * (nada falló): tono de advertencia y `role="status"`, sin interrumpir. Todo
  * el texto va en `ink`: `muted` sobre el tinte de advertencia no llega a
  * 4,5:1 (axe en claro). Importe y día con el formato de la sede y el código
@@ -34,8 +61,9 @@ export const withoutRateCopy = {
  */
 export function WithoutRateNotice({ token, payments }: { token: string; payments: PaymentWithoutRate[] }) {
   const fmt = readyFormat(useSedeFormat(token));
-  if (payments.length === 0) return null;
   const canRegister = canManageExchangeRates(getTokenRole(token));
+  const settings = useExchangeRateSettings(token, canRegister && payments.length > 0);
+  if (payments.length === 0) return null;
   return (
     <div
       role="status"
@@ -53,19 +81,52 @@ export function WithoutRateNotice({ token, payments }: { token: string; payments
           ))}
         </ul>
         {canRegister ? (
-          <p className="mt-1">
-            <Link
-              href={EXCHANGE_RATE_SETTINGS_HREF}
-              className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:min-h-0"
-            >
-              {withoutRateCopy.adminLink}
-            </Link>
-            <span className="block text-xs">{withoutRateCopy.adminHint}</span>
-          </p>
+          <AdminAction settings={settings} payments={payments} />
         ) : (
           <p className="mt-1">{withoutRateCopy.otherRoles}</p>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Qué puede hacer el ADMIN según la fuente (DX-386): con manual, registrar la
+ * tasa; con la del proveedor, esperar o, si no puede, pasar a manual sabiendo
+ * desde cuándo rige. Mientras se lee la fuente, nada que proponer todavía.
+ */
+function AdminAction({ settings, payments }: { settings: ExchangeRateSettingsState; payments: PaymentWithoutRate[] }) {
+  if (settings.status === 'idle' || settings.status === 'loading') return null;
+  if (settings.status === 'error') {
+    return (
+      <p className="mt-1">
+        <Link href={EXCHANGE_RATE_SETTINGS_HREF} className={linkClass}>
+          {withoutRateCopy.settingsLink}
+        </Link>
+      </p>
+    );
+  }
+  const days = rateDays(payments, settings.settings);
+  const automatic = settings.settings.source === 'AUTOMATIC';
+  return (
+    <>
+      {days.provider ? <p className="mt-1">{withoutRateCopy.automatic}</p> : null}
+      {days.manual ? (
+        <p className="mt-1">
+          <Link href={EXCHANGE_RATE_SETTINGS_HREF} className={linkClass}>
+            {withoutRateCopy.adminLink}
+          </Link>
+          <span className="block text-xs">{withoutRateCopy.adminHint}</span>
+        </p>
+      ) : null}
+      {automatic ? (
+        <p className="mt-1">
+          <Link href={EXCHANGE_RATE_SETTINGS_HREF} className={linkClass}>
+            {withoutRateCopy.switchToManualLink}
+          </Link>
+          <span className="block text-xs">{withoutRateCopy.switchToManualHint}</span>
+        </p>
+      ) : null}
+    </>
   );
 }

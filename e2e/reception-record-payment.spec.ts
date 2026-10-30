@@ -154,7 +154,7 @@ for (const viewport of [
     await expect(planSelect).toBeVisible({ timeout: 10_000 });
     // El plan propuesto, nombrado sin nada clínico: fecha, estado y saldo.
     await expect(planSelect.locator('option:checked')).toHaveText(
-      /^Plan del \d{2}\/\d{2}\/\d{4} · Borrador · Saldo 800\.000,00/,
+      /^Plan del \d{2}\/\d{2}\/\d{4} · Borrador · Saldo COP\s800\.000,00/,
     );
     await expect(dialog).not.toContainText(`Corona DX067 ${tag}`);
     await expect(dialog.getByLabel('Moneda')).toHaveValue('COP');
@@ -168,7 +168,7 @@ for (const viewport of [
       expect(box.left).toBeGreaterThanOrEqual(0);
       expect(box.right).toBeLessThanOrEqual(viewport.width);
       // El select recorta el nombre largo del plan: el saldo se lee debajo.
-      await expect(dialog).toContainText(`Saldo ${figure(PLAN_PRICE)}`);
+      await expect(dialog).toContainText(`Saldo COP ${figure(PLAN_PRICE)}`);
       await expectNoHorizontalScroll(page);
     }
 

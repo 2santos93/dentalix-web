@@ -10,8 +10,8 @@ import type { AccountStatementOpeningBalance } from '@/lib/account-statement/acc
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from '@/lib/payments/payment-method';
 import { recordPaymentErrorMessage } from '@/lib/payments/payment-errors';
 import { statementCopy } from '@/lib/account-statement/presentation';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Input } from '@/components/ui/input';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
@@ -132,6 +132,10 @@ export function RecordPaymentModal({
   // «Hoy» de la sede (DX-097). Sin su zona la fecha empieza vacía y, si la
   // sede no tiene zona, el campo muestra `SedeConfigError`: nunca otra zona.
   const zone = useSedeTimeZone(token);
+  // DX-386: importes y días con el formato de la sede y el código ISO de la
+  // moneda; mientras carga, «—».
+  const fmt = readyFormat(useSedeFormat(token));
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const timeZone = readyTimeZone(zone);
   const today = timeZone ? sedeToday(timeZone) : '';
   const [form, setForm] = useState<FormState>(() => initialForm(today));
@@ -206,7 +210,7 @@ export function RecordPaymentModal({
       return;
     }
     if (opening && Math.round(parsed.value * 100) > Math.round(opening.pending * 100)) {
-      setAmountError(copy.overPending(formatCurrency(opening.pending, opening.currency)));
+      setAmountError(copy.overPending(money(opening.pending, opening.currency)));
       return;
     }
     setAmountError(null);
@@ -239,8 +243,8 @@ export function RecordPaymentModal({
         : null;
       const savedPlan = plans.find((p) => p.id === saved.treatmentPlanId) ?? plan;
       const recorded = copy.recorded(
-        formatCurrency(saved.amount, saved.currency),
-        formatCivilDate(saved.paidOn),
+        money(saved.amount, saved.currency),
+        sedeCivilDate(saved.paidOn, fmt),
         savedOpening
           ? copy.openingLabel(savedOpening.concept)
           : savedPlan
@@ -291,13 +295,13 @@ export function RecordPaymentModal({
             {!noPlans ? <option value="">{copy.targetPlan}</option> : null}
             {openings.map((o) => (
               <option key={o.id} value={`${OPENING_PREFIX}${o.id}`}>
-                {copy.targetOpening(o.concept, formatCurrency(o.pending, o.currency))}
+                {copy.targetOpening(o.concept, money(o.pending, o.currency))}
               </option>
             ))}
           </select>
           {opening ? (
             <p id="rp-target-hint" className="mt-1 text-xs text-muted tabular-nums">
-              {copy.openingPending(formatCurrency(opening.pending, opening.currency))}
+              {copy.openingPending(money(opening.pending, opening.currency))}
             </p>
           ) : null}
         </FormField>
@@ -318,6 +322,7 @@ export function RecordPaymentModal({
                 patch({ planId, currency: next?.currency ?? '' });
               }}
               disabled={submitting}
+              money={money}
             />
           )}
           {plan || opening ? (
@@ -355,6 +360,7 @@ export function RecordPaymentModal({
                   planCurrency={plan.currency}
                   planBalance={previewBalance}
                   date={form.date}
+                  fmt={fmt}
                 />
               ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
