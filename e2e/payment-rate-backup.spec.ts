@@ -154,20 +154,39 @@ for (const viewport of VIEWPORTS) {
       await expect(dialog).toHaveCount(0);
       await expect(page.getByText('Tasa de COP registrada.')).toBeVisible();
 
-      // 4. El registro adelanta el reintento y el barrido lo resuelve: el aviso desaparece.
-      await page.goto(`${session.origin}/dashboard`);
+      // 4. El registro adelanta el reintento y el barrido real lo resuelve.
+      // Consultar con la sesión API independiente mantiene montada la UI y no
+      // interrumpe un refresh de cookie de un solo uso mediante otro reload.
       await expect
         .poll(
           async () => {
-            const [res] = await Promise.all([
-              page.waitForResponse((r) => new URL(r.url()).pathname.endsWith('/payments/rate-backlog')),
-              page.reload(),
-            ]);
+            const res = await request.get(`${API_URL}/payments/rate-backlog`, {
+              headers: session.headers,
+              timeout: 10_000,
+            });
+            expect(res.status(), 'La sesión API del tenant debe seguir autenticada durante el barrido.').not.toBe(401);
+            expect(res.ok(), `Consultar abonos sin tasa del tenant falló: ${res.status()} ${await res.text()}`).toBeTruthy();
             return ((await res.json()) as { count: number }).count;
           },
           { timeout: 120_000, intervals: [5_000] },
         )
         .toBe(0);
+      // Una sola navegación, con su lectura autenticada terminada antes de la
+      // siguiente. HTML load por sí solo no garantiza el bootstrap de sesión.
+      const [dashboardBacklog] = await Promise.all([
+        page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return url.origin === new URL(session.origin).origin
+            && url.pathname === '/api/v1/payments/rate-backlog'
+            && response.request().method() === 'GET';
+        }, { timeout: 15_000 }).catch((error: Error) => {
+          throw new Error(`El panel no terminó su lectura autenticada de abonos sin tasa; página actual: ${new URL(page.url()).pathname}. ${error.message}`);
+        }),
+        page.goto(`${session.origin}/dashboard`),
+      ]);
+      expect(dashboardBacklog.ok(), `La lectura del panel debe estar autenticada: HTTP ${dashboardBacklog.status()}`).toBeTruthy();
+      expect(((await dashboardBacklog.json()) as { count: number }).count).toBe(0);
+      await expect(page).toHaveURL(`${session.origin}/dashboard`);
       await expect(page.getByRole('region', { name: NOTICE })).toHaveCount(0);
 
       // 5. La tasa ya la usa el abono: no se puede corregir.

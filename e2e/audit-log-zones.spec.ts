@@ -218,7 +218,21 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
     await expectNoHorizontalScrollIn(page);
     await shoot(page, 'auditoria-zonas-berlin', viewport.width);
 
-    // De vuelta a «Todas las sedes» para la siguiente anchura.
-    await page.getByLabel('Sede', { exact: true }).locator('visible=true').first().selectOption({ label: 'Todas las sedes' });
+    // El selector recarga el documento. No iniciar el siguiente goto mientras
+    // ese documento aún restaura la sesión y rota su cookie de un solo uso.
+    await Promise.all([
+      page.waitForEvent('domcontentloaded'),
+      page.getByLabel('Sede', { exact: true }).locator('visible=true').first().selectOption({ label: 'Todas las sedes' }),
+    ]);
+    const bogotaHint = page.getByText(
+      `Horas y días en la hora de Bogotá (America/Bogota, ${offset(now, BOGOTA)}). Lo más reciente, arriba.`,
+      { exact: true },
+    );
+    await expect.poll(async () => {
+      if (new URL(page.url()).pathname === '/login') {
+        throw new Error('La sesión se perdió al restaurar Todas las sedes; se esperaba la auditoría autenticada del nuevo documento.');
+      }
+      return await table.isVisible() && await bogotaHint.isVisible();
+    }, { timeout: 15_000, message: 'El nuevo documento termina de autenticar y carga la auditoría en Bogotá antes de cambiar de ventana.' }).toBe(true);
   }
 });
