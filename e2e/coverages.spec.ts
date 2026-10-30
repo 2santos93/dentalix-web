@@ -378,7 +378,7 @@ test('el listado de pacientes filtrado por «Sura EPS» muestra solo a ese pacie
   await expect(page.getByText(otherLastName).first()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(lastName).first()).toBeVisible();
 
-  const select = page.getByRole('combobox', { name: 'Filtrar por pagador' });
+  const select = page.getByRole('combobox', { name: 'Cobertura' });
   await expect(select.locator('option', { hasText: payerName })).toHaveCount(1);
   // Espera la respuesta filtrada: durante la carga la tabla son esqueletos y
   // un «no está» pasaría aunque el filtro no se enviara.

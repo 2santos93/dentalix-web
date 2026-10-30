@@ -331,14 +331,10 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           <div className="flex h-14 min-w-0 flex-1 items-center">
             <ShellBrand name={branding.name} logoUrl={branding.logoUrl} />
           </div>
-          {/* Por debajo de 380 px el selector con nombre no deja sitio a la
-              marca: pasa a botón de icono (la sede, en `title`). */}
-          <div className="hidden min-[380px]:contents">
-            <LocationSwitcher variant="compact" />
-          </div>
-          <div className="contents min-[380px]:hidden">
-            <LocationSwitcher variant="rail" />
-          </div>
+          {/* La sede, compacta (pin + rótulo corto, nombre entero en el nombre
+              accesible): la marca de la clínica se queda el ancho y ya no se
+              cortan las dos a 390 px. */}
+          <LocationSwitcher variant="phone" />
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
