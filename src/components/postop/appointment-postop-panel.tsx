@@ -37,7 +37,7 @@ const copy = {
   email: 'Enviar por email',
   whatsapp: 'Abrir WhatsApp',
   emailBlocked: 'No se puede enviar por email a este paciente.',
-  whatsappBlocked: 'El paciente no tiene un celular con indicativo de país.',
+  whatsappBlocked: 'El teléfono del paciente no sirve para WhatsApp: revísalo en su ficha o escríbelo con + y su prefijo.',
   emailSent: (to: string) => `Indicaciones enviadas a ${to}.`,
   emailSentToResponsible: (to: string) =>
     `Indicaciones enviadas al responsable del paciente (${to}).`,

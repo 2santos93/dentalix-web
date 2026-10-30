@@ -34,9 +34,9 @@ const QA_DIR = process.env.E2E_QA_DIR;
 const PREFIX = 'Prefijo telefónico por defecto';
 const SUGGESTED = 'Sugerido por el país de la sede.';
 const NO_PREFIX = 'Sin prefijo por defecto';
-const NEEDS_MOBILE =
-  'Para elegir WhatsApp el paciente necesita un móvil válido. Revisa el número (si es de otro país, escríbelo con + y su indicativo).';
-const AMBIGUOUS = 'Ese número se puede leer de dos formas. Escríbelo con + y el prefijo del país.';
+// El texto exacto lo da la API; aquí importa que va junto al campo «Móvil».
+const NEEDS_MOBILE = /móvil válido/;
+const AMBIGUOUS = /se puede leer de dos formas/;
 
 const VENEZUELA: RegionalSettings = {
   country: 'VE',
@@ -159,6 +159,15 @@ async function saveWhatsApp(dialog: Locator, phone: string, optIn: boolean): Pro
   await dialog.getByRole('button', { name: 'Guardar' }).click();
 }
 
+/** El 400 del móvil va junto a «Móvil», con el foco, y no arriba del diálogo. */
+async function expectMobileError(dialog: Locator, message: RegExp): Promise<void> {
+  const mobile = dialog.getByLabel('Móvil');
+  await expect(mobile).toHaveAccessibleDescription(message);
+  await expect(mobile).toHaveAttribute('aria-invalid', 'true');
+  await expect(mobile).toBeFocused();
+  await expect(dialog.getByRole('alert')).toHaveCount(1);
+}
+
 test.beforeAll(async ({ request }) => {
   test.setTimeout(120_000);
   clinics.sedes = await registerClinic(request, 'sedes', VENEZUELA);
@@ -238,9 +247,9 @@ test('an admin clears the prefix and a number without + is then refused', async 
   expect((await locationsOf(request, clinic))[0].defaultPhoneRegion).toBeNull();
 
   const { block, dialog } = await openCommunication(page, clinic, patientId);
-  await expect(dialog).toContainText('Escríbelo con + y el prefijo del país.');
+  await expect(dialog).toContainText('Escríbelo con + y su prefijo.');
   await saveWhatsApp(dialog, '0412-1234567', false);
-  await expect(dialog.getByRole('alert')).toContainText(NEEDS_MOBILE);
+  await expectMobileError(dialog, NEEDS_MOBILE);
 
   await saveWhatsApp(dialog, '+58 412 1234567', true);
   await expect(dialog).toBeHidden({ timeout: 10_000 });
@@ -280,7 +289,7 @@ test('an ambiguous number asks to write it with +', async ({ page, request }) =>
 
   const { block, dialog } = await openCommunication(page, clinic, patientId);
   await saveWhatsApp(dialog, '0058 412 1234567', false);
-  await expect(dialog.getByRole('alert')).toContainText(AMBIGUOUS);
+  await expectMobileError(dialog, AMBIGUOUS);
 
   await saveWhatsApp(dialog, '+58 412 1234567', true);
   await expect(dialog).toBeHidden({ timeout: 10_000 });

@@ -21,8 +21,13 @@ const mockedUpdate = updatePatientCommunication as jest.MockedFunction<
   typeof updatePatientCommunication
 >;
 
+// El texto lo da la API; aquí solo importa dónde se pinta.
 const NEEDS_MOBILE =
-  'Para elegir WhatsApp el paciente necesita un móvil válido. Revisa el número (si es de otro país, escríbelo con + y su indicativo).';
+  'Para elegir WhatsApp el paciente necesita un móvil válido. Revisa el número o escríbelo con + y su prefijo.';
+
+const AMBIGUOUS = 'Ese número se puede leer de dos formas. Escríbelo con + y su prefijo.';
+const OPT_IN_SOURCE =
+  'Indica dónde aceptó el paciente que le escriban por WhatsApp: en persona, por enlace o por mensaje.';
 
 function comms(over: Partial<PatientCommunication> = {}): PatientCommunication {
   return {
@@ -105,7 +110,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(await screen.findByText('601 234 5678')).toBeInTheDocument();
     expect(screen.getByText('Móvil no válido')).toBeInTheDocument();
     expect(
-      screen.getByText('No sirve para WhatsApp: revisa el número o escríbelo con + y su indicativo.'),
+      screen.getByText('No sirve para WhatsApp: revisa el número o escríbelo con + y su prefijo.'),
     ).toBeInTheDocument();
   });
 
@@ -140,7 +145,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
     renderSection();
     await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('Escríbelo con + y el prefijo del país.');
+    expect(dialog).toHaveTextContent('Escríbelo con + y su prefijo.');
     expect(dialog).not.toHaveTextContent('Sin + se usa el prefijo de la sede');
   });
 
@@ -159,10 +164,10 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(await screen.findByText('49 151 23456789')).toBeInTheDocument();
     expect(screen.getByText('Móvil no válido')).toBeInTheDocument();
     expect(
-      screen.getByText('Ese número se puede leer de dos formas. Escríbelo con + y el prefijo del país.'),
+      screen.getByText('Ese número se puede leer de dos formas. Escríbelo con + y su prefijo.'),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('No sirve para WhatsApp: revisa el número o escríbelo con + y su indicativo.'),
+      screen.queryByText('No sirve para WhatsApp: revisa el número o escríbelo con + y su prefijo.'),
     ).not.toBeInTheDocument();
   });
 
@@ -237,10 +242,13 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(mockedUpdate).not.toHaveBeenCalled();
   });
 
-  it('el 400 de la API (móvil inválido) se muestra en el formulario, que sigue abierto', async () => {
+  it.each([
+    ['móvil inválido', NEEDS_MOBILE],
+    ['número con dos lecturas', AMBIGUOUS],
+  ])('el 400 de la API (%s) va en el campo «Móvil», con el foco, y el diálogo sigue abierto (DX-329)', async (_, message) => {
     mockedGet.mockResolvedValue(comms({ phone: '123', phoneE164: null, phoneInternational: null, phoneStatus: 'INVALID' }));
     mockedUpdate.mockRejectedValue(
-      new ApiError(400, NEEDS_MOBILE, { messages: [NEEDS_MOBILE] }),
+      new ApiError(400, message, { messages: [message], code: 'WHATSAPP_REQUIRES_VALID_MOBILE' }),
     );
     const user = setupUser();
     renderSection();
@@ -248,8 +256,55 @@ describe('PatientCommunicationSection (DX-128)', () => {
     const dialog = await screen.findByRole('dialog');
     await user.selectOptions(within(dialog).getByLabelText('Canal de los recordatorios'), 'WHATSAPP');
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(NEEDS_MOBILE);
+
+    const mobile = within(dialog).getByLabelText('Móvil');
+    await waitFor(() => expect(mobile).toHaveAccessibleDescription(message));
+    expect(mobile).toHaveAttribute('aria-invalid', 'true');
+    expect(mobile).toHaveFocus();
+    // Solo junto al campo: ninguna alerta del formulario repite el mensaje.
+    expect(within(dialog).getAllByRole('alert')).toHaveLength(1);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    // Al corregirlo, el aviso se va.
+    await user.type(mobile, '4');
+    expect(mobile).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('otro 400 de la API sigue en el formulario, no en el campo', async () => {
+    mockedGet.mockResolvedValue(comms());
+    mockedUpdate.mockRejectedValue(new ApiError(400, OPT_IN_SOURCE, { messages: [OPT_IN_SOURCE] }));
+    const user = setupUser();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText('Canal de los recordatorios'), 'WHATSAPP');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(OPT_IN_SOURCE);
+    expect(within(dialog).getByLabelText('Móvil')).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('the editor shows the mobile as the block does, and an untouched mobile is not sent (DX-329)', async () => {
+    mockedGet.mockResolvedValue(
+      comms({ phone: '+584121234567', phoneE164: '+584121234567', phoneInternational: '+58 412 1234567', phoneCountry: 'VE' }),
+    );
+    mockedUpdate.mockResolvedValue(comms({ contactChannel: 'WHATSAPP' }));
+    const user = setupUser();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Móvil')).toHaveValue('+58 412 1234567');
+    await user.selectOptions(within(dialog).getByLabelText('Canal de los recordatorios'), 'WHATSAPP');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 'p1', { contactChannel: 'WHATSAPP' });
+  });
+
+  it('a mobile the API cannot read opens as stored', async () => {
+    mockedGet.mockResolvedValue(comms({ phone: '123', phoneE164: null, phoneInternational: null, phoneStatus: 'INVALID' }));
+    const user = setupUser();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
+    expect(within(await screen.findByRole('dialog')).getByLabelText('Móvil')).toHaveValue('123');
   });
 
   it('anotar la baja a petición del paciente', async () => {

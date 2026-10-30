@@ -339,6 +339,23 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('Escape on an open prefix list closes the list and keeps the dialog (DX-329)', async () => {
+    const { dialog, user, onOpenChange } = setup();
+    await currenciesLoaded(dialog);
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Norte');
+    const prefix = within(dialog).getByRole('combobox', { name: PREFIX });
+    await user.clear(prefix);
+    await user.type(prefix, 'ital');
+    expect(prefix).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard('{Escape}');
+    expect(prefix).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(within(dialog).getByLabelText('Nombre')).toHaveValue('Sede Norte');
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it('the create description says which fields may come suggested, the country included', () => {
     const { dialog } = setup();
     expect(dialog).toHaveAccessibleDescription(
@@ -723,6 +740,21 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       await view.user.click(within(view.dialog).getByRole('button', { name: 'Guardar sede' }));
       await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(3));
       expect(mockedUpdate.mock.calls[2][2]).toMatchObject({ country: 'VE', defaultPhoneRegion: 'VE' });
+    });
+
+    it('a location from an older API, without the prefix key, does not send null when the prefix is untouched (DX-329)', async () => {
+      const old: Partial<ClinicLocation> = { ...clinicLocation({ country: 'CO' }) };
+      delete old.defaultPhoneRegion;
+      const sede = old as ClinicLocation;
+      mockedUpdate.mockResolvedValue(sede);
+      const { user, dialog } = setup(sede);
+      await currenciesLoaded(dialog);
+      await user.clear(within(dialog).getByLabelText('Nombre'));
+      await user.type(within(dialog).getByLabelText('Nombre'), 'Sede renombrada');
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+      expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ name: 'Sede renombrada' });
+      expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('defaultPhoneRegion');
     });
 
     it('the API error for the prefix shows under its field', async () => {

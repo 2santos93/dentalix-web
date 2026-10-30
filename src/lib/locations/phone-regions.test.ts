@@ -52,6 +52,28 @@ describe('phone regions (DX-329, spec §6.2)', () => {
     expect(searchPhoneRegions('+9999')).toEqual([]);
   });
 
+  it('a partial calling code narrows the list while typing, (DX-329 M6)', () => {
+    const plusFive = searchPhoneRegions('+5');
+    expect(plusFive.length).toBeGreaterThan(10);
+    expect(plusFive.every((r) => r.callingCode.startsWith('5'))).toBe(true);
+    expect(plusFive.map((r) => r.callingCode)).toEqual(expect.arrayContaining(['51', '52', '54', '56', '58']));
+    expect(PHONE_REGIONS.filter((r) => r.callingCode.startsWith('5'))).toHaveLength(plusFive.length);
+    expect(searchPhoneRegions('5')).toEqual(plusFive);
+
+    // Ningún indicativo empieza por otro: el completo da solo los suyos.
+    const codes = new Set(PHONE_REGIONS.map((r) => r.callingCode));
+    for (const code of codes) {
+      expect(searchPhoneRegions(`+${code}`).every((r) => r.callingCode === code)).toBe(true);
+    }
+  });
+
+  it('spaces inside a calling code do not stop it from matching', () => {
+    const plusFiftyEight = searchPhoneRegions('+58');
+    expect(searchPhoneRegions('+ 58')).toEqual(plusFiftyEight);
+    expect(searchPhoneRegions(' + 5 8 ')).toEqual(plusFiftyEight);
+    expect(searchPhoneRegions('+ 5')).toEqual(searchPhoneRegions('+5'));
+  });
+
   it('searching ignores accents and case and the exact code comes first', () => {
     expect(searchPhoneRegions('ASCENSION').map((r) => r.code)).toEqual(['AC']);
     expect(searchPhoneRegions('venezuela').map((r) => r.code)).toEqual(['VE']);

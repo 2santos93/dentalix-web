@@ -240,8 +240,10 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
     const { address: newAddress, phone: newPhone, defaultPhoneRegion, ...rest } = body();
     return {
       ...rest,
-      // Solo si cambió: sin el campo, la API lo deja como estaba.
-      ...(defaultPhoneRegion !== location?.defaultPhoneRegion ? { defaultPhoneRegion } : {}),
+      // Solo si cambió: sin el campo, la API lo deja como estaba. Una sede que
+      // llega sin la clave (una réplica anterior de la API) cuenta como null:
+      // guardar sin tocar el prefijo no lo vacía en la réplica nueva.
+      ...(defaultPhoneRegion !== (location?.defaultPhoneRegion ?? null) ? { defaultPhoneRegion } : {}),
       // Vaciar un dato que tenía lo borra; si no tenía, no se envía.
       ...(newAddress !== undefined || location?.address ? { address: newAddress ?? '' } : {}),
       ...(newPhone !== undefined || location?.phone ? { phone: newPhone ?? null } : {}),

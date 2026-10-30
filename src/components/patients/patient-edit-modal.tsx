@@ -19,6 +19,7 @@ import {
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { normalizeDocType } from '@/lib/patients/legacy-doc-type';
 import { isEmailAddress } from '@/lib/format/email';
+import { isWhatsappMobileError } from '@/lib/patients/communication-api';
 
 // Copy as constants (i18n-ready) — es first.
 const copy = {
@@ -175,6 +176,8 @@ export function PatientEditModal({
   const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const emailRef = React.useRef<HTMLInputElement>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const phoneRef = React.useRef<HTMLInputElement>(null);
   const [sex, setSex] = useState<Patient['sex']>(patient.sex);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,6 +200,7 @@ export function PatientEditModal({
     setDocTypeLabel(patient.docTypeLabel ?? '');
     setDocTypeLabelError(null);
     setEmailError(null);
+    setPhoneError(null);
     setSex(patient.sex);
     setError(null);
   }
@@ -248,6 +252,7 @@ export function PatientEditModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setPhoneError(null);
     // La regla de `@IsEmail()` de la API (el navegador acepta «ana@x»). Solo
     // si cambió: un email guardado no viaja y no hay que frenar por él.
     const email = text.email.trim();
@@ -269,7 +274,15 @@ export function PatientEditModal({
       onSaved(saved);
       onOpenChange(false);
     } catch (err) {
-      setError(apiErrorMessage(err, copy.genericError));
+      const text = apiErrorMessage(err, copy.genericError);
+      // Con WhatsApp como canal el teléfono tiene que leerse como móvil: el
+      // mensaje dice cómo escribirlo, así que va junto a «Teléfono».
+      if (isWhatsappMobileError(err)) {
+        setPhoneError(text);
+        phoneRef.current?.focus();
+      } else {
+        setError(text);
+      }
     } finally {
       setSaving(false);
     }
@@ -277,11 +290,11 @@ export function PatientEditModal({
 
   function textField(f: TextFieldSpec) {
     const id = `pe-${f.key}`;
-    const error = f.key === 'email' ? emailError : null;
+    const error = f.key === 'email' ? emailError : f.key === 'phone' ? phoneError : null;
     return (
       <FormField key={f.key} htmlFor={id} label={f.label} error={error}>
         <Input
-          ref={f.key === 'email' ? emailRef : undefined}
+          ref={f.key === 'email' ? emailRef : f.key === 'phone' ? phoneRef : undefined}
           id={id}
           type={f.type ?? 'text'}
           value={text[f.key]}
@@ -291,6 +304,7 @@ export function PatientEditModal({
           onChange={(e) => {
             setText((prev) => ({ ...prev, [f.key]: e.target.value }));
             if (f.key === 'email') setEmailError(null);
+            if (f.key === 'phone') setPhoneError(null);
           }}
         />
       </FormField>

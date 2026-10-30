@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
+import { ApiError } from '@/lib/api/api-error';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { Patient } from './patients-api';
@@ -35,6 +36,19 @@ export const OPT_OUT_SOURCE_LABELS: Record<ReminderOptOutSource, string> = {
   MESSAGE: 'respondiendo «BAJA» al mensaje',
   STAFF: 'anotada por la clínica',
 };
+
+/**
+ * 400 de la API cuando el canal o la aceptación de WhatsApp piden un móvil que
+ * no lee (no válido o con dos lecturas). Lo da el PATCH de comunicaciones y
+ * también la edición general del paciente; su mensaje dice cómo escribir el
+ * móvil, así que la pantalla lo pone junto a ese campo.
+ */
+const WHATSAPP_REQUIRES_VALID_MOBILE = 'WHATSAPP_REQUIRES_VALID_MOBILE';
+
+/** True si `err` es ese 400: el error va en el campo del móvil, no en el formulario. */
+export function isWhatsappMobileError(err: unknown): err is ApiError {
+  return err instanceof ApiError && err.code === WHATSAPP_REQUIRES_VALID_MOBILE;
+}
 
 /** `GET /patients/:id/communication`: lo ven los 4 roles. */
 export async function getPatientCommunication(

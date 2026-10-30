@@ -334,4 +334,13 @@ describe('CountryCombobox with phone regions (DX-329, spec §6.3)', () => {
     expect(screen.getByRole('status')).toHaveTextContent(phoneRegionComboboxCopy.results(regions));
     expect(screen.getAllByRole('option')).toHaveLength(regions);
   });
+
+  it('a query with nothing to search shows the none row and announces no count', async () => {
+    const { user, input } = setupPhone();
+    await user.clear(input);
+    // Solo una tilde suelta: la clave de búsqueda queda vacía, como la lista entera.
+    await user.type(input, '\u0301');
+    expect(screen.getAllByRole('option')[0]).toHaveTextContent('Sin prefijo por defecto');
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  });
 });

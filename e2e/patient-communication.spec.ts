@@ -31,8 +31,8 @@ const admin = { fullName: 'Ana Titular', email: `ana.com.${suffix}@example.com` 
 const reception = { fullName: 'Rita Recepción', email: `rita.com.${suffix}@example.com` };
 const dentist = { fullName: 'Dra. Laura Gómez', email: `laura.com.${suffix}@example.com` };
 const lastName = `Comunica${suffix}`.slice(0, 40);
-const NEEDS_MOBILE =
-  'Para elegir WhatsApp el paciente necesita un móvil válido. Revisa el número (si es de otro país, escríbelo con + y su indicativo).';
+// El texto exacto lo da la API; aquí importa que va junto al campo «Móvil».
+const NEEDS_MOBILE = /móvil válido/;
 
 let session: ApiSession;
 let patientId: string;
@@ -84,7 +84,9 @@ test('escritorio: recepción pasa a WhatsApp con opt-in en persona y el móvil i
   const dialog = page.getByRole('dialog', { name: 'Comunicaciones del paciente' });
   await dialog.getByLabel('Canal de los recordatorios').selectOption('WHATSAPP');
   await dialog.getByRole('button', { name: 'Guardar' }).click();
-  await expect(dialog.getByRole('alert')).toContainText(NEEDS_MOBILE);
+  await expect(dialog.getByLabel('Móvil')).toHaveAccessibleDescription(NEEDS_MOBILE);
+  await expect(dialog.getByLabel('Móvil')).toHaveAttribute('aria-invalid', 'true');
+  await expect(dialog.getByLabel('Móvil')).toBeFocused();
 
   await dialog.getByLabel('Móvil').fill('310 123 4567');
   await dialog.getByLabel('Acepta que la clínica le escriba por WhatsApp').check();

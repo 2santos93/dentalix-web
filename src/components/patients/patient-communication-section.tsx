@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/format/date';
 import {
   CHANNEL_LABELS,
   getPatientCommunication,
+  isWhatsappMobileError,
   OPT_IN_SOURCE_LABELS,
   OPT_OUT_SOURCE_LABELS,
   updatePatientCommunication,
@@ -38,9 +39,9 @@ const copy = {
   noMobile: 'Sin móvil registrado',
   mobileValid: 'Móvil válido',
   mobileInvalid: 'Móvil no válido',
-  mobileInvalidHint: 'No sirve para WhatsApp: revisa el número o escríbelo con + y su indicativo.',
+  mobileInvalidHint: 'No sirve para WhatsApp: revisa el número o escríbelo con + y su prefijo.',
   // DX-329 (C1): los dígitos admiten dos lecturas válidas distintas; la API no elige ninguna.
-  mobileAmbiguousHint: 'Ese número se puede leer de dos formas. Escríbelo con + y el prefijo del país.',
+  mobileAmbiguousHint: 'Ese número se puede leer de dos formas. Escríbelo con + y su prefijo.',
   email: 'Correo',
   noEmail: 'Sin correo',
   noEmailHint: 'Con canal Email y sin correo no le llegan los recordatorios.',
@@ -59,7 +60,7 @@ const copy = {
   mobileHint: (region: string | null) =>
     region
       ? `Sin + se usa el prefijo de la sede: ${region}. Se guarda en formato internacional.`
-      : 'Escríbelo con + y el prefijo del país.',
+      : 'Escríbelo con + y su prefijo.',
   mobileRequired: 'Para elegir WhatsApp escribe el móvil del paciente.',
   optInLabel: 'Acepta que la clínica le escriba por WhatsApp',
   optInHint: 'Regístralo solo si el paciente lo aceptó. Se guarda la fecha, el origen y quién lo anotó.',
@@ -99,10 +100,18 @@ interface Draft {
   optOut: boolean;
 }
 
+/**
+ * El móvil con el que se abre el editor: el mismo formato que enseña el bloque
+ * (el internacional de la API), o lo guardado tal cual si la API no lo lee.
+ */
+function seededPhone(data: PatientCommunication): string {
+  return data.phoneInternational ?? data.phone ?? '';
+}
+
 function draftFrom(data: PatientCommunication): Draft {
   return {
     channel: data.contactChannel,
-    phone: data.phone ?? '',
+    phone: seededPhone(data),
     optIn: data.whatsappOptIn !== null,
     optInSource: data.whatsappOptIn?.source ?? 'IN_PERSON',
     optOut: data.reminderOptOut !== null,
@@ -113,7 +122,8 @@ function draftFrom(data: PatientCommunication): Draft {
 function changesOf(data: PatientCommunication, draft: Draft): UpdatePatientCommunicationInput {
   const input: UpdatePatientCommunicationInput = {};
   if (draft.channel !== data.contactChannel) input.contactChannel = draft.channel;
-  if (draft.phone.trim() !== (data.phone ?? '')) input.phone = draft.phone.trim() || null;
+  // Contra lo sembrado: abrir y guardar sin tocar el móvil no lo reenvía.
+  if (draft.phone.trim() !== seededPhone(data)) input.phone = draft.phone.trim() || null;
   if (draft.optIn !== (data.whatsappOptIn !== null)) {
     input.whatsappOptIn = draft.optIn;
     if (draft.optIn) input.whatsappOptInSource = draft.optInSource;
@@ -210,7 +220,15 @@ export function PatientCommunicationSection({
       setDraft(null);
       onChanged?.(saved);
     } catch (err) {
-      setSaveError(apiErrorMessage(err, { fallback: copy.saveError }));
+      const text = apiErrorMessage(err, { fallback: copy.saveError });
+      // El móvil no sirve para WhatsApp (no válido o con dos lecturas): el
+      // mensaje dice cómo escribir ese campo, así que va junto a él.
+      if (isWhatsappMobileError(err)) {
+        setPhoneError(text);
+        document.getElementById(`${ids}-phone`)?.focus();
+      } else {
+        setSaveError(text);
+      }
     } finally {
       setSaving(false);
     }
@@ -381,7 +399,10 @@ export function PatientCommunicationSection({
               value={draft.phone}
               aria-invalid={phoneError ? true : undefined}
               aria-describedby={phoneError ? fieldErrorId(`${ids}-phone`) : undefined}
-              onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+              onChange={(e) => {
+                setDraft({ ...draft, phone: e.target.value });
+                setPhoneError(null);
+              }}
             />
           </FormField>
 

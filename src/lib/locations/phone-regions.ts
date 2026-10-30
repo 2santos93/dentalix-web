@@ -40,16 +40,18 @@ export function phoneRegionLabel(code: string | null): string | null {
 const KEYS = PHONE_REGIONS.map((r) => ({ region: r, key: countrySearchKey(r.name) }));
 
 /**
- * Regiones que casan con lo escrito. Un indicativo, con o sin `+` («58»,
- * «+58»), da todas las regiones que lo comparten. Si no, la del código exacto
+ * Regiones que casan con lo escrito. Unas cifras, con o sin `+` y con
+ * espacios, dan las regiones cuyo indicativo empieza por ellas, para que la
+ * lista se acote mientras se escribe; ningún indicativo es el principio de
+ * otro, así que el completo da solo los suyos. Si no, la del código exacto
  * primero, luego los nombres que empiezan por la clave y luego los que la
- * contienen, cada grupo en el orden de `PHONE_REGIONS`. Sin consulta, todas.
+ * contienen. Cada grupo, en el orden de `PHONE_REGIONS`. Sin consulta, todas.
  */
 export function searchPhoneRegions(query: string): PhoneRegionOption[] {
   const key = countrySearchKey(query);
   if (key === '') return [...PHONE_REGIONS];
-  const callingCode = /^\+?(\d+)$/.exec(key)?.[1];
-  if (callingCode !== undefined) return PHONE_REGIONS.filter((r) => r.callingCode === callingCode);
+  const digits = /^\+?(\d+)$/.exec(key.replace(/\s/g, ''))?.[1];
+  if (digits !== undefined) return PHONE_REGIONS.filter((r) => r.callingCode.startsWith(digits));
   const code = key.toUpperCase();
   const exact = BY_CODE.get(code);
   const rest = KEYS.filter(({ region }) => region !== exact);

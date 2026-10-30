@@ -191,11 +191,13 @@ export function CountryCombobox<T extends ComboboxOption = CountryOption>({
 
   const shown = query ?? labelOf(value);
   // Solo mientras se escribe: abrir la lista completa no anuncia «250 países».
+  // Con la misma clave que `itemsFor`, así la opción «ninguno» (solo con la
+  // lista entera) nunca entra en el recuento.
   const status =
-    open && query !== null && query.trim() !== ''
+    open && query !== null && countrySearchKey(query) !== ''
       ? results.length === 0
         ? copy.noMatch
-        : copy.results(results.filter((item) => item.code !== COMBOBOX_NONE).length)
+        : copy.results(results.length)
       : '';
 
   return (
