@@ -115,6 +115,8 @@ import { PriceQuoteLine, itemPriceOriginText } from './price-quote-line';
 import { MarkDoneModal } from './mark-done-modal';
 import { VoidCancellationFeeModal, voidFeeCopy } from '@/components/appointments/fee-reason-modal';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
+import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
+import { frozenRateLabel, paymentRateCopy } from '@/lib/payments/payment-rate';
 
 // El pliegue «Abonos y saldo»: destino estable del foco cuando un modal de un
 // abono se cierra y la fila que lo abrió ya no existe.
@@ -647,6 +649,28 @@ function RegisterImplantLink({
 }
 
 /**
+ * DX-375: «Sin tasa» junto al importe de un abono que no tenía tasa de su día
+ * (el saldo no lo cuenta todavía). El motivo va en texto para lectores de
+ * pantalla, no solo en el color.
+ */
+function PaymentMissingRateBadge({ payment }: { payment: Payment }) {
+  if (payment.exchangeRateStatus !== 'MISSING') return null;
+  return (
+    <Badge variant="warning">
+      {paymentRateCopy.missing}
+      <span className="sr-only">: {paymentRateCopy.missingHelp}</span>
+    </Badge>
+  );
+}
+
+/** DX-375: la tasa que congeló un abono en otra moneda, bajo su importe. */
+function PaymentFrozenRate({ payment }: { payment: Payment }) {
+  const label = frozenRateLabel(payment);
+  if (!label) return null;
+  return <span className="mt-0.5 block text-xs font-normal text-muted tabular-nums">{label}</span>;
+}
+
+/**
  * Las cuatro cifras del plan en UNA fila etiquetada, no en tarjetas.
  *
  * Antes esta pantalla mostraba «Total» en su propia franja y luego tres
@@ -662,10 +686,12 @@ function RegisterImplantLink({
  * el paciente pregunta en voz alta.
  */
 function PlanMoneySummary({
+  token,
   total,
   currency,
   balance,
 }: {
+  token: string;
   total: number;
   currency: string;
   balance: PlanBalance | null;
@@ -723,7 +749,12 @@ function PlanMoneySummary({
           </div>
         ))}
       </dl>
-      {balance && balance.unconvertedPaymentsCount > 0 ? (
+      {/* DX-375: los abonos «sin tasa» no cuentan en Pagado ni en Saldo; el
+          aviso lo dice junto a las cifras (y cómo resolverlo) en vez de la
+          nota de «sin convertir», que habla de los mismos abonos. */}
+      {balance && balance.paymentsWithoutRate.length > 0 ? (
+        <WithoutRateNotice token={token} payments={balance.paymentsWithoutRate} />
+      ) : balance && balance.unconvertedPaymentsCount > 0 ? (
         <p className="text-sm text-muted">{allocationCopy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>
       ) : null}
     </>
@@ -1061,7 +1092,9 @@ function PaymentsList({
                       {manualPaymentIds?.has(payment.id) ? (
                         <Badge variant="muted">{copy.manualAllocation}</Badge>
                       ) : null}
+                      <PaymentMissingRateBadge payment={payment} />
                     </span>
+                    <PaymentFrozenRate payment={payment} />
                   </TableCell>
                   <TableCell>
                     {payment.method ? (
@@ -1134,7 +1167,9 @@ function PaymentsList({
                 {manualPaymentIds?.has(payment.id) ? (
                   <Badge variant="muted">{copy.manualAllocation}</Badge>
                 ) : null}
+                <PaymentMissingRateBadge payment={payment} />
               </p>
+              <PaymentFrozenRate payment={payment} />
               <p className="mt-1 text-sm text-muted tabular-nums">
                 {copy.paymentReceiptMobile(payment.receiptNumber)}
               </p>
@@ -2375,6 +2410,7 @@ export function TreatmentPlansTab({
                     bajo el encabezado «Plan de pagos», que es lo que las
                     distingue. Ninguna cifra desapareció. */}
                 <PlanMoneySummary
+                  token={token}
                   total={planDetail.total ?? 0}
                   currency={planDetail.currency}
                   balance={planBalance}

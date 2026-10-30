@@ -25,7 +25,7 @@ import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-s
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 // Copy como constantes (i18n-ready).
-const copy = {
+export const recordPaymentCopy = {
   title: 'Registrar abono',
   description: 'El abono se aplica al plan que elijas y aparece en la caja de hoy.',
   // QA D2: con saldos migrados pendientes, el destino puede ser uno de ellos.
@@ -38,8 +38,10 @@ const copy = {
   date: 'Fecha de pago',
   invalidAmount: 'Escribe un importe mayor que 0.',
   invalidDate: 'Elige la fecha de pago.',
-  recorded: (amount: string, date: string, plan: string) =>
-    `Abono registrado: ${amount} · ${date} · ${plan}.`,
+  recorded: (amount: string, date: string, plan: string) => `Abono registrado: ${amount} · ${date} · ${plan}.`,
+  // DX-375: sin tasa de su día el abono se guarda igual, pero el saldo no lo
+  // cuenta todavía (el plan lo enseña con su aviso).
+  recordedWithoutRate: 'Quedó sin tasa de cambio de su día: el saldo no lo cuenta hasta que se registre la tasa.',
   // DX-262: destino del abono cuando el paciente trae saldo migrado.
   target: 'Abonar a',
   targetPlan: 'Un plan de tratamiento',
@@ -50,6 +52,7 @@ const copy = {
   overPending: (pending: string) =>
     `El abono supera lo pendiente del saldo migrado: quedan ${pending}.`,
 };
+const copy = recordPaymentCopy;
 
 /** Valor del selector de destino de un saldo migrado. */
 const OPENING_PREFIX = 'ob:';
@@ -215,17 +218,16 @@ export function RecordPaymentModal({
         ? (openings.find((o) => o.id === saved.openingBalanceId) ?? opening)
         : null;
       const savedPlan = plans.find((p) => p.id === saved.treatmentPlanId) ?? plan;
-      onRecorded(
-        copy.recorded(
-          formatCurrency(saved.amount, saved.currency),
-          formatCivilDate(saved.paidOn),
-          savedOpening
-            ? copy.openingLabel(savedOpening.concept)
-            : savedPlan
-              ? statementCopy.planLabel(savedPlan.createdAt)
-              : '',
-        ),
+      const recorded = copy.recorded(
+        formatCurrency(saved.amount, saved.currency),
+        formatCivilDate(saved.paidOn),
+        savedOpening
+          ? copy.openingLabel(savedOpening.concept)
+          : savedPlan
+            ? statementCopy.planLabel(savedPlan.createdAt)
+            : '',
       );
+      onRecorded(saved.exchangeRateStatus === 'MISSING' ? `${recorded} ${copy.recordedWithoutRate}` : recorded);
     } catch (err) {
       // La clave NO cambia: el reintento de este mismo abono la reusa y el
       // servidor lo deduplica en vez de cobrar dos veces.

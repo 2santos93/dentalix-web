@@ -42,13 +42,25 @@ export const ITEM_WITHOUT_DISCOUNT = {
 } as const;
 
 /**
+ * DX-375: la tasa de un abono en la moneda de su plan (no necesita tasa), para
+ * los abonos de ejemplo de los tests.
+ */
+export const PAYMENT_IN_PLAN_CURRENCY = {
+  exchangeRateCurrency: null,
+  frozenRate: null,
+  exchangeRateStatus: 'NOT_NEEDED',
+} as const;
+
+/**
  * Campos de la imputación (DX-051) de un saldo sin abonos imputados ni ítems,
  * para los saldos de ejemplo de los tests.
  */
 export const BALANCE_WITHOUT_ALLOCATIONS: Pick<
   PlanBalance,
-  'allocated' | 'unallocated' | 'unconvertedPaymentsCount' | 'manualPaymentIds' | 'items'
+  'allocated' | 'unallocated' | 'unconvertedPaymentsCount' | 'manualPaymentIds' | 'items' | 'paymentsWithoutRate'
 > = {
+  // DX-375: ningún abono «sin tasa».
+  paymentsWithoutRate: [],
   allocated: 0,
   unallocated: 0,
   unconvertedPaymentsCount: 0,
