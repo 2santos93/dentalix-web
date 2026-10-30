@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Patient } from '@/lib/patients/patients-api';
+import { displayPhone } from '@/lib/phone/display-phone';
 import {
   Table,
   TableBody,
@@ -116,8 +117,11 @@ export function PatientsTable({
                 <TableCell className="text-muted" data-label={copy.colDoc}>
                   {patient.docNumber ?? copy.docFallback}
                 </TableCell>
-                <TableCell className="text-muted" data-label={copy.colPhone}>
-                  {patient.phone ?? copy.docFallback}
+                <TableCell
+                  className="min-w-0 tabular-nums text-muted [overflow-wrap:anywhere]"
+                  data-label={copy.colPhone}
+                >
+                  {displayPhone(patient) ?? copy.docFallback}
                 </TableCell>
                 <TableCell className="text-muted" data-label={copy.colEmail}>
                   {patient.email ?? copy.docFallback}
@@ -148,7 +152,9 @@ export function PatientsTable({
               </div>
               <div className="flex justify-between gap-2">
                 <dt>{copy.colPhone}</dt>
-                <dd className="text-ink">{patient.phone ?? copy.docFallback}</dd>
+                <dd className="min-w-0 text-right tabular-nums text-ink [overflow-wrap:anywhere]">
+                  {displayPhone(patient) ?? copy.docFallback}
+                </dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt>{copy.colEmail}</dt>

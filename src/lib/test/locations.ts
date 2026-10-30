@@ -16,6 +16,8 @@ export function clinicLocation(overrides: Partial<ClinicLocation> = {}): ClinicL
     healthRegistrationNumber: null,
     showHealthRegistrationNumber: false,
     phone: null,
+    // DX-387: el formato internacional que calcula la API (null = sin él).
+    phoneInternational: null,
     // DX-329: sin prefijo telefónico por defecto; el test que lo use lo fija.
     defaultPhoneRegion: null,
     isActive: true,
