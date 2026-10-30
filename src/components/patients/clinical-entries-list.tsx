@@ -186,7 +186,15 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
   function renderAnesthesia(entry: ClinicalEntry) {
     const records = anesthesiaByEntry.get(entry.id) ?? [];
     if (records.length === 0) return null;
-    const last = records[records.length - 1];
+    // El acumulado lo sella cada registro con todo lo creado ANTES que él: vale
+    // el del último creado. La lista viene por hora de administración (elegida
+    // al minuto o anotada tarde), que no siempre coincide con ese orden.
+    const last = records.reduce((latest, r) =>
+      r.createdAt > latest.createdAt ||
+      (r.createdAt === latest.createdAt && r.cumulativeMg > latest.cumulativeMg)
+        ? r
+        : latest,
+    );
     return (
       <div className="mt-2 flex flex-col gap-1">
         <ul
