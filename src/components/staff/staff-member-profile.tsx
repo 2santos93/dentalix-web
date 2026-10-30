@@ -32,12 +32,15 @@ import {
   canWriteScheduleBlocks,
 } from '@/lib/appointments/schedule-blocks-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { useSedeClock } from '@/lib/locations/sede-clock';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { toast } from 'sonner';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
   back: 'Volver a Personal',
+  sedeLoading: 'Cargando la sede. Vuelve a intentarlo en un momento.',
   sectionTitle: 'Datos del miembro',
   fullNameLabel: 'Nombre completo',
   emailLabel: 'Correo electrónico',
@@ -98,11 +101,6 @@ function minutesLeft(until: string | null): number | null {
   return Number.isNaN(ms) || ms <= 0 ? null : Math.ceil(ms / 60_000);
 }
 
-function todayLocal(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
   { value: 'ADMIN', label: 'Administrador/a' },
   { value: 'DENTIST', label: 'Odontólogo/a' },
@@ -156,8 +154,16 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
     canWriteScheduleBlocks(viewerRole) && (!blocksOwnAgendaOnly(viewerRole) || viewerId === userId);
   const [blocking, setBlocking] = useState(false);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  // DX-378: el bloqueo se calcula en el reloj de la sede, nunca en el del navegador.
+  const sede = useSedeClock(token);
 
   async function openBlockDialog() {
+    if (sede.status !== 'ready') {
+      notifyError(sede.status === 'error' ? sede.message : copy.sedeLoading, {
+        onRetry: sede.status === 'error' ? sede.retry : undefined,
+      });
+      return;
+    }
     // Las sedes solo hacen falta aquí; sin ellas se bloquea en todas.
     if (locations.length === 0) {
       setLocations(await listLocations(token).catch(() => []));
@@ -517,7 +523,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         onConfirm={() => void handleDeactivate()}
       />
 
-      {blocking && member ? (
+      {blocking && member && sede.status === 'ready' ? (
         <ScheduleBlockDialog
           open
           onOpenChange={setBlocking}
@@ -531,8 +537,9 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
             },
           ]}
           locations={locations.filter((l) => l.isActive)}
+          clock={sede.clock}
           activeLocationId={null}
-          defaultDate={todayLocal()}
+          defaultDate={sedeToday(sede.clock.timeZone)}
           defaultProviderId={member.userId}
           ownProviderId={member.userId}
           onCreated={() => {

@@ -2,6 +2,11 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DayAgenda } from './day-agenda';
 import type { Appointment } from '@/lib/appointments/appointments-api';
+import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
+import { clinicLocation } from '@/lib/test/locations';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 function timeLabel(startIso: string, endIso: string): string {
   const fmt = (iso: string) =>
@@ -57,28 +62,28 @@ const earlier: Appointment = {
 
 describe('DayAgenda', () => {
   it('shows a loading state', () => {
-    render(<DayAgenda appointments={[]} loading={true} />);
+    render(<DayAgenda clock={CLOCK} appointments={[]} loading={true} />);
     expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
   });
 
   it('shows an empty state when there are no appointments and it is not loading', () => {
-    render(<DayAgenda appointments={[]} loading={false} />);
+    render(<DayAgenda clock={CLOCK} appointments={[]} loading={false} />);
     expect(screen.getByText(/no hay citas/i)).toBeInTheDocument();
   });
 
   it('does not show the empty message while loading', () => {
-    render(<DayAgenda appointments={[]} loading={true} />);
+    render(<DayAgenda clock={CLOCK} appointments={[]} loading={true} />);
     expect(screen.queryByText(/no hay citas/i)).not.toBeInTheDocument();
   });
 
   it('shows an alert with the error message and no empty/loading state when loading failed', () => {
-    render(<DayAgenda appointments={[]} loading={false} error="Error del servidor" />);
+    render(<DayAgenda clock={CLOCK} appointments={[]} loading={false} error="Error del servidor" />);
     expect(screen.getByRole('alert')).toHaveTextContent('Error del servidor');
     expect(screen.queryByText(/no hay citas/i)).not.toBeInTheDocument();
   });
 
   it('renders one row per appointment, ordered by start time ascending regardless of input order', () => {
-    render(<DayAgenda appointments={[later, earlier]} loading={false} />);
+    render(<DayAgenda clock={CLOCK} appointments={[later, earlier]} loading={false} />);
 
     const rows = screen.getAllByRole('row').slice(1); // skip header row
     expect(rows).toHaveLength(2);
@@ -87,7 +92,7 @@ describe('DayAgenda', () => {
   });
 
   it('shows patient, reason (with a fallback when absent) and a status label per appointment', () => {
-    render(<DayAgenda appointments={[earlier, later]} loading={false} />);
+    render(<DayAgenda clock={CLOCK} appointments={[earlier, later]} loading={false} />);
 
     const rows = screen.getAllByRole('row').slice(1);
     // earlier: no reason -> fallback dash; patientNames not provided -> raw id
@@ -103,7 +108,7 @@ describe('DayAgenda', () => {
 
   it('resolves the patient label from patientNames when available, falling back to the raw id otherwise', () => {
     render(
-      <DayAgenda
+      <DayAgenda clock={CLOCK}
         appointments={[earlier]}
         loading={false}
         patientNames={{ 'pat-1': 'Ana García' }}
@@ -128,7 +133,7 @@ describe('DayAgenda', () => {
       end: new Date(Date.parse(earlier.end) + i * 3600_000).toISOString(),
       status,
     }));
-    const { container } = render(<DayAgenda appointments={appointments} loading={false} />);
+    const { container } = render(<DayAgenda clock={CLOCK} appointments={appointments} loading={false} />);
 
     // Scope to the desktop table only — the mobile cards render the same
     // badges again (duplicate testids across the two responsive variants).
@@ -145,7 +150,7 @@ describe('DayAgenda', () => {
   });
 
   it('switches table/cards on its CONTAINER width, not the viewport — so it also fits the agenda day drawer', () => {
-    const { container } = render(<DayAgenda appointments={[earlier]} loading={false} />);
+    const { container } = render(<DayAgenda clock={CLOCK} appointments={[earlier]} loading={false} />);
     // The component declares itself a query container...
     expect(container.querySelector('.\\@container')).toBeInTheDocument();
 
@@ -161,7 +166,7 @@ describe('DayAgenda', () => {
   });
 
   it('gives each appointment an accessible label combining time, patient and status (mobile cards)', () => {
-    render(<DayAgenda appointments={[earlier]} loading={false} />);
+    render(<DayAgenda clock={CLOCK} appointments={[earlier]} loading={false} />);
     const items = screen.getAllByRole('listitem');
     expect(items.length).toBeGreaterThan(0);
     expect(items[0]).toHaveAccessibleName(
@@ -170,7 +175,7 @@ describe('DayAgenda', () => {
   });
 
   it('does NOT render a status select when onStatusChange is not provided (backward compatible, read-only badge only)', () => {
-    render(<DayAgenda appointments={[earlier]} loading={false} />);
+    render(<DayAgenda clock={CLOCK} appointments={[earlier]} loading={false} />);
     expect(screen.queryAllByRole('combobox')).toHaveLength(0);
   });
 
@@ -178,7 +183,7 @@ describe('DayAgenda', () => {
     it('renders a labeled status select per row, in both the desktop table and the mobile cards, with the current status selected', () => {
       const onStatusChange = jest.fn();
       const { container } = render(
-        <DayAgenda appointments={[earlier, later]} loading={false} onStatusChange={onStatusChange} />,
+        <DayAgenda clock={CLOCK} appointments={[earlier, later]} loading={false} onStatusChange={onStatusChange} />,
       );
 
       const table = container.querySelector('table') as HTMLElement;
@@ -200,7 +205,7 @@ describe('DayAgenda', () => {
       const onStatusChange = jest.fn();
       const user = userEvent.setup();
       const { container } = render(
-        <DayAgenda appointments={[earlier]} loading={false} onStatusChange={onStatusChange} />,
+        <DayAgenda clock={CLOCK} appointments={[earlier]} loading={false} onStatusChange={onStatusChange} />,
       );
 
       const table = container.querySelector('table') as HTMLElement;
@@ -214,7 +219,7 @@ describe('DayAgenda', () => {
       const onStatusChange = jest.fn();
       const user = userEvent.setup();
       const { container } = render(
-        <DayAgenda appointments={[earlier]} loading={false} onStatusChange={onStatusChange} />,
+        <DayAgenda clock={CLOCK} appointments={[earlier]} loading={false} onStatusChange={onStatusChange} />,
       );
 
       const table = container.querySelector('table') as HTMLElement;
@@ -230,7 +235,7 @@ describe('DayAgenda', () => {
     it('disables the status select (both desktop and mobile) only for the row matching updatingId', () => {
       const onStatusChange = jest.fn();
       const { container } = render(
-        <DayAgenda
+        <DayAgenda clock={CLOCK}
           appointments={[earlier, later]}
           loading={false}
           onStatusChange={onStatusChange}
@@ -267,7 +272,7 @@ describe('DayAgenda', () => {
           confirmationSentAt: '2026-03-01T00:00:00.000Z',
         },
       ];
-      render(<DayAgenda appointments={appointments} loading={false} />);
+      render(<DayAgenda clock={CLOCK} appointments={appointments} loading={false} />);
       // Tabla + tarjetas (las dos variantes responsive están en el DOM).
       expect(screen.getAllByText('Pide llamada')).toHaveLength(2);
       expect(screen.getAllByText('Confirmación pendiente')).toHaveLength(2);
@@ -278,7 +283,7 @@ describe('DayAgenda', () => {
       const onSelect = jest.fn();
       const appointment = apt('a-1', '09:00', '09:30');
       render(
-        <DayAgenda appointments={[appointment]} loading={false} onSelectAppointment={onSelect} />,
+        <DayAgenda clock={CLOCK} appointments={[appointment]} loading={false} onSelectAppointment={onSelect} />,
       );
       const [first] = screen.getAllByRole('button', { name: 'Detalle de la cita de 09:00–09:30' });
       await userEvent.click(first);
@@ -286,7 +291,7 @@ describe('DayAgenda', () => {
     });
 
     it('sin onSelectAppointment no hay botón de detalle', () => {
-      render(<DayAgenda appointments={[apt('a-1', '09:00', '09:30')]} loading={false} />);
+      render(<DayAgenda clock={CLOCK} appointments={[apt('a-1', '09:00', '09:30')]} loading={false} />);
       expect(screen.queryByRole('button', { name: /detalle/i })).not.toBeInTheDocument();
     });
   });
@@ -294,7 +299,7 @@ describe('DayAgenda', () => {
   it('DX-200: en el flujo el selector solo ofrece su estado y la salida, y la fila lleva sus botones', async () => {
     const arrived: Appointment = { ...later, status: 'ARRIVED', arrivedAt: '2026-07-23T13:55:00.000Z' };
     render(
-      <DayAgenda
+      <DayAgenda clock={CLOCK}
         appointments={[arrived]}
         loading={false}
         onStatusChange={jest.fn()}
@@ -321,7 +326,7 @@ describe('DayAgenda · cobertura (DX-153)', () => {
       validTo: '2026-01-31',
     };
     render(
-      <DayAgenda
+      <DayAgenda clock={CLOCK}
         appointments={[
           { ...earlier, coverage: expired },
           { ...later, coverage: { ...expired, status: 'ACTIVE' as const } },
@@ -333,5 +338,27 @@ describe('DayAgenda · cobertura (DX-153)', () => {
     const chips = screen.getAllByTestId('coverage-chip');
     expect(chips.length).toBeGreaterThan(0);
     chips.forEach((c) => expect(c).toHaveTextContent('Cobertura vencida'));
+  });
+});
+
+describe('DayAgenda con el reloj de la sede (DX-378)', () => {
+  it('sede en 12 h en Caracas: la hora de la sede, no la del navegador (TZ=UTC)', () => {
+    render(<DayAgenda clock={testAgendaClock([caracasSede()])} appointments={[later]} loading={false} />);
+    // 14:00 UTC son las 10:00 a. m. en Caracas.
+    expect(screen.getAllByText('10:00 a. m. – 10:30 a. m.').length).toBeGreaterThan(0);
+  });
+
+  it('cada cita, con el reloj de su sede; sin reloj de su sede, «—» y nunca otro', () => {
+    const madrid = clinicLocation({ id: 'madrid', timeZone: 'Europe/Madrid', locale: 'es-ES', hourCycle: 'h23' });
+    const sinReloj = clinicLocation({ id: 'sin-reloj', hourCycle: null });
+    render(
+      <DayAgenda
+        clock={testAgendaClock([caracasSede(), madrid, sinReloj])}
+        appointments={[{ ...later, locationId: 'madrid' }, { ...earlier, locationId: 'sin-reloj' }]}
+        loading={false}
+      />,
+    );
+    expect(screen.getAllByText('16:00–16:30').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 });

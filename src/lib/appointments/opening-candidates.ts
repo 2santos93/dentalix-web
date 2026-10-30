@@ -1,12 +1,14 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
-import { formatTime } from '@/lib/format/date';
 import type { BusinessHours } from '@/lib/locations/schedule-api';
 import type { Appointment } from './appointments-api';
 import { longAppointmentDay } from './confirmation-message';
 import { blockShownInColumn, type ScheduleBlockLike } from './schedule-blocks';
 import type { AppointmentWrite } from './waitlist-api';
+import { sedeTime, type SedeClock } from '@/lib/locations/sede-clock';
+import { civilWeekday } from '@/lib/time/civil-day';
+import { wallInstant, wallMinuteOfDay } from '@/lib/time/wall-clock';
 
 // DX-210: «Ocupar este hueco», del contrato generado.
 export type OpeningCandidates = components['schemas']['OpeningCandidatesDto'];
@@ -111,18 +113,21 @@ export function offerMessage({
   start,
   locationName,
   providerName,
+  clock,
 }: {
   firstName: string;
   start: string;
   locationName: string;
   providerName: string | null;
+  /** Reloj de la sede del hueco: el día y la hora que verá el paciente. */
+  clock: SedeClock;
 }): string {
   const first = firstName.trim().split(/\s+/)[0] ?? '';
   const greeting = first ? `Hola ${first}` : 'Hola';
   const withWhom = providerName ? ` con ${providerName}` : '';
   return (
     `${greeting}, te escribimos de ${locationName}. Se liberó un hueco el ` +
-    `${longAppointmentDay(start)} a las ${formatTime(start)}${withWhom}. ` +
+    `${longAppointmentDay(start, clock.timeZone)} a las ${sedeTime(start, clock)}${withWhom}. ` +
     '¿Te gustaría tomarlo? Respóndenos por aquí y te lo reservamos.'
   );
 }
@@ -143,7 +148,7 @@ function intersectRanges(location: DayRange[], provider: DayRange[] | null): Day
   return out;
 }
 
-/** Un hueco libre de una columna, en minutos locales del día y como instantes. */
+/** Un hueco libre de una columna, en minutos del día en el reloj de la sede y como instantes. */
 export interface FreeGap {
   startMinute: number;
   endMinute: number;
@@ -156,8 +161,8 @@ export const MIN_GAP_MINUTES = 15;
 const STEP = 5;
 
 /**
- * Huecos libres de la columna de `providerId` el día `date` (`YYYY-MM-DD`
- * local): los tramos del horario de la sede menos sus citas activas (una
+ * Huecos libres de la columna de `providerId` el día civil `date` en el reloj
+ * de la sede (`timeZone`): los tramos del horario de la sede menos sus citas activas (una
  * cancelada libera su hora; un no-show no, como la restricción de la BD) y los
  * bloqueos que no dejan agendar; sin el pasado y de al menos 15 min. Sin
  * horario configurado no hay huecos que proponer. Con horario del profesional
@@ -171,9 +176,12 @@ export function freeGaps({
   providerId,
   activeLocationId,
   now,
+  timeZone,
   providerRanges = null,
 }: {
   date: string;
+  /** Zona de la sede: el horario y los minutos son los de su reloj. */
+  timeZone: string;
   hours: BusinessHours | null;
   /**
    * DX-233: tramos del profesional ese día en la sede (del cuadrante). `null`
@@ -187,9 +195,16 @@ export function freeGaps({
   now: Date;
 }): FreeGap[] {
   if (!hours) return [];
-  const midnight = new Date(`${date}T00:00:00`);
-  const weekday = midnight.getDay();
-  const toMinute = (iso: string) => Math.round((new Date(iso).getTime() - midnight.getTime()) / 60000);
+  const weekday = civilWeekday(date);
+  const dayStart = wallInstant(date, 0, timeZone).getTime();
+  const dayEnd = wallInstant(date, 24 * 60, timeZone).getTime();
+  // Minuto del reloj de la sede; lo que cae antes o después del día, a su borde.
+  const toMinute = (instant: string | Date) => {
+    const ms = new Date(instant).getTime();
+    if (ms <= dayStart) return 0;
+    if (ms >= dayEnd) return 24 * 60;
+    return wallMinuteOfDay(instant, timeZone);
+  };
   const busy = [
     ...appointments
       .filter((a) => a.providerId === providerId && a.status !== 'CANCELLED')
@@ -198,7 +213,7 @@ export function freeGaps({
       .filter((b) => !b.allowsBooking && blockShownInColumn(b, providerId, activeLocationId))
       .map((b) => ({ start: toMinute(b.start), end: toMinute(b.end) })),
   ].sort((a, b) => a.start - b.start);
-  const nowMinute = Math.ceil((now.getTime() - midnight.getTime()) / 60000 / STEP) * STEP;
+  const nowMinute = Math.ceil(toMinute(now) / STEP) * STEP;
 
   const gaps: FreeGap[] = [];
   const ranges = intersectRanges(
@@ -212,8 +227,8 @@ export function freeGaps({
         gaps.push({
           startMinute: cursor,
           endMinute: end,
-          start: new Date(midnight.getTime() + cursor * 60000).toISOString(),
-          end: new Date(midnight.getTime() + end * 60000).toISOString(),
+          start: wallInstant(date, cursor, timeZone).toISOString(),
+          end: wallInstant(date, end, timeZone).toISOString(),
         });
       }
     };

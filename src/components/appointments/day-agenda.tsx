@@ -10,9 +10,9 @@ import {
   ConfirmationBadge,
   StatusBadge,
   STATUS_LABELS,
-  formatTimeRange,
   patientLabel,
 } from './appointment-display';
+import { sedeTimeRange, type AgendaClock } from '@/lib/locations/sede-clock';
 import { AppointmentStatusSelect } from './appointment-status-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
@@ -44,6 +44,8 @@ const copy = {
 interface DayAgendaProps {
   /** Appointments to render — any order; this component sorts by `start` ASC. */
   appointments: Appointment[];
+  /** DX-378: cada hora, con la zona y el reloj de la sede de su cita. */
+  clock: AgendaClock;
   loading: boolean;
   /** Error message to show instead of the list/empty state, if loading failed. */
   error?: string | null;
@@ -155,6 +157,7 @@ function StatusSelect({ appointment, timeRange, onStatusChange, updating, role }
  */
 export function DayAgenda({
   appointments,
+  clock,
   loading,
   error,
   onRetry,
@@ -239,7 +242,7 @@ export function DayAgenda({
           </thead>
           <tbody>
             {sorted.map((appointment) => {
-              const timeRange = formatTimeRange(appointment.start, appointment.end);
+              const timeRange = sedeTimeRange(appointment.start, appointment.end, clock.of(appointment.locationId));
               const updating = updatingId === appointment.id;
               return (
                 <tr
@@ -298,7 +301,7 @@ export function DayAgenda({
       {/* Narrow-container cards (mobile, and the day drawer on any screen) */}
       <ul aria-label={copy.heading} className="flex flex-col gap-3 @2xl:hidden">
         {sorted.map((appointment) => {
-          const timeRange = formatTimeRange(appointment.start, appointment.end);
+          const timeRange = sedeTimeRange(appointment.start, appointment.end, clock.of(appointment.locationId));
           const updating = updatingId === appointment.id;
           const label = `${timeRange} · ${patientLabel(appointment, patientNames)} · ${STATUS_LABELS[appointment.status]}`;
           return (

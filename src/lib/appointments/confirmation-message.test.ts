@@ -1,9 +1,15 @@
 import {
   confirmationIndicator,
   confirmationMessage,
+  longAppointmentDay,
   whatsAppUrl,
 } from './confirmation-message';
 import type { Appointment } from './appointments-api';
+import { locationClock } from '@/lib/locations/sede-clock';
+import { clinicLocation } from '@/lib/test/locations';
+
+// Sede en Caracas (UTC−4) y 12 h; Jest corre con TZ=UTC.
+const CLOCK = locationClock(clinicLocation({ timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' }))!;
 
 function appointment(overrides: Partial<Appointment> = {}): Appointment {
   return {
@@ -43,9 +49,10 @@ describe('confirmationMessage', () => {
         locationName: 'Sede Norte',
         locationAddress: 'Calle 100 # 15-20',
       },
+      clock: CLOCK,
     });
     expect(text).toBe(
-      'Hola Ana, te recordamos tu cita del martes, 20 de octubre a las 14:00 con Dra. Pérez en Sede Norte (Calle 100 # 15-20). ' +
+      'Hola Ana, te recordamos tu cita del martes, 20 de octubre a las 10:00 a. m. con Dra. Pérez en Sede Norte (Calle 100 # 15-20). ' +
         'Confírmala, cancélala o pide que te llamemos aquí: https://demo.dentalix.app/confirmar/tok',
     );
   });
@@ -61,11 +68,18 @@ describe('confirmationMessage', () => {
         locationName: 'Sede principal',
         locationAddress: null,
       },
+      clock: CLOCK,
     });
     expect(text).toBe(
-      'Hola, te recordamos tu cita del martes, 20 de octubre a las 14:00 en Sede principal. ' +
+      'Hola, te recordamos tu cita del martes, 20 de octubre a las 10:00 a. m. en Sede principal. ' +
         'Confírmala, cancélala o pide que te llamemos aquí: u',
     );
+  });
+});
+
+describe('longAppointmentDay', () => {
+  it('is the day in the sede zone: 02:00 UTC is still the previous day in Caracas', () => {
+    expect(longAppointmentDay('2026-10-21T02:00:00.000Z', 'America/Caracas')).toBe('martes, 20 de octubre');
   });
 });
 

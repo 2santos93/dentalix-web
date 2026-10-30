@@ -30,7 +30,6 @@ import {
 } from '@/lib/appointments/schedule-blocks';
 import type { MoveTarget } from '@/lib/appointments/day-grid';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
-import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calendar-grid';
 import { DayAgenda } from '@/components/appointments/day-agenda';
 import { CoverageDetailLine } from '@/components/appointments/coverage-detail-line';
@@ -78,7 +77,6 @@ import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
   STATUS_LABELS,
-  formatTimeRange,
   patientLabel,
 } from '@/components/appointments/appointment-display';
 import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair } from 'lucide-react';
@@ -117,7 +115,14 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import { formatDateLabel } from '@/lib/format/date';
+import { civilDateLabel } from '@/lib/format/date';
+import { sedeTimeRange, useSedeClock, type AgendaClock } from '@/lib/locations/sede-clock';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { Skeleton } from '@/components/ui/skeleton';
+import { isCivilDay } from '@/lib/time/civil-day';
+import { addCivilDays, civilWeekStart, wallDay, wallDayRange, wallWeekRange } from '@/lib/time/wall-clock';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -208,22 +213,6 @@ const copy = {
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
-function dateToLocalDateString(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function todayLocalDateString(): string {
-  return dateToLocalDateString(new Date());
-}
-
-/** `WeekTimeGrid`'s `weekStart` (the Monday of `date`'s week, as a local `YYYY-MM-DD`) — derived from `localWeekRange`'s `from` boundary so the two never drift apart. */
-function weekStartOf(date: string): string {
-  return dateToLocalDateString(new Date(localWeekRange(date).from));
-}
-
 type ViewMode = 'month' | 'day' | 'week';
 /** DX-121: la vista Día se ve en columnas por profesional (por defecto) o en lista. */
 type DayLayout = 'columns' | 'list';
@@ -254,45 +243,32 @@ const VIEW_LABEL: Record<ViewMode, string> = {
   week: copy.weekView,
 };
 
-/** The `{ from, to }` fetch range for the active view + selected date. */
-function rangeFor(mode: ViewMode, date: string): { from: string; to: string } {
-  if (mode === 'month') return monthGridRange(date);
-  if (mode === 'week') return localWeekRange(date);
-  return localDayRange(date);
-}
-
-/** Local `YYYY-MM-DD` of an appointment's start (for filtering to the selected day in the month panel). */
-function localDayKeyOf(iso: string): string {
-  return dateToLocalDateString(new Date(iso));
+/**
+ * The `{ from, to }` fetch range for the active view + selected date, in the
+ * sede zone (DX-378): the agenda's days are the sede's days, in any browser.
+ */
+function rangeFor(mode: ViewMode, date: string, timeZone: string): { from: string; to: string } {
+  if (mode === 'month') return monthGridRange(date, timeZone);
+  if (mode === 'week') return wallWeekRange(date, timeZone);
+  return wallDayRange(date, timeZone);
 }
 
 /** Weekday + day + month label for the day-panel header, e.g. "lunes, 15 de marzo". */
 function longDayLabel(date: string): string {
-  return formatDateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' });
-}
-
-/** `date` shifted by `n` local days, as `YYYY-MM-DD` — the ‹ › step for the
- * Día view (n = ±1) and the Semana view (n = ±7). */
-function addDays(date: string, n: number): string {
-  const d = new Date(`${date}T00:00:00`);
-  d.setDate(d.getDate() + n);
-  return dateToLocalDateString(d);
+  return civilDateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 /** The week's range label for the Semana nav, e.g. "9 – 15 de marzo" (or
- * spanning months, "30 mar – 5 abr"), derived from `localWeekRange`. */
+ * spanning months, "30 mar – 5 abr"). Civil days: no zone involved. */
 function weekRangeLabel(date: string): string {
-  const { from, to } = localWeekRange(date);
-  const start = new Date(from);
-  // `to` is the exclusive end (next Monday 00:00) — step back a day for the
-  // inclusive Sunday shown to the user.
-  const end = new Date(new Date(to).getTime() - 24 * 60 * 60 * 1000);
-  const sameMonth = start.getMonth() === end.getMonth();
-  const startStr = formatDateLabel(start, {
+  const start = civilWeekStart(date);
+  const end = addCivilDays(start, 6);
+  const sameMonth = start.slice(0, 7) === end.slice(0, 7);
+  const startStr = civilDateLabel(start, {
     day: 'numeric',
     ...(sameMonth ? {} : { month: 'short' }),
   });
-  const endStr = formatDateLabel(end, { day: 'numeric', month: 'long' });
+  const endStr = civilDateLabel(end, { day: 'numeric', month: 'long' });
   return `${startStr} – ${endStr}`;
 }
 
@@ -328,6 +304,14 @@ function DateNav({
   onToday: () => void;
   onDateChange: (date: string) => void;
 }) {
+  // Lo que se escribe en el campo: vacío o a medio escribir no cambia el día
+  // de la agenda (no es un día civil); al cambiar el día desde fuera, se alinea.
+  const [draft, setDraft] = useState(date);
+  const [shown, setShown] = useState(date);
+  if (date !== shown) {
+    setShown(date);
+    setDraft(date);
+  }
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-1">
@@ -345,8 +329,11 @@ function DateNav({
         <input
           type="date"
           aria-label={copy.dateLabel}
-          value={date}
-          onChange={(e) => onDateChange(e.target.value)}
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (isCivilDay(e.target.value)) onDateChange(e.target.value);
+          }}
           className={cn(fieldClass, 'ml-1 h-8 w-auto px-2.5 py-1 text-sm')}
         />
       </div>
@@ -376,6 +363,35 @@ interface AgendaViewProps {
  * see `agenda-view.test.tsx`.
  */
 export function AgendaView({ token }: AgendaViewProps) {
+  // DX-378: la agenda va en la zona y el reloj de la sede, nunca en los del
+  // navegador. Sin ellos no hay días que contar: el error de la sede con su
+  // Reintentar en lugar de la agenda.
+  const sede = useSedeClock(token);
+  if (sede.status === 'loading') {
+    return (
+      <div role="status" aria-live="polite" className="flex flex-col gap-3">
+        <span className="sr-only">{copy.loading}</span>
+        <Skeleton aria-hidden className="h-9 w-64" />
+        <Skeleton aria-hidden className="h-96 w-full" />
+      </div>
+    );
+  }
+  if (sede.status === 'error') {
+    return (
+      <SedeConfigError
+        kind={sede.kind}
+        description={sede.message}
+        onRetry={sede.retry}
+        locationId={sede.locationId}
+      />
+    );
+  }
+  return <AgendaScreen token={token} clock={sede.clock} />;
+}
+
+/** La agenda con el reloj de la sede ya resuelto. */
+function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }) {
+  const timeZone = clock.timeZone;
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
   // Truthy is all that's needed — the rendered `FieldError` shows a fixed
@@ -384,10 +400,10 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [staffReloadKey, setStaffReloadKey] = useState(0);
   const [providerId, setProviderId] = useState('');
 
-  const [selectedDate, setSelectedDate] = useState(todayLocalDateString);
-  // Today's local date — stable across renders (set once) so the calendar's
+  const [selectedDate, setSelectedDate] = useState(() => sedeToday(timeZone));
+  // Today in the sede — stable across renders (set once) so the calendar's
   // "today" highlight and the "Hoy" button never drift mid-session.
-  const [today] = useState(todayLocalDateString);
+  const [today] = useState(() => sedeToday(timeZone));
   // Mes (calendar) | Día | Semana. 'month' is the default landing view: a
   // month grid of all providers' appointments; picking a day reveals its full
   // list + the new-appointment flow below (see the `viewMode === 'month'`
@@ -612,7 +628,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     async function load() {
       setAppointmentsLoading(true);
       try {
-        const { from, to } = rangeFor(viewMode, selectedDate);
+        const { from, to } = rangeFor(viewMode, selectedDate, timeZone);
         const data = await listAppointments(token, {
           from,
           to,
@@ -634,7 +650,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, providerId, selectedDate, viewMode, appointmentsReloadKey, columnsMode, columnsKey, waitingForStaff]);
+  }, [token, providerId, selectedDate, viewMode, appointmentsReloadKey, columnsMode, columnsKey, waitingForStaff, timeZone]);
 
   // DX-122: bloqueos del rango visible (Día y Semana; el Mes no los pinta).
   // Si fallan, la agenda sigue siendo correcta: aviso con Reintentar (escalón 3).
@@ -647,7 +663,7 @@ export function AgendaView({ token }: AgendaViewProps) {
         return;
       }
       try {
-        const { from, to } = rangeFor(viewMode, selectedDate);
+        const { from, to } = rangeFor(viewMode, selectedDate, timeZone);
         const data = await listScheduleBlocks(token, { from, to });
         if (!cancelled) setBlocks(data);
       } catch (err) {
@@ -661,7 +677,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, viewMode, selectedDate, blocksReloadKey]);
+  }, [token, viewMode, selectedDate, blocksReloadKey, timeZone]);
 
   /** Bloqueos que se pintan en la Semana: los del profesional elegido (o todos) y de la sede activa. */
   const weekBlocks = blocks.filter((b) =>
@@ -714,6 +730,10 @@ export function AgendaView({ token }: AgendaViewProps) {
     const location =
       locationId ?? activeLocationId ?? (locations.length === 1 ? locations[0].id : null);
     if (!location) return;
+    if (!clock.of(location)) {
+      notifyError(SEDE_LOCALE_ERROR);
+      return;
+    }
     setDetailAppointment(null);
     setFillSlot({ locationId: location, providerId: slotProviderId, ...slot });
   }
@@ -728,7 +748,7 @@ export function AgendaView({ token }: AgendaViewProps) {
   function refreshAppointmentsInPlace(): Promise<void> {
     if (!token) return Promise.resolve();
     setAppointmentsRefreshing(true);
-    const { from, to } = rangeFor(viewMode, selectedDate);
+    const { from, to } = rangeFor(viewMode, selectedDate, timeZone);
     return listAppointments(token, {
       from,
       to,
@@ -775,7 +795,7 @@ export function AgendaView({ token }: AgendaViewProps) {
         appointmentId={appointment.id}
         status={appointment.status}
         role={role}
-        isToday={localDayKeyOf(appointment.start) === today}
+        isToday={wallDay(appointment.start, timeZone) === today}
         patientName={patientLabel(appointment)}
         runner={flow}
         className={className}
@@ -845,6 +865,15 @@ export function AgendaView({ token }: AgendaViewProps) {
     }
   }
 
+  /** «Mover a…»: sin el reloj de la sede de la cita no se puede elegir su hora. */
+  function requestMove(appointment: Appointment) {
+    if (!clock.of(appointment.locationId)) {
+      notifyError(SEDE_LOCALE_ERROR);
+      return;
+    }
+    setMovingAppointment(appointment);
+  }
+
   /** «Mover a…» confirmado por el servidor: cierra el modal, lo anuncia y refresca. */
   function handleMoved(updated: Appointment) {
     setMovingAppointment(null);
@@ -887,7 +916,7 @@ export function AgendaView({ token }: AgendaViewProps) {
   // The selected day's appointments, derived from the month's fetched set —
   // no extra request; the panel and the calendar share one source of truth.
   const selectedDayAppointments = appointments.filter(
-    (a) => localDayKeyOf(a.start) === selectedDate,
+    (a) => wallDay(a.start, timeZone) === selectedDate,
   );
 
   /**
@@ -1012,6 +1041,10 @@ export function AgendaView({ token }: AgendaViewProps) {
     : null;
 
   const userId = getTokenUserId(token);
+  // DX-378: «Ocupar este hueco» habla con el reloj de la sede del hueco.
+  const fillClock = fillSlot ? clock.of(fillSlot.locationId) : null;
+  // «Mover a…» elige la fecha y la hora en el reloj de la sede de la cita.
+  const movingClock = movingAppointment ? clock.of(movingAppointment.locationId) : null;
 
   return (
     <div
@@ -1155,6 +1188,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             />
             <MonthAgenda
               appointments={appointments}
+              clock={clock}
               monthDate={selectedDate}
               selectedDate={selectedDate}
               today={today}
@@ -1172,8 +1206,8 @@ export function AgendaView({ token }: AgendaViewProps) {
               nextLabel={copy.nextWeek}
               date={selectedDate}
               onDateChange={setSelectedDate}
-              onPrev={() => setSelectedDate(addDays(selectedDate, -7))}
-              onNext={() => setSelectedDate(addDays(selectedDate, 7))}
+              onPrev={() => setSelectedDate(addCivilDays(selectedDate, -7))}
+              onNext={() => setSelectedDate(addCivilDays(selectedDate, 7))}
               onToday={() => setSelectedDate(today)}
             />
             {/* `WeekTimeGrid` is purely presentational (no loading/error props,
@@ -1193,7 +1227,8 @@ export function AgendaView({ token }: AgendaViewProps) {
             ) : (
               <WeekTimeGrid
                 appointments={appointments}
-                weekStart={weekStartOf(selectedDate)}
+                clock={clock}
+                weekStart={civilWeekStart(selectedDate)}
                   onSelectDay={handleSelectDay}
                 onSelectSlot={handleSelectSlot}
                 onSelectAppointment={(a) => setDetailAppointment(a)}
@@ -1211,8 +1246,8 @@ export function AgendaView({ token }: AgendaViewProps) {
               nextLabel={copy.nextDay}
               date={selectedDate}
               onDateChange={setSelectedDate}
-              onPrev={() => setSelectedDate(addDays(selectedDate, -1))}
-              onNext={() => setSelectedDate(addDays(selectedDate, 1))}
+              onPrev={() => setSelectedDate(addCivilDays(selectedDate, -1))}
+              onNext={() => setSelectedDate(addCivilDays(selectedDate, 1))}
               onToday={() => setSelectedDate(today)}
             />
             <div
@@ -1252,6 +1287,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             {dayLayout === 'list' ? (
               <DayAgenda
                 appointments={appointments}
+                clock={clock}
                 loading={appointmentsLoading}
                 error={appointmentsLoadError}
                 onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
@@ -1272,6 +1308,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             ) : (
               <DayColumns
                 date={selectedDate}
+                clock={clock}
                 providers={visibleColumnProviders}
                 providerRanges={providerRanges}
                 appointments={appointments}
@@ -1281,7 +1318,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                 onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
                 canMove={canMove}
                 onSelectAppointment={openAppointmentDetail}
-                onMoveRequest={setMovingAppointment}
+                onMoveRequest={requestMove}
                 onDrop={(a, target) => void handleDrop(a, target)}
                 onNewAppointment={handleNewFromColumn}
                 pendingId={movePendingId}
@@ -1339,7 +1376,7 @@ export function AgendaView({ token }: AgendaViewProps) {
           />
         ) : null}
 
-        {movingAppointment && (
+        {movingAppointment && movingClock && (
           <MoveAppointmentDialog
             key={movingAppointment.id}
             open
@@ -1348,6 +1385,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             }}
             token={token}
             appointment={movingAppointment}
+            clock={movingClock}
             providers={staff}
             hours={hours}
             onMoved={handleMoved}
@@ -1393,6 +1431,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             <SheetBody className="flex flex-col gap-3">
               <DayAgenda
                 appointments={selectedDayAppointments}
+                clock={clock}
                 loading={appointmentsLoading}
                 error={appointmentsLoadError}
                 onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
@@ -1434,7 +1473,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                   {patientLabel(liveDetailAppointment)}
                 </SheetTitle>
                 <SheetDescription>
-                  {formatTimeRange(liveDetailAppointment.start, liveDetailAppointment.end)}
+                  {sedeTimeRange(liveDetailAppointment.start, liveDetailAppointment.end, clock.of(liveDetailAppointment.locationId))}
                 </SheetDescription>
               </SheetHeader>
               <SheetBody className="flex flex-col gap-4">
@@ -1512,7 +1551,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                 {/* DX-170: la evolución queda ligada a esta cita. Se cierra el
                     panel antes de abrir el modal: dos capas modales a la vez
                     se pelean el foco. Recepción no lo ve (la API da 403). */}
-                {canRegisterEvolution(role, liveDetailAppointment, today) ? (
+                {canRegisterEvolution(role, liveDetailAppointment, today, timeZone) ? (
                   <Button
                     type="button"
                     className="w-full sm:w-auto sm:self-start"
@@ -1544,6 +1583,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                   key={liveDetailAppointment.id}
                   token={token}
                   appointment={liveDetailAppointment}
+                  clock={clock.of(liveDetailAppointment.locationId)}
                   onLinkCreated={() => void refreshAppointmentsInPlace()}
                 />
                 {/* DX-099: «Enviar anamnesis» antes de la cita (caduca a su
@@ -1593,6 +1633,7 @@ export function AgendaView({ token }: AgendaViewProps) {
           <WaitlistPanel
             token={token}
             staff={staff}
+            clock={clock}
             waitlist={waitlist}
             onScheduled={handleWaitlistScheduled}
           />
@@ -1610,6 +1651,7 @@ export function AgendaView({ token }: AgendaViewProps) {
               <WaitlistPanel
                 token={token}
                 staff={staff}
+                clock={clock}
                 waitlist={waitlist}
                 onScheduled={handleWaitlistScheduled}
               />
@@ -1631,7 +1673,7 @@ export function AgendaView({ token }: AgendaViewProps) {
         </Sheet>
       ) : null}
 
-      {fillSlot ? (
+      {fillSlot && fillClock ? (
         <FillOpeningPanel
           open
           onOpenChange={(open) => {
@@ -1639,6 +1681,7 @@ export function AgendaView({ token }: AgendaViewProps) {
           }}
           token={token}
           slot={fillSlot}
+          clock={fillClock}
           providerName={staffName(fillSlot.providerId) ?? ''}
           locationName={locations.find((l) => l.id === fillSlot.locationId)?.name ?? ''}
           canAct={canOfferOpenings(role)}
@@ -1676,6 +1719,7 @@ export function AgendaView({ token }: AgendaViewProps) {
           token={token}
           staff={attendingStaff(staff)}
           locations={locations}
+          clock={clock}
           activeLocationId={activeLocationId}
           defaultDate={selectedDate}
           defaultProviderId={providerId || columnIds[0]}

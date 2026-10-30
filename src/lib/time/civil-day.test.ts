@@ -1,4 +1,4 @@
-import { civilNoonUtc, civilWeekday } from './civil-day';
+import { civilNoonUtc, civilWeekday, isCivilDay } from './civil-day';
 
 describe('civilNoonUtc', () => {
   it('is noon UTC of the civil day', () => {
@@ -20,5 +20,13 @@ describe('civilWeekday', () => {
   it('rejects a day that does not exist', () => {
     expect(() => civilWeekday('2027-02-30')).toThrow(RangeError);
     expect(() => civilWeekday('03/05/2027')).toThrow(RangeError);
+  });
+});
+
+describe('isCivilDay', () => {
+  it('only an existing YYYY-MM-DD day', () => {
+    expect(isCivilDay('2027-05-03')).toBe(true);
+    expect(isCivilDay('')).toBe(false);
+    expect(isCivilDay('2027-02-30')).toBe(false);
   });
 });

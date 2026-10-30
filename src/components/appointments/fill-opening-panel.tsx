@@ -20,8 +20,7 @@ import {
 } from '@/lib/appointments/opening-candidates';
 import { scheduleFromWaitlist, type AppointmentWrite } from '@/lib/appointments/waitlist-api';
 import { longAppointmentDay } from '@/lib/appointments/confirmation-message';
-import { formatTimeRange } from '@/components/appointments/appointment-display';
-import { formatTime } from '@/lib/format/date';
+import { sedeTime, sedeTimeRange, type SedeClock } from '@/lib/locations/sede-clock';
 import { notifyError } from '@/components/errors/notify';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -36,6 +35,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { endSentence } from '@/lib/format/text';
 
 // Copy as constants (i18n-ready, es-first).
 export const fillOpeningCopy = {
@@ -83,7 +83,7 @@ export const fillOpeningCopy = {
   capReached: 'Ya alcanzó el tope de ofertas de hoy',
   assign: 'Asignar',
   assignFor: (name: string) => `Asignar el hueco a ${name}`,
-  assigned: (name: string, when: string) => `Hueco asignado: ${name}, ${when}.`,
+  assigned: (name: string, when: string) => endSentence(`Hueco asignado: ${name}, ${when}`),
   offerRecorded: (name: string) => `Oferta a ${name} registrada.`,
   offerError: 'No pudimos registrar la oferta. Intenta de nuevo.',
   assignError: 'No pudimos asignar el hueco. Intenta de nuevo.',
@@ -95,6 +95,8 @@ interface FillOpeningPanelProps {
   token: string;
   /** El hueco (o la cita recién cancelada) a ocupar. */
   slot: OpeningSlot;
+  /** DX-378: reloj de la sede del hueco: el día y la hora en la agenda y en el mensaje. */
+  clock: SedeClock;
   providerName: string;
   locationName: string;
   /** RECEPTION y ADMIN: ofrecer y asignar. El odontólogo solo mira. */
@@ -111,8 +113,8 @@ function fullName(c: OpeningCandidate): string {
   return `${c.patientFirstName} ${c.patientLastName}`.trim();
 }
 
-function whenLabel(start: string): string {
-  return `${longAppointmentDay(start)} a las ${formatTime(start)}`;
+function whenLabel(start: string, clock: SedeClock): string {
+  return `${longAppointmentDay(start, clock.timeZone)} a las ${sedeTime(start, clock)}`;
 }
 
 /**
@@ -128,6 +130,7 @@ export function FillOpeningPanel({
   onOpenChange,
   token,
   slot,
+  clock,
   providerName,
   locationName,
   canAct,
@@ -245,7 +248,7 @@ export function FillOpeningPanel({
               start: slot.start,
             })
           : await moveAppointmentToOpening(token, c.appointmentId ?? '', slot);
-      toast.success(fillOpeningCopy.assigned(fullName(c), whenLabel(appointment.start)));
+      toast.success(fillOpeningCopy.assigned(fullName(c), whenLabel(appointment.start, clock)));
       announceAppointmentWarnings(appointment);
       onAssigned(appointment);
     } catch (err) {
@@ -263,8 +266,8 @@ export function FillOpeningPanel({
   }
 
   const description = fillOpeningCopy.description(
-    longAppointmentDay(slot.start),
-    formatTimeRange(slot.start, slot.end),
+    longAppointmentDay(slot.start, clock.timeZone),
+    sedeTimeRange(slot.start, slot.end, clock),
     providerName,
     locationName,
   );
@@ -326,6 +329,7 @@ export function FillOpeningPanel({
                     candidate={c}
                     cap={cap}
                     slot={slot}
+                    clock={clock}
                     providerName={providerName}
                     locationName={locationName}
                     canAct={canAct}
@@ -358,6 +362,7 @@ interface CandidateRowProps {
   candidate: OpeningCandidate;
   cap: number;
   slot: OpeningSlot;
+  clock: SedeClock;
   providerName: string;
   locationName: string;
   canAct: boolean;
@@ -373,6 +378,7 @@ function CandidateRow({
   candidate: c,
   cap,
   slot,
+  clock,
   providerName,
   locationName,
   canAct,
@@ -399,6 +405,7 @@ function CandidateRow({
           start: slot.start,
           locationName,
           providerName,
+          clock,
         }),
       )
     : null;
@@ -421,7 +428,7 @@ function CandidateRow({
         </p>
         {c.currentAppointment ? (
           <p className="tabular-nums text-ink">
-            {fillOpeningCopy.currentAppointment(whenLabel(c.currentAppointment.start))}
+            {fillOpeningCopy.currentAppointment(whenLabel(c.currentAppointment.start, clock))}
           </p>
         ) : null}
         {c.preferredWindow ? <p>{fillOpeningCopy.prefers(c.preferredWindow)}</p> : null}

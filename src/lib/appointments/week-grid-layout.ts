@@ -1,3 +1,5 @@
+import { wallMinuteOfDay } from '@/lib/time/wall-clock';
+
 /** Minutos por fila de la rejilla (media hora). */
 export const SLOT_MINUTES = 30;
 /** Alto en px de cada fila de 30 min. */
@@ -8,10 +10,9 @@ export const GRID_HEIGHT_PX = (DAY_MINUTES / SLOT_MINUTES) * ROW_HEIGHT_PX;
 /** Alto mínimo de un bloque para que sea clickeable (media fila). */
 export const MIN_BLOCK_PX = ROW_HEIGHT_PX / 2;
 
-/** Minutos locales transcurridos desde 00:00 del instante `iso`. */
-export function minutesFromMidnight(iso: string): number {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
+/** Minutos desde las 00:00 del instante `iso` en el reloj de la sede (`timeZone`), nunca en el del navegador. */
+export function minutesFromMidnight(iso: string, timeZone: string): number {
+  return wallMinuteOfDay(iso, timeZone);
 }
 
 /**
@@ -24,8 +25,9 @@ export function minutesFromMidnight(iso: string): number {
 export function blockGeometry(
   startIso: string,
   endIso: string,
+  timeZone: string,
 ): { topPx: number; heightPx: number } {
-  const startMin = minutesFromMidnight(startIso);
+  const startMin = minutesFromMidnight(startIso, timeZone);
   const durationMin = Math.round(
     (new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000,
   );

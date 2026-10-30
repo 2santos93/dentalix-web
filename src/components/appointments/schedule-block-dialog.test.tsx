@@ -8,6 +8,10 @@ import {
   type ScheduleBlock,
 } from '@/lib/appointments/schedule-blocks-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { testAgendaClock } from '@/lib/test/sede-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 jest.mock('../../lib/appointments/schedule-blocks-api', () => ({
   createScheduleBlock: jest.fn(),
@@ -39,7 +43,7 @@ const local = (day: string, hhmm: string) => new Date(`${day}T${hhmm}:00`).toISO
 function renderDialog(props: Partial<React.ComponentProps<typeof ScheduleBlockDialog>> = {}) {
   const onCreated = jest.fn();
   render(
-    <ScheduleBlockDialog
+    <ScheduleBlockDialog clock={CLOCK}
       open
       onOpenChange={jest.fn()}
       token="tok"

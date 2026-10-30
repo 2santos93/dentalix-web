@@ -14,7 +14,6 @@ import {
 } from '@/lib/appointments/waitlist-api';
 import { groupOpeningsByDay } from '@/lib/appointments/waitlist-display';
 import type { StaffMember } from '@/lib/appointments/staff-api';
-import { formatTimeRange } from '@/components/appointments/appointment-display';
 import {
   Dialog,
   DialogContent,
@@ -29,7 +28,11 @@ import { FormField } from '@/components/shared/form-field';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
-import { formatDateLabel } from '@/lib/format/date';
+import { civilDateLabel } from '@/lib/format/date';
+import { sedeTime, sedeTimeRange, type SedeClock } from '@/lib/locations/sede-clock';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
+import { addCivilDays, wallDay } from '@/lib/time/wall-clock';
+import { endSentence } from '@/lib/format/text';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -49,7 +52,7 @@ const copy = {
   truncated: 'Hay más huecos: acota las fechas para verlos todos.',
   bookHere: 'Agendar aquí',
   bookHereAt: (when: string) => `Agendar aquí el ${when}`,
-  scheduled: (name: string, when: string) => `Cita agendada: ${name}, ${when}.`,
+  scheduled: (name: string, when: string) => endSentence(`Cita agendada: ${name}, ${when}`),
   scheduleError: 'No pudimos agendar la cita. Intenta de nuevo.',
   entryGone: (name: string) =>
     `${name} ya no está en pendientes: alguien lo agendó o lo descartó.`,
@@ -59,23 +62,8 @@ const copy = {
 /** Días que se buscan por defecto: dos semanas. */
 const DEFAULT_SPAN_DAYS = 13;
 
-function localDay(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function addDays(day: string, n: number): string {
-  const d = new Date(`${day}T00:00:00`);
-  d.setDate(d.getDate() + n);
-  return localDay(d);
-}
-
-function hhmm(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
 function dayLabel(day: string): string {
-  return formatDateLabel(day, { weekday: 'long', day: 'numeric', month: 'long' });
+  return civilDateLabel(day, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 export function waitlistPatientName(entry: WaitlistEntry): string {
@@ -87,6 +75,8 @@ interface OpeningsDialogProps {
   onOpenChange: (open: boolean) => void;
   token: string;
   entry: WaitlistEntry;
+  /** DX-378: reloj de la sede de la entrada: sus días y sus horas. */
+  clock: SedeClock;
   /** Profesionales que se pueden elegir (odontólogos y ADMIN primero). */
   providers: StaffMember[];
   onScheduled: (appointment: AppointmentWrite) => void;
@@ -115,15 +105,16 @@ export function OpeningsDialog({
   onOpenChange,
   token,
   entry,
+  clock,
   providers,
   onScheduled,
   onEntryGone,
   onCloseAutoFocus,
 }: OpeningsDialogProps) {
-  const [today] = useState(() => localDay(new Date()));
+  const [today] = useState(() => sedeToday(clock.timeZone));
   const [providerId, setProviderId] = useState(entry.providerId ?? providers[0]?.userId ?? '');
   const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(() => addDays(today, DEFAULT_SPAN_DAYS));
+  const [to, setTo] = useState(() => addCivilDays(today, DEFAULT_SPAN_DAYS));
   // Lo que se busca: cambia al pulsar «Buscar» (no en cada tecla).
   const [query, setQuery] = useState({ providerId, from, to });
   const [reloadKey, setReloadKey] = useState(0);
@@ -183,7 +174,7 @@ export function OpeningsDialog({
         providerId: query.providerId,
         start: opening.start,
       });
-      const when = `${formatDateLabel(created.start, { weekday: 'short', day: 'numeric', month: 'short' })} ${formatTimeRange(created.start, created.end)}`;
+      const when = `${civilDateLabel(wallDay(created.start, clock.timeZone), { weekday: 'short', day: 'numeric', month: 'short' })} ${sedeTimeRange(created.start, created.end, clock)}`;
       toast.success(copy.scheduled(name, when));
       announceAppointmentWarnings(created);
       onScheduled(created);
@@ -203,7 +194,7 @@ export function OpeningsDialog({
     }
   }
 
-  const groups = groupOpeningsByDay(openings);
+  const groups = groupOpeningsByDay(openings, clock.timeZone);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -280,14 +271,14 @@ export function OpeningsDialog({
                         className="flex min-h-11 items-center justify-between gap-3 px-3 py-1.5"
                       >
                         <span className="text-sm font-medium tabular-nums text-ink">
-                          {hhmm(opening.start)}–{hhmm(opening.end)}
+                          {sedeTimeRange(opening.start, opening.end, clock)}
                         </span>
                         <Button
                           type="button"
                           size="sm"
                           loading={bookingStart === opening.start}
                           disabled={bookingStart !== null}
-                          aria-label={copy.bookHereAt(`${dayLabel(group.day)} a las ${hhmm(opening.start)}`)}
+                          aria-label={copy.bookHereAt(`${dayLabel(group.day)} a las ${sedeTime(opening.start, clock)}`)}
                           onClick={() => void book(opening)}
                         >
                           {copy.bookHere}

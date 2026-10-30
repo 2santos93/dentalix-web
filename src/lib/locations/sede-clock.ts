@@ -120,3 +120,21 @@ export function sedeTimeRange(start: string, end: string, clock: SedeClock | nul
   const separator = clock.fmt.hourCycle === 'h12' ? ' – ' : '–';
   return `${sedeTime(start, clock)}${separator}${sedeTime(end, clock)}`;
 }
+
+/** Un minuto del día (0–1440) con el reloj de la sede; 1440 es el fin del día («24:00» o «12:00 a. m.»). */
+export function sedeMinute(minute: number, fmt: RegionalFormat): string {
+  if (minute === 24 * 60) return fmt.hourCycle === 'h23' ? '24:00' : fmt.clock(0, 0);
+  return fmt.clock(Math.floor(minute / 60), minute % 60);
+}
+
+/** «09:00–13:00, 15:00–19:00» / «9:00 a. m. – 1:00 p. m., …», ordenados; «» sin tramos. */
+export function sedeMinuteRanges(
+  ranges: readonly { startMinute: number; endMinute: number }[],
+  fmt: RegionalFormat,
+): string {
+  const separator = fmt.hourCycle === 'h12' ? ' – ' : '–';
+  return [...ranges]
+    .sort((a, b) => a.startMinute - b.startMinute)
+    .map((r) => `${sedeMinute(r.startMinute, fmt)}${separator}${sedeMinute(r.endMinute, fmt)}`)
+    .join(', ');
+}

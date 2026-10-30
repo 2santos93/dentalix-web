@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 import {
   STATUS_BADGE_CLASSES,
   STATUS_LABELS,
-  formatTimeRange,
   patientLabel,
   StatusBadge,
 } from './appointment-display';
@@ -32,14 +31,6 @@ const appointment: Appointment = {
 };
 
 describe('appointment-display (shared day/week agenda helpers)', () => {
-  it('formatTimeRange renders an en-dash-joined es-locale HH:mm–HH:mm range', () => {
-    const fmt = (iso: string) =>
-      new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-    expect(formatTimeRange(appointment.start, appointment.end)).toBe(
-      `${fmt(appointment.start)}–${fmt(appointment.end)}`,
-    );
-  });
-
   it('patientLabel resolves the name from patientNames, falling back to the raw patientId', () => {
     expect(patientLabel(appointment, { 'pat-1': 'Ana García' })).toBe('Ana García');
     expect(patientLabel(appointment)).toBe('pat-1');

@@ -11,6 +11,10 @@ import {
   type AppointmentWrite,
   type WaitlistEntry,
 } from '@/lib/appointments/waitlist-api';
+import { testAgendaClock } from '@/lib/test/sede-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 jest.mock('../../lib/appointments/waitlist-api', () => ({
   listWaitlist: jest.fn(),
@@ -82,7 +86,7 @@ function Harness(props: { onScheduled?: (a: AppointmentWrite) => void }) {
   return (
     <>
       <p data-testid="count">{waitlist.total}</p>
-      <WaitlistPanel token="tok" staff={staff} waitlist={waitlist} {...props} />
+      <WaitlistPanel clock={CLOCK} token="tok" staff={staff} waitlist={waitlist} {...props} />
     </>
   );
 }

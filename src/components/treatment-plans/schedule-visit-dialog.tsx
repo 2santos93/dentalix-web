@@ -19,9 +19,16 @@ import { Button } from "@/components/ui/button";
 import { AsyncSection } from "@/components/shared/async-section";
 import { InlineError } from "@/components/errors/inline-error";
 import { apiErrorMessage } from "@/lib/api/error-message";
-const localDay = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-export function ScheduleVisitDialog({
+import { SedeConfigError } from "@/components/locations/sede-config-error";
+import { formatMinute } from "@/lib/appointments/day-grid";
+import { civilDateLabel } from "@/lib/format/date";
+import { sedeTimeRange, useSedeClock } from "@/lib/locations/sede-clock";
+import { addCivilDays, wallDay, wallMinuteOfDay } from "@/lib/time/wall-clock";
+
+/**
+ * «Agendar visita»: los huecos, la fecha mínima y la hora que se propone
+ * van en el reloj de la sede de la visita (DX-378), nunca en el del navegador.
+ */export function ScheduleVisitDialog({
   token,
   patientId,
   locationId,
@@ -49,7 +56,10 @@ export function ScheduleVisitDialog({
   const searchVersion = useRef(0);
   const [slot, setSlot] = useState<Opening | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const minimumDay = visit.minimumDay ?? localDay(new Date(visit.minimumDate));
+  const sede = useSedeClock(token, site || undefined);
+  const clock = sede.status === "ready" ? sede.clock : null;
+  const minimumDay =
+    visit.minimumDay ?? (clock ? wallDay(visit.minimumDate, clock.timeZone) : null);
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -94,17 +104,16 @@ export function ScheduleVisitDialog({
     setSearching(false);
   }
   async function search() {
+    if (!minimumDay) return;
     const version = ++searchVersion.current;
     setSearching(true);
     setSearchError(null);
-    const to = new Date(`${minimumDay}T12:00:00`);
-    to.setDate(to.getDate() + 14);
     try {
       const result = await findOpenings(token, {
         providerId: provider,
         locationId: site,
         from: minimumDay,
-        to: localDay(to),
+        to: addCivilDays(minimumDay, 14),
         durationMinutes: 30,
         patientId,
       });
@@ -118,12 +127,9 @@ export function ScheduleVisitDialog({
       if (version === searchVersion.current) setSearching(false);
     }
   }
-  const time = (value: string) =>
-    new Date(value).toLocaleTimeString("es", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+  /** "HH:mm" del reloj de la sede: el valor de la hora del formulario. */
+  const inputTime = (value: string, timeZone: string) =>
+    formatMinute(wallMinuteOfDay(value, timeZone));
   return (
     <Dialog
       open
@@ -136,19 +142,27 @@ export function ScheduleVisitDialog({
           <DialogTitle>Agendar visita {visit.number}</DialogTitle>
           <DialogDescription>
             {visit.label ? `${visit.label}. ` : ""}Fecha mínima sugerida:{" "}
-            {minimumDay}. Los tratamientos seleccionados quedarán enlazados a la
+            {minimumDay && clock ? clock.fmt.civilDate(minimumDay) : "—"}. Los tratamientos seleccionados quedarán enlazados a la
             cita.
           </DialogDescription>
         </DialogHeader>
+        {sede.status === "error" ? (
+          <SedeConfigError
+            kind={sede.kind}
+            description={sede.message}
+            onRetry={sede.retry}
+            locationId={sede.locationId}
+          />
+        ) : (
         <AsyncSection
-          loading={loading}
+          loading={loading || !clock || !minimumDay}
           error={error}
           onRetry={() => {
             setLoading(true);
             setReload((k) => k + 1);
           }}
         >
-          {patient ? (
+          {patient && clock && minimumDay ? (
             <div className="flex flex-col gap-4">
               <fieldset className="flex flex-col gap-2">
                 <legend className="mb-2 text-sm font-medium text-ink">
@@ -222,8 +236,12 @@ export function ScheduleVisitDialog({
                           className="min-h-11 justify-start"
                           onClick={() => setSlot(o)}
                         >
-                          {localDay(new Date(o.start))} · {time(o.start)}–
-                          {time(o.end)}
+                          {civilDateLabel(wallDay(o.start, clock.timeZone), {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                          })}{" "}
+                          · {sedeTimeRange(o.start, o.end, clock)}
                         </Button>
                       ))
                     )}
@@ -241,12 +259,12 @@ export function ScheduleVisitDialog({
                   defaultPatient={patient}
                   defaultReason={`Visita ${visit.number}${visit.label ? " · " + visit.label : ""}`}
                   defaultDate={
-                    slot ? localDay(new Date(slot.start)) : minimumDay
+                    slot ? wallDay(slot.start, clock.timeZone) : minimumDay
                   }
                   minimumDate={minimumDay}
                   defaultProviderId={slot ? provider : undefined}
-                  defaultStartTime={slot ? time(slot.start) : undefined}
-                  defaultEndTime={slot ? time(slot.end) : undefined}
+                  defaultStartTime={slot ? inputTime(slot.start, clock.timeZone) : undefined}
+                  defaultEndTime={slot ? inputTime(slot.end, clock.timeZone) : undefined}
                   planItemIds={selected}
                   locationId={site}
                   onCreated={onCreated}
@@ -255,6 +273,7 @@ export function ScheduleVisitDialog({
             </div>
           ) : null}
         </AsyncSection>
+        )}
       </DialogContent>
     </Dialog>
   );

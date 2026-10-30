@@ -1,4 +1,7 @@
 import { apiFetch } from '@/lib/api/client';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMinuteRanges } from '@/lib/locations/sede-clock';
+import { civilWeekday } from '@/lib/time/civil-day';
 
 /** Un tramo de atención, en minutos de pared desde 00:00. */
 export interface ScheduleRange {
@@ -103,18 +106,20 @@ export function fitsBusinessHoursLocal(
   const startMinute = timeToMinutes(startTime);
   const endMinute = timeToMinutes(endTime);
   if (startMinute === null || endMinute === null) return true; // otra validación lo cubre
-  const weekday = new Date(`${date}T00:00:00`).getDay();
+  const weekday = civilWeekday(date);
   return hours.ranges
     .filter((r) => r.weekday === weekday)
     .some((r) => startMinute >= r.startMinute && endMinute <= r.endMinute);
 }
 
-/** `"09:00–13:00, 15:00–19:00"`, o `""` si el día está cerrado. */
-export function describeDay(weekday: number, hours: BusinessHours | null): string {
+/**
+ * Los tramos del día con el reloj de la sede: `"09:00–13:00, 15:00–19:00"` o
+ * `"9:00 a. m. – 1:00 p. m., …"`; `""` si el día está cerrado o no hay horario.
+ */
+export function describeDay(weekday: number, hours: BusinessHours | null, fmt: RegionalFormat): string {
   if (!hours) return '';
-  return hours.ranges
-    .filter((r) => r.weekday === weekday)
-    .sort((a, b) => a.startMinute - b.startMinute)
-    .map((r) => `${minutesToTime(r.startMinute)}–${minutesToTime(r.endMinute)}`)
-    .join(', ');
+  return sedeMinuteRanges(
+    hours.ranges.filter((r) => r.weekday === weekday),
+    fmt,
+  );
 }

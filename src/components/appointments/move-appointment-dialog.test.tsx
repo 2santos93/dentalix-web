@@ -3,6 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { MoveAppointmentDialog } from './move-appointment-dialog';
 import { ApiError } from '@/lib/api/client';
 import { updateAppointment, type Appointment } from '@/lib/appointments/appointments-api';
+import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
+import { wallInstant } from '@/lib/time/wall-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 jest.mock('../../lib/appointments/appointments-api', () => ({
   updateAppointment: jest.fn(),
@@ -44,7 +49,7 @@ const appointment: Appointment = {
 
 function renderDialog(onMoved = jest.fn()) {
   render(
-    <MoveAppointmentDialog
+    <MoveAppointmentDialog clock={CLOCK}
       open
       onOpenChange={jest.fn()}
       token="tok"
@@ -104,5 +109,41 @@ describe('MoveAppointmentDialog (DX-121)', () => {
     expect(await screen.findByText('El profesional ya tiene una cita en ese horario')).toBeInTheDocument();
     expect(onMoved).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('MoveAppointmentDialog con el reloj de la sede (DX-378)', () => {
+  beforeEach(() => mockedUpdate.mockReset());
+
+  it('la fecha y la hora son las de la sede de la cita; el destino se calcula en su zona', async () => {
+    const user = userEvent.setup();
+    const ccs = (minute: number) => wallInstant(FUTURE, minute, 'America/Caracas').toISOString();
+    const inCaracas = { ...appointment, notes: null, start: ccs(9 * 60), end: ccs(10 * 60 + 30) };
+    mockedUpdate.mockResolvedValue(inCaracas);
+    render(
+      <MoveAppointmentDialog
+        clock={testAgendaClock([caracasSede()])}
+        open
+        onOpenChange={jest.fn()}
+        token="tok"
+        appointment={inCaracas}
+        providers={providers}
+        hours={null}
+        onMoved={jest.fn()}
+      />,
+    );
+    expect(screen.getByLabelText('Hora de inicio')).toHaveValue('09:00');
+    expect(screen.getByText('Dura 90 min: terminaría a las 10:30 a. m.')).toBeInTheDocument();
+    const time = screen.getByLabelText('Hora de inicio');
+    await user.clear(time);
+    await user.type(time, '15:00');
+    time.focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 'apt-1', {
+      start: ccs(15 * 60),
+      end: ccs(16 * 60 + 30),
+      providerId: 'prov-1',
+    });
   });
 });

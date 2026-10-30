@@ -2,6 +2,10 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WeekAgenda } from './week-agenda';
 import type { Appointment } from '@/lib/appointments/appointments-api';
+import { testAgendaClock } from '@/lib/test/sede-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 // Week of Monday 2026-03-09 .. Sunday 2026-03-15 (matches day-range.test.ts's
 // localWeekRange fixture, so the two stay consistent with each other).
@@ -42,7 +46,7 @@ const patientNames = { 'pat-1': 'Ana García', 'pat-2': 'Luis Pérez' };
 describe('WeekAgenda', () => {
   it('shows a loading state', () => {
     render(
-      <WeekAgenda
+      <WeekAgenda clock={CLOCK}
         appointments={[]}
         weekStart={WEEK_START}
         loading={true}
@@ -54,7 +58,7 @@ describe('WeekAgenda', () => {
 
   it('shows an alert with the error message when loading failed', () => {
     render(
-      <WeekAgenda
+      <WeekAgenda clock={CLOCK}
         appointments={[]}
         weekStart={WEEK_START}
         loading={false}
@@ -67,7 +71,7 @@ describe('WeekAgenda', () => {
 
   it('renders all 7 day columns with an empty placeholder when there are no appointments', () => {
     render(
-      <WeekAgenda
+      <WeekAgenda clock={CLOCK}
         appointments={[]}
         weekStart={WEEK_START}
         loading={false}
@@ -91,7 +95,7 @@ describe('WeekAgenda', () => {
 
   it('groups appointments into the column matching their local day', () => {
     render(
-      <WeekAgenda
+      <WeekAgenda clock={CLOCK}
         appointments={[wedApt, mondayApt]}
         weekStart={WEEK_START}
         patientNames={patientNames}
@@ -119,7 +123,7 @@ describe('WeekAgenda', () => {
 
   it('falls back to the raw patientId when patientNames does not have an entry', () => {
     render(
-      <WeekAgenda
+      <WeekAgenda clock={CLOCK}
         appointments={[mondayApt]}
         weekStart={WEEK_START}
         loading={false}
@@ -133,7 +137,7 @@ describe('WeekAgenda', () => {
     const onSelectDay = jest.fn();
     const user = userEvent.setup();
     render(
-      <WeekAgenda
+      <WeekAgenda clock={CLOCK}
         appointments={[]}
         weekStart={WEEK_START}
         loading={false}
@@ -151,7 +155,7 @@ describe('WeekAgenda', () => {
 
   it('does NOT render a status <select> (no status-change control in week view)', () => {
     const { container } = render(
-      <WeekAgenda
+      <WeekAgenda clock={CLOCK}
         appointments={[mondayApt]}
         weekStart={WEEK_START}
         loading={false}

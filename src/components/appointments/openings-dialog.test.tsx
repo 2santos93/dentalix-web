@@ -7,6 +7,10 @@ import {
   scheduleFromWaitlist,
   type WaitlistEntry,
 } from '@/lib/appointments/waitlist-api';
+import { testAgendaClock } from '@/lib/test/sede-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 jest.mock('../../lib/appointments/waitlist-api', () => ({
   findOpenings: jest.fn(),
@@ -38,7 +42,7 @@ const onEntryGone = jest.fn();
 function renderDialog() {
   const onScheduled = jest.fn();
   render(
-    <OpeningsDialog
+    <OpeningsDialog clock={CLOCK}
       open
       onOpenChange={jest.fn()}
       token="tok"

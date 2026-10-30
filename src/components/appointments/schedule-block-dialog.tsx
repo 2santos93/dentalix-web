@@ -15,12 +15,15 @@ import {
 } from '@/lib/appointments/schedule-blocks';
 import type { StaffMember } from '@/lib/appointments/staff-api';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { formatTimeRange } from '@/components/appointments/appointment-display';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { formatDateLabel } from '@/lib/format/date';
+import { civilDateLabel } from '@/lib/format/date';
+import { sedeTimeRange, type AgendaClock } from '@/lib/locations/sede-clock';
+import { SEDE_TIME_ZONE_ERROR } from '@/lib/locations/use-sede-time-zone';
+import { timeToMinutes } from '@/lib/locations/schedule-api';
+import { addCivilDays, wallDay, wallInstant } from '@/lib/time/wall-clock';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 
 // Copy as constants (i18n-ready, es-first).
@@ -65,15 +68,10 @@ const selectClass =
 
 type Scope = 'provider' | 'location';
 
-/** `YYYY-MM-DD` + `HH:mm` locales → instante ISO. */
-function localInstant(date: string, time: string): string {
-  return new Date(`${date}T${time}:00`).toISOString();
-}
-
-function nextDay(date: string): string {
-  const d = new Date(`${date}T00:00:00`);
-  d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** `YYYY-MM-DD` + `HH:mm` en el reloj de la sede (`timeZone`) → instante ISO; `null` con una hora inválida. */
+function sedeInstant(date: string, time: string, timeZone: string): string | null {
+  const minute = timeToMinutes(time);
+  return minute === null ? null : wallInstant(date, minute, timeZone).toISOString();
 }
 
 function patientName(a: AffectedAppointmentsPage['items'][number]): string {
@@ -87,6 +85,12 @@ interface ScheduleBlockDialogProps {
   /** Solo quien atiende (odontología y ADMIN): la API rechaza al resto. */
   staff: StaffMember[];
   locations: ClinicLocation[];
+  /**
+   * DX-378: los días y las horas del bloqueo son los del reloj de su sede; uno
+   * de «todas las sedes», los de la sede de la pantalla (la activa o la
+   * principal, como la API).
+   */
+  clock: AgendaClock;
   /** Sede activa (null = «Todas las sedes»): la propuesta para un bloqueo de sede. */
   activeLocationId: string | null;
   /** Día que se está mirando en la agenda (`YYYY-MM-DD`). */
@@ -111,6 +115,7 @@ export function ScheduleBlockDialog({
   token,
   staff,
   locations,
+  clock,
   activeLocationId,
   defaultDate,
   defaultProviderId,
@@ -157,17 +162,28 @@ export function ScheduleBlockDialog({
     setAffected(null);
   }
 
-  function range(): { start: string; end: string } | null {
+  // La sede del bloqueo decide su reloj; sin la zona de esa sede no se calcula
+  // con la de otra.
+  const blockLocationId = scope === 'location' ? locationId : providerLocationId;
+  const blockClock = blockLocationId ? clock.of(blockLocationId) : clock;
+
+  function range(timeZone: string): { start: string; end: string } | null {
     if (!fromDate || !toDate) return null;
-    return wholeDays
-      ? { start: localInstant(fromDate, '00:00'), end: localInstant(nextDay(toDate), '00:00') }
-      : { start: localInstant(fromDate, fromTime), end: localInstant(toDate, toTime) };
+    const start = sedeInstant(fromDate, wholeDays ? '00:00' : fromTime, timeZone);
+    const end = wholeDays
+      ? sedeInstant(addCivilDays(toDate, 1), '00:00', timeZone)
+      : sedeInstant(toDate, toTime, timeZone);
+    return start && end ? { start, end } : null;
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    const r = range();
+    if (!blockClock) {
+      setError(SEDE_TIME_ZONE_ERROR);
+      return;
+    }
+    const r = range(blockClock.timeZone);
     const target =
       scope === 'provider'
         ? { providerId, locationId: providerLocationId || undefined }
@@ -210,6 +226,14 @@ export function ScheduleBlockDialog({
   }
 
   const affectedList = affected?.items ?? [];
+  /** «mar 4 mar · 9:00 a. m. – 9:30 a. m.», con el reloj de la sede de esa cita. */
+  function affectedWhen(a: AffectedAppointmentsPage['items'][number]): string {
+    const own = clock.of(a.locationId);
+    if (!own) return sedeTimeRange(a.start, a.end, null);
+    const day = civilDateLabel(wallDay(a.start, own.timeZone), { weekday: 'short', day: 'numeric', month: 'short' });
+    return `${day} · ${sedeTimeRange(a.start, a.end, own)}`;
+  }
+
   const affectedTotal = affected?.total ?? 0;
   const confirming = affectedTotal > 0;
   const noLocations = restricted && locations.length === 0;
@@ -233,8 +257,7 @@ export function ScheduleBlockDialog({
             <li key={a.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
               <span className="font-medium text-ink">{patientName(a)}</span>
               <span className="tabular-nums text-muted">
-                {formatDateLabel(a.start, { weekday: 'short', day: 'numeric', month: 'short' })} ·{' '}
-                {formatTimeRange(a.start, a.end)} · {staffName(a.providerId)}
+                {affectedWhen(a)} · {staffName(a.providerId)}
               </span>
             </li>
           ))}

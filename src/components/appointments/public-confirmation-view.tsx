@@ -22,8 +22,7 @@ import {
   type PublicConfirmation,
 } from '@/lib/appointments/confirmations-api';
 import { formatCurrency } from '@/lib/format/currency';
-import { longAppointmentDay } from '@/lib/appointments/confirmation-message';
-import { formatTimeRange } from '@/components/appointments/appointment-display';
+import { formatDateLabel, formatTime } from '@/lib/format/date';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -77,13 +76,23 @@ type LoadState =
   | { kind: 'invalid' }
   | { kind: 'ready'; data: PublicConfirmation };
 
+/**
+ * La página pública no recibe la zona ni el reloj de la sede (la API no los
+ * manda en la confirmación): el día y la hora salen en los del navegador del
+ * paciente. Excepción listada en `src/architecture/sede-clock-guard.test.ts`.
+ */
 function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointment }) {
   const rows = [
-    { icon: CalendarCheck, label: copy.dayLabel, value: longAppointmentDay(appointment.start), sub: null },
+    {
+      icon: CalendarCheck,
+      label: copy.dayLabel,
+      value: formatDateLabel(appointment.start, { weekday: 'long', day: 'numeric', month: 'long' }),
+      sub: null,
+    },
     {
       icon: Clock,
       label: copy.timeLabel,
-      value: formatTimeRange(appointment.start, appointment.end),
+      value: `${formatTime(appointment.start)}–${formatTime(appointment.end)}`,
       sub: null,
     },
     ...(appointment.providerName

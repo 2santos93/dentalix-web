@@ -1,9 +1,11 @@
+import type { ReactElement } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaView } from './agenda-view';
 import { Toaster } from '@/components/errors/toaster';
 import { ApiError } from '@/lib/api/client';
-import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
+import { wallDayRange, wallWeekRange } from '@/lib/time/wall-clock';
+import { caracasSede, utcSede } from '@/lib/test/sede-clock';
 import { createAppointment, listAppointments, updateAppointment } from '@/lib/appointments/appointments-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
@@ -16,7 +18,6 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listOpeningCandidates } from '@/lib/appointments/opening-candidates';
 import { getRoster } from '@/lib/locations/provider-schedule-api';
-import { clinicLocation } from '@/lib/test/locations';
 
 /** DX-295: el estado se elige abriendo la lista y pulsando una opción. */
 async function pickStatus(user: ReturnType<typeof userEvent.setup>, trigger: HTMLElement, label: string) {
@@ -49,7 +50,8 @@ jest.mock('../../lib/appointments/appointment-types-api', () => ({
   listAppointmentTypes: jest.fn().mockResolvedValue([]),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({
-  listLocations: jest.fn().mockResolvedValue([{ id: 'loc-1', name: 'Sede principal' }]),
+  // DX-378: la agenda va en el reloj de la sede (aquí, UTC y 24 h: las horas de estas pruebas).
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
 }));
 // Sede sin horario configurado: nada sombreado, nada bloqueado.
 jest.mock('../../lib/locations/schedule-api', () => ({
@@ -181,6 +183,16 @@ function appointment(overrides: Partial<import('@/lib/appointments/appointments-
 const apt1 = appointment({ id: 'apt-1' });
 const apt2 = appointment({ id: 'apt-2', patientId: 'pat-1' });
 
+/**
+ * DX-378: la agenda espera al reloj de la sede (la lista de sedes) antes de
+ * pintarse; las pruebas empiezan con la agenda ya en pantalla.
+ */
+async function renderAgenda(ui: ReactElement) {
+  const result = render(ui);
+  await screen.findByRole('group', { name: 'Vista' });
+  return result;
+}
+
 /** A promise this test controls the settlement of, to assert on the interim (pending) state — same helper as odontogram-tab.test.tsx. */
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -230,7 +242,7 @@ describe('AgendaView', () => {
     mockedListStaff.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
     mockedListAppointments.mockResolvedValue([]);
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
 
     // El error ocupa el lugar del filtro, no una franja debajo. Se busca por
     // texto (no `findByRole('status')` a secas): el spinner de carga del
@@ -249,7 +261,7 @@ describe('AgendaView', () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
 
     const providerSelect = await screen.findByLabelText<HTMLSelectElement>(/profesional/i);
     // '' = "Todos los profesionales" — the month calendar shows the whole clinic.
@@ -262,12 +274,12 @@ describe('AgendaView', () => {
     );
   });
 
-  it('in Día view fetches the selected day with localDayRange boundaries, scoped to the chosen provider', async () => {
+  it('in Día view fetches the selected day with the sede day boundaries, scoped to the chosen provider', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     await user.click(screen.getByRole('button', { name: /^día$/i }));
@@ -281,7 +293,7 @@ describe('AgendaView', () => {
 
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     const params = mockedListAppointments.mock.calls.at(-1)![1];
-    const expected = localDayRange('2026-03-10');
+    const expected = wallDayRange('2026-03-10', 'UTC');
     expect(params.from).toBe(expected.from);
     expect(params.to).toBe(expected.to);
     expect(params.providerId).toBe('staff-1');
@@ -306,7 +318,7 @@ describe('AgendaView', () => {
     });
 
     const user = userEvent.setup();
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
 
     // Switch to Día view — where the appointment table renders — then let the
     // initial load settle with the one appointment.
@@ -373,7 +385,7 @@ describe('AgendaView', () => {
     });
 
     const user = userEvent.setup();
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
 
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await user.click(screen.getByRole('button', { name: /^lista$/i }));
@@ -425,7 +437,7 @@ describe('AgendaView', () => {
     });
 
     const user = userEvent.setup();
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
 
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await user.click(screen.getByRole('button', { name: /^lista$/i }));
@@ -484,7 +496,7 @@ describe('AgendaView', () => {
     });
 
     const user = userEvent.setup();
-    render(
+    await renderAgenda(
       <>
         <AgendaView token="tok" />
         <Toaster />
@@ -521,7 +533,7 @@ describe('AgendaView', () => {
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListStaff).toHaveBeenCalled());
 
     const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
@@ -546,7 +558,7 @@ describe('AgendaView', () => {
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     expect(screen.getByRole('button', { name: /^mes$/i })).toHaveAttribute('aria-pressed', 'true');
@@ -562,7 +574,7 @@ describe('AgendaView', () => {
 
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     const params = mockedListAppointments.mock.calls.at(-1)![1];
-    const expected = localWeekRange('2026-03-11');
+    const expected = wallWeekRange('2026-03-11', 'UTC');
     expect(params.from).toBe(expected.from);
     expect(params.to).toBe(expected.to);
     // Default provider filter is "Todos" ('') → no providerId sent.
@@ -577,7 +589,7 @@ describe('AgendaView', () => {
     mockedListAppointments.mockResolvedValueOnce([]); // month mount
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
@@ -601,7 +613,7 @@ describe('AgendaView', () => {
     mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos cargar la agenda.');
@@ -619,7 +631,7 @@ describe('AgendaView', () => {
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
@@ -652,7 +664,7 @@ describe('AgendaView', () => {
     mockedListPatients.mockResolvedValue(patientsPage);
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
@@ -688,7 +700,7 @@ describe('AgendaView', () => {
       },
     ]);
     const user = userEvent.setup();
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
     await user.clear(dateInput);
@@ -718,7 +730,7 @@ describe('AgendaView', () => {
     mockedUpdateAppointment.mockReturnValue(patchPromise);
 
     const user = userEvent.setup();
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
@@ -779,7 +791,7 @@ describe('AgendaView', () => {
     ]);
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     const dateInput = screen.getByLabelText(/^fecha$/i);
@@ -809,7 +821,7 @@ describe('AgendaView', () => {
     ]);
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     const dateInput = screen.getByLabelText(/^fecha$/i);
@@ -848,7 +860,7 @@ describe('AgendaView', () => {
     });
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" />);
+    await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     const dateInput = screen.getByLabelText(/^fecha$/i);
@@ -900,7 +912,7 @@ describe('AgendaView', () => {
     // re-renderizar (el de confirmación salía repetido tras «Enviar confirmación»).
     const consoleError = jest.spyOn(console, 'error');
 
-    render(<AgendaView token={receptionToken} />);
+    await renderAgenda(<AgendaView token={receptionToken} />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     const dateInput = screen.getByLabelText(/^fecha$/i);
@@ -934,7 +946,7 @@ describe('AgendaView', () => {
       mockedListStaff.mockResolvedValue(team);
       mockedListAppointments.mockResolvedValue([]);
       const user = userEvent.setup();
-      render(<AgendaView token="tok" />);
+      await renderAgenda(<AgendaView token="tok" />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
       await user.click(screen.getByRole('button', { name: /^día$/i }));
@@ -963,7 +975,7 @@ describe('AgendaView', () => {
         mockedListStaff.mockResolvedValue(porSede);
         mockedListAppointments.mockResolvedValue([]);
         const user = userEvent.setup();
-        render(<AgendaView token="tok" />);
+        await renderAgenda(<AgendaView token="tok" />);
         await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
         await user.click(screen.getByRole('button', { name: /^día$/i }));
@@ -980,7 +992,7 @@ describe('AgendaView', () => {
         mockedListStaff.mockResolvedValue(porSede.filter((m) => m.locationIds !== null));
         mockedListAppointments.mockResolvedValue([]);
         const user = userEvent.setup();
-        render(<AgendaView token="tok" />);
+        await renderAgenda(<AgendaView token="tok" />);
         await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
         await user.click(screen.getByRole('button', { name: /^día$/i }));
@@ -1008,7 +1020,7 @@ describe('AgendaView', () => {
         new ApiError(409, 'El profesional ya tiene una cita en ese horario'),
       );
       const user = userEvent.setup();
-      render(
+      await renderAgenda(
         <>
           <AgendaView token={receptionToken} />
           <Toaster />
@@ -1092,7 +1104,7 @@ describe('AgendaView', () => {
         }),
       );
       const user = userEvent.setup();
-      render(<AgendaView token="tok" />);
+      await renderAgenda(<AgendaView token="tok" />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       await user.click(screen.getByRole('button', { name: /^día$/i }));
 
@@ -1112,7 +1124,7 @@ describe('AgendaView', () => {
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([]);
       const user = userEvent.setup();
-      render(<AgendaView token="tok" />);
+      await renderAgenda(<AgendaView token="tok" />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       expect(await screen.findAllByTestId('day-column')).toHaveLength(2);
@@ -1166,12 +1178,12 @@ describe('AgendaView', () => {
 
     it('Día: pinta los bloqueos del día y recepción puede quitarlos con confirmación', async () => {
       const user = userEvent.setup();
-      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
       await user.click(screen.getByRole('button', { name: /^día$/i }));
 
       expect(await screen.findAllByTestId('schedule-block')).toHaveLength(2);
       const range = mockedListBlocks.mock.calls.at(-1)![1];
-      expect(range).toEqual(localDayRange(today));
+      expect(range).toEqual(wallDayRange(today, 'UTC'));
 
       await user.click(screen.getAllByRole('button', { name: /^Quitar bloqueo: Almuerzo/ })[0]);
       const dialog = await screen.findByRole('dialog', { name: 'Quitar el bloqueo' });
@@ -1182,13 +1194,13 @@ describe('AgendaView', () => {
     });
 
     it('«Bloquear horario» solo para quien puede bloquear (no la asistente)', async () => {
-      const { unmount } = render(<AgendaView token={tokenFor('ASSISTANT')} />);
+      const { unmount } = await renderAgenda(<AgendaView token={tokenFor('ASSISTANT')} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       expect(screen.queryByRole('button', { name: 'Bloquear horario' })).not.toBeInTheDocument();
       unmount();
 
       const user = userEvent.setup();
-      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
       await user.click(await screen.findByRole('button', { name: 'Bloquear horario' }));
       expect(await screen.findByRole('dialog', { name: 'Bloquear horario' })).toBeInTheDocument();
     });
@@ -1198,7 +1210,7 @@ describe('AgendaView', () => {
       mockedListAppointments.mockResolvedValue([apt]);
       mockedUpdateAppointment.mockResolvedValue({ ...apt, status: 'CANCELLED' });
       const user = userEvent.setup();
-      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       await user.click(screen.getByRole('button', { name: 'Lista' }));
       await waitFor(() => expect(mockedListWaitlist).toHaveBeenCalled());
@@ -1227,7 +1239,7 @@ describe('AgendaView', () => {
       const apt = appointment({ id: 'apt-k', start: new Date(`${today}T09:00:00`).toISOString(), end: new Date(`${today}T09:30:00`).toISOString() });
       mockedListAppointments.mockResolvedValue([apt]);
       const user = userEvent.setup();
-      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       await user.click(screen.getByRole('button', { name: 'Lista' }));
       const [select] = await screen.findAllByTestId('appointment-status-select');
@@ -1259,7 +1271,7 @@ describe('AgendaView', () => {
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([completed]);
       const user = userEvent.setup();
-      render(<AgendaView token={token} />);
+      await renderAgenda(<AgendaView token={token} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
       await user.clear(dateInput);
@@ -1293,7 +1305,7 @@ describe('AgendaView', () => {
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([apt]);
       const user = userEvent.setup();
-      render(<AgendaView token={token} />);
+      await renderAgenda(<AgendaView token={token} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
       await user.clear(dateInput);
@@ -1364,10 +1376,7 @@ describe('AgendaView', () => {
       timezone: 'America/Bogota',
       ranges: [{ weekday: FIXED_NOW.getDay(), startMinute: 14 * 60, endMinute: 18 * 60 }],
     };
-    const sedes = [
-      { id: 'loc-1', name: 'Sede principal', isActive: true },
-      { id: 'loc-2', name: 'Sede Norte', isActive: true },
-    ];
+    const sedes = [utcSede({ id: 'loc-1', name: 'Sede principal' }), utcSede({ id: 'loc-2', name: 'Sede Norte' })];
     const candidate = {
       kind: 'WAITLIST' as const,
       patientId: 'pat-9',
@@ -1401,13 +1410,13 @@ describe('AgendaView', () => {
     afterEach(() => {
       jest.useRealTimers();
       window.localStorage.clear();
-      mockedListLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', name: 'Sede principal' })]);
+      mockedListLocations.mockResolvedValue([utcSede()]);
       mockedSchedule.mockResolvedValue(null);
     });
 
     it('un hueco libre de la columna abre el panel con la sede activa y su profesional; «Asignar» refresca la agenda', async () => {
       window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
-      mockedListLocations.mockResolvedValue(sedes as never);
+      mockedListLocations.mockResolvedValue(sedes);
       mockedSchedule.mockResolvedValue(hours);
       mockedCandidates.mockImplementation((_t, slot) =>
         Promise.resolve({
@@ -1424,7 +1433,7 @@ describe('AgendaView', () => {
         warnings: [],
       } as never);
       const user = userEvent.setup();
-      render(
+      await renderAgenda(
         <>
           <AgendaView token={tokenFor('RECEPTION')} />
           <Toaster />
@@ -1459,7 +1468,7 @@ describe('AgendaView', () => {
     });
 
     it('«Todas las sedes» con varias sedes: sin huecos libres inventados; la cita cancelada usa SU sede', async () => {
-      mockedListLocations.mockResolvedValue(sedes as never);
+      mockedListLocations.mockResolvedValue(sedes);
       mockedSchedule.mockResolvedValue(hours);
       mockedCandidates.mockResolvedValue({
         locationId: 'loc-2',
@@ -1483,7 +1492,7 @@ describe('AgendaView', () => {
         }),
       ]);
       const user = userEvent.setup();
-      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       const fill = await screen.findByTestId('fill-cancelled');
       expect(screen.queryAllByTestId('free-gap')).toHaveLength(0);
@@ -1499,16 +1508,61 @@ describe('AgendaView', () => {
     it('el odontólogo solo tiene «Ocupar» en su columna; la asistente, en ninguna', async () => {
       mockedSchedule.mockResolvedValue(hours);
       const user = userEvent.setup();
-      const { unmount } = render(<AgendaView token={tokenFor('DENTIST', 'staff-2')} />);
+      const { unmount } = await renderAgenda(<AgendaView token={tokenFor('DENTIST', 'staff-2')} />);
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       const gaps = await screen.findAllByTestId('free-gap');
       expect(gaps.every((g) => /Dr\. Luis Gómez$/.test(g.getAttribute('aria-label') ?? ''))).toBe(true);
       unmount();
 
-      render(<AgendaView token={tokenFor('ASSISTANT')} />);
+      await renderAgenda(<AgendaView token={tokenFor('ASSISTANT')} />);
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       await screen.findAllByTestId('day-column');
       expect(screen.queryAllByTestId('free-gap')).toHaveLength(0);
     });
+  });
+});
+
+describe('AgendaView con el reloj de la sede (DX-378)', () => {
+  const mockedListLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+  // 2026-03-10 a mediodía en Caracas (16:00 UTC). Jest corre con TZ=UTC.
+  const NOW = new Date('2026-03-10T16:00:00.000Z');
+
+  beforeEach(() => {
+    mockedListStaff.mockReset();
+    mockedListAppointments.mockReset();
+    mockedListStaff.mockResolvedValue(staff);
+    fakeDateOnly(NOW);
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    mockedListLocations.mockResolvedValue([utcSede()]);
+  });
+
+  it('pide el día de la sede y pinta la hora con su reloj de 12 h, como «En clínica»', async () => {
+    mockedListLocations.mockResolvedValue([caracasSede({ id: 'loc-1' })]);
+    // 19:30 UTC son las 3:30 p. m. en Caracas.
+    mockedListAppointments.mockResolvedValue([
+      appointment({ id: 'apt-ccs', start: '2026-03-10T19:30:00.000Z', end: '2026-03-10T20:00:00.000Z' }),
+    ]);
+    const user = userEvent.setup();
+    await renderAgenda(<AgendaView token="tok" />);
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
+
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    expect(within(table).getByText('3:30 p. m. – 4:00 p. m.')).toBeInTheDocument();
+    const params = mockedListAppointments.mock.calls.at(-1)![1];
+    // El día 10 de Caracas, no el del navegador.
+    expect(params.from).toBe('2026-03-10T04:00:00.000Z');
+    expect(params.to).toBe('2026-03-11T03:59:59.999Z');
+  });
+
+  it('sin el reloj de la sede no pinta la agenda con el del navegador: «Falta un dato de la sede» con Reintentar', async () => {
+    mockedListLocations.mockResolvedValue([caracasSede({ hourCycle: null })]);
+    mockedListAppointments.mockResolvedValue([]);
+    render(<AgendaView token="tok" />);
+    expect(await screen.findByText('Falta un dato de la sede')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    expect(mockedListAppointments).not.toHaveBeenCalled();
   });
 });

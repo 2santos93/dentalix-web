@@ -7,29 +7,32 @@ import {
   MIN_BLOCK_PX,
 } from './week-grid-layout';
 
+// UTC−4: las horas de pared de abajo son las de Caracas.
+const ZONE = 'America/Caracas';
+const at = (wall: string) => new Date(new Date(`${wall}Z`).getTime() + 4 * 3600_000).toISOString();
+
 describe('minutesFromMidnight', () => {
-  it('returns local minutes since 00:00', () => {
-    // TZ=UTC in tests, so the Z time equals local time.
-    expect(minutesFromMidnight('2026-03-09T09:30:00.000Z')).toBe(9 * 60 + 30);
-    expect(minutesFromMidnight('2026-03-09T00:00:00.000Z')).toBe(0);
+  it('returns the minutes since 00:00 on the sede clock, not the browser (TZ=UTC in tests)', () => {
+    expect(minutesFromMidnight('2026-03-09T13:30:00.000Z', ZONE)).toBe(9 * 60 + 30);
+    expect(minutesFromMidnight('2026-03-09T04:00:00.000Z', ZONE)).toBe(0);
   });
 });
 
 describe('blockGeometry', () => {
   it('positions a 30-min block at its start row', () => {
-    const g = blockGeometry('2026-03-09T09:00:00.000Z', '2026-03-09T09:30:00.000Z');
+    const g = blockGeometry(at('2026-03-09T09:00:00.000'), at('2026-03-09T09:30:00.000'), ZONE);
     expect(g.topPx).toBe((9 * 60 / 30) * ROW_HEIGHT_PX); // 18 slots * 40 = 720
     expect(g.heightPx).toBe(ROW_HEIGHT_PX); // 30 min = 1 row
   });
 
   it('enforces a minimum height for zero/negative durations', () => {
-    const g = blockGeometry('2026-03-09T09:00:00.000Z', '2026-03-09T09:00:00.000Z');
+    const g = blockGeometry(at('2026-03-09T09:00:00.000'), at('2026-03-09T09:00:00.000'), ZONE);
     expect(g.heightPx).toBe(MIN_BLOCK_PX);
   });
 
   it('clamps height to the bottom of the grid', () => {
     // Starts at 23:30, "ends" next day — height clamps to remaining grid.
-    const g = blockGeometry('2026-03-09T23:30:00.000Z', '2026-03-10T02:00:00.000Z');
+    const g = blockGeometry(at('2026-03-09T23:30:00.000'), at('2026-03-10T02:00:00.000'), ZONE);
     expect(g.topPx).toBe((23 * 60 + 30) / 30 * ROW_HEIGHT_PX);
     expect(g.topPx + g.heightPx).toBeLessThanOrEqual(GRID_HEIGHT_PX);
   });
@@ -37,7 +40,7 @@ describe('blockGeometry', () => {
   it('grid clamp wins over minimum height at end of day', () => {
     // Starts at 23:50, duration 15 min; remaining space (10px) < MIN_BLOCK_PX (20px).
     // Grid clamp must win, so heightPx = 10px and topPx + heightPx = GRID_HEIGHT_PX.
-    const g = blockGeometry('2026-03-09T23:50:00.000Z', '2026-03-10T00:05:00.000Z');
+    const g = blockGeometry(at('2026-03-09T23:50:00.000'), at('2026-03-10T00:05:00.000'), ZONE);
     expect(g.topPx + g.heightPx).toBeLessThanOrEqual(GRID_HEIGHT_PX);
     expect(g.heightPx).toBeLessThan(MIN_BLOCK_PX); // Grid clamp forced this below minimum
   });

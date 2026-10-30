@@ -4,6 +4,7 @@ import {
   zoneCityLabel,
   formatCivilDate,
   formatDate,
+  civilDateLabel,
   formatDateLabel,
   formatDateTime,
   formatDateTimeInZone,
@@ -109,6 +110,21 @@ describe('zonedDayStart (civil day in a zone → UTC instant)', () => {
   it('null for a malformed day', () => {
     expect(zonedDayStart('16/10/2026', 'America/Bogota')).toBeNull();
     expect(zonedDayStart('2026-02-30', 'America/Bogota')).toBeNull();
+  });
+});
+
+describe('civilDateLabel (DX-378)', () => {
+  it('a civil day in words of the product language, with no zone at all', () => {
+    expect(civilDateLabel('2026-03-15', { weekday: 'long', day: 'numeric', month: 'long' })).toBe(
+      'domingo, 15 de marzo',
+    );
+    expect(civilDateLabel('2026-03-01', { month: 'long', year: 'numeric' })).toBe('marzo de 2026');
+    expect(civilDateLabel('2026-03-09', { weekday: 'short', day: 'numeric', month: 'short' })).toBe('lun, 9 mar');
+  });
+
+  it('a day that does not exist gives the fallback', () => {
+    expect(civilDateLabel('2026-02-30', { day: 'numeric' })).toBe('—');
+    expect(civilDateLabel('09/03/2026', { day: 'numeric' }, '')).toBe('');
   });
 });
 

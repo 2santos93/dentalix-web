@@ -2,6 +2,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import {
   locationClock,
   sedeClockFor,
+  sedeMinute,
+  sedeMinuteRanges,
   sedeTime,
   sedeTimeRange,
   useSedeClock,
@@ -127,5 +129,27 @@ describe('useSedeClock', () => {
     });
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(listLocationsMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('sedeMinute / sedeMinuteRanges', () => {
+  const h12 = locationClock(caracas)!.fmt;
+  const h23 = locationClock(madrid)!.fmt;
+
+  it('a minute of the day with the clock of the sede; 1440 is the end of the day', () => {
+    expect(sedeMinute(15 * 60 + 30, h12)).toBe('3:30 p. m.');
+    expect(sedeMinute(15 * 60 + 30, h23)).toBe('15:30');
+    expect(sedeMinute(24 * 60, h23)).toBe('24:00');
+    expect(sedeMinute(24 * 60, h12)).toBe('12:00 a. m.');
+  });
+
+  it('ranges sorted, joined by commas', () => {
+    const ranges = [
+      { startMinute: 15 * 60, endMinute: 19 * 60 },
+      { startMinute: 9 * 60, endMinute: 13 * 60 },
+    ];
+    expect(sedeMinuteRanges(ranges, h23)).toBe('09:00–13:00, 15:00–19:00');
+    expect(sedeMinuteRanges(ranges, h12)).toBe('9:00 a. m. – 1:00 p. m., 3:00 p. m. – 7:00 p. m.');
+    expect(sedeMinuteRanges([], h12)).toBe('');
   });
 });

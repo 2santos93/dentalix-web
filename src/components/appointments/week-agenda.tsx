@@ -1,8 +1,10 @@
 'use client';
 import type { Appointment } from '@/lib/appointments/appointments-api';
-import { StatusBadge, formatTimeRange, patientLabel } from './appointment-display';
+import { StatusBadge, patientLabel } from './appointment-display';
 import { SectionError } from '@/components/errors/section-error';
-import { formatDateLabel } from '@/lib/format/date';
+import { sedeTimeRange, type AgendaClock } from '@/lib/locations/sede-clock';
+import { addCivilDays, wallDay } from '@/lib/time/wall-clock';
+import { weekDayHeader } from '@/lib/appointments/calendar-grid';
 
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx's convention.
 const copy = {
@@ -12,34 +14,17 @@ const copy = {
   heading: 'Agenda de la semana',
 };
 
-/** Local (not UTC) `YYYY-MM-DD` for the instant `iso` represents — same convention as `day-range.ts`'s date-string inputs, used here to bucket appointments by their local calendar day. */
-function localDateString(iso: string): string {
-  const d = new Date(iso);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-/** The 7 `YYYY-MM-DD` local dates of the week starting at `weekStart` (expected to be a Monday, e.g. from `localWeekRange`'s implicit boundary) — Mon..Sun. */
+/** The 7 civil `YYYY-MM-DD` days of the week starting at `weekStart` (a Monday) — Mon..Sun. */
 function weekDates(weekStart: string): string[] {
-  const monday = new Date(`${weekStart}T00:00:00`);
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(d.getDate() + i);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
-}
-
-/** Header label for a day column, e.g. "lun, 09/03". */
-function dayHeaderLabel(date: string): string {
-  return formatDateLabel(date, { weekday: 'short', day: '2-digit', month: '2-digit' });
+  return Array.from({ length: 7 }, (_, i) => addCivilDays(weekStart, i));
 }
 
 interface WeekAgendaProps {
-  /** Appointments to render — any order; grouped by local day and sorted by `start` ASC within each day. */
+  /** Appointments to render — any order; grouped by day of the sede and sorted by `start` ASC within each day. */
   appointments: Appointment[];
-  /** `YYYY-MM-DD` local date of the Monday starting this week (e.g. `localWeekRange`'s implicit boundary). */
+  /** DX-378: la sede de la pantalla cuenta los días; cada hora sale con el reloj de la sede de su cita. */
+  clock: AgendaClock;
+  /** Civil `YYYY-MM-DD` of the Monday starting this week. */
   weekStart: string;
   loading: boolean;
   /** Error message to show instead of the grid, if loading failed. */
@@ -69,6 +54,7 @@ interface WeekAgendaProps {
  */
 export function WeekAgenda({
   appointments,
+  clock,
   weekStart,
   loading,
   error,
@@ -91,7 +77,7 @@ export function WeekAgenda({
   const dates = weekDates(weekStart);
   const byDay = new Map<string, Appointment[]>();
   for (const apt of appointments) {
-    const day = localDateString(apt.start);
+    const day = wallDay(apt.start, clock.timeZone);
     const bucket = byDay.get(day);
     if (bucket) bucket.push(apt);
     else byDay.set(day, [apt]);
@@ -119,7 +105,7 @@ export function WeekAgenda({
               onClick={() => onSelectDay(date)}
               className="text-left text-sm font-medium text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg rounded"
             >
-              {dayHeaderLabel(date)}
+              {weekDayHeader(date, clock.fmt)}
             </button>
             <ul className="flex flex-col gap-2">
               {dayAppointments.length === 0 ? (
@@ -132,7 +118,7 @@ export function WeekAgenda({
                   >
                     <div className="flex items-center justify-between gap-1">
                       <time dateTime={appointment.start} className="text-ink">
-                        {formatTimeRange(appointment.start, appointment.end)}
+                        {sedeTimeRange(appointment.start, appointment.end, clock.of(appointment.locationId))}
                       </time>
                       <StatusBadge status={appointment.status} />
                     </div>

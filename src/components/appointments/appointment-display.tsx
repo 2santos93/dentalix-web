@@ -5,7 +5,6 @@ import {
   confirmationIndicator,
   type ConfirmationIndicator,
 } from '@/lib/appointments/confirmation-message';
-import { formatTime } from '@/lib/format/date';
 import { cn } from '@/lib/utils';
 
 /** es status labels — shared by `DayAgenda` and `WeekAgenda` (and their status <select>s). */
@@ -59,11 +58,6 @@ export const STATUS_BADGE_CLASSES: Record<AppointmentStatus, string> = {
   IN_CHAIR: 'border-primary bg-primary/15 text-ink',
   READY_FOR_CHECKOUT: 'border-success bg-surface text-ink',
 };
-
-/** e.g. "09:00–09:30", 24h times in the user's local timezone. */
-export function formatTimeRange(start: string, end: string): string {
-  return `${formatTime(start)}–${formatTime(end)}`;
-}
 
 /**
  * Display name for an appointment's patient. Prefers the name the API joins
