@@ -69,6 +69,8 @@ describe('communication-api (DX-128)', () => {
     expect(withCommunication(patient, saved)).toEqual({
       ...patient,
       phone: '+573101234567',
+      // DX-387: la cabecera y «Datos» pintan el formato internacional nuevo.
+      phoneInternational: '+57 310 1234567',
       contactChannel: 'WHATSAPP',
       whatsappOptInAt: '2026-10-17T10:00:00.000Z',
       whatsappOptInSource: 'IN_PERSON',

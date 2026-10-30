@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { UserPlus, Users } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { displayPhone } from '@/lib/phone/display-phone';
 import {
   getPatientResponsibles,
   partyDocument,
@@ -166,7 +167,8 @@ export function PatientResponsiblePartiesSection({
           <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
             {data.parties.map((party) => {
               const doc = partyDocument(party);
-              const contactLine = [doc, party.email, party.phone].filter(Boolean).join(' · ');
+              // DX-387: el teléfono con el formato internacional de la API, o el guardado.
+              const contactLine = [doc, party.email, displayPhone(party)].filter(Boolean).join(' · ');
               return (
                 <li
                   key={party.id}
@@ -188,7 +190,7 @@ export function PatientResponsiblePartiesSection({
                       <span className="text-sm text-muted">{RELATIONSHIP_LABELS[party.relationship]}</span>
                     </span>
                     {contactLine ? (
-                      <span className="break-words text-sm text-muted tabular-nums">{contactLine}</span>
+                      <span className="text-sm text-muted tabular-nums [overflow-wrap:anywhere]">{contactLine}</span>
                     ) : null}
                     <span className="flex flex-wrap gap-1.5">
                       {party.kind === 'PATIENT' ? <Badge variant="muted">{copy.isPatient}</Badge> : null}

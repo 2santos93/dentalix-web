@@ -81,6 +81,8 @@ export function withCommunication(patient: Patient, c: PatientCommunication): Pa
   return {
     ...patient,
     phone: c.phone,
+    // DX-387: con la misma región que la ficha (la sede activa o la principal).
+    phoneInternational: c.phoneInternational,
     contactChannel: c.contactChannel,
     whatsappOptInAt: c.whatsappOptIn?.at ?? null,
     whatsappOptInSource: c.whatsappOptIn?.source ?? null,

@@ -67,6 +67,7 @@ const mother = {
   docNumber: '52987654',
   email: 'claudia@example.com',
   phone: null,
+  phoneInternational: null,
   relationship: 'MOTHER' as const,
   isPayer: true,
   receivesNotices: true,

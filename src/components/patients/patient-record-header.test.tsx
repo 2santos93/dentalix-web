@@ -58,6 +58,40 @@ describe('PatientRecordHeader', () => {
     expect(strip).toHaveTextContent('Tel. +57 300 000 0000');
   });
 
+  it('shows the international phone of the API, or the stored one when it has none (DX-387)', () => {
+    const { rerender } = render(
+      <PatientRecordHeader
+        patient={patient({ phone: '0412-1234567', phoneInternational: '+58 412 1234567' })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByText('Tel. +58 412 1234567')).toBeInTheDocument();
+    expect(screen.queryByText(/0412-1234567/)).not.toBeInTheDocument();
+    rerender(
+      <PatientRecordHeader
+        patient={patient({ phone: 'llamar por la tarde', phoneInternational: null })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByText('Tel. llamar por la tarde')).toBeInTheDocument();
+  });
+
+  it('a long phone wraps inside the strip instead of widening the header at 390 px (DX-387)', () => {
+    const phone = '+58 412 1234567 ext. 123456';
+    render(
+      <PatientRecordHeader
+        patient={patient({ phone: '04121234567x123456', phoneInternational: phone })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    const value = screen.getByText(`Tel. ${phone}`);
+    expect(value).toHaveClass('[overflow-wrap:anywhere]');
+    expect(value.parentElement).toHaveClass('min-w-0');
+  });
+
   it('omite entero el dato que falta en vez de dejar un marcador vacío', () => {
     render(
       <PatientRecordHeader

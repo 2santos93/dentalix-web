@@ -9,6 +9,7 @@ import {
   type ClinicLocation,
 } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
+import { displayPhone } from '@/lib/phone/display-phone';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { Input } from '@/components/ui/input';
@@ -114,7 +115,9 @@ function LocationPhoneRow({
   canEdit: boolean;
   onSaved: (location: ClinicLocation) => void;
 }) {
-  const current = location.phone ?? '';
+  // DX-387: el formato internacional de la API, o el guardado tal cual (como
+  // el móvil del bloque de comunicaciones, DX-329).
+  const current = displayPhone(location) ?? '';
   const [value, setValue] = useState(current);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +135,7 @@ function LocationPhoneRow({
     try {
       const updated = await updateLocationPhone(token, location.id, value.trim() || null);
       onSaved(updated);
-      setValue(updated.phone ?? '');
+      setValue(displayPhone(updated) ?? '');
       setSaved(true);
     } catch (err) {
       setError(apiErrorMessage(err, copy.saveError));
@@ -147,9 +150,9 @@ function LocationPhoneRow({
     return (
       <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
         {header}
-        <div className="flex flex-col sm:items-end">
+        <div className="flex min-w-0 flex-col sm:items-end">
           <span className="text-xs text-muted">{copy.label}</span>
-          <span className="tabular-nums text-ink">{current || copy.empty}</span>
+          <span className="tabular-nums text-ink [overflow-wrap:anywhere]">{current || copy.empty}</span>
           <span className="text-xs text-muted">{copy.readOnly}</span>
         </div>
       </div>

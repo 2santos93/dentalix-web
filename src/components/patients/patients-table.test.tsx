@@ -13,6 +13,7 @@ const patients: Patient[] = [
     birthDate: null,
     sex: 'F',
     phone: '3001234567',
+    phoneInternational: '+57 300 1234567',
     email: 'ana@example.com',
     address: null,
     notes: null,
@@ -46,6 +47,23 @@ describe('PatientsTable', () => {
     // Desktop table
     expect(screen.getAllByText('Ana García')).toHaveLength(2); // table + mobile card
     expect(screen.getAllByText('Luis Pérez')).toHaveLength(2);
+  });
+
+  it('shows the international phone of the API, or the stored one when it has none (DX-387)', () => {
+    const stored = { ...patients[1], id: '3', phone: 'casa: 2345', phoneInternational: null };
+    render(<PatientsTable patients={[patients[0], stored]} loading={false} />);
+    expect(screen.getAllByText('+57 300 1234567')).toHaveLength(2);
+    expect(screen.queryByText('3001234567')).not.toBeInTheDocument();
+    expect(screen.getAllByText('casa: 2345')).toHaveLength(2);
+  });
+
+  it('a long phone wraps in its cell and in the mobile card instead of widening them (DX-387)', () => {
+    const phone = '+58 412 1234567 ext. 123456';
+    render(<PatientsTable patients={[{ ...patients[0], phoneInternational: phone }]} loading={false} />);
+    for (const cell of screen.getAllByText(phone)) {
+      expect(cell).toHaveClass('[overflow-wrap:anywhere]');
+      expect(cell).toHaveClass('min-w-0');
+    }
   });
 
   it('renders a desktop table hidden below md and mobile cards hidden at md+', () => {
