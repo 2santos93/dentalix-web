@@ -533,7 +533,7 @@ export interface paths {
         head?: never;
         /**
          * Cambiar canal, móvil, opt-in de WhatsApp o baja (DX-128)
-         * @description Solo recepción y ADMIN. El móvil se normaliza a E.164 con el país de la sede. WHATSAPP exige un móvil válido (400 `WHATSAPP_REQUIRES_VALID_MOBILE`). Queda en la auditoría con el autor, los campos y el origen.
+         * @description Solo recepción y ADMIN. El móvil se normaliza a E.164; sin «+» se lee con el prefijo telefónico por defecto de la sede. WHATSAPP exige un móvil válido (400 `WHATSAPP_REQUIRES_VALID_MOBILE`). Queda en la auditoría con el autor, los campos y el origen.
          */
         patch: operations["PatientCommunicationController_update"];
         trace?: never;
@@ -5791,7 +5791,7 @@ export interface components {
             reason: string;
         };
         /**
-         * @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp).
+         * @description MISSING: sin móvil. INVALID: no es un móvil válido con el prefijo de la sede (no puede ser canal WhatsApp).
          * @enum {string}
          */
         MobileStatus: "MISSING" | "VALID" | "INVALID";
@@ -5843,11 +5843,15 @@ export interface components {
             clinicDefaultChannel: components["schemas"]["ContactChannel"];
             /** @description Tal como está guardado. */
             phone: string | null;
-            /** @description E.164 (+ seguido del indicativo y el número, sin espacios), solo si es un móvil válido. */
+            /** @description E.164 (+ seguido del prefijo y el número, sin espacios), solo si es un móvil válido. */
             phoneE164: string | null;
-            /** @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp). */
+            /** @description MISSING: sin móvil. INVALID: no es un móvil válido con el prefijo de la sede (no puede ser canal WhatsApp). */
             phoneStatus: components["schemas"]["MobileStatus"];
-            /** @description País (ISO 3166-1 alfa-2) con el que se valida un número sin indicativo: el de la sede activa o la principal (sin sedes, el del paciente). null si no hay país o si ese país no tiene indicativo por defecto (hasta DX-329): el número se escribe con +. */
+            /** @description true si los dígitos se pueden leer como dos números válidos distintos: hay que escribirlo con + y su prefijo. */
+            phoneAmbiguous: boolean;
+            /** @description Número válido en formato internacional de la librería, con su extensión si la tiene. null si no es válido. */
+            phoneInternational: string | null;
+            /** @description Región (ISO 3166-1 alfa-2) cuyo prefijo se añade a un número escrito sin +: la de la sede activa o la principal. null si la sede no tiene prefijo por defecto. */
             phoneCountry: string | null;
             email: string | null;
             whatsappOptIn: components["schemas"]["WhatsappOptInDto"] | null;
@@ -5865,7 +5869,7 @@ export interface components {
         };
         UpdatePatientCommunicationDto: {
             contactChannel?: components["schemas"]["ContactChannel"];
-            /** @description Móvil. Se guarda en E.164 si es válido para el país de la sede; null o vacío lo borra. */
+            /** @description Móvil. Se guarda en E.164 si es válido; sin «+» se lee con el prefijo telefónico por defecto de la sede. null o vacío lo borra. */
             phone?: string | null;
             /** @description true registra el opt-in de WhatsApp (exige `whatsappOptInSource` y un móvil válido); false lo retira. */
             whatsappOptIn?: boolean;
@@ -6450,6 +6454,8 @@ export interface components {
             showHealthRegistrationNumber: boolean;
             /** @description DX-222: teléfono de la sede o null. */
             phone: string | null;
+            /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. */
+            defaultPhoneRegion: string | null;
             isActive: boolean;
             /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1). */
             currency: string | null;
@@ -6504,6 +6510,8 @@ export interface components {
             hourCycle?: "h12" | "h23";
             /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. */
             phone?: string;
+            /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. Sin el campo se sugiere desde el país de la sede, si la librería lo admite. */
+            defaultPhoneRegion?: string | null;
         };
         UpdateLocationDto: {
             name?: string;
@@ -6516,6 +6524,8 @@ export interface components {
             showHealthRegistrationNumber?: boolean;
             /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia. */
             phone?: string | null;
+            /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. Vacío o null lo quita; sin el campo no cambia, tampoco al cambiar el país. */
+            defaultPhoneRegion?: string | null;
             /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. */
             currency?: string;
             /**
@@ -8518,10 +8528,7 @@ export interface components {
              * @description Inicio de la cita.
              */
             expiresAt: string;
-            /**
-             * @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable.
-             * @example 573105550101
-             */
+            /** @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable. */
             whatsappPhone: string | null;
             appointment: components["schemas"]["PublicConfirmationAppointmentDto"];
         };
@@ -8649,12 +8656,9 @@ export interface components {
             patientId: string;
             /** @example Ana Pérez */
             patientName: string;
-            /** @description Teléfono tal como está en la ficha, con su indicativo de país si lo tiene. */
+            /** @description Teléfono tal como está en la ficha, con su prefijo si lo tiene. */
             patientPhone: string | null;
-            /**
-             * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
-             * @example 573001234567
-             */
+            /** @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable */
             patientWhatsApp: string | null;
             /** Format: uuid */
             optionGroupId: string | null;
@@ -10574,12 +10578,9 @@ export interface components {
             id: string;
             /** @example Ana Pérez */
             fullName: string;
-            /** @description Teléfono tal como está en la ficha, con su indicativo de país si lo tiene. */
+            /** @description Teléfono tal como está en la ficha, con su prefijo si lo tiene. */
             phone: string | null;
-            /**
-             * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
-             * @example 573001234567
-             */
+            /** @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable */
             whatsApp: string | null;
         };
         AgingBucketsDto: {
@@ -24613,7 +24614,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Sin email ni responsable que reciba avisos, sin teléfono con indicativo, o el paciente dio de baja los envíos */
+            /** @description Sin email ni responsable que reciba avisos, sin un teléfono que sirva para WhatsApp, o el paciente dio de baja los envíos */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26730,7 +26731,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Sede por defecto del lote (indicativo de los teléfonos). Sin ella, la sede de escritura. */
+                /** @description Sede por defecto del lote (su prefijo telefónico se usa con los teléfonos sin +). Sin ella, la sede de escritura. */
                 "X-Location-Id"?: string;
             };
             path?: never;

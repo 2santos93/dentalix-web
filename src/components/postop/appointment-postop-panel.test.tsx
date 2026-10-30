@@ -142,12 +142,22 @@ describe('AppointmentPostOpPanel', () => {
 
   it('sin teléfono: «Abrir WhatsApp» deshabilitado con el motivo', async () => {
     mockedGet.mockResolvedValue(
-      suggestions({ whatsapp: { phone: null, reason: 'El paciente no tiene celular con indicativo.' } }),
+      suggestions({ whatsapp: { phone: null, reason: 'El teléfono del paciente no sirve para WhatsApp.' } }),
     );
     renderPanel();
     const button = await screen.findByRole('button', { name: 'Abrir WhatsApp' });
     expect(button).toBeDisabled();
-    expect(button).toHaveAccessibleDescription('El paciente no tiene celular con indicativo.');
+    expect(button).toHaveAccessibleDescription('El teléfono del paciente no sirve para WhatsApp.');
+  });
+
+  it('sin teléfono y sin motivo de la API: el propio dice cómo escribirlo, sin nombrar un país (DX-329)', async () => {
+    mockedGet.mockResolvedValue(suggestions({ whatsapp: { phone: null, reason: null } }));
+    renderPanel();
+    const button = await screen.findByRole('button', { name: 'Abrir WhatsApp' });
+    expect(button).toHaveAccessibleDescription(
+      'El teléfono del paciente no sirve para WhatsApp: revísalo en su ficha o escríbelo con + y su prefijo.',
+    );
+    expect(button).not.toHaveAccessibleDescription(/país|indicativo/);
   });
 
   it('«Enviar por email» confirma a quién se envió (y si fue al responsable)', async () => {
