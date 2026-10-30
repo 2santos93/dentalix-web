@@ -1,4 +1,6 @@
 import { moneyInputCopy } from '@/lib/format/money';
+import { regionalFormat } from '@/lib/format/regional-format';
+import { moneyWithCode } from '@/lib/format/sede-number';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TreatmentPlansTab } from './treatment-plans-tab';
@@ -120,6 +122,15 @@ jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
 // new-plan-currency selects render deterministically.
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn(),
+}));
+// DX-376: la previsualización del cobro en otra moneda pide las tasas del día.
+// DX-386: la fuente de la clínica (solo ADMIN) decide qué propone el aviso «sin tasa».
+jest.mock('../../lib/exchange/exchange-settings-api', () => ({
+  ...jest.requireActual('../../lib/exchange/exchange-settings-api'),
+  getExchangeRateSettings: jest.fn().mockResolvedValue({ source: 'MANUAL', manualSince: '2026-10-01', baseCurrency: 'USD' }),
+}));
+jest.mock('../../lib/exchange/exchange-api', () => ({
+  getExchangeRates: jest.fn().mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: { COP: 4000 } }),
 }));
 // Recibo de caja (DX-136): el diálogo pide el recibo a la API.
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
@@ -318,6 +329,16 @@ const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', curre
  */
 function expectedCurrencyText(amount: number): string {
   return currencyFormatter.format(amount).replace(/\u00A0/g, ' ');
+}
+
+/**
+ * DX-386: la lista de abonos, «Cobrado»/«Pendiente» por ítem y la
+ * previsualización del cobro van con el formato de la sede del fixture (es-CO)
+ * y el código ISO («USD 50.000,00»), nunca con el símbolo.
+ */
+const SEDE_FMT = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+function sedeCurrencyText(amount: number, currency = 'USD'): string {
+  return moneyWithCode(amount, currency, SEDE_FMT).replace(/\u00A0/g, ' ');
 }
 
 /** A promise this test controls the settlement of, to assert on the interim (pending) state — same helper as odontogram-tab.test.tsx / agenda-view.test.tsx. */
@@ -742,7 +763,7 @@ describe('TreatmentPlansTab', () => {
 
     const paymentsTable = await openPaymentsTable(user);
     const row = within(paymentsTable)
-      .getByText(expectedCurrencyText(payment1.amount))
+      .getByText(sedeCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
     await user.click(within(row).getByRole('button', { name: /anular/i }));
 
@@ -752,7 +773,7 @@ describe('TreatmentPlansTab', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mockedVoidPayment).not.toHaveBeenCalled();
-    expect(within(paymentsTable).getByText(expectedCurrencyText(payment1.amount))).toBeInTheDocument();
+    expect(within(paymentsTable).getByText(sedeCurrencyText(payment1.amount))).toBeInTheDocument();
   });
 
   it("changing the plan's status calls updatePlan then refreshes the detail (and the plan list) in place", async () => {
@@ -797,8 +818,10 @@ describe('TreatmentPlansTab', () => {
     expect(within(balanceCard).getByText(expectedCurrencyText(balance1.balance))).toBeInTheDocument();
 
     const paymentsTable = await openPaymentsTable(user);
-    expect(within(paymentsTable).getByText(expectedCurrencyText(payment1.amount))).toBeInTheDocument();
+    expect(within(paymentsTable).getByText(sedeCurrencyText(payment1.amount))).toBeInTheDocument();
     expect(within(paymentsTable).getByText('Efectivo')).toBeInTheDocument();
+    // DX-386: importe y día de cada abono con el formato de la sede y el código ISO.
+    expect(paymentsTable).not.toHaveTextContent('US$');
   });
 
   it('DX-097: la fecha por defecto del abono es hoy en la sede, no en el navegador (20:30 en Bogotá = 01:30Z)', async () => {
@@ -851,6 +874,14 @@ describe('TreatmentPlansTab', () => {
 
     await user.type(screen.getByLabelText(/^monto$/i), '25000');
 
+    // DX-376: antes de guardar, lo que cubre en la moneda del plan y con qué tasa.
+    const preview = await screen.findByTestId('rp-rate-preview');
+    await waitFor(() => expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Equivalente en USDUSD 6,25'));
+    expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Pendiente tras el abonoUSD 79.993,75');
+    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Tasa: 1 USD = COP 4\.000,00 · manual · \d{2}\/\d{2}\/\d{4}/);
+    // DX-386: el mismo formato que la «Tasa congelada» de cada abono, sin «US$».
+    expect(preview).not.toHaveTextContent('US$');
+
     const newPayment = { ...payment1, id: 'pay-2', amount: 25000, currency: 'COP' };
     const updatedBalance = { ...balance1, paid: balance1.paid + 25000, balance: balance1.balance - 25000 };
     mockedRecordPayment.mockResolvedValue(newPayment);
@@ -886,7 +917,7 @@ describe('TreatmentPlansTab', () => {
 
     const paymentsTable = await openPaymentsTable(user);
     const row = within(paymentsTable)
-      .getByText(expectedCurrencyText(payment1.amount))
+      .getByText(sedeCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
     const voidButton = within(row).getByRole('button', { name: /anular/i });
 
@@ -924,7 +955,7 @@ describe('TreatmentPlansTab', () => {
     // Un abono anterior a la numeración no se renumera: «Sin serie».
     expect(within(paymentsTable).getByText('Sin serie')).toBeInTheDocument();
     const row = within(paymentsTable)
-      .getByText(expectedCurrencyText(payment1.amount))
+      .getByText(sedeCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
     await user.click(within(row).getByRole('button', { name: /^recibo$/i }));
 
@@ -1586,7 +1617,7 @@ describe('TreatmentPlansTab', () => {
       );
       const paymentsTable = await openPaymentsTable(user);
       const row = within(paymentsTable)
-        .getByText(expectedCurrencyText(payment1.amount))
+        .getByText(sedeCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
@@ -1618,7 +1649,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const paymentsTable = await openPaymentsTable(user);
       const row = within(paymentsTable)
-        .getByText(expectedCurrencyText(payment1.amount))
+        .getByText(sedeCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
@@ -1646,7 +1677,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const paymentsTable = await openPaymentsTable(user);
       const row = within(paymentsTable)
-        .getByText(expectedCurrencyText(payment1.amount))
+        .getByText(sedeCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
@@ -2473,14 +2504,14 @@ describe('TreatmentPlansTab', () => {
       expect(names.indexOf('Pendiente')).toBe(names.indexOf('Precio') + 2);
 
       const accepted = within(table).getByText('26').closest('tr') as HTMLTableRowElement;
-      expect(within(accepted).getByText(expectedCurrencyText(50000))).toBeInTheDocument();
-      expect(within(accepted).getByText(expectedCurrencyText(30000))).toBeInTheDocument();
+      expect(within(accepted).getByText(sedeCurrencyText(50000))).toBeInTheDocument();
+      expect(within(accepted).getByText(sedeCurrencyText(30000))).toBeInTheDocument();
       const proposed = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
       expect(within(proposed).getAllByLabelText('Sin importe a cobrar')).toHaveLength(2);
 
       // Tarjetas móviles: «Cobrado {x} · Pendiente {y}».
       expect(
-        screen.getByText(`Cobrado ${expectedCurrencyText(50000)} · Pendiente ${expectedCurrencyText(30000)}`),
+        screen.getByText(`Cobrado ${sedeCurrencyText(50000)} · Pendiente ${sedeCurrencyText(30000)}`),
       ).toBeInTheDocument();
     });
 
@@ -2528,7 +2559,7 @@ describe('TreatmentPlansTab', () => {
 
       const notice = await screen.findByText(withoutRateCopy.title(1));
       expect(notice.closest('[role="status"]')).toHaveTextContent('30/10/2026');
-      expect(screen.getByRole('link', { name: withoutRateCopy.adminLink })).toHaveAttribute(
+      expect(await screen.findByRole('link', { name: withoutRateCopy.adminLink })).toHaveAttribute(
         'href',
         '/settings/tasa-de-cambio',
       );

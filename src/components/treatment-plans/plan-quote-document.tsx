@@ -3,6 +3,7 @@ import type { PlanQuote, PlanQuoteItem } from '@/lib/treatment-plans/plan-quote-
 import { SURFACE_LABELS } from '@/lib/odontogram/surface-labels';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
 
 const copy = {
   title: 'Presupuesto de tratamiento',
@@ -37,6 +38,11 @@ const copy = {
   gross: 'Subtotal',
   discounts: 'Descuentos',
   total: (currency: string) => `Total (${currency})`,
+  // DX-376: segunda moneda opcional al imprimir.
+  secondTotal: (currency: string) => `Total orientativo (${currency})`,
+  secondRate: (pair: string, source: string, date: string) => `Tasa: ${pair} (${source}, ${date}).`,
+  secondNote: (currency: string) =>
+    `El importe en ${currency} es orientativo y se calcula con la tasa del día del pago.`,
   signatureHeading: 'Aceptación',
   acceptedBy: (name: string, when: string) => `Aceptado y firmado por ${name} el ${when}`,
   signatureAlt: (name: string) => `Firma de ${name}`,
@@ -71,8 +77,25 @@ function surfacesOf(item: PlanQuoteItem): string {
       : copy.noSurfaces;
 }
 
+/**
+ * DX-376: la 2.ª moneda que se elige al imprimir, con la tasa del día de la
+ * clínica (su fuente y su día): las dos monedas en unidades por 1 de la base.
+ */
+export interface QuoteSecondCurrency {
+  currency: string;
+  /** Unidades de la moneda del plan por 1 de la base. */
+  fromPerBase: number;
+  /** Unidades de `currency` por 1 de la base. */
+  toPerBase: number;
+  source: 'AUTOMATIC' | 'MANUAL';
+  /** Día (AAAA-MM-DD) de la tasa. */
+  date: string;
+}
+
 interface PlanQuoteDocumentProps {
   quote: PlanQuote;
+  /** DX-376: total orientativo en otra moneda; sin ella, el presupuesto no cambia. */
+  secondCurrency?: QuoteSecondCurrency | null;
 }
 
 /**
@@ -86,7 +109,7 @@ interface PlanQuoteDocumentProps {
  * papel blanco y tinta oscura explícitos, también en modo oscuro. En pantalla
  * estrecha la tabla se apila en tarjetas; en papel siempre es tabla.
  */
-export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
+export function PlanQuoteDocument({ quote, secondCurrency = null }: PlanQuoteDocumentProps) {
   const { acceptance, currency } = quote;
   const organization=new Map((quote.visitOrganization??[]).map(v=>[v.itemId,v]));
   const orderedItems=[...quote.items].sort((a,b)=>(organization.get(a.id)?.visit??1)-(organization.get(b.id)?.visit??1));
@@ -266,9 +289,27 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                 <dt>{copy.total(total.currency)}</dt>
                 <dd className="tabular-nums">{money(total.net, total.currency)}</dd>
               </div>
+              {secondCurrency && total.currency === currency ? (
+                <div data-testid="quote-second-total" className="flex justify-between gap-4">
+                  <dt className="text-[#4b5563]">{copy.secondTotal(secondCurrency.currency)}</dt>
+                  <dd className="tabular-nums">
+                    {money(convertWithRate(total.net, secondCurrency), secondCurrency.currency)}
+                  </dd>
+                </div>
+              ) : null}
             </React.Fragment>
           ))}
         </dl>
+        {secondCurrency ? (
+          <p data-testid="quote-second-currency" className="mt-2 ml-auto max-w-xs text-xs text-[#4b5563]">
+            {copy.secondRate(
+              ratePairLabel(currency, secondCurrency, money),
+              paymentRateCopy.source[secondCurrency.source],
+              formatCivilDate(secondCurrency.date),
+            )}{' '}
+            {copy.secondNote(secondCurrency.currency)}
+          </p>
+        ) : null}
       </section>
 
       <section

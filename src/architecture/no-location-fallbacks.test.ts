@@ -1309,3 +1309,79 @@ describe(`teléfono con ${PHONE_LIBRARY_NAME} (DX-329)`, () => {
     }
   });
 });
+
+/**
+ * DX-368: ningún texto visible pone de ejemplo un teléfono, una moneda, una
+ * dirección o una ciudad de un país. El teléfono pide el indicativo sin dar
+ * uno («Con indicativo internacional (+…).»); la moneda, el código ISO 4217.
+ * Los documentos los guarda DX-327 (arriba) y las monedas entre comillas,
+ * GLOBAL-G1 (al principio). Recorre lo mismo que G1: `src/` sin tests,
+ * fixtures, `schema.d.ts` ni líneas de comentario, y deja las claves de
+ * `ZONE_CITY_LABELS`, que rotulan una zona elegida.
+ */
+/** Un teléfono con indicativo real: `+57 601…`, `+34612…`, `+57…`. */
+const PHONE_EXAMPLE = /(?<![\w+\\])\+[1-9]\d{0,2}(?:[\s-]?\d{2,}|…|\.\.\.)/;
+/** Un literal que es solo un teléfono nacional sin indicativo: `'310 000 0001'`, `"612 34 56 78"` (no fechas ni importes). */
+const NATIONAL_PHONE_EXAMPLE = /['"`>]\s*\(?\d{3}\)?(?: \d{2,4}){2,}\s*['"`<]/;
+/** Monedas de la región y las que salieron de ejemplo, tras «p. ej.» o «por ejemplo». */
+const CURRENCY_FOR_EXAMPLE =
+  /(?:p\.\s*ej\.|por ejemplo|ej\.)[:,]?\s*[«"'(]?\d*[\s.,\d]*(?:COP|USD|EUR|VES|MXN|ARS|CLP|PEN|BRL|BOB|PYG|UYU|GTQ|CRC|DOP|GBP)\b/i;
+/** Dirección con número a la colombiana o similar: `Calle 1 # 2-3`, `Cra 15 #90-20`. */
+const ADDRESS_EXAMPLE =
+  /\b(?:Calle|Carrera|Cra|Cl|Kr|Avenida|Av|Diagonal|Dg|Transversal|Tv)\.?\s*\d+[A-Za-z]?\s*(?:#|N[°º.o]\.?)\s*\d/i;
+/** Ciudades que eran ejemplo de dirección o de hora (con tilde: no son ids IANA). */
+const CITY_EXAMPLE = /Bogotá|Medellín/;
+
+function countryExampleHit(line: string): boolean {
+  if (COMMENT_LINE.test(line) || ZONE_LABEL_KEY.test(line)) return false;
+  return [PHONE_EXAMPLE, NATIONAL_PHONE_EXAMPLE, CURRENCY_FOR_EXAMPLE, ADDRESS_EXAMPLE, CITY_EXAMPLE].some((pattern) =>
+    pattern.test(line),
+  );
+}
+
+describe('arquitectura: textos sin ejemplos de un país (DX-368)', () => {
+  it('src/ shows no phone, currency, address or city of one country as an example', () => {
+    const files = sourceFiles(SRC).filter(scanned);
+    expect(files.length).toBeGreaterThan(300);
+    const found = files.flatMap((path) =>
+      readFileSync(path, 'utf8')
+        .split('\n')
+        .flatMap((line, i) => (countryExampleHit(line) ? [`${relative(SRC, path)}:${i + 1}: ${line.trim()}`] : [])),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('the example patterns catch each retired form and skip neutral text', () => {
+    for (const line of [
+      "  hint: 'Con indicativo de país, p. ej. +57 601 555 0101',",
+      "    'El paciente no tiene un teléfono con indicativo de país (p. ej. +57…). Agrégalo en su ficha.',",
+      '  placeholder="+34 612 34 56 78"',
+      '  placeholder="612 34 56 78"',
+      "  phonePlaceholder: '310 000 0001',",
+      '  <span>(601) 555 0101</span>',
+      "  currencyHint: 'Código de 3 letras (p. ej. COP).',",
+      "  hint: 'Por ejemplo, 150.000 COP.',",
+      "  addressPlaceholder: 'Calle 1 # 2-3',",
+      "  addressPlaceholder: 'Cra 15 #90-20',",
+      '  <p>Un abono a las 20:00 en Bogotá cuenta ese día.</p>',
+    ]) {
+      expect({ line, caught: countryExampleHit(line) }).toEqual({ line, caught: true });
+    }
+    for (const line of [
+      "  hint: 'Con indicativo internacional (+…).',",
+      "  currencyHint: 'Código ISO 4217 de 3 letras.',",
+      "  codeHintCreate: 'Corto y único, p. ej. EXO o CIR-3M. No se puede cambiar después.',",
+      "  emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',",
+      "  'America/Bogota': 'Bogotá',",
+      '  // (medianoche UTC sería la tarde del día anterior en Bogotá).',
+      '   * siempre en USD). Mientras no se sabe la moneda',
+      '  const co = /^\\+57(\\d{3})(\\d{3})(\\d{4})$/.exec(e164);',
+      "  mobileInvalidHint: 'No sirve para WhatsApp: revisa el número o escríbelo con + y su indicativo.',",
+      "  label: 'Mejora: +20 % frente al periodo anterior',",
+      "  const day = '2026-10-17';",
+      "  const amount = '1 500 000';",
+    ]) {
+      expect({ line, caught: countryExampleHit(line) }).toEqual({ line, caught: false });
+    }
+  });
+});

@@ -175,10 +175,10 @@ for (const viewport of [
     const target = dialog.getByLabel('Abonar a');
     await expect(target).toBeVisible({ timeout: 10_000 });
     const option = target.locator('option', { hasText: 'Cartera anterior' });
-    await expect(option).toHaveText(/^Saldo migrado · Cartera anterior · pendiente 100\.000,00/);
+    await expect(option).toHaveText(/^Saldo migrado · Cartera anterior · pendiente COP\s100\.000,00/);
     await target.selectOption((await option.getAttribute('value')) ?? '');
     await expect(dialog.getByLabel('Moneda')).toBeDisabled();
-    await expect(dialog).toContainText(/Pendiente: 100\.000,00/);
+    await expect(dialog).toContainText(/Pendiente: COP\s100\.000,00/);
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
 
     // Pasarse de lo pendiente: no se registra y se dice en español.

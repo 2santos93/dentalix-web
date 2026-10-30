@@ -10,8 +10,8 @@ import type { AccountStatementOpeningBalance } from '@/lib/account-statement/acc
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from '@/lib/payments/payment-method';
 import { recordPaymentErrorMessage } from '@/lib/payments/payment-errors';
 import { statementCopy } from '@/lib/account-statement/presentation';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Input } from '@/components/ui/input';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
@@ -21,6 +21,9 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
 import { useBillablePlans } from './use-billable-plans';
 import { usePaymentLocationHint } from './use-payment-location-hint';
+import { useExchangeRates } from './use-exchange-rates';
+import { PaymentRatePreview, ratePreviewCopy, type PreviewPlanBalance } from './payment-rate-preview';
+import { usePlanBalance } from './use-plan-balance';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 
@@ -41,7 +44,7 @@ export const recordPaymentCopy = {
   recorded: (amount: string, date: string, plan: string) => `Abono registrado: ${amount} · ${date} · ${plan}.`,
   // DX-375: sin tasa de su día el abono se guarda igual, pero el saldo no lo
   // cuenta todavía (el plan lo enseña con su aviso).
-  recordedWithoutRate: 'Quedó sin tasa de cambio de su día: el saldo no lo cuenta hasta que se registre la tasa.',
+  recordedWithoutRate: 'Quedó sin tasa de cambio de su día: el saldo no lo cuenta hasta que haya tasa de ese día.',
   // DX-262: destino del abono cuando el paciente trae saldo migrado.
   target: 'Abonar a',
   targetPlan: 'Un plan de tratamiento',
@@ -51,6 +54,8 @@ export const recordPaymentCopy = {
   openingPending: (pending: string) => `Pendiente: ${pending}`,
   overPending: (pending: string) =>
     `El abono supera lo pendiente del saldo migrado: quedan ${pending}.`,
+  // DX-376: previsualización del cobro en otra moneda que la del plan.
+  preview: ratePreviewCopy,
 };
 const copy = recordPaymentCopy;
 
@@ -127,6 +132,10 @@ export function RecordPaymentModal({
   // «Hoy» de la sede (DX-097). Sin su zona la fecha empieza vacía y, si la
   // sede no tiene zona, el campo muestra `SedeConfigError`: nunca otra zona.
   const zone = useSedeTimeZone(token);
+  // DX-386: importes y días con el formato de la sede y el código ISO de la
+  // moneda; mientras carga, «—».
+  const fmt = readyFormat(useSedeFormat(token));
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const timeZone = readyTimeZone(zone);
   const today = timeZone ? sedeToday(timeZone) : '';
   const [form, setForm] = useState<FormState>(() => initialForm(today));
@@ -169,6 +178,21 @@ export function RecordPaymentModal({
   const plan = opening ? null : (plans.find((p) => p.id === form.planId) ?? plans[0] ?? null);
   // El abono a un saldo migrado va siempre en su moneda.
   const currency = opening ? opening.currency : form.currency || plan?.currency || '';
+  // DX-376: cobrar en otra moneda que la del plan enseña, antes de guardar, la
+  // tasa del día del abono y cuánto cubre (un saldo migrado va en su moneda).
+  const otherCurrency = plan !== null && currency !== '' && currency !== plan.currency;
+  const rates = useExchangeRates(token, form.date, open && otherCurrency);
+  // Lo pendiente sale del saldo del plan con los abonos en otra moneda ya
+  // convertidos: `plan.balance` (lista de cobrables) no los descuenta.
+  const balance = usePlanBalance(token, plan?.id ?? null, open && otherCurrency);
+  const previewBalance: PreviewPlanBalance =
+    balance.status === 'ready'
+      ? { balance: balance.balance.balance, paymentsWithoutRate: balance.balance.paymentsWithoutRate.length }
+      : balance.status === 'error'
+        ? 'error'
+        : 'loading';
+  const parsedAmount = currency ? parseMoneyInput(form.amount, currency) : null;
+  const previewAmount = parsedAmount?.ok && parsedAmount.value > 0 ? parsedAmount.value : null;
 
   function patch(next: Partial<FormState>) {
     setForm((f) => ({ ...f, ...next }));
@@ -186,7 +210,7 @@ export function RecordPaymentModal({
       return;
     }
     if (opening && Math.round(parsed.value * 100) > Math.round(opening.pending * 100)) {
-      setAmountError(copy.overPending(formatCurrency(opening.pending, opening.currency)));
+      setAmountError(copy.overPending(money(opening.pending, opening.currency)));
       return;
     }
     setAmountError(null);
@@ -219,8 +243,8 @@ export function RecordPaymentModal({
         : null;
       const savedPlan = plans.find((p) => p.id === saved.treatmentPlanId) ?? plan;
       const recorded = copy.recorded(
-        formatCurrency(saved.amount, saved.currency),
-        formatCivilDate(saved.paidOn),
+        money(saved.amount, saved.currency),
+        sedeCivilDate(saved.paidOn, fmt),
         savedOpening
           ? copy.openingLabel(savedOpening.concept)
           : savedPlan
@@ -271,13 +295,13 @@ export function RecordPaymentModal({
             {!noPlans ? <option value="">{copy.targetPlan}</option> : null}
             {openings.map((o) => (
               <option key={o.id} value={`${OPENING_PREFIX}${o.id}`}>
-                {copy.targetOpening(o.concept, formatCurrency(o.pending, o.currency))}
+                {copy.targetOpening(o.concept, money(o.pending, o.currency))}
               </option>
             ))}
           </select>
           {opening ? (
             <p id="rp-target-hint" className="mt-1 text-xs text-muted tabular-nums">
-              {copy.openingPending(formatCurrency(opening.pending, opening.currency))}
+              {copy.openingPending(money(opening.pending, opening.currency))}
             </p>
           ) : null}
         </FormField>
@@ -298,6 +322,7 @@ export function RecordPaymentModal({
                 patch({ planId, currency: next?.currency ?? '' });
               }}
               disabled={submitting}
+              money={money}
             />
           )}
           {plan || opening ? (
@@ -327,6 +352,17 @@ export function RecordPaymentModal({
                   />
                 </FormField>
               </div>
+              {otherCurrency && plan ? (
+                <PaymentRatePreview
+                  state={rates}
+                  amount={previewAmount}
+                  paymentCurrency={currency}
+                  planCurrency={plan.currency}
+                  planBalance={previewBalance}
+                  date={form.date}
+                  fmt={fmt}
+                />
+              ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField htmlFor="rp-method" label={copy.method}>
                   <select

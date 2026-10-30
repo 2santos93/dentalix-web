@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { PaymentReceiptDocument } from './payment-receipt-document';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
+import type { PaymentReceipt } from '@/lib/payments/payment-receipts-api';
 
 function text(node: HTMLElement): string {
   return (node.textContent ?? '').replace(/\s/g, ' ');
@@ -168,4 +169,64 @@ it('prints the docTypeName of the DTO, or the generic name when it is missing', 
   const doc = screen.getByTestId('receipt-document');
   expect(doc).toHaveTextContent('Identificación fiscal ******5678');
   expect(doc).not.toHaveTextContent('TAX_ID');
+});
+
+describe('DX-376: abono en otra moneda', () => {
+  const inVes = (exchangeRate: PaymentReceipt['exchangeRate']) => {
+    const receipt = paymentReceiptFixture({ exchangeRate });
+    return {
+      ...receipt,
+      snapshot: {
+        ...receipt.snapshot,
+        payment: { ...receipt.snapshot.payment, amount: 1825, currency: 'VES' },
+        planBalance: { currency: 'USD', billable: 1000, paid: 50, balance: 950 },
+      },
+    };
+  };
+  const FROZEN: PaymentReceipt['exchangeRate'] = {
+    status: 'FROZEN',
+    rate: { currency: 'USD', fromPerBase: 36.5, toPerBase: 1, source: 'MANUAL', date: '2026-10-29' },
+    equivalentAmount: 50,
+  };
+
+  it('imprime el importe cobrado, el equivalente en la moneda del plan y «Tasa aplicada: Z (fuente, fecha)»', () => {
+    render(<PaymentReceiptDocument receipt={inVes(FROZEN)} />);
+    const doc = text(screen.getByTestId('receipt-document'));
+    expect(doc).toContain('1825,00 VES');
+    expect(doc).toContain('Equivalente en USD');
+    expect(doc).toContain('50,00 US$');
+    expect(doc).toContain('Tasa aplicada: 1 USD = 36,50 VES (manual, 29/10/2026)');
+  });
+
+  it('la tasa sale de la congelada del abono: con otra tasa congelada imprime otra (reimprimir no la recalcula)', () => {
+    const other: PaymentReceipt['exchangeRate'] = {
+      status: 'FROZEN',
+      rate: { currency: 'USD', fromPerBase: 40, toPerBase: 1, source: 'AUTOMATIC', date: '2026-10-30' },
+      equivalentAmount: 45.63,
+    };
+    render(<PaymentReceiptDocument receipt={inVes(other)} />);
+    const doc = text(screen.getByTestId('receipt-document'));
+    expect(doc).toContain('Tasa aplicada: 1 USD = 40,00 VES (automática, 30/10/2026)');
+    expect(doc).toContain('45,63 US$');
+  });
+
+  it('un abono «sin tasa» lo dice en lugar de la tasa y el equivalente', () => {
+    render(
+      <PaymentReceiptDocument receipt={inVes({ status: 'MISSING', rate: null, equivalentAmount: null })} />,
+    );
+    const doc = text(screen.getByTestId('receipt-document'));
+    expect(doc).toContain('Tasa aplicada: sin tasa de cambio de su día');
+    expect(doc).not.toContain('Equivalente en');
+  });
+
+  it('en la moneda del plan no imprime tasa ni equivalente', () => {
+    render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
+    expect(screen.queryByText(/tasa aplicada/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/equivalente en/i)).not.toBeInTheDocument();
+  });
+
+  it('ningún texto nombra un país ni un banco central', () => {
+    render(<PaymentReceiptDocument receipt={inVes(FROZEN)} />);
+    expect(text(screen.getByTestId('receipt-document'))).not.toMatch(/venezuela|bcv|banco central/i);
+  });
 });

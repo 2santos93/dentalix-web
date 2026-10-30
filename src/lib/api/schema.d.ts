@@ -2114,7 +2114,7 @@ export interface paths {
         };
         /**
          * Tasas de un día para la clínica, según su fuente (DX-374)
-         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor.
+         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo).
          */
         get: operations["ExchangeController_rates"];
         put?: never;
@@ -3316,7 +3316,7 @@ export interface paths {
         put?: never;
         /**
          * Anular un cargo ya generado, con motivo (SEC-050)
-         * @description La única forma de dejar sin efecto un cargo generado: desde el plan, su ítem no cambia de precio, descuento ni estado ni se quita (409 a todo rol). En una transacción, con la cita y el cargo bloqueados, guarda en el cargo quién, cuándo y el motivo (3–500) y retira su ítem del plan «Cargos administrativos» (deja de salir en el estado de cuenta). Una vez por cargo. Si los abonos vivos de ese plan ya cubren el cargo, 409: se anula antes el abono. Auditado (VOID APPOINTMENT, CANCELLATION_FEE_VOIDED, estado CHARGED → VOIDED, sin el texto del motivo). Sin Idempotency-Key, como condonar: repetirla da 409 «ya se anuló».
+         * @description La única forma de dejar sin efecto un cargo generado: desde el plan, su ítem no cambia de precio, descuento ni estado ni se quita (409 a todo rol). En una transacción, con la cita y el cargo bloqueados, guarda en el cargo quién, cuándo y el motivo (3–500) y retira su ítem del plan «Cargos administrativos» (deja de salir en el estado de cuenta). Una vez por cargo. Si los abonos vivos de ese plan ya cubren el cargo, 409: se anula antes el abono. Lo cobrado se compara en la moneda del plan con la base de imputación de cada abono (DX-051, con la tasa que congeló, DX-375); si algún abono vivo aún no la tiene («sin tasa»), 409 «Hay abonos sin convertir» (DX-382). Auditado (VOID APPOINTMENT, CANCELLATION_FEE_VOIDED, estado CHARGED → VOIDED, sin el texto del motivo). Sin Idempotency-Key, como condonar: repetirla da 409 «ya se anuló».
          */
         post: operations["CancellationFeeController_voidFee"];
         delete?: never;
@@ -4824,7 +4824,7 @@ export interface components {
             after: components["schemas"]["AuditScheduleEntryDto"][];
         };
         AuditCurrencyTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Filas del archivo */
             rows: number;
@@ -4982,10 +4982,7 @@ export interface components {
             fullName: string;
             /** @description País de la primera sede: código ISO 3166-1 alfa-2 de la lista de países. Obligatorio junto con los otros campos location*. */
             locationCountry?: string;
-            /**
-             * @description Moneda ISO 4217 de la primera sede (GET /public/currencies).
-             * @example EUR
-             */
+            /** @description Moneda ISO 4217 de la primera sede (GET /public/currencies). */
             locationCurrency?: string;
             /**
              * @description Zona horaria IANA de la primera sede.
@@ -5581,7 +5578,7 @@ export interface components {
             names: components["schemas"]["DocumentTypeNamesValuesDto"];
         };
         OverdueAmountDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Lo exigible vencido, sin lo que está por vencer */
             amount: number;
@@ -6006,10 +6003,7 @@ export interface components {
         CreatePaymentPromiseDto: {
             /** @example 200000 */
             amount: number;
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Día del compromiso (AAAA-MM-DD) en la zona de la sede: desde hoy hasta un año
@@ -6035,7 +6029,7 @@ export interface components {
             /** Format: uuid */
             locationId: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Día civil de la sede
@@ -6066,7 +6060,7 @@ export interface components {
         CoveragePayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             type: components["schemas"]["PayerType"];
             active: boolean;
@@ -6153,7 +6147,7 @@ export interface components {
         PayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             type: components["schemas"]["PayerType"];
             active: boolean;
@@ -6177,7 +6171,7 @@ export interface components {
         AssignedAgreementPayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             type: components["schemas"]["PayerType"];
         };
@@ -6246,7 +6240,7 @@ export interface components {
         AgreementPayerDto: {
             /** Format: uuid */
             id: string;
-            /** @example Sanitas */
+            /** @example Aseguradora Ejemplo */
             name: string;
             /** @description SEC-047: con un pagador externo, asignar el convenio exige una cobertura viva del paciente con él; OTHER (cortesía, empleados…) solo lo asigna ADMIN. */
             type: components["schemas"]["PayerType"];
@@ -6254,18 +6248,15 @@ export interface components {
         AgreementPriceListDto: {
             /** Format: uuid */
             id: string;
-            /** @example Lista Sanitas 2026 */
+            /** @example Lista de precios 2026 */
             name: string;
-            /**
-             * @description Código ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
         };
         AgreementDto: {
             /** Format: uuid */
             id: string;
-            /** @example Convenio Sanitas */
+            /** @example Convenio de empresa */
             name: string;
             payer: components["schemas"]["AgreementPayerDto"];
             kind: components["schemas"]["AgreementKind"];
@@ -6434,10 +6425,7 @@ export interface components {
             /** @description Región cuyo prefijo telefónico se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo por defecto. */
             defaultPhoneRegion: string | null;
             isActive: boolean;
-            /**
-             * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1).
-             * @example EUR
-             */
+            /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1). */
             currency: string | null;
             /**
              * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios. null = sede sin configurar (fase 1).
@@ -6466,14 +6454,11 @@ export interface components {
         CreateLocationDto: {
             /** @example Sede Norte */
             name: string;
-            /** @example Cra 15 #90-20 */
+            /** @description Dirección postal de la sede, texto libre en el formato local. */
             address?: string;
             /** @description País de la sede: código ISO 3166-1 alfa-2 de la lista de países. No decide ninguna regla. */
             country: string;
-            /**
-             * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
-             * @example EUR
-             */
+            /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. */
             currency: string;
             /**
              * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios.
@@ -6501,10 +6486,7 @@ export interface components {
             address?: string;
             /** @description País de la sede: código ISO 3166-1 alfa-2 de la lista de países. No decide ninguna regla. */
             country?: string;
-            /**
-             * @description DX-319: nº de registro sanitario de la sede, texto libre sin formato ni validación por país (hasta 64 caracteres, se recorta). Solo ADMIN; queda auditado con su antes y después. Vacío o null lo quita; sin el campo no cambia.
-             * @example NRS 28/1234-AB
-             */
+            /** @description DX-319: nº de registro sanitario de la sede, texto libre sin formato ni validación por país (hasta 64 caracteres, se recorta). Solo ADMIN; queda auditado con su antes y después. Vacío o null lo quita; sin el campo no cambia. */
             healthRegistrationNumber?: string | null;
             /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
             showHealthRegistrationNumber?: boolean;
@@ -6512,10 +6494,7 @@ export interface components {
             phone?: string | null;
             /** @description Región cuyo prefijo telefónico se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo por defecto. Vacío o null lo quita; sin el campo no cambia, tampoco al cambiar el país. */
             defaultPhoneRegion?: string | null;
-            /**
-             * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
-             * @example EUR
-             */
+            /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. */
             currency?: string;
             /**
              * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios.
@@ -6551,10 +6530,7 @@ export interface components {
             id: string;
             /** @example Convenio Sura EPS */
             name: string;
-            /**
-             * @description Código ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: uuid
@@ -6571,10 +6547,7 @@ export interface components {
         };
         CreatePriceListDto: {
             name: string;
-            /**
-             * @description Código ISO 4217 de `currencies`.
-             * @example COP
-             */
+            /** @description Código ISO 4217 de `currencies`. */
             currency: string;
             /**
              * Format: uuid
@@ -6584,10 +6557,7 @@ export interface components {
         };
         UpdatePriceListDto: {
             name?: string;
-            /**
-             * @description Con precios cargados, otra moneda da 409.
-             * @example COP
-             */
+            /** @description Con precios cargados, otra moneda da 409. */
             currency?: string;
             /**
              * Format: uuid
@@ -8504,7 +8474,7 @@ export interface components {
             /** @description Texto de la clínica (puede ir vacío). */
             text: string;
             suggestedFee: number | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string | null;
         };
         PublicAppointmentConfirmationDto: {
@@ -8612,7 +8582,7 @@ export interface components {
             patientId: string;
             /** @example Ana Pérez */
             patientName: string;
-            /** @example +57 300 123 4567 */
+            /** @description Teléfono tal como está en la ficha, con su indicativo de país si lo tiene. */
             patientPhone: string | null;
             /**
              * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
@@ -8629,10 +8599,7 @@ export interface components {
             presentedLocationId: string;
             /** @description Días completos desde la presentación */
             daysSincePresented: number;
-            /**
-             * @description Moneda del plan (ISO 4217)
-             * @example COP
-             */
+            /** @description Moneda del plan (código ISO 4217 de 3 letras). */
             currency: string;
             /** @description Σ (precio − descuento) de los ítems vivos, en `currency` */
             total: number;
@@ -8645,10 +8612,7 @@ export interface components {
             pageSize: number;
         };
         CreateTreatmentPlanDto: {
-            /**
-             * @description ISO 4217 (si se omite, la moneda de la sede activa o la común de la clínica)
-             * @example EUR
-             */
+            /** @description ISO 4217 (si se omite, la moneda de la sede activa o la común de la clínica) */
             currency?: string;
             notes?: string;
         };
@@ -8766,10 +8730,7 @@ export interface components {
             patientId: string;
             /** @enum {string} */
             status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /**
-             * @description ISO 4217
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             notes: string | null;
             /** Format: uuid */
@@ -8808,10 +8769,7 @@ export interface components {
              * @enum {string}
              */
             status?: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /**
-             * @description ISO 4217
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency?: string;
             notes?: string;
             /**
@@ -8873,7 +8831,7 @@ export interface components {
             percent: number;
         };
         ApplyBulkDiscountResultDto: {
-            /** @description Los ítems descontados: el % de su precio redondeado a la unidad de la moneda del plan (COP sin decimales, EUR a céntimos), nunca por encima del tope del rol ítem a ítem */
+            /** @description Los ítems descontados: el % de su precio redondeado a la unidad de la moneda del plan (sin decimales si la moneda no los usa, a céntimos si usa dos), nunca por encima del tope del rol ítem a ítem */
             items: components["schemas"]["TreatmentPlanItemDto"][];
             /**
              * @description DX-105: ítems pedidos cuyo procedimiento no admite descuentos; se saltan y no cambian
@@ -8960,7 +8918,7 @@ export interface components {
             agreementName: string | null;
         };
         PlanQuoteTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Σ precios */
             gross: number;
@@ -9001,7 +8959,7 @@ export interface components {
             patientId: string;
             /** @enum {string} */
             planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             clinicName: string;
             clinicLogoUrl: string | null;
@@ -9050,7 +9008,7 @@ export interface components {
             agreementName: string | null;
             /** @description false = la prestación no admite descuentos (ni % del convenio ni discrecionales) */
             allowDiscount: boolean;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
         };
         DiscountMaxPercentByRoleDto: {
@@ -9089,7 +9047,7 @@ export interface components {
             location: components["schemas"]["DiscountReportLocationDto"] | null;
         };
         DiscountReportTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Ítems con descuento en esta moneda */
             items: number;
@@ -9101,7 +9059,7 @@ export interface components {
             percentOfGross: number;
         };
         AgreementReductionTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Líneas con rebaja de convenio en esta moneda */
             items: number;
@@ -9129,7 +9087,7 @@ export interface components {
             toothNumber: string;
             /** @description Procedimiento del catálogo */
             procedure: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre) */
             catalogPrice: number | null;
@@ -9218,13 +9176,7 @@ export interface components {
             base: "USD";
             /** @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día). */
             source: components["schemas"]["ExchangeRateSource"];
-            /**
-             * @description Units of each currency per 1 USD, for the requested date. Con fuente MANUAL solo trae las monedas con tasa registrada ese día: una moneda que NO aparece está «sin tasa» (no se inventa, no se toma la de otro día ni se pide al proveedor) y convertirla responde 400 EXCHANGE_RATE_MISSING.
-             * @example {
-             *       "COP": 4000,
-             *       "EUR": 0.92
-             *     }
-             */
+            /** @description Units of each currency per 1 USD, for the requested date, keyed by its ISO 4217 code (3 letters). Con fuente MANUAL solo trae las monedas con tasa registrada ese día: una moneda que NO aparece está «sin tasa» (no se inventa, no se toma la de otro día ni se pide al proveedor) y convertirla responde 400 EXCHANGE_RATE_MISSING. */
             rates: {
                 [key: string]: number;
             };
@@ -9232,9 +9184,9 @@ export interface components {
         ConvertResponseDto: {
             /** @example 100 */
             amount: number;
-            /** @example USD */
+            /** @description Código ISO 4217 de 3 letras. */
             from: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             to: string;
             /** @example 2026-07-01 */
             date: string;
@@ -9257,10 +9209,7 @@ export interface components {
              * @example 2026-10-30
              */
             manualSince: string | null;
-            /**
-             * @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia.
-             * @example USD
-             */
+            /** @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia. */
             baseCurrency: string;
         };
         UpdateExchangeRateSettingsDto: {
@@ -9284,7 +9233,7 @@ export interface components {
              * @example 2026-10-30
              */
             date: string;
-            /** @example VES */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Unidades de la moneda por 1 USD.
@@ -9306,10 +9255,7 @@ export interface components {
              * @example 2026-10-30
              */
             date: string;
-            /**
-             * @description Código ISO 4217 de la lista de monedas (GET /currencies). USD no: es la base.
-             * @example VES
-             */
+            /** @description Código ISO 4217 de la lista de monedas (GET /currencies). USD no: es la base. */
             currency: string;
             /**
              * @description Unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
@@ -9385,7 +9331,7 @@ export interface components {
             logoUrl: string | null;
         };
         CurrencyDto: {
-            /** @example EUR */
+            /** @description Código ISO 4217 de 3 letras. */
             code: string;
             /** @example Euro */
             name: string;
@@ -9401,9 +9347,9 @@ export interface components {
         CityDto: {
             /** @example 12345 */
             id: number;
-            /** @example Bogotá */
+            /** @description Nombre de la ciudad. */
             name: string;
-            /** @example Bogota D.C. */
+            /** @description Región, provincia o estado de la ciudad, si lo hay. */
             region: string | null;
         };
         Icd10CodeDto: {
@@ -9460,7 +9406,7 @@ export interface components {
              */
             paidAt: string;
             /**
-             * @description Día civil (YYYY-MM-DD) de `paidAt` en la zona IANA de la sede del abono (DX-097): el día de caja en que cuenta. Un abono a las 20:00 en Bogotá es de ese día aunque en UTC ya sea el siguiente.
+             * @description Día civil (YYYY-MM-DD) de `paidAt` en la zona IANA de la sede del abono (DX-097): el día de caja en que cuenta. Un abono a las 20:00 de una sede en UTC−5 es de ese día aunque en UTC ya sea el siguiente.
              * @example 2026-10-16
              */
             paidOn: string;
@@ -9473,10 +9419,7 @@ export interface components {
             registeredToday: boolean;
             /** @example 150000 */
             amount: number;
-            /**
-             * @description ISO 4217 currency code
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
@@ -9493,7 +9436,7 @@ export interface components {
             location: components["schemas"]["CashLocationRefDto"] | null;
         };
         CashCurrencyTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Suma sin convertir
@@ -9509,7 +9452,7 @@ export interface components {
              * @enum {string|null}
              */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 200000 */
             total: number;
@@ -9544,13 +9487,10 @@ export interface components {
              * @example 100
              */
             amount: number;
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
-             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en Bogotá) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC.
+             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en UTC−5) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC.
              * @example 2026-10-16
              */
             paidAt: string;
@@ -9559,10 +9499,7 @@ export interface components {
             notes?: string;
         };
         FrozenExchangeRateDto: {
-            /**
-             * @description Moneda de destino: la del plan (o la del saldo migrado)
-             * @example USD
-             */
+            /** @description Moneda de destino: la del plan (o la del saldo migrado) */
             currency: string;
             /**
              * @description Unidades de la moneda del abono por 1 USD, tal como las dio la fuente ese día (hasta 8 decimales)
@@ -9606,10 +9543,7 @@ export interface components {
             patientId: string;
             /** @example 100 */
             amount: number;
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** Format: date-time */
             paidAt: string;
@@ -9632,10 +9566,7 @@ export interface components {
              * @example NOR-000123
              */
             receiptNumber: string | null;
-            /**
-             * @description DX-375: moneda a la que convierte la tasa del abono (la del plan o la del saldo migrado); null en un abono anterior a la tasa congelada aún sin congelar.
-             * @example USD
-             */
+            /** @description DX-375: moneda a la que convierte la tasa del abono (la del plan o la del saldo migrado); null en un abono anterior a la tasa congelada aún sin congelar. */
             exchangeRateCurrency: string | null;
             /** @description DX-375: la tasa que congeló el abono; null en su misma moneda, «sin tasa» o anterior aún sin congelar. */
             frozenRate: components["schemas"]["FrozenExchangeRateDto"] | null;
@@ -9650,7 +9581,7 @@ export interface components {
              * @example 150000
              */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Día civil del abono en su sede: el de la tasa que falta
@@ -9688,10 +9619,7 @@ export interface components {
             balance: number;
         };
         PlanBalanceWithItemsDto: {
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             planCurrency: string;
             /**
              * @description Sum of ACCEPTED|DONE item prices minus their discounts
@@ -9738,6 +9666,22 @@ export interface components {
              */
             reason: string;
         };
+        /**
+         * @description FROZEN: congeló su tasa (rate y equivalentAmount presentes). MISSING: «sin tasa» de su día. LEGACY: anterior a la tasa congelada y aún sin congelar.
+         * @enum {string}
+         */
+        ReceiptExchangeRateStatus: "FROZEN" | "MISSING" | "LEGACY";
+        ReceiptExchangeRateDto: {
+            /** @description FROZEN: congeló su tasa (rate y equivalentAmount presentes). MISSING: «sin tasa» de su día. LEGACY: anterior a la tasa congelada y aún sin congelar. */
+            status: components["schemas"]["ReceiptExchangeRateStatus"];
+            /** @description La tasa congelada (moneda de destino, fuente y día); null si no la congeló. */
+            rate: components["schemas"]["FrozenExchangeRateDto"] | null;
+            /**
+             * @description El abono en la moneda de destino (`rate.currency`) con la tasa congelada, redondeado a céntimos; null sin tasa.
+             * @example 50
+             */
+            equivalentAmount: number | null;
+        };
         ReceiptClinicDto: {
             /** @example Clínica Demo */
             name: string;
@@ -9775,7 +9719,7 @@ export interface components {
             id: string;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
@@ -9807,7 +9751,7 @@ export interface components {
             asOfDate: string;
         };
         ReceiptPlanBalanceDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 900000 */
             billable: number;
@@ -9862,6 +9806,8 @@ export interface components {
             /** Format: date-time */
             voidedAt: string | null;
             voidReason: string | null;
+            /** @description DX-376: la tasa del abono y su equivalente en la moneda de su destino; null si el abono está en esa moneda. */
+            exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
             /** @description Foto inmutable al emitir (en los «sin serie», los datos de hoy). */
             snapshot: components["schemas"]["ReceiptSnapshotDto"];
         };
@@ -9930,14 +9876,14 @@ export interface components {
              * @example 100
              */
             paymentAmount: number;
-            /** @example USD */
+            /** @description Código ISO 4217 de 3 letras. */
             paymentCurrency: string;
             /**
              * @description Día civil del abono en su sede: la fecha de la tasa
              * @example 2026-10-20
              */
             paidOn: string;
-            /** @example EUR */
+            /** @description Código ISO 4217 de 3 letras. */
             planCurrency: string;
             /** @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos */
             planStatus: components["schemas"]["TreatmentPlanStatus"];
@@ -9999,14 +9945,14 @@ export interface components {
              * @example 100
              */
             paymentAmount: number;
-            /** @example USD */
+            /** @description Código ISO 4217 de 3 letras. */
             paymentCurrency: string;
             /**
              * @description Día civil del abono en su sede: la fecha de la tasa
              * @example 2026-10-20
              */
             paidOn: string;
-            /** @example EUR */
+            /** @description Código ISO 4217 de 3 letras. */
             planCurrency: string;
             /** @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos */
             planStatus: components["schemas"]["TreatmentPlanStatus"];
@@ -10104,10 +10050,7 @@ export interface components {
             id: string;
             /** @example clx0987654321 */
             treatmentPlanId: string;
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @enum {string} */
             status: "ACTIVE" | "COMPLETED" | "CANCELLED";
@@ -10220,10 +10163,7 @@ export interface components {
             amount: number;
         };
         AccountStatementCurrencySummaryDto: {
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Σ ítems ACCEPTED|DONE de los planes no cancelados en esta moneda
@@ -10260,7 +10200,7 @@ export interface components {
             nextInstallment: components["schemas"]["AccountStatementNextInstallmentDto"] | null;
         };
         AccountStatementOtherCurrencyDto: {
-            /** @example USD */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 50 */
             amount: number;
@@ -10270,7 +10210,7 @@ export interface components {
             id: string;
             /** @enum {string} */
             status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: date-time
@@ -10324,7 +10264,7 @@ export interface components {
             paidOn: string;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
@@ -10360,7 +10300,7 @@ export interface components {
             paymentPlanId: string;
             /** Format: uuid */
             treatmentPlanId: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @enum {string} */
             kind: "DOWN_PAYMENT" | "INSTALLMENT";
@@ -10379,7 +10319,7 @@ export interface components {
         AccountStatementOpeningBalanceDto: {
             /** Format: uuid */
             id: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 150000 */
             amount: number;
@@ -10429,7 +10369,7 @@ export interface components {
             lastName: string;
         };
         FamilyCurrencyAmountsDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Igual que `summary[].budgeted` individual */
             budgeted: number;
@@ -10467,10 +10407,7 @@ export interface components {
              * @enum {string}
              */
             status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
-            /**
-             * @description Moneda del plan (la del saldo y la del plan de cuotas)
-             * @example COP
-             */
+            /** @description Moneda del plan (la del saldo y la del plan de cuotas) */
             currency: string;
             /**
              * Format: date-time
@@ -10512,7 +10449,7 @@ export interface components {
             id: string;
             /** @example Ana Pérez */
             fullName: string;
-            /** @example +57 300 123 4567 */
+            /** @description Teléfono tal como está en la ficha, con su indicativo de país si lo tiene. */
             phone: string | null;
             /**
              * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
@@ -10539,7 +10476,7 @@ export interface components {
             amount: number;
         };
         AgingCurrencyDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Saldo neto = debt − credit: el mismo `balance` del estado de cuenta */
             balance: number;
@@ -10561,7 +10498,7 @@ export interface components {
              */
             paidOn: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
         };
         AgingRowNextInstallmentDto: {
@@ -10569,7 +10506,7 @@ export interface components {
             dueDate: string;
             /** @description Lo que falta por cubrir de esa cuota */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
         };
         AgingLastNoteDto: {
@@ -10582,7 +10519,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Día civil de la sede
@@ -10617,7 +10554,7 @@ export interface components {
             promise: components["schemas"]["AgingPromiseDto"] | null;
         };
         AgingTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Deudores con esta moneda */
             patients: number;
@@ -10675,7 +10612,7 @@ export interface components {
              * @enum {string|null}
              */
             trend: "BETTER" | "WORSE" | "EQUAL" | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description BE-045: solo en producción y % de cobro, y solo cuando la producción del período comparado en esta moneda no es base (empieza antes de DX-050 con realizados «Sin atribuir», o tuvo cobros sin producción): `change` y `trend` van a null
@@ -10765,14 +10702,14 @@ export interface components {
             fullName: string | null;
         };
         CashMoneyDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             amount: number;
         };
         /** @enum {string} */
         PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
         CashExpectedLineDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /** @description Fondo inicial (solo efectivo) */
@@ -10799,7 +10736,7 @@ export interface components {
              */
             paidOn: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
             /** @example PRI-000012 */
@@ -10818,7 +10755,7 @@ export interface components {
              */
             paidOn: string;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
             /** @example PRI-000012 */
@@ -10844,7 +10781,7 @@ export interface components {
             category: string;
             supplier: string | null;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** Format: date-time */
             createdAt: string;
@@ -10862,7 +10799,7 @@ export interface components {
             category: string;
             supplier: string | null;
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** Format: date-time */
             createdAt: string;
@@ -10907,7 +10844,7 @@ export interface components {
             id: string;
             /** @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada. */
             kind: components["schemas"]["CashAdjustmentKind"];
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /** @description Con signo */
@@ -10928,7 +10865,7 @@ export interface components {
             originalSession: components["schemas"]["CashSessionRefDto"] | null;
         };
         CashClosingLineDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             opening: number;
@@ -11026,10 +10963,7 @@ export interface components {
             session: components["schemas"]["CashSessionDetailDto"] | null;
         };
         CashFloatInputDto: {
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @example 100000 */
             amount: number;
@@ -11073,10 +11007,7 @@ export interface components {
             pageSize: number;
         };
         CashCountInputDto: {
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /** @example 350000 */
@@ -11094,10 +11025,7 @@ export interface components {
             reason: string;
         };
         CreateCashAdjustmentDto: {
-            /**
-             * @description ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /**
@@ -11154,7 +11082,7 @@ export interface components {
             /** Format: uuid */
             locationId: string;
             locationName: string;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Abonos vivos del mes civil de la sede, sin anulados. */
             income: number;
@@ -11194,7 +11122,7 @@ export interface components {
             description: string | null;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: date
@@ -11271,10 +11199,7 @@ export interface components {
              * @example 150000
              */
             amount: number;
-            /**
-             * @description Código ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: date
@@ -11300,7 +11225,7 @@ export interface components {
             id: string;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /**
@@ -11339,7 +11264,7 @@ export interface components {
             description: string | null;
             /** @example 150000 */
             amount: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: date
@@ -11388,7 +11313,7 @@ export interface components {
              * @example 150000
              */
             amount?: number;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency?: string;
             /** Format: uuid */
             locationId?: string;
@@ -11452,10 +11377,7 @@ export interface components {
              * @example 150000
              */
             amount: number;
-            /**
-             * @description Código ISO 4217
-             * @example COP
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * Format: uuid
@@ -11664,7 +11586,7 @@ export interface components {
              * @example 50000
              */
             suggestedFee: number | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string | null;
             /** @description Texto para el paciente */
             patientText: string;
@@ -11693,10 +11615,7 @@ export interface components {
              * @example 50000
              */
             suggestedFee?: number | null;
-            /**
-             * @description ISO 4217 del importe sugerido (obligatoria con importe)
-             * @example COP
-             */
+            /** @description ISO 4217 del importe sugerido (obligatoria con importe) */
             currency?: string | null;
             /** @example Si no puedes venir, avísanos con 24 horas de antelación. */
             patientText?: string;
@@ -11709,7 +11628,7 @@ export interface components {
             version: number;
             noticeHours: number;
             suggestedFee: number | null;
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string | null;
         };
         CancellationFeeRecordDto: {
@@ -12119,10 +12038,7 @@ export interface components {
             from: string;
             /** Format: date-time */
             to: string;
-            /**
-             * @description ISO 4217 currency code
-             * @example USD
-             */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
              * @description Sum of every active payment's amount in the range, each converted to `currency` using the rate of ITS OWN civil paid date in its location's time zone (never today's rate).
@@ -12134,13 +12050,7 @@ export interface components {
              * @example 12
              */
             count: number;
-            /**
-             * @description Breakdown of the ORIGINAL (unconverted) amounts grouped by each payment's own currency.
-             * @example {
-             *       "COP": 500000,
-             *       "USD": 30
-             *     }
-             */
+            /** @description Breakdown of the ORIGINAL (unconverted) amounts grouped by each payment's own currency, keyed by its ISO 4217 code (3 letters). */
             byCurrency: Record<string, never>;
         };
         DashboardLowStockItemDto: {
@@ -13772,7 +13682,7 @@ export interface components {
         /** @enum {string} */
         PatientImportDuplicateMode: "SKIP" | "FILL_EMPTY";
         BalanceCurrencyTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Filas del archivo */
             rows: number;
@@ -13780,7 +13690,7 @@ export interface components {
             amount: number;
         };
         ImportedBalanceTotalDto: {
-            /** @example COP */
+            /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** @description Saldos migrados vivos */
             count: number;
@@ -19943,7 +19853,7 @@ export interface operations {
             query: {
                 /** @description Procedimiento del catálogo */
                 catalogItemId: string;
-                /** @description Moneda del plan (ISO 4217) */
+                /** @description Moneda del plan (código ISO 4217 de 3 letras). */
                 currency: string;
             };
             header?: {
@@ -20141,7 +20051,7 @@ export interface operations {
     ExchangeController_rates: {
         parameters: {
             query: {
-                /** @description Historical day to fetch USD-base rates for (YYYY-MM-DD). */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista). Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor entre el alta de la clínica (o su primer abono, lo anterior) y hoy en la zona de sus sedes: fuera de ahí, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -20158,17 +20068,38 @@ export interface operations {
                     "application/json": components["schemas"]["RatesResponseDto"];
                 };
             };
+            /** @description Fecha que no existe (`EXCHANGE_RATE_DATE_INVALID` o el mensaje de validación de `date`) o día sin tasa guardada fuera de la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     ExchangeController_convert: {
         parameters: {
             query: {
                 amount: number;
-                /** @description ISO 4217 currency code */
+                /** @description Código ISO 4217 de 3 letras. */
                 from: string;
-                /** @description ISO 4217 currency code */
+                /** @description Código ISO 4217 de 3 letras. */
                 to: string;
-                /** @description Historical day whose rate applies to this conversion (YYYY-MM-DD). */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista). Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor entre el alta de la clínica (o su primer abono, lo anterior) y hoy en la zona de sus sedes: fuera de ahí, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -20185,8 +20116,22 @@ export interface operations {
                     "application/json": components["schemas"]["ConvertResponseDto"];
                 };
             };
-            /** @description Moneda sin tasa ese día: «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español */
+            /** @description Fecha que no existe (`EXCHANGE_RATE_DATE_INVALID` o el mensaje de validación de `date`) o día sin tasa guardada fuera de la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23245,7 +23190,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Sin cargo generado (o condonado), ya anulado, ya cobrado (anula antes el abono), o la cita cambió */
+            /** @description Sin cargo generado (o condonado), ya anulado, ya cobrado (anula antes el abono), hay abonos del plan sin convertir a su moneda (registra la tasa del día), o la cita cambió. «Ya cobrado» compara en la moneda del plan con la base de cada abono (DX-382) */
             409: {
                 headers: {
                     [name: string]: unknown;

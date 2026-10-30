@@ -28,4 +28,17 @@ describe('LandingPage', () => {
     expect(screen.getByRole('heading', { name: /historia clínica confiable/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /^white-label$/i })).toBeInTheDocument();
   });
+
+  it('describe sus garantías sin nombrar leyes ni prometer que las cumple (DX-369)', () => {
+    const { container } = render(<LandingPage />);
+    const text = container.textContent ?? '';
+
+    expect(text).not.toMatch(/habeas|lgpd|gdpr|rgpd|hipaa|\bley\b|cumpl/i);
+    expect(screen.getByRole('heading', { name: /^seguridad y trazabilidad$/i })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Registro de auditoría de accesos y cambios, historia clínica inmutable, consentimientos versionados y conexión cifrada.',
+      ),
+    ).toBeInTheDocument();
+  });
 });

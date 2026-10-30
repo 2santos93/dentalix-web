@@ -4,13 +4,30 @@ import { PlanQuotePrintView } from './plan-quote-print-view';
 import { getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { ApiError } from '@/lib/api/client';
 import { planQuoteFixture } from './plan-quote-fixture';
+import { getExchangeRates } from '@/lib/exchange/exchange-api';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
   getPlanQuote: jest.fn(),
 }));
 
+jest.mock('../../lib/exchange/exchange-api', () => ({
+  getExchangeRates: jest.fn(),
+}));
+jest.mock('../../lib/reference/currencies-api', () => ({
+  listCurrencies: jest.fn().mockResolvedValue([
+    { code: 'COP', name: 'Peso', symbol: '$' },
+    { code: 'USD', name: 'Dólar', symbol: 'US$' },
+  ]),
+}));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn(),
+}));
+
 const mockedGet = getPlanQuote as jest.MockedFunction<typeof getPlanQuote>;
+const mockedRates = getExchangeRates as jest.MockedFunction<typeof getExchangeRates>;
 
 function renderView(props: Partial<React.ComponentProps<typeof PlanQuotePrintView>> = {}) {
   return render(
@@ -30,6 +47,61 @@ describe('PlanQuotePrintView (DX-012)', () => {
     mockedGet.mockReset();
     print.mockReset();
     window.print = print;
+    jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+    mockedRates.mockReset();
+  });
+
+  describe('DX-376: segunda moneda opcional', () => {
+    it('sin elegir no pide tasas; al elegir una pinta su total con la tasa de hoy en la sede', async () => {
+      mockedGet.mockResolvedValue(planQuoteFixture());
+      mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { COP: 4000 } });
+      renderView();
+      await screen.findByTestId('quote-header');
+      expect(mockedRates).not.toHaveBeenCalled();
+      const select = screen.getByLabelText('Segunda moneda (opcional)');
+      await screen.findByRole('option', { name: /Dólar/ });
+      await userEvent.selectOptions(select, 'USD');
+      const total = await screen.findByTestId('quote-second-total');
+      expect((total.textContent ?? '').replace(/\s/g, ' ')).toContain('825,00 US$');
+      expect(mockedRates).toHaveBeenCalledWith('tok', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
+      expect(screen.getByTestId('quote-second-currency')).toHaveTextContent(/automática/);
+    });
+
+    it('sin tasa de hoy lo dice y no imprime la segunda moneda', async () => {
+      mockedGet.mockResolvedValue(planQuoteFixture());
+      mockedRates.mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: {} });
+      renderView();
+      await screen.findByTestId('quote-header');
+      await screen.findByRole('option', { name: /Dólar/ });
+      await userEvent.selectOptions(screen.getByLabelText('Segunda moneda (opcional)'), 'USD');
+      expect(await screen.findByText(/no hay tasa de COP para hoy/i)).toBeInTheDocument();
+      expect(screen.queryByTestId('quote-second-total')).not.toBeInTheDocument();
+    });
+
+    it('si falla la consulta lo dice con reintento', async () => {
+      mockedGet.mockResolvedValue(planQuoteFixture());
+      mockedRates
+        .mockRejectedValueOnce(new Error('red'))
+        .mockResolvedValueOnce({ base: 'USD', source: 'AUTOMATIC', rates: { COP: 4000 } });
+      renderView();
+      await screen.findByTestId('quote-header');
+      await screen.findByRole('option', { name: /Dólar/ });
+      await userEvent.selectOptions(screen.getByLabelText('Segunda moneda (opcional)'), 'USD');
+      await userEvent.click(await screen.findByRole('button', { name: 'Reintentar la consulta de la tasa' }));
+      expect(await screen.findByTestId('quote-second-total')).toBeInTheDocument();
+    });
+
+    it('sin la zona de la sede no se queda «consultando» para siempre: lo dice con reintento', async () => {
+      mockedGet.mockResolvedValue(planQuoteFixture());
+      jest.mocked(listLocations).mockRejectedValue(new Error('red'));
+      renderView();
+      await screen.findByTestId('quote-header');
+      await screen.findByRole('option', { name: /Dólar/ });
+      await userEvent.selectOptions(screen.getByLabelText('Segunda moneda (opcional)'), 'USD');
+      expect(await screen.findByText(/zona horaria de la sede/i)).toBeInTheDocument();
+      expect(screen.queryByText('Consultando la tasa de hoy…')).not.toBeInTheDocument();
+      expect(mockedRates).not.toHaveBeenCalled();
+    });
   });
 
   it('muestra la carga, pinta el documento y abre el diálogo de impresión una vez', async () => {
