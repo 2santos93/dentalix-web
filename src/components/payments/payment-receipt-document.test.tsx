@@ -230,3 +230,27 @@ describe('DX-376: abono en otra moneda', () => {
     expect(text(screen.getByTestId('receipt-document'))).not.toMatch(/venezuela|bcv|banco central/i);
   });
 });
+
+it('DX-377: el recibo muestra el medio de pago de la clínica y la referencia', () => {
+  const receipt = paymentReceiptFixture();
+  render(
+    <PaymentReceiptDocument
+      receipt={{
+        ...receipt,
+        snapshot: {
+          ...receipt.snapshot,
+          payment: {
+            ...receipt.snapshot.payment,
+            method: 'TRANSFER',
+            paymentMethodName: 'Pago móvil',
+            reference: '0412 555',
+          },
+        },
+      }}
+    />,
+  );
+  const doc = screen.getByTestId('receipt-document');
+  expect(doc).toHaveTextContent('Pago móvil');
+  expect(doc).toHaveTextContent('Referencia');
+  expect(doc).toHaveTextContent('0412 555');
+});

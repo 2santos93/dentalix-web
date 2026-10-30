@@ -46,6 +46,8 @@ const anaCash: CashPayment = {
   amount: 150000.5,
   currency: 'COP',
   method: 'CASH',
+  paymentMethod: null,
+  reference: null,
   notes: null,
   location: { id: 'loc-1', name: 'Sede principal' },
   patient: { id: 'pat-1', fullName: 'Ana Gómez' },
@@ -88,6 +90,11 @@ function response(overrides: Partial<CashPaymentsResponse> = {}): CashPaymentsRe
       byCurrency: [
         { currency: 'COP', total: 150000.5, count: 1 },
         { currency: 'USD', total: 50.25, count: 1 },
+      ],
+      // DX-377: el resumen se pinta por medio de pago de la clínica.
+      byPaymentMethod: [
+        { paymentMethodId: 'pm-cash', name: 'Efectivo', currency: 'COP', total: 150000.5, count: 1 },
+        { paymentMethodId: 'pm-card', name: 'Tarjeta', currency: 'USD', total: 50.25, count: 1 },
       ],
       byMethod: [
         { method: 'CASH', currency: 'COP', total: 150000.5, count: 1 },
@@ -161,6 +168,17 @@ it('resume el período por moneda y por método en un registro, no en tarjetas',
   expect(money(card?.textContent)).toMatch(/USD/);
 });
 
+it('DX-377: cada abono muestra su medio de pago y su referencia', async () => {
+  mockedList.mockResolvedValue(
+    response({
+      items: [{ ...anaCash, method: 'TRANSFER', paymentMethod: { id: 'pm-mobile', name: 'Pago móvil' }, reference: '0412 555' }],
+    }),
+  );
+  render(<CashRegisterView token="tok" />);
+  expect((await screen.findAllByText('Pago móvil')).length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Ref. 0412 555').length).toBeGreaterThan(0);
+});
+
 it('marca el alcance de sede: "Todas las sedes" sin sede activa, el nombre con una', async () => {
   mockedList.mockResolvedValueOnce(response());
   const { unmount } = render(<CashRegisterView token="tok" />);
@@ -194,7 +212,7 @@ it('muestra el estado vacío cuando el período no tiene abonos', async () => {
     response({
       items: [],
       total: 0,
-      summary: { count: 0, byCurrency: [], byMethod: [] },
+      summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [] },
     }),
   );
   render(<CashRegisterView token="tok" />);
@@ -562,7 +580,7 @@ describe('tras anular, la caja no se queda en una página vacía (DX-067)', () =
       response({
         items: [],
         total: 0,
-        summary: { count: 0, byCurrency: [], byMethod: [] },
+        summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [] },
       }),
     );
     render(<CashRegisterView token="tok" />);

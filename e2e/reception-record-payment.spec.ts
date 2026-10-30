@@ -178,7 +178,7 @@ for (const viewport of [
     await expect(dialog.getByRole('alert')).toContainText('Escribe un importe mayor que 0.');
 
     await dialog.getByLabel('Importe').fill(String(PAYMENT));
-    await dialog.getByLabel('Método').selectOption('CASH');
+    await dialog.getByLabel('Método').selectOption({ label: 'Efectivo' });
     await submit.click();
     await expect(dialog).toBeHidden({ timeout: 10_000 });
     await expect(page.getByRole('status').filter({ hasText: 'Abono registrado' })).toBeVisible();

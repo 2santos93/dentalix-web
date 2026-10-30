@@ -25,6 +25,32 @@ jest.mock('../../lib/payments/billable-plans-api', () => ({
 jest.mock('../../lib/exchange/exchange-api', () => ({
   getExchangeRates: jest.fn(),
 }));
+// DX-377: medios de pago activos de la clínica.
+jest.mock('../../lib/payments/payment-methods-api', () => ({
+  ...jest.requireActual('../../lib/payments/payment-methods-api'),
+  listPaymentMethods: jest.fn().mockResolvedValue([
+    {
+      id: 'pm-transfer',
+      name: 'Transferencia',
+      kind: 'TRANSFER',
+      active: true,
+      requiresReference: false,
+      legacyMethod: 'TRANSFER',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'pm-mobile',
+      name: 'Pago móvil',
+      kind: 'DIGITAL',
+      active: true,
+      requiresReference: true,
+      legacyMethod: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ]),
+}));
 jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
@@ -102,6 +128,10 @@ function savedPayment(
     paidAt: '2026-10-01T00:00:00.000Z',
     paidOn: '2026-10-01',
     method: 'TRANSFER',
+    paymentMethodId: null,
+    paymentMethodName: null,
+    reference: null,
+    duplicateReferenceReason: null,
     notes: null,
     createdById: 'u-1',
     createdAt: '2026-10-16T12:00:00.000Z',
@@ -287,7 +317,7 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   await within(dialog).findByLabelText('Plan');
 
   await user.type(within(dialog).getByLabelText('Importe'), '150000');
-  await user.selectOptions(within(dialog).getByLabelText('Método'), 'TRANSFER');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Transferencia');
   await user.clear(within(dialog).getByLabelText('Fecha de pago'));
   await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
   await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
@@ -300,7 +330,7 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
         amount: 150000,
         currency: 'COP',
         paidAt: '2026-10-01',
-        method: 'TRANSFER',
+        paymentMethodId: 'pm-transfer',
       },
       expect.stringMatching(/^[0-9a-f-]{36}$/),
     ),
@@ -308,6 +338,51 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   expect(onRecorded).toHaveBeenCalledWith(
     expect.stringMatching(/^Abono registrado: COP\s150\.000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
   );
+});
+
+it('DX-377: un medio que pide referencia la exige antes de llamar a la API', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  expect(await within(dialog).findByText('Este medio de pago pide la referencia del pago.')).toBeInTheDocument();
+  expect(mockedRecord).not.toHaveBeenCalled();
+});
+
+it('DX-377: referencia repetida (409): avisa, pide motivo y reintenta con él y la misma clave', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  mockedRecord
+    .mockRejectedValueOnce(
+      new ApiError(409, 'Esta referencia ya se usó con este medio de pago en otro abono de los últimos 90 días.', {
+        code: 'PAYMENT_REFERENCE_DUPLICATE',
+      }),
+    )
+    .mockResolvedValueOnce(savedPayment());
+  const { onRecorded } = renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  await user.type(within(dialog).getByLabelText('Referencia (obligatoria)'), ' 0412 555 ');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  expect(await within(dialog).findByText(/Esta referencia ya se usó/)).toBeInTheDocument();
+  await user.type(within(dialog).getByLabelText('Motivo para registrarla igualmente'), 'Dos cuotas, una operación');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar igualmente' }));
+
+  await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+  const [first, second] = mockedRecord.mock.calls;
+  expect(first[2]).toEqual(expect.objectContaining({ paymentMethodId: 'pm-mobile', reference: '0412 555' }));
+  expect(second[2]).toEqual(
+    expect.objectContaining({ reference: '0412 555', duplicateReferenceReason: 'Dos cuotas, una operación' }),
+  );
+  expect(second[3]).toBe(first[3]);
 });
 
 it('valida el importe en español sin llamar a la API', async () => {

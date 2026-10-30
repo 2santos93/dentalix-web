@@ -1688,6 +1688,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payment-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PaymentMethodsController_list"];
+        put?: never;
+        post: operations["PaymentMethodsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-methods/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PaymentMethodsController_update"];
+        trace?: never;
+    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -4747,7 +4779,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -8124,6 +8156,51 @@ export interface components {
             /** @description false (defecto): una cita fuera del horario del profesional se agenda con el aviso PROVIDER_OFF_SCHEDULE. true: se rechaza con 409. */
             strictProviderSchedule: boolean;
         };
+        /**
+         * @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER).
+         * @enum {string}
+         */
+        PaymentMethodKind: "CASH" | "CARD" | "TRANSFER" | "DIGITAL" | "OTHER";
+        /**
+         * @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica.
+         * @enum {string}
+         */
+        PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+        PaymentMethodDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Pago móvil */
+            name: string;
+            /** @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER). */
+            kind: components["schemas"]["PaymentMethodKind"];
+            active: boolean;
+            /** @description Si el abono con este medio exige la referencia del pago. */
+            requiresReference: boolean;
+            /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
+            legacyMethod: components["schemas"]["PaymentMethod"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatePaymentMethodDto: {
+            /** @example Pago móvil */
+            name: string;
+            kind: components["schemas"]["PaymentMethodKind"];
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
+            /** @description Sin indicarlo, no pide referencia. */
+            requiresReference?: boolean;
+        };
+        UpdatePaymentMethodDto: {
+            /** @example Pago móvil */
+            name?: string;
+            kind?: components["schemas"]["PaymentMethodKind"];
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
+            /** @description Sin indicarlo, no pide referencia. */
+            requiresReference?: boolean;
+        };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
         WaitlistSourceAppointmentDto: {
@@ -9348,6 +9425,12 @@ export interface components {
             /** @example Caries de la dentina */
             labelEs: string;
         };
+        CashPaymentMethodRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Pago móvil */
+            name: string;
+        };
         CashLocationRefDto: {
             /** Format: uuid */
             id: string;
@@ -9413,6 +9496,9 @@ export interface components {
             currency: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @description DX-377: medio de pago (el inicial de su método si el abono es de una réplica anterior). */
+            paymentMethod: components["schemas"]["CashPaymentMethodRefDto"] | null;
+            reference: string | null;
             notes: string | null;
             location: components["schemas"]["CashLocationRefDto"];
             patient: components["schemas"]["CashPatientRefDto"];
@@ -9449,6 +9535,21 @@ export interface components {
             /** @example 2 */
             count: number;
         };
+        CashPaymentMethodTotalDto: {
+            /**
+             * Format: uuid
+             * @description Medio de pago (DX-377). Un abono de una réplica anterior cuenta en el medio inicial de su método; `null` = abonos sin método.
+             */
+            paymentMethodId: string | null;
+            /** @example Pago móvil */
+            name: string | null;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @example 200000 */
+            total: number;
+            /** @example 2 */
+            count: number;
+        };
         CashPaymentsSummaryDto: {
             /** @description Número de abonos del período */
             count: number;
@@ -9456,6 +9557,8 @@ export interface components {
             byCurrency: components["schemas"]["CashCurrencyTotalDto"][];
             /** @description Total por método y moneda. */
             byMethod: components["schemas"]["CashMethodTotalDto"][];
+            /** @description DX-377: total por medio de pago de la clínica y moneda. */
+            byPaymentMethod: components["schemas"]["CashPaymentMethodTotalDto"][];
         };
         CashPaymentsResponseDto: {
             items: components["schemas"]["CashPaymentDto"][];
@@ -9484,8 +9587,20 @@ export interface components {
              * @example 2026-10-16
              */
             paidAt: string;
-            /** @enum {string} */
+            /**
+             * @description Método antiguo (clientes anteriores a DX-377). Con `paymentMethodId` se ignora: el método sale del tipo base del medio. Solo con él, el abono se enlaza al medio inicial de ese método.
+             * @enum {string}
+             */
             method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+            /**
+             * Format: uuid
+             * @description Medio de pago ACTIVO del catálogo de la clínica (GET /payment-methods).
+             */
+            paymentMethodId?: string;
+            /** @description Referencia del pago. Obligatoria si el medio la pide (400). Se compara sin espacios y en mayúsculas: si el mismo medio ya la tiene en un abono vivo de ±90 días, 409 `PAYMENT_REFERENCE_DUPLICATE` con `matches`. */
+            reference?: string;
+            /** @description Motivo para confirmar una referencia repetida tras el 409. Se guarda en el abono; la auditoría registra la confirmación y los abonos repetidos. */
+            duplicateReferenceReason?: string;
             notes?: string;
         };
         FrozenExchangeRateDto: {
@@ -9542,8 +9657,24 @@ export interface components {
              * @example 2026-10-16
              */
             paidOn: string;
-            /** @enum {string|null} */
+            /**
+             * @description Método antiguo, derivado del tipo base del medio (DX-377: DIGITAL se guarda como TRANSFER). Se mantiene para informes y réplicas anteriores.
+             * @enum {string|null}
+             */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /**
+             * Format: uuid
+             * @description Medio de pago del catálogo de la clínica (DX-377).
+             */
+            paymentMethodId: string | null;
+            /** @example Pago móvil */
+            paymentMethodName: string | null;
+            /** @description Referencia del pago tal como la dio el pagador (DX-377). */
+            reference: string | null;
+            /** @description Motivo con que se confirmó una referencia repetida (DX-377); null si no se repetía. */
+            duplicateReferenceReason: string | null;
+            /** @description Solo en la respuesta del alta: ids de los abonos con la misma referencia y medio que se confirmaron con motivo. */
+            duplicateReferenceOf?: string[];
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
@@ -9713,6 +9844,10 @@ export interface components {
             currency: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @description DX-377: nombre del medio de pago; ausente en los recibos anteriores. */
+            paymentMethodName?: string | null;
+            /** @description DX-377: referencia del pago; ausente en los recibos anteriores. */
+            reference?: string | null;
             /** Format: date-time */
             paidAt: string;
             /**
@@ -10696,8 +10831,6 @@ export interface components {
             currency: string;
             amount: number;
         };
-        /** @enum {string} */
-        PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
         CashExpectedLineDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -18753,6 +18886,132 @@ export interface operations {
             };
         };
     };
+    PaymentMethodsController_list: {
+        parameters: {
+            query?: {
+                /** @description Incluir los desactivados (la pantalla de Ajustes). */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"][];
+                };
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentMethodDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"];
+                };
+            };
+            /** @description Nombre vacío o tipo desconocido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un medio con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePaymentMethodDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un medio con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     WaitlistController_list: {
         parameters: {
             query?: {
@@ -20670,7 +20929,14 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. */
+            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. DX-377: `code: PAYMENT_REFERENCE_DUPLICATE` si la referencia y el medio ya están en otro abono vivo de ±90 días (`matches`); se confirma repitiendo con `duplicateReferenceReason`. */
             409: {
                 headers: {
                     [name: string]: unknown;
