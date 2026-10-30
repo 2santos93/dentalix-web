@@ -24,3 +24,13 @@ export function civilNoonUtc(day: string): Date {
 export function civilWeekday(day: string): number {
   return civilNoonUtc(day).getUTCDay();
 }
+
+/** `true` si `day` es un día civil `YYYY-MM-DD` que existe (un `<input type="date">` vacío no lo es). */
+export function isCivilDay(day: string): boolean {
+  try {
+    civilNoonUtc(day);
+    return true;
+  } catch {
+    return false;
+  }
+}

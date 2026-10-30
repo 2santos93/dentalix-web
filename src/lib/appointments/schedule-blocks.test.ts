@@ -5,9 +5,15 @@ import {
   blockShownInColumn,
   type ScheduleBlockLike,
 } from './schedule-blocks';
+import { wallInstant } from '@/lib/time/wall-clock';
 
 const DAY = '2031-03-04'; // martes
-const local = (day: string, hhmm: string) => new Date(`${day}T${hhmm}:00`).toISOString();
+// Reloj de la sede (UTC−4); Jest corre con TZ=UTC, así que el navegador marcaría otra hora.
+const ZONE = 'America/Caracas';
+const local = (day: string, hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return wallInstant(day, h * 60 + m, ZONE).toISOString();
+};
 
 function block(overrides: Partial<ScheduleBlockLike> = {}): ScheduleBlockLike {
   return {
@@ -52,21 +58,21 @@ describe('schedule-blocks (DX-122)', () => {
   describe('banda de un día', () => {
     const window = { start: 7 * 60, end: 20 * 60 };
     it('las horas del bloqueo ese día, en minutos locales', () => {
-      expect(blockBandForDay(block(), DAY, window)).toEqual({ start: 13 * 60, end: 14 * 60 });
+      expect(blockBandForDay(block(), DAY, window, ZONE)).toEqual({ start: 13 * 60, end: 14 * 60 });
     });
     it('un bloqueo de varios días cubre el día entero (recortado a la franja)', () => {
       const vacation = block({ start: local('2031-03-03', '00:00'), end: local('2031-03-08', '00:00') });
-      expect(blockBandForDay(vacation, DAY, window)).toEqual(window);
+      expect(blockBandForDay(vacation, DAY, window, ZONE)).toEqual(window);
     });
     it('el primer y el último día, recortados', () => {
       const spanning = block({ start: local(DAY, '18:00'), end: local('2031-03-05', '10:00') });
-      expect(blockBandForDay(spanning, DAY, window)).toEqual({ start: 18 * 60, end: 20 * 60 });
-      expect(blockBandForDay(spanning, '2031-03-05', window)).toEqual({ start: 7 * 60, end: 10 * 60 });
+      expect(blockBandForDay(spanning, DAY, window, ZONE)).toEqual({ start: 18 * 60, end: 20 * 60 });
+      expect(blockBandForDay(spanning, '2031-03-05', window, ZONE)).toEqual({ start: 7 * 60, end: 10 * 60 });
     });
     it('null si no toca ese día o queda fuera de la franja', () => {
-      expect(blockBandForDay(block(), '2031-03-05', window)).toBeNull();
+      expect(blockBandForDay(block(), '2031-03-05', window, ZONE)).toBeNull();
       expect(
-        blockBandForDay(block({ start: local(DAY, '05:00'), end: local(DAY, '06:00') }), DAY, window),
+        blockBandForDay(block({ start: local(DAY, '05:00'), end: local(DAY, '06:00') }), DAY, window, ZONE),
       ).toBeNull();
     });
   });

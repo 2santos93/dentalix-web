@@ -4,6 +4,12 @@ import { DayColumns } from './day-columns';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import type { BusinessHours } from '@/lib/locations/schedule-api';
 import { PX_PER_MINUTE } from '@/lib/appointments/day-grid';
+import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
+import { clinicLocation } from '@/lib/test/locations';
+import { wallInstant } from '@/lib/time/wall-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 // jsdom no trae PointerEvent: sin él, `fireEvent.pointerDown` crea un Event
 // genérico sin `pointerType` ni coordenadas. Un MouseEvent con los dos campos
@@ -79,7 +85,7 @@ function renderColumns(props: Partial<React.ComponentProps<typeof DayColumns>> =
     onNewAppointment: jest.fn(),
   };
   render(
-    <DayColumns
+    <DayColumns clock={CLOCK}
       date={DATE}
       providers={providers}
       appointments={[endo, light]}
@@ -183,7 +189,7 @@ describe('DayColumns (DX-121)', () => {
   it('estados de carga (esqueleto) y de error (con Reintentar)', async () => {
     const user = userEvent.setup();
     const { unmount } = render(
-      <DayColumns
+      <DayColumns clock={CLOCK}
         date={DATE}
         providers={providers}
         appointments={[]}
@@ -533,4 +539,58 @@ it.each(['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED
   const labels = { SCHEDULED:'Agendada', CONFIRMED:'Confirmada', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No asistió', ARRIVED:'En espera', IN_CHAIR:'En sillón', READY_FOR_CHECKOUT:'Listo para cobrar' };
   renderColumns({ appointments:[appointment({ id:'status', status })] });
   expect(screen.getByRole('button', { name: new RegExp('Detalle.*' + labels[status]) })).toHaveAccessibleName(expect.stringContaining('Endodoncia'));
+});
+
+describe('DayColumns con el reloj de la sede (DX-378)', () => {
+  // Caracas (UTC−4) en 12 h; Jest corre con TZ=UTC: con la zona del navegador,
+  // la cita de las 9:00 de la sede caería a las 13:00 de la rejilla.
+  const caracas = testAgendaClock([caracasSede()]);
+  const at = (minute: number) => wallInstant(DATE, minute, 'America/Caracas').toISOString();
+  const nine = appointment({ id: 'apt-ccs', start: at(9 * 60), end: at(10 * 60 + 30) });
+
+  it('coloca la cita en la fila de su hora en la sede y la pinta en 12 h', () => {
+    renderColumns({ clock: caracas, appointments: [nine] });
+    const card = screen.getByTestId('day-column-appointment');
+    // La franja empieza a las 08:30 (horario 9–19 con media hora de margen).
+    expect(card).toHaveStyle({ top: `${30 * PX_PER_MINUTE}px` });
+    expect(
+      screen.getByRole('button', { name: /detalle de la cita de 9:00 a\. m\. – 10:30 a\. m\. · maría lópez/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('9:00 a. m.')).toBeInTheDocument();
+    expect(screen.getByText('12:00 p. m.')).toBeInTheDocument();
+  });
+
+  it('una cita de otra sede sale con la hora y el reloj de SU sede', () => {
+    const madrid = clinicLocation({ id: 'madrid', timeZone: 'Europe/Madrid', locale: 'es-ES', hourCycle: 'h23' });
+    renderColumns({
+      clock: testAgendaClock([caracasSede(), madrid]),
+      appointments: [{ ...nine, locationId: 'madrid' }],
+    });
+    // 13:00 UTC del 3 de marzo son las 14:00 en Madrid.
+    expect(screen.getByRole('button', { name: /detalle de la cita de 14:00–15:30/i })).toBeInTheDocument();
+  });
+
+  it('el arrastre suelta en la hora de la sede, no en la del navegador', () => {
+    const rectSpy = jest
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const index = providers.findIndex((p) => p.userId === this.dataset.providerId);
+        return (index >= 0
+          ? { left: 100 + index * 200, right: 300 + index * 200, top: 0, bottom: 2000 }
+          : { left: 0, right: 0, top: 0, bottom: 0 }) as DOMRect;
+      });
+    const { onDrop } = renderColumns({ clock: caracas, appointments: [nine] });
+    const card = screen.getByTestId('day-column-appointment');
+    const y = 150 * PX_PER_MINUTE; // 08:30 + 150 min = 11:00 en la sede
+    fireEvent.pointerDown(card, { pointerId: 3, pointerType: 'mouse', button: 0, clientX: 150, clientY: 0 });
+    fireEvent.pointerMove(window, { pointerId: 3, clientX: 150, clientY: y });
+    expect(screen.getByTestId('drag-preview')).toHaveTextContent('Mover a las 11:00 a. m. · Dra. Ana Ríos');
+    fireEvent.pointerUp(window, { pointerId: 3, clientX: 150, clientY: y });
+    expect(onDrop).toHaveBeenCalledWith(nine, {
+      start: '2031-03-03T15:00:00.000Z',
+      end: '2031-03-03T16:30:00.000Z',
+      providerId: 'prov-1',
+    });
+    rectSpy.mockRestore();
+  });
 });

@@ -22,7 +22,9 @@ import {
   summaryRangeDays,
 } from '@/lib/expenses/presentation';
 import { saveCsv } from '@/lib/files/save-csv';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { useExpenseToday } from './use-expense-today';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { notifyError } from '@/components/errors/notify';
@@ -90,6 +92,9 @@ const rowKey = (row: ExpenseSummaryRow) => `${row.month}|${row.locationId}|${row
 export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: ExpensesViewTabs }) {
   const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
   const { locations, failed: locationsFailed, reload: reloadLocations } = useExpenseLocations(token);
+  // DX-378 (FE-078): importes con el formato de la sede, no con «es».
+  const sedeFormat = useSedeFormat(token);
+  const fmt = readyFormat(sedeFormat);
   const reference = activeLocationId ? locations.find((location) => location.id === activeLocationId) : locations[0];
   const { today, error: scheduleError, retry: retrySchedule } = useExpenseToday(token, reference?.id);
   const currentMonth = today?.slice(0, 7) ?? null;
@@ -266,6 +271,16 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
             description={expensesSummaryCopy.forbiddenHint}
           />
         ) : rangeError ? null : (
+          <>
+          {sedeFormat.status === 'error' ? (
+            <SedeConfigError
+              kind="locale"
+              variant="note"
+              description={sedeFormat.message}
+              onRetry={sedeFormat.retry}
+              locationId={sedeFormat.locationId}
+            />
+          ) : null}
           <AsyncSection
             loading={showLoading}
             error={zoneError ?? loadError}
@@ -299,7 +314,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                     const key = rowKey(row);
                     const open = expanded.has(key);
                     const month = summaryMonthLabel(row.month);
-                    const expenses = formatCurrency(row.expensesTotal, row.currency);
+                    const expenses = sedeMoney(row.expensesTotal, row.currency, fmt);
                     const panelId = `summary-breakdown-${key.replace(/[^\w-]/g, '_')}`;
                     return (
                       <Fragment key={key}>
@@ -312,7 +327,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                             {row.currency}
                           </TableCell>
                           <TableCell data-label={expensesSummaryCopy.colIncome} className="text-right tabular-nums">
-                            {formatCurrency(row.income, row.currency)}
+                            {sedeMoney(row.income, row.currency, fmt)}
                           </TableCell>
                           <TableCell data-label={expensesSummaryCopy.colExpenses} className="text-right tabular-nums">
                             {row.categories.length > 0 ? (
@@ -343,7 +358,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                             data-label={expensesSummaryCopy.colNet}
                             className={cn('text-right font-medium tabular-nums', row.net < 0 && 'text-danger')}
                           >
-                            {formatCurrency(row.net, row.currency)}
+                            {sedeMoney(row.net, row.currency, fmt)}
                           </TableCell>
                         </TableRow>
                         {open ? (
@@ -356,7 +371,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                                 {row.categories.map((c) => (
                                   <li key={c.category} className="flex justify-between gap-4">
                                     <span className="min-w-0 [overflow-wrap:anywhere]">{c.category}</span>
-                                    <span className="tabular-nums">{formatCurrency(c.amount, row.currency)}</span>
+                                    <span className="tabular-nums">{sedeMoney(c.amount, row.currency, fmt)}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -371,6 +386,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
             </Card>
             <p className="mt-3 text-xs text-muted">{expensesSummaryCopy.currencyNote}</p>
           </AsyncSection>
+          </>
         )}
       </div>
     </>

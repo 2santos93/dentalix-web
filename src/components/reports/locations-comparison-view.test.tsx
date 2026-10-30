@@ -12,6 +12,8 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { saveCsv } from '@/lib/files/save-csv';
 import { SEDE_TIME_ZONE_ERROR, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SEDE_LOCALE_ERROR, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { regionalFormat } from '@/lib/format/regional-format';
 
 jest.mock('../../lib/reports/reports-api', () => ({
   getLocationsComparison: jest.fn(),
@@ -25,7 +27,14 @@ jest.mock('../../lib/locations/use-sede-time-zone', () => ({
   sedeToday: () => '2026-10-24',
 }));
 
+// DX-378 (FE-078): el formato de la sede. es-ES deja «+20 %» y «100.000,00» de estas pruebas.
+jest.mock('../../lib/locations/use-sede-format', () => ({
+  ...jest.requireActual('../../lib/locations/use-sede-format'),
+  useSedeFormat: jest.fn(),
+}));
+
 const mockedZone = useSedeTimeZone as jest.MockedFunction<typeof useSedeTimeZone>;
+const mockedFormat = useSedeFormat as jest.MockedFunction<typeof useSedeFormat>;
 const mockedGet = getLocationsComparison as jest.MockedFunction<typeof getLocationsComparison>;
 const mockedCsv = downloadLocationsComparisonCsv as jest.MockedFunction<typeof downloadLocationsComparisonCsv>;
 
@@ -111,7 +120,28 @@ describe('LocationsComparisonView (DX-014)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Bogota' });
+    mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'es-ES', hourCycle: 'h23' }) });
     mockedGet.mockResolvedValue(report());
+  });
+
+  it('DX-378 (FE-078): cifras, % y fechas con el formato de la sede (en-US), no con «es»', async () => {
+    mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'en-US', hourCycle: 'h12' }) });
+    render(<LocationsComparisonView token="t" />);
+    await screen.findByRole('table');
+    const principal = screen.getAllByTestId('comparison-row')[0];
+    expect(within(principal).getAllByText('+20%').length).toBeGreaterThan(0);
+    expect(within(principal).getByText('Empeora: +2 p.p. frente a 8%')).toBeInTheDocument();
+    expect(screen.getByText(/^Del \d{2}\/\d{2}\/\d{4} al /)).toBeInTheDocument();
+  });
+
+  it('DX-378: sin formato de la sede, su error con Reintentar en lugar de las cifras', async () => {
+    const retry = jest.fn();
+    mockedFormat.mockReturnValue({ status: 'error', message: SEDE_LOCALE_ERROR, retry, locationId: 'loc-1' });
+    render(<LocationsComparisonView token="t" />);
+    expect(await screen.findByText(SEDE_LOCALE_ERROR)).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(retry).toHaveBeenCalled();
   });
 
   it('pide «Este mes» comparado con el período anterior por defecto', async () => {

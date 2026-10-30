@@ -9,7 +9,17 @@
  * UTC. Genuine instants (appointment times, server timestamps) are shown in the
  * user's local timezone; civil dates (a birthday, the day a payment was made)
  * are shown exactly as they were picked.
+ *
+ * DX-378: las pantallas pintan horas y fechas con la zona y el formato de la
+ * sede (`SedeClock`/`RegionalFormat`). `formatTime`, `formatDate`,
+ * `formatDateTime`, `formatTimeInZone`, `formatDateTimeInZone` y
+ * `formatDateLabel` quedan para las pantallas aún sin migrar que lista
+ * `src/architecture/sede-clock-guard.test.ts`; la prueba falla si otra los
+ * importa.
  */
+
+import { UI_LANGUAGE } from '@/lib/format/regional-format';
+import { civilNoonUtc } from '@/lib/time/civil-day';
 
 const FALLBACK = '—';
 
@@ -204,6 +214,42 @@ export function formatDateLabel(
     return fallback;
   }
 }
+
+/** Partes con palabras de un día civil: nunca un mes en cifras (su orden lo decide el locale de la sede). */
+export interface CivilLabelOptions {
+  weekday?: 'long' | 'short';
+  day?: 'numeric';
+  month?: 'long' | 'short';
+  year?: 'numeric';
+}
+
+/**
+ * Un día civil `YYYY-MM-DD` en palabras del idioma del producto («domingo, 15
+ * de marzo», «marzo de 2026»), sin ninguna zona: ni la del navegador ni la de
+ * la sede (DX-378). Para un instante, primero su día en la zona de la sede
+ * (`wallDay`). Un día que no existe da `fallback`.
+ */
+export function civilDateLabel(day: string, options: CivilLabelOptions, fallback: string = FALLBACK): string {
+  let noon: Date;
+  try {
+    noon = civilNoonUtc(day);
+  } catch {
+    return fallback;
+  }
+  let formatter = civilLabelFormatters.get(JSON.stringify(options));
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(UI_LANGUAGE, {
+      ...options,
+      timeZone: 'UTC',
+      calendar: 'gregory',
+      numberingSystem: 'latn',
+    });
+    civilLabelFormatters.set(JSON.stringify(options), formatter);
+  }
+  return formatter.format(noon);
+}
+
+const civilLabelFormatters = new Map<string, Intl.DateTimeFormat>();
 
 /**
  * El día civil (`YYYY-MM-DD`) de un instante en una zona IANA — p. ej. qué día

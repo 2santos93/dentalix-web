@@ -1,8 +1,10 @@
-import { localDayRange } from './day-range';
-import { formatDateLabel } from '@/lib/format/date';
+import { civilDateLabel } from '@/lib/format/date';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { civilNoonUtc } from '@/lib/time/civil-day';
+import { addCivilDays, civilWeekStart, wallDayRange } from '@/lib/time/wall-clock';
 
 /**
- * A single cell of the month calendar grid: its local `YYYY-MM-DD` date and
+ * A single cell of the month calendar grid: its civil `YYYY-MM-DD` date and
  * whether it belongs to the month being displayed (leading/trailing days from
  * the adjacent months fill the 6×7 grid and render muted).
  */
@@ -11,68 +13,53 @@ export interface MonthGridDay {
   inMonth: boolean;
 }
 
-/** Local `YYYY-MM-DD` for a `Date`, using its LOCAL calendar fields (never UTC-shifted). */
-function toLocalDateString(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 /**
  * The 42 days (6 weeks × 7, Monday-first) of the calendar grid for the month
- * containing `date`. Leading days come from the previous month and trailing
- * days from the next, so the grid is always a full rectangle — the classic
- * month-calendar layout. Weeks run Monday..Sunday (ISO-8601), consistent with
- * `localWeekRange` in `day-range.ts`.
+ * containing `date`. Civil days with no zone (DX-378): the grid is the same in
+ * any browser. Weeks run Monday..Sunday (ISO-8601), like `civilWeekStart`.
  */
 export function monthGridDays(date: string): MonthGridDay[] {
-  // Parsed as local midnight (same convention as `localDayRange`) so weekday
-  // math reads the LOCAL calendar, not a UTC-shifted one.
-  const d = new Date(`${date}T00:00:00`);
-  const month = d.getMonth();
-  const first = new Date(d.getFullYear(), month, 1);
-
-  // Monday-first offset: how many days back from the 1st to reach that week's
-  // Monday. `getDay()`: 0 = Sunday..6 = Saturday; Sunday sits 6 days after its
-  // Monday, every other day is `getDay() - 1`.
-  const dow = first.getDay();
-  const daysBackToMonday = dow === 0 ? 6 : dow - 1;
-
-  const gridStart = new Date(first);
-  gridStart.setDate(first.getDate() - daysBackToMonday);
-
-  const days: MonthGridDay[] = [];
-  for (let i = 0; i < 42; i++) {
-    const cur = new Date(gridStart);
-    cur.setDate(gridStart.getDate() + i);
-    days.push({ date: toLocalDateString(cur), inMonth: cur.getMonth() === month });
-  }
-  return days;
+  const month = date.slice(0, 7);
+  const gridStart = civilWeekStart(`${month}-01`);
+  return Array.from({ length: 42 }, (_, i) => {
+    const day = addCivilDays(gridStart, i);
+    return { date: day, inMonth: day.startsWith(month) };
+  });
 }
 
 /**
  * The `{ from, to }` UTC-ISO range covering the whole visible grid (first
- * Monday .. last Sunday, inclusive-end-of-day) for `date`'s month — so a
- * single `GET /appointments?from&to` fetch backs every cell, including the
- * leading/trailing adjacent-month days the grid shows.
+ * Monday 00:00 .. last Sunday end-of-day) in the sede zone — so a single
+ * `GET /appointments?from&to` fetch backs every cell.
  */
-export function monthGridRange(date: string): { from: string; to: string } {
+export function monthGridRange(date: string, timeZone: string): { from: string; to: string } {
   const days = monthGridDays(date);
   return {
-    from: localDayRange(days[0].date).from,
-    to: localDayRange(days[days.length - 1].date).to,
+    from: wallDayRange(days[0].date, timeZone).from,
+    to: wallDayRange(days[days.length - 1].date, timeZone).to,
   };
 }
 
-/** `date` shifted by `delta` whole months, clamped to a valid day, as a local `YYYY-MM-DD` (for the ‹ › month navigation). */
+/** `date` shifted by `delta` whole months, clamped to a valid day, as a civil `YYYY-MM-DD` (for the ‹ › month navigation). */
 export function addMonths(date: string, delta: number): string {
-  const d = new Date(`${date}T00:00:00`);
-  const targetMonthFirst = new Date(d.getFullYear(), d.getMonth() + delta, 1);
+  const d = civilNoonUtc(date);
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + delta, 1, 12));
   // Clamp the day to the target month's length (e.g. Jan 31 + 1 month → Feb 28/29).
-  const lastDay = new Date(targetMonthFirst.getFullYear(), targetMonthFirst.getMonth() + 1, 0).getDate();
-  targetMonthFirst.setDate(Math.min(d.getDate(), lastDay));
-  return toLocalDateString(targetMonthFirst);
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0, 12)).getUTCDate();
+  target.setUTCDate(Math.min(d.getUTCDate(), lastDay));
+  return target.toISOString().slice(0, 10);
 }
 
-/** Human month + year label for the calendar header, e.g. "marzo 2026" (es). */
+/** Month + year label for the calendar header, e.g. "marzo de 2026". */
 export function monthLabel(date: string): string {
-  return formatDateLabel(date, { month: 'long', year: 'numeric' });
+  return civilDateLabel(date, { month: 'long', year: 'numeric' });
+}
+
+/**
+ * Encabezado de un día de la semana: «lun 09/03» (es-VE) o «lun 03/09»
+ * (en-US). La palabra, en el idioma del producto; el día y el mes, en el
+ * orden del locale de la sede.
+ */
+export function weekDayHeader(day: string, fmt: RegionalFormat): string {
+  return `${civilDateLabel(day, { weekday: 'short' })} ${fmt.dayMonth(civilNoonUtc(day), 'UTC')}`;
 }

@@ -12,7 +12,9 @@ import { CalendarPlus, MoveRight, UserPlus } from 'lucide-react';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import type { StaffMember } from '@/lib/appointments/staff-api';
 import type { BusinessHours } from '@/lib/locations/schedule-api';
-import { describeRanges, outsideBands } from '@/lib/locations/provider-schedule';
+import { outsideBands } from '@/lib/locations/provider-schedule';
+import { sedeMinute, sedeMinuteRanges, sedeTimeRange, type AgendaClock } from '@/lib/locations/sede-clock';
+import { civilWeekday } from '@/lib/time/civil-day';
 import type { MinuteRangeDto } from '@/lib/locations/provider-schedule-api';
 import {
   GRID_LINE_MINUTES,
@@ -39,7 +41,6 @@ import { freeGaps } from '@/lib/appointments/opening-candidates';
 import { WANTS_EARLIER_LABEL, WantsEarlierChip } from '@/components/appointments/wants-earlier-chip';
 import {
   STATUS_LABELS,
-  formatTimeRange,
   patientLabel,
 } from '@/components/appointments/appointment-display';
 import { Button } from '@/components/ui/button';
@@ -83,8 +84,13 @@ const DRAG_THRESHOLD_PX = 4;
 const MAX_COLUMNS_WITHOUT_SCROLL = 6;
 
 interface DayColumnsProps {
-  /** Día que se mira (`YYYY-MM-DD` local). */
+  /** Día que se mira (`YYYY-MM-DD` civil, de la sede). */
   date: string;
+  /**
+   * DX-378: la rejilla (filas, posición de cada cita, arrastre) va en el reloj
+   * de la sede de la pantalla; la hora de cada cita, con el de su sede.
+   */
+  clock: AgendaClock;
   /** Una columna por profesional, en este orden. */
   providers: StaffMember[];
   appointments: Appointment[];
@@ -164,6 +170,7 @@ function cardColors(appointment: Appointment): React.CSSProperties | undefined {
  */
 export function DayColumns({
   date,
+  clock,
   providers,
   appointments,
   hours,
@@ -194,13 +201,14 @@ export function DayColumns({
   // indicador lo descarta para que soltar no abra el detalle.
   const suppressClick = useRef(false);
 
-  const weekday = new Date(`${date}T00:00:00`).getDay();
+  const { timeZone, fmt } = clock;
+  const weekday = civilWeekday(date);
   const span: MinuteRange = gridWindow(
     hours,
     weekday,
     appointments.map((a) => ({
-      start: minuteOfDay(a.start),
-      end: Math.max(minuteOfDay(a.start) + 5, minuteOfDay(a.start) + durationMinutes(a)),
+      start: minuteOfDay(a.start, timeZone),
+      end: Math.max(minuteOfDay(a.start, timeZone) + 5, minuteOfDay(a.start, timeZone) + durationMinutes(a)),
     })),
   );
   const bands = closedBands(hours, weekday, span);
@@ -250,9 +258,9 @@ export function DayColumns({
       if (!target) return;
       const a = current.appointment;
       const unchanged =
-        target.providerId === a.providerId && target.minute === minuteOfDay(a.start);
+        target.providerId === a.providerId && target.minute === minuteOfDay(a.start, timeZone);
       if (unchanged) return;
-      onDrop(a, moveTarget(a, date, target.minute, target.providerId));
+      onDrop(a, moveTarget(a, date, target.minute, target.providerId, timeZone));
     }
 
     function handleKey(e: KeyboardEvent) {
@@ -270,7 +278,7 @@ export function DayColumns({
       globalThis.removeEventListener('pointerup', handleUp);
       globalThis.removeEventListener('keydown', handleKey);
     };
-  }, [drag, date, onDrop, spanStart, spanEnd]);
+  }, [drag, date, onDrop, spanStart, spanEnd, timeZone]);
 
   function startDrag(e: React.PointerEvent<HTMLDivElement>, appointment: Appointment) {
     // Solo ratón: en táctil el gesto es desplazar la página, y para eso está
@@ -367,12 +375,13 @@ export function DayColumns({
       >
         <div
           className={cn(
-            'grid grid-cols-[3.5rem_minmax(0,1fr)]',
+            'grid grid-cols-[var(--hours)_minmax(0,1fr)]',
             scrolls
-              ? 'sm:min-w-max sm:[grid-template-columns:3.5rem_repeat(var(--cols),minmax(10rem,1fr))]'
-              : 'sm:[grid-template-columns:3.5rem_repeat(var(--cols),minmax(0,1fr))]',
+              ? 'sm:min-w-max sm:[grid-template-columns:var(--hours)_repeat(var(--cols),minmax(10rem,1fr))]'
+              : 'sm:[grid-template-columns:var(--hours)_repeat(var(--cols),minmax(0,1fr))]',
           )}
-          style={{ '--cols': providers.length } as React.CSSProperties}
+          // Con 12 h, «12:30 p. m.» necesita más sitio que «12:30».
+          style={{ '--cols': providers.length, '--hours': fmt.hourCycle === 'h12' ? '5.5rem' : '3.5rem' } as React.CSSProperties}
         >
           {/* Cabecera: nombre y nº de citas por columna. */}
           <div className="sticky left-0 z-10 border-b border-border bg-surface-2" />
@@ -394,7 +403,7 @@ export function DayColumns({
                   if (ranges === null) return null;
                   return (
                     <p data-testid="provider-hours" className="truncate text-xs tabular-nums text-muted">
-                      {ranges.length > 0 ? describeRanges(ranges) : copy.providerNotHere}
+                      {ranges.length > 0 ? sedeMinuteRanges(ranges, fmt) : copy.providerNotHere}
                     </p>
                   );
                 })()}
@@ -407,10 +416,10 @@ export function DayColumns({
             {hourMarks.map((m) => (
               <span
                 key={m}
-                className="absolute right-2 -translate-y-1/2 text-xs tabular-nums text-muted"
+                className="absolute right-2 -translate-y-1/2 whitespace-nowrap text-xs tabular-nums text-muted"
                 style={{ top: offsetFromMinute(m, span) }}
               >
-                {formatMinute(m)}
+                {sedeMinute(m, fmt)}
               </span>
             ))}
           </div>
@@ -420,8 +429,8 @@ export function DayColumns({
             const laid = layoutLanes(
               columnAppointments.map((a) => ({
                 appointment: a,
-                start: minuteOfDay(a.start),
-                end: minuteOfDay(a.start) + Math.max(durationMinutes(a), 5),
+                start: minuteOfDay(a.start, timeZone),
+                end: minuteOfDay(a.start, timeZone) + Math.max(durationMinutes(a), 5),
               })),
             );
             const dragTarget = drag?.started && drag.target?.providerId === p.userId ? drag.target : null;
@@ -440,6 +449,7 @@ export function DayColumns({
                   providerId: p.userId,
                   activeLocationId,
                   now,
+                  timeZone,
                   providerRanges: ranges,
                 })
               : [];
@@ -493,10 +503,10 @@ export function DayColumns({
                 ))}
 
                 {columnBlocks.map((block) => {
-                    const band = blockBandForDay(block, date, span);
+                    const band = blockBandForDay(block, date, span, timeZone);
                     if (!band) return null;
                     const label = blockLabel(block);
-                    const aria = copy.blockAria(label, `${formatMinute(band.start)}–${formatMinute(band.end)}`);
+                    const aria = copy.blockAria(label, sedeMinuteRanges([{ startMinute: band.start, endMinute: band.end }], fmt));
                     return (
                       <div
                         key={block.id}
@@ -532,7 +542,7 @@ export function DayColumns({
                   })}
 
                 {gaps.map((gap) => {
-                  const range = `${formatMinute(gap.startMinute)}–${formatMinute(gap.endMinute)}`;
+                  const range = sedeMinuteRanges([gap], fmt);
                   const top = offsetFromMinute(gap.startMinute, span);
                   const height = (gap.endMinute - gap.startMinute) * PX_PER_MINUTE;
                   return (
@@ -578,7 +588,7 @@ export function DayColumns({
                 {laid.map(({ appointment: a, start, end, lane, laneCount }) => {
                   const colors = cardColors(a);
                   const patient = patientLabel(a);
-                  const range = formatTimeRange(a.start, a.end);
+                  const range = sedeTimeRange(a.start, a.end, clock.of(a.locationId));
                   const dragging = drag?.started && drag.appointment.id === a.id;
                   const inactive = a.status === 'CANCELLED' || a.status === 'NO_SHOW';
                   const wantsEarlier = a.wantsEarlier && !inactive;
@@ -707,7 +717,7 @@ export function DayColumns({
                       height: Math.max(durationMinutes(drag.appointment) * PX_PER_MINUTE, 24),
                     }}
                   >
-                    {copy.dragPreview(formatMinute(dragTarget.minute), providerName(dragTarget.providerId))}
+                    {copy.dragPreview(sedeMinute(dragTarget.minute, fmt), providerName(dragTarget.providerId))}
                   </div>
                 )}
               </div>

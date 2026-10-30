@@ -5,8 +5,11 @@ import {
   type AppointmentReminderItem,
 } from '@/lib/reminders/reminders-api';
 import { ApiError } from '@/lib/api/client';
-import { formatTime } from '@/lib/format/date';
 import { setupUser } from '@/lib/test/user';
+import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 jest.mock('../../lib/reminders/reminders-api', () => ({
   ...jest.requireActual('../../lib/reminders/reminders-api'),
@@ -54,20 +57,33 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
         }),
       ],
     });
-    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     expect(screen.getByRole('status', { name: 'Cargando recordatorios' })).toBeInTheDocument();
 
     const list = await screen.findByRole('list', { name: 'Recordatorios de la cita' });
     const [sent, pending, skipped] = within(list).getAllByRole('listitem');
-    expect(sent).toHaveTextContent(`Enviado 14/10 ${formatTime('2026-10-14T14:00:00.000Z')}`);
+    expect(sent).toHaveTextContent('Enviado 14/10 14:00');
     expect(sent).toHaveTextContent('2 días antes');
     expect(sent).toHaveTextContent('Entregado al proveedor de correo');
     expect(pending).toHaveTextContent('Pendiente');
     expect(pending).toHaveTextContent('2 h antes');
-    expect(pending).toHaveTextContent(`sale el 16/10 ${formatTime('2026-10-16T12:00:00.000Z')}`);
+    expect(pending).toHaveTextContent('sale el 16/10 12:00');
     expect(skipped).toHaveTextContent('Omitido: reprogramada');
     expect(skipped).toHaveTextContent('Para la hora anterior de la cita');
     expect(mockedGet).toHaveBeenCalledWith('tok', 'a-1');
+  });
+
+  it('DX-378: la hora de envío, con la zona y el reloj de 12 h de la sede de la cita', async () => {
+    mockedGet.mockResolvedValue({
+      enabled: true,
+      leadHours: [48],
+      patientBlocker: null,
+      items: [item({ state: 'SENT', sentAt: '2026-10-14T14:00:00.000Z', emailDelivery: 'SENT' })],
+    });
+    render(<AppointmentRemindersPanel clock={testAgendaClock([caracasSede()])} token="tok" appointmentId="a-1" />);
+    const list = await screen.findByRole('list', { name: 'Recordatorios de la cita' });
+    // 14:00 UTC son las 10:00 a. m. en Caracas.
+    expect(within(list).getByRole('listitem')).toHaveTextContent('Enviado 14/10 10:00 a. m.');
   });
 
   it('omitido sin email, no enviado por agendarse tarde y email fallido', async () => {
@@ -86,7 +102,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
         }),
       ],
     });
-    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     const list = await screen.findByRole('list', { name: 'Recordatorios de la cita' });
     expect(list).toHaveTextContent('No enviado');
     expect(list).toHaveTextContent('La cita se agendó después de esa hora.');
@@ -105,7 +121,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
         failureReason: 'Error ECONNRESET',
       })],
     });
-    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     const list = await screen.findByRole('list', { name: 'Recordatorios de la cita' });
     expect(within(list).getByText('Falló el envío')).toHaveClass('text-danger');
     expect(list).toHaveTextContent('El recordatorio no pudo enviarse tras agotar los intentos.');
@@ -116,14 +132,14 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
 
   it('vacío: sede sin recordatorios, o nada por salir', async () => {
     mockedGet.mockResolvedValueOnce({ enabled: false, leadHours: [], patientBlocker: null, items: [] });
-    const { unmount } = render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    const { unmount } = render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     expect(
       await screen.findByText('La sede de esta cita no tiene recordatorios automáticos.'),
     ).toBeInTheDocument();
     unmount();
 
     mockedGet.mockResolvedValueOnce({ enabled: true, leadHours: [2], patientBlocker: null, items: [] });
-    render(<AppointmentRemindersPanel token="tok" appointmentId="a-2" />);
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-2" />);
     expect(await screen.findByText('Esta cita no tiene recordatorios por salir.')).toBeInTheDocument();
   });
 
@@ -137,7 +153,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
         patientBlocker: null,
         items: [item({ leadHours: 2 })],
       });
-    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos cargar los recordatorios de la cita.');
     await user.click(within(alert).getByRole('button', { name: /reintentar/i }));
@@ -155,7 +171,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
     ],
   ] as const)('con %s lo dice en vez de «sin recordatorios por salir»', async (blocker, text) => {
     mockedGet.mockResolvedValue({ enabled: true, leadHours: [2], patientBlocker: blocker, items: [] });
-    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     expect(await screen.findByText(text)).toHaveAttribute('role', 'status');
     expect(screen.queryByText('Esta cita no tiene recordatorios por salir.')).not.toBeInTheDocument();
   });
@@ -167,7 +183,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
       patientBlocker: 'OPTED_OUT',
       items: [item({ state: 'SENT', sentAt: '2026-10-14T14:00:00.000Z' })],
     });
-    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     expect(await screen.findByRole('list', { name: 'Recordatorios de la cita' })).toBeInTheDocument();
     expect(screen.getByText('El paciente se dio de baja de los recordatorios automáticos.')).toBeInTheDocument();
   });
@@ -182,7 +198,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
         item({ leadHours: 2, state: 'SKIPPED', skipReason: 'CHANNEL_WHATSAPP' }),
       ],
     });
-    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     const list = await screen.findByRole('list', { name: 'Recordatorios de la cita' });
     expect(list).toHaveTextContent('Omitido: el paciente se dio de baja');
     expect(list).toHaveTextContent('Omitido: su canal es WhatsApp');
@@ -202,7 +218,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
         }),
       ],
     });
-    render(<AppointmentRemindersPanel token="tok" appointmentId="appt-1" />);
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="appt-1" />);
     expect(await screen.findByText('Recordatorio enviado al responsable')).toBeInTheDocument();
   });
 });

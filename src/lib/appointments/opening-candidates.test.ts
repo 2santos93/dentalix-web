@@ -4,9 +4,13 @@ import {
   freeGaps,
   offerMessage,
 } from './opening-candidates';
+import { locationClock } from '@/lib/locations/sede-clock';
+import { clinicLocation } from '@/lib/test/locations';
+import { wallInstant } from '@/lib/time/wall-clock';
 import type { BusinessHours } from '@/lib/locations/schedule-api';
 
-// TZ=UTC en los tests: las horas locales son las de la cadena ISO.
+// Reloj de la sede: Caracas (UTC−4). Jest corre con TZ=UTC, así que una cuenta
+// con la zona del navegador daría otras horas.
 const DAY = '2026-10-20'; // martes
 const HOURS: BusinessHours = {
   timezone: 'UTC',
@@ -15,8 +19,13 @@ const HOURS: BusinessHours = {
     { weekday: 2, startMinute: 15 * 60, endMinute: 19 * 60 },
   ],
 };
-const at = (hhmm: string) => `${DAY}T${hhmm}:00.000Z`;
-const BEFORE = new Date(`${DAY}T06:00:00.000Z`);
+const ZONE = 'America/Caracas';
+const at = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return wallInstant(DAY, h * 60 + m, ZONE).toISOString();
+};
+const BEFORE = new Date(at('06:00'));
+const CLOCK = locationClock(clinicLocation({ timeZone: ZONE, locale: 'es-VE', hourCycle: 'h12' }))!;
 
 describe('offerMessage (DX-210)', () => {
   it('solo nombre de pila, fecha, hora, sede y profesional', () => {
@@ -25,9 +34,10 @@ describe('offerMessage (DX-210)', () => {
       start: at('10:00'),
       locationName: 'Sede Norte',
       providerName: 'Dra. Pérez',
+      clock: CLOCK,
     });
     expect(text).toBe(
-      'Hola Ana, te escribimos de Sede Norte. Se liberó un hueco el martes, 20 de octubre a las 10:00 con Dra. Pérez. ¿Te gustaría tomarlo? Respóndenos por aquí y te lo reservamos.',
+      'Hola Ana, te escribimos de Sede Norte. Se liberó un hueco el martes, 20 de octubre a las 10:00 a. m. con Dra. Pérez. ¿Te gustaría tomarlo? Respóndenos por aquí y te lo reservamos.',
     );
   });
 });
@@ -54,6 +64,7 @@ describe('freeGaps', () => {
     providerId: 'drx',
     activeLocationId: null,
     now: BEFORE,
+    timeZone: ZONE,
   };
 
   it('el horario menos las citas activas; una cancelada libera su hora', () => {
@@ -75,7 +86,7 @@ describe('freeGaps', () => {
   it('sin el pasado, sin huecos de menos de 15 min, sin bloqueos que no dejan agendar', () => {
     const gaps = freeGaps({
       ...base,
-      now: new Date(`${DAY}T09:02:00.000Z`),
+      now: new Date(at('09:02')),
       appointments: [
         { providerId: 'drx', start: at('09:10'), end: at('12:00'), status: 'SCHEDULED' },
       ],

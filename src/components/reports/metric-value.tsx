@@ -3,6 +3,7 @@ import * as React from 'react';
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import { formatChange, formatMetric, TREND_LABELS } from '@/lib/reports/comparison-table';
 import type { KpiDefinition, Metric } from '@/lib/reports/reports-api';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -35,19 +36,22 @@ export function MetricValue({
   changeUnit,
   metric,
   currency,
+  fmt,
   align = 'end',
 }: {
   unit: KpiDefinition['unit'];
   changeUnit: KpiDefinition['changeUnit'];
   metric: Metric & { previousUnattributed?: true };
   currency?: string;
+  /** DX-378: el formato de la sede (números, % y moneda). */
+  fmt: RegionalFormat;
   align?: 'start' | 'end';
 }) {
-  const value = formatMetric(unit, metric.value, currency);
+  const value = formatMetric(unit, metric.value, fmt, currency);
   const { trend, previous, change } = metric;
-  const changeText = change === null ? null : formatChange(change, changeUnit);
+  const changeText = change === null ? null : formatChange(change, changeUnit, fmt);
   const showChange = trend !== null && previous !== null;
-  const previousText = previous === null ? '' : formatMetric(unit, previous, currency);
+  const previousText = previous === null ? '' : formatMetric(unit, previous, fmt, currency);
   const up = metric.value !== null && previous !== null && metric.value > previous;
   const Icon = trend === 'EQUAL' ? Minus : up ? ArrowUp : ArrowDown;
   return (

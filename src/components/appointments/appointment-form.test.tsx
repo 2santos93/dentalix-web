@@ -8,6 +8,9 @@ import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { getProviderScheduleSettings, getRoster } from '@/lib/locations/provider-schedule-api';
 import { getPatientMedicalAlerts } from '@/lib/clinical/medical-alerts';
+import { listLocations } from '@/lib/locations/locations-api';
+import { caracasSede, utcSede } from '@/lib/test/sede-clock';
+import { wallInstant } from '@/lib/time/wall-clock';
 
 // PatientForm (rendered inside the "Crear paciente" dialog) calls
 // useRouter() — mock it the same way patient-form.test.tsx does, since it's
@@ -26,6 +29,10 @@ jest.mock('../../lib/appointments/staff-api', () => ({
 // El formulario lee el horario de la sede. Se mockea el módulo entero pero se
 // mantienen los helpers REALES (fitsBusinessHoursLocal/describeDay) para que los
 // tests ejerciten la lógica de verdad, no un doble de ella.
+// DX-378: la fecha y las horas van en el reloj de la sede (aquí, UTC y 24 h).
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 jest.mock('../../lib/locations/schedule-api', () => ({
   ...jest.requireActual('../../lib/locations/schedule-api'),
   getLocationSchedule: jest.fn(),
@@ -183,6 +190,8 @@ async function renderFormAndWaitForLoad() {
   await screen.findByRole('option', { name: /dra\. ana ríos/i });
   // The initial (empty-query) patient load settles.
   await waitFor(() => expect(mockedListPatients).toHaveBeenCalled());
+  // DX-378: la fecha se habilita con el reloj de la sede.
+  await waitFor(() => expect(screen.getByLabelText(/^fecha$/i)).toBeEnabled());
 }
 
 // Picks María López (pat-1) by typing her exact document number, which
@@ -855,4 +864,28 @@ describe('«Adelantar si hay hueco» (DX-210)', () => {
     expect(screen.queryByRole('checkbox', { name: 'Adelantar si hay hueco' })).not.toBeInTheDocument();
   });
 
+});
+
+describe('AppointmentForm con el reloj de la sede (DX-378)', () => {
+  const mockedListLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+  afterEach(() => mockedListLocations.mockResolvedValue([utcSede()]));
+
+  it('la fecha y las horas elegidas son las de la sede (Caracas), no las del navegador (UTC)', async () => {
+    mockedListLocations.mockResolvedValue([caracasSede()]);
+    mockedCreateAppointment.mockResolvedValue(createdAppointment);
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /agendar cita/i }));
+    await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalled());
+    const input = mockedCreateAppointment.mock.calls.at(-1)![1];
+    expect(input.start).toBe(wallInstant(FUTURE_DATE, 9 * 60, 'America/Caracas').toISOString());
+    expect(input.end).toBe(wallInstant(FUTURE_DATE, 9 * 60 + 30, 'America/Caracas').toISOString());
+  });
+
+  it('sin la zona de la sede, el campo de fecha se sustituye por su error con Reintentar', async () => {
+    mockedListLocations.mockResolvedValue([caracasSede({ timeZone: null })]);
+    render(<AppointmentForm token="tok" onCreated={jest.fn()} />);
+    expect(await screen.findByText('Sin zona de sede')).toBeInTheDocument();
+  });
 });

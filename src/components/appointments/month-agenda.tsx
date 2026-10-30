@@ -1,7 +1,9 @@
 'use client';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import { monthGridDays } from '@/lib/appointments/calendar-grid';
-import { formatTime, formatDateLabel } from '@/lib/format/date';
+import { civilDateLabel } from '@/lib/format/date';
+import { sedeTime, type AgendaClock } from '@/lib/locations/sede-clock';
+import { wallDay } from '@/lib/time/wall-clock';
 import { patientLabel } from './appointment-display';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { SectionError } from '@/components/errors/section-error';
@@ -34,11 +36,13 @@ const STATUS_DOT: Record<AppointmentStatus, string> = {
 interface MonthAgendaProps {
   /** Appointments across the whole visible grid range (see `monthGridRange`). */
   appointments: Appointment[];
-  /** Any local `YYYY-MM-DD` inside the month to render. */
+  /** DX-378: la sede de la pantalla cuenta los días; cada hora sale con el reloj de la sede de su cita. */
+  clock: AgendaClock;
+  /** Any civil `YYYY-MM-DD` inside the month to render. */
   monthDate: string;
   /** The currently selected day (`YYYY-MM-DD`) — its cell is highlighted. */
   selectedDate: string;
-  /** Today's local `YYYY-MM-DD`, passed in so the component stays pure/testable. */
+  /** Today in the sede (`YYYY-MM-DD`), passed in so the component stays pure/testable. */
   today: string;
   onSelectDay: (date: string) => void;
   patientNames?: Record<string, string>;
@@ -50,13 +54,11 @@ interface MonthAgendaProps {
   maxPerCell?: number;
 }
 
-/** Groups appointments by their LOCAL day (`YYYY-MM-DD`), each list sorted by start ASC. */
-function groupByDay(appointments: Appointment[]): Record<string, Appointment[]> {
+/** Groups appointments by their day in the sede zone (`YYYY-MM-DD`), each list sorted by start ASC. */
+function groupByDay(appointments: Appointment[], timeZone: string): Record<string, Appointment[]> {
   const map: Record<string, Appointment[]> = {};
   for (const a of appointments) {
-    const d = new Date(a.start);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    (map[key] ??= []).push(a);
+    (map[wallDay(a.start, timeZone)] ??= []).push(a);
   }
   for (const key of Object.keys(map)) {
     map[key].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
@@ -65,7 +67,7 @@ function groupByDay(appointments: Appointment[]): Record<string, Appointment[]> 
 }
 
 function longDayLabel(date: string): string {
-  return formatDateLabel(date, { day: 'numeric', month: 'long' });
+  return civilDateLabel(date, { day: 'numeric', month: 'long' });
 }
 
 /**
@@ -77,6 +79,7 @@ function longDayLabel(date: string): string {
  */
 export function MonthAgenda({
   appointments,
+  clock,
   monthDate,
   selectedDate,
   today,
@@ -92,7 +95,7 @@ export function MonthAgenda({
   }
 
   const days = monthGridDays(monthDate);
-  const byDay = groupByDay(appointments);
+  const byDay = groupByDay(appointments, clock.timeZone);
 
   return (
     <div
@@ -174,7 +177,7 @@ export function MonthAgenda({
                     className="relative flex min-h-12 min-w-0 items-center justify-center gap-1 rounded text-[11px] leading-tight text-ink md:justify-start md:bg-surface-2 md:px-1"
                   >
                     <span aria-hidden className={`hidden h-1.5 w-1.5 shrink-0 rounded-full md:inline ${STATUS_DOT[a.status]}`} />
-                    <span className="hidden shrink-0 tabular-nums text-muted md:inline">{formatTime(a.start)}</span>
+                    <span className="hidden shrink-0 tabular-nums text-muted md:inline">{sedeTime(a.start, clock.of(a.locationId))}</span>
                     <span className="hidden min-w-0 flex-1 truncate md:inline">{patientLabel(a, patientNames)}</span>
                     <MedicalAlertIndicator
                       flags={a.medicalAlerts}

@@ -11,6 +11,7 @@ import {
 import { ClinicalEntryAddendumModal } from '@/components/patients/clinical-entry-addendum-modal';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { appointmentLine } from '@/lib/clinical-notes/appointment-line';
+import { useSedeClock } from '@/lib/locations/sede-clock';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -70,6 +71,9 @@ interface ClinicalEntriesListProps {
  * X»).
  */
 export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListProps) {
+  // DX-378: el día de la cita, en la zona y con el formato de la sede.
+  const sede = useSedeClock(token);
+  const clock = sede.status === 'ready' ? sede.clock : null;
   const [entries, setEntries] = useState<ClinicalEntry[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,7 +236,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
     if (!entry.appointment) return null;
     return (
       <p className="mt-1 text-xs tabular-nums text-muted">
-        {appointmentLine(entry.appointment.start, entry.appointment.providerName)}
+        {appointmentLine(entry.appointment.start, entry.appointment.providerName, clock)}
       </p>
     );
   }

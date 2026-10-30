@@ -150,8 +150,12 @@ function partsOf(formatter: Intl.DateTimeFormat, instant: Date): Partial<Record<
   return parts;
 }
 
-/** Hora de pared con un formatter neutro fijo: es lógica, no presentación. */
-function wallParts(instant: Date, timeZone: string): WallParts {
+/**
+ * Hora de pared con un formatter neutro fijo: es lógica, no presentación (la
+ * rejilla de la agenda, los rangos de un día en la sede). Lanza RangeError con
+ * una zona que no existe.
+ */
+export function wallParts(instant: Date, timeZone: string): WallParts {
   const parts = partsOf(
     dateFormatter('en-US', {
       timeZone,

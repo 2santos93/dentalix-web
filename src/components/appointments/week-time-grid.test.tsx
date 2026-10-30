@@ -2,6 +2,11 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WeekTimeGrid } from './week-time-grid';
 import type { Appointment } from '@/lib/appointments/appointments-api';
+import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
+import { ROW_HEIGHT_PX, SLOT_MINUTES } from '@/lib/appointments/week-grid-layout';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 const WEEK_START = '2026-03-09'; // lunes
 
@@ -24,7 +29,7 @@ function noop() {}
 
 it('renders 7 day headers Mon..Sun', () => {
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[]} weekStart={WEEK_START}
       onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
     />,
@@ -40,7 +45,7 @@ it('renders 7 day headers Mon..Sun', () => {
 it('clicking a day header calls onSelectDay with its date', async () => {
   const onSelectDay = jest.fn();
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[]} weekStart={WEEK_START}
       onSelectDay={onSelectDay} onSelectSlot={noop} onSelectAppointment={noop}
     />,
@@ -52,7 +57,7 @@ it('clicking a day header calls onSelectDay with its date', async () => {
 it('clicking an empty slot calls onSelectSlot with that day and time', async () => {
   const onSelectSlot = jest.fn();
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[]} weekStart={WEEK_START}
       onSelectDay={noop} onSelectSlot={onSelectSlot} onSelectAppointment={noop}
     />,
@@ -67,7 +72,7 @@ it('renders an appointment block and calls onSelectAppointment on click', async 
   const onSelectAppointment = jest.fn();
   const apt = appointment({ id: 'apt-1', start: '2026-03-09T09:00:00.000Z', end: '2026-03-09T10:00:00.000Z' });
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[apt]} weekStart={WEEK_START} patientNames={{ 'pat-1': 'Ana García' }}
       onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={onSelectAppointment}
     />,
@@ -83,7 +88,7 @@ it('places two overlapping same-day appointments in two lanes', () => {
   const a = appointment({ id: 'a', start: '2026-03-09T09:00:00.000Z', end: '2026-03-09T10:00:00.000Z' });
   const b = appointment({ id: 'b', start: '2026-03-09T09:30:00.000Z', end: '2026-03-09T10:30:00.000Z' });
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[a, b]} weekStart={WEEK_START}
       onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
     />,
@@ -98,7 +103,7 @@ it('places two overlapping same-day appointments in two lanes', () => {
 
 it('marca en el bloque de la cita "pide llamada" (DX-005), con texto para lectores de pantalla', () => {
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[
         appointment({ id: 'a1', callbackRequestedAt: '2026-03-01T00:00:00.000Z' }),
       ]}
@@ -125,7 +130,7 @@ const VACATION_BLOCK = {
 it('DX-122: pinta los bloqueos del profesional elegido con su etiqueta, sin tapar los huecos', async () => {
   const onSelectSlot = jest.fn();
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[]}
       weekStart={WEEK_START}
       onSelectDay={noop}
@@ -145,7 +150,7 @@ it('DX-122: pinta los bloqueos del profesional elegido con su etiqueta, sin tapa
 
 it('DX-122: con «Todos» el bloqueo de un profesional no tapa el día, pero se anuncia en la cabecera', () => {
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[]}
       weekStart={WEEK_START}
       onSelectDay={noop}
@@ -163,7 +168,7 @@ it('DX-122: con «Todos» el bloqueo de un profesional no tapa el día, pero se 
 
 it('DX-150: la tarjeta lleva el chip «Saldo vencido» (también en su nombre accesible); sin saldo vencido, nada', () => {
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[
         appointment({ id: 'a1', balance: { hasOverdue: true, overdueDays: 40 } }),
         appointment({
@@ -186,7 +191,7 @@ it('DX-150: la tarjeta lleva el chip «Saldo vencido» (también en su nombre ac
 
 it('DX-153: la tarjeta con cobertura vencida lleva la marca «Cobertura vencida»; vigente, nada', () => {
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[
         appointment({
           id: 'a1',
@@ -215,7 +220,7 @@ it('DX-247: una cita de 15 min con alerta lleva el icono, fuera del botón de la
   const user = userEvent.setup();
   const onSelectAppointment = jest.fn();
   render(
-    <WeekTimeGrid
+    <WeekTimeGrid clock={CLOCK}
       appointments={[
         appointment({
           id: 'a1',
@@ -250,9 +255,28 @@ it('DX-247: una cita de 15 min con alerta lleva el icono, fuera del botón de la
 
 it.each(['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const)('DX-242: %s tiene estado visible y nombre accesible con tipo', (status) => {
   const labels = { SCHEDULED:'Agendada', CONFIRMED:'Confirmada', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No asistió', ARRIVED:'En espera', IN_CHAIR:'En sillón', READY_FOR_CHECKOUT:'Listo para cobrar' };
-  render(<WeekTimeGrid appointments={[appointment({ id: status, status, appointmentType: { id:'t', name:'Control', color:'#123456', durationMinutes:30 } })]} weekStart={WEEK_START} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} />);
+  render(<WeekTimeGrid clock={CLOCK} appointments={[appointment({ id: status, status, appointmentType: { id:'t', name:'Control', color:'#123456', durationMinutes:30 } })]} weekStart={WEEK_START} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} />);
   const card = screen.getByTestId('week-grid-appointment');
   expect(card).toHaveAccessibleName(expect.stringContaining(labels[status]));
   expect(card).toHaveAccessibleName(expect.stringContaining('Control'));
   expect(card.querySelector('[data-appointment-status]')).not.toBeNull();
+});
+
+it('DX-378: el día, la fila y la hora de cada cita salen del reloj de la sede (12 h), no del navegador', () => {
+  // 02:30 UTC del martes 10 son las 10:30 p. m. del lunes 9 en Caracas.
+  const late = appointment({ id: 'late', start: '2026-03-10T02:30:00.000Z', end: '2026-03-10T03:00:00.000Z' });
+  render(
+    <WeekTimeGrid
+      clock={testAgendaClock([caracasSede()])}
+      appointments={[late]} weekStart={WEEK_START}
+      onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
+    />,
+  );
+  const [monday, tuesday] = screen.getAllByTestId('week-grid-day-column');
+  const card = screen.getByTestId('week-grid-appointment');
+  expect(monday).toContainElement(card);
+  expect(tuesday).not.toContainElement(card);
+  expect(card.parentElement).toHaveStyle({ top: `${((22 * 60 + 30) / SLOT_MINUTES) * ROW_HEIGHT_PX}px` });
+  expect(card).toHaveAccessibleName(/^10:30 p\. m\. – 11:00 p\. m\./);
+  expect(screen.getByText('9:00 a. m.')).toBeInTheDocument();
 });

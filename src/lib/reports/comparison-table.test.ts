@@ -1,4 +1,5 @@
 import { formatChange, formatMetric, metricValues, nextSort, sortRows, type SortState } from './comparison-table';
+import { regionalFormat } from '@/lib/format/regional-format';
 import type { ComparisonRow, LocationsComparison, Metric } from './reports-api';
 
 const metric = (value: number | null): Metric => ({ value, previous: null, change: null, trend: null });
@@ -62,19 +63,31 @@ describe('tabla de «Comparar sedes» (DX-014)', () => {
   });
 
   it('formatea valores y variaciones', () => {
-    expect(formatMetric('PERCENT', 33.33)).toBe('33,33 %');
-    expect(formatMetric('COUNT', 1234)).toBe('1234');
-    expect(formatMetric('PERCENT', null)).toBe('—');
-    expect(formatMetric('MONEY', 120000, 'COP')).toMatch(/120\.000,00/);
+    const co = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+    expect(formatMetric('PERCENT', 33.33, co)).toBe('33,33%');
+    expect(formatMetric('COUNT', 1234, co)).toBe('1.234');
+    expect(formatMetric('PERCENT', null, co)).toBe('—');
+    // DX-378: el código de la moneda, nunca «$» (producto bimonetario).
+    expect(formatMetric('MONEY', 120000, co, 'COP')).toBe('COP\u00a0120.000,00');
+    expect(formatMetric('MONEY', 120000, co, 'USD')).toBe('USD\u00a0120.000,00');
     // Sin moneda: el importe sin símbolo, sin espacio delante.
-    expect(formatMetric('MONEY', 120000)).toBe('120.000,00');
-    expect(formatChange(20, 'PERCENT')).toBe('+20 %');
-    expect(formatChange(-2.25, 'PERCENT')).toBe('−2,3 %');
-    expect(formatChange(0, 'PERCENT')).toBe('0 %');
+    expect(formatMetric('MONEY', 120000, co)).toBe('120.000,00');
+    expect(formatChange(20, 'PERCENT', co)).toBe('+20%');
+    expect(formatChange(-2.25, 'PERCENT', co)).toBe('−2,3%');
+    expect(formatChange(0, 'PERCENT', co)).toBe('0%');
     // Los indicadores que ya son un % varían en puntos porcentuales.
-    expect(formatChange(2, 'POINTS')).toBe('+2 p.p.');
-    expect(formatChange(-1.25, 'POINTS')).toBe('−1,3 p.p.');
-    expect(formatChange(0, 'POINTS')).toBe('0 p.p.');
+    expect(formatChange(2, 'POINTS', co)).toBe('+2 p.p.');
+    expect(formatChange(-1.25, 'POINTS', co)).toBe('−1,3 p.p.');
+    expect(formatChange(0, 'POINTS', co)).toBe('0 p.p.');
+  });
+
+  it('DX-378 (FE-078): con una sede en en-US, sus separadores, no los de «es»', () => {
+    const us = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+    expect(formatMetric('COUNT', 1234, us)).toBe('1,234');
+    expect(formatMetric('PERCENT', 33.33, us)).toBe('33.33%');
+    expect(formatMetric('MONEY', 120000, us)).toBe('120,000.00');
+    expect(formatChange(-2.25, 'PERCENT', us)).toBe('−2.3%');
+    expect(formatChange(-1.25, 'POINTS', us)).toBe('−1.3 p.p.');
   });
 });
 

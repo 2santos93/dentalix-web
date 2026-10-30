@@ -1,10 +1,12 @@
-import { formatTime, formatDateLabel } from '@/lib/format/date';
+import { civilDateLabel } from '@/lib/format/date';
+import { sedeTime, type SedeClock } from '@/lib/locations/sede-clock';
+import { wallDay } from '@/lib/time/wall-clock';
 import type { Appointment } from './appointments-api';
 import type { ConfirmationAppointment } from './confirmations-api';
 
-/** "martes, 20 de octubre" — en la zona horaria local, como el resto de la agenda. */
-export function longAppointmentDay(iso: string): string {
-  return formatDateLabel(iso, { weekday: 'long', day: 'numeric', month: 'long' });
+/** "martes, 20 de octubre": el día del instante en la zona de la sede, nunca en la del navegador. */
+export function longAppointmentDay(iso: string, timeZone: string): string {
+  return civilDateLabel(wallDay(iso, timeZone), { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 /**
@@ -15,9 +17,12 @@ export function longAppointmentDay(iso: string): string {
 export function confirmationMessage({
   url,
   appointment,
+  clock,
 }: {
   url: string;
   appointment: ConfirmationAppointment;
+  /** Reloj de la sede de la cita: el día y la hora que verá el paciente. */
+  clock: SedeClock;
 }): string {
   const greeting = appointment.patientFirstName ? `Hola ${appointment.patientFirstName}` : 'Hola';
   const withWhom = appointment.providerName ? ` con ${appointment.providerName}` : '';
@@ -25,8 +30,8 @@ export function confirmationMessage({
     ? `${appointment.locationName} (${appointment.locationAddress})`
     : appointment.locationName;
   return (
-    `${greeting}, te recordamos tu cita del ${longAppointmentDay(appointment.start)} ` +
-    `a las ${formatTime(appointment.start)}${withWhom} en ${where}. ` +
+    `${greeting}, te recordamos tu cita del ${longAppointmentDay(appointment.start, clock.timeZone)} ` +
+    `a las ${sedeTime(appointment.start, clock)}${withWhom} en ${where}. ` +
     `Confírmala, cancélala o pide que te llamemos aquí: ${url}`
   );
 }

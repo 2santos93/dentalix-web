@@ -1,3 +1,5 @@
+import { wallInstant, wallMinuteOfDay } from '@/lib/time/wall-clock';
+
 /**
  * Bloqueos de agenda en la web (DX-122): etiquetas, qué columna pinta cada
  * bloqueo y su banda en un día. Puro: lo prueban los tests sin DOM.
@@ -44,24 +46,27 @@ export function blockShownInColumn(
   return block.providerId === providerId && inLocation;
 }
 
-/** Medianoche local de `YYYY-MM-DD`, en ms. */
-function localMidnight(day: string): number {
-  return new Date(`${day}T00:00:00`).getTime();
-}
-
 /**
- * Tramo `[start, end)` (minutos locales desde las 00:00 de `day`) que el
- * bloqueo ocupa ese día, recortado a la franja visible; `null` si no se ve.
+ * Tramo `[start, end)` (minutos desde las 00:00 de `day` en el reloj de la
+ * sede, `timeZone`) que el bloqueo ocupa ese día, recortado a la franja
+ * visible; `null` si no se ve.
  */
 export function blockBandForDay(
   block: Pick<ScheduleBlockLike, 'start' | 'end'>,
   day: string,
   window: { start: number; end: number },
+  timeZone: string,
 ): { start: number; end: number } | null {
-  const dayStart = localMidnight(day);
-  const toMinute = (ms: number) => Math.round((ms - dayStart) / 60000);
-  const start = Math.max(toMinute(new Date(block.start).getTime()), window.start);
-  const end = Math.min(toMinute(new Date(block.end).getTime()), window.end);
+  const dayStart = wallInstant(day, 0, timeZone).getTime();
+  const dayEnd = wallInstant(day, 24 * 60, timeZone).getTime();
+  const toMinute = (iso: string) => {
+    const ms = new Date(iso).getTime();
+    if (ms <= dayStart) return 0;
+    if (ms >= dayEnd) return 24 * 60;
+    return wallMinuteOfDay(iso, timeZone);
+  };
+  const start = Math.max(toMinute(block.start), window.start);
+  const end = Math.min(toMinute(block.end), window.end);
   return end > start ? { start, end } : null;
 }
 

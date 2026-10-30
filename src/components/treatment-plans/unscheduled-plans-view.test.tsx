@@ -6,7 +6,12 @@ jest.mock("../../lib/treatment-plans/plan-visits-api", () => ({
   listUnscheduledPlans: jest.fn(),
 }));
 jest.mock("../../lib/locations/locations-api", () => ({
-  listLocations: jest.fn().mockResolvedValue([{ id: "l1", name: "Principal" }]),
+  // DX-378: sede con zona y formato (en-US, para que se note que no es «es»).
+  listLocations: jest.fn(() =>
+    Promise.resolve([
+      jest.requireActual("../../lib/test/sede-clock").caracasSede({ id: "l1", name: "Principal", locale: "en-US" }),
+    ]),
+  ),
 }));
 jest.mock("./schedule-visit-dialog", () => ({
   ScheduleVisitDialog: () => null,
@@ -55,6 +60,9 @@ it("muestra importe y moneda independientes, siguiente visita y enlace seguro Wh
   render(<UnscheduledPlansView token="token" />);
   expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
   expect(screen.getByText("COP")).toBeInTheDocument();
+  // DX-378 (FE-078): fecha mínima e importe con el formato de la sede (en-US).
+  expect(await screen.findByText("04/01/2027")).toBeInTheDocument();
+  expect(screen.getByText(/100,000/)).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: "Agendar a Ana Pérez" }),
   ).toBeInTheDocument();

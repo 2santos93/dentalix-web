@@ -21,8 +21,14 @@ import {
   getLocationSchedule,
   fitsBusinessHoursLocal,
   describeDay,
+  timeToMinutes,
   type BusinessHours,
 } from '@/lib/locations/schedule-api';
+import { sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { civilWeekday } from '@/lib/time/civil-day';
+import { wallInstant } from '@/lib/time/wall-clock';
 import { UserPlus, Loader2, Search, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,8 +42,9 @@ import { PatientForm } from '@/components/patients/patient-form';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { useProviderDay } from '@/components/appointments/use-provider-day';
-import { describeRanges, fitsRanges } from '@/lib/locations/provider-schedule';
+import { fitsRanges } from '@/lib/locations/provider-schedule';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
+import { endSentence } from '@/lib/format/text';
 
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
@@ -74,12 +81,13 @@ const copy = {
   staffFieldError: 'No se pudieron cargar',
   genericSaveError: 'No pudimos crear la cita. Intenta de nuevo.',
   validationMissingFields: 'Completa paciente, profesional, fecha y horas.',
+  sedeLoading: 'Cargando el horario de la sede. Vuelve a intentarlo en un momento.',
   validationEndAfterStart: 'La hora de fin debe ser posterior a la hora de inicio.',
   validationPastStart: 'No se puede agendar en el pasado. Elige una fecha y hora futuras.',
   validationOutsideHours: (ranges: string) =>
     ranges === ''
       ? 'La sede no atiende ese día.'
-      : `Fuera del horario de atención. Ese día se atiende: ${ranges}.`,
+      : endSentence(`Fuera del horario de atención. Ese día se atiende: ${ranges}`),
   hoursHint: (ranges: string) => `Horario de ese día: ${ranges}`,
   hoursHintClosed: 'La sede no atiende ese día.',
   // DX-233: aviso no bloqueante (la API decide: aviso o 409 en modo estricto).
@@ -110,23 +118,13 @@ const PATIENT_SEARCH_DEBOUNCE_MS = 300;
 /** Bounded page size for the patient search — matches the "typeahead" nature of the search box (not a full roster listing). */
 const PATIENT_SEARCH_PAGE_SIZE = 20;
 
-/** Builds a local-time ISO instant from a `YYYY-MM-DD` date + `HH:mm` time — the browser's timezone converts it to UTC on the wire (see `Appointment.start`/`end` docs). */
-function toIsoInstant(date: string, time: string): string {
-  return new Date(`${date}T${time}:00`).toISOString();
-}
-
 /**
- * Today as a local `YYYY-MM-DD`, for the date field's `min` — you can't book in
- * the past. Local (not `toISOString()`) so the boundary is the user's own day,
- * not UTC's. Same shape as `agenda-view.tsx`/`dashboard-view.tsx`'s helper of
- * the same name (that duplication is the existing house convention here).
+ * DX-378: the ISO instant of a `YYYY-MM-DD` date + `HH:mm` time on the sede
+ * clock (`timeZone`), never the browser's; `null` for a malformed time.
  */
-function todayLocalDateString(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+function toIsoInstant(date: string, time: string, timeZone: string): string | null {
+  const minute = timeToMinutes(time);
+  return minute === null ? null : wallInstant(date, minute, timeZone).toISOString();
 }
 
 interface AppointmentFormProps {
@@ -226,6 +224,11 @@ export function AppointmentForm({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPatientDialog, setShowPatientDialog] = useState(false);
+  // DX-378: la fecha y las horas son las del reloj de la sede de la cita (la
+  // indicada o la de la pantalla), nunca las del navegador.
+  const sede = useSedeClock(token, locationId);
+  const clock = sede.status === 'ready' ? sede.clock : null;
+  const today = clock ? sedeToday(clock.timeZone) : undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -381,8 +384,16 @@ export function AppointmentForm({
       return;
     }
 
-    const start = toIsoInstant(date, startTime);
-    const end = toIsoInstant(date, endTime);
+    if (!clock) {
+      setValidationError(sede.status === 'error' ? sede.message : copy.sedeLoading);
+      return;
+    }
+    const start = toIsoInstant(date, startTime, clock.timeZone);
+    const end = toIsoInstant(date, endTime, clock.timeZone);
+    if (!start || !end) {
+      setValidationError(copy.validationMissingFields);
+      return;
+    }
     if (new Date(end).getTime() <= new Date(start).getTime()) {
       setValidationError(copy.validationEndAfterStart);
       return;
@@ -400,8 +411,7 @@ export function AppointmentForm({
     // Horario de atención. El backend lo rechaza igual con 400; esto lo avisa
     // antes de enviar y con el horario real del día en el mensaje.
     if (!fitsBusinessHoursLocal(date, startTime, endTime, hours)) {
-      const weekday = new Date(`${date}T00:00:00`).getDay();
-      setValidationError(copy.validationOutsideHours(describeDay(weekday, hours)));
+      setValidationError(copy.validationOutsideHours(describeDay(civilWeekday(date), hours, clock.fmt)));
       return;
     }
 
@@ -647,28 +657,38 @@ export function AppointmentForm({
           <label htmlFor="appointment-date" className="text-sm font-medium text-ink">
             {copy.dateLabel}
           </label>
-          <input
-            id="appointment-date"
-            type="date"
-            required
-            // No se puede agendar en el pasado: el date picker no ofrece días
-            // anteriores a hoy. "Hoy a una hora ya pasada" lo cubre la validación
-            // del instante en handleSubmit (y el backend con un 400).
-            min={minimumDate && minimumDate > todayLocalDateString() ? minimumDate : todayLocalDateString()}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
-          />
+          {sede.status === 'error' ? (
+            // Sin el reloj de la sede no hay «hoy» ni hora que valga: el campo
+            // se sustituye por su error con Reintentar (escalón 2).
+            <SedeConfigError
+              kind={sede.kind}
+              variant="field"
+              retryId="appointment-date"
+              onRetry={sede.retry}
+            />
+          ) : (
+            <input
+              id="appointment-date"
+              type="date"
+              required
+              disabled={!clock}
+              // No se puede agendar en el pasado: el date picker no ofrece días
+              // anteriores a hoy en la sede. "Hoy a una hora ya pasada" lo cubre
+              // la validación del instante en handleSubmit (y el backend con un 400).
+              min={today && minimumDate && minimumDate > today ? minimumDate : today}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          )}
           {/* Pista del horario del día elegido: que se VEA por qué una hora no
               entra, en vez de descubrirlo al enviar. Solo cuando la sede tiene
               horario configurado. */}
-          {hours && date !== '' && (
+          {hours && clock && date !== '' && (
             <p className="text-xs text-muted">
-              {describeDay(new Date(`${date}T00:00:00`).getDay(), hours) === ''
+              {describeDay(civilWeekday(date), hours, clock.fmt) === ''
                 ? copy.hoursHintClosed
-                : copy.hoursHint(
-                    describeDay(new Date(`${date}T00:00:00`).getDay(), hours),
-                  )}
+                : copy.hoursHint(describeDay(civilWeekday(date), hours, clock.fmt))}
             </p>
           )}
         </div>
@@ -739,9 +759,9 @@ export function AppointmentForm({
         const start = startTime ? Number(startTime.slice(0, 2)) * 60 + Number(startTime.slice(3, 5)) : NaN;
         const end = endTime ? Number(endTime.slice(0, 2)) * 60 + Number(endTime.slice(3, 5)) : NaN;
         if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return null;
-        if (fitsRanges(providerDay.ranges, start, end)) return null;
+        if (fitsRanges(providerDay.ranges, start, end) || !clock) return null;
         const name = staff.find((s) => s.userId === providerId)?.fullName ?? '';
-        const ranges = describeRanges(providerDay.ranges ?? []);
+        const ranges = sedeMinuteRanges(providerDay.ranges ?? [], clock.fmt);
         return (
           <p
             role="status"

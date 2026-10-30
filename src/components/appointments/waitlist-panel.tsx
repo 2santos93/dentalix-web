@@ -12,6 +12,9 @@ import {
 import { WAITLIST_LOAD_ERROR, type WaitlistState } from '@/components/appointments/use-waitlist';
 import { waitingLabel, waitlistOriginLabel } from '@/lib/appointments/waitlist-display';
 import type { StaffMember } from '@/lib/appointments/staff-api';
+import type { AgendaClock } from '@/lib/locations/sede-clock';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
+import { notifyError } from '@/components/errors/notify';
 import {
   OpeningsDialog,
   waitlistPatientName,
@@ -60,6 +63,8 @@ export function attendingStaff(staff: StaffMember[]): StaffMember[] {
 interface WaitlistPanelProps {
   token: string;
   staff: StaffMember[];
+  /** DX-378: cada entrada, con el reloj de su sede. */
+  clock: AgendaClock;
   /** La lista, cargada UNA vez por la agenda (`useWaitlist`). */
   waitlist: WaitlistState;
   /** Se agendó una cita desde la lista: la agenda se refresca. */
@@ -75,6 +80,7 @@ interface WaitlistPanelProps {
 export function WaitlistPanel({
   token,
   staff,
+  clock,
   waitlist,
   onScheduled,
   className,
@@ -83,6 +89,8 @@ export function WaitlistPanel({
   const titleId = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [searching, setSearching] = useState<WaitlistEntry | null>(null);
+  const searchingOwnClock = searching ? clock.of(searching.locationId) : null;
+  const searchingClock = searching && searchingOwnClock ? { entry: searching, clock: searchingOwnClock } : null;
   const [dismissing, setDismissing] = useState<WaitlistEntry | null>(null);
   const [reason, setReason] = useState('');
   const [dismissError, setDismissError] = useState<string | null>(null);
@@ -182,9 +190,9 @@ export function WaitlistPanel({
                     ) : null}
                   </div>
                   <div className="flex flex-col gap-0.5 text-xs text-muted">
-                    <p>{waitlistOriginLabel(entry)}</p>
+                    <p>{waitlistOriginLabel(entry, clock.of(entry.locationId))}</p>
                     <p className="tabular-nums">
-                      {waitingLabel(entry.createdAt)} · {entry.durationMinutes} min
+                      {waitingLabel(entry.createdAt, clock.timeZone)} · {entry.durationMinutes} min
                     </p>
                     {entry.preferredWindow ? <p>{waitlistCopy.prefers(entry.preferredWindow)}</p> : null}
                     {entry.note ? <p className="text-ink">{entry.note}</p> : null}
@@ -205,7 +213,11 @@ export function WaitlistPanel({
                       size="sm"
                       variant="secondary"
                       aria-label={waitlistCopy.findSlotFor(name)}
-                      onClick={() => setSearching(entry)}
+                      onClick={() => {
+                        // Los huecos se buscan y se pintan en el reloj de la sede de la entrada.
+                        if (clock.of(entry.locationId)) setSearching(entry);
+                        else notifyError(SEDE_LOCALE_ERROR);
+                      }}
                     >
                       <CalendarSearch aria-hidden /> {waitlistCopy.findSlot}
                     </Button>
@@ -229,19 +241,20 @@ export function WaitlistPanel({
         </>
       )}
 
-      {searching ? (
+      {searchingClock ? (
         <OpeningsDialog
-          key={searching.id}
+          key={searchingClock.entry.id}
           open
           onOpenChange={(open) => {
             if (!open) setSearching(null);
           }}
           token={token}
-          entry={searching}
+          entry={searchingClock.entry}
+          clock={searchingClock.clock}
           providers={attendingStaff(staff)}
-          onScheduled={(appointment) => handleScheduled(searching, appointment)}
+          onScheduled={(appointment) => handleScheduled(searchingClock.entry, appointment)}
           onEntryGone={() => {
-            resolved(searching);
+            resolved(searchingClock.entry);
             setSearching(null);
           }}
           onCloseAutoFocus={focusAfterClose}

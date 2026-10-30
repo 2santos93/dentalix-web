@@ -2,6 +2,13 @@
   "$comment": "DX-252 (TST-030): ÚNICOS tests de Playwright que pueden salir «skipped» en la E2E. scripts/check-e2e-skips.mjs pone la CI en rojo, nombrando el test, si se salta cualquier otro. Cada entrada: fichero, título completo y exacto (los describe y el test unidos por « › », como en el informe), `annotation` = el texto EXACTO del test.skip, `requiresUnset` = la variable de entorno cuya ausencia lo justifica, y `reason`. El salto solo se permite si esa variable NO está definida al correr la guardia: en la CI (scripts/e2e-ci.sh) E2E_DATABASE_URL y E2E_MAIL_DIR están definidas, así que allí cualquiera de estos saltos es rojo. Un test que no llegó a ejecutarse (fallo previo en serie) nunca se permite. Un salto por la hora del reloj NO es legítimo: fija el reloj (e2e/support/clock.ts).",
   "allowed": [
     {
+      "file": "e2e/agenda-sede-clock.spec.ts",
+      "title": "una cita de hoy que llegó sale con la misma hora en la agenda y en «En clínica»",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede pasar a hoy una cita ya empezada",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede pasar a hoy una cita ya empezada (la API no agenda en el pasado)."
+    },
+    {
       "file": "e2e/break-glass.spec.ts",
       "title": "el superadmin enrola el MFA, entra a una clínica con código y motivo, y la clínica lo ve",
       "annotation": "E2E_DATABASE_URL no definido: no se puede otorgar el rol de superadmin",

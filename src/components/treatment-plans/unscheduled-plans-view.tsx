@@ -13,7 +13,9 @@ import {
 } from "@/lib/locations/locations-api";
 import { getActiveLocationId } from "@/lib/locations/location-store";
 import { apiErrorMessage } from "@/lib/api/error-message";
-import { formatCurrency } from "@/lib/format/currency";
+import { NO_SEDE_FORMAT, sedeMoney } from "@/lib/format/sede-number";
+import { useSedeClock } from "@/lib/locations/sede-clock";
+import { SedeConfigError } from "@/components/locations/sede-config-error";
 import { Button } from "@/components/ui/button";
 import { AsyncSection } from "@/components/shared/async-section";
 import { ScheduleVisitDialog } from "./schedule-visit-dialog";
@@ -22,6 +24,13 @@ export function UnscheduledPlansView({ token }: { token: string }) {
   const [locationId, setLocationId] = useState(
     () => getActiveLocationId() ?? "",
   );
+  // DX-378 (FE-078): la fecha mínima y el total con el formato de la sede, no con «es».
+  const sede = useSedeClock(token, locationId || undefined);
+  const clock = sede.status === "ready" ? sede.clock : null;
+  const minimumDateLabel = (day: string | null | undefined, instant: string) => {
+    if (!clock) return NO_SEDE_FORMAT;
+    return day ? clock.fmt.civilDate(day) : clock.fmt.date(new Date(instant), clock.timeZone);
+  };
   const [age, setAge] = useState(0);
   const [cursor, setCursor] = useState<string | undefined>();
   const [history, setHistory] = useState<(string | undefined)[]>([]);
@@ -81,6 +90,15 @@ export function UnscheduledPlansView({ token }: { token: string }) {
       aria-label="Tratamiento aceptado sin agendar"
       className="flex min-w-0 flex-col gap-5"
     >
+      {sede.status === "error" ? (
+        <SedeConfigError
+          kind={sede.kind}
+          variant="note"
+          description={sede.message}
+          onRetry={sede.retry}
+          locationId={sede.locationId}
+        />
+      ) : null}
       <div>
         <h2 className="text-xl font-semibold text-ink">Aceptado sin agendar</h2>
         <p className="mt-2 max-w-[65ch] text-sm text-muted">
@@ -159,17 +177,14 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                 <p className="mt-1 text-sm text-muted">
                   Fecha mínima:{" "}
                   <time dateTime={item.minimumDate}>
-                    {item.minimumDay ??
-                      new Intl.DateTimeFormat("es", {
-                        dateStyle: "medium",
-                      }).format(new Date(item.minimumDate))}
+                    {minimumDateLabel(item.minimumDay, item.minimumDate)}
                   </time>{" "}
                   · {item.daysSinceAccepted} días desde la aceptación
                 </p>
               </div>
               <div className="flex items-baseline gap-2 lg:flex-col lg:items-end">
                 <span className="font-semibold text-ink tabular-nums">
-                  {formatCurrency(item.total, item.currency)}
+                  {sedeMoney(item.total, item.currency, clock?.fmt ?? null)}
                 </span>
                 <span className="text-sm text-muted">{item.currency}</span>
               </div>

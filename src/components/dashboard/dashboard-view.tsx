@@ -14,7 +14,9 @@ import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { activeSedeCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
 import { formatCurrency } from '@/lib/format/currency';
 import { listStaff } from '@/lib/appointments/staff-api';
-import { formatTime, zoneCityLabel } from '@/lib/format/date';
+import { zoneCityLabel } from '@/lib/format/date';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -108,6 +110,8 @@ export function DashboardView({ token }: DashboardViewProps) {
   // sin zona de la sede, `SedeConfigError` (nunca otra zona).
   const zone = useSedeTimeZone(token);
   const timeZone = readyTimeZone(zone);
+  // DX-378: la hora de las próximas citas, con el reloj de la sede (como la agenda y «En clínica»).
+  const fmt = readyFormat(useSedeFormat(token));
   const defaults = useMemo(
     () =>
       timeZone
@@ -286,6 +290,7 @@ export function DashboardView({ token }: DashboardViewProps) {
             <UpcomingAppointmentsCard
               upcomingAppointments={data.upcomingAppointments}
               staffNames={staffNames}
+              timeOf={(start) => (fmt && timeZone ? fmt.time(new Date(start), timeZone) : NO_SEDE_FORMAT)}
             />
             <LowStockCard lowStockItems={data.lowStockItems} />
           </div>
@@ -372,9 +377,12 @@ function LowStockCard({ lowStockItems }: { lowStockItems: Dashboard['lowStockIte
 function UpcomingAppointmentsCard({
   upcomingAppointments,
   staffNames,
+  timeOf,
 }: {
   upcomingAppointments: Dashboard['upcomingAppointments'];
   staffNames: Record<string, string>;
+  /** DX-378: la hora con el reloj de la sede. */
+  timeOf: (start: string) => string;
 }) {
   return (
     <Card>
@@ -409,7 +417,7 @@ function UpcomingAppointmentsCard({
                   className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
                 >
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium text-ink">{formatTime(appointment.start)}</span>
+                    <span className="text-sm font-medium text-ink">{timeOf(appointment.start)}</span>
                     <span className="text-xs text-muted">
                       {patientLabel} · {providerLabel}
                     </span>

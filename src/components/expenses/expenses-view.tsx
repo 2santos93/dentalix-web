@@ -16,8 +16,11 @@ import {
 } from '@/lib/expenses/expenses-api';
 import { EXPENSE_STATUS_FILTERS, expensesCsvFileName } from '@/lib/expenses/presentation';
 import { saveCsv } from '@/lib/files/save-csv';
-import { formatCurrency } from '@/lib/format/currency';
-import { firstOfMonth, formatCivilDate } from '@/lib/format/date';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { firstOfMonth } from '@/lib/format/date';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { expenseZoneError, useExpenseToday } from './use-expense-today';
 import { FieldError } from '@/components/errors/field-error';
@@ -97,6 +100,9 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
   const isAdmin = canManageExpenses(getTokenRole(token));
   const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
   const sedes = useExpenseLocations(token);
+  // DX-378 (FE-078): importes y fechas con el formato de la sede, no con «es».
+  const sedeFormat = useSedeFormat(token);
+  const fmt = readyFormat(sedeFormat);
   const reference = activeLocationId ? sedes.locations.find((location) => location.id === activeLocationId) : sedes.locations[0];
   const { today, error: scheduleError, retry: retrySchedule } = useExpenseToday(token, reference?.id);
   const [from, setFrom] = useState<string | null>(null);
@@ -388,6 +394,15 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
               <ResultCount total={data.total} noun={expensesCopy.countNoun} nounPlural={expensesCopy.countNounPlural} />
             ) : null}
 
+            {sedeFormat.status === 'error' ? (
+              <SedeConfigError
+                kind="locale"
+                variant="note"
+                description={sedeFormat.message}
+                onRetry={sedeFormat.retry}
+                locationId={sedeFormat.locationId}
+              />
+            ) : null}
             <AsyncSection
               loading={showLoading}
               error={zoneError ?? loadError}
@@ -422,9 +437,9 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
                   <TableBody>
                     {items.map((expense) => (
                       <TableRow key={expense.id} data-testid="expense-row">
-                        <TableCell className="tabular-nums">{formatCivilDate(expense.invoiceDate)}</TableCell>
+                        <TableCell className="tabular-nums">{sedeCivilDate(expense.invoiceDate, fmt)}</TableCell>
                         <TableCell>
-                          <OpenExpenseButton expense={expense} onOpen={openDetail} />
+                          <OpenExpenseButton expense={expense} onOpen={openDetail} fmt={fmt} />
                           {expense.description ? (
                             <span className="block max-w-[28ch] truncate text-xs text-muted">{expense.description}</span>
                           ) : null}
@@ -436,10 +451,10 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
                         <TableCell
                           className={cn('text-right tabular-nums', expense.status === 'VOIDED' && 'text-muted line-through')}
                         >
-                          {formatCurrency(expense.amount, expense.currency)}
+                          {sedeMoney(expense.amount, expense.currency, fmt)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatCurrency(expense.paidAmount, expense.currency)}
+                          {sedeMoney(expense.paidAmount, expense.currency, fmt)}
                         </TableCell>
                         <TableCell>
                           <ExpenseStatusBadges expense={expense} />
@@ -454,7 +469,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
               <ul aria-label={expensesCopy.listLabel} aria-busy={refreshing || undefined} className="flex flex-col gap-3 md:hidden">
                 {items.map((expense) => (
                   <li key={expense.id}>
-                    <ExpenseCard expense={expense} locationName={locationName(expense.locationId)} onOpen={openDetail} />
+                    <ExpenseCard expense={expense} locationName={locationName(expense.locationId)} onOpen={openDetail} fmt={fmt} />
                   </li>
                 ))}
               </ul>
@@ -516,12 +531,20 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
 
 type OpenExpense = (id: string, trigger: HTMLElement) => void;
 
-function OpenExpenseButton({ expense, onOpen }: { expense: Expense; onOpen: OpenExpense }) {
+function OpenExpenseButton({
+  expense,
+  onOpen,
+  fmt,
+}: {
+  expense: Expense;
+  onOpen: OpenExpense;
+  fmt: RegionalFormat | null;
+}) {
   return (
     <button
       type="button"
       onClick={(e) => onOpen(expense.id, e.currentTarget)}
-      aria-label={expensesCopy.open(expense.category, formatCivilDate(expense.invoiceDate))}
+      aria-label={expensesCopy.open(expense.category, sedeCivilDate(expense.invoiceDate, fmt))}
       className="text-left font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       {expense.category}
@@ -533,16 +556,18 @@ function ExpenseCard({
   expense,
   locationName,
   onOpen,
+  fmt,
 }: {
   expense: Expense;
   locationName: string;
   onOpen: OpenExpense;
+  fmt: RegionalFormat | null;
 }) {
   return (
     <Card className="flex flex-col gap-2 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <OpenExpenseButton expense={expense} onOpen={onOpen} />
+          <OpenExpenseButton expense={expense} onOpen={onOpen} fmt={fmt} />
           <span className="text-xs text-muted [overflow-wrap:anywhere]">
             {[expense.supplier, locationName].filter(Boolean).join(' · ')}
           </span>
@@ -553,13 +578,13 @@ function ExpenseCard({
             expense.status === 'VOIDED' && 'text-muted line-through',
           )}
         >
-          {formatCurrency(expense.amount, expense.currency)}
+          {sedeMoney(expense.amount, expense.currency, fmt)}
         </span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted tabular-nums">
         <span>
-          {formatCivilDate(expense.invoiceDate)} · {expensesCopy.colPaid}{' '}
-          {formatCurrency(expense.paidAmount, expense.currency)}
+          {sedeCivilDate(expense.invoiceDate, fmt)} · {expensesCopy.colPaid}{' '}
+          {sedeMoney(expense.paidAmount, expense.currency, fmt)}
         </span>
         <ExpenseStatusBadges expense={expense} />
       </div>

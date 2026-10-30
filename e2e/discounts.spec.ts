@@ -259,7 +259,8 @@ for (const viewport of [
     // Los tres del 10 % y la rebaja de precio del 95 % (SEC-041).
     await expect(rows.filter({ hasText: data.fullName })).toHaveCount(4);
     await expect(
-      rows.filter({ hasText: data.fullName }).filter({ hasText: /Precio rebajado a 80\.?750,00/ }),
+      // DX-378 (FE-078): separadores de la sede (es-CO) y siempre el código de la moneda, nunca «$».
+      rows.filter({ hasText: data.fullName }).filter({ hasText: /Precio rebajado a COP\s80\.750,00/ }),
     ).toHaveCount(1);
     // SEC-047: la línea solo de convenio, con su frase, sin desbordar a 390 px.
     const agreementLine = rows.filter({ hasText: data.agreementPatientName });

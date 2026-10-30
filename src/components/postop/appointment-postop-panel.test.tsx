@@ -10,6 +10,10 @@ import {
   type PostOpDeliverySummary,
   type PostOpSuggestions,
 } from '@/lib/postop/postop-api';
+import { testAgendaClock } from '@/lib/test/sede-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 jest.mock('../../lib/postop/postop-api', () => ({
   ...jest.requireActual('../../lib/postop/postop-api'),
@@ -80,7 +84,7 @@ function fakeWindow() {
 }
 
 function renderPanel() {
-  return render(<AppointmentPostOpPanel token="tok" appointmentId="appt-1" />);
+  return render(<AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="appt-1" />);
 }
 
 beforeEach(() => {
@@ -346,7 +350,7 @@ describe('AppointmentPostOpPanel', () => {
 
   it('dos paneles tienen nombres ligados a sus propios encabezados únicos', async () => {
     mockedGet.mockResolvedValue(suggestions());
-    render(<><AppointmentPostOpPanel token="tok" appointmentId="a" /><AppointmentPostOpPanel token="tok" appointmentId="b" /></>);
+    render(<><AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="a" /><AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="b" /></>);
     const panels = await screen.findAllByRole('region', { name: 'Indicaciones' });
     const ids = panels.map((p) => p.getAttribute('aria-labelledby'));
     expect(new Set(ids).size).toBe(2);

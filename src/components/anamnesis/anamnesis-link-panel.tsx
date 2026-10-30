@@ -4,7 +4,8 @@ import { Check, ClipboardList, Copy, MessageCircle } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { createAnamnesisRequest, type AnamnesisRequestCreated } from '@/lib/anamnesis/anamnesis-api';
 import { whatsAppUrl } from '@/lib/appointments/confirmation-message';
-import { formatDateTime } from '@/lib/format/date';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import { useSedeClock } from '@/lib/locations/sede-clock';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/errors/inline-error';
@@ -42,6 +43,9 @@ interface AnamnesisLinkPanelProps {
  * anula el anterior). Recepción también puede enviarlo.
  */
 export function AnamnesisLinkPanel({ token, patientId, appointmentId, onCreated }: AnamnesisLinkPanelProps) {
+  // DX-378: la caducidad, con la zona y el reloj de la sede.
+  const sede = useSedeClock(token);
+  const clock = sede.status === 'ready' ? sede.clock : null;
   const [link, setLink] = useState<AnamnesisRequestCreated | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +111,7 @@ export function AnamnesisLinkPanel({ token, patientId, appointmentId, onCreated 
             onFocus={(e) => e.currentTarget.select()}
             className="font-mono text-xs"
           />
-          <p className="text-xs text-muted tabular-nums">{copy.expires(formatDateTime(link.expiresAt))}</p>
+          <p className="text-xs text-muted tabular-nums">{copy.expires(clock ? clock.fmt.dateTime(new Date(link.expiresAt), clock.timeZone) : NO_SEDE_FORMAT)}</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="button" variant="secondary" onClick={() => void handleCopy()} className="w-full sm:w-auto">
               {copyState === 'copied' ? <Check aria-hidden /> : <Copy aria-hidden />} {copy.copy}

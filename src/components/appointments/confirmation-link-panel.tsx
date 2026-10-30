@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/errors/inline-error';
 import { ConfirmationBadge, STATUS_LABELS } from './appointment-display';
+import type { SedeClock } from '@/lib/locations/sede-clock';
+import { sedeConfigErrorCopy } from '@/components/locations/sede-config-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -26,6 +28,7 @@ const copy = {
   copied: 'Enlace copiado',
   copyFailed: 'No pudimos copiar automáticamente: cópialo a mano desde el campo.',
   whatsapp: 'Abrir WhatsApp',
+  noClock: `${sedeConfigErrorCopy.fieldLabel.locale}: el mensaje no puede decir la hora de la cita. Copia el enlace.`,
   noPhone:
     'El paciente no tiene un teléfono con indicativo internacional (+…). Agrégalo en su ficha o copia el enlace.',
   notConfirmable: (status: string) =>
@@ -48,6 +51,8 @@ function blockedReason(appointment: Appointment): string | null {
 interface ConfirmationLinkPanelProps {
   token: string;
   appointment: Appointment;
+  /** DX-378: reloj de la sede de la cita, con el que el mensaje dice el día y la hora; `null` si le falta. */
+  clock: SedeClock | null;
   /** Tras generar el enlace — p. ej. refrescar la agenda para que la tarjeta muestre "Confirmación pendiente". */
   onLinkCreated?: () => void;
 }
@@ -59,7 +64,7 @@ interface ConfirmationLinkPanelProps {
  * guarda únicamente su hash, así que cerrar el detalle lo pierde y hay que
  * generar otro (que anula el anterior).
  */
-export function ConfirmationLinkPanel({ token, appointment, onLinkCreated }: ConfirmationLinkPanelProps) {
+export function ConfirmationLinkPanel({ token, appointment, clock, onLinkCreated }: ConfirmationLinkPanelProps) {
   const [link, setLink] = useState<ConfirmationLink | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,10 +150,10 @@ export function ConfirmationLinkPanel({ token, appointment, onLinkCreated }: Con
             <Button type="button" variant="secondary" onClick={() => void handleCopy()} className="w-full sm:w-auto">
               {copyState === 'copied' ? <Check aria-hidden /> : <Copy aria-hidden />} {copy.copy}
             </Button>
-            {link.whatsappPhone ? (
+            {link.whatsappPhone && clock ? (
               <Button asChild className="w-full sm:w-auto">
                 <a
-                  href={whatsAppUrl(link.whatsappPhone, confirmationMessage(link))}
+                  href={whatsAppUrl(link.whatsappPhone, confirmationMessage({ ...link, clock }))}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -164,11 +169,11 @@ export function ConfirmationLinkPanel({ token, appointment, onLinkCreated }: Con
           <p role="status" aria-live="polite" className="text-xs text-muted empty:hidden">
             {copyState === 'copied' ? copy.copied : copyState === 'failed' ? copy.copyFailed : ''}
           </p>
-          {!link.whatsappPhone && (
+          {!link.whatsappPhone || !clock ? (
             <p id={noPhoneId} className="text-xs text-muted">
-              {copy.noPhone}
+              {link.whatsappPhone ? copy.noClock : copy.noPhone}
             </p>
-          )}
+          ) : null}
           <p className="text-xs text-muted">{copy.resendNote}</p>
         </div>
       )}

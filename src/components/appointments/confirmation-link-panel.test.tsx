@@ -3,6 +3,10 @@ import { ConfirmationLinkPanel } from './confirmation-link-panel';
 import { createConfirmationLink } from '../../lib/appointments/confirmations-api';
 import { ApiError } from '../../lib/api/client';
 import type { Appointment } from '../../lib/appointments/appointments-api';
+import { testAgendaClock } from '@/lib/test/sede-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 jest.mock('../../lib/appointments/confirmations-api', () => ({
   createConfirmationLink: jest.fn(),
@@ -70,7 +74,7 @@ describe('ConfirmationLinkPanel', () => {
     create.mockResolvedValueOnce(link());
     const onLinkCreated = jest.fn();
 
-    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} onLinkCreated={onLinkCreated} />);
+    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} onLinkCreated={onLinkCreated} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
 
     await waitFor(() => expect(create).toHaveBeenCalledWith('jwt', 'appt-1'));
@@ -100,7 +104,7 @@ describe('ConfirmationLinkPanel', () => {
 
   it('sin teléfono utilizable: "Abrir WhatsApp" deshabilitado con la explicación', async () => {
     create.mockResolvedValueOnce(link(null));
-    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
+    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
 
     const wa = await screen.findByRole('button', { name: /abrir whatsapp/i });
@@ -117,7 +121,7 @@ describe('ConfirmationLinkPanel', () => {
   it('si el portapapeles no está disponible, lo dice y deja el enlace seleccionado', async () => {
     create.mockResolvedValueOnce(link());
     writeText.mockRejectedValueOnce(new Error('denied'));
-    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
+    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Copiar enlace' }));
     expect(await screen.findByText(/cópialo a mano/i)).toBeInTheDocument();
@@ -125,7 +129,7 @@ describe('ConfirmationLinkPanel', () => {
 
   it('error al generar: mensaje junto al botón, que sigue disponible', async () => {
     create.mockRejectedValueOnce(new ApiError(409, 'Solo se puede pedir confirmación de una cita agendada o confirmada'));
-    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
+    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/solo se puede pedir confirmación/i);
     expect(screen.getByRole('button', { name: 'Enviar confirmación' })).toBeEnabled();
@@ -135,14 +139,14 @@ describe('ConfirmationLinkPanel', () => {
     ['CANCELLED', /cancelada/i],
     ['COMPLETED', /completada/i],
   ] as const)('cita %s: botón deshabilitado con la razón', (status, reason) => {
-    render(<ConfirmationLinkPanel token="jwt" appointment={appointment({ status })} />);
+    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment({ status })} />);
     expect(screen.getByRole('button', { name: 'Enviar confirmación' })).toBeDisabled();
     expect(screen.getByText(reason)).toBeInTheDocument();
   });
 
   it('cita que ya empezó: deshabilitado', () => {
     render(
-      <ConfirmationLinkPanel
+      <ConfirmationLinkPanel clock={CLOCK}
         token="jwt"
         appointment={appointment({ start: new Date(Date.now() - 60_000).toISOString() })}
       />,
@@ -153,7 +157,7 @@ describe('ConfirmationLinkPanel', () => {
 
   it('muestra el estado actual: confirmación pendiente / pide llamada', () => {
     const { rerender } = render(
-      <ConfirmationLinkPanel
+      <ConfirmationLinkPanel clock={CLOCK}
         token="jwt"
         appointment={appointment({ confirmationSentAt: '2026-10-10T00:00:00.000Z' })}
       />,
@@ -162,7 +166,7 @@ describe('ConfirmationLinkPanel', () => {
     expect(screen.getByRole('button', { name: 'Reenviar confirmación' })).toBeEnabled();
 
     rerender(
-      <ConfirmationLinkPanel
+      <ConfirmationLinkPanel clock={CLOCK}
         token="jwt"
         appointment={appointment({ callbackRequestedAt: '2026-10-10T00:00:00.000Z' })}
       />,

@@ -13,6 +13,10 @@ import {
   type OpeningSlot,
 } from '@/lib/appointments/opening-candidates';
 import { scheduleFromWaitlist, type AppointmentWrite } from '@/lib/appointments/waitlist-api';
+import { testAgendaClock } from '@/lib/test/sede-clock';
+
+/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
+const CLOCK = testAgendaClock();
 
 jest.mock('../../lib/appointments/opening-candidates', () => {
   const actual = jest.requireActual('../../lib/appointments/opening-candidates');
@@ -116,7 +120,7 @@ function renderPanel(props: Partial<React.ComponentProps<typeof FillOpeningPanel
     onShowWaitlist: jest.fn(),
   };
   render(
-    <FillOpeningPanel
+    <FillOpeningPanel clock={CLOCK}
       open
       token="tok"
       slot={SLOT}

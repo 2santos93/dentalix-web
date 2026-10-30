@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getRoster, type Roster } from '@/lib/locations/provider-schedule-api';
 import { addDaysIso, mondayOf, rosterCell } from '@/lib/locations/provider-schedule';
-import { formatDateLabel } from '@/lib/format/date';
+import { civilDateLabel } from '@/lib/format/date';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
@@ -27,17 +27,17 @@ const copy = {
 
 function weekLabel(from: string, to: string): string {
   const sameMonth = from.slice(5, 7) === to.slice(5, 7);
-  const start = formatDateLabel(from, { day: 'numeric', ...(sameMonth ? {} : { month: 'short' }) });
-  const end = formatDateLabel(to, { day: 'numeric', month: 'long', year: 'numeric' });
+  const start = civilDateLabel(from, { day: 'numeric', ...(sameMonth ? {} : { month: 'short' }) });
+  const end = civilDateLabel(to, { day: 'numeric', month: 'long', year: 'numeric' });
   return `${start} – ${end}`;
 }
 
 function dayHeader(date: string): string {
-  return formatDateLabel(date, { weekday: 'short', day: 'numeric' });
+  return civilDateLabel(date, { weekday: 'short', day: 'numeric' });
 }
 
 function dayLong(date: string): string {
-  return formatDateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' });
+  return civilDateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 interface ScheduleRosterProps {

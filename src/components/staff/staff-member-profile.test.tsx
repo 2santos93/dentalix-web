@@ -10,6 +10,9 @@ import {
 } from '@/lib/staff/staff-api';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
+import { listLocations } from '@/lib/locations/locations-api';
+import { SEDE_TIME_ZONE_ERROR } from '@/lib/locations/use-sede-time-zone';
+import { utcSede } from '@/lib/test/sede-clock';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -52,6 +55,7 @@ describe('StaffMemberProfile', () => {
     mockedReactivate.mockReset();
     mockedUnlock.mockReset();
     mockedGet.mockResolvedValue(activo);
+    (listLocations as jest.Mock).mockResolvedValue([]);
   });
 
   it('muestra los datos del miembro y su estado', async () => {
@@ -255,6 +259,8 @@ describe('StaffMemberProfile', () => {
   });
 
   it('DX-122: quien puede bloquear agendas lo hace desde el perfil; sin rol legible, no', async () => {
+    // DX-378: el bloqueo se calcula en el reloj de la sede.
+    (listLocations as jest.Mock).mockResolvedValue([utcSede()]);
     const { unmount } = render(<StaffMemberProfile token="tok" userId="u1" />);
     await screen.findByText('Ana Ríos');
     expect(screen.queryByRole('button', { name: 'Bloquear agenda' })).not.toBeInTheDocument();
@@ -266,6 +272,22 @@ describe('StaffMemberProfile', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Bloquear horario' });
     expect(within(dialog).getByLabelText('Profesional')).toHaveValue('u1');
     expect(within(dialog).getByLabelText('Profesional')).toBeDisabled();
+  });
+
+  it('DX-378: sin el reloj de la sede no abre el bloqueo con el del navegador; avisa con Reintentar', async () => {
+    (listLocations as jest.Mock).mockResolvedValue([utcSede({ timeZone: null })]);
+    const admin = `h.${btoa(JSON.stringify({ sub: 'adm', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    render(
+      <>
+        <StaffMemberProfile token={admin} userId="u1" />
+        <Toaster />
+      </>,
+    );
+    await screen.findByText('Ana Ríos');
+    await waitFor(() => expect(listLocations).toHaveBeenCalled());
+    await userEvent.click(await screen.findByRole('button', { name: 'Bloquear agenda' }));
+    expect(await screen.findByText(SEDE_TIME_ZONE_ERROR)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Bloquear horario' })).not.toBeInTheDocument();
   });
 
   it('DX-122: a un miembro no clínico no se le ofrece bloquear la agenda', async () => {

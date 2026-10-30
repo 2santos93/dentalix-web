@@ -11,10 +11,14 @@ import {
   type BusinessHours,
 } from '@/lib/locations/schedule-api';
 import { formatMinute, minuteOfDay, moveTarget } from '@/lib/appointments/day-grid';
+import { sedeMinute, type SedeClock } from '@/lib/locations/sede-clock';
+import { civilWeekday } from '@/lib/time/civil-day';
+import { wallDay } from '@/lib/time/wall-clock';
 import { patientLabel } from '@/components/appointments/appointment-display';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import { endSentence } from '@/lib/format/text';
 
 const copy = {
   title: 'Mover a…',
@@ -24,29 +28,26 @@ const copy = {
   time: 'Hora de inicio',
   provider: 'Profesional',
   submit: 'Mover cita',
-  duration: (minutes: number, end: string) => `Dura ${minutes} min: terminaría a las ${end}.`,
+  duration: (minutes: number, end: string) => endSentence(`Dura ${minutes} min: terminaría a las ${end}`),
   missing: 'Completa la fecha, la hora y el profesional.',
   past: 'No se puede mover una cita al pasado. Elige una fecha y hora futuras.',
   outsideHours: (ranges: string) =>
     ranges === ''
       ? 'La sede no atiende ese día.'
-      : `Fuera del horario de atención. Ese día se atiende: ${ranges}.`,
+      : endSentence(`Fuera del horario de atención. Ese día se atiende: ${ranges}`),
   genericError: 'No pudimos mover la cita. Intenta de nuevo.',
 };
 
 const selectClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg';
 
-function localDate(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 interface MoveAppointmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
   appointment: Appointment;
+  /** DX-378: reloj de la sede de la cita: la fecha y la hora elegidas son las de su reloj. */
+  clock: SedeClock;
   providers: StaffMember[];
   /** Horario de la sede, para avisar antes de enviar (el servidor manda: 422). */
   hours: BusinessHours | null;
@@ -64,12 +65,14 @@ export function MoveAppointmentDialog({
   onOpenChange,
   token,
   appointment,
+  clock,
   providers,
   hours,
   onMoved,
 }: MoveAppointmentDialogProps) {
-  const [date, setDate] = useState(() => localDate(appointment.start));
-  const [time, setTime] = useState(() => formatMinute(minuteOfDay(appointment.start)));
+  const { timeZone, fmt } = clock;
+  const [date, setDate] = useState(() => wallDay(appointment.start, timeZone));
+  const [time, setTime] = useState(() => formatMinute(minuteOfDay(appointment.start, timeZone)));
   const [providerId, setProviderId] = useState(appointment.providerId);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -78,7 +81,7 @@ export function MoveAppointmentDialog({
     (new Date(appointment.end).getTime() - new Date(appointment.start).getTime()) / 60000,
   );
   const startMinute = timeToMinutes(time);
-  const endLabel = startMinute === null ? null : formatMinute((startMinute + duration) % (24 * 60));
+  const endLabel = startMinute === null ? null : sedeMinute((startMinute + duration) % (24 * 60), fmt);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -87,14 +90,13 @@ export function MoveAppointmentDialog({
       setError(copy.missing);
       return;
     }
-    const target = moveTarget(appointment, date, startMinute, providerId);
+    const target = moveTarget(appointment, date, startMinute, providerId, timeZone);
     if (new Date(target.start).getTime() < Date.now()) {
       setError(copy.past);
       return;
     }
     if (!fitsBusinessHoursLocal(date, time, formatMinute(startMinute + duration), hours)) {
-      const weekday = new Date(`${date}T00:00:00`).getDay();
-      setError(copy.outsideHours(describeDay(weekday, hours)));
+      setError(copy.outsideHours(describeDay(civilWeekday(date), hours, fmt)));
       return;
     }
     setSubmitting(true);

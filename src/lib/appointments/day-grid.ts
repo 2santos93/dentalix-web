@@ -1,12 +1,13 @@
 import type { BusinessHours } from '@/lib/locations/schedule-api';
+import { wallInstant, wallMinuteOfDay } from '@/lib/time/wall-clock';
 
 /**
  * Geometría de la vista Día en columnas (DX-121): qué franja horaria se pinta,
  * dónde está sombreado «fuera de horario», y la conversión posición ⇄ hora que
  * usa el arrastre. Puro: lo prueban los tests sin DOM.
  *
- * Todo en minutos de pared desde 00:00 del día que se mira (hora local del
- * navegador, la misma que usa el resto de la agenda).
+ * Todo en minutos de pared desde 00:00 del día que se mira, en el reloj de la
+ * sede (DX-378), nunca en el del navegador.
  */
 
 /** Rejilla de 15 min (líneas) con ajuste de 5 min al soltar una cita. */
@@ -102,13 +103,15 @@ export function minuteFromOffset(offsetPx: number, window: MinuteRange): number 
   return Math.min(Math.max(snapped, window.start), window.end - GRID_SNAP_MINUTES);
 }
 
-/** Minutos locales desde 00:00 del instante `iso`. */
-export function minuteOfDay(iso: string): number {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
+/** Minutos desde las 00:00 del instante `iso` en el reloj de la sede (`timeZone`). */
+export function minuteOfDay(iso: string, timeZone: string): number {
+  return wallMinuteOfDay(iso, timeZone);
 }
 
-/** "HH:mm" de un minuto del día. */
+/**
+ * "HH:mm" de un minuto del día: el valor de un `<input type="time">`, nunca un
+ * texto en pantalla (para eso, `sedeMinute` con el formato de la sede).
+ */
 export function formatMinute(minute: number): string {
   return `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 }
@@ -120,17 +123,18 @@ export interface MoveTarget {
 }
 
 /**
- * Destino de un movimiento: el día (`YYYY-MM-DD` local), la hora de inicio y el
- * profesional nuevos, conservando la duración de la cita.
+ * Destino de un movimiento: el día civil, la hora de inicio en el reloj de la
+ * sede (`timeZone`) y el profesional nuevos, conservando la duración de la cita.
  */
 export function moveTarget(
   appointment: { start: string; end: string },
   date: string,
   startMinute: number,
   providerId: string,
+  timeZone: string,
 ): MoveTarget {
   const duration = new Date(appointment.end).getTime() - new Date(appointment.start).getTime();
-  const start = new Date(`${date}T${formatMinute(startMinute)}:00`);
+  const start = wallInstant(date, startMinute, timeZone);
   return {
     start: start.toISOString(),
     end: new Date(start.getTime() + duration).toISOString(),

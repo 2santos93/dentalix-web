@@ -4,6 +4,7 @@ import {
   closedBands,
   gridWindow,
   minuteFromOffset,
+  minuteOfDay,
   moveTarget,
   offsetFromMinute,
 } from './day-grid';
@@ -73,15 +74,20 @@ describe('day-grid (DX-121)', () => {
 
   describe('moveTarget', () => {
     it('conserva la duración y cambia día, hora y profesional', () => {
-      const appointment = {
-        start: new Date('2031-03-03T09:00:00').toISOString(),
-        end: new Date('2031-03-03T10:30:00').toISOString(),
-      };
-      expect(moveTarget(appointment, '2031-03-04', 15 * 60, 'prov-2')).toEqual({
-        start: new Date('2031-03-04T15:00:00').toISOString(),
-        end: new Date('2031-03-04T16:30:00').toISOString(),
+      // Caracas (UTC−4): las 15:00 de la sede son las 19:00 UTC, sea cual sea el navegador.
+      const appointment = { start: '2031-03-03T13:00:00.000Z', end: '2031-03-03T14:30:00.000Z' };
+      expect(moveTarget(appointment, '2031-03-04', 15 * 60, 'prov-2', 'America/Caracas')).toEqual({
+        start: '2031-03-04T19:00:00.000Z',
+        end: '2031-03-04T20:30:00.000Z',
         providerId: 'prov-2',
       });
+    });
+  });
+
+  describe('minuteOfDay', () => {
+    it('es el minuto que marca el reloj de la sede', () => {
+      expect(minuteOfDay('2031-03-03T13:05:00.000Z', 'America/Caracas')).toBe(9 * 60 + 5);
+      expect(minuteOfDay('2031-03-03T13:05:00.000Z', 'Asia/Tokyo')).toBe(22 * 60 + 5);
     });
   });
 });
