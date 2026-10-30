@@ -329,6 +329,8 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     mockedRecord.mockResolvedValue({
       id: 'pay-new',
       tenantId: 't-1',
+      splitId: null,
+      splitLine: null,
       treatmentPlanId: 'plan-1',
       openingBalanceId: null,
       patientId: 'pat-1',

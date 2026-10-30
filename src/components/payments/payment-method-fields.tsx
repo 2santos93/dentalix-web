@@ -7,6 +7,7 @@ import { PAYMENT_REFERENCE_DUPLICATE, type ClinicPaymentMethod } from '@/lib/pay
 import type { RecordPaymentInput } from '@/lib/payments/payments-api';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import { FieldError } from '@/components/errors/field-error';
 import { usePaymentMethods, type PaymentMethodsState } from './use-payment-methods';
 
 // Copy como constantes (i18n-ready).
@@ -14,8 +15,10 @@ export const paymentMethodFieldsCopy = {
   method: 'Método',
   methodNone: 'Sin especificar',
   methodsLoading: 'Cargando medios de pago…',
-  methodsError: 'No pudimos cargar los medios de pago.',
-  methodsRetry: 'Reintentar',
+  // FE-082: etiqueta corta del `FieldError` (escalón 2): el contexto lo da la etiqueta del campo.
+  methodsError: 'No cargaron los medios',
+  methodsRetry: 'Reintentar la carga de los medios de pago',
+  methodMissing: 'Elige el medio de pago de esta forma de pago.',
   reference: 'Referencia',
   referenceRequired: 'Referencia (obligatoria)',
   referenceHint: 'El número de operación que da el pagador.',
@@ -58,12 +61,17 @@ export interface PaymentMethodFieldsState {
   duplicateReason: string;
   /** DX-395: el motivo que falta, junto a su campo. */
   duplicateReasonError: string | null;
+  /** DX-390: el medio que falta, junto a su selector. */
+  methodError: string | null;
   /**
    * DX-395: el campo que debe recibir el foco (la referencia o el motivo que
    * faltan, o el motivo al llegar el aviso de repetida). `seq` cambia en cada
    * petición, para volver a enfocar el mismo campo.
    */
-  focusRequest: { field: 'reference' | 'reason'; seq: number } | null;
+  focusRequest: {
+    field: 'reference' | 'reason' | 'method';
+    seq: number;
+  } | null;
   selectMethod: (id: string) => void;
   setReference: (value: string) => void;
   setDuplicateReason: (value: string) => void;
@@ -71,14 +79,130 @@ export interface PaymentMethodFieldsState {
   reset: () => void;
   /**
    * Antes de enviar: `false` si falta la referencia o el motivo de la
-   * repetida. El error va junto a su campo (`aria-invalid`) y el campo recibe
-   * el foco (DX-395).
+   * repetida (o, con `requireMethod`, el medio: DX-390). El error va junto a
+   * su campo (`aria-invalid`) y el campo recibe el foco (DX-395).
    */
-  validate: () => boolean;
+  validate: (options?: { requireMethod?: boolean }) => boolean;
   /** Lo que se añade al cuerpo del abono. */
   body: () => MethodBody;
   /** `true` si el error es el 409 de referencia repetida (ya avisado). */
   catchDuplicate: (err: unknown) => boolean;
+}
+
+/**
+ * El estado de los campos de medio y referencia de UNA forma de pago: el
+ * abono suelto lo guarda en su propio estado y el cobro dividido (DX-390), uno
+ * por línea.
+ */
+export interface MethodLineState {
+  paymentMethodId: string;
+  reference: string;
+  referenceError: string | null;
+  duplicate: string | null;
+  duplicateReason: string;
+  duplicateReasonError: string | null;
+  /** DX-390: el medio que falta (cada línea de un cobro dividido lleva uno). */
+  methodError: string | null;
+  focusRequest: PaymentMethodFieldsState['focusRequest'];
+}
+
+export const EMPTY_METHOD_LINE: MethodLineState = {
+  paymentMethodId: '',
+  reference: '',
+  referenceError: null,
+  duplicate: null,
+  duplicateReason: '',
+  duplicateReasonError: null,
+  methodError: null,
+  focusRequest: null,
+};
+
+/** Cambiar el medio o la referencia retira el aviso de repetida. */
+function withoutDuplicate(state: MethodLineState): MethodLineState {
+  return {
+    ...state,
+    referenceError: null,
+    duplicate: null,
+    duplicateReason: '',
+    duplicateReasonError: null,
+  };
+}
+
+function withFocus(state: MethodLineState, field: 'reference' | 'reason' | 'method'): MethodLineState {
+  return {
+    ...state,
+    focusRequest: { field, seq: (state.focusRequest?.seq ?? 0) + 1 },
+  };
+}
+
+/**
+ * La regla de los campos de medio y referencia sobre un estado: la usan el
+ * abono suelto (`usePaymentMethodFields`) y cada línea del cobro dividido
+ * (DX-390), así las dos validan igual. `update` aplica el cambio al estado de
+ * quien llama.
+ */
+export function methodFieldsOf(
+  methods: PaymentMethodsState,
+  state: MethodLineState,
+  update: (change: (state: MethodLineState) => MethodLineState) => void,
+): PaymentMethodFieldsState {
+  const selected = methods.methods.find((m) => m.id === state.paymentMethodId) ?? null;
+  return {
+    methods,
+    selected,
+    paymentMethodId: state.paymentMethodId,
+    reference: state.reference,
+    referenceError: state.referenceError,
+    duplicate: state.duplicate,
+    duplicateReason: state.duplicateReason,
+    duplicateReasonError: state.duplicateReasonError,
+    methodError: state.methodError,
+    focusRequest: state.focusRequest,
+    selectMethod: (id) =>
+      update((s) => ({
+        ...withoutDuplicate(s),
+        paymentMethodId: id,
+        methodError: null,
+      })),
+    setReference: (value) => update((s) => ({ ...withoutDuplicate(s), reference: value })),
+    setDuplicateReason: (value) =>
+      update((s) => ({
+        ...s,
+        duplicateReason: value,
+        duplicateReasonError: null,
+      })),
+    reset: () => update(() => EMPTY_METHOD_LINE),
+    validate: ({ requireMethod = false } = {}) => {
+      if (requireMethod && !selected) {
+        update((s) => withFocus({ ...s, methodError: copy.methodMissing }, 'method'));
+        return false;
+      }
+      if (selected?.requiresReference && isBlankReference(state.reference)) {
+        update((s) => withFocus({ ...s, referenceError: copy.referenceMissing }, 'reference'));
+        return false;
+      }
+      if (state.duplicate && state.duplicateReason.trim() === '') {
+        update((s) => withFocus({ ...s, duplicateReasonError: copy.duplicateReasonMissing }, 'reason'));
+        return false;
+      }
+      return true;
+    },
+    body: () => {
+      const trimmed = state.reference.trim();
+      const reason = state.duplicateReason.trim();
+      return {
+        ...(selected ? { paymentMethodId: selected.id } : {}),
+        ...(selected && trimmed ? { reference: trimmed } : {}),
+        ...(state.duplicate && reason ? { duplicateReferenceReason: reason } : {}),
+      };
+    },
+    catchDuplicate: (err) => {
+      if (!(err instanceof ApiError) || err.code !== PAYMENT_REFERENCE_DUPLICATE) return false;
+      // DX-395: el aviso pide el motivo: el foco va a él.
+      update((s) => withFocus({ ...s, duplicate: apiErrorMessage(err, copy.duplicateFallback) }, 'reason'));
+      return true;
+    },
+  };
 }
 
 /**
@@ -88,86 +212,16 @@ export interface PaymentMethodFieldsState {
  */
 export function usePaymentMethodFields(token: string, enabled: boolean): PaymentMethodFieldsState {
   const methods = usePaymentMethods(token, enabled);
-  const [paymentMethodId, setPaymentMethodId] = useState('');
-  const [reference, setReferenceValue] = useState('');
-  const [duplicateReason, setDuplicateReason] = useState('');
-  const [referenceError, setReferenceError] = useState<string | null>(null);
-  const [duplicate, setDuplicate] = useState<string | null>(null);
-  const [duplicateReasonError, setDuplicateReasonError] = useState<string | null>(null);
-  const [focusRequest, setFocusRequest] = useState<PaymentMethodFieldsState['focusRequest']>(null);
-  const requestFocus = (field: 'reference' | 'reason') =>
-    setFocusRequest((prev) => ({ field, seq: (prev?.seq ?? 0) + 1 }));
-  const selected = methods.methods.find((m) => m.id === paymentMethodId) ?? null;
-
-  // Cambiar el medio o la referencia retira el aviso de repetida.
-  function clearDuplicate() {
-    setReferenceError(null);
-    setDuplicate(null);
-    setDuplicateReason('');
-    setDuplicateReasonError(null);
-  }
-
-  return {
-    methods,
-    selected,
-    paymentMethodId,
-    reference,
-    referenceError,
-    duplicate,
-    duplicateReason,
-    duplicateReasonError,
-    focusRequest,
-    selectMethod: (id) => {
-      setPaymentMethodId(id);
-      clearDuplicate();
-    },
-    setReference: (value) => {
-      setReferenceValue(value);
-      clearDuplicate();
-    },
-    setDuplicateReason: (value) => {
-      setDuplicateReason(value);
-      setDuplicateReasonError(null);
-    },
-    reset: () => {
-      setPaymentMethodId('');
-      setReferenceValue('');
-      clearDuplicate();
-      setFocusRequest(null);
-    },
-    validate: () => {
-      if (selected?.requiresReference && isBlankReference(reference)) {
-        setReferenceError(copy.referenceMissing);
-        requestFocus('reference');
-        return false;
-      }
-      if (duplicate && duplicateReason.trim() === '') {
-        setDuplicateReasonError(copy.duplicateReasonMissing);
-        requestFocus('reason');
-        return false;
-      }
-      return true;
-    },
-    body: () => {
-      const trimmed = reference.trim();
-      const reason = duplicateReason.trim();
-      return {
-        ...(selected ? { paymentMethodId: selected.id } : {}),
-        ...(selected && trimmed ? { reference: trimmed } : {}),
-        ...(duplicate && reason ? { duplicateReferenceReason: reason } : {}),
-      };
-    },
-    catchDuplicate: (err) => {
-      if (!(err instanceof ApiError) || err.code !== PAYMENT_REFERENCE_DUPLICATE) return false;
-      setDuplicate(apiErrorMessage(err, copy.duplicateFallback));
-      // DX-395: el aviso pide el motivo: el foco va a él.
-      requestFocus('reason');
-      return true;
-    },
-  };
+  const [state, setState] = useState<MethodLineState>(EMPTY_METHOD_LINE);
+  return methodFieldsOf(methods, state, setState);
 }
 
-/** El selector de medios activos (con carga y error con reintento). */
+/**
+ * El selector de medios activos, con carga y, si no cargan, el escalón 2 de la
+ * escalera de errores (FE-082): `FieldError` en el sitio del control, a su
+ * altura, con el reintento como destino de la etiqueta. Con `methodError`
+ * (DX-390), el error del campo y el foco.
+ */
 export function PaymentMethodSelect({
   fields,
   id,
@@ -179,22 +233,30 @@ export function PaymentMethodSelect({
   label?: string;
   disabled?: boolean;
 }) {
-  const { methods } = fields;
+  const { methods, methodError, focusRequest } = fields;
+  const selectRef = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (focusRequest?.field === 'method') selectRef.current?.focus();
+  }, [focusRequest]);
   return (
-    <FormField htmlFor={id} label={label}>
+    <FormField htmlFor={id} label={label} error={methodError}>
       {methods.status === 'error' ? (
-        <p className="flex flex-wrap items-center gap-2 text-sm text-danger" role="alert">
-          {copy.methodsError}
-          <button type="button" className="font-medium underline" onClick={methods.retry}>
-            {copy.methodsRetry}
-          </button>
-        </p>
+        <FieldError
+          label={copy.methodsError}
+          onRetry={methods.retry}
+          retryLabel={copy.methodsRetry}
+          retryId={id}
+          className="h-10 w-full max-sm:h-11"
+        />
       ) : (
         <select
           id={id}
+          ref={selectRef}
           value={fields.paymentMethodId}
           disabled={disabled || methods.status === 'loading'}
           onChange={(e) => fields.selectMethod(e.target.value)}
+          aria-invalid={methodError ? true : undefined}
+          aria-describedby={methodError ? fieldErrorId(id) : undefined}
           className={fieldClass}
         >
           <option value="">{methods.status === 'loading' ? copy.methodsLoading : copy.methodNone}</option>
@@ -226,7 +288,7 @@ export function PaymentReferenceFields({ fields, idPrefix }: { fields: PaymentMe
   // DX-395: el foco va al campo que falta (o al motivo que pide el aviso de
   // repetida), ya montado tras el render que lo pidió.
   useEffect(() => {
-    if (!focusRequest) return;
+    if (!focusRequest || focusRequest.field === 'method') return;
     (focusRequest.field === 'reference' ? referenceRef : reasonRef).current?.focus();
   }, [focusRequest]);
 

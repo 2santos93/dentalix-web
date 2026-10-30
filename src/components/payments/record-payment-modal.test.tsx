@@ -133,6 +133,8 @@ function savedPayment(
     reference: null,
     duplicateReferenceReason: null,
     notes: null,
+    splitId: null,
+    splitLine: null,
     createdById: 'u-1',
     createdAt: '2026-10-16T12:00:00.000Z',
     updatedAt: '2026-10-16T12:00:00.000Z',

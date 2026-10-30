@@ -288,6 +288,8 @@ const plan2Detail = { ...plan2, items: [item1], total: item1.price };
 const payment1: Payment = {
   id: 'pay-1',
   tenantId: 't1',
+  splitId: null,
+  splitLine: null,
   treatmentPlanId: 'plan-1',
   openingBalanceId: null,
   patientId: 'pat-1',

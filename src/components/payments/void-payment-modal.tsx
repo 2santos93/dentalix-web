@@ -24,6 +24,9 @@ const copy = {
   reasonTooShort: `Escribe el motivo (al menos ${VOID_REASON_MIN} caracteres).`,
   counter: (n: number) => `${n}/${VOID_REASON_MAX}`,
   submit: 'Anular abono',
+  // DX-390: una línea de un cobro dividido se anula con todo el cobro.
+  splitNotice: (lines: number) =>
+    `Es una de las ${lines} formas de pago de un mismo cobro: se anulan todas y su recibo.`,
 };
 
 interface VoidPaymentModalProps {
@@ -38,6 +41,8 @@ interface VoidPaymentModalProps {
   restrictedToOwnToday: boolean;
   /** Qué abono se anula, p. ej. «12.345 COP · 16/10/2026 · Ana Gómez». */
   subject?: string;
+  /** DX-390: formas de pago del cobro dividido al que pertenece el abono (se anulan juntas). */
+  splitLines?: number;
 }
 
 /**
@@ -53,6 +58,7 @@ export function VoidPaymentModal({
   error,
   restrictedToOwnToday,
   subject,
+  splitLines,
 }: VoidPaymentModalProps) {
   const fieldId = useId();
   const hintId = `${fieldId}-hint`;
@@ -86,6 +92,11 @@ export function VoidPaymentModal({
       {subject ? (
         <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-ink tabular-nums">
           {subject}
+        </p>
+      ) : null}
+      {splitLines && splitLines > 1 ? (
+        <p role="note" className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink">
+          {copy.splitNotice(splitLines)}
         </p>
       ) : null}
       <div className="flex flex-col gap-1.5">

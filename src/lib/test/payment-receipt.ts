@@ -13,6 +13,7 @@ export function paymentReceiptFixture(overrides: Partial<PaymentReceipt> = {}): 
     voidedAt: null,
     voidReason: null,
     exchangeRate: null,
+    split: null,
     snapshot: {
       version: 1,
       clinic: { name: 'Clínica Sonrisas', legalName: null, taxId: null, address: null },

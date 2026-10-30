@@ -1,7 +1,17 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { recordOpeningBalancePayment, recordPayment } from '@/lib/payments/payments-api';
+import { Plus } from 'lucide-react';
+import {
+  SPLIT_MAX_LINES,
+  SPLIT_PAYMENT_EXCEEDS_BALANCE,
+  recordOpeningBalancePayment,
+  recordPayment,
+  recordSplitPayment,
+  type SplitPaymentLineInput,
+} from '@/lib/payments/payments-api';
+import { ApiError } from '@/lib/api/api-error';
+import { Button } from '@/components/ui/button';
 import type { AccountStatementOpeningBalance } from '@/lib/account-statement/account-statement-api';
 import { recordPaymentErrorMessage } from '@/lib/payments/payment-errors';
 import { statementCopy } from '@/lib/account-statement/presentation';
@@ -27,6 +37,14 @@ import {
   paymentMethodFieldsCopy,
   usePaymentMethodFields,
 } from './payment-method-fields';
+import {
+  SplitLineFields,
+  SplitPaymentSummary,
+  lineAmount,
+  splitPaymentCopy,
+  splitTotalOf,
+  useSplitLines,
+} from './split-payment-lines';
 
 // Copy como constantes (i18n-ready).
 export const recordPaymentCopy = {
@@ -55,6 +73,10 @@ export const recordPaymentCopy = {
     `El abono supera lo pendiente del saldo migrado: quedan ${pending}.`,
   // DX-376: previsualización del cobro en otra moneda que la del plan.
   preview: ratePreviewCopy,
+  // DX-390: cobro dividido en varias formas de pago con un solo recibo.
+  recordedSplit: (total: string, count: number, date: string, plan: string, receipt: string | null) =>
+    `Cobro registrado: ${total} en ${count} formas de pago · ${date} · ${plan}${receipt ? ` · recibo ${receipt}` : ''}.`,
+  split: splitPaymentCopy,
 };
 const copy = recordPaymentCopy;
 
@@ -142,6 +164,11 @@ export function RecordPaymentModal({
   const [amountError, setAmountError] = useState<string | null>(null);
   // DX-377: medio de la clínica, referencia y aviso de referencia repetida.
   const methodFields = usePaymentMethodFields(token, open);
+  // DX-390: las formas de pago 2.ª a 5.ª del cobro dividido, con los mismos
+  // medios que la primera.
+  const split = useSplitLines(methodFields.methods);
+  const [confirmCredit, setConfirmCredit] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   // Si la persona aún no tocó la fecha, sigue a «hoy» de la sede cuando llega
   // su zona (DX-097).
@@ -163,6 +190,9 @@ export function RecordPaymentModal({
       setError(null);
       setAmountError(null);
       methodFields.reset();
+      split.reset();
+      setConfirmCredit(false);
+      setConfirmError(null);
     }
   }
 
@@ -181,10 +211,16 @@ export function RecordPaymentModal({
   // DX-376: cobrar en otra moneda que la del plan enseña, antes de guardar, la
   // tasa del día del abono y cuánto cubre (un saldo migrado va en su moneda).
   const otherCurrency = plan !== null && currency !== '' && currency !== plan.currency;
-  const rates = useExchangeRates(token, form.date, open && otherCurrency);
+  // DX-390: con varias formas de pago (solo a un plan), el total y lo
+  // pendiente en la moneda del plan.
+  const isSplit = plan !== null && split.lines.length > 0;
+  const lineCurrency = (c: string) => c || plan?.currency || '';
+  const splitOtherCurrency =
+    isSplit && plan !== null && split.lines.some((l) => lineCurrency(l.currency) !== plan.currency);
+  const rates = useExchangeRates(token, form.date, open && (otherCurrency || splitOtherCurrency));
   // Lo pendiente sale del saldo del plan con los abonos en otra moneda ya
   // convertidos: `plan.balance` (lista de cobrables) no los descuenta.
-  const balance = usePlanBalance(token, plan?.id ?? null, open && otherCurrency);
+  const balance = usePlanBalance(token, plan?.id ?? null, open && (otherCurrency || isSplit));
   const previewBalance: PreviewPlanBalance =
     balance.status === 'ready'
       ? { balance: balance.balance.balance, paymentsWithoutRate: balance.balance.paymentsWithoutRate.length }
@@ -198,6 +234,113 @@ export function RecordPaymentModal({
     setForm((f) => ({ ...f, ...next }));
   }
 
+  const splitTotal =
+    isSplit && plan
+      ? splitTotalOf(
+          [
+            { amount: lineAmount(form.amount, currency), currency },
+            ...split.lines.map((l) => ({
+              amount: lineAmount(l.amount, lineCurrency(l.currency)),
+              currency: lineCurrency(l.currency),
+            })),
+          ],
+          plan.currency,
+          rates,
+        )
+      : null;
+  const pending: number | 'loading' | 'error' =
+    balance.status === 'ready' ? balance.balance.balance : balance.status === 'error' ? 'error' : 'loading';
+  const splitExceeds =
+    splitTotal?.status === 'ready' &&
+    typeof pending === 'number' &&
+    Math.round(splitTotal.total * 100) > Math.max(0, Math.round(pending * 100));
+
+  /**
+   * DX-390: el cobro dividido. Cada forma de pago valida como un abono (su
+   * importe en su moneda, su medio, su referencia y el motivo de una
+   * repetida); el error va junto al campo, que recibe el foco.
+   */
+  async function submitSplit(planId: string, paidAt: string, first: number) {
+    const lines: SplitPaymentLineInput[] = [];
+    let valid = true;
+    for (const line of split.lines) {
+      const lc = lineCurrency(line.currency);
+      const parsed = parseMoneyInput(line.amount, lc);
+      if (!parsed.ok || parsed.value <= 0) {
+        split.patch(line.key, {
+          amountError: parsed.ok || parsed.reason === 'empty' ? copy.invalidAmount : parsed.message,
+        });
+        valid = false;
+        continue;
+      }
+      lines.push({
+        amount: parsed.value,
+        currency: lc,
+        paymentMethodId: '',
+        ...split.fields(line).body(),
+      });
+    }
+    if (!valid) return;
+    if (!methodFields.validate({ requireMethod: true })) return;
+    for (const line of split.lines) {
+      if (!split.fields(line).validate({ requireMethod: true })) return;
+    }
+    if (splitExceeds && !confirmCredit) {
+      setConfirmError(copy.split.confirmCreditMissing);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const saved = await recordSplitPayment(
+        token,
+        planId,
+        {
+          paidAt,
+          ...(confirmCredit ? { confirmCreditBalance: true } : {}),
+          lines: [
+            {
+              amount: first,
+              currency,
+              paymentMethodId: '',
+              ...methodFields.body(),
+            } as SplitPaymentLineInput,
+            ...lines,
+          ],
+        },
+        idempotencyKey,
+      );
+      const savedPlan = plans.find((p) => p.id === planId) ?? plan;
+      const head = saved.payments[0];
+      const recorded = copy.recordedSplit(
+        saved.total === null
+          ? saved.payments.map((p) => money(p.amount, p.currency)).join(' + ')
+          : money(saved.total, saved.planCurrency),
+        saved.payments.length,
+        head ? sedeCivilDate(head.paidOn, fmt) : '',
+        savedPlan ? statementCopy.planLabel(savedPlan.createdAt) : '',
+        saved.receiptNumber,
+      );
+      onRecorded(
+        saved.payments.some((p) => p.exchangeRateStatus === 'MISSING')
+          ? `${recorded} ${copy.recordedWithoutRate}`
+          : recorded,
+      );
+    } catch (err) {
+      // La clave NO cambia: el reintento de este cobro la reusa.
+      if (err instanceof ApiError && err.code === SPLIT_PAYMENT_EXCEEDS_BALANCE) {
+        setConfirmError(copy.split.confirmCreditMissing);
+        return;
+      }
+      if (err instanceof ApiError && err.line !== null && err.line > 0) {
+        const line = split.lines[err.line - 1];
+        if (line && split.fields(line).catchDuplicate(err)) return;
+      }
+      if (methodFields.catchDuplicate(err)) return;
+      setError(recordPaymentErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -224,6 +367,10 @@ export function RecordPaymentModal({
     // guarda al mediodía de la sede, así cae en ese día de caja en su zona
     // (medianoche UTC sería la tarde del día anterior en Bogotá).
     const paidAt = form.date;
+    if (isSplit && plan) {
+      await submitSplit(plan.id, paidAt, amount);
+      return;
+    }
     // DX-395: la referencia o el motivo que faltan se marcan en su campo,
     // que recibe el foco.
     if (!methodFields.validate()) return;
@@ -273,7 +420,11 @@ export function RecordPaymentModal({
       title={copy.title}
       description={openings.length > 0 ? copy.descriptionWithOpenings : copy.description}
       onSubmit={handleSubmit}
-      submitLabel={methodFields.duplicate ? paymentMethodFieldsCopy.duplicateSubmit : copy.submit}
+      submitLabel={
+        methodFields.duplicate || split.lines.some((l) => l.method.duplicate)
+          ? paymentMethodFieldsCopy.duplicateSubmit
+          : copy.submit
+      }
       submitting={submitting}
       submitDisabled={plan === null && opening === null}
       error={error}
@@ -293,6 +444,8 @@ export function RecordPaymentModal({
             disabled={submitting}
             onChange={(e) => {
               setAmountError(null);
+              // El cobro dividido es solo a un plan: otro destino lo deshace.
+              split.reset();
               patch({ target: e.target.value });
             }}
             aria-describedby={opening ? 'rp-target-hint' : undefined}
@@ -358,7 +511,7 @@ export function RecordPaymentModal({
                   />
                 </FormField>
               </div>
-              {otherCurrency && plan ? (
+              {otherCurrency && plan && !isSplit ? (
                 <PaymentRatePreview
                   state={rates}
                   amount={previewAmount}
@@ -389,6 +542,55 @@ export function RecordPaymentModal({
                 </FormField>
               </div>
               <PaymentReferenceFields fields={methodFields} idPrefix="rp" />
+              {plan && !opening
+                ? split.lines.map((line, index) => (
+                    <SplitLineFields
+                      key={line.key}
+                      line={line}
+                      index={index + 1}
+                      fields={split.fields(line)}
+                      token={token}
+                      defaultCurrency={plan.currency}
+                      disabled={submitting}
+                      onPatch={(next) => split.patch(line.key, next)}
+                      onRemove={() => {
+                        split.remove(line.key);
+                        setConfirmError(null);
+                      }}
+                    />
+                  ))
+                : null}
+              {plan && !opening ? (
+                split.lines.length + 1 < SPLIT_MAX_LINES ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={split.add}
+                    disabled={submitting}
+                    className="w-full sm:w-auto sm:self-start"
+                  >
+                    <Plus aria-hidden />
+                    {copy.split.addLine}
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted">{copy.split.maxLines(SPLIT_MAX_LINES)}</p>
+                )
+              ) : null}
+              {isSplit && plan && splitTotal ? (
+                <SplitPaymentSummary
+                  total={splitTotal}
+                  pending={pending}
+                  planCurrency={plan.currency}
+                  fmt={fmt}
+                  confirmCredit={confirmCredit}
+                  onConfirmCredit={(value) => {
+                    setConfirmCredit(value);
+                    setConfirmError(null);
+                  }}
+                  confirmError={confirmError}
+                  disabled={submitting}
+                />
+              ) : null}
             </>
           ) : null}
         </>

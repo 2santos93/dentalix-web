@@ -3097,7 +3097,14 @@ export function TreatmentPlansTab({
         error={paymentActionError}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={role !== 'ADMIN'}
+        splitLines={splitLinesOf(payments, paymentToVoid)}
       />
     </div>
   );
+}
+
+/** DX-390: cuántas formas de pago tiene el cobro dividido del abono (0 si es suelto). */
+function splitLinesOf(payments: Payment[], paymentId: string | null): number {
+  const splitId = payments.find((p) => p.id === paymentId)?.splitId;
+  return splitId ? payments.filter((p) => p.splitId === splitId).length : 0;
 }

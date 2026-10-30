@@ -279,6 +279,7 @@ export function apiErrorFromBody(
   let field: string | null = null;
   let locationId: string | null = null;
   let holidayId: string | null = null;
+  let line: number | null = null;
   if (body && typeof body === 'object') {
     const data = body as {
       message?: unknown;
@@ -286,6 +287,7 @@ export function apiErrorFromBody(
       field?: unknown;
       locationId?: unknown;
       holidayId?: unknown;
+      line?: unknown;
     };
     const raw = data.message;
     if (typeof raw === 'string' && raw) messages = [raw];
@@ -294,6 +296,7 @@ export function apiErrorFromBody(
     if (typeof data.field === 'string' && data.field) field = data.field;
     if (typeof data.locationId === 'string' && data.locationId) locationId = data.locationId;
     if (typeof data.holidayId === 'string' && data.holidayId) holidayId = data.holidayId;
+    if (typeof data.line === 'number' && Number.isInteger(data.line) && data.line >= 0) line = data.line;
   }
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
@@ -303,6 +306,7 @@ export function apiErrorFromBody(
     field,
     locationId,
     holidayId,
+    line,
   });
 }
 

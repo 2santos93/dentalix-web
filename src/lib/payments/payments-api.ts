@@ -48,6 +48,35 @@ export async function recordPayment(
   });
 }
 
+export type RecordSplitPaymentInput = components['schemas']['RecordSplitPaymentDto'];
+export type SplitPaymentLineInput = components['schemas']['SplitPaymentLineDto'];
+export type SplitPayment = components['schemas']['SplitPaymentDto'];
+
+/** DX-390: líneas de un cobro dividido (con una sola es un abono de siempre). */
+export const SPLIT_MAX_LINES = 5;
+
+/** DX-390: 409 del cobro cuyo total supera lo pendiente sin confirmar el saldo a favor. */
+export const SPLIT_PAYMENT_EXCEEDS_BALANCE = 'SPLIT_PAYMENT_EXCEEDS_BALANCE';
+
+/**
+ * `POST /treatment-plans/:id/split-payments` (DX-390): un cobro en 2–5 formas
+ * de pago, cada una un abono, con UN recibo y en una sola transacción. Una
+ * Idempotency-Key para el cobro entero.
+ */
+export async function recordSplitPayment(
+  token: string,
+  planId: string,
+  input: RecordSplitPaymentInput,
+  idempotencyKey: string,
+): Promise<SplitPayment> {
+  return apiFetch<SplitPayment>(`/treatment-plans/${planId}/split-payments`, {
+    method: 'POST',
+    body: input,
+    token,
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
+}
+
 /**
  * `POST /opening-balances/:id/payments` (DX-262): abono contra el saldo
  * migrado del paciente, con su recibo de caja; en la moneda del saldo y sin
