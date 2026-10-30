@@ -10207,6 +10207,12 @@ export interface components {
              */
             oldestSince: string | null;
         };
+        PaymentRateOtherMissingDto: {
+            /** @example 0 */
+            count: number;
+            /** @description Las otras monedas sin tasa manual ese día (ISO 4217). */
+            currencies: string[];
+        };
         PaymentRateBacklogDayDto: {
             /**
              * Format: date
@@ -10216,7 +10222,7 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
-             * @description Abonos vivos de la clínica de ese día (en su sede) que esperan su tasa y están en esa moneda o van a un plan (o saldo migrado) en esa moneda.
+             * @description Abonos vivos de la clínica de ese día (en su sede) que esperan su tasa, están en esa moneda o van a un plan (o saldo migrado) en esa moneda, y cuya otra moneda es USD o ya tiene tasa manual ese día: a los que servirá de respaldo.
              * @example 1
              */
             count: number;
@@ -10225,6 +10231,8 @@ export interface components {
              * @example false
              */
             providerRateSaved: boolean;
+            /** @description Abonos de ese día que necesitan esa moneda y otra distinta de USD sin tasa manual ese día: la de respaldo solo les servirá cuando se registre también la otra. */
+            otherRatesMissing: components["schemas"]["PaymentRateOtherMissingDto"];
         };
         CreatePaymentPlanDto: {
             /**
