@@ -92,5 +92,9 @@ describe('RateBacklogNotice (DX-380)', () => {
   it('el texto propone lo que resuelve el caso: la tasa manual de ese día como respaldo', () => {
     expect(rateBacklogCopy.body).toMatch(/respaldo/);
     expect(rateBacklogCopy.body).not.toMatch(/cambia la fuente/);
+    // No da por hecho que servirá: el proveedor puede tener ya la tasa de ese
+    // día o el abono necesitar otra moneda; el formulario dice a cuántos.
+    expect(rateBacklogCopy.body).not.toMatch(/servirá de respaldo a esos abonos/);
+    expect(rateBacklogCopy.body).toMatch(/a cuántos/);
   });
 });

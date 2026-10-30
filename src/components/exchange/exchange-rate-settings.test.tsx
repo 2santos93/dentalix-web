@@ -337,6 +337,10 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
         backup.applies(1, 'VES'),
         backup.applies(3, 'VES'),
         backup.none('VES'),
+        backup.otherMissing(1, ['EUR']),
+        backup.otherMissing(2, ['EUR', 'COP']),
+        backup.onlyOther(1, 'VES', ['EUR']),
+        backup.onlyOther(2, 'VES', ['EUR']),
       ],
     });
     expect(texts).not.toMatch(/venezuela|colombia|españa|méxico|banco central|bcv|estadounidense/i);
@@ -349,6 +353,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
 describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', () => {
   const backup = rateFormCopy.backup;
   const SINCE = fmt.civilDate('2026-10-30');
+  const NO_OTHER = { count: 0, currencies: [] };
 
   async function openForm(settings: typeof MANUAL | typeof AUTO = MANUAL) {
     mockedGet.mockResolvedValue(settings);
@@ -381,7 +386,7 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
   });
 
   it('dice a cuántos abonos sin tasa de ese día se aplicará', async () => {
-    mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 2, providerRateSaved: false });
+    mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 2, providerRateSaved: false, otherRatesMissing: NO_OTHER });
     const { user, dialog, date, select } = await openForm();
     await user.clear(date);
     await user.type(date, '2026-10-28');
@@ -394,7 +399,7 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
   });
 
   it('sin abonos pendientes ese día, avisa de que la tasa no se usará', async () => {
-    mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 0, providerRateSaved: false });
+    mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 0, providerRateSaved: false, otherRatesMissing: NO_OTHER });
     const { user, dialog, date, select } = await openForm();
     await user.clear(date);
     await user.type(date, '2026-10-28');
@@ -404,8 +409,42 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
     );
   });
 
+  it('entre dos monedas sin la otra tasa del día, dice cuál falta además de a cuántos se aplicará', async () => {
+    mockedDay.mockResolvedValue({
+      date: '2026-10-28',
+      currency: 'VES',
+      count: 1,
+      providerRateSaved: false,
+      otherRatesMissing: { count: 2, currencies: ['COP', 'EUR'] },
+    });
+    const { user, dialog, date, select } = await openForm();
+    await user.clear(date);
+    await user.type(date, '2026-10-28');
+    await user.selectOptions(select, 'VES');
+    const notice = within(dialog).getByTestId('manual-rate-backup-notice');
+    await waitFor(() => expect(notice).toHaveTextContent(backup.applies(1, 'VES')));
+    expect(notice).toHaveTextContent(backup.otherMissing(2, ['COP', 'EUR']));
+  });
+
+  it('si todos sus abonos necesitan además otra tasa, avisa de que no se usará hasta registrarla', async () => {
+    mockedDay.mockResolvedValue({
+      date: '2026-10-28',
+      currency: 'VES',
+      count: 0,
+      providerRateSaved: false,
+      otherRatesMissing: { count: 1, currencies: ['EUR'] },
+    });
+    const { user, dialog, date, select } = await openForm();
+    await user.clear(date);
+    await user.type(date, '2026-10-28');
+    await user.selectOptions(select, 'VES');
+    const notice = within(dialog).getByTestId('manual-rate-backup-notice');
+    await waitFor(() => expect(notice).toHaveTextContent(backup.onlyOther(1, 'VES', ['EUR'])));
+    expect(notice).not.toHaveTextContent(backup.none('VES'));
+  });
+
   it('si el proveedor ya tiene la tasa de ese día, avisa de que no se usará', async () => {
-    mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 1, providerRateSaved: true });
+    mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 1, providerRateSaved: true, otherRatesMissing: NO_OTHER });
     const { user, dialog, date, select } = await openForm();
     await user.clear(date);
     await user.type(date, '2026-10-28');

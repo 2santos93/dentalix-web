@@ -19,7 +19,7 @@ export const rateBacklogCopy = {
     const what = count === 1 ? '1 abono sin tasa' : `${count} abonos sin tasa`;
     return since ? `${what} desde el ${since}` : `${what} desde hace más de 24 h`;
   },
-  body: 'El saldo y las imputaciones no los cuentan hasta que haya tasa de su día. Reintentamos solos; si la tasa no llega, pasa a la tasa manual y registra la de ese día: servirá de respaldo a esos abonos y el saldo los contará en un minuto.',
+  body: 'El saldo y las imputaciones no los cuentan hasta que haya tasa de su día. Reintentamos solos; si la tasa no llega, pasa a la tasa manual y registra la de ese día: al registrarla verás a cuántos de esos abonos servirá de respaldo.',
   link: 'Revisar la tasa de cambio',
   loadError: 'No pudimos comprobar si hay abonos sin tasa.',
 };

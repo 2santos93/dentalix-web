@@ -114,6 +114,15 @@ export const rateFormCopy = {
         : `Servirá de respaldo a los ${count} abonos sin tasa de ese día que necesitan la tasa de ${currency}: el saldo los contará en un minuto. No cambia ninguna tasa ya congelada.`,
     none: (currency: string) =>
       `No hay abonos sin tasa de ese día que necesiten la tasa de ${currency}, así que ahora no se usará. Solo serviría de respaldo a un abono de ese día que se quedara sin tasa.`,
+    // Entre dos monedas no USD la de respaldo necesita las dos tasas del día.
+    otherMissing: (count: number, currencies: string[]) =>
+      count === 1
+        ? `Otro abono sin tasa de ese día necesita además la tasa de ${currencies.join(', ')}: le servirá cuando registres también esa.`
+        : `Otros ${count} abonos sin tasa de ese día necesitan además la tasa de ${currencies.join(', ')}: les servirá cuando registres también esa.`,
+    onlyOther: (count: number, currency: string, currencies: string[]) =>
+      count === 1
+        ? `El abono sin tasa de ese día que necesita la tasa de ${currency} necesita además la de ${currencies.join(', ')}: esta no se usará hasta que registres también esa.`
+        : `Los ${count} abonos sin tasa de ese día que necesitan la tasa de ${currency} necesitan además la de ${currencies.join(', ')}: esta no se usará hasta que registres también esa.`,
     provider: 'Ese día ya tiene la tasa del proveedor: los abonos de ese día usan esa, así que esta no se usará.',
     unknown:
       'Su tasa solo sirve de respaldo a los abonos de ese día que sigan sin tasa, si el proveedor no tiene la de ese día.',
@@ -838,10 +847,17 @@ function BackupRateNotice({
   else if (current.day.providerRateSaved) {
     text = copy.provider;
     unused = true;
-  } else if (current.day.count === 0) {
-    text = copy.none(currency);
-    unused = true;
-  } else text = copy.applies(current.day.count, currency);
+  } else {
+    const { count, otherRatesMissing: other } = current.day;
+    const others = other.count > 0 ? other : null;
+    if (count > 0) {
+      text = copy.applies(count, currency);
+      if (others) text = `${text} ${copy.otherMissing(others.count, others.currencies)}`;
+    } else {
+      text = others ? copy.onlyOther(others.count, currency, others.currencies) : copy.none(currency);
+      unused = true;
+    }
+  }
 
   return (
     <div
