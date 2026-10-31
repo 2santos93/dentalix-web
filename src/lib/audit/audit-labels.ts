@@ -104,6 +104,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PROVIDER_SCHEDULE: 'Horario del profesional',
   // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
   MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
+  // DX-243: firma a distancia (enviar, abrir, código, bloqueo, firma, anular).
+  SIGNATURE_REQUEST: 'Firma a distancia',
   // DX-279: nueva versión de la política de cancelación de una sede.
   CANCELLATION_POLICY: 'Política de cancelación',
   // DX-274: gastos de la sede, sus pagos y su soporte.
@@ -168,15 +170,26 @@ export function communicationDetail(metadata: AuditMetadata): string | null {
   return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
 }
 
+/** DX-243: pasos de la firma a distancia que hace el propio paciente. */
+const PATIENT_SIGNATURE_REASONS = new Set([
+  'SIGNATURE_LINK_OPENED',
+  'SIGNATURE_CODE_SENT',
+  'SIGNATURE_CODE_VERIFIED',
+  'SIGNATURE_LINK_LOCKED',
+  'SIGNATURE_PATIENT_SIGNED',
+]);
+
 /**
  * DX-128: la baja la hizo el propio paciente (el evento no tiene usuario).
  * DX-099: también el envío de la anamnesis por enlace y su autorización.
+ * DX-243: y los pasos del enlace de firma a distancia.
  */
 export function isPatientOptOut(metadata: AuditMetadata): boolean {
   return (
     metadata.reason === 'REMINDER_OPT_OUT' ||
     metadata.reason === 'ANAMNESIS_SUBMITTED' ||
-    metadata.reason === 'ANAMNESIS_LINK'
+    metadata.reason === 'ANAMNESIS_LINK' ||
+    (metadata.reason !== undefined && PATIENT_SIGNATURE_REASONS.has(metadata.reason))
   );
 }
 
@@ -192,6 +205,22 @@ const ANAMNESIS_REASONS: Record<string, string> = {
 /** DX-099: qué pasó con la anamnesis por enlace, o null si no es de ella. */
 export function anamnesisDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && ANAMNESIS_REASONS[metadata.reason]) ?? null;
+}
+
+const SIGNATURE_REASONS: Record<string, string> = {
+  SIGNATURE_REQUEST_SENT: 'Enviado a firmar a distancia',
+  SIGNATURE_REQUEST_REVOKED: 'Enlace de firma anulado',
+  SIGNATURE_LINK_OPENED: 'Enlace de firma abierto',
+  SIGNATURE_CODE_SENT: 'Código de verificación enviado',
+  SIGNATURE_CODE_VERIFIED: 'Código de verificación correcto',
+  SIGNATURE_LINK_LOCKED: 'Enlace bloqueado tras 5 códigos incorrectos',
+  SIGNATURE_PATIENT_SIGNED: 'Firmado por el paciente a distancia',
+  CONSENT_COUNTERSIGNED: 'Firma del profesional (consentimiento completo)',
+};
+
+/** DX-243: qué pasó con la firma a distancia, o null si no es de ella. */
+export function signatureRequestDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && SIGNATURE_REASONS[metadata.reason]) ?? null;
 }
 
 const STAFF_LOGIN_REASONS: Record<string, string> = {

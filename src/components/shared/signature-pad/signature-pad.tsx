@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 const copy = {
   clear: 'Borrar',
-  placeholder: 'Firme aquí',
+  placeholder: 'Firma aquí',
   empty: 'Sin firma',
   captured: 'Firma capturada',
 };

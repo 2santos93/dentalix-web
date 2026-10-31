@@ -33,7 +33,7 @@ import { AccountStatementView } from '@/components/account-statement/account-sta
 import { PatientCollectionsSection } from '@/components/collections/patient-collections-section';
 import { FamilyAccountStatementSection } from '@/components/account-statement/family-account-statement-section';
 import { canManageCollections } from '@/lib/collections/presentation';
-import { getTokenRole } from '@/lib/auth/token-role';
+import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-access';
 import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
 import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
@@ -526,7 +526,12 @@ function PatientDetailView() {
           ) : null}
           {access.consents ? (
             <TabPanel tab="consents" activeTab={activeTab} register={registerPanel}>
-              <PatientConsentsTab token={accessToken} patientId={patientId} />
+              <PatientConsentsTab
+                token={accessToken}
+                patientId={patientId}
+                role={getTokenRole(accessToken)}
+                userId={getTokenUserId(accessToken)}
+              />
             </TabPanel>
           ) : null}
           {access.prescriptions ? (

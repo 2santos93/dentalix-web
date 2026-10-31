@@ -38,6 +38,7 @@ import {
   importBatchDetail,
   planItemAttributionDetail,
   anamnesisDetail,
+  signatureRequestDetail,
 } from '@/lib/audit/audit-labels';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
@@ -538,7 +539,8 @@ function AuditRow({
     clinicSettingsDetail(event.metadata) ??
     locationCalendarDetail(event.metadata) ??
     exchangeRateBackupDetail(event.metadata) ??
-    anamnesisDetail(event.metadata);
+    anamnesisDetail(event.metadata) ??
+    signatureRequestDetail(event.metadata);
   return (
     <TableRow>
       <TableCell className="tabular-nums" data-label={copy.colWhen}>

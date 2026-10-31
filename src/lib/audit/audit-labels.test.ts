@@ -22,6 +22,7 @@ import {
   locationCalendarDetail,
   staffDetail,
   locationNameMap,
+  signatureRequestDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -597,5 +598,18 @@ describe('exchangeRateBackupDetail (DX-402)', () => {
   it('null para otra reason', () => {
     expect(exchangeRateBackupDetail({ reason: 'RECEIPT_ISSUED' })).toBeNull();
     expect(exchangeRateBackupDetail({})).toBeNull();
+  });
+
+  it('DX-243: los pasos de la firma a distancia, y los del paciente salen sin usuario', () => {
+    expect(AUDIT_RESOURCE_LABELS.SIGNATURE_REQUEST).toBe('Firma a distancia');
+    expect(signatureRequestDetail({ reason: 'SIGNATURE_LINK_LOCKED', origin: 'LINK' })).toBe(
+      'Enlace bloqueado tras 5 códigos incorrectos',
+    );
+    expect(signatureRequestDetail({ reason: 'CONSENT_COUNTERSIGNED' })).toBe(
+      'Firma del profesional (consentimiento completo)',
+    );
+    expect(signatureRequestDetail({ reason: 'OTRA_COSA' })).toBeNull();
+    expect(isPatientOptOut({ reason: 'SIGNATURE_PATIENT_SIGNED', origin: 'LINK' })).toBe(true);
+    expect(isPatientOptOut({ reason: 'SIGNATURE_REQUEST_SENT' })).toBe(false);
   });
 });

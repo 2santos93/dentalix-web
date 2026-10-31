@@ -81,12 +81,17 @@ test('RECEPTION no ve el menú de catálogo ni las pestañas clínicas del pacie
     'Odontograma',
     'Periodontograma',
     'Plan de tratamiento',
-    'Consentimientos',
     'Recetas',
   ];
   for (const name of clinicalTabs) {
     await expect(page.getByRole('tab', { name, exact: true }), name).toHaveCount(0);
   }
+
+  // DX-243: «Consentimientos» sí aparece, pero solo con el bloque «Firma a
+  // distancia»: ni «Nuevo consentimiento» ni la tabla de documentos firmados.
+  await tabs.getByRole('tab', { name: 'Consentimientos', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Firma a distancia' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Nuevo consentimiento' })).toHaveCount(0);
 
   // Pedir una pestaña clínica por la URL tampoco la abre: cae en «Datos».
   await page.goto(`${origin}/patients/${patientId}?tab=clinical-history`);

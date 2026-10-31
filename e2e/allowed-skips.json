@@ -161,6 +161,34 @@
       "annotation": "E2E_DATABASE_URL no definido: no se puede dejar una sede sin revisar",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se puede dejar sin revisar la sede de una clínica nueva (desde DX-312 la API no registra sin sede)."
+    },
+    {
+      "file": "e2e/remote-signature.spec.ts",
+      "title": "Firma a distancia de consentimientos (DX-243) › recepción envía el consentimiento a firmar desde la ficha",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se pueden leer el enlace ni el código de la firma a distancia."
+    },
+    {
+      "file": "e2e/remote-signature.spec.ts",
+      "title": "Firma a distancia de consentimientos (DX-243) › la paciente verifica el código y firma desde el móvil (390 px, sin sesión)",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se pueden leer el enlace ni el código de la firma a distancia."
+    },
+    {
+      "file": "e2e/remote-signature.spec.ts",
+      "title": "Firma a distancia de consentimientos (DX-243) › recepción ve «Firmado por paciente» con las evidencias",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se pueden leer el enlace ni el código de la firma a distancia."
+    },
+    {
+      "file": "e2e/remote-signature.spec.ts",
+      "title": "Firma a distancia de consentimientos (DX-243) › el profesional firma en la app y el consentimiento queda «Completo»",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se pueden leer el enlace ni el código de la firma a distancia."
     }
   ]
 }
