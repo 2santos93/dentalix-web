@@ -6,6 +6,8 @@ import { InventoryItem } from './inventory-item-detail';
 import {
   getInventoryItem,
   recordInventoryMovement,
+  updateInventoryItem,
+  deleteInventoryItem,
   type InventoryItem as ItemDetail,
 } from '../../lib/inventory/inventory-api';
 
@@ -22,6 +24,8 @@ jest.mock('../../lib/inventory/inventory-api', () => ({
 
 const mockedGetItem = getInventoryItem as jest.MockedFunction<typeof getInventoryItem>;
 const mockedRecord = recordInventoryMovement as jest.MockedFunction<typeof recordInventoryMovement>;
+const mockedUpdate = updateInventoryItem as jest.MockedFunction<typeof updateInventoryItem>;
+const mockedDelete = deleteInventoryItem as jest.MockedFunction<typeof deleteInventoryItem>;
 
 function detail(overrides: Partial<ItemDetail> = {}): ItemDetail {
   return {
@@ -59,7 +63,7 @@ describe('InventoryItem', () => {
     expect(await screen.findByText('Jeringas')).toBeInTheDocument();
     // Stock actual + badge de stock bajo.
     expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getByText(/stock bajo/i)).toBeInTheDocument();
+    expect(screen.getByText(/bajo stock/i)).toBeInTheDocument();
     // Ledger: IN suma (+), OUT resta (-), ADJUSTMENT tal cual (conserva su signo).
     expect(screen.getByText('+5')).toBeInTheDocument();
     expect(screen.getByText('-3')).toBeInTheDocument();
@@ -128,5 +132,47 @@ describe('InventoryItem', () => {
     await screen.findByText('Jeringas');
 
     expect(screen.getByText(/sin movimientos aún/i)).toBeInTheDocument();
+  });
+
+  it('the header names the item, links back and lists the data as a description list', async () => {
+    mockedGetItem.mockResolvedValue(detail({ notes: 'Caja grande' }));
+    render(<InventoryItem token="tok" id="item1" />);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Jeringas' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /inventario/i })).toHaveAttribute('href', '/inventory');
+    expect(screen.getByText('Stock mínimo').tagName).toBe('DT');
+    expect(screen.getByText('Caja grande')).toBeInTheDocument();
+  });
+
+  it('edits in a modal and PATCHes', async () => {
+    mockedGetItem.mockResolvedValue(detail());
+    mockedUpdate.mockResolvedValue(detail({ name: 'Jeringas 5 ml' }));
+    const user = userEvent.setup();
+    render(<InventoryItem token="tok" id="item1" />);
+    await screen.findByRole('heading', { level: 1, name: 'Jeringas' });
+
+    await user.click(screen.getByRole('button', { name: /editar/i }));
+    const dialog = await screen.findByRole('dialog', { name: 'Editar insumo' });
+    const name = within(dialog).getByLabelText('Nombre');
+    await user.clear(name);
+    await user.type(name, 'Jeringas 5 ml');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'item1', expect.objectContaining({ name: 'Jeringas 5 ml' })),
+    );
+  });
+
+  it('deletes only after confirming, then goes back to the list', async () => {
+    mockedGetItem.mockResolvedValue(detail());
+    mockedDelete.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<InventoryItem token="tok" id="item1" />);
+    await screen.findByRole('heading', { level: 1, name: 'Jeringas' });
+
+    await user.click(screen.getByRole('button', { name: /eliminar/i }));
+    expect(mockedDelete).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog', { name: 'Eliminar insumo' });
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, eliminar' }));
+    await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'item1'));
+    expect(push).toHaveBeenCalledWith('/inventory');
   });
 });
