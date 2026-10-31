@@ -112,6 +112,10 @@ function codeOf(line: string): string {
 
 const citesLawInCode = (line: string): boolean => citesLaw(codeOf(line));
 
+/** Cuántas veces aparece la línea fijada (sin sangría) en el texto del fichero. */
+const pinnedCount = (text: string, pinned: string): number =>
+  text.split('\n').filter((l) => l.trim() === pinned).length;
+
 function isLawLineException(file: string, line: string): boolean {
   return LAW_LINE_EXCEPTIONS.some((e) => e.file === file && e.line === line.trim());
 }
@@ -150,7 +154,7 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
       const path = join(SRC, ...e.file.split('/'));
       expect([e.file, existsSync(path)]).toEqual([e.file, true]);
       const lines = readFileSync(path, 'utf8').split('\n').map((l) => l.trim());
-      expect([e.file, e.line, lines.includes(e.line)]).toEqual([e.file, e.line, true]);
+      expect([e.file, e.line, pinnedCount(lines.join('\n'), e.line)]).toEqual([e.file, e.line, 1]);
       expect([e.line, citesLawInCode(e.line)]).toEqual([e.line, true]);
     }
   });
@@ -161,6 +165,13 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
     expect(lawHit("  footer: 'Decr" + "eto 780 de 2016',", PRESCRIPTION_LEGACY_LAYOUT)).toBe(true);
     expect(lawHit(pinned.line.replace('2016', '2017'), PRESCRIPTION_LEGACY_LAYOUT)).toBe(true);
     expect(lawHit(pinned.line, 'lib/prescriptions/prescription-layout.ts')).toBe(true);
+  });
+
+  it('a second copy of a pinned line in the same file is detected', () => {
+    const [pinned] = LAW_LINE_EXCEPTIONS;
+    expect(pinnedCount(`a\n  ${pinned.line}\nb`, pinned.line)).toBe(1);
+    expect(pinnedCount(`a\n  ${pinned.line}\nb\n    ${pinned.line}`, pinned.line)).toBe(2);
+    expect(pinnedCount('a\nb', pinned.line)).toBe(0);
   });
 
   it('the law patterns catch each citation and skip neutral text', () => {
@@ -176,6 +187,8 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
       'Regul' + 'ation (EU) 2016/679',
       'Superinten' + 'dencia de Industria y Comercio',
       'ante la ' + 'SIC',
+      'la superinten' + 'dencia de salud',
+      'LA SUPERINTEN' + 'DENCIA DE SALUD',
       'Registro ' + 'IN' + 'VIMA',
       'Registro sanitario ' + 'IN' + 'VIMA',
       'Real Decr' + 'eto 1718/2010',

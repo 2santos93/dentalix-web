@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PrivacyPolicySettings } from './privacy-policy-settings';
 import { ApiError } from '@/lib/api/client';
@@ -95,6 +95,28 @@ it('no publica con marcadores de la plantilla', async () => {
 
   expect(within(dialog).getByRole('alert')).toHaveTextContent(
     'Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: [Nombre de la clínica], [Dirección], [Correo o teléfono de contacto].',
+  );
+  expect(mockedPublish).not.toHaveBeenCalled();
+});
+
+it('nombra el campo donde queda un marcador fuera del texto de la política', async () => {
+  const user = userEvent.setup();
+  mockedGet.mockResolvedValue(policiesFixture(null));
+  render(<PrivacyPolicySettings token={ADMIN} />);
+
+  await user.click(await screen.findByRole('button', { name: /publicar la política/i }));
+  const dialog = await screen.findByRole('dialog');
+  const policy = within(dialog).getByLabelText('Texto completo de la política');
+  await user.clear(policy);
+  await user.type(policy, FILLED_POLICY);
+  // fireEvent: user-event v14 interpreta los corchetes como teclas.
+  fireEvent.change(within(dialog).getByLabelText('Casilla «Comunicaciones comerciales»'), {
+    target: { value: 'Escriba a [Dirección].' },
+  });
+  await user.click(within(dialog).getByRole('button', { name: /^publicar$/i }));
+
+  expect(within(dialog).getByRole('alert')).toHaveTextContent(
+    'Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: [Dirección] (en Casilla «Comunicaciones comerciales»).',
   );
   expect(mockedPublish).not.toHaveBeenCalled();
 });

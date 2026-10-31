@@ -12,7 +12,7 @@ import {
   type PrivacyPolicyVersion,
   type PublishPrivacyPolicyInput,
 } from '@/lib/data-consents/data-consents-api';
-import { POLICY_TEMPLATE, unfilledPlaceholders } from '@/lib/data-consents/policy-template';
+import { POLICY_TEMPLATE, unfilledPlaceholderFields } from '@/lib/data-consents/policy-template';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { formatDate } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -40,6 +40,7 @@ const copy = {
   emptyRequired: 'Completa los cuatro textos antes de publicar.',
   placeholders: (remaining: string[]) =>
     `Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: ${remaining.join(', ')}.`,
+  placeholderIn: (placeholder: string, labels: string[]) => `${placeholder} (en ${labels.join(' y ')})`,
   genericError: 'No pudimos publicar la política. Intenta de nuevo.',
   loadError: 'No pudimos cargar la política de tratamiento de datos.',
   emptyTitle: 'La clínica aún no ha publicado su política de tratamiento de datos.',
@@ -57,6 +58,13 @@ const copy = {
 };
 
 type Draft = PublishPrivacyPolicyInput;
+
+const fieldLabels: Record<keyof Draft, string> = {
+  policyText: copy.policyText,
+  generalText: copy.generalText,
+  sensitiveHealthText: copy.sensitiveText,
+  marketingText: copy.marketingText,
+};
 
 function draftFrom(policy: PrivacyPolicyVersion | null): Draft {
   if (!policy) return { ...POLICY_TEMPLATE };
@@ -96,9 +104,17 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
       setError(copy.emptyRequired);
       return;
     }
-    const remaining = unfilledPlaceholders(draft);
+    const remaining = unfilledPlaceholderFields(draft);
     if (remaining.length > 0) {
-      setError(copy.placeholders(remaining));
+      setError(
+        copy.placeholders(
+          remaining.map(({ placeholder, fields }) => {
+            // El texto de la política es el campo principal: solo se nombran los demás.
+            const others = fields.filter((f) => f !== 'policyText').map((f) => fieldLabels[f]);
+            return others.length > 0 ? copy.placeholderIn(placeholder, others) : placeholder;
+          }),
+        ),
+      );
       return;
     }
     setSubmitting(true);

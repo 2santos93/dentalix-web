@@ -16,11 +16,13 @@ export const LAW_CITATION = new RegExp(
   'i',
 );
 
-/** Autoridades de datos o sanitarias por su sigla o nombre; sensible a mayúsculas. */
+/** Autoridades de datos o sanitarias por su sigla o nombre; sensible a mayúsculas; el nombre de la autoridad cuenta en minúscula, con inicial o todo en mayúsculas. */
 export const LAW_AUTHORITY = new RegExp(
   String.raw`\b(?:SIC|IN` +
     String.raw`VIMA|AEPD|AEMPS|ANMAT|COFEPRIS|ANVISA|DIGEMID|INHRR|SACS|ANPD|CNIL)\b` +
-    String.raw`|\bRD\s*\d|Superintendencia`,
+    String.raw`|\bRD\s*\d|[Ss]uperinten` +
+    String.raw`dencia|SUPERINTEN` +
+    String.raw`DENCIA`,
 );
 
 /** Si la línea cita una norma o una autoridad. */

@@ -3,6 +3,7 @@ import type { PublishPrivacyPolicyInput } from './data-consents-api';
 import {
   POLICY_TEMPLATE,
   POLICY_TEMPLATE_PLACEHOLDERS,
+  unfilledPlaceholderFields,
   unfilledPlaceholders,
 } from './policy-template';
 
@@ -85,6 +86,43 @@ describe('unfilledPlaceholders', () => {
 
   it('atrapa el marcador con espacios junto a los corchetes', () => {
     expect(unfilledPlaceholders({ ...FILLED, policyText: 'Con domicilio en [ Dirección ].' })).toEqual(['[Dirección]']);
+  });
+
+  it('atrapa el marcador con espacios invisibles dentro y junto a los corchetes', () => {
+    for (const [name, invisible] of [
+      ['ZWSP', '\u200B'],
+      ['ZWNJ', '\u200C'],
+      ['ZWJ', '\u200D'],
+      ['WJ', '\u2060'],
+      ['BOM', '\uFEFF'],
+    ]) {
+      for (const variant of [
+        `[Direc${invisible}ción]`,
+        `[${invisible}Dirección]`,
+        `[Dirección${invisible}]`,
+        `[ ${invisible}Dirección${invisible} ]`,
+        `${invisible}[Dirección]`,
+      ]) {
+        expect({ name, variant, found: unfilledPlaceholders({ ...FILLED, policyText: `En ${variant}.` }) }).toEqual({
+          name,
+          variant,
+          found: ['[Dirección]'],
+        });
+      }
+    }
+  });
+
+  it('unfilledPlaceholderFields dice en qué campos queda cada marcador', () => {
+    expect(
+      unfilledPlaceholderFields({
+        ...FILLED,
+        policyText: 'Ver [Dirección].',
+        marketingText: 'Escriba a [Dirección] o a [Correo o teléfono de contacto].',
+      }),
+    ).toEqual([
+      { placeholder: '[Dirección]', fields: ['policyText', 'marketingText'] },
+      { placeholder: '[Correo o teléfono de contacto]', fields: ['marketingText'] },
+    ]);
   });
 
   it('no bloquea los corchetes propios de la clínica', () => {
