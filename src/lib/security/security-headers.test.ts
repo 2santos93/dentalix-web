@@ -29,11 +29,8 @@ describe('cabeceras de seguridad de la web (DX-061)', () => {
     await expect(nextConfig.headers!()).resolves.toEqual(securityHeaderRules());
   });
 
-  it('next.config reescribe /api/v1/* hacia la API (mismo origen para la cookie de sesión, DX-062)', async () => {
-    expect(typeof nextConfig.rewrites).toBe('function');
-    const rewrites = await nextConfig.rewrites!();
-    expect(rewrites).toEqual([
-      expect.objectContaining({ source: '/api/v1/:path*', destination: expect.stringMatching(/\/:path\*$/) }),
-    ]);
+  it('DX-083: /api/v1/* NO se reescribe en next.config (se fijaría al compilar) sino en proxy.ts, y el build es standalone', () => {
+    expect(nextConfig.rewrites).toBeUndefined();
+    expect(nextConfig.output).toBe('standalone');
   });
 });

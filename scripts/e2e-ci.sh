@@ -135,8 +135,9 @@ load_env() {
   # dev/e2e) para que Playwright abra el enlace de «Restablecer contraseña».
   export MAIL_TRANSPORT=file
   export MAIL_FILE_DIR="$STATE_DIR/mail"
-  # La web: las NEXT_PUBLIC_* se incrustan en el build y el rewrite /api/v1.
-  export NEXT_PUBLIC_API_URL="$API_URL"
+  # La web lee API_URL en runtime (DX-083: proxy /api/v1 y SSR; `next start`
+  # no arranca sin ella en producción). NEXT_PUBLIC_ROOT_DOMAIN sí se incrusta.
+  export API_URL
   # Igual que el build de ci.yml y que `next dev` sin .env (default del código).
   export NEXT_PUBLIC_ROOT_DOMAIN=dentalix.local
   export NEXT_TELEMETRY_DISABLED=1
