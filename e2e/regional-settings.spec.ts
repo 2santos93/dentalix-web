@@ -297,7 +297,7 @@ for (const viewport of VIEWPORTS) {
       const [reviewed] = await listLocations(request, session);
       expect(reviewed.regionalSettingsReviewedAt).not.toBeNull();
       await page.goto(`${session.origin}/dashboard`);
-      await expect(page.getByRole('heading', { name: 'Resumen del período' })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('heading', { name: 'Resultados del período' })).toBeVisible({ timeout: 15_000 });
       await expect(notice).toHaveCount(0);
     });
   });
