@@ -494,7 +494,8 @@ export function PatientSignatureRequestsSection({
                     label={copy.actionsOf(r.title)}
                     actions={actions}
                     busy={pdfBusy.has(r.id) || pdfBusy.has(copyBusyKey(r.id))}
-                    className="shrink-0"
+                    // 44 px bajo sm, como el «⋯» de las tarjetas de DataList.
+                    className="size-11 shrink-0 sm:size-9"
                   />
                 ) : null}
               </li>

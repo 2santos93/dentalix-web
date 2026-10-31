@@ -2,6 +2,8 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { FormModal } from '@/components/shared/form-modal';
+import { Callout } from '@/components/ui/callout';
+import { InlineError } from '@/components/errors/inline-error';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -218,9 +220,9 @@ export function CreditRefundModal({
       </div>
       {method === 'CASH' ? (
         cashBlocked ? (
-          <p role="alert" data-testid="refund-cash-location" className="text-sm text-danger-text">
+          <Callout tone="warning" role="alert" data-testid="refund-cash-location">
             {copy.cashNeedsLocation}
-          </p>
+          </Callout>
         ) : activeLocation ? (
           <p data-testid="refund-cash-location" className="t-label text-muted">
             {copy.cashFrom(activeLocation.name)}
@@ -249,7 +251,7 @@ export function CreditRefundModal({
         />
       </FormField>
       <fieldset className="flex flex-col gap-2" aria-describedby="cr-payments-hint">
-        <legend className="text-sm font-medium text-ink">{copy.payments}</legend>
+        <legend className="t-label text-ink">{copy.payments}</legend>
         {payments.length === 0 ? (
           <p className="text-sm text-muted">{copy.noPayments}</p>
         ) : (
@@ -268,11 +270,9 @@ export function CreditRefundModal({
           ))
         )}
         {paymentsError ? (
-          <p role="alert" className="text-xs text-danger-text">
-            {paymentsError}
-          </p>
+          <InlineError id="cr-payments-hint">{paymentsError}</InlineError>
         ) : (
-          <p id="cr-payments-hint" className="text-xs text-muted">
+          <p id="cr-payments-hint" className="t-caption">
             {copy.paymentsHint}
           </p>
         )}

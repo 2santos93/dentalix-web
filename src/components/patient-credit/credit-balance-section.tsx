@@ -4,8 +4,9 @@ import { ArrowRightLeft, Undo2 } from 'lucide-react';
 import type { AccountStatement } from '@/lib/account-statement/account-statement-api';
 import type { CreditRefund } from '@/lib/patient-credit/patient-credit-api';
 import { formatCurrency } from '@/lib/format/currency';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { SectionHeader } from '@/components/ui/section-header';
+import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import {
   creditSources,
   referencePayments,
@@ -21,7 +22,8 @@ const copy = {
   inFavor: 'a favor',
   transfer: 'Aplicar a otro plan',
   refund: 'Devolver',
-  actionSuffix: (plan: string) => ` · ${plan}`,
+  colPlan: 'Plan',
+  colCredit: 'Saldo a favor',
 };
 
 interface CreditBalanceSectionProps {
@@ -51,57 +53,53 @@ export function CreditBalanceSection({
   const [action, setAction] = useState<{ kind: 'transfer' | 'refund'; source: CreditSource } | null>(null);
   if (sources.length === 0) return null;
 
+  const columns: DataListColumn<CreditSource>[] = [
+    {
+      id: 'plan',
+      header: copy.colPlan,
+      mobile: 'primary',
+      cell: (source) => <span className="break-words font-medium text-ink">{planName(source.planId)}</span>,
+    },
+    {
+      id: 'credit',
+      header: copy.colCredit,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (source) => (
+        <span data-testid="credit-row" className="t-data whitespace-nowrap text-ink">
+          {formatCurrency(source.credit, source.currency)} <span className="text-muted">{copy.inFavor}</span>
+        </span>
+      ),
+    },
+  ];
+
   return (
     <section aria-labelledby="credit-balance-heading" className="flex flex-col gap-3" data-testid="credit-balance">
-      <div>
-        <h3 id="credit-balance-heading" className="text-base font-semibold text-ink">
-          {copy.heading}
-        </h3>
-        <p className="mt-1 max-w-prose text-sm text-muted">{copy.hint}</p>
-      </div>
-      <Card className="divide-y divide-border-subtle p-0 shadow-none">
-        {sources.map((source) => {
-          const name = planName(source.planId);
-          return (
-            <div
-              key={source.planId}
-              data-testid="credit-row"
-              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6"
-            >
-              <div className="min-w-0">
-                <p className="break-words font-medium text-ink">{name}</p>
-                <p className="text-sm tabular-nums text-success-text">
-                  {formatCurrency(source.credit, source.currency)} {copy.inFavor}
-                </p>
-              </div>
-              {canAct ? (
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="w-full sm:w-auto"
-                    onClick={() => setAction({ kind: 'transfer', source })}
-                  >
-                    <ArrowRightLeft aria-hidden />
-                    {copy.transfer}
-                    <span className="sr-only">{copy.actionSuffix(name)}</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    onClick={() => setAction({ kind: 'refund', source })}
-                  >
-                    <Undo2 aria-hidden />
-                    {copy.refund}
-                    <span className="sr-only">{copy.actionSuffix(name)}</span>
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </Card>
+      <SectionHeader as="h3" titleId="credit-balance-heading" title={copy.heading} description={copy.hint} />
+      {/* B7: una fila por plan con saldo; «Aplicar a otro plan» y «Devolver» en el «⋯». */}
+      <DataList
+        label={copy.heading}
+        rows={sources}
+        columns={columns}
+        getRowKey={(source) => source.planId}
+        getRowLabel={(source) => planName(source.planId)}
+        rowActions={
+          canAct
+            ? (source) => [
+                {
+                  label: copy.transfer,
+                  icon: <ArrowRightLeft aria-hidden />,
+                  onSelect: () => afterMenuCloses(() => setAction({ kind: 'transfer', source })),
+                },
+                {
+                  label: copy.refund,
+                  icon: <Undo2 aria-hidden />,
+                  onSelect: () => afterMenuCloses(() => setAction({ kind: 'refund', source })),
+                },
+              ]
+            : undefined
+        }
+      />
 
       {action?.kind === 'transfer' ? (
         <CreditTransferModal
