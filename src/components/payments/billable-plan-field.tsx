@@ -16,7 +16,7 @@ export const billablePlanFieldCopy = {
   emptyTitle: 'Este paciente no tiene planes por cobrar.',
   emptyDescription:
     'Se cobra contra un plan de tratamiento con procedimientos aceptados. Cuando el odontólogo lo deje aceptado, aparecerá aquí.',
-  // El saldo se repite aquí: en móvil el `<select>` recorta el nombre del plan.
+  // El saldo se repite aquí: en móvil el selector nativo recorta el nombre del plan.
   figures: (balance: string, total: string, paid: string) =>
     `Saldo ${balance} · Total ${total} · Abonado ${paid}`,
   inFavor: 'a favor',

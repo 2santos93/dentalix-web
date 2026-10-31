@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
+import { dataList } from './support/data-list';
 
 /**
  * e2e (DX-049 · SEC-013): anular un abono exige motivo y deja rastro.
@@ -104,7 +105,7 @@ for (const viewport of [
     // Estado de cuenta: el anulado con su autor y motivo.
     await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
     const statement = page.locator('#tabpanel-account-statement');
-    const movements = statement.getByRole('table', { name: 'Movimientos (abonos)' });
+    const movements = dataList(statement, 'Movimientos (abonos)');
     await expect(movements).toContainText(`Anulado por ${adminName}: ${REASON}`, {
       timeout: 10_000,
     });

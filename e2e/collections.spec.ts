@@ -234,7 +234,9 @@ test('DX-215: anular el abono que cumplió el compromiso lo vuelve a «Abierto»
 
   // Recepción anula su abono de hoy desde el estado de cuenta.
   const panel = page.locator('#tabpanel-account-statement');
-  await panel.getByRole('button', { name: /^Anular abono de .*200\.000/ }).click();
+  // UX v2: «Anular» vive en el «⋯» del movimiento.
+  await panel.getByRole('button', { name: /^Acciones de abono de .*200\.000/ }).click();
+  await page.getByRole('menuitem', { name: 'Anular' }).click();
   const dialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
   await expect(dialog.getByText(/el compromiso vuelve a abierto/)).toBeVisible();
   await dialog.getByLabel('Motivo de la anulación').fill('Cobro duplicado por error');

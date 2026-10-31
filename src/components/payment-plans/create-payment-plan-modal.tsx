@@ -5,6 +5,8 @@ import { createPaymentPlan, type Periodicity } from '@/lib/payment-plans/payment
 import { paymentPlanErrorMessage } from '@/lib/payments/payment-errors';
 import { formatCurrency } from '@/lib/format/currency';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
@@ -32,11 +34,6 @@ const PERIODICITY_OPTIONS: { value: Periodicity; label: string }[] = [
   { value: 'BIWEEKLY', label: 'Quincenal' },
   { value: 'WEEKLY', label: 'Semanal' },
 ];
-
-// <select> nativo con el aspecto del átomo Input (misma cadena que
-// treatment-plans-tab.tsx; nativo por accesibilidad y tests).
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -216,27 +213,26 @@ export function CreatePaymentPlanModal({
             />
           </FormField>
           <FormField htmlFor="pp-periodicity" label={copy.periodicity}>
-            <select
+            <NativeSelect
               id="pp-periodicity"
               value={form.periodicity}
               onChange={(e) => patch({ periodicity: e.target.value as Periodicity })}
-              className={fieldClass}
             >
               {PERIODICITY_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField htmlFor="pp-start" label={copy.startDate}>
-            <Input
+            <DatePicker
               id="pp-start"
-              type="date"
-              value={form.startDate}
-              onChange={(e) => patch({ startDate: e.target.value })}
+              name="pp-start"
+              value={form.startDate || null}
+              onChange={(next) => patch({ startDate: next ?? '' })}
             />
           </FormField>
           <FormField htmlFor="pp-down" label={copy.downPayment} error={fieldErrors.downPayment}>

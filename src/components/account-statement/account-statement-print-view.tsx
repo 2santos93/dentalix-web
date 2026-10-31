@@ -113,7 +113,7 @@ export function AccountStatementPrintView({
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {data ? (
-          <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
+          <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
             <AccountStatementDocument statement={data} />
           </div>
         ) : forbidden ? (

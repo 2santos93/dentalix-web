@@ -211,7 +211,7 @@ for (const viewport of [
     await expect(dialog).toBeHidden({ timeout: 10_000 });
 
     // --- Estado de cuenta: el medio de la clínica y la referencia.
-    const movements = panel.getByRole('table', { name: /movimientos/i });
+    const movements = dataList(panel, /movimientos/i);
     await expect(movements).toContainText(`${MOBILE} · Ref. ${reference}`, { timeout: 15_000 });
     await expect(movements).toContainText(`${MOBILE} · Ref. ${dashed}`);
     await expect(movements).not.toContainText('Transferencia');

@@ -27,7 +27,7 @@ function NotBillable() {
 }
 
 function FullyPaid() {
-  return <Badge variant="muted">{itemPaidCopy.fullyPaid}</Badge>;
+  return <Badge variant="neutral">{itemPaidCopy.fullyPaid}</Badge>;
 }
 
 /**

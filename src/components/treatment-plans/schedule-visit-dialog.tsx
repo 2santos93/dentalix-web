@@ -204,7 +204,7 @@ export function ScheduleVisitDialog({
                 </label>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   className="min-h-11"
                   disabled={searching || !site || !provider}
                   onClick={() => void search()}

@@ -8,6 +8,7 @@ import { E2E_REGION } from './support/regional';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 import { openPatientTab } from './support/patient-tabs';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (DX-262, correcciones de la revisión C1 e I2) en la demo, a 1440 y 390.
@@ -197,8 +198,8 @@ for (const viewport of [
     await expect(paidRow).toContainText('40.000,00', { timeout: 10_000 });
     await expect(paidRow).toContainText('60.000,00');
     await expect(summary.getByTestId('balance')).toContainText('85.000,00');
-    const movements = panel.getByRole('table', { name: 'Movimientos (abonos)' });
-    await expect(movements.getByRole('row').filter({ hasText: 'Saldo migrado · Cartera anterior' })).toHaveCount(1);
+    const movements = dataList(panel, 'Movimientos (abonos)');
+    await expect(dataListRows(movements).filter({ hasText: 'Saldo migrado · Cartera anterior' })).toHaveCount(1);
     await expectNoHorizontalScroll(page);
     await expectNoHorizontalScrollIn(page, 'main');
     await shoot(page, `dx262-abono-saldo-${viewport.name}`);

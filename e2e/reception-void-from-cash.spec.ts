@@ -168,11 +168,16 @@ for (const viewport of [
 
     // --- Estado de cuenta: el abono anulado, con autor y motivo.
     await openPatientTab(page, 'Estado de cuenta');
-    const movements = page
-      .locator('#tabpanel-account-statement')
-      .getByRole('table', { name: 'Movimientos (abonos)' });
+    const movements = dataList(page.locator('#tabpanel-account-statement'), 'Movimientos (abonos)');
     await expect(movements).toContainText(`: ${REASON}`, { timeout: 10_000 });
-    await expect(movements.getByRole('button', { name: /anular/i })).toHaveCount(0);
+    // Ningún movimiento ofrece «Anular» en su «⋯» (el propio ya está anulado).
+    const menus = movements.getByRole('button', { name: /^Acciones de abono de/ });
+    for (let i = 0; i < (await menus.count()); i += 1) {
+      await menus.nth(i).click();
+      await expect(page.getByRole('menuitem', { name: 'Recibo' })).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: /anular/i })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+    }
     await expect(page.getByText('Insufficient role')).toHaveCount(0);
   });
 }

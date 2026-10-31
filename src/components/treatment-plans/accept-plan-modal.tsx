@@ -179,7 +179,7 @@ export function AcceptPlanModal({
                 <li key={item.id} className="flex items-baseline justify-between gap-3 py-2">
                   <span className="min-w-0">
                     <span className="block text-ink">{item.procedure}</span>
-                    <span className="block text-xs text-muted tabular-nums">{copy.tooth(item.toothNumber)}</span>
+                    <span className="block t-caption text-muted tabular-nums">{copy.tooth(item.toothNumber)}</span>
                   </span>
                   <span className="shrink-0 font-medium text-ink tabular-nums">
                     {formatCurrency(item.subtotal, quote.currency)}
@@ -196,7 +196,7 @@ export function AcceptPlanModal({
                 <span className="tabular-nums">{formatCurrency(total.net, total.currency)}</span>
               </p>
             ))}
-            <p className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+            <p className="flex flex-wrap items-center justify-between gap-2 t-caption text-muted">
               <span className="tabular-nums">
                 {copy.validity(quote.validityDays, formatCivilDate(quote.validUntil))}
               </span>
@@ -231,7 +231,7 @@ export function AcceptPlanModal({
             onChange={setSignature}
             disabled={submitting}
           />
-          <p className="text-xs text-muted">{copy.immutableNote}</p>
+          <p className="t-caption text-muted">{copy.immutableNote}</p>
         </>
       )}
     </FormModal>

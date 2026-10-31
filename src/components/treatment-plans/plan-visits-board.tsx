@@ -176,7 +176,7 @@ export function PlanVisitsBoard({
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-ink">Plan por visitas</h3>
+          <h3 className="t-title text-ink">Plan por visitas</h3>
           <p className="mt-1 text-sm text-muted">
             Organiza qué se realiza en cada cita y cuánto esperar entre visitas.
           </p>
@@ -184,7 +184,7 @@ export function PlanVisitsBoard({
         {editable ? (
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             className="min-h-11"
             disabled={saving || !dirty}
             onClick={() => void save()}
@@ -223,7 +223,7 @@ export function PlanVisitsBoard({
                 {visit && visit.planItemIds.length > 0 ? (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     className="min-h-11"
                     disabled={dirty}
                     onClick={() => setBooking(number)}

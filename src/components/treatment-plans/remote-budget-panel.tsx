@@ -70,7 +70,7 @@ export function RemoteAcceptanceEvidence({
   return (
     <dl
       aria-label={copy.evidenceHeading}
-      className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs text-muted sm:grid-cols-2"
+      className="grid grid-cols-1 gap-x-4 gap-y-1 t-caption text-muted sm:grid-cols-2"
     >
       {rows.map(([label, value]) => (
         <div key={label} className="flex min-w-0 gap-1">
@@ -159,7 +159,7 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
       ) : null}
       {emailNotQueued ? <InlineError>{copy.emailNotQueued}</InlineError> : null}
       <div>
-        <Button type="button" variant="outline" disabled={loading} onClick={() => setSending(true)}>
+        <Button type="button" variant="secondary" disabled={loading} onClick={() => setSending(true)}>
           <Send aria-hidden />
           {request ? copy.sendAgain : copy.send}
         </Button>

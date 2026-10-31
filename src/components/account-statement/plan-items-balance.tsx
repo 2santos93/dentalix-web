@@ -128,7 +128,7 @@ export function PlanItemsBalance({ token, planId }: { token: string; planId: str
                 <dd className="font-medium text-ink tabular-nums">
                   {sedeMoney(balance.unallocated, balance.planCurrency, fmt)}
                 </dd>
-                <dd className="w-full text-xs text-muted">{allocationCopy.unallocatedHelp}</dd>
+                <dd className="t-caption w-full text-muted">{allocationCopy.unallocatedHelp}</dd>
               </div>
             </dl>
           ) : null}

@@ -97,7 +97,7 @@ export function FamilyAccountStatementPrintView({
       </div>
       <main className="flex-1 sm:px-4 sm:py-8 print:p-0">
         {data ? (
-          <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
+          <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
             <FamilyAccountStatementDocument statement={data} />
           </div>
         ) : forbidden ? (

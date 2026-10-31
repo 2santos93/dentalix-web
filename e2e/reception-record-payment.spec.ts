@@ -193,8 +193,8 @@ for (const viewport of [
     await expect(summary.getByTestId('balance')).toContainText(
       figure(PLAN_PRICE - PAYMENT),
     );
-    const movements = panel.getByRole('table', { name: 'Movimientos (abonos)' });
-    await expect(movements.getByRole('row').filter({ hasText: 'Efectivo' })).toHaveCount(1);
+    const movements = dataList(panel, 'Movimientos (abonos)');
+    await expect(dataListRows(movements).filter({ hasText: 'Efectivo' })).toHaveCount(1);
 
     // --- «Plan de cuotas» del mismo plan.
     await panel.getByRole('button', { name: 'Plan de cuotas' }).click();
