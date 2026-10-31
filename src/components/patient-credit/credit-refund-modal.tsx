@@ -22,6 +22,8 @@ import { CreditPreview } from './credit-preview';
 
 export const REFUND_REASON_MIN = 3;
 export const REFUND_REASON_MAX = 500;
+/** Tope de abonos de referencia por devolución (el de la API). */
+export const REFUND_MAX_PAYMENTS = 20;
 const METHODS: RefundMethod[] = ['CASH', 'CARD', 'TRANSFER', 'OTHER'];
 
 const copy = {
@@ -36,6 +38,7 @@ const copy = {
   payments: 'Abonos que se devuelven',
   paymentsHint: 'Marca al menos uno: salen en el comprobante como referencia.',
   paymentsRequired: 'Marca al menos un abono de referencia.',
+  paymentsTooMany: `Marca como máximo ${REFUND_MAX_PAYMENTS} abonos de referencia.`,
   noPayments: 'Este plan no tiene abonos vivos que citar.',
   payment: (amount: string, date: string) => `${amount} · ${date}`,
   invalidAmount: 'Escribe un importe mayor que 0.',
@@ -71,7 +74,11 @@ export function CreditRefundModal({
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<RefundMethod>('CASH');
   const [reason, setReason] = useState('');
-  const [selected, setSelected] = useState<string[]>(() => payments.map((p) => p.id));
+  // Todos marcados de entrada, salvo que pasen del tope de la API: entonces
+  // ninguno (quien devuelve elige cuáles citar).
+  const [selected, setSelected] = useState<string[]>(() =>
+    payments.length <= REFUND_MAX_PAYMENTS ? payments.map((p) => p.id) : [],
+  );
   const [amountError, setAmountError] = useState<string | null>(null);
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [paymentsError, setPaymentsError] = useState<string | null>(null);
@@ -98,6 +105,9 @@ export function CreditRefundModal({
     }
     if (selected.length === 0) {
       setPaymentsError(copy.paymentsRequired);
+      invalid = true;
+    } else if (selected.length > REFUND_MAX_PAYMENTS) {
+      setPaymentsError(copy.paymentsTooMany);
       invalid = true;
     }
     if (invalid || !parsed.ok) return;

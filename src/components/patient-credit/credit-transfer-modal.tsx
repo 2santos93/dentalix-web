@@ -23,6 +23,7 @@ const copy = {
     'Este paciente no tiene otro plan vivo en esta moneda. Crea o acepta un plan para aplicarle el saldo.',
   amount: 'Importe a aplicar',
   reason: 'Nota (opcional)',
+  reasonTooShort: 'La nota, si la escribes, necesita al menos 3 caracteres.',
   invalidAmount: 'Escribe un importe mayor que 0.',
   overCredit: (max: string) => `No puede superar el saldo a favor (${max}).`,
   submit: 'Aplicar al plan',
@@ -59,6 +60,7 @@ export function CreditTransferModal({
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [amountError, setAmountError] = useState<string | null>(null);
+  const [reasonError, setReasonError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const key = useRef<{ body: string; key: string } | null>(null);
@@ -94,6 +96,12 @@ export function CreditTransferModal({
       return;
     }
     setAmountError(null);
+    // La API exige de 3 a 500 caracteres si llega nota.
+    const note = reason.trim();
+    if (note.length > 0 && note.length < 3) {
+      setReasonError(copy.reasonTooShort);
+      return;
+    }
     setError(null);
     const body = {
       targetPlanId: target.id,
@@ -167,15 +175,20 @@ export function CreditTransferModal({
               aria-describedby={amountError ? fieldErrorId('ct-amount') : undefined}
             />
           </FormField>
-          <FormField htmlFor="ct-reason" label={copy.reason}>
+          <FormField htmlFor="ct-reason" label={copy.reason} error={reasonError}>
             <textarea
               id="ct-reason"
               rows={2}
               maxLength={500}
               value={reason}
               disabled={submitting}
-              onChange={(e) => setReason(e.target.value)}
-              className={fieldClass}
+              onChange={(e) => {
+                setReason(e.target.value);
+                setReasonError(null);
+              }}
+              aria-invalid={reasonError ? true : undefined}
+              aria-describedby={reasonError ? fieldErrorId('ct-reason') : undefined}
+              className={cn(fieldClass, reasonError && 'border-danger')}
             />
           </FormField>
           <CreditPreview rows={preview} />

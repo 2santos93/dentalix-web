@@ -169,3 +169,37 @@ it('devolver sin abonos marcados: aviso y sin llamar a la API', async () => {
   expect(await within(dialog).findByRole('alert')).toHaveTextContent(/al menos un abono/);
   expect(mockedRefund).not.toHaveBeenCalled();
 });
+
+it('aplicar a otro plan: una nota de menos de 3 caracteres se avisa sin llamar a la API', async () => {
+  const user = userEvent.setup();
+  renderSection(copCredit());
+  await user.click(screen.getByRole('button', { name: /Aplicar a otro plan/ }));
+  const dialog = screen.getByRole('dialog');
+  await user.type(within(dialog).getByLabelText('Importe a aplicar'), '1000');
+  fireEvent.change(within(dialog).getByLabelText('Nota (opcional)'), { target: { value: 'ok' } });
+  await user.click(within(dialog).getByRole('button', { name: 'Aplicar al plan' }));
+  expect(await within(dialog).findByText(/al menos 3 caracteres/)).toBeInTheDocument();
+  expect(mockedTransfer).not.toHaveBeenCalled();
+});
+
+it('devolver con más de 20 abonos vivos: ninguno marcado de entrada y tope de 20 al enviar', async () => {
+  const user = userEvent.setup();
+  const statement = copCredit();
+  const many = Array.from({ length: 21 }, (_, i) => ({
+    ...statement.movements[0],
+    id: `pay-${String(i).padStart(2, '0')}`,
+    amount: 1000,
+  }));
+  renderSection({ ...statement, movements: many });
+  await user.click(screen.getByRole('button', { name: /Devolver/ }));
+  const dialog = screen.getByRole('dialog');
+  const boxes = within(dialog).getAllByRole('checkbox');
+  expect(boxes).toHaveLength(21);
+  expect(boxes.filter((b) => (b as HTMLInputElement).checked)).toHaveLength(0);
+  for (const box of boxes) await user.click(box);
+  await user.type(within(dialog).getByLabelText('Importe a devolver'), '1000');
+  fireEvent.change(within(dialog).getByLabelText('Motivo'), { target: { value: 'Motivo' } });
+  await user.click(within(dialog).getByRole('button', { name: 'Devolver' }));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(/como máximo 20/);
+  expect(mockedRefund).not.toHaveBeenCalled();
+});
