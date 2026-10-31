@@ -1,4 +1,5 @@
 'use client';
+import { Textarea } from '@/components/ui/textarea';
 import * as React from 'react';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -279,14 +280,13 @@ export function WaitlistPanel({
         onCloseAutoFocus={focusAfterClose}
       >
         <FormField htmlFor="waitlist-dismiss-reason" label={waitlistCopy.reason}>
-          <textarea
+          <Textarea
             id="waitlist-dismiss-reason"
             maxLength={200}
             rows={3}
             value={reason}
             placeholder={waitlistCopy.reasonPlaceholder}
             onChange={(e) => setReason(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />
         </FormField>
       </FormModal>

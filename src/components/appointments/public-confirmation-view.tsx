@@ -1,4 +1,5 @@
 'use client';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useEffect, useId, useRef, useState } from 'react';
 import { 
   CalendarCheck,
@@ -185,6 +186,12 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   const [acknowledged, setAcknowledged] = useState(false);
   const [ackError, setAckError] = useState(false);
   const ackRef = useRef<HTMLInputElement>(null);
+  // El foco va a la casilla DESPUÉS de pintar su error (la casilla se vuelve a
+  // montar al ganar el mensaje y perdería un foco puesto antes).
+  const [ackFocus, setAckFocus] = useState(0);
+  useEffect(() => {
+    if (ackFocus > 0) ackRef.current?.focus();
+  }, [ackFocus]);
   const ackId = useId();
 
   useEffect(() => {
@@ -208,7 +215,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
     const mustAcknowledge = action === 'cancel' && state.data.isLate && policy !== null;
     if (mustAcknowledge && !acknowledged) {
       setAckError(true);
-      ackRef.current?.focus();
+      setAckFocus((n) => n + 1);
       return;
     }
     setPending(action);
@@ -330,31 +337,19 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     <Phone aria-hidden /> {copy.callMe}
                   </Button>
                   {state.data.isLate && state.data.cancellationPolicy ? (
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-3">
-                        <input
-                          ref={ackRef}
-                          id={ackId}
-                          type="checkbox"
-                          checked={acknowledged}
-                          disabled={pending !== null}
-                          onChange={(e) => {
-                            setAcknowledged(e.target.checked);
-                            if (e.target.checked) setAckError(false);
-                          }}
-                          aria-invalid={ackError ? true : undefined}
-                          aria-describedby={ackError ? `${ackId}-error` : undefined}
-                          className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-                        />
-                        <label htmlFor={ackId} className="text-sm font-medium text-ink">
-                          {copy.acknowledge}
-                        </label>
-                      </div>
-                      {ackError ? (
-                        <InlineError id={`${ackId}-error`}>
-                          {copy.acknowledgeRequired(state.data.cancellationPolicy.noticeHours)}
-                        </InlineError>
-                      ) : null}
+                    <div className="rounded-lg border border-border bg-surface px-3 py-2">
+                      <Checkbox
+                        ref={ackRef}
+                        id={ackId}
+                        checked={acknowledged}
+                        disabled={pending !== null}
+                        onChange={(e) => {
+                          setAcknowledged(e.target.checked);
+                          if (e.target.checked) setAckError(false);
+                        }}
+                        label={copy.acknowledge}
+                        error={ackError ? copy.acknowledgeRequired(state.data.cancellationPolicy.noticeHours) : null}
+                      />
                     </div>
                   ) : null}
                   <Button

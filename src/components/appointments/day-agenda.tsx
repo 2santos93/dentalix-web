@@ -129,7 +129,7 @@ interface StatusSelectProps {
  * Interactive status control for one appointment row — a single colored pill
  * that both SHOWS the current status (tinted with the same semantic token as
  * `StatusBadge`) and lets the user CHANGE it. DX-295: `AppointmentStatusSelect`
- * (no un `<select>` nativo), así que las flechas no cambian la cita: solo se
+ * (no un select nativo), así que las flechas no cambian la cita: solo se
  * aplica con Enter o con un clic/toque en una opción. Rendered once per row
  * per responsive variant when `onStatusChange` is passed to `DayAgenda`.
  */

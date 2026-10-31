@@ -1,4 +1,5 @@
 'use client';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -1319,15 +1320,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             {columnsMode && offToday.length > 0 ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <span className="text-muted">{copy.hiddenProviders(offToday.length)}</span>
-                <label className="inline-flex min-h-11 items-center gap-2 font-medium text-ink sm:min-h-0">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-[var(--color-primary)]"
-                    checked={showAllProviders}
-                    onChange={(e) => setShowAllProviders(e.target.checked)}
-                  />
-                  {copy.showAllProviders}
-                </label>
+                <Checkbox
+                  checked={showAllProviders}
+                  onChange={(e) => setShowAllProviders(e.target.checked)}
+                  label={copy.showAllProviders}
+                />
               </div>
             ) : null}
             {dayLayout === 'list' ? (
@@ -1556,27 +1553,16 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 {canChangeWantsEarlier(role) &&
                 (liveDetailAppointment.status === 'SCHEDULED' ||
                   liveDetailAppointment.status === 'CONFIRMED') ? (
-                  <div className="flex items-start gap-3">
-                    <input
-                      id="detail-wants-earlier"
-                      type="checkbox"
-                      checked={liveDetailAppointment.wantsEarlier}
-                      disabled={updatingId === liveDetailAppointment.id}
-                      onChange={(e) =>
-                        void handleWantsEarlierChange(liveDetailAppointment.id, e.target.checked)
-                      }
-                      aria-describedby="detail-wants-earlier-hint"
-                      className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-                    />
-                    <div className="flex flex-col gap-0.5">
-                      <label htmlFor="detail-wants-earlier" className="text-sm font-medium text-ink">
-                        {WANTS_EARLIER_LABEL}
-                      </label>
-                      <p id="detail-wants-earlier-hint" className="text-xs text-muted">
-                        {copy.wantsEarlierHint}
-                      </p>
-                    </div>
-                  </div>
+                  <Checkbox
+                    id="detail-wants-earlier"
+                    checked={liveDetailAppointment.wantsEarlier}
+                    disabled={updatingId === liveDetailAppointment.id}
+                    onChange={(e) =>
+                      void handleWantsEarlierChange(liveDetailAppointment.id, e.target.checked)
+                    }
+                    label={WANTS_EARLIER_LABEL}
+                    description={copy.wantsEarlierHint}
+                  />
                 ) : null}
                 {liveDetailAppointment.status === 'CANCELLED' &&
                 new Date(liveDetailAppointment.end).getTime() > Date.now() &&

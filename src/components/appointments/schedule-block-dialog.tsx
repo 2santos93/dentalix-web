@@ -29,6 +29,11 @@ import { listAppointmentTypes, type AppointmentType } from '@/lib/appointments/a
 import { FieldError } from '@/components/errors/field-error';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TimeField } from '@/components/ui/date-field';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
+import { Badge } from '@/components/ui/badge';
+import { isCivilDay } from '@/lib/time/civil-day';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -81,9 +86,6 @@ const copy = {
   reservedOneDay: 'Un hueco reservado tiene que caber en un solo día.',
   releaseBeforeStart: '«Liberar a partir de» tiene que ser antes de la hora de inicio.',
 };
-
-const selectClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 type Scope = 'provider' | 'location';
 
@@ -228,7 +230,7 @@ export function ScheduleBlockDialog({
   const blockClock = blockLocationId ? clock.of(blockLocationId) : clock;
 
   function range(timeZone: string): { start: string; end: string } | null {
-    if (!fromDate || !toDate) return null;
+    if (!isCivilDay(fromDate) || !isCivilDay(toDate)) return null;
     const start = sedeInstant(fromDate, wholeDays ? '00:00' : fromTime, timeZone);
     const end = wholeDays
       ? sedeInstant(addCivilDays(toDate, 1), '00:00', timeZone)
@@ -333,7 +335,7 @@ export function ScheduleBlockDialog({
       size="lg"
     >
       {confirming ? (
-        <ul aria-label={copy.affectedList} className="flex flex-col divide-y divide-hairline rounded-lg border border-border">
+        <ul aria-label={copy.affectedList} className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border">
           {affectedList.map((a) => (
             <li key={a.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
               <span className="font-medium text-ink">{patientName(a)}</span>
@@ -354,35 +356,27 @@ export function ScheduleBlockDialog({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {!ownOnly && (
-            <fieldset className="sm:col-span-2">
-              <legend className="mb-1.5 text-xs font-semibold tracking-wide text-ink">{copy.scope}</legend>
-              <div className="flex flex-wrap gap-x-5 gap-y-2">
-                {(['provider', 'location'] as Scope[]).map((s) => (
-                  <label key={s} className="flex items-center gap-2 text-sm text-ink">
-                    <input
-                      type="radio"
-                      name="block-scope"
-                      value={s}
-                      checked={scope === s}
-                      onChange={() => {
-                        setScope(s);
-                        setAffected(null);
-                      }}
-                      className="size-4 accent-[var(--color-primary)]"
-                    />
-                    {s === 'provider' ? copy.scopeProvider : copy.scopeLocation}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <RadioGroup
+              id="block-scope"
+              legend={copy.scope}
+              value={scope}
+              onValueChange={(next) => {
+                setScope(next as Scope);
+                setAffected(null);
+              }}
+              className="sm:col-span-2"
+              optionsClassName="flex-row flex-wrap gap-x-5"
+            >
+              <RadioOption id="block-scope" value="provider" label={copy.scopeProvider} />
+              <RadioOption value="location" label={copy.scopeLocation} />
+            </RadioGroup>
           )}
 
           {scope === 'provider' ? (
             <>
               <FormField htmlFor="block-provider" label={copy.provider}>
-                <select
+                <NativeSelect
                   id="block-provider"
-                  className={selectClass}
                   value={providerId}
                   disabled={ownOnly}
                   onChange={(e) => setProviderId(e.target.value)}
@@ -392,12 +386,11 @@ export function ScheduleBlockDialog({
                       {s.fullName}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </FormField>
               <FormField htmlFor="block-provider-location" label={copy.location}>
-                <select
+                <NativeSelect
                   id="block-provider-location"
-                  className={selectClass}
                   value={providerLocationId}
                   onChange={(e) => setProviderLocationId(e.target.value)}
                 >
@@ -407,15 +400,14 @@ export function ScheduleBlockDialog({
                       {l.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
                 {restricted && <p className="mt-1 text-xs text-muted">{copy.restrictedHint}</p>}
               </FormField>
             </>
           ) : (
             <FormField htmlFor="block-location" label={copy.location} className="sm:col-span-2">
-              <select
+              <NativeSelect
                 id="block-location"
-                className={selectClass}
                 value={locationId}
                 onChange={(e) => setLocationId(e.target.value)}
               >
@@ -424,14 +416,13 @@ export function ScheduleBlockDialog({
                     {l.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FormField>
           )}
 
           <FormField htmlFor="block-kind" label={copy.kind}>
-            <select
+            <NativeSelect
               id="block-kind"
-              className={selectClass}
               value={kind}
               onChange={(e) => changeKind(e.target.value as ScheduleBlockKind)}
             >
@@ -440,59 +431,51 @@ export function ScheduleBlockDialog({
                   {k === 'RESERVED' ? copy.reservedKind : SCHEDULE_BLOCK_KIND_LABELS[k]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
           {reserved ? (
             <span aria-hidden="true" />
           ) : (
-            <label className="flex items-center gap-2 self-end pb-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={wholeDays}
-                onChange={(e) => setWholeDays(e.target.checked)}
-                className="size-4 accent-[var(--color-primary)]"
-              />
-              {copy.wholeDays}
-            </label>
+            <Checkbox
+              checked={wholeDays}
+              onChange={(e) => setWholeDays(e.target.checked)}
+              label={copy.wholeDays}
+              className="self-end"
+            />
           )}
 
           <FormField htmlFor="block-from-date" label={copy.fromDate}>
-            <Input
+            <DatePicker
               id="block-from-date"
-              type="date"
-              value={fromDate}
-              onChange={(e) => {
-                setFromDate(e.target.value);
-                if (e.target.value > toDate) setToDate(e.target.value);
+              value={fromDate || null}
+              onChange={(next) => {
+                setFromDate(next ?? '');
+                if (next && isCivilDay(next) && next > toDate) setToDate(next);
               }}
             />
           </FormField>
           <FormField htmlFor="block-to-date" label={copy.toDate}>
-            <Input
+            <DatePicker
               id="block-to-date"
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              value={toDate || null}
+              min={isCivilDay(fromDate) ? fromDate : undefined}
+              onChange={(next) => setToDate(next ?? '')}
             />
           </FormField>
           {!wholeDays && (
             <>
               <FormField htmlFor="block-from-time" label={copy.fromTime}>
-                <Input
+                <TimeField
                   id="block-from-time"
-                  type="time"
-                  step={300}
-                  value={fromTime}
-                  onChange={(e) => setFromTime(e.target.value)}
+                  value={fromTime || null}
+                  onChange={(next) => setFromTime(next ?? '')}
                 />
               </FormField>
               <FormField htmlFor="block-to-time" label={copy.toTime}>
-                <Input
+                <TimeField
                   id="block-to-time"
-                  type="time"
-                  step={300}
-                  value={toTime}
-                  onChange={(e) => setToTime(e.target.value)}
+                  value={toTime || null}
+                  onChange={(next) => setToTime(next ?? '')}
                 />
               </FormField>
             </>
@@ -501,7 +484,7 @@ export function ScheduleBlockDialog({
           {reserved ? (
             <>
               <fieldset className="sm:col-span-2" aria-describedby="block-reserved-types-hint">
-                <legend className="mb-1.5 text-xs font-semibold tracking-wide text-ink">{copy.reservedTypes}</legend>
+                <legend className="mb-1.5 text-sm font-medium text-ink">{copy.reservedTypes}</legend>
                 <p id="block-reserved-types-hint" className="mb-2 text-xs text-muted">
                   {copy.reservedTypesHint}
                 </p>
@@ -533,9 +516,7 @@ export function ScheduleBlockDialog({
                               <span aria-hidden="true" className="size-3 shrink-0 rounded-sm" style={{ backgroundColor: t.color }} />
                               <span className="min-w-0 break-words">{t.name}</span>
                               {t.isUrgent ? (
-                                <span className="rounded-full bg-danger-subtle px-2 py-0.5 text-xs font-medium text-danger-text">
-                                  {copy.urgentBadge}
-                                </span>
+                                <Badge variant="danger">{copy.urgentBadge}</Badge>
                               ) : null}
                             </span>
                           }
@@ -558,18 +539,15 @@ export function ScheduleBlockDialog({
               </FormField>
             </>
           ) : (
-            <label className="flex items-center gap-2 text-sm text-ink sm:col-span-2">
-              <input
-                type="checkbox"
-                checked={allowsBooking}
-                onChange={(e) => {
-                  setAllowsBooking(e.target.checked);
-                  setAllowsTouched(true);
-                }}
-                className="size-4 accent-[var(--color-primary)]"
-              />
-              {copy.allowsBooking}
-            </label>
+            <Checkbox
+              checked={allowsBooking}
+              onChange={(e) => {
+                setAllowsBooking(e.target.checked);
+                setAllowsTouched(true);
+              }}
+              label={copy.allowsBooking}
+              className="sm:col-span-2"
+            />
           )}
 
           <FormField htmlFor="block-note" label={copy.note} className="sm:col-span-2">

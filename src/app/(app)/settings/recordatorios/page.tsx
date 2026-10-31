@@ -38,10 +38,13 @@ export default function RemindersSettingsPage() {
   return (
     <>
       <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
-      <ReminderSettingsManager
-        token={accessToken}
-        allowed={canManageReminders(getTokenRole(accessToken))}
-      />
+      {/* Plantilla de Ajustes: columna de 720 px alineada a la izquierda. */}
+      <div className="w-full max-w-[45rem]">
+        <ReminderSettingsManager
+          token={accessToken}
+          allowed={canManageReminders(getTokenRole(accessToken))}
+        />
+      </div>
     </>
   );
 }

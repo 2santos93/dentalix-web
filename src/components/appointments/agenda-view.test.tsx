@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { readDate, readTime, typeDate, typeTime } from './date-segments-for-tests';
 import { AgendaView } from './agenda-view';
 import { Toaster } from '@/components/errors/toaster';
 import { ApiError } from '@/lib/api/client';
@@ -357,11 +358,10 @@ describe('AgendaView', () => {
       screen.getByLabelText(/profesional/i, { selector: '#appointment-provider' }),
       'staff-1',
     );
-    const formDate = screen.getByLabelText(/^fecha$/i, { selector: '#appointment-date' });
-    await user.clear(formDate);
-    await user.type(formDate, FUTURE_DATE);
-    await user.type(screen.getByLabelText(/hora de inicio/i), '09:00');
-    await user.type(screen.getByLabelText(/hora de fin/i), '09:30');
+    const form = screen.getByRole('form', { name: /agendar cita/i });
+    await typeDate(user, /^fecha$/i, FUTURE_DATE, form);
+    await typeTime(user, /hora de inicio/i, '09:00', form);
+    await typeTime(user, /hora de fin/i, '09:30', form);
 
     await user.click(screen.getByRole('button', { name: /agendar/i }));
 
@@ -564,10 +564,7 @@ describe('AgendaView', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('form', { name: /agendar cita/i })).toBeInTheDocument();
 
-    const formDateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i, {
-      selector: '#appointment-date',
-    });
-    expect(formDateInput.value).toBe(selectedDate);
+    expect(readDate(/^fecha$/i, dialog)).toBe(selectedDate);
   });
 
   describe('teléfono (≤ 767 px)', () => {
@@ -726,12 +723,10 @@ describe('AgendaView', () => {
     await user.click(screen.getByTestId('week-grid-slot-2026-03-09-09:00'));
 
     // El form se abre pre-rellenado (fecha del slot + hora inicio 09:00).
-    const formDate = await screen.findByLabelText<HTMLInputElement>(/^fecha$/i, {
-      selector: '#appointment-date',
-    });
-    expect(formDate.value).toBe('2026-03-09');
-    const startInput = document.querySelector<HTMLInputElement>('#appointment-start-time')!;
-    expect(startInput.value).toBe('09:00');
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByRole('group', { name: /^fecha$/i });
+    expect(readDate(/^fecha$/i, dialog)).toBe('2026-03-09');
+    expect(readTime(/hora de inicio/i, dialog)).toBe('09:00');
   });
 
   it('DX-247: al abrir la cita de un paciente con profilaxis antibiótica el detalle avisa «Requiere premedicación»', async () => {

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { typeDate } from '@/components/appointments/date-segments-for-tests';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { LocationCalendarView, locationCalendarCopy } from './location-calendar-view';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -269,7 +270,7 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
     await waitFor(() => expect(mockedSetWeekdays).toHaveBeenCalled());
 
     await user.click(within(festivos).getByRole('button', { name: 'Añadir festivo' }));
-    await user.type(screen.getByLabelText('Fecha'), '2027-12-24');
+    await typeDate(user, 'Fecha', '2027-12-24');
     await user.type(screen.getByLabelText('Nombre'), 'Nochebuena');
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Añadir festivo' }));
     expect(await within(festivos).findByText('Nochebuena')).toBeInTheDocument();

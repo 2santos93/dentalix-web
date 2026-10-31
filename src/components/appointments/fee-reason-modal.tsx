@@ -1,4 +1,5 @@
 'use client';
+import { Textarea } from '@/components/ui/textarea';
 import * as React from 'react';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
@@ -13,8 +14,6 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { fieldErrorId } from '@/components/shared/form-field';
 import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
 
 /** El motivo de condonar o anular un cargo (DX-291, SEC-050): 3–500. */
 export const feeReasonCopy = {
@@ -136,9 +135,10 @@ export function FeeReasonModal({
       {stale ? <FeeConflictNotice /> : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={reasonId}>{feeReasonCopy.reason}</Label>
-        <textarea
+        <Textarea
           id={reasonId}
           rows={3}
+          autoGrow
           maxLength={WAIVE_REASON_MAX}
           value={reason}
           disabled={submitting || stale}
@@ -148,7 +148,6 @@ export function FeeReasonModal({
           }}
           aria-invalid={fieldError ? true : undefined}
           aria-describedby={`${fieldError ? `${fieldErrorId(reasonId)} ` : ''}${reasonId}-counter`}
-          className={cn(fieldClass, fieldError && 'border-danger')}
         />
         <div className="flex items-start justify-between gap-3 text-xs">
           {fieldError ? (

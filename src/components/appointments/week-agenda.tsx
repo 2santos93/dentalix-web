@@ -48,7 +48,7 @@ interface WeekAgendaProps {
  * Presentational week agenda: a 7-column Mon..Sun grid. Each column groups
  * `appointments` falling on that local day (sorted by `start` ASC) and shows
  * time + patient + status badge per appointment — read-only, no status
- * <select> and no drag-and-drop (out of scope for the week view, see
+ * status select and no drag-and-drop (out of scope for the week view, see
  * `day-agenda.tsx` for those). Clicking a day header calls `onSelectDay` so
  * the caller (`AgendaView`) can switch back to the day view on that date.
  */

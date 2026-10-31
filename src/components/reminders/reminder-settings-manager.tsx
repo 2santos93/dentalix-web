@@ -11,7 +11,7 @@ import {
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { ReminderSettingsModal } from './reminder-settings-modal';
 
 const copy = {
@@ -27,11 +27,11 @@ const copy = {
   colLocation: 'Sede',
   colStatus: 'Estado',
   colLeads: 'Cuándo se envían',
-  colActions: 'Acciones',
+  none: 'Sin recordatorios',
   on: 'Activos',
   off: 'Desactivados',
-  configure: 'Configurar',
-  configureFor: (name: string) => `Configurar los recordatorios de ${name}`,
+  /** Delante del nombre de la sede, solo para lectores: «Configurar los recordatorios de Sede Norte». */
+  configurePrefix: 'Configurar los recordatorios de ',
   saved: (name: string, enabled: boolean) =>
     enabled ? `Recordatorios activados en ${name}.` : `Recordatorios desactivados en ${name}.`,
 };
@@ -103,31 +103,35 @@ export function ReminderSettingsManager({ token, allowed }: ReminderSettingsMana
   const activeCount = rows.filter((r) => r.enabled).length;
 
   function status(row: LocationReminderSettings) {
-    return <Badge variant={row.enabled ? 'success' : 'muted'}>{row.enabled ? copy.on : copy.off}</Badge>;
+    return <Badge variant={row.enabled ? 'success' : 'neutral'}>{row.enabled ? copy.on : copy.off}</Badge>;
   }
 
-  function leads(row: LocationReminderSettings) {
-    return row.enabled ? leadListLabel(row.leadHours) : '—';
-  }
-
-  function action(row: LocationReminderSettings) {
-    return (
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={() => openModal(row)}
-        aria-label={copy.configureFor(row.locationName)}
-        className="w-full sm:w-auto"
-      >
-        {copy.configure}
-      </Button>
-    );
-  }
+  const columns: DataListColumn<LocationReminderSettings>[] = [
+    {
+      id: 'location',
+      header: copy.colLocation,
+      mobile: 'primary',
+      // La fila entera abre el modal; el nombre del botón dice qué hace.
+      cell: (row) => (
+        <>
+          <span className="sr-only">{copy.configurePrefix}</span>
+          <span className="break-words font-medium">{row.locationName}</span>
+        </>
+      ),
+    },
+    { id: 'status', header: copy.colStatus, mobile: 'trailing', cell: status },
+    {
+      id: 'leads',
+      header: copy.colLeads,
+      mobile: 'meta',
+      cellClassName: 'tabular-nums',
+      cell: (row) => (row.enabled ? leadListLabel(row.leadHours) : copy.none),
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">
+      <p className="min-h-5 text-sm text-muted tabular-nums">
         {loading || error ? '' : `${copy.count(rows.length)} · ${copy.active(activeCount)}`}
       </p>
       <p role="status" aria-live="polite" className="sr-only">
@@ -144,53 +148,13 @@ export function ReminderSettingsManager({ token, allowed }: ReminderSettingsMana
         emptyIcon={<BellRing aria-hidden />}
         skeleton={<TableSkeleton rows={2} />}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colLocation}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colLeads}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.locationId} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-3 font-medium">{row.locationName}</td>
-                <td className="px-4 py-3">{status(row)}</td>
-                <td className="px-4 py-3 tabular-nums">{leads(row)}</td>
-                <td className="px-4 py-3 text-right">{action(row)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {rows.map((row) => (
-            <li
-              key={row.locationId}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="min-w-0 break-words font-medium">{row.locationName}</span>
-                {status(row)}
-              </div>
-              <p className="text-xs tabular-nums text-muted">{leads(row)}</p>
-              {action(row)}
-            </li>
-          ))}
-        </ul>
+        <DataList
+          label={copy.tableLabel}
+          rows={rows}
+          columns={columns}
+          getRowKey={(row) => row.locationId}
+          onRowClick={openModal}
+        />
       </AsyncSection>
 
       {editing && (

@@ -22,7 +22,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
+import { isCivilDay } from '@/lib/time/civil-day';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/shared/form-field';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -163,6 +165,8 @@ export function OpeningsDialog({
   function search(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBookError(null);
+    // Una fecha escrita a medias no se busca: se queda la búsqueda anterior.
+    if (!isCivilDay(from) || !isCivilDay(to)) return;
     setQuery({ providerId, from, to });
   }
 
@@ -206,33 +210,36 @@ export function OpeningsDialog({
 
         <form onSubmit={search} noValidate className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
           <FormField htmlFor="openings-provider" label={copy.provider}>
-            <select
+            <NativeSelect
               id="openings-provider"
               value={providerId}
               onChange={(e) => setProviderId(e.target.value)}
-              className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             >
               {providers.map((p) => (
                 <option key={p.userId} value={p.userId}>
                   {p.fullName}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
           <FormField htmlFor="openings-from" label={copy.from}>
-            <Input
+            <DatePicker
               id="openings-from"
-              type="date"
               min={today}
-              value={from}
-              onChange={(e) => {
-                setFrom(e.target.value);
-                if (e.target.value > to) setTo(e.target.value);
+              value={from || null}
+              onChange={(next) => {
+                setFrom(next ?? '');
+                if (next && isCivilDay(next) && next > to) setTo(next);
               }}
             />
           </FormField>
           <FormField htmlFor="openings-to" label={copy.to}>
-            <Input id="openings-to" type="date" min={from} value={to} onChange={(e) => setTo(e.target.value)} />
+            <DatePicker
+              id="openings-to"
+              min={isCivilDay(from) ? from : undefined}
+              value={to || null}
+              onChange={(next) => setTo(next ?? '')}
+            />
           </FormField>
           <Button type="submit" variant="secondary">
             {copy.search}
