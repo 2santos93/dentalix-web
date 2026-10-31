@@ -1,4 +1,4 @@
-import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
+import cldrFormatDigits from '@/lib/money/cldr-format-digits-zero.json';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 
 /**
@@ -7,8 +7,8 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
  */
 export const NO_SEDE_FORMAT = '—';
 
-/** Monedas que se pintan sin decimales cuando el importe es entero (misma regla que `formatCurrency`). */
-const ZERO_DECIMAL: ReadonlySet<string> = new Set(iso4217ZeroDecimal.minorUnitsZero);
+/** Monedas que se pintan sin decimales cuando el importe es entero (dígitos de formato CLDR 47; misma regla que `formatCurrency`). */
+const ZERO_DECIMAL: ReadonlySet<string> = new Set(cldrFormatDigits.cldrDigitsZero);
 const BIDI_MARKS_RE = /[‎‏؜]/g;
 const codeFormatters = new Map<string, Intl.NumberFormat>();
 

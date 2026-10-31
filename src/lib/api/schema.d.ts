@@ -10926,6 +10926,18 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        CurrencyDigitsDto: {
+            /**
+             * @description Minor units de ISO 4217 según la List One de SIX (RSD 2, JPY 0). Dato normativo; no se usa para redondear.
+             * @example 2
+             */
+            minorUnits: number;
+            /**
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @example 0
+             */
+            roundingDigits: number;
+        };
         TreatmentPlanRemoteAcceptanceDto: {
             /** @description Destino enmascarado (an***@dominio) */
             destinationMasked: string;
@@ -10991,6 +11003,8 @@ export interface components {
             items?: components["schemas"]["TreatmentPlanItemDto"][];
             /** @description Sum of active items price minus discount — only present on GET by id */
             total?: number;
+            /** @description DX-340: decimales de la moneda del plan (currencies). La web redondea con roundingDigits la vista previa del descuento en bloque. Solo en GET by id */
+            currencyDigits?: components["schemas"]["CurrencyDigitsDto"];
             /** @description Aceptación firmada (DX-012); null si no se firmó. Con firma, los ítems quedan congelados (409). Solo en GET by id */
             acceptance?: components["schemas"]["TreatmentPlanAcceptanceSummaryDto"] | null;
         };
@@ -11587,6 +11601,16 @@ export interface components {
             logoUrl: string | null;
         };
         CurrencyDto: {
+            /**
+             * @description Minor units de ISO 4217 según la List One de SIX (RSD 2, JPY 0). Dato normativo; no se usa para redondear.
+             * @example 2
+             */
+            minorUnits: number;
+            /**
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @example 0
+             */
+            roundingDigits: number;
             /** @description Código ISO 4217 de 3 letras. */
             code: string;
             /** @example Euro */
