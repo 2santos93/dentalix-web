@@ -9,9 +9,8 @@ import {
   type CashSessionDetail,
 } from '@/lib/cash-sessions/cash-sessions-api';
 import { FormModal } from '@/components/shared/form-modal';
-import { Label } from '@/components/ui/label';
-import { InlineError } from '@/components/errors/inline-error';
-import { fieldClass } from '@/lib/ui/field-class';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   title: '¿Reabrir esta caja?',
@@ -74,28 +73,25 @@ export function ReopenCashSessionModal({
       submitLabel={copy.submit}
       submitting={submitting}
       error={error}
+      touchTargets
     >
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={id}>{copy.reason}</Label>
-        <textarea
+      <FormField htmlFor={id} label={copy.reason} hint={copy.hint} hintId={`${id}-hint`} error={validation}>
+        <Textarea
           id={id}
           rows={3}
+          autoGrow
           maxLength={CASH_REASON_MAX}
           value={reason}
           disabled={submitting}
           aria-invalid={validation ? true : undefined}
+          aria-describedby={validation ? fieldErrorId(id) : `${id}-hint`}
           onChange={(e) => {
             setReason(e.target.value);
             setValidation(null);
           }}
-          className={fieldClass}
+          className="max-h-48"
         />
-        {validation ? (
-          <InlineError className="text-xs">{validation}</InlineError>
-        ) : (
-          <p className="text-xs text-muted">{copy.hint}</p>
-        )}
-      </div>
+      </FormField>
     </FormModal>
   );
 }

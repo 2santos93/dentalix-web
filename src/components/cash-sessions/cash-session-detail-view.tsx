@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Lock, Printer, Wallet } from 'lucide-react';
+import { Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -100,20 +100,12 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
     setModal(kind);
   }
 
-  const back = (
-    <Button asChild variant="ghost" className="mb-4 -ml-2 justify-start">
-      <Link href="/caja?tab=turnos">
-        <ChevronLeft aria-hidden />
-        {copy.back}
-      </Link>
-    </Button>
-  );
+  const back = { href: '/caja?tab=turnos', label: copy.back };
 
   if (!session) {
     return (
       <>
-        {back}
-        <PageHeader title={copy.title} />
+        <PageHeader title={copy.title} back={back} />
         {status === 404 ? (
           <EmptyState role="status" icon={<Wallet aria-hidden />} title={copy.notFoundTitle} description={copy.notFoundHint} />
         ) : status === 403 ? (
@@ -133,29 +125,29 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
 
   return (
     <>
-      {back}
       <PageHeader
+        back={back}
         title={copy.title}
         description={copy.description(session.location.name, session.openedBy.fullName ?? '—')}
         actions={
-          <div className="flex flex-col gap-2 max-sm:[&>*]:w-full sm:flex-row sm:flex-wrap sm:justify-end">
+          <div className="flex w-full flex-col gap-2 max-sm:[&>*]:w-full sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
             {session.can.close ? (
               <Button type="button" onClick={() => openModal('close')}>
                 {copy.close}
               </Button>
             ) : null}
             {session.can.reopen ? (
-              <Button type="button" variant="outline" onClick={() => openModal('reopen')}>
+              <Button type="button" variant="secondary" onClick={() => openModal('reopen')}>
                 {copy.reopen}
               </Button>
             ) : null}
             {session.can.adjust && currency ? (
-              <Button type="button" variant="outline" onClick={() => openModal('adjust')}>
+              <Button type="button" variant="secondary" onClick={() => openModal('adjust')}>
                 {copy.adjust}
               </Button>
             ) : null}
             {session.status === 'CLOSED' ? (
-              <Button asChild variant={session.can.reopen ? 'outline' : 'default'}>
+              <Button asChild variant={session.can.reopen || session.can.adjust ? 'secondary' : 'default'}>
                 <Link href={cashSessionReportHref(session.id)} target="_blank">
                   <Printer aria-hidden />
                   {copy.print}
@@ -177,7 +169,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
         />
       ) : null}
       <div className="overflow-hidden rounded-xl border border-border">
-        <CashSessionReport session={session} />
+        <CashSessionReport session={session} titleAs="h2" paper={false} />
       </div>
 
       {modal === 'close' ? (

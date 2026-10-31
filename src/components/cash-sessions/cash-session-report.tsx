@@ -19,7 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { DescriptionItem } from '@/components/ui/description-list';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 
 const copy = {
   titleClosed: 'Informe de cierre de caja',
@@ -155,7 +155,27 @@ interface CashSessionReportProps {
   session: CashSessionDetail;
   /** En la app, los ajustes enlazan con su caja de origen; en papel, no. */
   linkSessions?: boolean;
+  /**
+   * Nivel del título del documento: `h1` en la vista imprimible (es la página)
+   * y `h2` dentro de la ficha del turno, que ya tiene su h1. Las secciones van
+   * un nivel por debajo.
+   */
+  titleAs?: 'h1' | 'h2';
+  /**
+   * Ancho de hoja A4 (210 mm): la vista imprimible. En la ficha del turno el
+   * documento usa el ancho de la columna, para que el arqueo (ocho columnas)
+   * quepa sin desplazarse en escritorio.
+   */
+  paper?: boolean;
 }
+
+/**
+ * El arqueo es una tabla de comparación: en el teléfono no se apila, se
+ * desplaza de lado con «Moneda y método» fija (en papel no aplica).
+ */
+const STICKY_FIRST = 'max-sm:sticky max-sm:left-0 max-sm:z-[1] max-sm:border-r max-sm:border-border-subtle max-sm:bg-surface print:static';
+
+const HeadingLevel = React.createContext<'h2' | 'h3'>('h2');
 
 /**
  * El turno de caja como DOCUMENTO (DX-027): lo mismo en la ficha del turno,
@@ -165,23 +185,28 @@ interface CashSessionReportProps {
  * (`.cash-report-print-root` fija los tokens del tema claro, como la tarjeta
  * de implante).
  */
-export function CashSessionReport({ session, linkSessions = true }: CashSessionReportProps) {
+export function CashSessionReport({ session, linkSessions = true, titleAs: Title = 'h1', paper = true }: CashSessionReportProps) {
   const zone = session.timeZone;
   const when = (iso: string) => formatDateTimeInZone(iso, zone);
   const closing = session.closing;
   const rows = arqueoRows(session);
 
   return (
+    <HeadingLevel.Provider value={Title === 'h1' ? 'h2' : 'h3'}>
     <article
       data-testid="cash-session-report"
       aria-labelledby="cash-report-title"
-      className="cash-report-print-root mx-auto w-full max-w-[210mm] bg-surface px-4 py-6 text-sm text-ink sm:px-10 sm:py-10 print:max-w-none print:p-0"
+      className={cn(
+        'cash-report-print-root mx-auto w-full bg-surface',
+        paper && 'max-w-[210mm]',
+        'px-4 py-6 text-sm text-ink sm:px-10 sm:py-10 print:max-w-none print:p-0',
+      )}
     >
       <header className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 id="cash-report-title" className="text-xl font-semibold tracking-tight">
+          <Title id="cash-report-title" className="t-display">
             {closing ? copy.titleClosed : copy.titleOpen}
-          </h1>
+          </Title>
           <p className="mt-1 text-muted">
             {copy.location}: <span className="font-medium text-ink">{session.location.name}</span>
           </p>
@@ -195,7 +220,7 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
         </p>
       </header>
 
-      <dl className="grid gap-x-6 gap-y-2 border-b border-border py-4 sm:grid-cols-2">
+      <DescriptionList className="gap-y-3 border-b border-border py-4">
         <Fact label={copy.openedBy}>
           {copy.at(session.openedBy.fullName ?? '—', when(session.openedAt))}
         </Fact>
@@ -206,7 +231,7 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
           <span className="tabular-nums">{moneyList(session.floats)}</span>
         </Fact>
         {session.notes ? <Fact label={copy.notes}>{session.notes}</Fact> : null}
-      </dl>
+      </DescriptionList>
 
       <Section title={copy.arqueoTitle}>
         {session.blindHidden ? (
@@ -214,11 +239,11 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
         ) : rows.length === 0 ? (
           <p className="text-muted">{copy.noLines}</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-border">
-            <Table aria-label={copy.arqueoLabel}>
+          <div className="border-y border-border-subtle">
+            <Table aria-label={copy.arqueoLabel} stack={false}>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead scope="col">{copy.colLine}</TableHead>
+                  <TableHead scope="col" className={STICKY_FIRST}>{copy.colLine}</TableHead>
                   <TableHead scope="col" className="text-right">{copy.colOpening}</TableHead>
                   <TableHead scope="col" className="text-right">{copy.colPayments}</TableHead>
                   <TableHead scope="col" className="text-right">{copy.colAdjustments}</TableHead>
@@ -233,33 +258,33 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
                   const money = (n: number | null) => (n === null ? '—' : formatCurrency(n, row.currency));
                   return (
                     <TableRow key={row.key} className="cash-report-row">
-                      <TableCell data-label={copy.colLine} className="font-medium">
+                      <TableCell className={cn('font-medium whitespace-nowrap', STICKY_FIRST)}>
                         {PAYMENT_METHOD_LABELS[row.method]} · {row.currency}
                       </TableCell>
-                      <TableCell data-label={copy.colOpening} className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums">
                         {money(row.opening)}
                       </TableCell>
-                      <TableCell data-label={copy.colPayments} className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums">
                         {money(row.payments)}
                       </TableCell>
-                      <TableCell data-label={copy.colAdjustments} className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums">
                         {money(row.adjustments)}
                       </TableCell>
-                      <TableCell data-label={copy.colOutflows} className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums">
                         {/* Se restan: con signo, para que la fila se lea como una suma. */}
                         {money(row.outflows ? -row.outflows : row.outflows)}
                       </TableCell>
                       <TableCell
-                        data-label={copy.colExpected}
+                       
                         className={cn('text-right font-medium tabular-nums', row.expected < 0 && 'text-danger-text')}
                       >
                         {money(row.expected)}
                       </TableCell>
-                      <TableCell data-label={copy.colCounted} className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums">
                         {row.counted === null ? copy.notCounted : money(row.counted)}
                       </TableCell>
                       <TableCell
-                        data-label={copy.colDifference}
+                       
                         className={cn(
                           'text-right font-semibold tabular-nums',
                           row.difference !== null && row.difference !== 0 && 'text-danger-text',
@@ -275,7 +300,7 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
           </div>
         )}
         {closing ? (
-          <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+          <DescriptionList className="mt-4 gap-y-3">
             <Fact label={copy.differenceReason}>
               {closing.hasDifference ? closing.differenceReason : copy.squared}
             </Fact>
@@ -284,9 +309,9 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
               <span className="block text-xs text-muted">{copy.lockDateHint}</span>
             </Fact>
             {closing.notes ? <Fact label={copy.closingNotes}>{closing.notes}</Fact> : null}
-            {closing.blind ? <p className="text-xs text-muted">{copy.blindClose}</p> : null}
-          </dl>
+          </DescriptionList>
         ) : null}
+        {closing?.blind ? <p className="mt-3 text-xs text-muted">{copy.blindClose}</p> : null}
       </Section>
 
       {session.payments ? (
@@ -294,8 +319,8 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
           {session.payments.length === 0 ? (
             <p className="text-muted">{copy.noPayments}</p>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-border">
-              <Table aria-label={copy.paymentsLabel}>
+            <div className="border-y border-border-subtle">
+              <Table aria-label={copy.paymentsLabel} stack={false}>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead scope="col">{copy.colDate}</TableHead>
@@ -308,17 +333,17 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
                 <TableBody>
                   {session.payments.map((p) => (
                     <TableRow key={p.id} className="cash-report-row">
-                      <TableCell data-label={copy.colDate} className="tabular-nums">
+                      <TableCell className="tabular-nums">
                         {formatCivilDate(p.paidOn)}
                       </TableCell>
-                      <TableCell data-label={copy.colPatient}>{p.patient.fullName}</TableCell>
-                      <TableCell data-label={copy.colReceipt} className="tabular-nums">
+                      <TableCell>{p.patient.fullName}</TableCell>
+                      <TableCell className="tabular-nums">
                         {p.receiptNumber ?? '—'}
                       </TableCell>
-                      <TableCell data-label={copy.colMethod}>
+                      <TableCell>
                         {p.method ? PAYMENT_METHOD_LABELS[p.method] : copy.methodNone}
                       </TableCell>
-                      <TableCell data-label={copy.colAmount} className="text-right font-medium tabular-nums">
+                      <TableCell className="text-right font-medium tabular-nums">
                         {formatCurrency(p.amount, p.currency)}
                       </TableCell>
                     </TableRow>
@@ -334,9 +359,9 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
         {session.voidedPayments.length === 0 ? (
           <p className="text-muted">{copy.noVoided}</p>
         ) : (
-          <ul className="divide-y divide-hairline rounded-lg border border-border" aria-label={copy.voidedLabel}>
+          <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-label={copy.voidedLabel}>
             {session.voidedPayments.map((p) => (
-              <li key={p.id} className="cash-report-row flex flex-col gap-1 px-3 py-2">
+              <li key={p.id} className="cash-report-row flex flex-col gap-1 py-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-medium">
                     {p.patient.fullName}
@@ -416,6 +441,7 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
         ))}
       </section>
     </article>
+    </HeadingLevel.Provider>
   );
 }
 
@@ -425,11 +451,10 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const id = React.useId();
+  const level = React.useContext(HeadingLevel);
   return (
     <section aria-labelledby={id} className="cash-report-section border-b border-border py-4 last:border-b-0">
-      <h2 id={id} className="mb-2 text-base font-semibold">
-        {title}
-      </h2>
+      {React.createElement(level, { id, className: 't-title mb-2' }, title)}
       {children}
     </section>
   );
@@ -456,8 +481,8 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
   return (
     <div className="flex flex-col gap-2">
       {creditRefunds.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <Table aria-label={copy.creditRefundsLabel}>
+        <div className="border-y border-border-subtle">
+          <Table aria-label={copy.creditRefundsLabel} stack={false}>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead scope="col">{copy.colTime}</TableHead>
@@ -470,13 +495,13 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
             <TableBody>
               {creditRefunds.map((r) => (
                 <TableRow key={r.id} className="cash-report-row">
-                  <TableCell data-label={copy.colTime} className="tabular-nums">
+                  <TableCell className="tabular-nums">
                     {formatTimeInZone(r.createdAt, zone)}
                   </TableCell>
-                  <TableCell data-label={copy.colRefund} className="tabular-nums">{r.number}</TableCell>
-                  <TableCell data-label={copy.colPatient}>{r.patient.fullName}</TableCell>
-                  <TableCell data-label={copy.colBy}>{r.createdBy.fullName ?? '—'}</TableCell>
-                  <TableCell data-label={copy.colAmount} className="text-right font-medium tabular-nums">
+                  <TableCell className="tabular-nums">{r.number}</TableCell>
+                  <TableCell>{r.patient.fullName}</TableCell>
+                  <TableCell>{r.createdBy.fullName ?? '—'}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
                     {formatCurrency(r.amount, r.currency)}
                   </TableCell>
                 </TableRow>
@@ -486,8 +511,8 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
         </div>
       ) : null}
       {outflows.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <Table aria-label={copy.outflowsLabel}>
+        <div className="border-y border-border-subtle">
+          <Table aria-label={copy.outflowsLabel} stack={false}>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead scope="col">{copy.colTime}</TableHead>
@@ -500,13 +525,13 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
             <TableBody>
               {outflows.map((o) => (
                 <TableRow key={o.id} className="cash-report-row">
-                  <TableCell data-label={copy.colTime} className="tabular-nums">
+                  <TableCell className="tabular-nums">
                     {formatTimeInZone(o.createdAt, zone)}
                   </TableCell>
-                  <TableCell data-label={copy.colCategory}>{o.category}</TableCell>
-                  <TableCell data-label={copy.colSupplier}>{o.supplier ?? '—'}</TableCell>
-                  <TableCell data-label={copy.colBy}>{o.createdBy.fullName ?? '—'}</TableCell>
-                  <TableCell data-label={copy.colAmount} className="text-right font-medium tabular-nums">
+                  <TableCell>{o.category}</TableCell>
+                  <TableCell>{o.supplier ?? '—'}</TableCell>
+                  <TableCell>{o.createdBy.fullName ?? '—'}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
                     {formatCurrency(o.amount, o.currency)}
                   </TableCell>
                 </TableRow>
@@ -517,12 +542,10 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
       ) : null}
       {voidedOutflows.length > 0 ? (
         <>
-          <h3 id={voidedId} className="t-label mt-1 text-muted">
-            {copy.voidedOutflowsLabel}
-          </h3>
-          <ul className="divide-y divide-hairline rounded-lg border border-border" aria-labelledby={voidedId}>
+          <VoidedHeading id={voidedId}>{copy.voidedOutflowsLabel}</VoidedHeading>
+          <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-labelledby={voidedId}>
             {voidedOutflows.map((o) => (
-              <li key={o.id} className="cash-report-row flex flex-col gap-1 px-3 py-2">
+              <li key={o.id} className="cash-report-row flex flex-col gap-1 py-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-medium">
                     {formatTimeInZone(o.createdAt, zone)} · {outflowSubject(o)}
@@ -562,12 +585,12 @@ function AdjustmentList({
 }) {
   if (items.length === 0) return <p className="text-muted">{copy.noAdjustments}</p>;
   return (
-    <ul className="divide-y divide-hairline rounded-lg border border-border" aria-label={label}>
+    <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-label={label}>
       {items.map((a) => {
         const origin = a.originalSession;
         const originText = origin ? copy.fromSession(origin.openedBy.fullName ?? '—', when(origin.openedAt)) : null;
         return (
-          <li key={a.id} className="cash-report-row flex flex-col gap-1 px-3 py-2">
+          <li key={a.id} className="cash-report-row flex flex-col gap-1 py-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span className="font-medium">
                 {ADJUSTMENT_KIND_LABELS[a.kind]}
@@ -589,7 +612,7 @@ function AdjustmentList({
               <p className="text-xs">
                 {copy.colOrigin}:{' '}
                 {linkSessions ? (
-                  <Link href={cashSessionHref(origin.id)} className="text-primary underline-offset-4 hover:underline">
+                  <Link href={cashSessionHref(origin.id)} className="text-primary-text underline-offset-4 hover:underline">
                     {originText}
                   </Link>
                 ) : (
@@ -603,7 +626,7 @@ function AdjustmentList({
                 {a.sessionId === null ? (
                   copy.pending
                 ) : linkSessions ? (
-                  <Link href={cashSessionHref(a.sessionId)} className="text-primary underline-offset-4 hover:underline">
+                  <Link href={cashSessionHref(a.sessionId)} className="text-primary-text underline-offset-4 hover:underline">
                     {copy.otherSession}
                   </Link>
                 ) : (
@@ -616,4 +639,10 @@ function AdjustmentList({
       })}
     </ul>
   );
+}
+
+/** «Salidas anuladas»: un nivel por debajo de la sección en la que va. */
+function VoidedHeading({ id, children }: { id: string; children: React.ReactNode }) {
+  const section = React.useContext(HeadingLevel);
+  return React.createElement(section === 'h2' ? 'h3' : 'h4', { id, className: 't-label mt-1 text-muted' }, children);
 }

@@ -115,10 +115,14 @@ describe('CashShiftsView (DX-027)', () => {
     expect(within(rows[1]).getByText('Abierta')).toBeInTheDocument();
     expect(within(rows[2]).getByText('Cerrada')).toBeInTheDocument();
     expect(within(rows[2]).getByText(/-1\.?000,00/)).toBeInTheDocument();
-    expect(within(rows[2]).getByRole('link', { name: /Informe de cierre/ })).toHaveAttribute(
-      'href',
-      '/print/cash-sessions/cs-0',
-    );
+    // Toda la fila abre el turno; el informe de un cierre va en «⋯» (el turno abierto no lo tiene).
+    expect(within(rows[2]).getByRole('link', { name: /^\d{2}\/\d{2}\/\d{4}/ })).toHaveAttribute('href', '/caja/turnos/cs-0');
+    expect(within(rows[1]).queryByRole('button', { name: /^Acciones de turno/ })).not.toBeInTheDocument();
+    const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+    await userEvent.setup().click(within(rows[2]).getByRole('button', { name: /^Acciones de turno del / }));
+    await userEvent.setup().click(await screen.findByRole('menuitem', { name: 'Informe de cierre' }));
+    expect(open).toHaveBeenCalledWith('/print/cash-sessions/cs-0', '_blank', 'noopener');
+    open.mockRestore();
     expect(screen.getByText('Ves tus turnos.')).toBeInTheDocument();
   });
 
@@ -262,7 +266,8 @@ describe('CashShiftsView: moneda y zona de la sede (GLOBAL-G1)', () => {
     const row = within(table).getAllByRole('row')[1];
     expect(within(row).getByText('Por configurar')).toBeInTheDocument();
     expect(within(row).getByText(/no tiene zona horaria/)).toBeInTheDocument();
-    expect(within(row).getByRole('link', { name: 'Ver el turno de Sede principal (hora por configurar)' })).toBeInTheDocument();
+    expect(within(row).getByRole('link', { name: /^Por configurar/ })).toHaveAttribute('href', '/caja/turnos/cs-0');
+    expect(within(row).getByRole('button', { name: 'Acciones de turno de Sede principal (hora por configurar)' })).toBeInTheDocument();
     expect(screen.getByText(/hora por configurar: la sede no tiene zona horaria/)).toBeInTheDocument();
   });
 });

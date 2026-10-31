@@ -76,7 +76,7 @@ export function CashSessionPrintView({ token, sessionId, allowed = true }: CashS
   const forbidden = !allowed || status === 403;
 
   return (
-    <div className="cash-report-print-page flex min-h-full flex-1 flex-col bg-surface-2 print:bg-white">
+    <div className="cash-report-print-page flex min-h-full flex-1 flex-col bg-canvas print:bg-white">
       {session ? (
         <title>
           {copy.documentTitle(
@@ -104,7 +104,7 @@ export function CashSessionPrintView({ token, sessionId, allowed = true }: CashS
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {session ? (
-          <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
+          <div className="mx-auto max-w-[210mm] sm:rounded-xl sm:border sm:border-border print:border-0">
             <CashSessionReport session={session} linkSessions={false} />
           </div>
         ) : forbidden ? (

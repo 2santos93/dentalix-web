@@ -8,8 +8,8 @@ import { collapseSpaces } from '@/lib/format/text';
 import { FieldError } from '@/components/errors/field-error';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
 import type { ExpenseCategoriesState } from './use-expense-categories';
 
 /*
@@ -86,14 +86,13 @@ export function ExpenseCategoryField({ id, value, onChange, categories, error, d
           retryId={id}
         />
       ) : (
-        <select
+        <NativeSelect
           id={id}
           value={value}
           disabled={disabled || categories.categories === null}
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? fieldErrorId(id) : undefined}
-          className={cn(fieldClass, 'h-10')}
         >
           <option value="">
             {categories.categories === null ? expenseFieldsCopy.categoriesLoading : expenseFieldsCopy.categoryPlaceholder}
@@ -103,7 +102,7 @@ export function ExpenseCategoryField({ id, value, onChange, categories, error, d
               {name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       )}
       {children}
     </FormField>
@@ -178,16 +177,17 @@ interface ExpenseDescriptionFieldProps {
 export function ExpenseDescriptionField({ id, value, onChange, error, disabled = false }: ExpenseDescriptionFieldProps) {
   return (
     <FormField htmlFor={id} label={expenseFieldsCopy.description} error={error}>
-      <textarea
+      <Textarea
         id={id}
         rows={2}
+        autoGrow
         value={value}
         maxLength={EXPENSE_DESCRIPTION_MAX}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? fieldErrorId(id) : undefined}
-        className={fieldClass}
+        className="max-h-48"
       />
     </FormField>
   );

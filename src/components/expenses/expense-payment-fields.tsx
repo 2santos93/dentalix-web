@@ -2,9 +2,9 @@
 import type { PaymentMethod } from '@/lib/payments/payments-api';
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from '@/lib/payments/payment-method';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export const expensePaymentFieldsCopy = {
   method: 'Medio de pago',
@@ -70,7 +70,7 @@ export function ExpensePaymentFields({
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor={id('method')} label={expensePaymentFieldsCopy.method}>
-          <select
+          <NativeSelect
             id={id('method')}
             value={value.method}
             disabled={disabled}
@@ -78,49 +78,36 @@ export function ExpensePaymentFields({
               const method = e.target.value as PaymentMethod;
               onChange({ ...value, method, fromCashSession: method === 'CASH' && value.fromCashSession });
             }}
-            className={cn(fieldClass, 'h-10')}
           >
             {PAYMENT_METHOD_OPTIONS.map((method) => (
               <option key={method} value={method}>
                 {PAYMENT_METHOD_LABELS[method]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         <FormField htmlFor={id('paid-on')} label={expensePaymentFieldsCopy.paidOn} error={paidOnErrorText}>
-          <Input
+          <DatePicker
             id={id('paid-on')}
-            type="date"
+            name={id('paid-on')}
             max={today}
-            value={value.fromCashSession ? today : value.paidOn}
+            value={(value.fromCashSession ? today : value.paidOn) || null}
             disabled={disabled || value.fromCashSession}
-            onChange={(e) => onChange({ ...value, paidOn: e.target.value })}
+            onChange={(paidOn) => onChange({ ...value, paidOn: paidOn ?? '' })}
             aria-invalid={paidOnErrorText ? true : undefined}
             aria-describedby={paidOnErrorText ? fieldErrorId(id('paid-on')) : undefined}
-            className="tabular-nums"
           />
         </FormField>
       </div>
       {cash ? (
-        <div className="flex items-start gap-3">
-          <input
-            id={id('from-cash')}
-            type="checkbox"
-            checked={value.fromCashSession}
-            disabled={disabled}
-            onChange={(e) => onChange({ ...value, fromCashSession: e.target.checked })}
-            aria-describedby={id('from-cash-hint')}
-            className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-          />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor={id('from-cash')} className="text-sm font-medium text-ink">
-              {expensePaymentFieldsCopy.fromCash}
-            </label>
-            <p id={id('from-cash-hint')} className="text-xs text-muted">
-              {expensePaymentFieldsCopy.fromCashHint}
-            </p>
-          </div>
-        </div>
+        <Checkbox
+          id={id('from-cash')}
+          checked={value.fromCashSession}
+          disabled={disabled}
+          onChange={(e) => onChange({ ...value, fromCashSession: e.target.checked })}
+          label={expensePaymentFieldsCopy.fromCash}
+          description={expensePaymentFieldsCopy.fromCashHint}
+        />
       ) : null}
     </div>
   );
