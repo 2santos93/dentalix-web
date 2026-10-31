@@ -3,16 +3,18 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { DashboardView } from '@/components/dashboard/dashboard-view';
-import { PageHeader } from '@/components/shared/page-header';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  title: 'Inicio',
-  description: 'Lo cobrado en el período, las próximas citas y lo que falta reponer en el inventario.',
   checkingSession: 'Verificando sesión…',
 };
 
+/**
+ * «Inicio» (I1): la pantalla de arranque de los cuatro roles. La cabecera
+ * (título, línea de apoyo por rol y marca de alcance) la pinta la vista, que es
+ * quien sabe el rol, la sede y su zona.
+ */
 export default function DashboardPage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -40,10 +42,5 @@ export default function DashboardPage() {
     return null;
   }
 
-  return (
-    <>
-      <PageHeader title={copy.title} description={copy.description} />
-      <DashboardView token={accessToken} />
-    </>
-  );
+  return <DashboardView token={accessToken} />;
 }

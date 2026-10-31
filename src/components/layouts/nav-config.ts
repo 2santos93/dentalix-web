@@ -51,12 +51,14 @@ export interface NavGroup {
 // roles. Las demás copian el set de la API; antes de DX-070 Dashboard,
 // Catálogo, Inventario y Personal no lo llevaban, y recepción veía enlaces que
 // acababan en 403.
+// Inicio (I1): la pantalla de arranque de los CUATRO roles. Cada bloque pide
+// solo los endpoints que su rol puede leer (`components/dashboard/inicio-
+// roles.ts`); `GET /dashboard` (dato financiero, DASHBOARD_ROLES) sigue siendo
+// solo de ADMIN y nadie más lo llama.
 const DASHBOARD: NavItem = {
-  // DASHBOARD_ROLES: dato financiero agregado, solo gestión.
   href: '/dashboard',
   label: 'Inicio',
   icon: LayoutDashboard,
-  roles: ['ADMIN'],
 };
 const AGENDA: NavItem = { href: '/agenda', label: 'Agenda', icon: Calendar };
 const PATIENTS: NavItem = { href: '/patients', label: 'Pacientes', icon: Users };
@@ -144,20 +146,22 @@ export function visibleNavGroups(role: ClinicRole | null): NavGroup[] {
  * lista de reserva (el orden del menú), así que siempre salen cuatro mientras
  * existan.
  */
+// I1: Inicio va primero para todos (sus pendientes ya cuentan presupuestos,
+// anamnesis e inventario, que pasan a «Más» cuando no caben).
 const TAB_PREFERENCES: Record<ClinicRole, string[]> = {
   ADMIN: ['/dashboard', '/agenda', '/patients', '/caja'],
-  RECEPTION: ['/agenda', '/patients', '/caja', '/presupuestos'],
+  RECEPTION: ['/dashboard', '/agenda', '/patients', '/caja', '/presupuestos'],
   // `/catalog` explícito: desde DX-423 el odontólogo también ve Reportes, que
   // va antes en el orden del menú y le quitaría la pestaña al catálogo.
-  DENTIST: ['/agenda', '/patients', '/presupuestos', ANAMNESIS_HREF, '/inventory', '/catalog'],
-  ASSISTANT: ['/agenda', '/patients', '/presupuestos', ANAMNESIS_HREF, '/inventory'],
+  DENTIST: ['/dashboard', '/agenda', '/patients', ANAMNESIS_HREF, '/presupuestos', '/inventory', '/catalog'],
+  ASSISTANT: ['/dashboard', '/agenda', '/patients', ANAMNESIS_HREF, '/presupuestos', '/inventory'],
 };
 
 export const TAB_COUNT = 4;
 
 export function bottomTabsFor(role: ClinicRole | null): NavItem[] {
   const visible = ALL_NAV_ITEMS.filter((i) => canSee(i, role) && i.href !== SETTINGS.href);
-  const prefs = role ? TAB_PREFERENCES[role] : ['/agenda', '/patients'];
+  const prefs = role ? TAB_PREFERENCES[role] : ['/dashboard', '/agenda', '/patients'];
   const picked: NavItem[] = [];
   for (const href of prefs) {
     const item = visible.find((i) => i.href === href);

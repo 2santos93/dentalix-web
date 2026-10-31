@@ -100,16 +100,16 @@ describe('AppShell', () => {
       hidden: [],
     },
     DENTIST: {
-      visible: ['Pacientes', 'Agenda', 'Catálogo', 'Reportes'],
-      hidden: ['Inicio', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Catálogo', 'Reportes'],
+      hidden: ['Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
     },
     ASSISTANT: {
-      visible: ['Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
-      hidden: ['Inicio', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
+      hidden: ['Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes'],
     },
     RECEPTION: {
-      visible: ['Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos'],
-      hidden: ['Inicio', 'Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos'],
+      hidden: ['Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
     },
   };
   it.each(Object.keys(ROLE_NAV))('el menú de %s solo enseña lo que su rol puede abrir', async (role) => {
@@ -277,7 +277,7 @@ describe('AppShell', () => {
       const nav = sidebarFor('RECEPTION');
       await nav.findByRole('link', { name: 'Caja' });
       expect(groupsOf(nav)).toEqual([
-        [null, ['/agenda', '/patients']],
+        [null, ['/dashboard', '/agenda', '/patients']],
         ['Atención', ['/presupuestos']],
         ['Finanzas', ['/caja', '/caja/cartera']],
         ['Administración', ['/settings']],
@@ -329,11 +329,10 @@ describe('AppShell', () => {
 
     it.each([
       ['ADMIN', ['Inicio', 'Agenda', 'Pacientes', 'Caja']],
-      ['RECEPTION', ['Agenda', 'Pacientes', 'Presupuestos', 'Caja']],
-      // Presupuestos no es suyo: entra Anamnesis; Inventario tampoco: el
-      // siguiente que sí ve del menú, Catálogo.
-      ['DENTIST', ['Agenda', 'Pacientes', 'Anamnesis por revisar', 'Catálogo']],
-      ['ASSISTANT', ['Agenda', 'Pacientes', 'Anamnesis por revisar', 'Inventario']],
+      ['RECEPTION', ['Inicio', 'Agenda', 'Pacientes', 'Caja']],
+      // I1: Inicio primero para todos; Anamnesis completa las cuatro.
+      ['DENTIST', ['Inicio', 'Agenda', 'Pacientes', 'Anamnesis por revisar']],
+      ['ASSISTANT', ['Inicio', 'Agenda', 'Pacientes', 'Anamnesis por revisar']],
     ])('%s: %j y «Más»', async (role, names) => {
       const bar = await tabsFor(role);
       expect(bar.getAllByRole('link').map((a) => a.getAttribute('aria-label') ?? a.textContent)).toEqual(names);
@@ -406,7 +405,7 @@ describe('AppShell', () => {
   describe('A4: paleta de comandos', () => {
     it.each([
       ['ADMIN', ['Inicio', 'Caja', 'Personal', 'Ajustes'], [] as string[]],
-      ['RECEPTION', ['Agenda', 'Caja', 'Presupuestos', 'Ajustes'], ['Inicio', 'Personal', 'Inventario', 'Auditoría']],
+      ['RECEPTION', ['Inicio', 'Agenda', 'Caja', 'Presupuestos', 'Ajustes'], ['Personal', 'Inventario', 'Auditoría']],
     ])('%s: ⌘K la abre y «Ir a» solo lista lo que su rol puede abrir', async (role, visible, hidden) => {
       const user = userEvent.setup();
       mockAccessToken = tokenForRole(role);

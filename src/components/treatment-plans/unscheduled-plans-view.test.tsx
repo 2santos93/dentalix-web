@@ -21,7 +21,7 @@ it("muestra esqueleto, vacío y reintenta un error", async () => {
   jest
     .mocked(listUnscheduledPlans)
     .mockRejectedValueOnce(new Error("network"))
-    .mockResolvedValue({ items: [], nextCursor: null, limit: 25 });
+    .mockResolvedValue({ items: [], nextCursor: null, limit: 25, total: 0 });
   const user = userEvent.setup();
   render(<UnscheduledPlansView token="token" />);
   expect(screen.getByRole("status", { name: "Cargando" })).toBeInTheDocument();
@@ -56,6 +56,7 @@ it("muestra importe y moneda independientes, siguiente visita y enlace seguro Wh
     ],
     nextCursor: null,
     limit: 25,
+    total: 1,
   });
   render(<UnscheduledPlansView token="token" />);
   expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
