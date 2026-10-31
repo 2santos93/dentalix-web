@@ -155,7 +155,9 @@ describe('zoneCityLabel (DX-097)', () => {
   it('nombre legible de la zona', () => {
     expect(zoneCityLabel('America/Bogota')).toBe('Bogotá');
     expect(zoneCityLabel('Europe/Madrid')).toBe('Madrid');
-    expect(zoneCityLabel('America/Mexico_City')).toBe('Mexico City');
+    expect(zoneCityLabel('America/Mexico_City')).toBe('Ciudad de México');
+    expect(zoneCityLabel('America/Caracas')).toBe('Caracas');
+    expect(zoneCityLabel('America/Argentina/Buenos_Aires')).toBe('Buenos Aires');
   });
 });
 
