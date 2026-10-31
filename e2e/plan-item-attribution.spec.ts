@@ -294,7 +294,7 @@ for (const width of [390, 1440]) {
       .click();
     const attribute = admin.page.getByRole('dialog', { name: 'Atribuir el procedimiento' });
     await expect(attribute.getByLabel('Sede donde se realizó')).toBeVisible();
-    await expect(attribute.getByLabel('Fecha en que se realizó')).toBeVisible();
+    await expect(attribute.getByRole('group', { name: 'Fecha en que se realizó' })).toBeVisible();
     await expect(attribute.getByLabel('Profesional que lo realizó')).toBeVisible();
     await noOverflow(admin.page);
     await attribute.getByRole('button', { name: 'Guardar' }).click();

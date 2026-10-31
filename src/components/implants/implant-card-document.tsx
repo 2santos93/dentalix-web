@@ -100,7 +100,7 @@ export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: Reg
         <h2 id="implant-card-items" className="t-label text-muted">
           {copy.itemsHeading}
         </h2>
-        <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border">
           {card.items.map((item) => {
             const size = formatImplantSize(item.diameterMm, item.lengthMm, fmt);
             return (

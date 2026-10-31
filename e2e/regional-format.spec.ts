@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { apiLogin, apiPost, createLocationViaApi, registerClinicViaApi, type ApiSession } from './support/api';
 import { fillRegistrationLocation, loginAs, waitForHydratedForm } from './support/auth';
+import { dataList, dataListRows } from './support/data-list';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { registrationTokenFor } from './support/mail';
 import { pickRegional, type RegionalSettings } from './support/regional';
@@ -365,7 +366,8 @@ test('en A: los recuentos de la importación y el tamaño de un documento con lo
       await expect(queued.getByText('Subido')).toBeVisible({ timeout: 30_000 });
       await page.reload();
     }
-    const row = panel.getByRole('row').filter({ hasText: name }).first();
+    // DataList: fila de tabla a 1440, tarjeta (listitem) a 390.
+    const row = dataListRows(dataList(panel, /^Documentos$/)).filter({ hasText: name }).first();
     await expect(row).toContainText('1.5 KB', { timeout: 15_000 });
     await row.scrollIntoViewIfNeeded();
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
@@ -389,7 +391,10 @@ test('modal de sede: reloj bajo la vista previa; A pasa a 24 h y el panel lo pin
     await create.getByRole('radio', { name: '12 h', exact: true }).check();
     // M7, en Chromium: un número de-DE exacto y la hora de 12 h del ejemplo.
     await expect(create.getByText(/^Vista previa: 12\.345,67 · \d{2}\.\d{2}\.\d{4}/)).toBeVisible();
-    await expect(create.locator('[id$="-hourCycle-example"]')).toHaveText(/^(1[0-2]|[1-9]):[0-5]\d\s[ap]\.\s?m\.$/);
+    // El ejemplo es la descripción de la opción «12 h» (RadioCard de P2: `<id>-description`).
+    const twelve = create.getByRole('radio', { name: '12 h', exact: true });
+    const twelveExample = create.locator(`[id="${await twelve.getAttribute('id')}-description"]`);
+    await expect(twelveExample).toHaveText(/^(1[0-2]|[1-9]):[0-5]\d\s[ap]\.\s?m\.$/);
     // Grid: formato → vista previa → Reloj, cada uno a lo ancho, sin media fila vacía a 2 columnas.
     const preview = create.getByText(/^Vista previa:/);
     const clock = create.getByRole('radiogroup', { name: 'Reloj' });
@@ -465,17 +470,20 @@ test.describe('registro con el reloj del navegador', () => {
       await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
       await expect(clock).toContainText('Sugerido por tu navegador.');
 
+      // Paso 1 (la clínica y su sede).
       await page.getByLabel('Nombre de la clínica').fill(`Clínica Registro ${tag}`);
-      await page.getByLabel('Subdominio').fill(sub);
-      await page.getByLabel('Nombre completo').fill('Lucía Registro');
-      await page.getByLabel('Correo electrónico').fill(email);
-      await page.getByLabel('Contraseña', { exact: true }).fill(password);
+      await page.getByLabel('Dirección web').fill(sub);
       // Sin `hourCycle`: se queda el que sugirió el navegador.
       await fillRegistrationLocation(page, { country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES' });
       await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
       if (viewport.width === 390) await expectNoHorizontalScroll(page);
       await clock.scrollIntoViewIfNeeded();
       await shoot(page, 'registro-reloj', viewport.width);
+      await page.getByRole('button', { name: 'Continuar' }).click();
+      // Paso 2 (la cuenta).
+      await page.getByLabel('Nombre completo').fill('Lucía Registro');
+      await page.getByLabel('Correo electrónico').fill(email);
+      await page.getByLabel('Contraseña', { exact: true }).fill(password);
 
       const sent = page.waitForRequest(
         (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/auth/register'),

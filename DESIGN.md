@@ -378,7 +378,12 @@ allowlist of not-yet-migrated files only shrinks.
   Hasta» in one field, range calendar, optional `presets`: Hoy · Últimos 7 días · Este mes · Mes
   anterior). A clock time → `TimeField` (12/24 h from the sede).
 - **ISO in, ISO out:** `value` is `'YYYY-MM-DD'` (`'HH:mm'` for time; `{ from, to }` for a
-  range) or `null`, `onChange` returns the same. `name` (`startName`/`endName`) renders a hidden
+  range) or `null`, `onChange` returns the same. Only **complete** dates leave the field: while
+  the year is being typed (`2`, `20`, `202`) it emits `null`, never `0002-10-05`; the segments
+  keep what was typed. A parent that passes a new `onChange` on every render changes nothing
+  inside the field (stable internal callbacks).
+- **Enter submits:** Enter in any segment submits the enclosing `<form>` (`requestSubmit()`),
+  like a native input. No screen adds its own handler for it. `name` (`startName`/`endName`) renders a hidden
   input with the ISO value so `<form>`/`FormData` keep working. `min`/`max` are ISO too.
 - **Locale from the clinic, never the browser:** `SedeDateLocaleProvider` (in the app shell)
   feeds the active sede's `locale`, `hourCycle` and time zone to every field: segment order
@@ -387,6 +392,11 @@ allowlist of not-yet-migrated files only shrinks.
 - **Labels:** inside `FormField`, pass `id={htmlFor}`; the field names itself with
   `aria-labelledby={fieldLabelId(id)}`. Outside one, pass `label`. Invalid state with
   `isInvalid` or `aria-invalid` (danger border, like every field).
+- **Inside a dialog or sheet:** the calendar lives in its own (react-aria) portal, so it is
+  marked `data-nested-layer`, takes pointer events back (`pointer-events: auto`) and, while
+  open, pauses the Radix focus trap underneath (a Radix `FocusScope` of the same version as
+  `react-dialog`, pinned in package.json). A click or focus inside it is not «outside» the
+  dialog, and Escape closes the calendar only; a second Escape closes the dialog.
 - **Look:** the segment group is a `fieldClass` field (border-input, accent focus halo, danger
   when invalid, 44px on touch). Calendar cells 40px (44px coarse), today = accent ring,
   selected = solid accent, outside-month muted.
@@ -396,6 +406,19 @@ allowlist of not-yet-migrated files only shrinks.
 ### Cards / Containers
 - **Corner:** 12px. **Background:** surface. **Border:** 1px `border`. **Shadow:** none at rest — ever.
 - **Padding:** 16px on phones, 24px from `sm`. No nested cards; use `border-subtle` sections inside.
+
+### Dialogs and form modals
+- **`FormModal`** (create / edit a thing) is a centered modal from `sm` up and, **below 640px, a
+  full-screen sheet**: no corners, the form scrolls, the footer stays pinned to the bottom with
+  the primary full width on top of Cancel. `fullScreenOnMobile={false}` keeps a short form
+  floating. Any other `DialogContent` opts in with `fullScreenOnMobile` (e.g. signing a consent
+  on the phone) — never with copied `max-sm:` classes.
+- **Validation is ours:** the form is `noValidate`, so a native `required` on a `RadioGroup` or
+  `Checkbox` never pre-empts the form's own rung-4 errors. Text fields with `required` keep the
+  browser check as a safety net until the screen validates them itself and passes
+  `ownValidation`.
+- `Checkbox` keeps the same DOM with or without `error`/`description`: focusing the field with
+  the error before or after painting it is the same.
 
 ### Status tones (one vocabulary)
 Every domain status gets its tone and label from ONE map, `src/lib/status/tones.ts`,
@@ -432,6 +455,9 @@ dentition). Sunken track, selected segment on surface with ink — never a solid
 (`aria-pressed` buttons) where e2e already finds them as buttons; `activation="manual"`
 when choosing opens a confirmation. `size sm | md`, `fullWidthOnMobile`. Sections with
 their own content use Tabs, not this.
+
+### Wizard
+`Wizard steps current onStepChange` (`ui/wizard.tsx`): from `sm`, one row of step buttons with one-line labels on a shared underline (`aria-current="step"`); below `sm`, «Paso 2 de 5 · Antecedentes» + a thin `progressbar` — labels never hyphenate. `optional: true` adds «(opcional)»; a wizard whose later steps are optional offers its final action (e.g. «Crear paciente») from step 1, in a bottom action bar that sticks on phones.
 
 ### Tabs
 `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` (Radix), or `TabBar` when the page renders
@@ -524,13 +550,16 @@ the reload key that re-runs the load, not to the background-refresh function
 that shares its fetch — those two look interchangeable and are not.
 
 ### Tables
-- **Header:** surface-2, label type, muted. **Rows:** hairline separators, 44px min height,
+- **Header:** `t-label`, muted, **sentence case** — never `uppercase` + tracking (no per-column
+  override to undo it). **Rows:** hairline separators, 44px min height,
   hover = surface-2. **Numbers:** right-aligned, tabular.
 - **Lists use `DataList`** (`components/ui/data-list.tsx`): one column declaration, rendered as a
   real `<table>` from `sm` (640px) up and as a `<ul>` of compact cards on phones — two markups
   chosen by `matchMedia`, only one mounted (no duplicate DOM; without `matchMedia` — server,
   jsdom — the table renders). Each column declares its phone role with `mobile`:
-  - `primary` — line 1, left, ink 15px/600 (one per list; defaults to the first column);
+  - `primary` — line 1, left, ink 15px/600 (one per list; defaults to the first column); it
+    wraps to **two lines** before an ellipsis (`line-clamp-2 break-words`), so titles that share a
+    prefix or long file names stay distinguishable;
   - `trailing` — line 1, right: the key value (amount, time, age; tabular) or the status badge;
   - `meta` (default) — line 2, muted 13px, values joined with « · », blanks skipped (return
     `null` from `mobileCell`, never «—»); it wraps, never truncates (documents and phones must
@@ -539,7 +568,8 @@ that shares its fetch — those two look interchangeable and are not.
   With `getRowHref`/`onRowClick` the whole card is the tap target (≥56px) with a trailing
   chevron, and on desktop the primary cell's link is stretched over the row (one link per row
   for screen readers). Row actions go in `rowActions` → the `RowActions` «⋯» menu, outside the
-  card's link; never a labelled «ACCIONES» row or column of buttons. `leading` puts an avatar or
+  card's link (44px on touch); an item's `onSelect` runs once the menu has handed focus back to
+  the «⋯», so a Dialog it opens returns focus to that row when it closes — no timers in screens; never a labelled «ACCIONES» row or column of buttons. `leading` puts an avatar or
   icon before the primary cell; `showFrom` drops low-value columns on a narrow tablet.
 - **Comparison tables** (read down a column: caja del día, reportes, perio) opt out with
   `phone="scroll"`: the table stays a table on phones, scrolls sideways inside its frame with
@@ -570,7 +600,7 @@ screen it opens; a group with no visible entries disappears.
   no scroll (expanded ~5px to spare, rail ~3px; `e2e/sidebar-scrollbars.spec.ts` guards it).
   A new entry must *replace* one, never just be appended; the rail's 44px targets cannot
   shrink. Precedent (M2, DX-439): «Pendiente de cerrar» joined *Atención* and **Auditoría
-  moved into Ajustes → «Datos y seguridad»** (next to «Accesos de soporte»): it already lived
+  moved into Ajustes** (since B6 under «Herramientas y registros», next to «Accesos de soporte»): it already lived
   at `/settings/auditoria`, it is a monthly ADMIN-only check, not daily work, and the ⌘K
   palette still finds it by typing. Its page carries «← Ajustes» like every settings screen.
   The next candidate to fold is a low-frequency admin screen, never a daily queue.
@@ -616,6 +646,55 @@ screen it opens; a group with no visible entries disappears.
   Enter. Accent-insensitive matching. Full-screen on phones.
 - **System chrome:** `viewport-fit=cover` and a `theme-color` per scheme set to the canvas
   token (light `#F7F9FC`, dark `#0B0F14`) — never the accent.
+
+### Settings pages
+Every screen under `/settings` uses ONE template, `src/components/settings/` (B6). The
+index (`settings-sections.ts`) is the complete map — *Tu cuenta* (Mi perfil) · Clínica y
+sedes · Agenda · Cobro · Historia clínica · Datos y seguridad · *Herramientas y registros*
+(Importar pacientes, Implantes, Accesos de soporte, Auditoría: tools and logs, not
+policies) — and each entry's label is **exactly** its page's title.
+
+- **Frame** (`app/(app)/settings/layout.tsx` → `SettingsShell`): from `xl` (≥1280px) a
+  persistent **sub-navigation** (220px, sticky, own scroll, `border-subtle` rule) lists the
+  same groups as plain links (caption headings, no icons, active = `primary-subtle` +
+  `primary-subtle-text`, `aria-current="page"`); its «Ajustes» heading links to the index.
+  Below `xl`, and on the index itself, there is no sub-nav: the index is the entry and each
+  page carries «‹ Ajustes». Nothing to adopt — the layout wraps every settings route.
+- **`SettingsPage`** `title description scope width actions back`: «‹ Ajustes» (hidden at
+  `xl`, where the sub-nav replaces it; a `back` to another page — a sede's sheet back to
+  «Sedes» — always shows), Display title, ONE support line (≤68ch, ≤2 lines, no second
+  paragraph), and the **scope line** (`scope="clinic"` «Aplica a toda la clínica» ·
+  `"sede"` «Por sede» · a node: «Editando: Sede Norte», status chips). Content column
+  **720px, left-aligned**; `width="wide"` only for real tables (≥5 columns) and logs. Never
+  centered. Sections are 40px apart.
+- **`SettingsSection`** `title description actions as`: `SectionHeader` + one help line;
+  no icons, no eyebrows. Its region is named by its title.
+- **`SettingRows` + `SettingRow`** `label description value action children isDefault
+  inline`: the one row for a policy value — one bordered card per section, hairline rows,
+  label + muted help left; right, the control (Switch, a short field) **or** the current
+  value in `t-data` + a secondary «Cambiar» that opens a dialog. `isDefault` → neutral
+  «Por defecto» chip. On phones the control drops under the text, except `inline` (a Switch).
+- **Saving — one model per page.** A form's only Save is **`SaveBar`**
+  (`save-bar.tsx`): «Cambios sin guardar · Descartar · Guardar», rendered at the END of the
+  form, `sticky bottom-3` in the scrolling area (so it rides the viewport's foot while the
+  form is dirty and rests in place at the end), and **absent when nothing changed** — never
+  a permanently visible disabled Save, never a Save per field or per row. Pair it with
+  **`useSettingsDraft(saved)`** → `{ draft, setDraft, update, dirty, discard, commit }`
+  (dirty = draft ≠ saved; a reload of `saved` only replaces an untouched draft; dirty
+  pages warn on unload). `form="<id>"` makes Guardar submit the form (validation stays in
+  `onSubmit`); `error` shows the save failure (rung 4) inside the bar; give the button a
+  `saveAriaLabel` when a page has more than one form. Values edited in a dialog («Cambiar»,
+  versioned policies) keep the dialog's own Save and need no bar.
+- **Per sede:** a setting that is per sede is reached through its sede, not through a
+  second sede `<select>`: `/settings/sedes` is the list, `/settings/sedes/[id]` the sede's
+  sheet (data + regional config, registration, cancellation policy, calendar). Pages that
+  edit «the active sede» say which one («Editando: Sede Norte») and follow the global
+  switcher.
+- **Weeks** start where the sede's locale starts them (`weekOrder(locale)` in
+  `components/locations/week-order.ts`; Monday when the locale has no region).
+- **Lists** in settings follow Tables (`DataList`, row → edit, `RowActions` «⋯»;
+  Desactivar = reversible, Eliminar = irreversible with consequences). Empty list: no
+  «0 items» count, the primary lives inside the `EmptyState`.
 
 ### Odontogram (signature)
 - FDI-numbered tooth map on a paper field; teeth are precise vector marks, 5 selectable surfaces

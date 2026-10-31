@@ -5,8 +5,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { voidPrescription, type Prescription } from '@/lib/prescriptions/prescriptions-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   title: 'Anular receta',
@@ -68,13 +67,12 @@ export function VoidPrescriptionModal({
       destructive
     >
       <FormField htmlFor="rx-void-reason" label={copy.reasonLabel} hint={copy.reasonHint}>
-        <textarea
+        <Textarea
           id="rx-void-reason"
           rows={3}
           value={reason}
           maxLength={500}
           onChange={(e) => setReason(e.target.value)}
-          className={cn(fieldClass, 'h-auto font-[inherit]')}
         />
       </FormField>
     </FormModal>

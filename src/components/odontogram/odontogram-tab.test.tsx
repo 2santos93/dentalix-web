@@ -110,6 +110,25 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+
+/** «Ver la carta al» es un DatePicker (segmentos del locale de la sede): se teclea por segmento. */
+async function typeAsOf(user: ReturnType<typeof userEvent.setup>, iso: string) {
+  const group = screen.getByRole('group', { name: 'Ver la carta al' });
+  const [y, m, d] = iso.split('-');
+  await user.click(within(group).getAllByRole('spinbutton')[0]);
+  await user.keyboard(`${d}${m}${y}`);
+}
+
+/** El día ISO que muestra «Ver la carta al» ('' si está vacío). */
+function asOfValue(): string {
+  const group = screen.getByRole('group', { name: 'Ver la carta al' });
+  const read = (type: string) =>
+    group.querySelector(`[role="spinbutton"][data-type="${type}"]`)?.getAttribute('aria-valuenow') ?? '';
+  const [y, m, d] = [read('year'), read('month'), read('day')];
+  if (!y || !m || !d) return '';
+  return `${y.padStart(4, '0')}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
 describe('OdontogramTab', () => {
   beforeEach(() => {
     mockedListCatalog.mockReset();
@@ -160,7 +179,7 @@ describe('OdontogramTab', () => {
     mockedListCatalog.mockResolvedValue(catalog);
     mockedGetOdontogram.mockResolvedValue([]);
     render(<OdontogramTab token="tok" patientId="p1" />);
-    expect(await screen.findByText(/aún no hay registros: la carta está sana/i)).toBeInTheDocument();
+    expect(await screen.findByText(/aún no hay registros en la carta/i)).toBeInTheDocument();
   });
 
   it('avisa de los registros en dientes que la dentición actual no dibuja (el 55 ya exfoliado) y lleva a su historial', async () => {
@@ -274,8 +293,7 @@ describe('OdontogramTab', () => {
     render(<OdontogramTab token="tok" patientId="p1" initialTooth="11" />);
 
     await screen.findByRole('form', { name: /registrar en el diente 11/i });
-    const date = screen.getByLabelText('Ver la carta al');
-    await user.type(date, '2026-10-05');
+    await typeAsOf(user, '2026-10-05');
 
     await waitFor(() => expect(mockedGetOdontogram).toHaveBeenLastCalledWith('tok', 'p1', '2026-10-05'));
     expect(mockedGetDentition).toHaveBeenLastCalledWith('tok', 'p1', '2026-10-05');
@@ -304,14 +322,14 @@ describe('OdontogramTab', () => {
     );
 
     await screen.findByRole('form', { name: /registrar en el diente 11/i });
-    await user.type(screen.getByLabelText('Ver la carta al'), '2026-10-05');
+    await typeAsOf(user, '2026-10-05');
 
     await waitFor(() => expect(mockedGetOdontogram).toHaveBeenCalledWith('tok', 'p1', '2026-10-05'));
     expect(await screen.findByText('No pudimos actualizar el odontograma.')).toBeInTheDocument();
     // Lo que hay en pantalla es la carta de HOY: ni aviso de «Carta al…», ni
     // la fecha en el selector, y se puede seguir registrando.
     expect(screen.queryByText(/carta al 05\/10\/2026/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Ver la carta al')).toHaveValue('');
+    expect(asOfValue()).toBe('');
     expect(screen.getByRole('form', { name: /registrar en el diente 11/i })).toBeInTheDocument();
   });
 
@@ -329,7 +347,7 @@ describe('OdontogramTab', () => {
     );
 
     await screen.findByRole('form', { name: /registrar en el diente 11/i });
-    await user.type(screen.getByLabelText('Ver la carta al'), '2026-10-05');
+    await typeAsOf(user, '2026-10-05');
     expect(await screen.findByText(/carta al 05\/10\/2026 · solo lectura/i)).toBeInTheDocument();
 
     mockedGetOdontogram.mockRejectedValue(new ApiError(500, 'Error del servidor'));
@@ -337,7 +355,7 @@ describe('OdontogramTab', () => {
 
     expect(await screen.findByText('No pudimos actualizar el odontograma.')).toBeInTheDocument();
     expect(screen.getByText(/carta al 05\/10\/2026 · solo lectura/i)).toBeInTheDocument();
-    expect(screen.getByLabelText('Ver la carta al')).toHaveValue('2026-10-05');
+    expect(asOfValue()).toBe('2026-10-05');
     expect(screen.queryByRole('form', { name: /registrar en el diente 11/i })).not.toBeInTheDocument();
   });
 

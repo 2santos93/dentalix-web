@@ -5,8 +5,7 @@ import { EXPENSE_VOID_REASON_MAX, EXPENSE_VOID_REASON_MIN } from '@/lib/expenses
 import { InlineError } from '@/components/errors/inline-error';
 import { FormModal } from '@/components/shared/form-modal';
 import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 export const expenseVoidCopy = {
   expense: {
@@ -85,14 +84,15 @@ export function ExpenseVoidModal({
       submitting={submitting}
       error={error}
       destructive
+      touchTargets
       onCloseAutoFocus={onCloseAutoFocus}
     >
-      <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-ink tabular-nums [overflow-wrap:anywhere]">
+      <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm font-medium text-ink tabular-nums [overflow-wrap:anywhere]">
         {subject}
       </p>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={fieldId}>{expenseVoidCopy.reasonLabel}</Label>
-        <textarea
+        <Textarea
           id={fieldId}
           name="reason"
           rows={3}
@@ -105,7 +105,8 @@ export function ExpenseVoidModal({
           }}
           aria-invalid={validationError ? true : undefined}
           aria-describedby={validationError ? errorId : hintId}
-          className={cn(fieldClass, validationError && 'border-danger')}
+          autoGrow
+          className="max-h-48"
         />
         <div className="flex items-start justify-between gap-3">
           {validationError ? (

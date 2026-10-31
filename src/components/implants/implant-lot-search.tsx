@@ -1,7 +1,6 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Download, Lock, Search } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -18,15 +17,16 @@ import { notifyError } from '@/components/errors/notify';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { FormField } from '@/components/shared/form-field';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { Input } from '@/components/ui/input';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { saveCsv } from '@/lib/files/save-csv';
 
 const copy = {
   heading: '¿Quién recibió este lote?',
-  support:
-    'Busca por lote o por referencia (REF) cuando un fabricante retira un producto: salen los pacientes de la clínica que lo recibieron, en todas las sedes, con fecha, diente, profesional y sede. La búsqueda y la exportación quedan en el registro de accesos.',
+  note:
+    'Salen los pacientes de la clínica que lo recibieron, en todas las sedes, con fecha, diente, profesional y sede. La búsqueda y la exportación quedan en el registro de accesos.',
   lot: 'Lote',
   reference: 'Referencia (REF)',
   search: 'Buscar',
@@ -45,11 +45,12 @@ const copy = {
   count: (n: number) => (n === 1 ? '1 implante encontrado' : `${n} implantes encontrados`),
   tableLabel: 'Pacientes que recibieron el lote o la referencia',
   colPatient: 'Paciente',
+  colContact: 'Documento y teléfono',
   colDate: 'Fecha',
   colTooth: 'Diente',
   colProduct: 'Producto',
   colProfessional: 'Profesional',
-  voided: 'Anulado',
+  colStatus: 'Estado',
   product: (m: ImplantLotMatch) =>
     `${IMPLANT_KIND_LABELS[m.kind]} · ${m.manufacturer}${m.system ? ` ${m.system}` : ''}`,
   codes: (m: ImplantLotMatch) => `REF ${m.reference} · Lote ${m.lot}`,
@@ -137,56 +138,97 @@ export function ImplantLotSearch({ token, allowed }: { token: string; allowed: b
     );
   }
 
-  return (
-    <section aria-labelledby="implant-lot-heading" className="flex flex-col gap-4">
-      <div>
-        <h2 id="implant-lot-heading" className="text-lg font-semibold text-ink">
-          {copy.heading}
-        </h2>
-        <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
-      </div>
+  const canExport = query !== null && !loading && error === null && rows.length > 0;
 
+  const columns: DataListColumn<ImplantLotMatch>[] = [
+    { id: 'patient', header: copy.colPatient, mobile: 'primary', cell: (m) => m.patientName },
+    {
+      id: 'contact',
+      header: copy.colContact,
+      cell: (m) => (
+        <span className="t-data text-muted">{[m.patientDocument, m.phone].filter(Boolean).join(' · ')}</span>
+      ),
+      mobileCell: (m) => [m.patientDocument, m.phone].filter(Boolean).join(' · ') || null,
+    },
+    {
+      id: 'date',
+      header: copy.colDate,
+      cell: (m) => (
+        <span className="flex flex-col whitespace-nowrap">
+          <span className="t-data">{formatCivilDate(m.placedOn)}</span>
+          <span className="text-muted">{copy.tooth(m.toothNumber)}</span>
+        </span>
+      ),
+      mobileCell: (m) => `${formatCivilDate(m.placedOn)} · ${copy.tooth(m.toothNumber)}`,
+    },
+    {
+      id: 'product',
+      header: copy.colProduct,
+      cell: (m) => (
+        <span className="flex min-w-0 flex-col [overflow-wrap:anywhere]">
+          <span className={m.voided ? 'text-muted line-through' : undefined}>{copy.product(m)}</span>
+          <span className="t-id break-all text-muted">{copy.codes(m)}</span>
+        </span>
+      ),
+      mobileCell: (m) => (
+        <span className={m.voided ? 'line-through' : undefined}>
+          {copy.product(m)} · <span className="t-id break-all">{copy.codes(m)}</span>
+        </span>
+      ),
+    },
+    {
+      id: 'professional',
+      header: copy.colProfessional,
+      cell: (m) => (
+        <span className="flex min-w-0 flex-col text-muted">
+          <span>{m.professionalName}</span>
+          <span>{m.locationName}</span>
+        </span>
+      ),
+      mobileCell: (m) => [m.professionalName, m.locationName].filter(Boolean).join(' · '),
+    },
+    {
+      id: 'status',
+      header: <span className="sr-only">{copy.colStatus}</span>,
+      mobile: 'trailing',
+      cell: (m) => (m.voided ? <StatusBadge kind="clinicalRecord" status="VOIDED" /> : null),
+    },
+  ];
+
+  return (
+    <section aria-label={copy.heading} className="flex flex-col gap-4">
       <form
         onSubmit={handleSubmit}
         noValidate
-        className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+        className="flex max-w-[720px] flex-col gap-3 sm:flex-row sm:items-start"
       >
-        <FormField htmlFor="implant-lot" label={copy.lot} className="sm:w-56" error={formError}>
+        <FormField htmlFor="implant-lot" label={copy.lot} className="sm:flex-1" error={formError}>
           <Input
             id="implant-lot"
             autoComplete="off"
             maxLength={80}
             value={lot}
             onChange={(e) => setLot(e.target.value)}
-            className="tabular-nums"
+            className="t-id"
           />
         </FormField>
-        <FormField htmlFor="implant-reference" label={copy.reference} className="sm:w-56">
+        <FormField htmlFor="implant-reference" label={copy.reference} className="sm:flex-1">
           <Input
             id="implant-reference"
             autoComplete="off"
             maxLength={80}
             value={reference}
             onChange={(e) => setReference(e.target.value)}
-            className="tabular-nums"
+            className="t-id"
           />
         </FormField>
-        <div className="flex flex-col gap-2 sm:flex-row sm:ml-auto">
-          <Button type="submit" variant="secondary" className="w-full sm:w-auto">
-            <Search aria-hidden />
-            {copy.search}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void exportCsv()}
-            disabled={!query || loading || exporting || rows.length === 0 || error !== null}
-            className="w-full sm:w-auto"
-          >
-            <Download aria-hidden />
-            {exporting ? copy.exporting : copy.export}
-          </Button>
-        </div>
+        {/* Alineado con los campos: la etiqueta ocupa su sitio encima. */}
+        <Button type="submit" className="w-full sm:mt-[calc(1.125rem+0.375rem)] sm:w-auto">
+          <Search aria-hidden />
+          {copy.search}
+        </Button>
       </form>
+      <p className="t-caption max-w-[68ch] text-muted">{copy.note}</p>
 
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
@@ -204,47 +246,28 @@ export function ImplantLotSearch({ token, allowed }: { token: string; allowed: b
           emptyDescription={copy.emptyHint}
           skeleton={<TableSkeleton rows={3} />}
         >
-          <p className="text-sm text-muted tabular-nums">{copy.count(rows.length)}</p>
-          <ul aria-label={copy.tableLabel} className="flex flex-col gap-3">
-            {rows.map((m) => (
-              <li
-                key={m.implantId}
-                data-testid="implant-lot-row"
-                className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-4 text-sm text-ink [overflow-wrap:anywhere] sm:grid sm:grid-cols-[minmax(0,2fr)_auto_minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-4"
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="t-data text-sm text-muted">{copy.count(rows.length)}</p>
+            {canExport ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void exportCsv()}
+                disabled={exporting}
+                className="w-full sm:w-auto"
               >
-                <div className="flex min-w-0 flex-col">
-                  <Link
-                    href={`/patients/${encodeURIComponent(m.patientId)}?tab=implants`}
-                    className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    {m.patientName}
-                  </Link>
-                  <span className="text-muted tabular-nums">
-                    {[m.patientDocument, m.phone].filter(Boolean).join(' · ')}
-                  </span>
-                </div>
-                <div className="flex flex-col tabular-nums">
-                  <span>{formatCivilDate(m.placedOn)}</span>
-                  <span className="text-muted">{copy.tooth(m.toothNumber)}</span>
-                </div>
-                <div className="flex min-w-0 flex-col">
-                  <span className={m.voided ? 'text-muted line-through' : undefined}>
-                    {copy.product(m)}
-                  </span>
-                  <span className="break-all text-muted tabular-nums">{copy.codes(m)}</span>
-                  {m.voided ? (
-                    <Badge variant="danger" className="mt-1 w-fit">
-                      {copy.voided}
-                    </Badge>
-                  ) : null}
-                </div>
-                <div className="flex min-w-0 flex-col text-muted">
-                  <span>{m.professionalName}</span>
-                  <span>{m.locationName}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+                <Download aria-hidden />
+                {exporting ? copy.exporting : copy.export}
+              </Button>
+            ) : null}
+          </div>
+          <DataList
+            label={copy.tableLabel}
+            rows={rows}
+            columns={columns}
+            getRowKey={(m) => m.implantId}
+            getRowHref={(m) => `/patients/${encodeURIComponent(m.patientId)}?tab=implants`}
+          />
         </AsyncSection>
       )}
     </section>

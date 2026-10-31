@@ -79,7 +79,7 @@ export function PlanOptionsComparison({
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h3 id={headingId} className="text-base font-semibold text-ink">
+      <h3 id={headingId} className="t-title text-ink">
         {copy.heading}
       </h3>
       {error ? (
@@ -102,7 +102,7 @@ export function PlanOptionsComparison({
                   key={option.id}
                   aria-label={label}
                   aria-current={current ? true : undefined}
-                  className={cn('flex min-w-0 flex-col gap-2 bg-surface p-4', current && 'bg-surface-2')}
+                  className={cn('flex min-w-0 flex-col gap-2 bg-surface p-4', current && 'bg-surface-sunken')}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="min-w-0 font-medium text-ink">{label}</span>
@@ -122,7 +122,7 @@ export function PlanOptionsComparison({
                   ) : (
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       className="self-start"
                       aria-label={copy.view(label)}

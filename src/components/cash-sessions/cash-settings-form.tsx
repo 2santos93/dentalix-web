@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -12,8 +12,8 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import { SettingRows } from '@/components/settings/settings-page';
 
 const copy = {
   requireTitle: 'Exigir caja abierta',
@@ -22,7 +22,7 @@ const copy = {
   blindTitle: 'Arqueo ciego',
   blindHint:
     'Al cerrar, recepción cuenta por moneda y método antes de ver lo esperado. Administración lo ve siempre.',
-  save: 'Guardar',
+  saving: 'Guardando…',
   saved: 'Ajustes de caja guardados.',
   loadError: 'No pudimos cargar los ajustes de caja.',
   saveError: 'No pudimos guardar los ajustes de caja. Intenta de nuevo.',
@@ -36,16 +36,22 @@ interface CashSettingsFormProps {
   allowed: boolean;
 }
 
+type SettingKey = 'requireOpenSession' | 'blindClose';
+
 /**
  * Ajustes → Caja (DX-027): «exigir caja abierta» y «arqueo ciego» de la
  * clínica. Los dos nacen desactivados: el comportamiento de antes de la caja
  * por turno.
+ *
+ * Un solo modelo de guardado: cada interruptor se aplica al momento (DESIGN.md
+ * → Switch), sin botón «Guardar» que pueda quedarse a medias ni un primario
+ * apagado. Si la API falla, el interruptor vuelve a su sitio y se dice aquí.
  */
 export function CashSettingsForm({ token, allowed }: CashSettingsFormProps) {
   const [settings, setSettings] = useState<CashSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<SettingKey | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
 
@@ -81,102 +87,50 @@ export function CashSettingsForm({ token, allowed }: CashSettingsFormProps) {
     );
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function change(key: SettingKey, value: boolean) {
     if (!settings) return;
-    setSaving(true);
+    const before = settings;
+    const next = { ...settings, [key]: value };
+    setSettings(next);
+    setSaving(key);
     setSaveError(null);
     setNotice('');
     try {
-      setSettings(await saveCashSettings(token, settings));
+      setSettings(await saveCashSettings(token, next));
       setNotice(copy.saved);
     } catch (err) {
+      setSettings(before);
       setSaveError(apiErrorMessage(err, copy.saveError));
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   }
 
-  return (
-    <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-4">
-      <div className="divide-y divide-hairline rounded-xl border border-border bg-surface">
-        <SettingSwitch
-          title={copy.requireTitle}
-          hint={copy.requireHint}
-          checked={settings.requireOpenSession}
-          disabled={saving}
-          onChange={(requireOpenSession) => setSettings({ ...settings, requireOpenSession })}
-        />
-        <SettingSwitch
-          title={copy.blindTitle}
-          hint={copy.blindHint}
-          checked={settings.blindClose}
-          disabled={saving}
-          onChange={(blindClose) => setSettings({ ...settings, blindClose })}
-        />
-      </div>
-      {saveError ? <InlineError>{saveError}</InlineError> : null}
-      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
-        {notice}
-      </p>
-      <Button type="submit" loading={saving} className="self-start max-sm:h-11 max-sm:w-full">
-        {copy.save}
-      </Button>
-    </form>
-  );
-}
+  const rows: { key: SettingKey; title: string; hint: string }[] = [
+    { key: 'requireOpenSession', title: copy.requireTitle, hint: copy.requireHint },
+    { key: 'blindClose', title: copy.blindTitle, hint: copy.blindHint },
+  ];
 
-function SettingSwitch({
-  title,
-  hint,
-  checked,
-  disabled,
-  onChange,
-}: {
-  title: string;
-  hint: string;
-  checked: boolean;
-  disabled: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  const id = useId();
   return (
-    <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-6">
-      <div className="min-w-0">
-        <p id={`${id}-title`} className="font-medium text-ink">
-          {title}
-        </p>
-        <p id={`${id}-hint`} className="text-sm text-muted">
-          {hint}
-        </p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-labelledby={`${id}-title`}
-        aria-describedby={`${id}-hint`}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        // DX-395: el botón es el área táctil (44 px de alto en móvil) y la
-        // pista va dentro, con el mismo aspecto en todas las anchuras.
-        className="mt-1 inline-flex h-6 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 max-sm:-mb-2.5 max-sm:-mt-1.5 max-sm:h-11 max-sm:min-w-11"
-      >
-        <span
-          aria-hidden
-          className={cn(
-            'relative inline-flex h-6 w-11 items-center rounded-full border border-border transition-colors',
-            checked ? 'bg-primary' : 'bg-bg',
-          )}
-        >
-          <span
-            className={cn(
-              'inline-block h-5 w-5 rounded-full bg-surface shadow transition-transform',
-              checked ? 'translate-x-5' : 'translate-x-0.5',
-            )}
+    <div className="flex flex-col gap-3">
+      <SettingRows>
+        {rows.map((row) => (
+          <Switch
+            key={row.key}
+            checked={settings[row.key]}
+            disabled={saving !== null}
+            aria-busy={saving === row.key || undefined}
+            onChange={(e) => void change(row.key, e.target.checked)}
+            label={<span className="font-medium">{row.title}</span>}
+            description={<span className="text-sm">{row.hint}</span>}
+            className="flex-row-reverse justify-between gap-4 px-4 py-4 sm:px-6 pointer-coarse:py-4"
           />
-        </span>
-      </button>
+        ))}
+      </SettingRows>
+      {saveError ? <InlineError>{saveError}</InlineError> : null}
+      <p role="status" className={notice || saving ? 'text-sm text-muted' : 'sr-only'}>
+        {saving ? copy.saving : notice}
+      </p>
     </div>
   );
 }

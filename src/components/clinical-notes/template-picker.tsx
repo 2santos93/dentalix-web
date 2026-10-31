@@ -4,8 +4,8 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { NoteTemplate } from '@/lib/clinical-notes/note-templates-api';
 import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 export const templatePickerCopy = {
   label: 'Plantilla',
@@ -62,7 +62,8 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
   useEffect(() => {
     if (moved === null) return;
     if (moved.expanded) {
-      listRef.current?.querySelector<HTMLInputElement>('input[type="radio"]:checked')?.focus();
+      // Solo hay radios en la lista: el marcado es la plantilla elegida.
+      listRef.current?.querySelector<HTMLInputElement>('input:checked')?.focus();
     } else {
       changeRef.current?.focus();
     }
@@ -96,7 +97,7 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
     return (
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-ink">{copy.label}</span>
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-sunken px-3 py-2">
           <span className="min-w-0 text-sm text-ink">
             <span className="block truncate font-medium">{selected.name}</span>
             <span className="block text-xs text-muted">
@@ -138,18 +139,17 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
           className="pl-9"
         />
       </div>
-      <div
-        ref={listRef}
-        onPointerDown={() => setByPointer(true)}
-        onKeyDown={() => setByPointer(false)}
-        className="max-h-60 overflow-y-auto rounded-lg border border-border bg-surface"
-      >
-        <TemplateOption
+      <div ref={listRef} onPointerDown={() => setByPointer(true)} onKeyDown={() => setByPointer(false)}>
+        <RadioGroup
+          id={groupName}
           name={groupName}
-          checked={value === null}
-          onSelect={() => pick(null)}
-          title={copy.none}
-        />
+          legend={<span className="sr-only">{copy.label}</span>}
+          value={value ?? NONE}
+          onValueChange={(v) => pick(v === NONE ? null : v)}
+          className="gap-0"
+          optionsClassName="max-h-60 overflow-y-auto rounded-lg border border-border bg-surface"
+        >
+        <TemplateOption value={NONE} title={copy.none} />
         {groups.length === 0 ? (
           <p role="status" className="px-3 py-3 text-sm text-muted">
             {templates.length === 0 ? copy.noTemplates : copy.noResults(query.trim())}
@@ -157,15 +157,13 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
         ) : (
           groups.map(([folder, items]) => (
             <div key={folder} role="group" aria-label={folder}>
-              <p className="border-t border-hairline bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted">
+              <p className="border-t border-border-subtle bg-surface-sunken px-3 py-1.5 text-xs font-medium text-muted">
                 {folder}
               </p>
               {items.map((t) => (
                 <TemplateOption
                   key={t.id}
-                  name={groupName}
-                  checked={value === t.id}
-                  onSelect={() => pick(t.id)}
+                  value={t.id}
                   title={t.name}
                   meta={copy.questions(t.prompts.length)}
                 />
@@ -173,40 +171,26 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
             </div>
           ))
         )}
+        </RadioGroup>
       </div>
     </fieldset>
   );
 }
 
-function TemplateOption({
-  name,
-  checked,
-  onSelect,
-  title,
-  meta,
-}: {
-  name: string;
-  checked: boolean;
-  onSelect: () => void;
-  title: string;
-  meta?: string;
-}) {
+/** Valor del radio «Sin plantilla» (el grupo no admite `null`). */
+const NONE = '__none__';
+
+function TemplateOption({ value, title, meta }: { value: string; title: string; meta?: string }) {
   return (
-    <label
-      className={cn(
-        'flex min-h-11 cursor-pointer items-center gap-3 border-t border-hairline px-3 py-2 text-sm first:border-t-0 hover:bg-surface-2',
-        checked && 'bg-primary/5',
-      )}
-    >
-      <input
-        type="radio"
-        name={name}
-        checked={checked}
-        onChange={onSelect}
-        className="size-4 shrink-0 accent-[var(--color-primary)]"
-      />
-      <span className="min-w-0 flex-1 truncate text-ink">{title}</span>
-      {meta ? <span className="shrink-0 text-xs tabular-nums text-muted">{meta}</span> : null}
-    </label>
+    <RadioOption
+      value={value}
+      className="min-h-11 items-center border-t border-border-subtle px-3 first:border-t-0 hover:bg-surface-sunken has-checked:bg-primary-subtle [&>span:last-child]:flex-1"
+      label={
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="min-w-0 flex-1 truncate text-ink">{title}</span>
+          {meta ? <span className="shrink-0 text-xs tabular-nums text-muted">{meta}</span> : null}
+        </span>
+      }
+    />
   );
 }

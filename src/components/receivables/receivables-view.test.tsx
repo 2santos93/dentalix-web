@@ -12,6 +12,8 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { ApiError } from '@/lib/api/client';
 import { notifyError } from '@/components/errors/notify';
 
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('../../lib/receivables/receivables-api', () => ({
   getReceivablesAging: jest.fn(),
   downloadReceivablesCsv: jest.fn(),
@@ -90,6 +92,16 @@ function page(items: AgingRow[], overrides: Partial<ReceivablesAgingPage> = {}):
 
 const money = (text: string | null | undefined) => (text ?? '').replace(/\s/g, ' ');
 
+/** «Saldo mínimo», «Compromiso» y «Profesional» viven en «Más filtros». */
+async function openMoreFilters(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /^Más filtros/ }));
+}
+
+/** Las acciones de la fila están en su «⋯». */
+async function openRowMenu(user: ReturnType<typeof userEvent.setup>, name = 'Ana Pérez') {
+  await user.click(screen.getByRole('button', { name: `Acciones de ${name}` }));
+}
+
 describe('ReceivablesView (DX-145)', () => {
   beforeEach(() => {
     mockedAging.mockReset();
@@ -105,7 +117,7 @@ describe('ReceivablesView (DX-145)', () => {
     expect(screen.getByRole('status', { name: 'Cargando' })).toBeInTheDocument();
   });
 
-  it('lista al deudor con antigüedad, fecha aproximada, deuda, saldo a favor, tramos y acciones', async () => {
+  it('lista al deudor con antigüedad, fecha aproximada, deuda, saldo a favor, tramos y contacto', async () => {
     mockedAging.mockResolvedValue(page([row()]));
     render(<ReceivablesView token="tok" />);
 
@@ -113,7 +125,9 @@ describe('ReceivablesView (DX-145)', () => {
     const tableRow = within(table).getByRole('row', { name: /Ana Pérez/ });
     expect(within(tableRow).getByText('120 días')).toBeInTheDocument();
     expect(within(tableRow).getAllByText('Más de 90 días').length).toBeGreaterThan(0);
-    expect(within(tableRow).getByText('Fecha aproximada')).toBeInTheDocument();
+    // La fecha aproximada: «*» en la fila (con texto para el lector) y UNA nota al pie.
+    expect(within(tableRow).getByText('(fecha aproximada)')).toBeInTheDocument();
+    expect(screen.getByText(/^\* Fecha aproximada: parte del saldo no está en cuotas/)).toBeInTheDocument();
     expect(money(tableRow.textContent)).toContain('500.000,00');
     expect(money(tableRow.textContent)).toContain('A favor: 20.000,00');
     expect(within(tableRow).getByText('30/09/2026')).toBeInTheDocument();
@@ -121,7 +135,8 @@ describe('ReceivablesView (DX-145)', () => {
       'href',
       'tel:3001112222',
     );
-    expect(within(tableRow).getByRole('link', { name: 'Estado de cuenta de Ana Pérez' })).toHaveAttribute(
+    // Toda la fila abre el estado de cuenta (un enlace por fila, el del nombre).
+    expect(within(tableRow).getByRole('link', { name: /^Ana Pérez/ })).toHaveAttribute(
       'href',
       '/patients/pat-1?tab=account-statement',
     );
@@ -130,7 +145,7 @@ describe('ReceivablesView (DX-145)', () => {
     // Sin importes en el mensaje.
     expect(decodeURIComponent(whatsapp.getAttribute('href') ?? '')).not.toMatch(/\d{3}\.|COP|\$/);
 
-    expect(screen.getByText('Deudas de Sede principal')).toBeInTheDocument();
+    expect(screen.getByTestId('scope-marker')).toHaveTextContent('Sede principal');
     expect(screen.getByText('1 deudor')).toBeInTheDocument();
     expect(mockedAging).toHaveBeenCalledWith('tok', { page: 1 });
   });
@@ -158,8 +173,11 @@ describe('ReceivablesView (DX-145)', () => {
     const user = userEvent.setup();
     render(<ReceivablesView token="tok" />);
     await screen.findByRole('table');
+    await openMoreFilters(user);
     await user.type(screen.getByRole('textbox', { name: 'Saldo mínimo' }), '100000');
     await waitFor(() => expect(mockedAging).toHaveBeenLastCalledWith('tok', { minBalance: 100000, page: 1 }));
+    expect(screen.getByRole('button', { name: 'Más filtros (1)' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Moneda' }), 'COP');
     await waitFor(() =>
       expect(mockedAging).toHaveBeenLastCalledWith('tok', { currency: 'COP', minBalance: 100000, page: 1 }),
@@ -171,6 +189,7 @@ describe('ReceivablesView (DX-145)', () => {
     const user = userEvent.setup();
     render(<ReceivablesView token="tok" />);
     await screen.findByRole('table');
+    await openMoreFilters(user);
     const field = screen.getByRole('textbox', { name: 'Saldo mínimo' });
     await user.type(field, '100.000');
     await waitFor(() => expect(mockedAging).toHaveBeenLastCalledWith('tok', { minBalance: 100000, page: 1 }));
@@ -185,6 +204,7 @@ describe('ReceivablesView (DX-145)', () => {
     const user = userEvent.setup();
     render(<ReceivablesView token="tok" />);
     await screen.findByRole('table');
+    await openMoreFilters(user);
     const field = screen.getByRole('textbox', { name: 'Saldo mínimo' });
     await user.type(field, '1.50.0');
     expect(field).toHaveAttribute('aria-invalid', 'true');
@@ -279,7 +299,8 @@ describe('ReceivablesView (DX-145)', () => {
       render(<ReceivablesView token="tok" />);
       const table = await screen.findByRole('table');
       const tableRow = within(table).getByRole('row', { name: /Ana Pérez/ });
-      expect(within(tableRow).getByText('Llamada · Promete pago')).toBeInTheDocument();
+      // Con compromiso, la celda dice el compromiso; la gestión está en el estado de cuenta.
+      expect(within(tableRow).queryByText('Llamada · Promete pago')).toBeNull();
       expect(within(tableRow).getByText('Cumplido')).toBeInTheDocument();
       expect(money(tableRow.textContent)).toContain('para el 15/11/2026');
     });
@@ -328,13 +349,13 @@ describe('ReceivablesView (DX-145)', () => {
       expect(within(tableRow).queryByText('Reabierto: se anuló el abono')).toBeNull();
     });
 
-    it('«Gestión» abre el modal «Registrar gestión» y al guardar recarga la cartera', async () => {
+    it('«Registrar gestión» (en el «⋯») abre el modal y al guardar recarga la cartera', async () => {
       mockedAging.mockResolvedValue(page([row()]));
+      const user = userEvent.setup();
       render(<ReceivablesView token="tok" />);
-      const table = await screen.findByRole('table');
-      await userEvent.click(
-        within(table).getByRole('button', { name: 'Registrar gestión de cobro con Ana Pérez' }),
-      );
+      await screen.findByRole('table');
+      await openRowMenu(user);
+      await user.click(await screen.findByRole('menuitem', { name: 'Registrar gestión' }));
       const dialog = await screen.findByRole('dialog', { name: 'Registrar gestión' });
       await userEvent.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
       await userEvent.selectOptions(within(dialog).getByLabelText('Resultado'), 'NO_ANSWER');
@@ -349,14 +370,18 @@ describe('ReceivablesView (DX-145)', () => {
       );
       render(<ReceivablesView token="tok" />);
       const table = await screen.findByRole('table');
-      expect(within(table).queryByRole('button', { name: 'Compromiso de pago de Ana Pérez' })).toBeNull();
       expect(within(table).getByText('Abierto')).toBeInTheDocument();
+      await openRowMenu(userEvent.setup());
+      expect(await screen.findByRole('menuitem', { name: 'Registrar gestión' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Compromiso de pago' })).toBeNull();
     });
 
     it('filtra por compromiso abierto y por profesional', async () => {
       mockedAging.mockResolvedValue(page([row()]));
+      const user = userEvent.setup();
       render(<ReceivablesView token="tok" />);
       await screen.findByRole('table');
+      await openMoreFilters(user);
       await userEvent.selectOptions(screen.getByLabelText('Compromiso'), 'yes');
       await waitFor(() =>
         expect(mockedAging).toHaveBeenLastCalledWith('tok', expect.objectContaining({ hasPromise: true })),
@@ -371,5 +396,69 @@ describe('ReceivablesView (DX-145)', () => {
         ),
       );
     });
+  });
+
+  it('sin compromiso, la celda de gestión dice la última gestión', async () => {
+    mockedAging.mockResolvedValue(
+      page([row({ lastNote: { channel: 'CALL', outcome: 'PROMISED_PAYMENT', createdAt: '2026-10-16T15:00:00.000Z' } })]),
+    );
+    render(<ReceivablesView token="tok" />);
+    const tableRow = within(await screen.findByRole('table')).getByRole('row', { name: /Ana Pérez/ });
+    expect(within(tableRow).getByText('Llamada · Promete pago')).toBeInTheDocument();
+  });
+
+  describe('teléfono (<640px)', () => {
+    let original: typeof window.matchMedia;
+    beforeEach(() => {
+      original = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+    });
+    afterEach(() => {
+      window.matchMedia = original;
+    });
+
+    it('cada deudor es una tarjeta que abre su estado de cuenta; Llamar y WhatsApp van en el «⋯»', async () => {
+      mockedAging.mockResolvedValue(page([row()]));
+      const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+      const user = userEvent.setup();
+      render(<ReceivablesView token="tok" />);
+      const list = await screen.findByRole('list', { name: 'Deudores' });
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      const card = within(list).getByRole('link', { name: /Ana Pérez/ });
+      expect(card).toHaveAttribute('href', '/patients/pat-1?tab=account-statement');
+      expect(money(card.textContent)).toContain('500.000,00');
+      expect(card).toHaveTextContent('Más de 90 días');
+      await waitFor(() => expect(mockedClinic).toHaveBeenCalled());
+      await openRowMenu(user);
+      expect(await screen.findByRole('menuitem', { name: 'Llamar al 300 111 2222' })).toBeInTheDocument();
+      await user.click(screen.getByRole('menuitem', { name: 'WhatsApp' }));
+      expect(open).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/wa\.me\/573001112222\?text=/), '_blank', 'noopener,noreferrer');
+      const text = decodeURIComponent(String(open.mock.calls[0][0]).split('?text=')[1]);
+      expect(text).not.toMatch(/\d|COP|\$/);
+      open.mockRestore();
+    });
+  });
+
+  it('una moneda sin nada por cobrar no pinta cinco tramos a cero', async () => {
+    mockedAging.mockResolvedValue(
+      page([row()], {
+        totals: [
+          { currency: 'USD', patients: 1, balance: -50, debt: 0, credit: 50, buckets: { ...BUCKETS } },
+        ],
+      }),
+    );
+    render(<ReceivablesView token="tok" />);
+    const summary = await screen.findByTestId('aging-total-USD');
+    expect(within(summary).queryByText('Por vencer')).toBeNull();
+    expect(money(summary.textContent)).toContain('Saldo a favor 50,00');
   });
 });

@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (DX-067): recepción cobra desde el ESTADO DE CUENTA, sin entrar al plan de
@@ -192,8 +193,8 @@ for (const viewport of [
     await expect(summary.getByTestId('balance')).toContainText(
       figure(PLAN_PRICE - PAYMENT),
     );
-    const movements = panel.getByRole('table', { name: 'Movimientos (abonos)' });
-    await expect(movements.getByRole('row').filter({ hasText: 'Efectivo' })).toHaveCount(1);
+    const movements = dataList(panel, 'Movimientos (abonos)');
+    await expect(dataListRows(movements).filter({ hasText: 'Efectivo' })).toHaveCount(1);
 
     // --- «Plan de cuotas» del mismo plan.
     await panel.getByRole('button', { name: 'Plan de cuotas' }).click();
@@ -225,9 +226,9 @@ for (const viewport of [
 
     // --- Caja de hoy: el abono, a nombre del paciente.
     await page.goto(`${origin}/caja`);
-    const cash = page.getByRole('table', { name: 'Abonos del período' });
+    const cash = dataList(page, 'Abonos del período');
     await expect(cash).toBeVisible({ timeout: 15_000 });
-    const row = cash.getByRole('row').filter({ hasText: lastName });
+    const row = dataListRows(cash).filter({ hasText: lastName });
     await expect(row).toHaveCount(1);
     await expect(row).toContainText(figure(PAYMENT));
     // Registrado hoy con fecha de pago de hoy: no hace falta aclararlo.

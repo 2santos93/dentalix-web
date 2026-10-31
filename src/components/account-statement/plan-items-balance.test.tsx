@@ -46,6 +46,7 @@ function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {
     allocated: 120,
     unallocated: 0,
     unconvertedPaymentsCount: 0,
+    rateProviderTimedOut: false,
     manualPaymentIds: [],
     items: [
       {

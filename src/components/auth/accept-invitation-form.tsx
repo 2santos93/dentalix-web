@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { AUTH_FORM_CLASS, AUTH_LINK_CLASS, AUTH_SUBMIT_CLASS } from './auth-layout';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -29,6 +30,7 @@ const copy = {
   existingUserHint: 'Ingresa tu contraseña de Dentalix para continuar.',
   forgotPassword: '¿Olvidaste tu contraseña?',
   passwordLabel: 'Contraseña',
+  newPasswordHint: 'Mínimo 8 caracteres.',
   submit: 'Aceptar invitación',
   submitting: 'Activando…',
   genericError: 'No pudimos aceptar la invitación. Intenta de nuevo.',
@@ -69,6 +71,7 @@ const INVALID_STATUS_COPY: Record<
 };
 
 const ERROR_ID = 'accept-invitation-error';
+const HINT_ID = 'accept-invitation-hint';
 
 /**
  * Client form behind `/invitacion/[token]`. Looks up the invitation by its
@@ -78,7 +81,14 @@ const ERROR_ID = 'accept-invitation-error';
  * password form; every other status renders its own explanatory message plus
  * a link back to `/login`, never the form.
  */
-export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
+export function AcceptInvitationForm({
+  inviteToken,
+  hostClinicName = null,
+}: {
+  inviteToken: string;
+  /** La clínica que la página ya titula (H1): no se repite aquí. */
+  hostClinicName?: string | null;
+}) {
   const router = useRouter();
   const setAccessToken = useAuthStore((s) => s.setAccessToken);
 
@@ -140,7 +150,11 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
   }
 
   if (loading) {
-    return <p className="text-sm text-muted">{copy.loading}</p>;
+    return (
+      <p role="status" className="flex items-center gap-2 text-sm text-muted">
+        <Loader2 className="size-4 animate-spin" aria-hidden /> {copy.loading}
+      </p>
+    );
   }
 
   if (loadError) {
@@ -155,9 +169,9 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
     const { title, message } = INVALID_STATUS_COPY[invitation.status];
     return (
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-ink">{title}</h2>
+        <h2 className="t-title text-ink">{title}</h2>
         <p className="text-sm text-muted">{message}</p>
-        <Link href="/login" className="text-sm font-medium text-primary hover:underline">
+        <Link href="/login" className={`self-start ${AUTH_LINK_CLASS}`}>
           {copy.loginLink}
         </Link>
       </div>
@@ -167,10 +181,10 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
   const roleLabel = invitation.role ? (ROLE_LABELS[invitation.role] ?? invitation.role) : null;
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className={AUTH_FORM_CLASS}>
       <div className="flex flex-col gap-1">
-        {invitation.clinicName ? (
-          <p className="font-medium text-ink">{invitation.clinicName}</p>
+        {invitation.clinicName && invitation.clinicName !== hostClinicName ? (
+          <p className="t-title text-ink">{invitation.clinicName}</p>
         ) : null}
         {roleLabel ? <p className="text-sm text-muted">{copy.invitedAs(roleLabel)}</p> : null}
         {invitation.maskedEmail ? (
@@ -181,7 +195,12 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
         </p>
       </div>
 
-      <FormField htmlFor="accept-invitation-password" label={copy.passwordLabel}>
+      <FormField
+        htmlFor="accept-invitation-password"
+        label={copy.passwordLabel}
+        hint={invitation.requiresCurrentPassword ? undefined : copy.newPasswordHint}
+        hintId={HINT_ID}
+      >
         <Input
           id="accept-invitation-password"
           name="password"
@@ -191,7 +210,9 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
           required
           disabled={submitting}
           aria-invalid={submitError ? true : undefined}
-          aria-describedby={submitError ? ERROR_ID : undefined}
+          aria-describedby={
+            submitError ? ERROR_ID : invitation.requiresCurrentPassword ? undefined : HINT_ID
+          }
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
@@ -204,15 +225,12 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
       ) : null}
 
       {invitation.requiresCurrentPassword ? (
-        <Link
-          href="/olvide-contrasena"
-          className="self-start text-sm font-medium text-primary hover:underline"
-        >
+        <Link href="/olvide-contrasena" className={`-mt-2 self-start ${AUTH_LINK_CLASS}`}>
           {copy.forgotPassword}
         </Link>
       ) : null}
 
-      <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">
+      <Button type="submit" size="lg" disabled={submitting} className={AUTH_SUBMIT_CLASS}>
         {submitting ? (
           <>
             <Loader2 className="animate-spin" /> {copy.submitting}

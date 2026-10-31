@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import {
@@ -12,7 +13,7 @@ import {
   BREAK_GLASS_REASON_MIN,
   normalizeTotpCode,
 } from '@/lib/auth/break-glass';
-import { cn } from '@/lib/utils';
+import { AUTH_FORM_CLASS } from './auth-layout';
 
 const copy = {
   notice:
@@ -27,10 +28,6 @@ const copy = {
   submitting: 'Entrando…',
   back: 'Volver',
 };
-
-// Mismo estilo que el átomo Input, para el <textarea> nativo (como en las fichas).
-const textareaClass =
-  'flex w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface BreakGlassStepProps {
   submitting: boolean;
@@ -81,7 +78,7 @@ export function BreakGlassStep({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+    <form onSubmit={handleSubmit} className={AUTH_FORM_CLASS} noValidate>
       <Callout tone="warning" role="note" icon={ShieldAlert}>
         {copy.notice}
       </Callout>
@@ -110,10 +107,11 @@ export function BreakGlassStep({
         hint={copy.reasonHint(reason.length)}
         error={reasonError}
       >
-        <textarea
+        <Textarea
           id="break-glass-reason"
           name="breakGlassReason"
           rows={3}
+          autoGrow
           required
           maxLength={BREAK_GLASS_REASON_MAX}
           disabled={submitting}
@@ -121,7 +119,7 @@ export function BreakGlassStep({
           aria-invalid={reasonError ? true : undefined}
           aria-describedby={reasonError ? fieldErrorId('break-glass-reason') : undefined}
           onChange={(e) => setReason(e.target.value)}
-          className={cn(textareaClass, 'h-auto')}
+          className="max-h-60"
         />
       </FormField>
 
@@ -131,7 +129,7 @@ export function BreakGlassStep({
         </InlineError>
       ) : null}
 
-      <div className="mt-1 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+      <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
         <Button type="button" variant="ghost" onClick={onBack} disabled={submitting}>
           <ArrowLeft /> {copy.back}
         </Button>

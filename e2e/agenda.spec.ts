@@ -1,5 +1,5 @@
 import { test, expect } from './support/test';
-import { fillDate } from './support/dates';
+import { fillDate, fillTime, readDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
@@ -94,12 +94,12 @@ for (const browserClock of ['23:30', '06:00']) {
     await page.getByLabel('Sexo').selectOption('F');
 
     const createPatientError = page.locator('p[role="alert"]');
-    // El alta de paciente es un WIZARD de 5 pasos y el submit ("Guardar") vive en
+    // El alta de paciente es un WIZARD de 5 pasos; «Crear paciente» está en todos (solo el 1.º es obligatorio) y vive en
     // el último; con nombre, apellido y tipo de documento se puede saltar directo al final (ver
     // `goToStep` en patient-create-wizard.tsx). Antes esto pulsaba un botón "Crear
     // paciente" que ya no existe, y el spec se colgaba 30s en el click.
     await page.getByRole('button', { name: /Autorización de datos/ }).click();
-    await page.getByRole('button', { name: 'Guardar' }).click();
+    await page.getByRole('button', { name: 'Crear paciente' }).click();
 
     // El wizard redirige al DETALLE del paciente recién creado
     // (patient-create-wizard.tsx: `router.push(`/patients/${created.id}`)`), no a
@@ -152,9 +152,9 @@ for (const browserClock of ['23:30', '06:00']) {
     await expect(appointmentForm.getByText(`${patientFirstName} ${patientLastName}`)).toBeVisible();
     await appointmentForm.getByLabel('Profesional', { exact: true }).selectOption({ label: fullName });
     // El formulario hereda el día que se está viendo (`defaultDate`): el ancla.
-    await expect(appointmentForm.getByLabel('Fecha', { exact: true })).toHaveValue(anchorDay);
-    await appointmentForm.getByLabel('Hora de inicio').fill(startTime);
-    await appointmentForm.getByLabel('Hora de fin').fill(endTime);
+    await expect.poll(() => readDate(appointmentForm, 'Fecha')).toBe(anchorDay);
+    await fillTime(appointmentForm, 'Hora de inicio', startTime);
+    await fillTime(appointmentForm, 'Hora de fin', endTime);
     await appointmentForm.getByLabel('Motivo (opcional)').fill(appointmentReason);
 
     const saveError = appointmentForm.locator('p[role="alert"]');

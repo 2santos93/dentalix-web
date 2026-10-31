@@ -1,4 +1,6 @@
 'use client';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -80,7 +82,11 @@ import {
   STATUS_LABELS,
   patientLabel,
 } from '@/components/appointments/appointment-display';
-import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair, FileDown, Siren } from 'lucide-react';
+import { ContingencyAgendaDialog, contingencyCopy } from '@/components/appointments/contingency-agenda-dialog';
+import { WalkInDialog, walkInCopy } from '@/components/appointments/walk-in-dialog';
+import { canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
+import { canDownloadContingencyAgenda } from '@/lib/appointments/contingency-agenda-api';
 import { InClinicPanel, focusLocationSwitcher, inClinicCopy } from '@/components/appointments/in-clinic-panel';
 import {
   dismissReservedToasts,
@@ -186,9 +192,13 @@ const copy = {
   wantsEarlierError: 'No pudimos cambiar «Adelantar si hay hueco».',
   selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
   statusLabel: 'Estado',
+  detailProvider: 'Profesional',
+  detailType: 'Tipo',
+  detailReason: 'Motivo',
   // DX-122: bloqueos de agenda y pendientes por agendar.
   blockSchedule: 'Bloquear horario',
   blockCreated: 'Horario bloqueado.',
+  walkInCreated: (patient: string) => `${patient || 'El paciente'} ya está en «En clínica».`,
   blocksError: 'No pudimos cargar los bloqueos de la agenda.',
   removeBlockTitle: 'Quitar el bloqueo',
   removeBlockDescription: (label: string) =>
@@ -410,6 +420,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [activeLocationId] = useState(getActiveLocationId);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
+  // DX-470: «Atender sin cita».
+  const [showWalkIn, setShowWalkIn] = useState(false);
+  // DX-339: agenda de contingencia en PDF (ADMIN y RECEPTION).
+  const [showContingency, setShowContingency] = useState(false);
   const [removingBlock, setRemovingBlock] = useState<ScheduleBlockLike | null>(null);
   const [removeBlockError, setRemoveBlockError] = useState<string | null>(null);
   const [removingBlockPending, setRemovingBlockPending] = useState(false);
@@ -666,6 +680,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       : activeLocationId === null || b.locationId === null || b.locationId === activeLocationId,
   );
   const staffName = (id: string) => staff.find((s) => s.userId === id)?.fullName;
+
+  function handleWalkInCreated(result: WalkInResult) {
+    const name = [result.patientFirstName, result.patientLastName].filter(Boolean).join(' ');
+    toast.success(copy.walkInCreated(name));
+    void refreshAppointmentsInPlace();
+  }
 
   function handleBlockCreated() {
     setShowBlockDialog(false);
@@ -1121,9 +1141,19 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             {/* En el teléfono «Bloquear horario» baja, como icono con su
                 nombre, a la fila de «En clínica» y «Pendientes»: así «Nueva
                 cita» cabe junto al periodo. */}
+            {canDownloadContingencyAgenda(role) && !phone ? (
+              <Button type="button" variant="secondary" onClick={() => setShowContingency(true)}>
+                <FileDown aria-hidden /> {contingencyCopy.button}
+              </Button>
+            ) : null}
             {canWriteBlocks && !phone ? (
               <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
                 <CalendarOff aria-hidden /> {copy.blockSchedule}
+              </Button>
+            ) : null}
+            {canWalkIn(role) && !phone ? (
+              <Button type="button" variant="secondary" onClick={() => setShowWalkIn(true)}>
+                <Siren aria-hidden /> {walkInCopy.button}
               </Button>
             ) : null}
             <Button type="button" onClick={openNewAppointment}>
@@ -1209,6 +1239,19 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 <ListTodo aria-hidden /> {copy.waitlistButton}
                 {waitlistCount ? <span className={counterClass}>{waitlistCount}</span> : null}
               </Button>
+              {canWalkIn(role) && phone ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="flex-none!"
+                  title={walkInCopy.button}
+                  onClick={() => setShowWalkIn(true)}
+                >
+                  <Siren aria-hidden />
+                  <span className="sr-only">{walkInCopy.button}</span>
+                </Button>
+              ) : null}
               {canWriteBlocks && phone ? (
                 <Button
                   type="button"
@@ -1220,6 +1263,19 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 >
                   <CalendarOff aria-hidden />
                   <span className="sr-only">{copy.blockSchedule}</span>
+                </Button>
+              ) : null}
+              {canDownloadContingencyAgenda(role) && phone ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="flex-none!"
+                  title={contingencyCopy.button}
+                  onClick={() => setShowContingency(true)}
+                >
+                  <FileDown aria-hidden />
+                  <span className="sr-only">{contingencyCopy.button}</span>
                 </Button>
               ) : null}
             </div>
@@ -1319,15 +1375,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             {columnsMode && offToday.length > 0 ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <span className="text-muted">{copy.hiddenProviders(offToday.length)}</span>
-                <label className="inline-flex min-h-11 items-center gap-2 font-medium text-ink sm:min-h-0">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-[var(--color-primary)]"
-                    checked={showAllProviders}
-                    onChange={(e) => setShowAllProviders(e.target.checked)}
-                  />
-                  {copy.showAllProviders}
-                </label>
+                <Checkbox
+                  checked={showAllProviders}
+                  onChange={(e) => setShowAllProviders(e.target.checked)}
+                  label={copy.showAllProviders}
+                />
               </div>
             ) : null}
             {dayLayout === 'list' ? (
@@ -1524,7 +1576,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   {sedeTimeRange(liveDetailAppointment.start, liveDetailAppointment.end, clock.of(liveDetailAppointment.locationId))}
                 </SheetDescription>
               </SheetHeader>
-              <SheetBody className="flex flex-col gap-4">
+              <SheetBody className="flex flex-col gap-4 [&>*]:shrink-0">
                 {/* DX-247: «Requiere premedicación» y las alertas, primero. */}
                 <AppointmentMedicalAlerts flags={liveDetailAppointment.medicalAlerts} />
                 {/* DX-279: inasistencias y cancelaciones tardías del paciente (12 meses). */}
@@ -1535,9 +1587,20 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     {copy.cancelledBy} {cancellationSummary(liveDetailAppointment)}
                   </p>
                 ) : null}
-                {liveDetailAppointment.reason && (
-                  <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
-                )}
+                {/* Quién atiende, qué tipo y para qué: lo que recepción confirma por teléfono. */}
+                <DescriptionList columns={1} layout="inline">
+                  {staffName(liveDetailAppointment.providerId) ? (
+                    <DescriptionItem label={copy.detailProvider}>
+                      {staffName(liveDetailAppointment.providerId)}
+                    </DescriptionItem>
+                  ) : null}
+                  {liveDetailAppointment.appointmentType ? (
+                    <DescriptionItem label={copy.detailType}>{liveDetailAppointment.appointmentType.name}</DescriptionItem>
+                  ) : null}
+                  {liveDetailAppointment.reason ? (
+                    <DescriptionItem label={copy.detailReason}>{liveDetailAppointment.reason}</DescriptionItem>
+                  ) : null}
+                </DescriptionList>
                 <CoverageDetailLine coverage={liveDetailAppointment.coverage} />
                 <FormField htmlFor="detail-status" label={copy.statusLabel}>
                   {/* DX-295: las flechas no cambian la cita; solo Enter o un clic. */}
@@ -1556,27 +1619,16 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 {canChangeWantsEarlier(role) &&
                 (liveDetailAppointment.status === 'SCHEDULED' ||
                   liveDetailAppointment.status === 'CONFIRMED') ? (
-                  <div className="flex items-start gap-3">
-                    <input
-                      id="detail-wants-earlier"
-                      type="checkbox"
-                      checked={liveDetailAppointment.wantsEarlier}
-                      disabled={updatingId === liveDetailAppointment.id}
-                      onChange={(e) =>
-                        void handleWantsEarlierChange(liveDetailAppointment.id, e.target.checked)
-                      }
-                      aria-describedby="detail-wants-earlier-hint"
-                      className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-                    />
-                    <div className="flex flex-col gap-0.5">
-                      <label htmlFor="detail-wants-earlier" className="text-sm font-medium text-ink">
-                        {WANTS_EARLIER_LABEL}
-                      </label>
-                      <p id="detail-wants-earlier-hint" className="text-xs text-muted">
-                        {copy.wantsEarlierHint}
-                      </p>
-                    </div>
-                  </div>
+                  <Checkbox
+                    id="detail-wants-earlier"
+                    checked={liveDetailAppointment.wantsEarlier}
+                    disabled={updatingId === liveDetailAppointment.id}
+                    onChange={(e) =>
+                      void handleWantsEarlierChange(liveDetailAppointment.id, e.target.checked)
+                    }
+                    label={WANTS_EARLIER_LABEL}
+                    description={copy.wantsEarlierHint}
+                  />
                 ) : null}
                 {liveDetailAppointment.status === 'CANCELLED' &&
                 new Date(liveDetailAppointment.end).getTime() > Date.now() &&
@@ -1638,7 +1690,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     inicio). Solo citas aún por atender. */}
                 {liveDetailAppointment.status === 'SCHEDULED' ||
                 liveDetailAppointment.status === 'CONFIRMED' ? (
-                  <div className="border-t border-hairline pt-4">
+                  <div className="border-t border-border-subtle pt-4">
                     <AnamnesisLinkPanel
                       key={`anamnesis-${liveDetailAppointment.id}`}
                       token={token}
@@ -1777,6 +1829,26 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             providerName: staffName(evolutionFor.providerId),
           }}
           onCreated={() => toast.success(copy.evolutionSaved(patientLabel(evolutionFor)))}
+        />
+      ) : null}
+
+      {showContingency ? (
+        <ContingencyAgendaDialog
+          open
+          onOpenChange={setShowContingency}
+          token={token}
+          defaultLocationId={activeLocationId}
+        />
+      ) : null}
+
+      {showWalkIn ? (
+        <WalkInDialog
+          open
+          onOpenChange={setShowWalkIn}
+          token={token}
+          locationId={activeLocationId}
+          defaultProviderId={providerId || null}
+          onCreated={handleWalkInCreated}
         />
       ) : null}
 

@@ -1,5 +1,4 @@
 import { countToday } from './today-section';
-import { gmtOffsetLabel, sedeTimeLabel } from './zone-label';
 import { canSeeBlock } from './inicio-roles';
 import { overdueOf } from './inicio-api';
 import { cashValue, receivablesValue } from './pending-section';
@@ -25,20 +24,6 @@ describe('countToday', () => {
       now,
     );
     expect(counts).toEqual({ total: 6, toConfirm: 1, confirmed: 1, inClinic: 2, completed: 0, noShow: 1, cancelled: 1 });
-  });
-});
-
-describe('zona de la sede', () => {
-  it('GMT con signo menos tipográfico, medias horas y cero', () => {
-    const now = new Date('2026-08-15T12:00:00.000Z');
-    expect(gmtOffsetLabel('America/Caracas', now)).toBe('GMT−4');
-    expect(gmtOffsetLabel('Asia/Kolkata', now)).toBe('GMT+5:30');
-    expect(gmtOffsetLabel('UTC', now)).toBe('GMT');
-    expect(sedeTimeLabel('Sede Norte', 'America/Caracas', now)).toBe('Hora de Sede Norte (GMT−4)');
-  });
-  it('una zona inválida no inventa desfase', () => {
-    expect(gmtOffsetLabel('No/Existe')).toBeNull();
-    expect(sedeTimeLabel('Norte', 'No/Existe')).toBe('Hora de Norte');
   });
 });
 

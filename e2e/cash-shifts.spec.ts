@@ -188,13 +188,15 @@ for (const viewport of [
     await expect(page.getByText('Caja cerrada: el arqueo quedó guardado.')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('No tienes la caja abierta en esta sede.')).toBeVisible();
 
-    const table = page.getByRole('table', { name: 'Turnos de caja' });
-    const row = table.getByRole('row').filter({ hasText: 'Cerrada' }).first();
+    // DataList: tabla desde 640 px; en el teléfono, una tarjeta por turno (toda ella abre el turno).
+    const narrow = viewport.width === 390;
+    const listing = page.getByRole(narrow ? 'list' : 'table', { name: 'Turnos de caja' });
+    const row = listing.getByRole(narrow ? 'listitem' : 'row').filter({ hasText: 'Cerrada' }).first();
     await expect(row).toContainText(figure(-1_000));
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
 
     // Ficha del turno: inmutable (sin «Cerrar caja»), con el informe.
-    await row.getByRole('link', { name: /Ver el turno/ }).click();
+    await row.getByRole('link').first().click();
     await expect(page.getByRole('heading', { name: 'Turno de caja' })).toBeVisible({ timeout: 15_000 });
     const doc = page.getByTestId('cash-session-report');
     await expect(doc).toContainText('Informe de cierre de caja');

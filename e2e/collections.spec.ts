@@ -112,6 +112,20 @@ async function seedDebtor(
   return id;
 }
 
+/** Las acciones de cada deudor van en su «⋯» (DataList, UX v2). */
+async function rowAction(page: Page, name: string, action: string): Promise<void> {
+  await page.getByRole('button', { name: `Acciones de ${name}` }).click();
+  await page.getByRole('menuitem', { name: action }).click();
+}
+
+/** Con uno abierto, el «⋯» no ofrece otro compromiso. */
+async function expectNoNewPromise(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name: `Acciones de ${name}` }).click();
+  await expect(page.getByRole('menuitem', { name: 'Registrar gestión' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Compromiso de pago' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+}
+
 async function openCartera(page: Page): Promise<void> {
   await loginAs(page, origin, reception.email, password);
   await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
@@ -127,7 +141,7 @@ test('recepción registra una gestión y un compromiso desde la Cartera (1440 px
   await expect(row.getByText('Sin gestiones')).toBeVisible();
 
   // «Registrar gestión»: validación en español, aviso de datos clínicos.
-  await row.getByRole('button', { name: `Registrar gestión de cobro con ${fullName}` }).click();
+  await rowAction(page, fullName, 'Registrar gestión');
   const noteDialog = page.getByRole('dialog', { name: 'Registrar gestión' });
   await expect(noteDialog.getByText(/No escribas datos clínicos/)).toBeVisible();
   await noteDialog.getByRole('button', { name: 'Guardar gestión' }).click();
@@ -141,17 +155,18 @@ test('recepción registra una gestión y un compromiso desde la Cartera (1440 px
   await expect(row.getByText('Llamada · Promete pago')).toBeVisible({ timeout: 15_000 });
 
   // «Compromiso de pago».
-  await row.getByRole('button', { name: `Compromiso de pago de ${fullName}` }).click();
+  await rowAction(page, fullName, 'Compromiso de pago');
   const promiseDialog = page.getByRole('dialog', { name: 'Compromiso de pago' });
   await promiseDialog.getByLabel('Importe').fill('200000');
-  await promiseDialog.getByLabel('Pagará hasta el').fill(sedeDayFromToday(7));
+  await fillDate(promiseDialog, 'Pagará hasta el', sedeDayFromToday(7));
   await promiseDialog.getByRole('button', { name: 'Guardar compromiso' }).click();
   await expect(promiseDialog).toBeHidden();
   await expect(row.getByTestId('promise-status').getByText('Abierto')).toBeVisible({ timeout: 15_000 });
   // Con uno abierto, no se ofrece otro.
-  await expect(row.getByRole('button', { name: `Compromiso de pago de ${fullName}` })).toHaveCount(0);
+  await expectNoNewPromise(page, fullName);
 
-  // Filtro «Con compromiso abierto».
+  // Filtro «Con compromiso abierto» (en «Más filtros»).
+  await page.getByRole('button', { name: /^Más filtros/ }).click();
   await page.getByRole('combobox', { name: 'Compromiso' }).selectOption({ label: 'Con compromiso abierto' });
   await expect(page.getByRole('row', { name: new RegExp(fullName) })).toBeVisible();
   await expectNoHorizontalScroll(page);
@@ -162,9 +177,9 @@ test('a 390 px la gestión y el compromiso se registran desde la tarjeta, con lo
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openCartera(page);
-  const card = page.getByRole('article', { name: mobileFullName });
+  const card = page.getByRole('list', { name: 'Deudores' }).getByRole('listitem').filter({ hasText: mobileFullName });
   await expect(card).toBeVisible({ timeout: 15_000 });
-  await card.getByRole('button', { name: `Registrar gestión de cobro con ${mobileFullName}` }).click();
+  await rowAction(page, mobileFullName, 'Registrar gestión');
   const dialog = page.getByRole('dialog', { name: 'Registrar gestión' });
   await expectDialogInsideViewport(page, dialog);
   await expect(dialog.getByText(/No escribas datos clínicos/)).toBeVisible();
@@ -179,17 +194,17 @@ test('a 390 px la gestión y el compromiso se registran desde la tarjeta, con lo
   await expect(dialog).toBeHidden();
   await expect(card.getByText('WhatsApp · No contesta')).toBeVisible({ timeout: 15_000 });
 
-  await card.getByRole('button', { name: `Compromiso de pago de ${mobileFullName}` }).click();
+  await rowAction(page, mobileFullName, 'Compromiso de pago');
   const promiseDialog = page.getByRole('dialog', { name: 'Compromiso de pago' });
   await expectDialogInsideViewport(page, promiseDialog);
   await promiseDialog.getByRole('button', { name: 'Guardar compromiso' }).click();
   await expect(promiseDialog.getByText('Escribe un importe mayor que 0.')).toBeVisible();
   await promiseDialog.getByLabel('Importe').fill('150000');
-  await promiseDialog.getByLabel('Pagará hasta el').fill(sedeDayFromToday(10));
+  await fillDate(promiseDialog, 'Pagará hasta el', sedeDayFromToday(10));
   await promiseDialog.getByRole('button', { name: 'Guardar compromiso' }).click();
   await expect(promiseDialog).toBeHidden();
   await expect(card.getByTestId('promise-status').getByText('Abierto')).toBeVisible({ timeout: 15_000 });
-  await expect(card.getByRole('button', { name: `Compromiso de pago de ${mobileFullName}` })).toHaveCount(0);
+  await expectNoNewPromise(page, mobileFullName);
   await expectNoHorizontalScroll(page);
 });
 
@@ -234,7 +249,9 @@ test('DX-215: anular el abono que cumplió el compromiso lo vuelve a «Abierto»
 
   // Recepción anula su abono de hoy desde el estado de cuenta.
   const panel = page.locator('#tabpanel-account-statement');
-  await panel.getByRole('button', { name: /^Anular abono de .*200\.000/ }).click();
+  // UX v2: «Anular» vive en el «⋯» del movimiento.
+  await panel.getByRole('button', { name: /^Acciones de abono de .*200\.000/ }).click();
+  await page.getByRole('menuitem', { name: 'Anular' }).click();
   const dialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
   await expect(dialog.getByText(/el compromiso vuelve a abierto/)).toBeVisible();
   await dialog.getByLabel('Motivo de la anulación').fill('Cobro duplicado por error');

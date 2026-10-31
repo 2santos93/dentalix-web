@@ -1,15 +1,14 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
-import { getTokenRole } from '@/lib/auth/token-role';
-import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { countryName } from '@/lib/locations/countries';
 import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
 import { canonicalLocale, HOUR_CYCLE_LABELS, isHourCycle } from '@/lib/locations/regional-settings';
+import { localeName, timeZoneLabel } from '@/lib/locations/regional-options';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,12 +19,10 @@ import { DescriptionItem } from '@/components/ui/description-list';
 export const locationsListCopy = {
   // La página ya se titula «Sedes»: la sección no lo repite.
   heading: 'Sedes de la clínica',
-  support: 'País, moneda, zona horaria, formato y reloj de cada sede. Deciden la caja, la agenda y los documentos.',
+  open: (name: string) => `Abrir ${name}`,
   create: 'Nueva sede',
   edit: 'Editar',
   editFor: (name: string) => `Editar ${name}`,
-  calendar: 'Calendario',
-  calendarFor: (name: string) => `Calendario ${name}`,
   review: 'Revisar',
   reviewFor: (name: string) => `Revisar ${name}`,
   pendingReview: 'Por revisar',
@@ -86,8 +83,6 @@ export function LocationsList({
   onInitialEditConsumed,
 }: LocationsListProps) {
   const requestLocations = useSessionLocations(token);
-  // DX-316: el enlace al calendario sigue su propia regla (la de la API), no la de «Editar».
-  const canOpenCalendar = canManageLocationCalendar(getTokenRole(token));
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -151,11 +146,10 @@ export function LocationsList({
   return (
     <section aria-labelledby="locations-heading" className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 id="locations-heading" className="text-lg font-semibold text-ink">
+        <div className="flex flex-col gap-1">
+          <h2 id="locations-heading" className="t-title text-ink">
             {copy.heading}
           </h2>
-          <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
         </div>
         {canEdit ? (
           <Button type="button" onClick={() => openModal('new')} className="w-full sm:w-auto">
@@ -179,60 +173,65 @@ export function LocationsList({
         isEmpty={locations.length === 0}
         emptyTitle={copy.empty}
       >
-        <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border bg-surface">
+        <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
           {locations.map((location) => (
             <li
               key={location.id}
-              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              className="relative flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-canvas sm:flex-row sm:items-center sm:justify-between sm:px-6"
             >
               <div className="flex min-w-0 flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-ink">{location.name}</span>
-                  <Badge variant={location.isActive ? 'secondary' : 'muted'}>
-                    {location.isActive ? copy.active : copy.inactive}
-                  </Badge>
+                  {/* El nombre abre la ficha de la sede; el enlace se estira
+                      sobre la fila (el botón de editar queda por encima). */}
+                  <Link
+                    href={`/settings/sedes/${encodeURIComponent(location.id)}`}
+                    aria-label={copy.open(location.name)}
+                    className="font-medium text-ink after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+                  >
+                    {location.name}
+                  </Link>
+                  {/* Solo la excepción lleva chip: «Activa» en todas no dice nada. */}
+                  {location.isActive ? null : <Badge variant="neutral">{copy.inactive}</Badge>}
                   {isUnconfigured(location) ? <Badge variant="warning">{copy.unconfigured}</Badge> : null}
-                  {needsRegionalReview(location) ? <Badge variant="outline">{copy.pendingReview}</Badge> : null}
+                  {needsRegionalReview(location) ? <Badge variant="warning">{copy.pendingReview}</Badge> : null}
                 </div>
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3 lg:grid-cols-5">
                   <Detail label={copy.country} value={countryName(location.country)} />
                   <Detail label={copy.currency} value={location.currency} usable={locationCurrency(location) !== null} />
-                  <Detail label={copy.timeZone} value={location.timeZone} usable={locationTimeZone(location) !== null} />
-                  <Detail label={copy.locale} value={location.locale} usable={canonicalLocale(location.locale) !== null} />
+                  <Detail
+                    label={copy.timeZone}
+                    value={location.timeZone}
+                    usable={locationTimeZone(location) !== null}
+                    format={timeZoneLabel}
+                  />
+                  <Detail
+                    label={copy.locale}
+                    value={location.locale}
+                    usable={canonicalLocale(location.locale) !== null}
+                    format={(v) => localeName(canonicalLocale(v) ?? v)}
+                  />
                   <Detail
                     label={copy.hourCycle}
                     value={isHourCycle(location.hourCycle) ? HOUR_CYCLE_LABELS[location.hourCycle] : null}
                   />
                 </dl>
               </div>
-              {canEdit || canOpenCalendar ? (
-                <div className="flex shrink-0 gap-2 self-start sm:self-center">
-                  {canOpenCalendar ? (
-                    // DX-316: días hábiles y festivos de esta sede.
-                    <Button asChild variant="ghost" size="sm" className="max-sm:min-h-11">
-                      <Link
-                        href={`/settings/calendario?sede=${encodeURIComponent(location.id)}`}
-                        aria-label={copy.calendarFor(location.name)}
-                      >
-                        {copy.calendar}
-                      </Link>
-                    </Button>
-                  ) : null}
-                  {canEdit ? (
-                    // Aviso D5: guardar el modal, aunque no cambie nada, confirma la sede.
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => openModal(location)}
-                      aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
-                      className="max-sm:min-h-11"
-                    >
-                      {needsRegionalReview(location) ? copy.review : copy.edit}
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
+              <div className="relative z-10 flex shrink-0 items-center gap-2 self-start sm:self-center">
+                {canEdit ? (
+                  // Aviso D5: guardar el modal, aunque no cambie nada, confirma la sede.
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openModal(location)}
+                    aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
+                    className="max-sm:min-h-11"
+                  >
+                    {needsRegionalReview(location) ? copy.review : copy.edit}
+                  </Button>
+                ) : null}
+                <ChevronRight aria-hidden className="hidden size-4 text-muted sm:block" />
+              </div>
             </li>
           ))}
         </ul>
@@ -253,14 +252,25 @@ export function LocationsList({
   );
 }
 
-function Detail({ label, value, usable = true }: { label: string; value: string | null; usable?: boolean }) {
+function Detail({
+  label,
+  value,
+  usable = true,
+  format,
+}: {
+  label: string;
+  value: string | null;
+  usable?: boolean;
+  /** Nombre legible del valor (la zona con su desfase y ciudad, el idioma del formato), no el código. */
+  format?: (value: string) => string;
+}) {
   // Un valor guardado que no se puede usar se enseña tal cual, en tono de aviso.
-  const text = value === null ? copy.missing : usable ? value : copy.unusable(value);
+  const text = value === null ? copy.missing : usable ? (format ? format(value) : value) : copy.unusable(value);
   return (
     <DescriptionItem
       label={label}
       className="gap-0"
-      valueClassName={value !== null && usable ? 'truncate' : 'text-warning-text'}
+      valueClassName={value !== null && usable ? 'break-words' : 'text-warning-text'}
     >
       {text}
     </DescriptionItem>

@@ -43,10 +43,14 @@ test('cambiar la contraseña en /settings/profile cierra las otras sesiones y el
 
     // --- 1. Cambiar la contraseña ---
     await page.goto(`${origin}/settings/profile`);
-    await page.getByLabel('Contraseña actual').fill(OLD_PASSWORD);
-    await page.getByLabel('Nueva contraseña').fill(NEW_PASSWORD);
-    await page.getByLabel('Confirmar contraseña').fill(NEW_PASSWORD);
+    // B6: «Cambiar contraseña» (secundario) abre el diálogo con los tres campos.
     await page.getByRole('button', { name: 'Cambiar contraseña' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Cambiar contraseña' });
+    await dialog.getByLabel('Contraseña actual').fill(OLD_PASSWORD);
+    await dialog.getByLabel('Nueva contraseña').fill(NEW_PASSWORD);
+    await dialog.getByLabel('Confirmar contraseña').fill(NEW_PASSWORD);
+    await dialog.getByRole('button', { name: 'Cambiar contraseña' }).click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
     await expect(page.getByRole('status').filter({ hasText: 'Tu contraseña fue actualizada.' })).toBeVisible({
       timeout: 10_000,
     });

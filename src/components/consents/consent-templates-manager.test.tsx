@@ -106,7 +106,8 @@ describe('ConsentTemplatesManager', () => {
     mockedUpdate.mockRejectedValueOnce(new ApiError(409, 'Ya existe una plantilla de consentimiento con ese título.'));
     render(<ConsentTemplatesManager token="tok" allowed />);
     const table = await screen.findByRole('table');
-    await user.click(within(table).getByRole('button', { name: 'Editar «Exodoncia»' }));
+    await user.click(within(table).getByRole('button', { name: 'Acciones de «Exodoncia»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
     const dialog = await screen.findByRole('dialog', { name: 'Editar plantilla' });
     expect(dialog).toHaveTextContent(/ya firmados no cambian/i);
     await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
@@ -120,11 +121,13 @@ describe('ConsentTemplatesManager', () => {
     render(<ConsentTemplatesManager token="tok" allowed />);
 
     const table = await screen.findByRole('table');
-    await user.click(within(table).getByRole('button', { name: 'Desactivar «Exodoncia»' }));
+    await user.click(within(table).getByRole('button', { name: 'Acciones de «Exodoncia»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Desactivar' }));
     expect(mockedUpdate).toHaveBeenCalledWith('tok', 'tpl-1', { active: false });
     await waitFor(() => expect(within(table).getByText('Inactiva')).toBeInTheDocument());
 
-    await user.click(within(table).getByRole('button', { name: 'Activar «Exodoncia»' }));
+    await user.click(within(table).getByRole('button', { name: 'Acciones de «Exodoncia»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Activar' }));
     await waitFor(() =>
       expect(notifyError).toHaveBeenCalledWith(
         expect.stringContaining('Exodoncia'),

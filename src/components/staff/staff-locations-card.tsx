@@ -10,10 +10,12 @@ import {
 } from '@/lib/staff/staff-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Callout } from '@/components/ui/callout';
+import { SectionHeader } from '@/components/ui/section-header';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
-import { cn } from '@/lib/utils';
+import { DATA_SECTION_CLASS } from '@/components/patients/data-section';
 
 const copy = {
   title: 'Sedes',
@@ -34,8 +36,6 @@ const copy = {
   noneSelected: 'Elige al menos una sede o marca «Todas las sedes».',
 };
 
-const checkboxClass = 'size-5 shrink-0 accent-[var(--color-primary)]';
-
 interface StaffLocationsCardProps {
   token: string;
   userId: string;
@@ -43,7 +43,8 @@ interface StaffLocationsCardProps {
 }
 
 /**
- * Tarjeta «Sedes» de la ficha del miembro (DX-089, solo ADMIN): en qué sedes
+ * Sección «Sedes» de la ficha del miembro (plana, como las demás secciones
+ * del perfil; conserva el nombre por compatibilidad) (DX-089, solo ADMIN): en qué sedes
  * trabaja. «Todas las sedes» es el valor por defecto y la API lo guarda como
  * lista vacía; al desmarcarla se eligen las sedes una a una. Envío explícito,
  * como el resto de la ficha. El cambio llega al miembro al renovar su sesión.
@@ -51,10 +52,9 @@ interface StaffLocationsCardProps {
 export function StaffLocationsCard({ token, userId, memberRole }: StaffLocationsCardProps) {
   if (memberRole === 'ADMIN') {
     return (
-      <Card className="flex flex-col gap-3 p-5">
-        <h3 className="text-base font-semibold text-ink">{copy.title}</h3>
-        <p className="text-sm text-muted">{copy.adminOnly}</p>
-      </Card>
+      <section aria-labelledby="staff-locations-title" className={DATA_SECTION_CLASS}>
+        <SectionHeader titleId="staff-locations-title" title={copy.title} description={copy.adminOnly} />
+      </section>
     );
   }
   return <EditableStaffLocations token={token} userId={userId} />;
@@ -143,9 +143,8 @@ function EditableStaffLocations({ token, userId }: { token: string; userId: stri
   }
 
   return (
-    <Card className="flex flex-col gap-3 p-5">
-      <h3 className="text-base font-semibold text-ink">{copy.title}</h3>
-      <p className="text-sm text-muted">{copy.hint}</p>
+    <section aria-labelledby="staff-locations-title" className={DATA_SECTION_CLASS}>
+      <SectionHeader titleId="staff-locations-title" title={copy.title} description={copy.hint} />
       <AsyncSection
         loading={loading}
         error={loadError}
@@ -157,67 +156,42 @@ function EditableStaffLocations({ token, userId }: { token: string; userId: stri
         }
       >
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="staff-locations-all"
-              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm font-medium text-ink"
-            >
-              <input
-                id="staff-locations-all"
-                type="checkbox"
-                checked={all}
-                aria-describedby="staff-locations-all-hint"
-                onChange={(e) => {
-                  setSaveError(null);
-                  setAll(e.target.checked);
-                }}
-                className={checkboxClass}
-              />
-              {copy.all}
-            </label>
-            <p id="staff-locations-all-hint" className="text-xs text-muted">
-              {copy.allHint}
-            </p>
-          </div>
+          <Checkbox
+            id="staff-locations-all"
+            checked={all}
+            label={<span className="font-medium">{copy.all}</span>}
+            description={copy.allHint}
+            onChange={(e) => {
+              setSaveError(null);
+              setAll(e.target.checked);
+            }}
+          />
 
-          {noActiveAssigned && <p className="text-sm text-warning-text">{copy.noActiveAssigned}</p>}
+          {noActiveAssigned && <Callout tone="warning">{copy.noActiveAssigned}</Callout>}
 
-          <fieldset disabled={all} className="flex min-w-0 flex-col gap-1.5">
+          <fieldset disabled={all} className="flex min-w-0 flex-col gap-1">
             <legend className="t-label mb-1 text-muted">{copy.legend}</legend>
-            <div className="rounded-lg border border-border">
-              {shown.map((l) => {
-                const id = `staff-locations-${l.id}`;
-                const checked = selected.includes(l.id);
-                return (
-                  <label
-                    key={l.id}
-                    htmlFor={id}
-                    className={cn(
-                      'flex min-h-11 items-center gap-3 border-b border-hairline px-3 py-2 text-sm text-ink last:border-0',
-                      all ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-surface-2',
-                    )}
-                  >
-                    <input
-                      id={id}
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggle(l.id)}
-                      className={checkboxClass}
-                    />
-                    <span>{l.name}</span>
-                  </label>
-                );
-              })}
+            <div className="flex flex-col divide-y divide-border-subtle">
+              {shown.map((l) => (
+                <Checkbox
+                  key={l.id}
+                  id={`staff-locations-${l.id}`}
+                  checked={selected.includes(l.id)}
+                  disabled={all}
+                  label={l.name}
+                  onChange={() => toggle(l.id)}
+                />
+              ))}
             </div>
           </fieldset>
 
           {saveError && <InlineError variant="summary">{saveError}</InlineError>}
 
-          <Button type="submit" loading={saving} disabled={isUnchanged} className="self-start">
+          <Button type="submit" loading={saving} disabled={isUnchanged} className="self-start max-sm:w-full">
             {copy.save}
           </Button>
         </form>
       </AsyncSection>
-    </Card>
+    </section>
   );
 }

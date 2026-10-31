@@ -185,7 +185,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
           className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
         >
           <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
+            <tr className="border-b border-border bg-surface-sunken text-left">
               <th scope="col" className="px-4 py-3 font-medium text-muted">
                 {copy.colDate}
               </th>
@@ -211,7 +211,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
           </thead>
           <tbody>
             {exams.map((exam) => (
-              <tr key={exam.id} className="border-b border-hairline last:border-0">
+              <tr key={exam.id} className="border-b border-border-subtle last:border-0">
                 <td className="px-4 py-3 tabular-nums">{formatCivilDate(exam.examDate)}</td>
                 <td className="px-4 py-3">{exam.providerName}</td>
                 <td className="px-4 py-3">{statusBadge(exam)}</td>

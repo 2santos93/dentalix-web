@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageDocumentTypeNames } from '@/lib/patients/document-type-names-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { DocumentTypeNamesSettingsSection } from '@/components/patients/document-type-names-settings';
 
 const copy = {
@@ -35,12 +34,11 @@ export default function DocumentTypeNamesSettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
       <DocumentTypeNamesSettingsSection
         token={accessToken}
         allowed={canManageDocumentTypeNames(getTokenRole(accessToken))}
       />
-    </>
+    </SettingsPage>
   );
 }

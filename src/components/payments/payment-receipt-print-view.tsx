@@ -97,7 +97,7 @@ export function PaymentReceiptPrintView({
   return (
     <div
       data-format={format}
-      className="receipt-print-page flex min-h-full flex-1 flex-col bg-surface-2 print:bg-white"
+      className="receipt-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:bg-white"
     >
       {receipt ? <title>{copy.documentTitle(receipt.reference)}</title> : null}
       <div
@@ -112,15 +112,16 @@ export function PaymentReceiptPrintView({
           </Link>
         </Button>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <nav aria-label={copy.formats} className="flex gap-1 rounded-md border border-border p-1">
+          <nav aria-label={copy.formats} className="flex gap-1 rounded-lg bg-surface-sunken p-1">
             {(['a4', '80mm'] as const).map((f) => (
               <Link
                 key={f}
                 href={receiptPrintHref(paymentId, f)}
                 aria-current={f === format ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-9 flex-1 items-center justify-center whitespace-nowrap rounded-sm px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                  f === format ? 'bg-primary/10 text-primary' : 'text-muted hover:bg-surface-2',
+                  'flex min-h-9 flex-1 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text pointer-coarse:min-h-11',
+                  // Formato elegido = superficie + tinta, como `SegmentedControl` (nunca el acento).
+                  f === format ? 'bg-surface text-ink shadow-[0_1px_2px_rgb(15_23_42/0.06)]' : 'text-muted hover:text-ink',
                 )}
               >
                 {f === 'a4' ? copy.a4 : copy.roll}
@@ -138,7 +139,7 @@ export function PaymentReceiptPrintView({
         {receipt ? (
           <div
             className={cn(
-              'mx-auto shadow-sm print:shadow-none',
+              'mx-auto sm:border sm:border-border print:border-0',
               format === '80mm' ? 'max-w-[80mm]' : 'max-w-[210mm]',
             )}
           >

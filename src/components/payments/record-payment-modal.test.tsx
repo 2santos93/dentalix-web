@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RecordPaymentModal, recordPaymentCopy } from './record-payment-modal';
 import { ApiError, NetworkError } from '@/lib/api/client';
@@ -12,6 +12,20 @@ import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-pl
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { getExchangeRates } from '@/lib/exchange/exchange-api';
+
+
+/** El día ISO del `DatePicker` «Fecha de pago» (su `<input type="hidden">`). */
+function paymentDate(dialog: HTMLElement): string {
+  return dialog.querySelector<HTMLInputElement>('input[name="rp-date"]')?.value ?? '';
+}
+
+/** Escribe un día en el `DatePicker` por segmentos (dd/mm/aaaa, locale de la sede). */
+async function typePaymentDate(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement, iso: string) {
+  const [y, m, d] = iso.split('-');
+  const [day] = within(within(dialog).getByRole('group', { name: 'Fecha de pago' })).getAllByRole('spinbutton');
+  await user.click(day);
+  await user.keyboard(`${d}${m}${y}`);
+}
 
 jest.mock('../../lib/payments/payments-api', () => ({
   recordPayment: jest.fn(),
@@ -84,6 +98,7 @@ function usdBalance(overrides: Partial<PlanBalance> = {}): PlanBalance {
     allocated: 0,
     unallocated: 0,
     unconvertedPaymentsCount: 0,
+    rateProviderTimedOut: false,
     manualPaymentIds: [],
     items: [],
     ...overrides,
@@ -210,7 +225,7 @@ it('propone el primer plan, su moneda y la fecha de hoy, y enseña su saldo', as
     ]),
   );
   expect(within(dialog).getByLabelText('Moneda')).toHaveValue('COP');
-  expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toMatch(
+  expect(paymentDate(dialog)).toMatch(
     /^\d{4}-\d{2}-\d{2}$/,
   );
   // DX-386: con el formato de la sede y el código ISO, nunca «US$».
@@ -250,7 +265,7 @@ describe('fecha por defecto en la zona de la sede (DX-097)', () => {
     const dialog = screen.getByRole('dialog');
     await within(dialog).findByLabelText('Plan');
     await waitFor(() =>
-      expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toBe('2026-10-15'),
+      expect(paymentDate(dialog)).toBe('2026-10-15'),
     );
   });
 
@@ -265,7 +280,7 @@ describe('fecha por defecto en la zona de la sede (DX-097)', () => {
     const dialog = screen.getByRole('dialog');
     await within(dialog).findByLabelText('Plan');
     await waitFor(() =>
-      expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toBe('2026-10-16'),
+      expect(paymentDate(dialog)).toBe('2026-10-16'),
     );
   });
 });
@@ -283,7 +298,7 @@ it('consumers render SedeConfigError without a zone', async () => {
   mockedLocations.mockResolvedValue([clinicLocation({ timeZone: 'Asia/Tokyo' })]);
   await userEvent.setup().click(within(dialog).getByRole('button', { name: 'Reintentar' }));
   await waitFor(() =>
-    expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toMatch(/^\d{4}-\d{2}-\d{2}$/),
+    expect(paymentDate(dialog)).toMatch(/^\d{4}-\d{2}-\d{2}$/),
   );
 });
 
@@ -321,8 +336,7 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
 
   await user.type(within(dialog).getByLabelText('Importe'), '150000');
   await user.selectOptions(within(dialog).getByLabelText('Método'), 'Transferencia');
-  await user.clear(within(dialog).getByLabelText('Fecha de pago'));
-  await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
+  await typePaymentDate(user, dialog, '2026-10-01');
   await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
 
   await waitFor(() =>
@@ -565,8 +579,7 @@ it('el aviso dice lo que la API registró, no lo que quedó en el formulario (re
   const dialog = screen.getByRole('dialog');
   const plan = await within(dialog).findByLabelText('Plan');
   await user.type(within(dialog).getByLabelText('Importe'), '1000');
-  await user.clear(within(dialog).getByLabelText('Fecha de pago'));
-  await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
+  await typePaymentDate(user, dialog, '2026-10-01');
   const submit = within(dialog).getByRole('button', {
     name: 'Registrar abono',
   });
@@ -658,7 +671,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.type(within(dialog).getByLabelText('Importe'), '1825');
 
     await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
-    const date = (within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value;
+    const date = paymentDate(dialog);
     expect(mockedRates).toHaveBeenCalledWith('tok', date);
     const [y, m, d] = date.split('-');
     const text = money(preview(dialog).textContent);
@@ -669,8 +682,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
   it('cambiar la fecha pide la tasa de ese día', async () => {
     const { user, dialog } = await openUsdPlan();
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
-    await user.clear(within(dialog).getByLabelText('Fecha de pago'));
-    await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
+    await typePaymentDate(user, dialog, '2026-10-01');
     await waitFor(() => expect(mockedRates).toHaveBeenLastCalledWith('tok', '2026-10-01'));
   });
 
@@ -701,8 +713,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
 
     mockedRates.mockRejectedValueOnce(new Error('red'));
-    await user.clear(within(dialog).getByLabelText('Fecha de pago'));
-    await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
+    await typePaymentDate(user, dialog, '2026-10-01');
     await within(dialog).findByRole('button', { name: recordPaymentCopy.preview.retry });
     await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
@@ -722,7 +733,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await user.type(within(dialog).getByLabelText('Importe'), '1825');
 
-    const date = (within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value;
+    const date = paymentDate(dialog);
     const [y, m, d] = date.split('-');
     await waitFor(() =>
       expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.unavailable(`${d}/${m}/${y}`)),
@@ -759,7 +770,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await user.type(within(dialog).getByLabelText('Importe'), '1825');
     await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD50,00 USD'));
-    const date = (within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value;
+    const date = paymentDate(dialog);
     const [y, m, d] = date.split('-');
     expect(money(preview(dialog).textContent)).toContain(`Tasa: 1 USD = 36,50 VES · automática · ${d}.${m}.${y}`);
     expect(preview(dialog)).not.toHaveTextContent('US$');
@@ -843,11 +854,9 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await waitFor(() => expect(mockedRates).toHaveBeenCalled());
     mockedRates.mockClear();
-    const date = within(dialog).getByLabelText('Fecha de pago');
-    // Lo que emite un <input type="date"> mientras se teclea el año.
-    for (const value of ['0002-10-01', '0020-10-01', '0202-10-01', '2026-10-01']) {
-      fireEvent.change(date, { target: { value } });
-    }
+    // Teclear por segmentos emite los años intermedios (0002, 0020, 0202…)
+    // mientras se escribe el año.
+    await typePaymentDate(user, dialog, '2026-10-01');
     await waitFor(() => expect(mockedRates).toHaveBeenCalledWith('tok', '2026-10-01'));
     expect(mockedRates).toHaveBeenCalledTimes(1);
   });

@@ -35,7 +35,10 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
+import { FormField } from '@/components/shared/form-field';
+import { Card } from '@/components/ui/card';
 import { HowCalculated } from './how-calculated';
+import { RankedBars } from './ranked-bars';
 import { ProductionItemsDialog } from './production-items-dialog';
 import { cn } from '@/lib/utils';
 
@@ -84,6 +87,10 @@ export const productionCopy = {
   undatedNote: (count: number, amounts: string) =>
     `Además hay ${count} ${count === 1 ? 'procedimiento realizado' : 'procedimientos realizados'} sin fecha («Sin atribuir»: ${amounts}). No son de ningún período, así que no entran en la tabla; se atribuyen desde el plan del paciente.`,
   noValue: '—',
+  chartTitle: 'Neto por categoría',
+  chartCaption: (currency: string, others: boolean) =>
+    others ? `En ${currency}; las demás monedas, en la tabla.` : `En ${currency}.`,
+  uncategorized: 'Sin categoría',
   loadError: 'No pudimos cargar la producción por procedimiento.',
   badRequest: 'El período no es válido: «Desde» no puede ser posterior a «Hasta» y caben como mucho 24 meses.',
   forbiddenTitle: 'Tu rol no tiene acceso a la producción.',
@@ -96,10 +103,10 @@ export const productionCopy = {
 function ProductionSkeleton() {
   return (
     <div role="status" aria-label={productionCopy.loading} className="overflow-hidden rounded-xl border border-border">
-      <div className="border-b border-border bg-surface-2 px-4 py-3">
+      <div className="border-b border-border bg-surface-sunken px-4 py-3">
         <Skeleton className="h-3 w-40" />
       </div>
-      <div className="divide-y divide-hairline">
+      <div className="divide-y divide-border-subtle">
         {Array.from({ length: 4 }, (_, i) => (
           <div key={i} className="grid grid-cols-4 gap-4 px-4 py-4 sm:grid-cols-9">
             {Array.from({ length: 9 }, (_, j) => (
@@ -178,11 +185,11 @@ function LineRow({
         // Una celda fija a la izquierda (como la primera columna) y el resto
         // vacío con el mismo fondo: con colSpan sobre todo el ancho, el nombre
         // se iba con el scroll lateral a 390 px.
-        <tr className="bg-bg">
-          <th scope="colgroup" className={cn(firstCol, 'whitespace-nowrap bg-bg t-label pt-4 text-ink')}>
+        <tr className="bg-canvas">
+          <th scope="colgroup" className={cn(firstCol, 'whitespace-nowrap bg-canvas t-label pt-4 text-ink')}>
             {line.category}
           </th>
-          <td colSpan={8} aria-hidden="true" className="bg-bg" />
+          <td colSpan={8} aria-hidden="true" className="bg-canvas" />
         </tr>
       );
     case 'procedure': {
@@ -190,7 +197,7 @@ function LineRow({
       return (
         <tr
           data-testid="production-row"
-          className="h-11 cursor-pointer text-ink hover:bg-surface-2"
+          className="h-11 cursor-pointer text-ink hover:bg-surface-sunken"
           onClick={() => onOpen(row)}
         >
           <th scope="row" className={cn(firstCol, 'bg-surface font-normal')}>
@@ -224,8 +231,8 @@ function LineRow({
     }
     case 'subtotal':
       return (
-        <tr data-testid="production-subtotal" className="h-11 bg-bg text-ink">
-          <th scope="row" className={cn(firstCol, 'bg-bg font-medium')}>
+        <tr data-testid="production-subtotal" className="h-11 bg-canvas text-ink">
+          <th scope="row" className={cn(firstCol, 'bg-canvas font-medium')}>
             {productionCopy.subtotal(line.category)}
           </th>
           <td className="px-3 py-2">{line.currency}</td>
@@ -236,8 +243,8 @@ function LineRow({
       );
     case 'total':
       return (
-        <tr data-testid="production-total" className="h-11 border-t border-border bg-surface-2 font-semibold text-ink">
-          <th scope="row" className={cn(firstCol, 'bg-surface-2')}>
+        <tr data-testid="production-total" className="h-11 border-t border-border bg-surface-sunken font-semibold text-ink">
+          <th scope="row" className={cn(firstCol, 'bg-surface-sunken')}>
             {productionCopy.total}
           </th>
           <td className="px-3 py-2">{line.currency}</td>
@@ -312,7 +319,7 @@ function ProductionTable({
           <tr>
             <th
               scope="col"
-              className="t-label sticky left-0 top-0 z-[3] border-b border-border bg-surface-2 px-3 py-2 text-left align-bottom text-ink"
+              className="t-label sticky left-0 top-0 z-[3] border-b border-border bg-surface-sunken px-3 py-2 text-left align-bottom text-ink"
             >
               {c.procedure}
             </th>
@@ -321,7 +328,7 @@ function ProductionTable({
                 key={h.label}
                 scope="col"
                 className={cn(
-                  't-label sticky top-0 z-[2] border-b border-border bg-surface-2 px-3 py-2 align-bottom text-ink',
+                  't-label sticky top-0 z-[2] border-b border-border bg-surface-sunken px-3 py-2 align-bottom text-ink',
                   h.align === 'right' ? 'text-right' : 'text-left',
                 )}
               >
@@ -333,13 +340,43 @@ function ProductionTable({
             ))}
           </tr>
         </thead>
-        <tbody className="[&_td]:border-b [&_td]:border-hairline [&_th]:border-b [&_th]:border-hairline">
+        <tbody className="[&_td]:border-b [&_td]:border-border-subtle [&_th]:border-b [&_th]:border-border-subtle">
           {lines.map((line) => (
             <LineRow key={line.key} line={line} fmt={fmt} onOpen={onOpen} />
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Neto por categoría en la moneda principal (la primera del total): qué
+ * categorías sostienen la producción, de un vistazo y antes del detalle. Solo
+ * con dos categorías o más (una barra sola no es un gráfico).
+ */
+function CategoryChart({ data, fmt }: { data: ProductionByProcedure; fmt: RegionalFormat }) {
+  const currency = data.totals[0]?.currency;
+  if (!currency) return null;
+  const bars = data.categoryTotals
+    .filter((c) => c.currency === currency)
+    .map((c) => ({
+      key: c.category ?? '',
+      name: c.category ?? productionCopy.uncategorized,
+      value: c.net,
+      display: moneyWithCode(c.net, currency, fmt),
+    }));
+  if (bars.length < 2 || bars.every((b) => b.value <= 0)) return null;
+  const others = data.totals.some((t) => t.currency !== currency);
+  return (
+    <Card className="p-4 sm:p-6">
+      <RankedBars
+        title={productionCopy.chartTitle}
+        caption={productionCopy.chartCaption(currency, others)}
+        bars={bars}
+        className="max-w-3xl"
+      />
+    </Card>
   );
 }
 
@@ -459,24 +496,22 @@ export function ProductionByProcedureView({ token }: { token: string }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <p className="inline-flex max-w-[68ch] items-center gap-2 self-start rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-ink">
+      <p className="t-caption inline-flex items-center gap-1.5 text-muted">
         {own ? (
-          <UserRound aria-hidden className="size-4 shrink-0 text-muted/80" />
+          <UserRound aria-hidden className="size-4 shrink-0" />
         ) : (
-          <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
+          <Building2 aria-hidden className="size-4 shrink-0" />
         )}
         <span>{own ? productionCopy.scopeOwn : productionCopy.scopeClinic}</span>
       </p>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-4">
         <div className="grid min-w-0 grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
-          <label className="col-span-2 flex min-w-0 flex-col gap-1 text-sm text-muted sm:col-span-1">
-            {productionCopy.period}
+          <FormField htmlFor={`${periodErrorId}-period`} label={productionCopy.period} className="col-span-2 sm:col-span-1 sm:w-44">
             <NativeSelect
-              aria-label={productionCopy.period}
+              id={`${periodErrorId}-period`}
               value={preset}
               onChange={(e) => choosePreset(e.target.value as PeriodPresetKey)}
-              className="sm:w-44"
             >
               {PERIOD_PRESETS.map((p) => (
                 <option key={p.key} value={p.key}>
@@ -484,14 +519,16 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                 </option>
               ))}
             </NativeSelect>
-          </label>
+          </FormField>
           {preset === 'custom' && period ? (
             <>
               {/* Dos días sueltos (no un periodo en un campo): cada extremo tiene su
                   propio límite y su nombre («Desde», «Hasta»), como antes. Un
                   extremo a medio escribir no cambia el periodo. */}
-              <div className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-                <span id={`${periodErrorId}-from`}>{productionCopy.from}</span>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <span id={`${periodErrorId}-from`} className="text-sm font-medium text-ink">
+                  {productionCopy.from}
+                </span>
                 <DatePicker
                   aria-labelledby={`${periodErrorId}-from`}
                   value={period.from}
@@ -504,8 +541,10 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                   aria-describedby={invalidPeriod ? periodErrorId : undefined}
                 />
               </div>
-              <div className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-                <span id={`${periodErrorId}-to`}>{productionCopy.to}</span>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <span id={`${periodErrorId}-to`} className="text-sm font-medium text-ink">
+                  {productionCopy.to}
+                </span>
                 <DatePicker
                   aria-labelledby={`${periodErrorId}-to`}
                   value={period.to}
@@ -520,14 +559,12 @@ export function ProductionByProcedureView({ token }: { token: string }) {
               </div>
             </>
           ) : null}
-          <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-            {productionCopy.location}
+          <FormField htmlFor={`${periodErrorId}-location`} label={productionCopy.location} className="min-w-0 sm:w-48">
             <NativeSelect
-              aria-label={productionCopy.location}
+              id={`${periodErrorId}-location`}
               value={locationId}
               onChange={(e) => setLocationId(e.target.value)}
               disabled={!options}
-              className="sm:w-48"
             >
               <option value="">{productionCopy.locationAll}</option>
               {options?.locations.map((l) => (
@@ -536,16 +573,14 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                 </option>
               ))}
             </NativeSelect>
-          </label>
+          </FormField>
           {own ? null : (
-            <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-              {productionCopy.professional}
+            <FormField htmlFor={`${periodErrorId}-professional`} label={productionCopy.professional} className="min-w-0 sm:w-48">
               <NativeSelect
-                aria-label={productionCopy.professional}
+                id={`${periodErrorId}-professional`}
                 value={professionalId}
                 onChange={(e) => setProfessionalId(e.target.value)}
                 disabled={!options}
-                className="sm:w-48"
               >
                 <option value="">{productionCopy.professionalAll}</option>
                 {options?.professionals.map((p) => (
@@ -554,16 +589,14 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                   </option>
                 ))}
               </NativeSelect>
-            </label>
+            </FormField>
           )}
-          <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-            {productionCopy.category}
+          <FormField htmlFor={`${periodErrorId}-category`} label={productionCopy.category} className="min-w-0 sm:w-44">
             <NativeSelect
-              aria-label={productionCopy.category}
+              id={`${periodErrorId}-category`}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               disabled={!options}
-              className="sm:w-44"
             >
               <option value="">{productionCopy.categoryAll}</option>
               {options?.categories.map((name) => (
@@ -572,10 +605,11 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                 </option>
               ))}
             </NativeSelect>
-          </label>
+          </FormField>
         </div>
         <Button
           type="button"
+          variant="secondary"
           onClick={() => void exportCsv()}
           disabled={exporting || showLoading || invalidPeriod || Boolean(loadError)}
           className="shrink-0 self-start lg:self-auto"
@@ -634,6 +668,7 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                   </p>
                 </Callout>
               ) : null}
+              <CategoryChart data={data} fmt={fmt} />
               <ProductionTable lines={lines} fmt={fmt} onOpen={setOpenRow} />
               {filters ? (
                 <ProductionItemsDialog

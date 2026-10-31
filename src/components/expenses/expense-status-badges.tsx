@@ -3,15 +3,22 @@ import { Badge } from '@/components/ui/badge';
 import type { Expense } from '@/lib/expenses/expenses-api';
 import {
   EXPENSE_OVERDUE_LABEL,
-  isExpenseOverdue
+  EXPENSE_STATUS_LABELS,
+  isExpenseOverdue,
 } from '@/lib/expenses/presentation';
 
-/** El estado del gasto y, si está por pagar y vencido, «Vencido» al lado. */
+/**
+ * El estado del gasto. Uno por pagar y vencido es UN chip compuesto en peligro
+ * («Parcial · vencido»): dos chips sueltos partían la columna en dos líneas y
+ * el vencimiento es lo urgente, así que manda el tono.
+ */
 export function ExpenseStatusBadges({ expense }: { expense: Pick<Expense, 'status' | 'overdue'> }) {
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      <StatusBadge kind="expense" status={expense.status} />
-      {isExpenseOverdue(expense) ? <Badge variant="danger">{EXPENSE_OVERDUE_LABEL}</Badge> : null}
-    </span>
-  );
+  if (isExpenseOverdue(expense)) {
+    return (
+      <Badge variant="danger" dot data-status={expense.status} data-overdue="true">
+        {`${EXPENSE_STATUS_LABELS[expense.status]} · ${EXPENSE_OVERDUE_LABEL.toLowerCase()}`}
+      </Badge>
+    );
+  }
+  return <StatusBadge kind="expense" status={expense.status} />;
 }

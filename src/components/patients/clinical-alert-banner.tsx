@@ -107,7 +107,7 @@ export function ClinicalAlertBanner({ token, patientId, hideNoHistory = false }:
       <div
         role="status"
         aria-live="polite"
-        className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 p-3 text-sm text-ink"
+        className="flex items-center gap-2 rounded-lg border border-border bg-surface-sunken p-3 text-sm text-ink"
       >
         <CloudOff aria-hidden="true" className="size-4 shrink-0 text-muted" />
         <span className="flex-1">{copy.unknown}</span>

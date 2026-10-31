@@ -126,8 +126,15 @@ describe('PatientConsentsTab', () => {
     expect(remoteRow).toHaveTextContent('Falta firma del profesional');
     expect(remoteRow).toHaveTextContent('A distancia');
     expect(onScreenRow).toHaveTextContent('Completo');
-    expect(within(onScreenRow).queryByRole('button', { name: /firmar como profesional/i })).not.toBeInTheDocument();
-    await user.click(within(remoteRow).getByRole('button', { name: /firmar como profesional/i }));
+    // Lo que falta de MI firma se anuncia arriba, con su botón…
+    expect(screen.getByText('Falta tu firma como profesional')).toBeInTheDocument();
+    // …y está en el «⋯» de su fila; la fila completa no lo ofrece.
+    await user.click(within(onScreenRow).getByRole('button', { name: /^Acciones de/ }));
+    expect(await screen.findByRole('menuitem', { name: /ver e imprimir/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /firmar como profesional/i })).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(within(remoteRow).getByRole('button', { name: /^Acciones de/ }));
+    await user.click(await screen.findByRole('menuitem', { name: /firmar como profesional/i }));
     expect(await screen.findByRole('dialog', { name: 'Firmar como profesional' })).toBeInTheDocument();
   });
 
@@ -136,6 +143,16 @@ describe('PatientConsentsTab', () => {
     render(<PatientConsentsTab token="tok" patientId="p1" role="ADMIN" userId="u-admin" />);
     const table = await screen.findByRole('table', { name: 'Consentimientos firmados' });
     expect(within(table).queryByRole('button', { name: /firmar como profesional/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Falta tu firma como profesional')).not.toBeInTheDocument();
+  });
+
+  it('DX-243: el aviso «Falta tu firma» abre la firma del profesional', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([remoteConsent]);
+    render(<PatientConsentsTab token="tok" patientId="p1" {...CLINICAL} />);
+    await screen.findByRole('table', { name: 'Consentimientos firmados' });
+    await user.click(screen.getByRole('button', { name: /firmar como profesional/i }));
+    expect(await screen.findByRole('dialog', { name: 'Firmar como profesional' })).toBeInTheDocument();
   });
 
   it('DX-243: recepción ve solo la firma a distancia (no pide los documentos firmados)', async () => {

@@ -135,7 +135,7 @@ test('autorización de datos: publicar política → alta con casillas → ficha
   await page.getByRole('checkbox', { name: /datos personales/i }).check();
   await page.getByRole('checkbox', { name: /datos sensibles de salud/i }).check();
   await page.getByRole('checkbox', { name: /comunicaciones comerciales/i }).check();
-  await page.getByRole('button', { name: /guardar/i }).click();
+  await page.getByRole('button', { name: 'Crear paciente' }).click();
   await page.waitForURL(/\/patients\/[0-9a-f-]{36}$/);
 
   // --- 3. Pestaña «Autorizaciones» y revocación de MARKETING ---

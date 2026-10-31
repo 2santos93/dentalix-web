@@ -1,5 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { clearSegments, dateGroup, typeDate, typeTime } from './date-segments-for-tests';
 import { ScheduleBlockDialog } from './schedule-block-dialog';
 import { ApiError } from '@/lib/api/client';
 import {
@@ -10,6 +11,11 @@ import {
 import { clinicLocation } from '@/lib/test/locations';
 import { testAgendaClock } from '@/lib/test/sede-clock';
 import { listAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+
+// Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
+// pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
+// (mismo arreglo que perio-exam-editor). No cambia ninguna aserción.
+configure({ asyncUtilTimeout: 5_000 });
 
 /** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
 const CLOCK = testAgendaClock();
@@ -90,8 +96,7 @@ describe('ScheduleBlockDialog (DX-122)', () => {
 
   it('bloquea las vacaciones de un profesional en días completos, en todas las sedes', async () => {
     const onCreated = renderDialog();
-    await userEvent.clear(screen.getByLabelText('Hasta (incluido)'));
-    await userEvent.type(screen.getByLabelText('Hasta (incluido)'), '2031-03-07');
+    await typeDate(userEvent, 'Hasta (incluido)', '2031-03-07');
     await userEvent.type(screen.getByLabelText('Nota (opcional)'), 'Congreso');
     await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
 
@@ -176,14 +181,12 @@ describe('ScheduleBlockDialog (DX-122)', () => {
   it('valida el rango sin llamar a la API y enseña el error del servidor', async () => {
     renderDialog();
     await userEvent.click(screen.getByLabelText('Días completos'));
-    await userEvent.clear(screen.getByLabelText('Hora de fin'));
-    await userEvent.type(screen.getByLabelText('Hora de fin'), '12:00');
+    await typeTime(userEvent, 'Hora de fin', '12:00');
     await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
     expect(await screen.findByText(/posterior al inicio/)).toBeInTheDocument();
     expect(mockedAffected).not.toHaveBeenCalled();
 
-    await userEvent.clear(screen.getByLabelText('Hora de fin'));
-    await userEvent.type(screen.getByLabelText('Hora de fin'), '15:00');
+    await typeTime(userEvent, 'Hora de fin', '15:00');
     mockedCreate.mockRejectedValue(
       new ApiError(403, 'x', { messages: ['Solo puedes bloquear o cambiar tu propia agenda.'] }),
     );
@@ -203,10 +206,10 @@ describe('ScheduleBlockDialog (DX-122)', () => {
 
   it('sin validación nativa del navegador: fechas vacías dan el mensaje propio', async () => {
     renderDialog();
-    await userEvent.clear(screen.getByLabelText('Desde'));
+    await clearSegments(userEvent, 'Desde');
     await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
     expect(await screen.findByText('Completa el profesional o la sede, y las fechas.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Desde')).not.toBeRequired();
+    expect(within(dateGroup('Desde')).getAllByRole('spinbutton')[0]).not.toHaveAttribute('aria-required', 'true');
   });
 
   it('miembro acotado a sedes: sin «Todas las sedes» y el bloqueo de profesional lleva sede (DX-089)', async () => {

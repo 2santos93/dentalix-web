@@ -140,7 +140,8 @@ describe('NoteTemplatesManager (DX-170)', () => {
     mockedUpdate.mockResolvedValue(resinTemplate);
     const user = userEvent.setup();
     renderManager();
-    await user.click((await screen.findAllByRole('button', { name: 'Editar «Resina»' }))[0]);
+    // La fila entera abre la edición (su botón es el nombre de la plantilla).
+    await user.click(await screen.findByRole('button', { name: 'Resina' }));
     const dialog = await screen.findByRole('dialog', { name: /editar plantilla de evolución/i });
     const p2 = within(dialog).getByRole('listitem', { name: 'Pregunta 2' });
     const options = within(p2).getByLabelText('Opciones');
@@ -184,12 +185,15 @@ describe('NoteTemplatesManager (DX-170)', () => {
     const user = userEvent.setup();
     renderManager();
     const table = await screen.findByRole('table', { name: /plantillas de evolución/i });
-    await user.click(within(table).getByRole('button', { name: 'Desactivar «Resina»' }));
+    // Editar / Desactivar viven en el «⋯» de la fila.
+    await user.click(within(table).getByRole('button', { name: 'Acciones de Resina' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Desactivar' }));
     await waitFor(() =>
       expect(mockedUpdate).toHaveBeenCalledWith('tok', 'tpl-resina', { active: false }),
     );
     expect(await within(table).findByText('Desactivada')).toBeInTheDocument();
-    expect(within(table).getByRole('button', { name: 'Activar «Resina»' })).toBeInTheDocument();
+    await user.click(within(table).getByRole('button', { name: 'Acciones de Resina' }));
+    expect(await screen.findByRole('menuitem', { name: 'Activar' })).toBeInTheDocument();
   });
 
   it('sin permiso (no ADMIN) no pide nada y lo explica', () => {

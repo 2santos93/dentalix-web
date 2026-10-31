@@ -130,7 +130,8 @@ test('ADMIN crea «Sura EPS» en Ajustes y la ve activa; a 390 px sin scroll hor
   const table = page.getByRole('table', { name: 'Pagadores' });
   const row = table.getByRole('row', { name: new RegExp(payerName) });
   await expect(row).toContainText('Sistema público de salud');
-  await expect(row.getByRole('cell').nth(2)).toHaveText('Activo');
+  // Activo: sin marca (solo los inactivos la llevan).
+  await expect(row).not.toContainText('Inactivo');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByText(payerName).locator('visible=true').first()).toBeVisible();
@@ -181,7 +182,7 @@ test('an admin creates one payer of each type and none asks for a country', asyn
 
     const row = table.getByRole('row', { name: new RegExp(payer.name) });
     await expect(row.getByRole('cell').nth(1)).toHaveText(payer.label);
-    await expect(row.getByRole('cell').nth(2)).toHaveText('Activo');
+    await expect(row).not.toContainText('Inactivo');
   }
   await expect(table.getByRole('columnheader', { name: 'País' })).toHaveCount(0);
   await shot(page, 'payers-list');
@@ -208,7 +209,7 @@ test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cab
   await dialog.getByLabel('Pagador').selectOption({ label: payerOption });
   await dialog.getByLabel('Plan').fill('Plan Complementario');
   await dialog.getByLabel('Nº de afiliado o póliza').fill('987654');
-  await dialog.getByLabel('Vigente hasta').fill(twoDaysAgo);
+  await fillDate(dialog, 'Vigente hasta', twoDaysAgo);
   await shot(page, 'coverage-dialog');
   await dialog.getByRole('button', { name: 'Añadir', exact: true }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
@@ -231,7 +232,7 @@ test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cab
   await row.getByRole('button', { name: `Acciones de la cobertura de ${payerName}` }).click();
   await page.getByRole('menuitem', { name: 'Editar' }).click();
   const edit = page.getByRole('dialog', { name: 'Editar cobertura' });
-  await edit.getByLabel('Vigente hasta').fill(tomorrow);
+  await fillDate(edit, 'Vigente hasta', tomorrow);
   await edit.getByRole('button', { name: 'Guardar' }).click();
   await expect(edit).toBeHidden({ timeout: 10_000 });
 

@@ -159,14 +159,14 @@ function ReceiptBody({
         <PaymentReceiptDocument receipt={receipt} />
       </div>
       <DialogFooter className="print:hidden">
-        <Button type="button" variant="outline" onClick={onClose}>
+        <Button type="button" variant="ghost" onClick={onClose}>
           {copy.close}
         </Button>
-        <Button type="button" variant="outline" onClick={() => void send()} disabled={sending}>
+        <Button type="button" variant="secondary" onClick={() => void send()} disabled={sending}>
           <Mail aria-hidden />
           {sending ? copy.sending : copy.send}
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="secondary">
           <Link href={receiptPrintHref(paymentId, '80mm')} target="_blank" rel="noopener">
             <Printer aria-hidden />
             {copy.printRoll}

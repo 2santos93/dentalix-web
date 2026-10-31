@@ -48,6 +48,30 @@ describe('DocumentTypeNamesSettingsSection (DX-327)', () => {
     });
   });
 
+  it('without changes there is no Guardar; «Descartar» undoes the edits without saving', async () => {
+    const user = userEvent.setup();
+    render(<DocumentTypeNamesSettingsSection token="tok" allowed />);
+    const passport = await screen.findByLabelText(DOC_TYPE_LABEL.PASSPORT);
+    expect(screen.queryByRole('button', { name: 'Guardar' })).not.toBeInTheDocument();
+    await user.type(passport, 'Doc');
+    expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Descartar' }));
+    expect(passport).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Guardar' })).not.toBeInTheDocument();
+    expect(mockedSave).not.toHaveBeenCalled();
+  });
+
+  it('after saving, the bar goes away and focus lands on «Nombres guardados.», not on <body>', async () => {
+    const user = userEvent.setup();
+    mockedSave.mockResolvedValue({ ...NONE, PASSPORT: 'Doc' });
+    render(<DocumentTypeNamesSettingsSection token="tok" allowed />);
+    await user.type(await screen.findByLabelText(DOC_TYPE_LABEL.PASSPORT), 'Doc');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    const notice = await screen.findByText('Nombres guardados.');
+    await waitFor(() => expect(notice).toHaveFocus());
+    expect(screen.queryByRole('button', { name: 'Guardar' })).not.toBeInTheDocument();
+  });
+
   it('saves the five names trimmed, sending null for empty ones', async () => {
     const user = userEvent.setup();
     mockedGet.mockResolvedValue({ ...NONE, OTHER: 'Carné' });

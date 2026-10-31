@@ -84,7 +84,7 @@ export function PublicReminderOptOutView({ optOutToken }: { optOutToken: string 
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
@@ -124,7 +124,7 @@ export function PublicReminderOptOutView({ optOutToken }: { optOutToken: string 
             ) : (
               <section aria-labelledby="opt-out-question" className="flex flex-col gap-5">
                 <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-4">
-                  <p id="opt-out-question" className="text-base font-semibold text-ink">
+                  <p id="opt-out-question" className="t-title text-ink">
                     {copy.question(state.data.patientFirstName)}
                   </p>
                   <p className="text-sm text-muted">{copy.explanation}</p>

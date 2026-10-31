@@ -27,26 +27,31 @@ async function renderLoaded(settings: PrescriptionSettings = API_SETTINGS) {
   mockedGet.mockResolvedValue(settings);
   const user = userEvent.setup();
   render(<PrescriptionSettingsForm token="tok" />);
-  await screen.findByRole('switch', { name: 'Cantidad en letras' });
+  await screen.findByRole('checkbox', { name: 'Cantidad en letras' });
   return user;
 }
 
 const save = () => screen.getByRole('button', { name: 'Guardar' });
+/** Sin cambios no hay barra: ni «Guardar» ni «Descartar» (nunca un Guardar deshabilitado a la vista). */
+const noSaveBar = () => {
+  expect(screen.queryByRole('button', { name: 'Guardar' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Descartar' })).not.toBeInTheDocument();
+};
 const validity = () => screen.getByRole('textbox', { name: 'Validez (días)' });
 
 describe('PrescriptionSettingsForm (DX-324)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('shows the two switches and the validity with the API values', async () => {
+  it('shows the two checkboxes and the validity with the API values', async () => {
     await renderLoaded();
     expect(mockedGet).toHaveBeenCalledWith('tok');
-    const words = screen.getByRole('switch', { name: 'Cantidad en letras' });
-    expect(words).toHaveAttribute('aria-checked', 'true');
+    const words = screen.getByRole('checkbox', { name: 'Cantidad en letras' });
+    expect(words).toBeChecked();
     expect(words).toHaveAccessibleDescription(
       'Cada medicamento lleva también la cantidad escrita, p. ej. «21 (veintiuno) cápsulas».',
     );
-    const record = screen.getByRole('switch', { name: 'Exigir el nº de historia clínica' });
-    expect(record).toHaveAttribute('aria-checked', 'false');
+    const record = screen.getByRole('checkbox', { name: 'Exigir el nº de historia clínica' });
+    expect(record).not.toBeChecked();
     expect(record).toHaveAccessibleDescription(
       'No se emite la receta si el paciente no tiene documento registrado; la receta lo imprime como nº de historia clínica.',
     );
@@ -55,27 +60,42 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     expect(validity()).toHaveAccessibleDescription('Desde la fecha de inicio. Una clínica nueva empieza con 30 días.');
   });
 
-  it('save is disabled until something changes', async () => {
+  it('the save bar appears only when something changes', async () => {
     const user = await renderLoaded();
-    expect(save()).toBeDisabled();
-    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
+    noSaveBar();
+    expect(screen.queryByText('Cambios sin guardar')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
     expect(save()).toBeEnabled();
+    expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument();
     // Volver al valor de la API lo deja otra vez sin cambios.
-    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
-    expect(save()).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
+    noSaveBar();
     await user.clear(validity());
     await user.type(validity(), '30');
-    expect(save()).toBeDisabled();
+    noSaveBar();
     await user.type(validity(), '1');
     expect(save()).toBeEnabled();
+    expect(mockedSave).not.toHaveBeenCalled();
+  });
+
+  it('«Descartar» returns to the API values without saving', async () => {
+    const user = await renderLoaded();
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
+    await user.clear(validity());
+    await user.type(validity(), '45');
+    await user.click(screen.getByRole('button', { name: 'Descartar' }));
+    expect(screen.getByRole('checkbox', { name: 'Cantidad en letras' })).toBeChecked();
+    expect(validity()).toHaveValue('30');
+    noSaveBar();
+    expect(mockedSave).not.toHaveBeenCalled();
   });
 
   it('saves exactly { printQuantityInWords, requireClinicalRecordNumber, validityDays } and announces «Ajustes de la receta guardados.»', async () => {
     const user = await renderLoaded();
     const saved = { printQuantityInWords: false, requireClinicalRecordNumber: true, validityDays: 10 };
     mockedSave.mockResolvedValue(saved);
-    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
-    await user.click(screen.getByRole('switch', { name: 'Exigir el nº de historia clínica' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Exigir el nº de historia clínica' }));
     await user.clear(validity());
     await user.type(validity(), '10');
     await user.click(save());
@@ -86,34 +106,34 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
       'validityDays',
     ]);
     expect(await screen.findByRole('status')).toHaveTextContent('Ajustes de la receta guardados.');
-    // Lo guardado es la nueva base: sin cambios otra vez.
-    expect(save()).toBeDisabled();
+    // Lo guardado es la nueva base: sin cambios otra vez, sin barra.
+    noSaveBar();
     expect(validity()).toHaveValue('10');
   });
 
-  it('after a save, focus goes to the saved notice, not to <body> (Guardar is disabled)', async () => {
+  it('after a save, focus goes to the saved notice, not to <body> (the bar is gone)', async () => {
     const user = await renderLoaded();
     mockedSave.mockImplementation(async (_t, s) => s);
-    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
     await user.click(save());
     const notice = await screen.findByText('Ajustes de la receta guardados.');
     await waitFor(() => expect(notice).toHaveFocus());
     expect(notice).toHaveAttribute('role', 'status');
     expect(notice).toHaveAttribute('tabindex', '-1');
-    expect(save()).toBeDisabled();
+    noSaveBar();
     expect(document.body).not.toHaveFocus();
   });
 
   it.each([
-    ['the words switch', (user: ReturnType<typeof userEvent.setup>) =>
-      user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }))],
-    ['the record switch', (user: ReturnType<typeof userEvent.setup>) =>
-      user.click(screen.getByRole('switch', { name: 'Exigir el nº de historia clínica' }))],
+    ['the words checkbox', (user: ReturnType<typeof userEvent.setup>) =>
+      user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }))],
+    ['the record checkbox', (user: ReturnType<typeof userEvent.setup>) =>
+      user.click(screen.getByRole('checkbox', { name: 'Exigir el nº de historia clínica' }))],
     ['the validity', (user: ReturnType<typeof userEvent.setup>) => user.type(validity(), '0')],
   ])('editing %s again clears the saved notice', async (_name, edit) => {
     const user = await renderLoaded();
     mockedSave.mockImplementation(async (_t, s) => s);
-    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
     await user.click(save());
     expect(await screen.findByText('Ajustes de la receta guardados.')).toBeInTheDocument();
     await edit(user);
@@ -156,7 +176,7 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
   it('a 400 from the API shows its message in an InlineError', async () => {
     const user = await renderLoaded();
     mockedSave.mockRejectedValueOnce(new ApiError(400, PRESCRIPTION_VALIDITY_DAYS_MESSAGE));
-    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
     await user.click(save());
     expect(await screen.findByRole('alert')).toHaveTextContent(PRESCRIPTION_VALIDITY_DAYS_MESSAGE);
   });
@@ -165,7 +185,7 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     const user = await renderLoaded();
     const msg = 'Indica sí o no en «cantidad en letras».';
     mockedSave.mockRejectedValueOnce(new ApiError(400, 'Bad Request', { messages: [msg] }));
-    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
     await user.click(save());
     expect(await screen.findByRole('alert')).toHaveTextContent(msg);
   });
@@ -174,7 +194,7 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     const user = await renderLoaded();
     const msg = 'Solo un administrador puede cambiar los ajustes de la receta.';
     mockedSave.mockRejectedValueOnce(new ApiError(403, msg));
-    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
     await user.click(save());
     expect(await screen.findByRole('alert')).toHaveTextContent(msg);
   });
@@ -182,7 +202,7 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
   it('a 5xx on save shows the screen message, never the server text', async () => {
     const user = await renderLoaded();
     mockedSave.mockRejectedValueOnce(new ApiError(500, 'Internal server error'));
-    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
     await user.click(save());
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'No pudimos guardar los ajustes de la receta. Intenta de nuevo.',
@@ -195,9 +215,9 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     const user = userEvent.setup();
     render(<PrescriptionSettingsForm token="tok" />);
     expect(await screen.findByText('No pudimos cargar los ajustes de la receta.')).toBeInTheDocument();
-    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
-    expect(await screen.findByRole('switch', { name: 'Cantidad en letras' })).toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: 'Cantidad en letras' })).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledTimes(2);
   });
 
@@ -207,9 +227,12 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     expect(await screen.findByText('No pudimos cargar los ajustes de la receta.')).toBeInTheDocument();
   });
 
-  it('exactly one primary button', async () => {
-    await renderLoaded();
-    expect(screen.getAllByRole('button')).toHaveLength(1);
+  it('no buttons at rest; with changes, «Descartar» and one primary «Guardar» that submits the form', async () => {
+    const user = await renderLoaded();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Descartar', 'Guardar']);
     expect(save()).toHaveAttribute('type', 'submit');
+    expect(save()).toHaveAttribute('form', save().closest('form')!.id);
   });
 });

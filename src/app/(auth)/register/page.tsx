@@ -1,43 +1,39 @@
 import Link from 'next/link';
-import { headers } from 'next/headers';
 import { RegisterForm } from '@/components/auth/register-form';
-import { SplitAuthLayout } from '@/components/layouts/split-auth-layout';
-import { randomHeroImage } from '@/lib/auth/hero-images';
-import { fetchBranding } from '@/lib/branding';
-import { parseTenantFromHost } from '@/lib/tenant';
+import { AuthLayout } from '@/components/auth/auth-layout';
+import { authContext } from '@/components/auth/auth-clinic';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  defaultTitle: 'Dentalix',
-  subtitle: 'Crea tu cuenta',
+  task: 'Crea tu clínica',
   loginPrompt: '¿Ya tienes cuenta?',
   loginLink: 'Inicia sesión',
-  heroCaption: 'Gestiona tu clínica con confianza',
+  caption: 'Gestiona tu clínica con confianza',
 };
 
+/**
+ * Registro: crea una clínica NUEVA, así que nunca se titula con la del host
+ * (`clinic={null}`); el host solo propone el subdominio.
+ */
 export default async function RegisterPage() {
-  const h = await headers();
-  const tenant = h.get('x-tenant') ?? parseTenantFromHost(h.get('host'));
-  const branding = await fetchBranding(tenant);
-  const heroImage = randomHeroImage();
+  const { tenant } = await authContext();
 
   return (
-    <SplitAuthLayout
-      title={branding.name ?? copy.defaultTitle}
-      subtitle={copy.subtitle}
-      heroImage={heroImage}
-      heroCaption={copy.heroCaption}
+    <AuthLayout
+      clinic={null}
+      task={copy.task}
+      caption={copy.caption}
       footer={
         <>
           {copy.loginPrompt}{' '}
-          <Link href="/login" className="font-medium text-primary hover:underline">
+          <Link href="/login" className="font-medium text-primary-text hover:underline">
             {copy.loginLink}
           </Link>
         </>
       }
     >
       <RegisterForm tenant={tenant} />
-    </SplitAuthLayout>
+    </AuthLayout>
   );
 }

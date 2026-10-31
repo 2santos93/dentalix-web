@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useId, useState } from 'react';
-import { ClipboardClock, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getAnamnesisSettings,
@@ -12,6 +12,8 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
+import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import {
   Dialog,
   DialogClose,
@@ -24,11 +26,13 @@ import {
 
 /** Opciones del selector; la API acepta cualquier número de 1 a 60. */
 const MONTH_OPTIONS = [3, 6, 12, 18, 24, 36, 48, 60];
+/** Lo que trae una clínica nueva (la API). */
+const DEFAULT_MONTHS = 12;
 
 const copy = {
   title: 'Vigencia de la anamnesis',
   hint:
-    'Pasado este plazo desde la última anamnesis o la última confirmación «Sin cambios hoy», la agenda y la ficha la marcan como «Anamnesis caducada». La AAOM recomienda revisarla al menos una vez al año.',
+    'Pasado este plazo desde la última anamnesis o la última confirmación «Sin cambios hoy», la agenda y la ficha la marcan como «Anamnesis caducada». Se recomienda revisarla al menos una vez al año.',
   months: (n: number) => (n === 1 ? '1 mes' : `${n} meses`),
   change: 'Cambiar',
   dialogTitle: 'Cambiar la vigencia de la anamnesis',
@@ -43,13 +47,10 @@ const copy = {
   forbiddenHint: 'El equipo clínico ve en la agenda y en la ficha si la anamnesis está caducada.',
 };
 
-// 44 px bajo `sm` (DESIGN.md, objetivo táctil de móvil).
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-11';
 
 /**
- * Ajustes → Historia clínica (DX-247): cuántos meses vale la anamnesis en la
- * clínica (12 por defecto). Solo ADMIN la cambia, en un modal.
+ * Ajustes → Historia clínica (DX-247): cuántos meses es válida la anamnesis en
+ * la clínica (12 por defecto). Solo ADMIN la cambia, en un modal.
  */
 export function AnamnesisSettingsSection({ token, allowed }: { token: string; allowed: boolean }) {
   const [settings, setSettings] = useState<AnamnesisSettings | null>(null);
@@ -95,7 +96,7 @@ export function AnamnesisSettingsSection({ token, allowed }: { token: string; al
   }
   if (!settings) {
     return (
-      <div role="status" aria-label="Cargando" className="max-w-2xl rounded-xl border border-border bg-surface p-6">
+      <div role="status" aria-label="Cargando" className="rounded-xl border border-border bg-surface p-6">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="mt-4 h-4 w-72" />
       </div>
@@ -122,32 +123,32 @@ export function AnamnesisSettingsSection({ token, allowed }: { token: string; al
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-3">
-      <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-        <div className="flex min-w-0 items-start gap-3">
-          <ClipboardClock aria-hidden className="mt-0.5 size-5 shrink-0 text-muted" />
-          <div className="min-w-0">
-            <p className="font-medium text-ink">{copy.title}</p>
-            <p data-testid="anamnesis-validity" className="t-data text-ink tabular-nums">
-              {copy.months(settings.anamnesisValidityMonths)}
-            </p>
-            <p className="mt-1 text-sm text-muted">{copy.hint}</p>
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          className="shrink-0 max-sm:min-h-11 max-sm:w-full"
-          onClick={() => {
-            setDraft(settings.anamnesisValidityMonths);
-            setSaveError(null);
-            setNotice('');
-            setOpen(true);
-          }}
-        >
-          {copy.change}
-        </Button>
-      </div>
+    <div className="flex flex-col gap-3">
+      {/* Fila de política (plantilla de Ajustes): etiqueta y ayuda a la
+          izquierda; el valor en tipo dato y «Cambiar» (diálogo) a la derecha. */}
+      <SettingRows>
+        <SettingRow
+          label={copy.title}
+          description={copy.hint}
+          isDefault={settings.anamnesisValidityMonths === DEFAULT_MONTHS}
+          value={<span data-testid="anamnesis-validity">{copy.months(settings.anamnesisValidityMonths)}</span>}
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              className="max-sm:min-h-11"
+              onClick={() => {
+                setDraft(settings.anamnesisValidityMonths);
+                setSaveError(null);
+                setNotice('');
+                setOpen(true);
+              }}
+            >
+              {copy.change}
+            </Button>
+          }
+        />
+      </SettingRows>
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
@@ -162,9 +163,8 @@ export function AnamnesisSettingsSection({ token, allowed }: { token: string; al
               <label htmlFor={fieldId} className="text-sm font-medium text-ink">
                 {copy.fieldLabel}
               </label>
-              <select
+              <NativeSelect
                 id={fieldId}
-                className={fieldClass}
                 value={draft}
                 onChange={(e) => setDraft(Number(e.target.value))}
                 disabled={saving}
@@ -174,7 +174,7 @@ export function AnamnesisSettingsSection({ token, allowed }: { token: string; al
                     {copy.months(m)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             {saveError ? <InlineError variant="summary">{saveError}</InlineError> : null}
             <DialogFooter>

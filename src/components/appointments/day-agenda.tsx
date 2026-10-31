@@ -105,7 +105,7 @@ function DetailButton({
       type="button"
       aria-label={copy.detailLabel(timeRange)}
       onClick={() => onSelect(appointment)}
-      className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+      className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text focus-visible:ring-offset-1"
     >
       {copy.detail}
       <ChevronRight aria-hidden className="size-3.5" />
@@ -129,7 +129,7 @@ interface StatusSelectProps {
  * Interactive status control for one appointment row — a single colored pill
  * that both SHOWS the current status (tinted with the same semantic token as
  * `StatusBadge`) and lets the user CHANGE it. DX-295: `AppointmentStatusSelect`
- * (no un `<select>` nativo), así que las flechas no cambian la cita: solo se
+ * (no un select nativo), así que las flechas no cambian la cita: solo se
  * aplica con Enter o con un clic/toque en una opción. Rendered once per row
  * per responsive variant when `onStatusChange` is passed to `DayAgenda`.
  */
@@ -230,22 +230,22 @@ export function DayAgenda({
         <table aria-label={copy.heading} className="w-full border-collapse text-sm text-ink">
           <caption className="sr-only">{copy.heading}</caption>
           <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+            <tr className="border-b border-border bg-surface-sunken text-left">
+              <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                 {copy.colTime}
               </th>
-              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+              <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                 {copy.colPatient}
               </th>
               {providerName && (
-                <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+                <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                   {copy.colProvider}
                 </th>
               )}
-              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+              <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                 {copy.colReason}
               </th>
-              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+              <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                 {copy.colStatus}
               </th>
               {onSelectAppointment && (
@@ -262,7 +262,7 @@ export function DayAgenda({
               return (
                 <tr
                   key={appointment.id}
-                  className="border-b border-hairline transition-colors last:border-0 hover:bg-surface-2"
+                  className="border-b border-border-subtle transition-colors last:border-0 hover:bg-surface-sunken"
                 >
                   <td className="whitespace-nowrap px-4 py-3 font-medium tabular-nums text-ink">
                     <time dateTime={appointment.start}>{timeRange}</time>

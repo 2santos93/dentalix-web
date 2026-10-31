@@ -1,8 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Building2, Download, Lock } from 'lucide-react';
+import { Download, Lock } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -25,23 +24,25 @@ import {
 import { DISCOUNT_REASON_LABELS, type DiscountReasonCode } from '@/lib/discounts/discount-rules';
 import { saveCsv } from '@/lib/files/save-csv';
 import { notifyError } from '@/components/errors/notify';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DateRangePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
+import { FormField } from '@/components/shared/form-field';
+import { ScopeMarker } from '@/components/receivables/scope-marker';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageHeader } from '@/components/shared/page-header';
 import { Pagination } from '@/components/shared/pagination';
-import { ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
+import { ResultCount } from '@/components/shared/list-toolbar';
 import { cn } from '@/lib/utils';
 
 export const discountReportCopy = {
   title: 'Descuentos',
-  description:
-    'Lo que se descontó en los planes de tratamiento: cuánto, sobre qué bruto, por qué y quién lo dio. Las rebajas por convenio van aparte, con quién asignó el convenio y quién creó el ítem. Por moneda y sin convertir.',
-  scopeAll: 'Toda la clínica',
-  scopeLocation: (name: string) => `Descuentos dados en ${name}`,
+  // Una línea de apoyo (crítica ops §6): el detalle de convenios está en cada fila.
+  description: 'Descuentos y convenios aplicados en los planes, con su motivo y quién los dio. Por moneda, sin convertir.',
+  periodLabel: 'Periodo',
   fromLabel: 'Desde',
   toLabel: 'Hasta',
   professionalLabel: 'Quién lo dio',
@@ -64,8 +65,7 @@ export const discountReportCopy = {
   agreementAssignedBy: (name: string) => `Convenio asignado por ${name}`,
   itemCreatedBy: (name: string) => `Ítem creado por ${name}`,
   items: (n: number) => (n === 1 ? '1 ítem' : `${n} ítems`),
-  tableLabel: 'Descuentos del periodo, del más reciente al más antiguo',
-  listLabel: 'Descuentos',
+  listLabel: 'Descuentos del periodo',
   colDate: 'Fecha',
   colPatient: 'Paciente',
   colPlan: 'Plan · ítem',
@@ -85,7 +85,6 @@ export const discountReportCopy = {
   forbiddenHint: 'El informe es para la administración de la clínica.',
   empty: 'No hubo descuentos en este periodo',
   emptyHint: 'Prueba con otras fechas, otra sede u otro miembro del equipo.',
-  statement: (name: string) => `Abrir la ficha de ${name}`,
 };
 
 /** SEC-047: línea que solo tiene rebaja de convenio (sin descuento propio). */
@@ -108,9 +107,10 @@ function patientHref(item: DiscountReportItem): string {
 }
 
 /**
- * Totales por moneda como registro con filete (no tarjetas de métrica). Los de
- * DX-204 solo cuentan descuentos; las rebajas de convenio van en sus filas
- * (SEC-047).
+ * Totales por moneda como registro con filete (no tarjetas de métrica). La
+ * moneda y el número de ítems son el ENCABEZADO de la fila, no una métrica más
+ * (crítica ops §6); las tres cifras van a la derecha. Los de DX-204 solo
+ * cuentan descuentos; las rebajas de convenio van en su propia fila (SEC-047).
  */
 function DiscountSummary({
   totals,
@@ -125,56 +125,68 @@ function DiscountSummary({
   if (totals.length === 0 && agreementTotals.length === 0) return null;
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
-      <h2 id={headingId} className="t-title border-b border-hairline px-4 py-3 text-ink sm:px-6">
+      <h2 id={headingId} className="t-title border-b border-border-subtle px-4 py-3 text-ink sm:px-6">
         {discountReportCopy.summaryTitle}
       </h2>
-      <div className="divide-y divide-hairline">
+      <div className="divide-y divide-border-subtle">
         {totals.map((total) => (
-          <dl
+          <SummaryRow
             key={total.currency}
-            data-testid={`discount-total-${total.currency}`}
-            className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 sm:px-6"
-          >
-            <div className="min-w-0">
-              <dt className="t-label text-muted">{total.currency}</dt>
-              <dd className="tabular-nums text-ink">{discountReportCopy.items(total.items)}</dd>
-            </div>
-            <div className="min-w-0">
-              <dt className="t-label text-muted">{discountReportCopy.totalDiscount}</dt>
-              <dd className="truncate font-medium tabular-nums text-ink">
-                {moneyWithCode(total.discount, total.currency, fmt)}
-              </dd>
-            </div>
-            <div className="min-w-0">
-              <dt className="t-label text-muted">{discountReportCopy.gross}</dt>
-              <dd className="truncate tabular-nums text-ink">{moneyWithCode(total.gross, total.currency, fmt)}</dd>
-            </div>
-            <div className="min-w-0">
-              <dt className="t-label text-muted">{discountReportCopy.percentOfGross}</dt>
-              <dd className="font-medium tabular-nums text-ink">{fmt.percent(total.percentOfGross, 2)}</dd>
-            </div>
-          </dl>
+            testId={`discount-total-${total.currency}`}
+            heading={`${total.currency} · ${discountReportCopy.items(total.items)}`}
+            metrics={[
+              { label: discountReportCopy.totalDiscount, value: moneyWithCode(total.discount, total.currency, fmt), strong: true },
+              { label: discountReportCopy.gross, value: moneyWithCode(total.gross, total.currency, fmt) },
+              { label: discountReportCopy.percentOfGross, value: fmt.percent(total.percentOfGross, 2), strong: true },
+            ]}
+          />
         ))}
         {agreementTotals.map((total) => (
-          <dl
+          <SummaryRow
             key={`agreement-${total.currency}`}
-            data-testid={`agreement-total-${total.currency}`}
-            className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 sm:px-6"
-          >
-            <div className="min-w-0">
-              <dt className="t-label text-muted">{total.currency}</dt>
-              <dd className="tabular-nums text-ink">{discountReportCopy.agreementItems(total.items)}</dd>
-            </div>
-            <div className="min-w-0">
-              <dt className="t-label text-muted">{discountReportCopy.agreementReduction}</dt>
-              <dd className="truncate font-medium tabular-nums text-ink">
-                {moneyWithCode(total.reduction, total.currency, fmt)}
-              </dd>
-            </div>
-          </dl>
+            testId={`agreement-total-${total.currency}`}
+            heading={`${total.currency} · ${discountReportCopy.agreementItems(total.items)}`}
+            metrics={[
+              {
+                label: discountReportCopy.agreementReduction,
+                value: moneyWithCode(total.reduction, total.currency, fmt),
+                strong: true,
+              },
+            ]}
+          />
         ))}
       </div>
     </section>
+  );
+}
+
+function SummaryRow({
+  testId,
+  heading,
+  metrics,
+}: {
+  testId: string;
+  heading: string;
+  metrics: { label: string; value: string; strong?: boolean }[];
+}) {
+  const labelId = React.useId();
+  return (
+    <div
+      data-testid={testId}
+      className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:px-6"
+    >
+      <p id={labelId} className="text-sm font-medium tabular-nums text-ink">
+        {heading}
+      </p>
+      <dl aria-labelledby={labelId} className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 sm:flex sm:gap-8">
+        {metrics.map((m) => (
+          <div key={m.label} className="contents sm:flex sm:min-w-0 sm:flex-col sm:items-end">
+            <dt className="t-label text-muted">{m.label}</dt>
+            <dd className={cn('text-right tabular-nums text-ink', m.strong && 'font-medium')}>{m.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -182,20 +194,11 @@ function DiscountSummary({
  * Importe descontado (SEC-041: rebaja de precio frente al catálogo + descuento)
  * y su % sobre el precio de referencia (el de catálogo si se rebajó). SEC-047:
  * la rebaja de convenio va en su propia línea; un ítem que solo tiene esa
- * rebaja no pinta un «−0» de descuento. En la tarjeta móvil la frase del
- * convenio va fuera de la cabecera (`withAgreement` a false), en su propio
- * párrafo que parte líneas: dentro de un bloque que no se encoge desbordaba
- * 390 px (QA D1).
+ * rebaja no pinta un «−0» de descuento. En la tarjeta del teléfono solo va
+ * el importe; la frase del convenio pasa a la línea 2, que parte líneas
+ * (dentro de un bloque que no se encoge desbordaba 390 px, QA D1).
  */
-function AmountCell({
-  item,
-  fmt,
-  withAgreement = true,
-}: {
-  item: DiscountReportItem;
-  fmt: RegionalFormat;
-  withAgreement?: boolean;
-}) {
+function AmountCell({ item, fmt }: { item: DiscountReportItem; fmt: RegionalFormat }) {
   const agreement = item.agreementReduction > 0;
   return (
     <>
@@ -217,7 +220,7 @@ function AmountCell({
           {discountReportCopy.priceReduced(moneyWithCode(item.price, item.currency, fmt))}
         </span>
       ) : null}
-      {agreement && withAgreement ? (
+      {agreement ? (
         <span className="block text-xs tabular-nums text-ink">{agreementLine(item, fmt)}</span>
       ) : null}
     </>
@@ -246,21 +249,25 @@ function AgreementAuthors({ item, className }: { item: DiscountReportItem; class
 }
 
 function ReasonCell({ item }: { item: DiscountReportItem }) {
+  // «Sin motivo» es justo lo que una auditoría de descuentos busca: se marca.
+  const missing = !item.reason && !agreementOnly(item);
   return (
-    <>
-      <span className={cn('block', item.reason || agreementOnly(item) ? 'text-ink' : 'text-muted')}>
-        {reasonLabel(item)}
-      </span>
+    <span className="block">
+      {missing ? (
+        <Badge variant="warning">{discountReportCopy.noReason}</Badge>
+      ) : (
+        <span className="block text-ink">{reasonLabel(item)}</span>
+      )}
       {item.reasonNote ? <span className="block break-words text-xs text-muted">{item.reasonNote}</span> : null}
-    </>
+    </span>
   );
 }
 
 /**
  * Informe «Descuentos» (DX-204, solo ADMIN): por periodo, sede (la activa del
  * selector de sede, como la cartera) y quién lo dio. Totales por moneda con el
- * % sobre el bruto y el detalle ítem a ítem; exportable a CSV. En escritorio
- * es una tabla; bajo `sm`, una tarjeta por descuento.
+ * % sobre el bruto y el detalle ítem a ítem; exportable a CSV. `DataList`: tabla en
+ * escritorio, tarjeta compacta en el teléfono; la fila abre los planes del paciente.
  */
 export function DiscountReportView({ token }: { token: string }) {
   const isAdmin = getTokenRole(token) === 'ADMIN';
@@ -370,63 +377,135 @@ export function DiscountReportView({ token }: { token: string }) {
   const location = data?.scope.location ?? null;
   const showLoading = loading || !filters;
 
+  const columns: DataListColumn<DiscountReportItem>[] = fmt
+    ? [
+        {
+          id: 'date',
+          header: discountReportCopy.colDate,
+          cellClassName: 'whitespace-nowrap tabular-nums',
+          cell: (item) => fmt.civilDate(item.discountOn),
+        },
+        {
+          id: 'patient',
+          header: discountReportCopy.colPatient,
+          mobile: 'primary',
+          cell: (item) => item.patientName,
+        },
+        {
+          id: 'plan',
+          header: discountReportCopy.colPlan,
+          cell: (item) => (
+            <>
+              <span className="block text-ink">{discountReportCopy.tooth(item.toothNumber, item.procedure)}</span>
+              <span className="block text-xs text-muted">
+                {discountReportCopy.planOf(fmt.civilDate(item.planCreatedOn), item.planOptionLabel)}
+              </span>
+            </>
+          ),
+          // Tarjeta: el ítem y, si las hay, la rebaja de precio y la frase del
+          // convenio, que en la tabla van bajo el importe (QA D1: parten línea).
+          mobileCell: (item) => (
+            <>
+              {discountReportCopy.tooth(item.toothNumber, item.procedure)}
+              {item.priceReduction > 0 ? (
+                <> · {discountReportCopy.priceReduced(moneyWithCode(item.price, item.currency, fmt))}</>
+              ) : null}
+              {item.agreementReduction > 0 ? <> · {agreementLine(item, fmt)}</> : null}
+            </>
+          ),
+        },
+        {
+          id: 'amount',
+          header: discountReportCopy.colAmount,
+          numeric: true,
+          mobile: 'trailing',
+          cell: (item) => <AmountCell item={item} fmt={fmt} />,
+          mobileCell: (item) => (
+            <span data-testid="discount-card-amount" className="font-medium">
+              −
+              {moneyWithCode(
+                item.discount > 0 || item.agreementReduction <= 0 ? item.discount : item.agreementReduction,
+                item.currency,
+                fmt,
+              )}
+            </span>
+          ),
+        },
+        {
+          id: 'reason',
+          header: discountReportCopy.colReason,
+          cellClassName: 'max-w-[16rem]',
+          cell: (item) => <ReasonCell item={item} />,
+          mobileCell: (item) =>
+            !item.reason && !agreementOnly(item) ? (
+              <span className="text-warning-text">{discountReportCopy.noReason}</span>
+            ) : (
+              <>
+                {reasonLabel(item)}
+                {item.reasonNote ? ` (${item.reasonNote})` : ''}
+              </>
+            ),
+        },
+        {
+          id: 'by',
+          header: discountReportCopy.colBy,
+          cell: (item) => (
+            <>
+              <span data-testid="discount-author" className={authorName(item) ? 'text-ink' : 'text-muted'}>
+                {authorName(item) ?? discountReportCopy.unknownAuthor}
+              </span>
+              {item.locationName ? <span className="block text-xs text-muted">{item.locationName}</span> : null}
+              <AgreementAuthors item={item} />
+            </>
+          ),
+          mobileCell: (item) =>
+            `${discountReportCopy.colBy}: ${authorName(item) ?? discountReportCopy.unknownAuthor}${
+              item.locationName ? ` · ${item.locationName}` : ''
+            }`,
+        },
+      ]
+    : [];
+
   return (
     <>
       <PageHeader
         title={discountReportCopy.title}
         description={discountReportCopy.description}
-        meta={
-          data ? (
-            <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-muted">
-              <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
-              <span>{location ? discountReportCopy.scopeLocation(location.name) : discountReportCopy.scopeAll}</span>
-            </p>
-          ) : null
-        }
+        meta={data ? <ScopeMarker location={location} /> : null}
       />
 
       <div className="flex flex-col gap-3">
         {!forbidden ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-            <div className="grid min-w-0 grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
-              <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-                {discountReportCopy.fromLabel}
-                <Input
-                  type="date"
-                  value={effectiveFrom ?? ''}
-                  max={effectiveTo ?? undefined}
-                  onChange={(e) => {
-                    if (!e.target.value) return;
-                    setFrom(e.target.value);
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <FormField htmlFor="discount-period" label={discountReportCopy.periodLabel} className="w-full sm:w-auto">
+                <DateRangePicker
+                  id="discount-period"
+                  value={effectiveFrom && effectiveTo ? { from: effectiveFrom, to: effectiveTo } : null}
+                  onChange={(range) => {
+                    if (!range) return;
+                    setFrom(range.from);
+                    setTo(range.to);
                     setPage(1);
                   }}
-                  className="tabular-nums sm:w-44"
+                  presets
+                  startLabel={discountReportCopy.fromLabel}
+                  endLabel={discountReportCopy.toLabel}
                 />
-              </label>
-              <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-                {discountReportCopy.toLabel}
-                <Input
-                  type="date"
-                  value={effectiveTo ?? ''}
-                  min={effectiveFrom ?? undefined}
-                  onChange={(e) => {
-                    if (!e.target.value) return;
-                    setTo(e.target.value);
-                    setPage(1);
-                  }}
-                  className="tabular-nums sm:w-44"
-                />
-              </label>
+              </FormField>
               {staff.length > 0 ? (
-                <label className="col-span-2 flex min-w-0 flex-col gap-1 text-sm text-muted">
-                  {discountReportCopy.professionalLabel}
-                  <select
+                <FormField
+                  htmlFor="discount-professional"
+                  label={discountReportCopy.professionalLabel}
+                  className="w-full sm:w-56"
+                >
+                  <NativeSelect
+                    id="discount-professional"
                     value={professionalId}
                     onChange={(e) => {
                       setProfessionalId(e.target.value);
                       setPage(1);
                     }}
-                    className={cn(toolbarFieldClass, 'sm:w-56')}
                   >
                     <option value="ALL">{discountReportCopy.professionalAll}</option>
                     {staff.map((m) => (
@@ -434,13 +513,15 @@ export function DiscountReportView({ token }: { token: string }) {
                         {m.fullName}
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </NativeSelect>
+                </FormField>
               ) : null}
             </div>
+            {/* Exportar es secundario: el informe se lee aquí, el CSV es un extra. */}
             {isAdmin ? (
               <Button
                 type="button"
+                variant="secondary"
                 onClick={() => void exportCsv()}
                 disabled={exporting || showLoading || Boolean(loadError)}
                 className="shrink-0"
@@ -478,14 +559,6 @@ export function DiscountReportView({ token }: { token: string }) {
           )
         ) : (
           <>
-            {!showLoading && !loadError && data ? (
-              <ResultCount
-                total={data.total}
-                noun={discountReportCopy.countNoun}
-                nounPlural={discountReportCopy.countNounPlural}
-              />
-            ) : null}
-
             <AsyncSection
               loading={showLoading}
               error={loadError}
@@ -497,103 +570,19 @@ export function DiscountReportView({ token }: { token: string }) {
             >
               {data ? <DiscountSummary totals={data.totals} agreementTotals={data.agreementTotals} fmt={fmt} /> : null}
 
-              {/* Escritorio: una tabla. */}
-              <Card className="overflow-hidden p-0 max-sm:hidden">
-                <Table aria-label={discountReportCopy.tableLabel}>
-                  <caption className="sr-only">{discountReportCopy.tableLabel}</caption>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead scope="col">{discountReportCopy.colDate}</TableHead>
-                      <TableHead scope="col">{discountReportCopy.colPatient}</TableHead>
-                      <TableHead scope="col">{discountReportCopy.colPlan}</TableHead>
-                      <TableHead scope="col" className="text-right">
-                        {discountReportCopy.colAmount}
-                      </TableHead>
-                      <TableHead scope="col">{discountReportCopy.colReason}</TableHead>
-                      <TableHead scope="col">{discountReportCopy.colBy}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((item) => (
-                      <TableRow key={item.itemId} data-testid="discount-row">
-                        <TableCell className="tabular-nums">{fmt.civilDate(item.discountOn)}</TableCell>
-                        <TableCell>
-                          <Link
-                            href={patientHref(item)}
-                            aria-label={discountReportCopy.statement(item.patientName)}
-                            className="font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                          >
-                            {item.patientName}
-                          </Link>
-                        </TableCell>
-                        <TableCell>
-                          <span className="block text-ink">
-                            {discountReportCopy.tooth(item.toothNumber, item.procedure)}
-                          </span>
-                          <span className="block text-xs text-muted">
-                            {discountReportCopy.planOf(fmt.civilDate(item.planCreatedOn), item.planOptionLabel)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <AmountCell item={item} fmt={fmt} />
-                        </TableCell>
-                        <TableCell className="max-w-[16rem]">
-                          <ReasonCell item={item} />
-                        </TableCell>
-                        <TableCell>
-                          <span data-testid="discount-author" className={authorName(item) ? 'text-ink' : 'text-muted'}>
-                            {authorName(item) ?? discountReportCopy.unknownAuthor}
-                          </span>
-                          {item.locationName ? (
-                            <span className="block text-xs text-muted">{item.locationName}</span>
-                          ) : null}
-                          <AgreementAuthors item={item} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
+              <ResultCount
+                total={data?.total ?? 0}
+                noun={discountReportCopy.countNoun}
+                nounPlural={discountReportCopy.countNounPlural}
+              />
 
-              {/* Móvil: una tarjeta por descuento, sin scroll lateral. */}
-              <ul aria-label={discountReportCopy.listLabel} className="flex flex-col gap-3 sm:hidden">
-                {items.map((item) => (
-                  <li
-                    key={item.itemId}
-                    data-testid="discount-card"
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <Link
-                        href={patientHref(item)}
-                        aria-label={discountReportCopy.statement(item.patientName)}
-                        className="min-w-0 break-words font-medium text-ink underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      >
-                        {item.patientName}
-                      </Link>
-                      <span data-testid="discount-card-amount" className="shrink-0 text-right">
-                        <AmountCell item={item} fmt={fmt} withAgreement={false} />
-                      </span>
-                    </div>
-                    {item.agreementReduction > 0 ? (
-                      <p className="break-words text-xs tabular-nums text-ink">{agreementLine(item, fmt)}</p>
-                    ) : null}
-                    <p className="text-ink">{discountReportCopy.tooth(item.toothNumber, item.procedure)}</p>
-                    <p className="text-xs text-muted tabular-nums">
-                      {fmt.civilDate(item.discountOn)} ·{' '}
-                      {discountReportCopy.planOf(fmt.civilDate(item.planCreatedOn), item.planOptionLabel)}
-                    </p>
-                    <div>
-                      <ReasonCell item={item} />
-                    </div>
-                    <p className="text-xs text-muted">
-                      {discountReportCopy.colBy}: {authorName(item) ?? discountReportCopy.unknownAuthor}
-                      {item.locationName ? ` · ${item.locationName}` : ''}
-                    </p>
-                    <AgreementAuthors item={item} />
-                  </li>
-                ))}
-              </ul>
+              <DataList
+                label={discountReportCopy.listLabel}
+                rows={items}
+                columns={columns}
+                getRowKey={(item) => item.itemId}
+                getRowHref={patientHref}
+              />
             </AsyncSection>
 
             {!loadError ? (

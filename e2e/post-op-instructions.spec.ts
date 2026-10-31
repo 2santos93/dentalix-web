@@ -178,13 +178,22 @@ for (const viewport of VIEWPORTS) {
       color: '#7C3AED',
     });
 
-    // --- 1. Ajustes › Sedes: teléfono de la sede --------------------------------
+    // --- 1. Ajustes › Sedes › la sede: su teléfono (B6: en «Editar sede») ------
     await page.goto(`${origin}/settings/sedes`);
-    const phone = page.getByRole('textbox', { name: /^Teléfono · / });
-    await expect(phone).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('link', { name: /^Abrir / }).first().click();
+    // La lista también tiene «Editar …»: se espera a la ficha antes de buscarlo.
+    await expect(page).toHaveURL(/\/settings\/sedes\/[^/?]+$/, { timeout: 15_000 });
+    const editSede = page
+      .getByRole('region', { name: 'Datos de la sede' })
+      .getByRole('button', { name: /^(?:Editar|Revisar) / });
+    await expect(editSede).toBeVisible({ timeout: 15_000 });
+    await editSede.click();
+    const sedeDialog = page.getByRole('dialog', { name: /^(?:Editar|Revisar) sede/ });
+    const phone = sedeDialog.getByLabel('Teléfono', { exact: true });
     await phone.fill(SEDE_PHONE);
-    await page.locator('form', { has: phone }).getByRole('button', { name: /^Guardar/ }).click();
-    await expect(page.getByText('Guardado', { exact: true })).toBeVisible();
+    await sedeDialog.getByRole('button', { name: 'Guardar sede' }).click();
+    await expect(sedeDialog).toBeHidden();
+    await expect(page.getByRole('region', { name: 'Datos de la sede' })).toContainText(SEDE_PHONE.slice(-4));
     await expectNoHorizontalScroll(page);
 
     // --- 2. Ajustes › Indicaciones: crear POI-EXO -------------------------------
@@ -356,10 +365,11 @@ for (const viewport of VIEWPORTS) {
     // --- 5. Editar la plantilla (v2) y la HC conserva la v1 --------------------
     await page.goto(`${origin}/settings/indicaciones`);
     await page
-      .getByRole('button', { name: `Editar «${TITLE}»` })
+      .getByRole('button', { name: `Acciones de «${TITLE}»` })
       .locator('visible=true')
       .first()
       .click();
+    await page.getByRole('menuitem', { name: 'Editar' }).click();
     const edit = page.getByRole('dialog', { name: 'Editar indicaciones' });
     await edit.getByLabel('Indicaciones', { exact: true }).fill(BODY_V2);
     await edit.getByRole('button', { name: 'Guardar cambios' }).click();
@@ -372,7 +382,7 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByRole('heading', { name: 'Indicaciones entregadas' })).toBeVisible({
       timeout: 15_000,
     });
-    const deliveries = page.getByRole(vw >= 768 ? 'table' : 'list', { name: 'Indicaciones entregadas' });
+    const deliveries = page.getByRole(vw >= 640 ? 'table' : 'list', { name: 'Indicaciones entregadas' });
     await expect(deliveries.getByText('POI-EXO · v1')).toHaveCount(3, { timeout: 15_000 });
     await expect(deliveries.getByText('POI-EXO · v2')).toHaveCount(0);
     for (const channel of ['Impresa', 'Email', 'WhatsApp']) {

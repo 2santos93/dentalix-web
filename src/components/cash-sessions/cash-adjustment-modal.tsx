@@ -15,8 +15,8 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { parseMoneyInput } from '@/lib/format/money';
 import { CurrencySelect } from '@/components/shared/currency-select';
-import { InlineError } from '@/components/errors/inline-error';
-import { fieldClass } from '@/lib/ui/field-class';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   title: 'Corregir el cierre',
@@ -106,18 +106,18 @@ export function CashAdjustmentModal({
       submitLabel={copy.submit}
       submitting={submitting}
       error={error}
+      touchTargets
     >
       <FormField htmlFor={`${id}-sign`} label={copy.direction}>
-        <select
+        <NativeSelect
           id={`${id}-sign`}
           value={sign}
           disabled={submitting}
           onChange={(e) => setSign(e.target.value === '1' ? 1 : -1)}
-          className={`${fieldClass} h-10`}
         >
           <option value={-1}>{copy.subtract}</option>
           <option value={1}>{copy.add}</option>
-        </select>
+        </NativeSelect>
       </FormField>
       <div className="grid gap-3 sm:grid-cols-3">
         <FormField htmlFor={`${id}-amount`} label={copy.amount} error={amountError}>
@@ -145,36 +145,43 @@ export function CashAdjustmentModal({
           />
         </FormField>
         <FormField htmlFor={`${id}-method`} label={copy.method}>
-          <select
+          <NativeSelect
             id={`${id}-method`}
             value={method}
             disabled={submitting}
             onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-            className={`${fieldClass} h-10`}
           >
             {PAYMENT_METHOD_OPTIONS.map((m) => (
               <option key={m} value={m}>
                 {PAYMENT_METHOD_LABELS[m]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
       </div>
-      <FormField htmlFor={`${id}-reason`} label={copy.reason} hint={copy.reasonHint}>
-        <textarea
+      <FormField
+        htmlFor={`${id}-reason`}
+        label={copy.reason}
+        hint={copy.reasonHint}
+        hintId={`${id}-reason-hint`}
+        error={validation}
+      >
+        <Textarea
           id={`${id}-reason`}
           rows={3}
+          autoGrow
           maxLength={CASH_REASON_MAX}
           value={reason}
           disabled={submitting}
+          aria-invalid={validation ? true : undefined}
+          aria-describedby={validation ? fieldErrorId(`${id}-reason`) : `${id}-reason-hint`}
           onChange={(e) => {
             setReason(e.target.value);
             setValidation(null);
           }}
-          className={fieldClass}
+          className="max-h-48"
         />
       </FormField>
-      {validation ? <InlineError>{validation}</InlineError> : null}
     </FormModal>
   );
 }

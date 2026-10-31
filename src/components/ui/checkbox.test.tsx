@@ -58,3 +58,31 @@ test('desactivado no cambia', async () => {
   expect(box).not.toBeChecked();
   expect(box).toBeDisabled();
 });
+
+test('ganar o perder el error (o la descripción) no vuelve a montar el input: conserva el foco', () => {
+  const { rerender } = render(<Checkbox id="c" label="Recurrente" className="sm:col-span-2" />);
+  const box = screen.getByRole('checkbox', { name: 'Recurrente' });
+  box.focus();
+  rerender(<Checkbox id="c" label="Recurrente" className="sm:col-span-2" error="Marca la casilla" description="Cada año" />);
+  expect(screen.getByRole('checkbox', { name: 'Recurrente' })).toBe(box);
+  expect(box).toHaveFocus();
+  expect(box).toHaveAccessibleDescription(/Cada año.*Marca la casilla/);
+  // Con error, el envoltorio apila fila y mensaje y lleva la clase de layout.
+  expect(box.closest('div')).toHaveClass('flex', 'flex-col', 'sm:col-span-2');
+  rerender(<Checkbox id="c" label="Recurrente" className="sm:col-span-2" />);
+  expect(screen.getByRole('checkbox')).toBe(box);
+  expect(box).toHaveFocus();
+  // Sin error, el envoltorio no cuenta para el layout y la clase va en la fila.
+  expect(box.closest('div')).toHaveClass('contents');
+  expect(box.closest('label')).toHaveClass('sm:col-span-2');
+});
+
+test('sin etiqueta tampoco se vuelve a montar al ganar el error', () => {
+  const { rerender } = render(<Checkbox id="b" aria-label="Elegir" />);
+  const box = screen.getByRole('checkbox', { name: 'Elegir' });
+  box.focus();
+  rerender(<Checkbox id="b" aria-label="Elegir" error="Obligatorio" />);
+  expect(screen.getByRole('checkbox')).toBe(box);
+  expect(box).toHaveFocus();
+  expect(box).toHaveAccessibleDescription('Obligatorio');
+});

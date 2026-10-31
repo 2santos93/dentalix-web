@@ -161,7 +161,7 @@ for (const viewport of VIEWPORTS) {
     expect(violations.dark).toEqual([]);
 
     // El abono lleva «Sin tasa» en la lista de abonos.
-    const fold = panel.getByRole('button', { name: /^Abonos y saldo/ });
+    const fold = panel.getByRole('button', { name: /^Abonos registrados/ });
     if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
     await expect(panel.getByText(/^Sin tasa/).locator('visible=true').first()).toBeVisible();
     // DX-386: el importe del abono con el código ISO y el formato de la sede, sin símbolo.
@@ -186,7 +186,8 @@ test('ADMIN: la tasa registrada desde el aviso se puede corregir mientras ningú
   await expect(dialog).toBeHidden();
 
   const table = page.getByRole('table', { name: 'Tasas manuales' });
-  await table.getByRole('button', { name: new RegExp(`^Corregir la tasa de ${LOCAL} del `) }).click();
+  await table.getByRole('button', { name: new RegExp(`^Acciones de ${LOCAL} del `) }).click();
+  await page.getByRole('menuitem', { name: 'Corregir' }).click();
   const correct = page.getByRole('dialog', { name: new RegExp(`^Corregir la tasa de ${LOCAL} del `) });
   await correct.getByLabel(/^Tasa por 1 /).fill('4100');
   await correct.getByRole('button', { name: 'Guardar tasa' }).click();

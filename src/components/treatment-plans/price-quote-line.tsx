@@ -71,7 +71,7 @@ export function PriceQuoteLine({
   id?: string;
 }) {
   return (
-    <p id={id} className="text-xs text-muted tabular-nums">
+    <p id={id} className="t-caption text-muted tabular-nums">
       {priceSourceText(quote, currency)}
     </p>
   );

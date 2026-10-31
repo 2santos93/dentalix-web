@@ -168,7 +168,8 @@ for (const viewport of [
     await page.goto(`${origin}/settings/importar-pacientes`);
     const history = page.getByRole('list', { name: 'Importaciones de la clínica' });
     const row = history.getByRole('listitem').filter({ hasText: `pacientes-${viewport.name}.csv` }).first();
-    await row.getByRole('button', { name: /Deshacer el lote/ }).click();
+    await row.getByRole('button', { name: /^Acciones de/ }).click();
+    await page.getByRole('menuitem', { name: 'Deshacer lote', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('Se retirarán los 2 pacientes');
     await dialog.getByRole('button', { name: 'Deshacer lote' }).click();
@@ -295,7 +296,8 @@ test('legacy «Tipo Doc» CC, DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 
   await page.goto(`${origin}/settings/importar-pacientes`);
   const history = page.getByRole('list', { name: 'Importaciones de la clínica' });
   const row = history.getByRole('listitem').filter({ hasText: fileName }).first();
-  await row.getByRole('button', { name: /Deshacer el lote/ }).click();
+  await row.getByRole('button', { name: /^Acciones de/ }).click();
+    await page.getByRole('menuitem', { name: 'Deshacer lote', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Deshacer lote' }).click();
   await expect(dialog).toBeHidden({ timeout: 60_000 });

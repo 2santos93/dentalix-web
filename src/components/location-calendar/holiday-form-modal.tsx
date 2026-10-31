@@ -6,8 +6,10 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { createHoliday, updateHoliday, type LocationHoliday } from '@/lib/locations/location-calendar-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { InlineError } from '@/components/errors/inline-error';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
+import { isCivilDay } from '@/lib/time/civil-day';
 
 export const holidayFormCopy = {
   createTitle: 'Añadir festivo',
@@ -52,7 +54,7 @@ interface HolidayFormModalProps {
 
 /**
  * Alta y edición de un festivo de la sede (DX-316, spec §7.2). La fecha es el
- * valor ISO del `<input type="date">`, sin pasar por ninguna zona. El alta
+ * valor ISO del `DatePicker` (día civil), sin pasar por ninguna zona. El alta
  * manda `{ date, name, recurring }`; la edición, solo lo que cambió. Un 400 de
  * la API con `field` va junto a su campo; el resto (los 409 de día ocupado o
  * de tope de festivos) arriba del modal. El padre lo monta con una `key` por
@@ -76,7 +78,9 @@ export function HolidayFormModal({
   const [submitting, setSubmitting] = useState(false);
 
   function focusField(field: Field) {
-    document.getElementById(inputId(field))?.focus();
+    const el = document.getElementById(inputId(field));
+    // La fecha es un grupo de segmentos: el foco va al primero (el día).
+    (el?.getAttribute('role') === 'group' ? el.querySelector<HTMLElement>('[role="spinbutton"]') : el)?.focus();
   }
 
   function clearError(field: Field) {
@@ -85,7 +89,7 @@ export function HolidayFormModal({
 
   function validate(): FieldErrors {
     const found: FieldErrors = {};
-    if (date === '') found.date = copy.dateMissing;
+    if (!isCivilDay(date)) found.date = copy.dateMissing;
     if (name.trim() === '') found.name = copy.nameMissing;
     return found;
   }
@@ -141,8 +145,6 @@ export function HolidayFormModal({
     void save();
   }
 
-  const recurringHintId = `${inputId('recurring')}-hint`;
-
   return (
     <FormModal
       open={open}
@@ -155,20 +157,18 @@ export function HolidayFormModal({
       onCloseAutoFocus={onCloseAutoFocus}
     >
       <FormField htmlFor={inputId('date')} label={copy.date} error={errors.date}>
-        <Input
+        <DatePicker
           id={inputId('date')}
-          type="date"
-          value={date}
+          value={date || null}
           min={DATE_MIN}
           max={DATE_MAX}
-          onChange={(e) => {
-            setDate(e.target.value);
+          onChange={(next) => {
+            setDate(next ?? '');
             clearError('date');
           }}
-          aria-required
+          required
           aria-invalid={errors.date ? true : undefined}
           aria-describedby={errors.date ? fieldErrorId(inputId('date')) : undefined}
-          className="max-sm:min-h-11"
         />
       </FormField>
       <FormField htmlFor={inputId('name')} label={copy.name} error={errors.name}>
@@ -187,35 +187,17 @@ export function HolidayFormModal({
           className="max-sm:min-h-11"
         />
       </FormField>
-      <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor={inputId('recurring')}
-          className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-ink sm:min-h-0"
-        >
-          <input
-            id={inputId('recurring')}
-            type="checkbox"
-            checked={recurring}
-            onChange={(e) => {
-              setRecurring(e.target.checked);
-              clearError('recurring');
-            }}
-            aria-invalid={errors.recurring ? true : undefined}
-            aria-describedby={errors.recurring ? fieldErrorId(inputId('recurring')) : recurringHintId}
-            className="size-4 shrink-0 rounded accent-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-          />
-          {copy.recurring}
-        </label>
-        {errors.recurring ? (
-          <InlineError id={fieldErrorId(inputId('recurring'))} className="text-xs">
-            {errors.recurring}
-          </InlineError>
-        ) : (
-          <p id={recurringHintId} className="text-xs text-muted">
-            {copy.recurringHint}
-          </p>
-        )}
-      </div>
+      <Checkbox
+        id={inputId('recurring')}
+        checked={recurring}
+        onChange={(e) => {
+          setRecurring(e.target.checked);
+          clearError('recurring');
+        }}
+        label={copy.recurring}
+        description={copy.recurringHint}
+        error={errors.recurring}
+      />
     </FormModal>
   );
 }

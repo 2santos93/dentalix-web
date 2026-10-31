@@ -76,7 +76,7 @@ export function PlanQuoteActions({ token, patientId, plan, role, onAccepted }: P
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         {canPrintPlanQuote(role) ? (
-          <Button asChild variant="outline">
+          <Button asChild variant="secondary">
             <Link href={planQuotePrintHref(patientId, plan.id)} target="_blank" rel="noopener">
               <Printer aria-hidden />
               {copy.print}

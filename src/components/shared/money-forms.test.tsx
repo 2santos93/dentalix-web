@@ -94,7 +94,13 @@ const forms: Record<string, FormDriver> = {
       );
       return screen.getByLabelText('Importe');
     },
-    fillRest: (user) => user.type(screen.getByLabelText('Pagará hasta el'), inDays(2)),
+    // «Pagará hasta el» es un DatePicker: se teclea por segmentos (dd/mm/aaaa).
+    fillRest: async (user) => {
+      const [y, m, d] = inDays(2).split('-');
+      const group = screen.getByRole('group', { name: 'Pagará hasta el' });
+      await user.click(within(group).getAllByRole('spinbutton')[0]);
+      await user.keyboard(`${d}${m}${y}`);
+    },
     submit: 'Guardar compromiso',
     sent: () => mocked.promise.mock.calls[0]?.[2].amount,
   },

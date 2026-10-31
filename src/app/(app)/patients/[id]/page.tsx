@@ -529,28 +529,20 @@ function PatientDetailView() {
                   hideNoHistory
                 />
               </div>
-              <section className="flex flex-col gap-3">
-                <h2
-                  id={ANAMNESIS_HEADING_ID}
-                  tabIndex={-1}
-                  className="t-title scroll-mt-16 text-ink focus-visible:outline-none"
-                >
-                  {copy.anamnesisHeading}
-                </h2>
-                <MedicalHistoryPanel
-                  token={accessToken}
-                  patientId={patientId}
-                  onSaved={medicalAlerts.reload}
-                />
-              </section>
-              <section className="flex flex-col gap-3">
-                <h2 className="t-title text-ink">{copy.entriesHeading}</h2>
-                <ClinicalEntriesList token={accessToken} patientId={patientId} />
-              </section>
+              {/* Orden de trabajo: lo que el odontólogo viene a hacer (evolución)
+                  primero; la anamnesis vigente como resumen y su formulario detrás
+                  de «Actualizar anamnesis» (crea una versión nueva). */}
+              <ClinicalEntriesList token={accessToken} patientId={patientId} heading={copy.entriesHeading} />
               <section className="flex flex-col gap-3">
                 <h2 className="t-title text-ink">{copy.postOpHeading}</h2>
                 <PatientPostOpDeliveries token={accessToken} patientId={patientId} />
               </section>
+              <MedicalHistoryPanel
+                token={accessToken}
+                patientId={patientId}
+                headingId={ANAMNESIS_HEADING_ID}
+                onSaved={medicalAlerts.reload}
+              />
             </TabPanel>
           ) : null}
 

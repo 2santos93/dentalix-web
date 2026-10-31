@@ -40,6 +40,24 @@ async function openNorte(user: ReturnType<typeof setupUser>) {
   return screen.findByRole('dialog');
 }
 
+/** Fuerza el modo teléfono de `DataList` (jsdom no tiene `matchMedia`). */
+function mockPhone() {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: true,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  return () => {
+    window.matchMedia = original;
+  };
+}
+
 describe('ReminderSettingsManager (DX-026)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -63,9 +81,26 @@ describe('ReminderSettingsManager (DX-026)', () => {
     expect(second).toHaveTextContent('Sede Norte');
     expect(second).toHaveTextContent('Desactivados');
     expect(screen.getByText('2 sedes · 1 con recordatorios')).toBeInTheDocument();
-    // La versión móvil (tarjetas) lleva lo mismo.
-    const cards = screen.getByRole('list', { name: 'Recordatorios por sede' });
-    expect(within(cards).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('teléfono: una tarjeta por sede, toda ella abre su configuración', async () => {
+    const restore = mockPhone();
+    try {
+      const user = setupUser();
+      render(<ReminderSettingsManager token="tok" allowed />);
+      const cards = await screen.findByRole('list', { name: 'Recordatorios por sede' });
+      const items = within(cards).getAllByRole('listitem');
+      expect(items).toHaveLength(2);
+      expect(items[1]).toHaveTextContent('Sede Norte');
+      expect(items[1]).toHaveTextContent('Desactivados');
+      // Sin un «—» suelto: dice que no hay recordatorios.
+      expect(items[1]).toHaveTextContent('Sin recordatorios');
+      // En la tarjeta el botón es toda ella: su nombre empieza por la acción.
+      await user.click(within(items[1]).getByRole('button', { name: /^Configurar los recordatorios de Sede Norte/ }));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    } finally {
+      restore();
+    }
   });
 
   it('vacío: sin sedes', async () => {

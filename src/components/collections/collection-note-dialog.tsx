@@ -13,9 +13,10 @@ import {
 } from '@/lib/collections/presentation';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
-import { toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { cn } from '@/lib/utils';
 import { Callout } from '@/components/ui/callout';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
 
 export const noteDialogCopy = {
   title: 'Registrar gestión',
@@ -106,13 +107,12 @@ export function CollectionNoteDialog({ open, onOpenChange, token, patient, onSav
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="cn-channel" label={noteDialogCopy.channel} error={errors.channel}>
-          <select
+          <NativeSelect
             id="cn-channel"
             value={channel}
             onChange={(e) => setChannel(e.target.value as CollectionChannel | '')}
             aria-invalid={errors.channel ? true : undefined}
             aria-describedby={errors.channel ? fieldErrorId('cn-channel') : undefined}
-            className={toolbarFieldClass}
           >
             <option value="">{noteDialogCopy.choose}</option>
             {CHANNEL_ORDER.map((c) => (
@@ -120,16 +120,15 @@ export function CollectionNoteDialog({ open, onOpenChange, token, patient, onSav
                 {CHANNEL_LABELS[c]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         <FormField htmlFor="cn-outcome" label={noteDialogCopy.outcome} error={errors.outcome}>
-          <select
+          <NativeSelect
             id="cn-outcome"
             value={outcome}
             onChange={(e) => setOutcome(e.target.value as CollectionOutcome | '')}
             aria-invalid={errors.outcome ? true : undefined}
             aria-describedby={errors.outcome ? fieldErrorId('cn-outcome') : undefined}
-            className={toolbarFieldClass}
           >
             <option value="">{noteDialogCopy.choose}</option>
             {OUTCOME_ORDER.map((o) => (
@@ -137,21 +136,21 @@ export function CollectionNoteDialog({ open, onOpenChange, token, patient, onSav
                 {OUTCOME_LABELS[o]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
       </div>
       <FormField htmlFor="cn-text" label={noteDialogCopy.text} error={errors.text}>
         <Callout id="cn-text-warning-text" tone="warning" role="note" icon={ShieldAlert}>
           {noteDialogCopy.clinicalWarning}
         </Callout>
-        <textarea
+        <Textarea
           id="cn-text"
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={3}
+          autoGrow
           aria-invalid={errors.text ? true : undefined}
           aria-describedby={cn('cn-text-warning-text cn-text-counter', errors.text && fieldErrorId('cn-text'))}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
         <p
           id="cn-text-counter"

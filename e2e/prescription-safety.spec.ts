@@ -217,9 +217,10 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
   await expect(panel.locator('table')).toContainText(longReason);
   await expect(panel.locator('table')).toContainText('Warfarina 5 mg');
   await page.setViewportSize({ width: 390, height: 900 });
-  const mobileDetails = panel.locator('ul.md\\:hidden').getByText('Detalles de seguridad');
-  await mobileDetails.click();
-  await expect(panel.locator('ul.md\\:hidden')).toContainText(longReason);
+  // DataList monta en el teléfono la lista de tarjetas (una sola marca, por matchMedia).
+  const mobileList = panel.getByRole('list', { name: 'Recetas del paciente' });
+  await mobileList.getByText('Detalles de seguridad').click();
+  await expect(mobileList).toContainText(longReason);
   await expectNoHorizontalScroll(page);
 
   await page.addInitScript(() => { window.print = () => {}; });

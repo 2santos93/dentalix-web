@@ -15,7 +15,7 @@ import { E2E_BROWSER_LOCALE } from './support/regional';
  *   2. En OTRO contexto del navegador (otra persona, sin la cookie del ADMIN)
  *      se abre `/invitacion/[token]`: clínica, rol y correo enmascarado, se
  *      crea la contraseña y entra directo a la app con su propia sesión.
- *   3. El ADMIN la ve como «Aceptado»; el enlace ya no sirve («ya utilizada»);
+ *   3. El ADMIN ve al miembro «Activo»; el enlace ya no sirve («ya utilizada»);
  *      y la invitada puede volver a entrar con la contraseña que eligió.
  *
  * DX-088: la invitación sale además por correo (en e2e, ConsoleMailer): la
@@ -115,7 +115,7 @@ test('un ADMIN invita, otra sesión acepta en /invitacion/[token] y entra con su
   const row = page.getByRole('table', { name: 'Personal de la clínica' }).getByRole('row', {
     name: new RegExp(invitee.fullName),
   });
-  await expect(row).toContainText('Aceptado', { timeout: 15_000 });
+  await expect(row).toContainText('Activo', { timeout: 15_000 });
   await expect(row).toContainText('Odontólogo/a');
 });
 

@@ -8,6 +8,7 @@ import { PAYER_TYPES, isExternalPayer } from '@/lib/payers/payer-type';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { PAYER_TYPE_LABELS } from './payer-labels';
 
 const copy = {
@@ -16,7 +17,7 @@ const copy = {
   description:
     'El tipo decide si la cobertura pide el nº de afiliado: todos lo piden salvo «Otro / interno».',
   name: 'Nombre',
-  namePlaceholder: 'Por ejemplo, Sanitas',
+  namePlaceholder: 'Por ejemplo, Seguros Horizonte',
   type: 'Tipo',
   typePlaceholder: 'Elige un tipo',
   typeRequired: 'Elige el tipo de pagador.',
@@ -30,10 +31,6 @@ const copy = {
 
 /** id de la pista de SEC-047, para el `aria-describedby` del tipo. */
 const TYPE_HINT_ID = 'payer-type-hint';
-
-// <select> nativo con el aspecto del átomo Input.
-const selectClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface PayerFormModalProps {
   open: boolean;
@@ -102,6 +99,7 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
       submitLabel={editing ? copy.save : copy.create}
       submitting={submitting}
       error={error}
+      touchTargets
     >
       <FormField htmlFor="payer-name" label={copy.name}>
         <Input
@@ -120,7 +118,7 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
         hint={internal ? copy.otherHint : undefined}
         hintId={TYPE_HINT_ID}
       >
-        <select
+        <NativeSelect
           id="payer-type"
           ref={typeRef}
           value={type}
@@ -133,7 +131,6 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
           aria-describedby={
             typeError ? fieldErrorId('payer-type') : internal ? TYPE_HINT_ID : undefined
           }
-          className={selectClass}
         >
           <option value="" disabled>
             {copy.typePlaceholder}
@@ -143,7 +140,7 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
               {PAYER_TYPE_LABELS[t]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
     </FormModal>
   );

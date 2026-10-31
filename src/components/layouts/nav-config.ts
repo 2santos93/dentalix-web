@@ -121,7 +121,7 @@ const INVENTORY: NavItem = { href: '/inventory', label: 'Inventario', icon: Pack
 // La pantalla lee `GET /staff/directory`: STAFF_WRITE_ROLES.
 const STAFF: NavItem = { href: '/staff', label: 'Personal', icon: UserCog, roles: ['ADMIN'] };
 // Índice de ajustes: lo abren todos (cada pantalla filtra sus entradas por rol).
-// La Auditoría (DX-009) vive ahí, en «Datos y seguridad» (M2: dejó la barra
+// La Auditoría (DX-009) vive ahí, en «Herramientas y registros» (M2: dejó la barra
 // para que «Pendiente de cerrar» quepa a 900 px; DESIGN.md → Navigation).
 const SETTINGS: NavItem = { href: '/settings', label: 'Ajustes', icon: Settings };
 

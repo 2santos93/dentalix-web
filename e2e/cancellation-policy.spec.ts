@@ -81,6 +81,8 @@ async function patientWithAppointment(
 async function configurePolicy(page: import('@playwright/test').Page, hours: string, version: number) {
   await loginAs(page, origin, admin.email, password);
   await page.goto(`${origin}/settings/sedes`);
+  // B6: la política vive en la ficha de la sede.
+  await page.getByRole('link', { name: 'Abrir Sede principal' }).click();
   const section = page.getByRole('region', { name: 'Política de cancelación' });
   await expect(section).toBeVisible({ timeout: 15_000 });
   await section.getByRole('button', { name: /la política de Sede principal/ }).click();
@@ -202,6 +204,7 @@ test('axe: diálogo de cancelar, insignia y modal de la política, a 390 y 1440 
 
       await loginAs(page, origin, admin.email, password);
       await page.goto(`${origin}/settings/sedes`);
+      await page.getByRole('link', { name: 'Abrir Sede principal' }).click({ timeout: 15_000 });
       const section = page.getByRole('region', { name: 'Política de cancelación' });
       await section.getByRole('button', { name: /la política de Sede principal/ }).click({ timeout: 15_000 });
       await expect(page.getByRole('dialog')).toBeVisible();

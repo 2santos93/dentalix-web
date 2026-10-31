@@ -2,14 +2,11 @@
 import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { PageHeader } from '@/components/shared/page-header';
 import { StaffMemberProfile } from '@/components/staff/staff-member-profile';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  title: 'Perfil del miembro',
-  description: 'Cambia su nombre, su rol o su acceso a la clínica.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -37,10 +34,7 @@ export default function StaffMemberPage() {
   }
   if (!accessToken) return null;
 
-  return (
-    <>
-      <PageHeader title={copy.title} description={copy.description} />
-      <StaffMemberProfile token={accessToken} userId={userId} />
-    </>
-  );
+  // La cabecera (nombre del miembro, estado, vuelta a Personal) la pinta el
+  // perfil: es la única que conoce el nombre.
+  return <StaffMemberProfile token={accessToken} userId={userId} />;
 }

@@ -176,7 +176,7 @@ export function SignedFileViewerDialog({
             target="_blank"
             rel="noopener noreferrer"
             onClick={openFresh}
-            className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
           >
             <ExternalLink className="size-4" aria-hidden />
             {copy.openInNewTab}

@@ -99,7 +99,7 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=implants`;
 
   return (
-    <div className="implant-card-print-page flex min-h-full flex-1 flex-col bg-surface-2 print:min-h-0 print:bg-white">
+    <div className="implant-card-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
       {card ? <title>{copy.documentTitle(card.patientName)}</title> : null}
       <div
         role="toolbar"

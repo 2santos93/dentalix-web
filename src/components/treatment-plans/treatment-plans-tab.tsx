@@ -1,389 +1,84 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
-  addItem,
   createPlan,
   getPlan,
   listPlans,
   removeItem,
   updateItem,
   updatePlan,
-  type AddTreatmentPlanItemInput,
   type TreatmentPlan,
   type TreatmentPlanItem,
   type TreatmentPlanItemStatus,
   type TreatmentPlanStatus,
 } from '@/lib/treatment-plans/treatment-plans-api';
-import {
-  PLAN_STATUS_LABELS,
-  isPlanBillable,
-  isPlanClosed,
-} from '@/lib/treatment-plans/plan-status';
-import { ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
+import { PLAN_STATUS_LABELS, isPlanBillable, isPlanClosed } from '@/lib/treatment-plans/plan-status';
 import {
   getPlanBalance,
   listPayments,
-  recordPayment,
   voidPayment,
   type Payment,
   type PlanBalance,
-  type PlanItemBalance,
-  type RecordPaymentInput,
 } from '@/lib/payments/payments-api';
-import { allocationCopy } from '@/lib/payments/allocation-copy';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
-import { isFdiToothNumber } from '@/lib/odontogram/fdi';
-import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { activeSedeCurrency } from '@/lib/locations/location-settings';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
-import Link from 'next/link';
-import { formatCurrency } from '@/lib/format/currency';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { StatusBadge } from '@/components/ui/status-badge';
+import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import { canRecordPayments } from '@/lib/payments/billable-plans-api';
+import { optionGroupOf, patchableStatuses } from '@/lib/treatment-plans/plan-options';
+import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
+import type { DiscountRules } from '@/lib/discounts/discount-rules';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
+import { NativeSelect } from '@/components/ui/native-select';
+import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { MoneyInput } from '@/components/shared/money-input';
-import { parseMoneyInput } from '@/lib/format/money';
-import { FormModal } from '@/components/shared/form-modal';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { FormField } from '@/components/shared/form-field';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { Disclosure } from '@/components/shared/disclosure';
-import { CatalogPicker } from '@/components/odontogram/catalog-picker';
-import { ToothPicker } from '@/components/odontogram/tooth-picker';
-import {
-  PaymentMethodSelect,
-  PaymentReferenceFields,
-  paymentMethodFieldsCopy,
-  usePaymentMethodFields,
-} from '@/components/payments/payment-method-fields';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
 import { ReallocatePaymentModal } from '@/components/payments/reallocate-payment-modal';
-import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
-import { canRecordPayments } from '@/lib/payments/billable-plans-api';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
+import { notifyError } from '@/components/errors/notify';
+import { BulkDiscountModal, bulkDiscountCopy } from '@/components/discounts/bulk-discount-modal';
+import { VoidCancellationFeeModal } from '@/components/appointments/fee-reason-modal';
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanVisitsBoard } from './plan-visits-board';
 import { PlanQuoteActions } from './plan-quote-actions';
 import { PlanOptionsPanel } from './plan-options-panel';
-import { ItemPaidCell, ItemPaidLine, itemPaidCopy } from './item-paid-cell';
-import { optionGroupOf, patchableStatuses } from '@/lib/treatment-plans/plan-options';
-import { SectionError } from '@/components/errors/section-error';
-import { InlineError } from '@/components/errors/inline-error';
-import { notifyError } from '@/components/errors/notify';
-import { cn } from '@/lib/utils';
-import { formatDateTime } from '@/lib/format/date';
-import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
-import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import type { RegionalFormat } from '@/lib/format/regional-format';
-import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
-import { SedeConfigError } from '@/components/locations/sede-config-error';
-import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
-import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
-import {
-  DISCOUNT_REASON_LABELS,
-  PRICE_BELOW_CATALOG_NOTICE,
-  capFor,
-  effectiveDiscount,
-  exceedsCap,
-  NO_DISCOUNT_ALLOWED_NOTICE,
-  needsReason,
-  noDiscountAllowed,
-  priceBelowCatalogCapMessage,
-  roleCapMessage,
-  type DiscountReasonCode,
-  type DiscountRules,
-} from '@/lib/discounts/discount-rules';
-import {
-  DiscountReasonFields,
-  EMPTY_REASON,
-  reasonPayload,
-  validateDiscountReason,
-  type DiscountReasonValue,
-} from '@/components/discounts/discount-reason-fields';
-import { BulkDiscountModal, bulkDiscountCopy } from '@/components/discounts/bulk-discount-modal';
-import { usePriceQuote } from '@/lib/treatment-plans/use-price-quote';
-import { FieldError } from '@/components/errors/field-error';
-import { PriceQuoteLine, itemPriceOriginText } from './price-quote-line';
 import { MarkDoneModal } from './mark-done-modal';
-import { VoidCancellationFeeModal, voidFeeCopy } from '@/components/appointments/fee-reason-modal';
-import { attributionText } from '@/lib/treatment-plans/item-attribution';
-import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
-import { PaymentRatePreview } from '@/components/payments/payment-rate-preview';
-import { useExchangeRates } from '@/components/payments/use-exchange-rates';
-import { frozenRateLabel, paymentRateCopy } from '@/lib/payments/payment-rate';
+import { ItemsTable } from './plan-items-table';
+import { PlanItemForm } from './plan-item-form';
+import { PlanMoneySummary } from './plan-money-summary';
+import { PlanPaymentFormModal } from './plan-payment-form-modal';
+import { PlanPaymentsList, paymentRowActionsButton } from './plan-payments-list';
+import {
+  PAYMENTS_TRIGGER_ID,
+  copy,
+  feeReferences,
+  procedureName,
+  splitLinesOf,
+} from './treatment-plans-tab-copy';
 
-// El pliegue «Abonos y saldo»: destino estable del foco cuando un modal de un
-// abono se cierra y la fila que lo abrió ya no existe.
-const PAYMENTS_TRIGGER_ID = 'tp-payments-trigger';
-
-// Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
-// agenda-view.tsx convention until next-intl wiring lands.
-const copy = {
-  loading: 'Cargando planes de tratamiento…',
-  // No «Intenta de nuevo.» — `SectionError` has its own retry button.
-  genericLoadError: 'No pudimos cargar los planes de tratamiento.',
-  refreshing: 'Actualizando…',
-  // No «Intenta de nuevo.» — the toast carries its own retry action.
-  genericRefreshError: 'No pudimos actualizar los planes de tratamiento.',
-  plansHeading: 'Planes de tratamiento',
-  newPlan: 'Nuevo plan',
-  // No adjacent `<label>` for this one (it sits next to the "Nuevo plan"
-  // button, not in a `FormField`) — passed as `CurrencySelect`'s `ariaLabel`
-  // so it still has an accessible name (WCAG 4.1.2).
-  newPlanCurrencyLabel: 'Moneda del nuevo plan',
-  newPlanCurrencyPlaceholder: 'Elige la moneda',
-  // GLOBAL-G1 (R14): sin sede activa y con sedes en monedas distintas (o una
-  // sede sin moneda) no hay moneda que suponer.
-  newPlanCurrencyRequired: 'Elige la moneda del nuevo plan.',
-  creatingPlan: 'Creando…',
-  planCreated: 'Plan creado y seleccionado abajo.',
-  // Reuse path (dup guard): an empty DRAFT already existed, so "Nuevo plan"
-  // switched to it instead of POSTing another identical empty plan.
-  planReused: 'Ya había un plan en borrador vacío; lo seleccionamos abajo.',
-  genericCreatePlanError: 'No pudimos crear el plan. Intenta de nuevo.',
-  emptyPlansTitle: 'Este paciente todavía no tiene un plan de tratamiento.',
-  emptyPlansDescription: 'Crea el primer plan para empezar a registrar procedimientos.',
-  selectPlanLabel: 'Plan',
-  // Numbered + timestamped down to the minute so multiple plans created the
-  // same day are distinguishable in the selector (fixes the "Nuevo plan looks
-  // like it did nothing" perception — every option used to read identically as
-  // "Plan del <date> — Borrador").
-  // Con alternativas (DX-040), la etiqueta de la opción va al final: dos
-  // opciones del mismo día se distinguen por ella.
-  planOptionLabel: (
-    createdAt: string,
-    status: TreatmentPlanStatus,
-    number: number,
-    optionLabel?: string | null,
-  ) =>
-    `Plan ${number} · ${formatDateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}${optionLabel ? ` · ${optionLabel}` : ''}`,
-  detailHeading: 'Detalle del plan',
-  planStatusLabel: 'Estado del plan',
-  loadingPlanDetail: 'Cargando plan…',
-  // No «Intenta de nuevo.» — `SectionError` has its own retry button.
-  genericPlanDetailError: 'No pudimos cargar el plan.',
-  // No «Intenta de nuevo.» — the toast carries its own retry action.
-  genericPlanDetailRefreshError: 'No pudimos actualizar el plan.',
-  genericPlanStatusError: 'No pudimos actualizar el estado del plan. Intenta de nuevo.',
-  itemsTableCaption: 'Ítems del plan de tratamiento',
-  // DX-343: cada tabla nombra su visita; el encabezado visible ya dice «Ítems
-  // del plan de tratamiento» y repetirlo en N tablas no distingue ninguna.
-  visitItemsTableCaption: (visit: number) => `Ítems de la visita ${visit}`,
-  colTooth: 'Diente',
-  // DX-291: un cargo administrativo (inasistencia) no es de ningún diente.
-  noTooth: 'Sin diente',
-  noSurfaces: '—',
-  colProcedure: 'Procedimiento',
-  colSurfaces: 'Caras',
-  colPrice: 'Precio',
-  colStatus: 'Estado',
-  colActions: 'Acciones',
-  wholeToothFallback: 'Diente completo',
-  emptyItemsTitle: 'Este plan todavía no tiene ítems.',
-  emptyItemsDescription: 'Agrega un procedimiento con el formulario de abajo.',
-  totalLabel: 'Total',
-  remove: 'Quitar',
-  // SEC-050: el ítem de un cargo por inasistencia vigente.
-  feeItemNote: 'Cargo por inasistencia o cancelación tardía: su importe y su estado no se cambian aquí.',
-  feeItemNoteAdmin:
-    'Cargo por inasistencia o cancelación tardía: su importe y su estado no se cambian aquí; si se generó por error, anúlalo con motivo.',
-  // DX-343: cada «Anular cargo» se distingue por el ítem y su importe y, si
-  // hay varios cargos en el plan, por la referencia visible «Cargo n de N».
-  feeReference: (n: number, total: number) => `Cargo ${n} de ${total}`,
-  voidFeeFor: (item: string, amount: string, ref?: { n: number; total: number }) =>
-    `Anular cargo${ref ? ` ${ref.n} de ${ref.total}` : ''}: ${item}, ${amount}`,
-  feeRefreshing: 'Actualizando el estado del cargo…',
-  removing: 'Quitando…',
-  removeConfirmTitle: '¿Quitar este ítem del plan?',
-  // El backend hace soft-delete (`deletedAt`) y `getPlan` incluye los ítems
-  // con `deletedAt: null`, así que el ítem desaparece del plan y de la app
-  // aunque la fila siga en la base de datos. La copia lo dice tal cual en vez
-  // de prometer un historial que en pantalla no existe. Lo que sí sobrevive
-  // es el registro que el ítem creó en el odontograma al marcarse realizado
-  // (Pieza B): `RemoveTreatmentPlanItemUseCase` no lo toca.
-  removeConfirmDescription:
-    'El ítem sale del plan y deja de contar en el total y en el saldo. No se borra de la base de datos, pero ya no podrás verlo desde la aplicación. Si ya estaba realizado, su registro en el odontograma se mantiene.',
-  removeConfirm: 'Quitar ítem',
-  genericItemUpdateError: 'No pudimos actualizar el estado del ítem. Intenta de nuevo.',
-  genericRemoveItemError: 'No pudimos quitar el ítem. Intenta de nuevo.',
-  itemStatusSelectLabel: (tooth: string) => `Estado del ítem del diente ${tooth}`,
-  // DX-050: quién lo realizó. Corregirlo es solo de la administración.
-  correctAttribution: 'Corregir',
-  correctAttributionFor: (tooth: string) => `Corregir quién realizó el ítem del diente ${tooth}`,
-  // DX-305: un realizado «Sin atribuir» se atribuye con quién, cuándo y dónde.
-  attributeItem: 'Atribuir',
-  attributeItemFor: (tooth: string) => `Atribuir quién, cuándo y dónde se realizó el ítem del diente ${tooth}`,
-  markDoneSubject: (procedure: string, tooth: string) => `${procedure} · diente ${tooth}`,
-  addItemHeading: 'Agregar ítem',
-  invalidToothNumber: 'Número de diente inválido. Usa la notación FDI (ej. 11, 26, 55).',
-  procedureLabel: 'Procedimiento',
-  procedureFilterPlaceholder: 'Resina, corona, limpieza…',
-  selectProcedurePrompt: 'Selecciona un procedimiento del catálogo.',
-  /**
-   * El puente que faltaba. El odontograma proyecta automáticamente un ítem
-   * DONE (Pieza B); el camino de vuelta era escribir el número a mano. Estos
-   * enlaces lo cierran en los dos sentidos, y el nombre accesible EMPIEZA por
-   * el texto visible para no romper «label in name» (WCAG 2.5.3).
-   */
-  viewInOdontogram: 'Ver en el odontograma',
-  viewInOdontogramFor: (tooth: string) => `Ver en el odontograma el diente ${tooth}`,
-  // DX-191: acceso directo al formulario «Registrar implante» con el ítem y el
-  // diente puestos.
-  registerImplant: 'Registrar implante',
-  registerImplantFor: (tooth: string) => `Registrar implante en el diente ${tooth}`,
-  focusedToothNotice: (tooth: string) => `Diente ${tooth}: sus ítems aparecen resaltados abajo.`,
-  focusedToothRow: 'Diente en foco',
-  clearFocusedTooth: 'Ver todos los dientes',
-  priceLabel: 'Precio',
-  // DX-105: precio resuelto por convenio / lista de la sede.
-  priceQuoteLoading: 'Calculando el precio…',
-  priceQuoteError: 'No pudimos traer el precio',
-  // Descuento por ítem (DX-012): sale en el presupuesto imprimible y resta del
-  // total y del saldo.
-  discountLabel: 'Descuento (opcional)',
-  discountHint: 'En la moneda del plan. Sale en el presupuesto.',
-  invalidDiscount: 'El descuento debe ser un monto válido, no mayor que el precio.',
-  unreadablePrice: (reason: string) => `El precio no se entiende. ${reason}`,
-  unreadableDiscount: (reason: string) => `El descuento no se entiende. ${reason}`,
-  itemDiscount: (amount: string) => `Descuento −${amount}`,
-  // SEC-041: el precio por debajo del de catálogo cuenta como descuento.
-  itemPriceReduction: (amount: string, catalog: string) => `Rebaja −${amount} (catálogo ${catalog})`,
-  priceBelowCatalogDetail: (reduction: string, catalog: string) =>
-    `Rebaja de ${reduction} sobre ${catalog}. Se compara con el tope de tu rol y sale en el informe de descuentos.`,
-  // DX-204: motivo del descuento y «Descuento %» sobre varios ítems.
-  itemDiscountReason: (reason: string) => `Motivo: ${reason}`,
-  selectItem: (tooth: string) => `Seleccionar el ítem del diente ${tooth}`,
-  selectAll: 'Seleccionar todos',
-  clearSelection: 'Quitar selección',
-  selectedCount: (n: number) =>
-    n === 0 ? 'Selecciona ítems para descontar' : n === 1 ? '1 ítem seleccionado' : `${n} ítems seleccionados`,
-  bulkDiscount: 'Descuento %',
-  bulkDiscountApplied: (n: number) =>
-    n === 1 ? 'Descuento aplicado a 1 ítem.' : `Descuento aplicado a ${n} ítems.`,
-  acceptedDiscountNotice: 'El presupuesto está aceptado: sus descuentos ya no se pueden cambiar.',
-  surfacesLegend: 'Caras (opcional)',
-  notesLabel: 'Notas',
-  addItemSubmit: 'Agregar ítem',
-  addItemSubmitting: 'Agregando…',
-  genericAddItemError: 'No pudimos agregar el ítem. Intenta de nuevo.',
-  emptyCatalogTitle: 'No hay procedimientos en el catálogo.',
-  emptyCatalogDescription: 'Crea procedimientos en el catálogo dental para poder agregarlos a un plan.',
-  manageCatalogCta: 'Ir al catálogo',
-
-  // Abonos + saldo (PAY-T4).
-  paymentsHeading: 'Abonos y saldo',
-  /**
-   * Alcance de la región de dinero (Principio 6 de PRODUCT.md). Verificado
-   * contra el backend, NO deducido de la documentación: `listPayments` y
-   * `getPlanBalance` acaban los dos en `PrismaPaymentRepository.listByPlan`,
-   * que deliberadamente NO aplica el filtro de sede — el plan es de la
-   * clínica, no de una sede. La cabecera `X-Location-Id` viaja en estas
-   * peticiones pero el backend la ignora aquí.
-   */
-  paymentsScopeNote: 'El saldo suma los abonos de todas las sedes.',
-  loadingBalance: 'Cargando saldo…',
-  // No «Intenta de nuevo.» — `SectionError` has its own retry button.
-  genericBalanceError: 'No pudimos cargar el saldo.',
-  // No «Intenta de nuevo.» — the toast carries its own retry action.
-  genericBalanceRefreshError: 'No pudimos actualizar el saldo.',
-  billableLabel: 'A pagar',
-  paidLabel: 'Pagado',
-  balanceLabel: 'Saldo',
-  registerPayment: 'Registrar abono',
-  notBillableHint: (status: string) =>
-    `Este plan está «${status}»: no admite abonos ni planes de cuotas.`,
-  closedItemsNotice: (status: string) =>
-    `Este plan está «${status}»: sus ítems ya no se pueden añadir, cambiar ni quitar.`,
-  completedItemsNotice:
-    'Este plan está «Completado»: sus ítems ya no se pueden añadir, cambiar ni quitar. Solo puedes marcar como realizado un procedimiento que quedó aceptado.',
-  cancelPaymentForm: 'Cancelar',
-  paymentAmountLabel: 'Monto',
-  paymentCurrencyLabel: 'Moneda',
-  paymentDateLabel: 'Fecha',
-  paymentMethodLabel: 'Método',
-  paymentNotesLabel: 'Notas',
-  addPaymentSubmit: 'Registrar abono',
-  addPaymentSubmitting: 'Registrando…',
-  invalidPaymentAmount: 'Escribe un importe mayor que 0.',
-  invalidPaymentCurrency: 'Ingresa una moneda válida.',
-  invalidPaymentDate: 'Ingresa una fecha válida.',
-  genericAddPaymentError: 'No pudimos registrar el abono. Intenta de nuevo.',
-  paymentsTableCaption: 'Abonos del plan de tratamiento',
-  colPaymentDate: 'Fecha',
-  colPaymentAmount: 'Monto',
-  colPaymentMethod: 'Método',
-  colPaymentNotes: 'Notas',
-  colPaymentActions: 'Acciones',
-  paymentMethodFallback: '—',
-  paymentNotesFallback: '—',
-  voidPaymentAction: 'Anular',
-  voidingPayment: 'Anulando…',
-  // Recibo de caja numerado (DX-136).
-  receiptAction: 'Recibo',
-  colPaymentReceipt: 'N.º de recibo',
-  paymentReceiptLegacy: 'Sin serie',
-  paymentReceiptMobile: (receiptNumber: string | null) =>
-    `Recibo ${receiptNumber ?? 'sin serie'}`,
-  // DX-051: un ADMIN fijó a mano a qué ítems va este abono.
-  manualAllocation: 'Fijada a mano',
-  // DX-051: abre «Imputar abono» (solo ADMIN).
-  allocationAction: 'Imputación',
-  // Con varios abonos, «Imputación, Imputación…» no dice de cuál: el lector
-  // oye también el recibo (o el importe, si no tiene serie).
-  allocationActionContext: (payment: Payment, fmt: RegionalFormat | null) =>
-    ` del abono ${payment.receiptNumber ?? sedeMoney(payment.amount, payment.currency, fmt)}`,
-  emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
-  emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
-
-  // Divulgación progresiva. La lista de abonos y el calendario de cuotas son
-  // el DETALLE de cifras que ya están arriba: se pliegan, pero su encabezado
-  // lleva el dato que decide si hace falta abrirlos (cuántos abonos hay), así
-  // que plegar no esconde información necesaria para decidir.
-  paymentsDisclosure: 'Abonos registrados',
-  paymentsDisclosureMeta: (n: number) => (n === 1 ? '1 abono' : `${n} abonos`),
-};
-
-const ITEM_STATUS_OPTIONS: TreatmentPlanItemStatus[] = ['PROPOSED', 'ACCEPTED', 'DONE'];
-
-/**
- * Un importe opcional de un campo de dinero (DX-241): `undefined` si está
- * vacío, `null` si no se entiende, o el número leído con la regla común.
+/*
+ * La pestaña «Plan de tratamiento» de la ficha. Las piezas viven en ficheros
+ * propios: la tabla de ítems (`plan-items-table`), el formulario «Agregar
+ * ítem» (`plan-item-form`), el modal «Registrar abono»
+ * (`plan-payment-form-modal`), la lista de abonos (`plan-payments-list`) y
+ * las cifras (`plan-money-summary`); el copy, en `treatment-plans-tab-copy`.
  */
-function optionalAmount(text: string, currency: string): number | undefined | null {
-  if (text.trim() === '') return undefined;
-  const parsed = parseMoneyInput(text, currency);
-  return parsed.ok ? parsed.value : null;
-}
-
-/** El motivo por el que no se entiende un importe escrito. */
-function unreadableReason(text: string, currency: string): string {
-  const parsed = parseMoneyInput(text, currency);
-  return parsed.ok ? '' : parsed.message;
-}
-
-function emptySurfacesState(): Record<ToothSurface, boolean> {
-  return { VESTIBULAR: false, LINGUAL: false, MESIAL: false, DISTAL: false, OCCLUSAL: false };
-}
-
-
-// Native <select>/<input> styled to match the Input atom (kept native for
-// a11y/tests) — same documented convention as `agenda-view.tsx` /
-// `patient-form.tsx`'s `fieldClass`; this app has no tested consumer of the
-// Radix-backed `ui/select` yet, and native controls keep this form directly
-// testable with Testing Library without extra jsdom polyfills.
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface TreatmentPlansTabProps {
   patientId: string;
@@ -401,819 +96,6 @@ interface TreatmentPlansTabProps {
    * registra implantes) no se pinta.
    */
   implantHref?: (item: TreatmentPlanItem) => string;
-}
-
-interface ItemsTableProps {
-  items: TreatmentPlanItem[];
-  catalogById: Map<string, DentalCatalogItem>;
-  /** The plan's currency (`planDetail.currency`) — item prices don't carry their own currency. */
-  currency: string;
-  /** La visita cuyos ítems lista (`null` sin visitas): nombra la tabla. */
-  visit: number | null;
-  /** DX-343: «Cargo n de N» de cada ítem de cargo (ver `feeReferences`). */
-  feeRefs: ReadonlyMap<string, FeeRef>;
-  /** DX-343: un 409 dejó el cargo sin confirmar; «Anular cargo» espera. */
-  feeStale?: boolean;
-  updatingItemId: string | null;
-  /** FDI code whose rows are marked as the ones the user arrived looking for. */
-  focusedTooth?: string | null;
-  odontogramHref?: (toothNumber: string) => string;
-  implantHref?: (item: TreatmentPlanItem) => string;
-  onStatusChange: (itemId: string, status: TreatmentPlanItemStatus) => void;
-  onRemove: (itemId: string) => void;
-  /**
-   * DX-050: sacar un ítem de «Realizado» es de la administración o de quien
-   * lo realizó (la API responde 403 a otro): si no, solo se ofrece su estado.
-   */
-  canLeaveDone?: (item: TreatmentPlanItem) => boolean;
-  /** DX-050: ADMIN corrige quién realizó un ítem (sin ella, no se ofrece). */
-  onCorrectAttribution?: (itemId: string) => void;
-  /**
-   * SEC-050: anular el cargo por inasistencia de un ítem que lo es (solo
-   * ADMIN: recepción no ve el plan). Sin ella, el ítem solo lo explica.
-   */
-  onVoidFee?: (item: TreatmentPlanItem) => void;
-  /**
-   * Plan aceptado con firma (DX-012): sus ítems no se quitan ni vuelven a
-   * «Propuesto» (la API responde 409); el tratamiento sí avanza.
-   */
-  locked?: boolean;
-  /**
-   * Plan cerrado (cancelado, rechazado o completado, DX-109): sus ítems no se
-   * tocan, ni siquiera de estado (la API responde 409)...
-   */
-  closed?: boolean;
-  /**
-   * ...salvo en un plan completado: ahí un ítem aceptado sí se marca como
-   * realizado (y llega al odontograma).
-   */
-  markDoneOnly?: boolean;
-  /**
-   * DX-051: cobrado y pendiente de cada ítem, por id. Sin ella (el saldo aún
-   * no llegó, o el rol no ve pagos: 403) no hay columnas de cobro.
-   */
-  itemBalances?: ReadonlyMap<string, PlanItemBalance>;
-  /**
-   * DX-204: ítems marcados para «Descuento %». Sin ella (plan aceptado,
-   * firmado o cerrado: no se vuelve a descontar) no hay casillas.
-   */
-  selection?: {
-    selectedIds: ReadonlySet<string>;
-    onToggle: (itemId: string, checked: boolean) => void;
-  };
-  /** DX-386: formato de la sede para «Cobrado» y «Pendiente»; `null` mientras carga («—»). */
-  fmt: RegionalFormat | null;
-}
-
-/**
- * DX-050: «Realizado por Dra. X · fecha · sede» (o «Sin atribuir») bajo un
- * ítem realizado; con `onCorrect` (ADMIN), el enlace para corregirlo.
- */
-function ItemAttributionLine({
-  item,
-  onCorrect,
-}: {
-  item: TreatmentPlanItem;
-  onCorrect?: (itemId: string) => void;
-}) {
-  const text = attributionText(item);
-  if (!text) return null;
-  return (
-    <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
-      <span className="tabular-nums">{text}</span>
-      {onCorrect ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-11 px-2 text-xs md:h-7"
-          aria-label={
-            item.performedLocationId === null
-              ? copy.attributeItemFor(item.toothNumber)
-              : copy.correctAttributionFor(item.toothNumber)
-          }
-          onClick={() => onCorrect(item.id)}
-        >
-          {item.performedLocationId === null ? copy.attributeItem : copy.correctAttribution}
-        </Button>
-      ) : null}
-    </span>
-  );
-}
-
-/**
- * SEC-050: el ítem de un cargo por inasistencia vigente no se quita ni cambia
- * de estado (la API responde 409 a todo rol): lo dice y, a un ADMIN, le ofrece
- * anularlo con motivo.
- */
-function FeeItemLine({
-  item,
-  label,
-  currency,
-  feeRef,
-  disabled,
-  onVoid,
-}: {
-  item: TreatmentPlanItem;
-  /** El procedimiento tal como lo dice la fila. */
-  label: string;
-  currency: string;
-  /** Solo con más de un cargo en el plan. */
-  feeRef?: FeeRef;
-  /** DX-343: tras un 409, hasta releer el plan. */
-  disabled?: boolean;
-  onVoid?: (item: TreatmentPlanItem) => void;
-}) {
-  if (!item.cancellationFeeAppointmentId) return null;
-  return (
-    <span className="flex flex-col items-start gap-1 text-xs text-muted">
-      <span>{onVoid ? copy.feeItemNoteAdmin : copy.feeItemNote}</span>
-      {feeRef ? <span className="font-medium text-ink">{copy.feeReference(feeRef.n, feeRef.total)}</span> : null}
-      {onVoid ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-11 md:h-8"
-          disabled={disabled}
-          aria-label={copy.voidFeeFor(label, formatCurrency(item.price, currency), feeRef)}
-          onClick={() => onVoid(item)}
-        >
-          {voidFeeCopy.action}
-        </Button>
-      ) : null}
-    </span>
-  );
-}
-
-type FeeRef = { n: number; total: number };
-
-/**
- * DX-343: «Cargo n de N» por ítem de cargo, en el orden en que se pintan
- * (visita a visita, el de `PlanVisitsBoard`) y sobre el plan entero, para que
- * dos cargos del mismo importe no se confundan.
- * Vacío con un solo cargo: ítem e importe ya lo distinguen.
- */
-function feeReferences(items: TreatmentPlanItem[]): ReadonlyMap<string, FeeRef> {
-  const fees = items.filter((item) => item.cancellationFeeAppointmentId);
-  if (fees.length < 2) return new Map();
-  return new Map(fees.map((item, index) => [item.id, { n: index + 1, total: fees.length }]));
-}
-
-/** Línea del descuento de un ítem: importe y, si lo tiene, su motivo. */
-function ItemDiscountLine({ item, currency }: { item: TreatmentPlanItem; currency: string }) {
-  const { priceReduction } = effectiveDiscount(item.catalogPrice, item.price, item.discount);
-  const origin = itemPriceOriginText(item, currency);
-  if (item.discount <= 0 && priceReduction <= 0 && !origin) return null;
-  const reason = item.discountReason as DiscountReasonCode | null;
-  return (
-    <span className="block text-xs font-normal text-muted">
-      {origin ? <span className="block tabular-nums">{origin}</span> : null}
-      {priceReduction > 0 && item.catalogPrice !== null ? (
-        <span className="block">
-          {copy.itemPriceReduction(
-            formatCurrency(priceReduction, currency),
-            formatCurrency(item.catalogPrice, currency),
-          )}
-        </span>
-      ) : null}
-      {item.discount > 0 ? <span className="block">{copy.itemDiscount(formatCurrency(item.discount, currency))}</span> : null}
-      {reason ? (
-        <span className="block">{copy.itemDiscountReason(DISCOUNT_REASON_LABELS[reason])}</span>
-      ) : null}
-    </span>
-  );
-}
-
-function ItemSelectBox({
-  item,
-  selection,
-}: {
-  item: TreatmentPlanItem;
-  selection: NonNullable<ItemsTableProps['selection']>;
-}) {
-  return (
-    <input
-      type="checkbox"
-      aria-label={copy.selectItem(item.toothNumber)}
-      checked={selection.selectedIds.has(item.id)}
-      onChange={(e) => selection.onToggle(item.id, e.target.checked)}
-      className="size-5 shrink-0 accent-[var(--color-primary)]"
-    />
-  );
-}
-
-/**
- * The row-level way back to the chart. Rendered as a real `<Link>` (not a
- * button): it is a location, so it must open in a new tab, be copied, and be
- * reachable with the browser's own affordances like any other address.
- */
-function OdontogramLink({
-  toothNumber,
-  href,
-}: {
-  toothNumber: string;
-  href?: (toothNumber: string) => string;
-}) {
-  // DX-291: un cargo administrativo no tiene diente al que volver.
-  if (!href || !toothNumber) return null;
-  return (
-    <Link
-      href={href(toothNumber)}
-      // El nombre accesible EMPIEZA por el texto visible (WCAG 2.5.3): sin eso,
-      // cinco filas ofrecerían cinco enlaces con el mismo nombre y ninguna
-      // pista de a qué diente lleva cada uno.
-      aria-label={copy.viewInOdontogramFor(toothNumber)}
-      className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-    >
-      {copy.viewInOdontogram}
-    </Link>
-  );
-}
-
-/**
- * DX-191: «Registrar implante» desde el ítem del plan que se ejecuta. Un
- * `<Link>` por la misma razón que `OdontogramLink`; el nombre accesible empieza
- * por el texto visible y lleva el diente (WCAG 2.5.3).
- */
-function RegisterImplantLink({
-  item,
-  href,
-}: {
-  item: TreatmentPlanItem;
-  href: (item: TreatmentPlanItem) => string;
-}) {
-  return (
-    <Link
-      href={href(item)}
-      aria-label={copy.registerImplantFor(item.toothNumber)}
-      className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-    >
-      {copy.registerImplant}
-    </Link>
-  );
-}
-
-/**
- * DX-375: «Sin tasa» junto al importe de un abono que no tenía tasa de su día
- * (el saldo no lo cuenta todavía). El motivo va en texto para lectores de
- * pantalla, no solo en el color.
- */
-function PaymentMissingRateBadge({ payment }: { payment: Payment }) {
-  if (payment.exchangeRateStatus !== 'MISSING') return null;
-  return (
-    <Badge variant="warning">
-      {paymentRateCopy.missing}
-      <span className="sr-only">: {paymentRateCopy.missingHelp}</span>
-    </Badge>
-  );
-}
-
-/** DX-375: la tasa que congeló un abono en otra moneda, bajo su importe, con el formato de la sede (DX-378). */
-function PaymentFrozenRate({ payment, fmt }: { payment: Payment; fmt: RegionalFormat | null }) {
-  const label = frozenRateLabel(payment, fmt);
-  if (!label) return null;
-  return <span className="mt-0.5 block text-xs font-normal text-muted tabular-nums">{label}</span>;
-}
-
-/**
- * Las cuatro cifras del plan en UNA fila etiquetada, no en tarjetas.
- *
- * Antes esta pantalla mostraba «Total» en su propia franja y luego tres
- * tarjetas con borde (A pagar / Pagado / Saldo) — la plantilla de
- * métrica-héroe que DESIGN.md prohíbe como estructura, y seis cifras con
- * alcances distintos compitiendo por la misma atención junto a las tres del
- * plan de pagos. Aquí las cuatro que describen ESTE plan van juntas y con el
- * mismo peso; las del financiamiento se quedan bajo «Plan de pagos», que es lo
- * que las distingue.
- *
- * `Saldo` es la única que se destaca (`text-ink` sobre el resto en `text-muted`
- * es lo que hace jerarquía sin volver a inventar una tarjeta): es la cifra que
- * el paciente pregunta en voz alta.
- */
-function PlanMoneySummary({
-  token,
-  total,
-  currency,
-  balance,
-}: {
-  token: string;
-  total: number;
-  currency: string;
-  balance: PlanBalance | null;
-}) {
-  const figures: { key: string; label: string; value: string; strong?: boolean; help?: string }[] = [
-    { key: 'total', label: copy.totalLabel, value: formatCurrency(total, currency) },
-  ];
-  if (balance) {
-    figures.push(
-      {
-        key: 'billable',
-        label: copy.billableLabel,
-        value: formatCurrency(balance.billable, balance.planCurrency),
-      },
-      {
-        key: 'paid',
-        label: copy.paidLabel,
-        value: formatCurrency(balance.paid, balance.planCurrency),
-      },
-      {
-        key: 'balance',
-        label: copy.balanceLabel,
-        value: formatCurrency(balance.balance, balance.planCurrency),
-        strong: true,
-      },
-    );
-    // DX-051: solo cuando hay algo por imputar; un cero aquí sería ruido.
-    if (balance.unallocated > 0) {
-      figures.push({
-        key: 'unallocated',
-        label: allocationCopy.unallocated,
-        value: formatCurrency(balance.unallocated, balance.planCurrency),
-        help: allocationCopy.unallocatedHelp,
-      });
-    }
-  }
-
-  return (
-    <>
-      {/* `<dl>` y no divs: son pares etiqueta/valor, y así un lector de
-          pantalla los anuncia emparejados en vez de como ocho textos sueltos. */}
-      <dl className="flex flex-wrap gap-x-8 gap-y-3">
-        {figures.map((figure) => (
-          <div key={figure.key} className="min-w-0">
-            <dt className="t-label text-muted">{figure.label}</dt>
-            <dd
-              className={cn(
-                'mt-0.5 tabular-nums',
-                figure.strong ? 'text-lg font-semibold text-ink' : 'text-base text-muted',
-              )}
-            >
-              {figure.value}
-            </dd>
-            {figure.help ? <dd className="mt-0.5 max-w-[28ch] text-xs text-muted">{figure.help}</dd> : null}
-          </div>
-        ))}
-      </dl>
-      {/* DX-375: los abonos «sin tasa» no cuentan en Pagado ni en Saldo; el
-          aviso lo dice junto a las cifras (y cómo resolverlo) en vez de la
-          nota de «sin convertir», que habla de los mismos abonos. */}
-      {balance && balance.paymentsWithoutRate.length > 0 ? (
-        <WithoutRateNotice token={token} payments={balance.paymentsWithoutRate} />
-      ) : balance && balance.unconvertedPaymentsCount > 0 ? (
-        <p className="text-sm text-muted">{allocationCopy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>
-      ) : null}
-    </>
-  );
-}
-
-function procedureName(item: TreatmentPlanItem, catalogById: Map<string, DentalCatalogItem>): string {
-  return catalogById.get(item.catalogItemId)?.labelEs ?? item.catalogItemId;
-}
-
-function surfacesLabel(item: TreatmentPlanItem): string {
-  if (item.surfaces.length > 0) return item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ');
-  // DX-291: un cargo administrativo no tiene diente ni caras.
-  return item.toothNumber ? copy.wholeToothFallback : copy.noSurfaces;
-}
-
-function ItemsTable({
-  items,
-  catalogById,
-  currency,
-  updatingItemId,
-  visit,
-  feeRefs,
-  feeStale,
-  focusedTooth,
-  odontogramHref,
-  implantHref,
-  onStatusChange,
-  onRemove,
-  canLeaveDone = () => true,
-  onCorrectAttribution,
-  onVoidFee,
-  locked = false,
-  closed = false,
-  markDoneOnly = false,
-  itemBalances,
-  selection,
-  fmt,
-}: ItemsTableProps) {
-  // SEC-050: el ítem de un cargo vigente no se quita, no cambia de estado ni
-  // entra en «Descuento %».
-  const isFee = (item: TreatmentPlanItem) => Boolean(item.cancellationFeeAppointmentId);
-  const removable = (item: TreatmentPlanItem) => !locked && !closed && !isFee(item);
-  // DX-191: el implante se registra al ejecutar un ítem aceptado (o ya
-  // realizado); no en uno solo propuesto ni en un plan cancelado o rechazado.
-  const implantLinkFor = (item: TreatmentPlanItem) =>
-    implantHref && (item.status === 'ACCEPTED' || item.status === 'DONE') && (!closed || markDoneOnly)
-      ? implantHref
-      : undefined;
-  // Plan cerrado: el estado no se toca, salvo en uno completado marcar como
-  // realizado lo que quedó aceptado (misma regla que la API).
-  const statusFrozen = (item: TreatmentPlanItem) =>
-    isFee(item) || (closed && !(markDoneOnly && item.status === 'ACCEPTED'));
-  const optionDisabled = (item: TreatmentPlanItem, status: TreatmentPlanItemStatus) =>
-    (locked && status === 'PROPOSED') ||
-    (closed && status !== item.status && status !== 'DONE') ||
-    (item.status === 'DONE' && status !== 'DONE' && !canLeaveDone(item));
-  if (items.length === 0) {
-    return <EmptyState role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
-  }
-
-  return (
-    <>
-      {/* Desktop table */}
-      <div className="hidden md:block">
-        <Table>
-          <caption className="sr-only">
-            {visit === null ? copy.itemsTableCaption : copy.visitItemsTableCaption(visit)}
-          </caption>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              {selection ? (
-                <TableHead>
-                  <span className="sr-only">{copy.bulkDiscount}</span>
-                </TableHead>
-              ) : null}
-              <TableHead>{copy.colTooth}</TableHead>
-              <TableHead>{copy.colProcedure}</TableHead>
-              <TableHead>{copy.colSurfaces}</TableHead>
-              <TableHead>{copy.colPrice}</TableHead>
-              {itemBalances ? (
-                <>
-                  <TableHead className="text-right">{itemPaidCopy.colPaid}</TableHead>
-                  <TableHead className="text-right">{itemPaidCopy.colPending}</TableHead>
-                </>
-              ) : null}
-              <TableHead>{copy.colStatus}</TableHead>
-              <TableHead className="sr-only">{copy.colActions}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => {
-              const updating = updatingItemId === item.id;
-              const focused = focusedTooth === item.toothNumber;
-              const implantLink = implantLinkFor(item);
-              return (
-                <TableRow
-                  key={item.id}
-                  // `aria-current` dice en la capa accesible lo mismo que el
-                  // fondo dice en la visual: esta es la fila que el usuario
-                  // vino a ver desde el odontograma.
-                  aria-current={focused ? true : undefined}
-                  className={cn(focused && 'bg-surface-2')}
-                >
-                  {selection ? (
-                    <TableCell className="w-10">
-                      {isFee(item) ? null : <ItemSelectBox item={item} selection={selection} />}
-                    </TableCell>
-                  ) : null}
-                  <TableCell className="font-medium tabular-nums">{item.toothNumber || copy.noTooth}</TableCell>
-                  <TableCell>{procedureName(item, catalogById)}</TableCell>
-                  <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
-                  <TableCell className="tabular-nums">
-                    {formatCurrency(item.price, currency)}
-                    <ItemDiscountLine item={item} currency={currency} />
-                  </TableCell>
-                  {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} fmt={fmt} /> : null}
-                  <TableCell>
-                    <div className="flex flex-col items-start gap-1.5">
-                      <StatusBadge kind="treatmentPlanItem" status={item.status} />
-                      <span className="inline-flex items-center gap-2">
-                        <select
-                          aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
-                          value={item.status}
-                          disabled={updating || statusFrozen(item)}
-                          onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
-                          className={cn(fieldClass, 'h-8 px-2 py-1 text-xs')}
-                        >
-                          {ITEM_STATUS_OPTIONS.map((status) => (
-                            <option key={status} value={status} disabled={optionDisabled(item, status)}>
-                              {ITEM_STATUS_LABELS[status]}
-                            </option>
-                          ))}
-                        </select>
-                        {updating && (
-                          <span role="status" className="text-xs text-muted">
-                            {copy.refreshing}
-                          </span>
-                        )}
-                      </span>
-                      <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
-                      <FeeItemLine
-                        item={item}
-                        label={procedureName(item, catalogById)}
-                        currency={currency}
-                        feeRef={feeRefs.get(item.id)}
-                        disabled={feeStale}
-                        onVoid={onVoidFee}
-                      />
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {/* Mismo aislamiento que en la tabla de abonos: el enlace
-                        inocuo y el botón destructivo no comparten zona de
-                        toque. */}
-                    <div className="flex flex-wrap items-center gap-3">
-                      <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                      {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
-                      {item.toothNumber && odontogramHref && removable(item) ? <Separator orientation="vertical" className="h-5" /> : null}
-                      {!removable(item) ? null : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={updating}
-                          onClick={() => onRemove(item.id)}
-                        >
-                          {updating ? copy.removing : copy.remove}
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Mobile list. Hairline-separated rows inside ONE bordered container —
-          not a stack of `<Card>`s nested inside the card this section already
-          lives in (DESIGN.md: "No nested cards; use hairline sections
-          inside"). */}
-      <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-border md:hidden">
-        {items.map((item) => {
-          const updating = updatingItemId === item.id;
-          const focused = focusedTooth === item.toothNumber;
-          const implantLink = implantLinkFor(item);
-          return (
-            <li
-              key={item.id}
-              aria-current={focused ? true : undefined}
-              className={cn('p-4', focused && 'bg-surface-2')}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-3 font-medium text-ink tabular-nums">
-                  {selection && !isFee(item) ? <ItemSelectBox item={item} selection={selection} /> : null}
-                  {item.toothNumber ? `${copy.colTooth} ${item.toothNumber}` : copy.noTooth}
-                </span>
-                <StatusBadge kind="treatmentPlanItem" status={item.status} />
-              </div>
-              <p className="mt-2 text-ink">{procedureName(item, catalogById)}</p>
-              <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
-              <p className="mt-1 font-medium text-ink tabular-nums">
-                {formatCurrency(item.price, currency)}
-                <ItemDiscountLine item={item} currency={currency} />
-              </p>
-              {itemBalances?.has(item.id) ? (
-                <div className="mt-1">
-                  <ItemPaidLine item={itemBalances.get(item.id)} currency={currency} fmt={fmt} />
-                </div>
-              ) : null}
-              <div className="mt-1">
-                <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
-              </div>
-              {isFee(item) ? (
-                <div className="mt-2">
-                  <FeeItemLine
-                    item={item}
-                    label={procedureName(item, catalogById)}
-                    currency={currency}
-                    feeRef={feeRefs.get(item.id)}
-                    disabled={feeStale}
-                    onVoid={onVoidFee}
-                  />
-                </div>
-              ) : null}
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <select
-                  aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
-                  value={item.status}
-                  disabled={updating || statusFrozen(item)}
-                  onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
-                  className={cn(fieldClass, 'h-9 w-auto text-xs')}
-                >
-                  {ITEM_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status} disabled={optionDisabled(item, status)}>
-                      {ITEM_STATUS_LABELS[status]}
-                    </option>
-                  ))}
-                </select>
-                {!removable(item) ? null : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={updating}
-                    onClick={() => onRemove(item.id)}
-                  >
-                    {updating ? copy.removing : copy.remove}
-                  </Button>
-                )}
-              </div>
-              {item.toothNumber && (odontogramHref || implantLink) ? (
-                <p className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-                  <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                  {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
-                </p>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </>
-  );
-}
-
-interface PaymentsListProps {
-  payments: Payment[];
-  voidingPaymentId: string | null;
-  onVoid: (paymentId: string) => void;
-  /** Abre el recibo de caja del abono (DX-136). */
-  onReceipt: (paymentId: string) => void;
-  /** Plan rechazado o cancelado (DX-109): el vacío no invita a registrar un abono. */
-  billable?: boolean;
-  /** DX-051: abonos cuya imputación fijó un ADMIN a mano (`balance.manualPaymentIds`). */
-  manualPaymentIds?: ReadonlySet<string>;
-  /** DX-051: abre «Imputar abono»; solo ADMIN y en un plan que se cobra. */
-  onAllocate?: (paymentId: string, trigger: HTMLElement) => void;
-  /** DX-375/DX-378/DX-386: formato de la sede para importe, día y tasa congelada; `null` mientras carga («—»). */
-  fmt: RegionalFormat | null;
-}
-
-/** Desktop table + mobile cards for the abonos list — same responsive split as `ItemsTable`. */
-function PaymentsList({
-  payments,
-  voidingPaymentId,
-  onVoid,
-  onReceipt,
-  billable = true,
-  manualPaymentIds,
-  onAllocate,
-  fmt,
-}: PaymentsListProps) {
-  if (payments.length === 0) {
-    return (
-      <EmptyState
-        role="status"
-        title={copy.emptyPaymentsTitle}
-        description={billable ? copy.emptyPaymentsDescription : undefined}
-      />
-    );
-  }
-
-  return (
-    <>
-      {/* Desktop table */}
-      <div className="hidden md:block">
-        <Table>
-          <caption className="sr-only">{copy.paymentsTableCaption}</caption>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>{copy.colPaymentDate}</TableHead>
-              <TableHead>{copy.colPaymentReceipt}</TableHead>
-              <TableHead>{copy.colPaymentAmount}</TableHead>
-              <TableHead>{copy.colPaymentMethod}</TableHead>
-              <TableHead>{copy.colPaymentNotes}</TableHead>
-              <TableHead className="sr-only">{copy.colPaymentActions}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {payments.map((payment) => {
-              const voiding = voidingPaymentId === payment.id;
-              return (
-                <TableRow key={payment.id}>
-                  <TableCell>{sedeCivilDate(payment.paidOn, fmt)}</TableCell>
-                  <TableCell className="tabular-nums">
-                    {payment.receiptNumber ?? (
-                      <span className="text-muted">{copy.paymentReceiptLegacy}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <span className="inline-flex flex-wrap items-center gap-2">
-                      {sedeMoney(payment.amount, payment.currency, fmt)}
-                      {manualPaymentIds?.has(payment.id) ? (
-                        <Badge variant="muted">{copy.manualAllocation}</Badge>
-                      ) : null}
-                      <PaymentMissingRateBadge payment={payment} />
-                    </span>
-                    <PaymentFrozenRate payment={payment} fmt={fmt} />
-                  </TableCell>
-                  <TableCell>
-                    {payment.method ? (
-                      <StatusBadge kind="paymentMethod" status={payment.method} />
-                    ) : (
-                      <span className="text-muted">{copy.paymentMethodFallback}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted">{payment.notes ?? copy.paymentNotesFallback}</TableCell>
-                  <TableCell>
-                    {/* «Recibo» y «Anular» son dos botones de 36px: a 8px de
-                        distancia, en tablet, anular es un dedo mal puesto.
-                        Separador vertical + hueco mayor para que el destructivo
-                        no comparta zona de toque con el inocuo. */}
-                    <div className="flex items-center gap-3">
-                      <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
-                        {copy.receiptAction}
-                      </Button>
-                      {onAllocate ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => onAllocate(payment.id, e.currentTarget)}
-                        >
-                          {copy.allocationAction}
-                          <span className="sr-only">{copy.allocationActionContext(payment, fmt)}</span>
-                        </Button>
-                      ) : null}
-                      <Separator orientation="vertical" className="h-5" />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={voiding}
-                        onClick={() => onVoid(payment.id)}
-                      >
-                        {voiding ? copy.voidingPayment : copy.voidPaymentAction}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Mobile list — hairline rows in one bordered container, not `<Card>`s
-          nested inside the card this section lives in (DESIGN.md). */}
-      <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-border md:hidden">
-        {payments.map((payment) => {
-          const voiding = voidingPaymentId === payment.id;
-          return (
-            <li key={payment.id} className="p-4">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-ink tabular-nums">{sedeCivilDate(payment.paidOn, fmt)}</span>
-                {payment.method ? (
-                  <StatusBadge kind="paymentMethod" status={payment.method} />
-                ) : (
-                  <span className="text-sm text-muted">{copy.paymentMethodFallback}</span>
-                )}
-              </div>
-              <p className="mt-2 flex flex-wrap items-center gap-2 font-medium text-ink tabular-nums">
-                {sedeMoney(payment.amount, payment.currency, fmt)}
-                {manualPaymentIds?.has(payment.id) ? (
-                  <Badge variant="muted">{copy.manualAllocation}</Badge>
-                ) : null}
-                <PaymentMissingRateBadge payment={payment} />
-              </p>
-              <PaymentFrozenRate payment={payment} fmt={fmt} />
-              <p className="mt-1 text-sm text-muted tabular-nums">
-                {copy.paymentReceiptMobile(payment.receiptNumber)}
-              </p>
-              <p className="mt-1 text-sm text-muted">{payment.notes ?? copy.paymentNotesFallback}</p>
-              {/* Mismo aislamiento del destructivo que en la tabla de
-                  escritorio — en móvil el riesgo de mal toque es mayor, no
-                  menor. Dos grupos en los extremos en vez de un separador:
-                  con «Imputación» la fila se parte a 390 px y el separador
-                  quedaba colgando al final de la primera línea. */}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
-                    {copy.receiptAction}
-                  </Button>
-                  {onAllocate ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => onAllocate(payment.id, e.currentTarget)}
-                    >
-                      {copy.allocationAction}
-                      <span className="sr-only">{copy.allocationActionContext(payment, fmt)}</span>
-                    </Button>
-                  ) : null}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={voiding}
-                  onClick={() => onVoid(payment.id)}
-                >
-                  {voiding ? copy.voidingPayment : copy.voidPaymentAction}
-                </Button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </>
-  );
 }
 
 /**
@@ -1271,7 +153,6 @@ export function TreatmentPlansTab({
   // PAYMENT_ROLES que la API). DENTIST y ASSISTANT no ven datos de pago: ni se
   // piden (serían 403 y un toast en cada acción) ni se pinta su sección.
   const canSeeBilling = canRecordPayments(getTokenRole(token));
-  const sedeTimeZone = readyTimeZone(sedeZone);
   // Plans list + catalog (loaded together).
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
@@ -1352,31 +233,11 @@ export function TreatmentPlansTab({
   // toast's retry bumps this instead of closing over a ref.
   const [paymentsReloadKey, setPaymentsReloadKey] = useState(0);
   const loadedPaymentsPlanIdRef = useRef<string | null>(null);
-  // Idempotency-Key for the in-progress abono. Minted when the form opens
-  // (openPaymentForm) and rotated after a SUCCESSFUL submit, so every retry of
-  // the SAME click (network error → user clicks again) reuses the same key and
-  // the backend dedups it, while each new abono gets a fresh key.
-  const paymentIdempotencyKeyRef = useRef<string | null>(null);
 
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  // DX-377: medio de la clínica, referencia y aviso de repetida (el mismo que
-  // «Registrar abono»).
-  const paymentMethodFields = usePaymentMethodFields(token, showPaymentForm);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentCurrency, setPaymentCurrency] = useState('');
-  const [paymentDate, setPaymentDate] = useState('');
-  // La zona llega después de abrir el formulario: la fecha vacía pasa a «hoy».
-  const [prevSedeTimeZone, setPrevSedeTimeZone] = useState(sedeTimeZone);
-  if (sedeTimeZone !== prevSedeTimeZone) {
-    setPrevSedeTimeZone(sedeTimeZone);
-    if (sedeTimeZone && paymentDate === '') setPaymentDate(sedeToday(sedeTimeZone));
-  }
-  const [paymentNotes, setPaymentNotes] = useState('');
-  const [addPaymentSubmitting, setAddPaymentSubmitting] = useState(false);
-  const [addPaymentValidationError, setAddPaymentValidationError] = useState<string | null>(null);
-  // DX-241: el motivo de un monto que no vale va junto al campo (escalón 4).
-  const [paymentAmountError, setPaymentAmountError] = useState<string | null>(null);
-  const [addPaymentError, setAddPaymentError] = useState<string | null>(null);
+
+  // «Registrar abono»: `seq` remonta el modal en cada apertura (formulario
+  // limpio e Idempotency-Key nueva); `open` aparte para cerrar con animación.
+  const [paymentForm, setPaymentForm] = useState<{ open: boolean; seq: number } | null>(null);
 
   const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null);
   // Igual que `itemToRemove`: anular mueve dinero en el saldo y no tiene
@@ -1387,7 +248,6 @@ export function TreatmentPlansTab({
   // `open` aparte del abono, para que el modal se cierre con su animación;
   // `seq` lo remonta (y relee) en cada apertura, aunque sea el mismo abono.
   const [allocation, setAllocation] = useState<{ paymentId: string; open: boolean; seq: number } | null>(null);
-  const allocationTriggerRef = useRef<HTMLElement | null>(null);
   const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
 
   // Bumped whenever the balance/abonos refresh, so the payment-plan section
@@ -1409,29 +269,13 @@ export function TreatmentPlansTab({
   const newPlanCurrency =
     newPlanCurrencyChoice || activeSedeCurrency(locations, activeLocationId).currency || '';
 
-  // Add-item form state.
-  const [toothNumber, setToothNumber] = useState('');
-  const [catalogItemId, setCatalogItemId] = useState('');
-  const [price, setPrice] = useState('');
-  const [discount, setDiscount] = useState('');
-  const [surfaces, setSurfaces] = useState<Record<ToothSurface, boolean>>(emptySurfacesState);
-  const [notes, setNotes] = useState('');
   // DX-204: motivo del descuento del ítem nuevo, política de la clínica (para
   // avisar antes; la API la aplica) y la selección de «Descuento %».
-  const [addReason, setAddReason] = useState<DiscountReasonValue>(EMPTY_REASON);
-  const [addReasonErrors, setAddReasonErrors] = useState<{ reason?: string; note?: string } | null>(null);
   const [discountRules, setDiscountRules] = useState<DiscountRules | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<ReadonlySet<string>>(() => new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkKey, setBulkKey] = useState(0);
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
-  const [addItemSubmitting, setAddItemSubmitting] = useState(false);
-  // DX-105: el usuario tocó el precio precargado; solo entonces se envía.
-  const [priceEdited, setPriceEdited] = useState(false);
-  const [addItemValidationError, setAddItemValidationError] = useState<string | null>(null);
-  // DX-241: precio y descuento que no valen, junto a su campo (escalón 4).
-  const [itemAmountErrors, setItemAmountErrors] = useState<{ price?: string; discount?: string }>({});
-  const [addItemError, setAddItemError] = useState<string | null>(null);
 
   // Política de descuentos (DX-204): solo para avisar del tope y del motivo
   // antes de enviar. Si no carga, el formulario no avisa y la API sigue
@@ -1563,57 +407,15 @@ export function TreatmentPlansTab({
   if (selectedPlanId !== prevSelectedPlanId) {
     setPrevSelectedPlanId(selectedPlanId);
     setPlanDetail(null);
-    setToothNumber('');
-    setCatalogItemId('');
-    setPrice('');
-    setDiscount('');
-    setSurfaces(emptySurfacesState());
-    setNotes('');
-    setAddItemValidationError(null);
-    setItemAmountErrors({});
-    setAddItemError(null);
     // Balance/abonos (PAY-T4) — same rationale: a different plan is a
     // genuinely different resource, and an in-progress abono form must not
     // carry over to the wrong plan.
     setPlanBalance(null);
     setPayments([]);
-    setShowPaymentForm(false);
-    setPaymentAmount('');
-    setPaymentCurrency('');
-    setPaymentDate('');
-    paymentMethodFields.reset();
-    setPaymentNotes('');
-    setAddPaymentValidationError(null);
-    setPaymentAmountError(null);
-    setAddPaymentError(null);
   }
 
   const catalogById = new Map(allCatalogItems.map((item) => [item.id, item]));
 
-  // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
-  // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,
-  // vuelve el precio de catálogo y el campo sigue editable.
-  const priceQuote = usePriceQuote({
-    token,
-    patientId,
-    catalogItemId,
-    currency: planDetail?.currency ?? '',
-    onSettled: (q) => {
-      if (q) {
-        setPrice(q.price !== null ? String(q.price) : '');
-        if (noDiscountAllowed(q)) setDiscount('');
-      } else {
-        const fallback = catalogById.get(catalogItemId)?.defaultPrice;
-        setPrice(fallback != null ? String(fallback) : '');
-      }
-      setPriceEdited(false);
-    },
-  });
-  const quoteReady = priceQuote.status === 'ready' ? priceQuote.quote : null;
-  const addPriceLoading = priceQuote.status === 'loading';
-  const addNoDiscount = noDiscountAllowed(quoteReady);
-  // Referencia de la rebaja (R1): el precio resuelto, no el de catálogo.
-  const referencePrice = quoteReady ? quoteReady.price : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
 
   // Lo único de esta página donde la sede activa SÍ decide algo: a qué sede
   // queda atribuido un abono nuevo. Mismo aviso que el estado de cuenta
@@ -1624,14 +426,6 @@ export function TreatmentPlansTab({
     getTokenAllowedLocationIds(token),
   );
 
-  // DX-376: cobrar en otra moneda que la del plan enseña, antes de guardar, la
-  // tasa del día del abono, cuánto cubre y lo que queda pendiente.
-  const paymentInOtherCurrency =
-    planDetail !== null && paymentCurrency !== '' && paymentCurrency !== planDetail.currency;
-  const paymentRates = useExchangeRates(token, paymentDate, showPaymentForm && paymentInOtherCurrency);
-  const parsedPaymentAmount = paymentCurrency ? parseMoneyInput(paymentAmount, paymentCurrency) : null;
-  const previewPaymentAmount =
-    parsedPaymentAmount?.ok && parsedPaymentAmount.value > 0 ? parsedPaymentAmount.value : null;
 
   function refreshPlansInPlace(): Promise<void> {
     setRefreshing(true);
@@ -1889,98 +683,25 @@ export function TreatmentPlansTab({
       .finally(() => setPaymentsRefreshing(false));
   }
 
-  /** Opens the "Registrar pago" modal, defaulting currency=plan.currency / fecha=today. */
+
+  /** Abre «Registrar abono» con un formulario nuevo. */
   function openPaymentForm() {
-    paymentIdempotencyKeyRef.current = crypto.randomUUID();
-    setPaymentAmount('');
-    // GLOBAL-G1 (R14): la del plan, sin moneda de reserva.
-    setPaymentCurrency(planDetail?.currency ?? '');
-    // DX-097: hoy en la zona de la sede, no en la del navegador.
-    setPaymentDate(sedeTimeZone ? sedeToday(sedeTimeZone) : '');
-    paymentMethodFields.reset();
-    setPaymentNotes('');
-    setAddPaymentValidationError(null);
-    setPaymentAmountError(null);
-    setAddPaymentError(null);
-    setShowPaymentForm(true);
+    setPaymentForm((prev) => ({ open: true, seq: (prev?.seq ?? 0) + 1 }));
   }
 
-  async function handleAddPayment(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setAddPaymentValidationError(null);
-    setPaymentAmountError(null);
-    setAddPaymentError(null);
-
-    if (!selectedPlanId) return;
-
-    const currencyValue = paymentCurrency.trim().toUpperCase();
-    if (!currencyValue) {
-      setAddPaymentValidationError(copy.invalidPaymentCurrency);
-      return;
-    }
-    // DX-241: la lectura común de los campos de dinero, con los decimales de
-    // la moneda del abono.
-    const parsedAmount = parseMoneyInput(paymentAmount, currencyValue);
-    if (!parsedAmount.ok || parsedAmount.value <= 0) {
-      setPaymentAmountError(
-        parsedAmount.ok || parsedAmount.reason === 'empty' ? copy.invalidPaymentAmount : parsedAmount.message,
-      );
-      return;
-    }
-    const amountNumber = parsedAmount.value;
-    if (!paymentDate) {
-      setAddPaymentValidationError(copy.invalidPaymentDate);
-      return;
-    }
-    // DX-395: la referencia o el motivo que faltan se marcan en su campo,
-    // que recibe el foco.
-    if (!paymentMethodFields.validate()) return;
-
-    setAddPaymentSubmitting(true);
-    try {
-      const input: RecordPaymentInput = {
-        amount: amountNumber,
-        currency: currencyValue,
-        // DX-097: el DÍA elegido; la API lo guarda al mediodía de la sede.
-        paidAt: paymentDate,
-        ...paymentMethodFields.body(),
-        ...(paymentNotes.trim() ? { notes: paymentNotes.trim() } : {}),
-      };
-      // Defensive: if the form was somehow submitted without an open-time key,
-      // mint one now so this submit still dedups.
-      const idempotencyKey =
-        paymentIdempotencyKeyRef.current ??
-        (paymentIdempotencyKeyRef.current = crypto.randomUUID());
-      await recordPayment(token, selectedPlanId, input, idempotencyKey);
-      // Success → rotate: the next abono is a genuinely different payment.
-      paymentIdempotencyKeyRef.current = crypto.randomUUID();
-      setPaymentAmount('');
-      paymentMethodFields.reset();
-      setPaymentNotes('');
-      setShowPaymentForm(false);
-      await refreshBalanceAndPayments();
-    } catch (err) {
-      // Key intentionally NOT rotated here: a retry of this same click must
-      // reuse it so the backend dedups instead of double-charging.
-      // DX-377: la referencia repetida se avisa junto al campo y pide motivo.
-      if (paymentMethodFields.catchDuplicate(err)) return;
-      // Un 400 técnico (importe/moneda) se dice en español (apiErrorMessage).
-      setAddPaymentError(apiErrorMessage(err, copy.genericAddPaymentError));
-    } finally {
-      setAddPaymentSubmitting(false);
-    }
-  }
-
-  function openAllocation(paymentId: string, trigger: HTMLElement) {
-    allocationTriggerRef.current = trigger;
+  function openAllocation(paymentId: string) {
     setAllocation((prev) => ({ paymentId, open: true, seq: (prev?.seq ?? 0) + 1 }));
   }
 
-  /** Si la fila del abono ya no está (p. ej. lo anuló otra persona), el foco va al pliegue de abonos. */
+  /**
+   * Al cerrar «Imputar abono» el foco vuelve al «⋯» de su fila; si la fila ya
+   * no está (p. ej. lo anuló otra persona), al pliegue de abonos.
+   */
   function focusAfterAllocation(event: Event) {
-    if (allocationTriggerRef.current?.isConnected) return;
     event.preventDefault();
-    document.getElementById(PAYMENTS_TRIGGER_ID)?.focus();
+    const payment = payments.find((p) => p.id === allocation?.paymentId);
+    const trigger = payment ? paymentRowActionsButton(payment, sedeFmt) : null;
+    (trigger ?? document.getElementById(PAYMENTS_TRIGGER_ID))?.focus();
   }
 
   /** La fila ya no anula: abre la confirmación. */
@@ -2093,124 +814,6 @@ export function TreatmentPlansTab({
     await Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
   }
 
-  function handleProcedureChange(nextCatalogItemId: string) {
-    setCatalogItemId(nextCatalogItemId);
-    // Prefill (not lock) the price with the chosen procedure's default —
-    // the field stays editable afterwards.
-    // El precio resuelto del paciente llega de `usePriceQuote`; hasta
-    // entonces el campo está en espera.
-    const item = catalogById.get(nextCatalogItemId);
-    setPrice(item?.defaultPrice != null ? String(item.defaultPrice) : '');
-    setPriceEdited(false);
-  }
-
-  function handleSurfaceChange(surface: ToothSurface, checked: boolean) {
-    setSurfaces((prev) => ({ ...prev, [surface]: checked }));
-  }
-
-  async function handleAddItem(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setAddItemValidationError(null);
-    setItemAmountErrors({});
-    setAddItemError(null);
-
-    if (!selectedPlanId) return;
-
-    const tooth = toothNumber.trim();
-    if (!isFdiToothNumber(tooth)) {
-      setAddItemValidationError(copy.invalidToothNumber);
-      return;
-    }
-    if (!catalogItemId) {
-      setAddItemValidationError(copy.selectProcedurePrompt);
-      return;
-    }
-
-    const selectedSurfaces = SURFACE_ORDER.filter((s) => surfaces[s]);
-    const itemCurrency = planDetail?.currency ?? '';
-    const priceInput = optionalAmount(price, itemCurrency);
-    const discountInput = optionalAmount(discount, itemCurrency);
-    // Lo que no se entiende dice por qué (la regla común de los importes).
-    if (priceInput === null || discountInput === null) {
-      setItemAmountErrors({
-        price: priceInput === null ? copy.unreadablePrice(unreadableReason(price, itemCurrency)) : undefined,
-        discount: discountInput === null ? copy.unreadableDiscount(unreadableReason(discount, itemCurrency)) : undefined,
-      });
-      return;
-    }
-    const discountValue = discountInput ?? 0;
-    if (priceInput !== undefined && discountValue > priceInput) {
-      setItemAmountErrors({ discount: copy.invalidDiscount });
-      return;
-    }
-    // DX-105: una prestación sin descuentos no admite rebajar el precio
-    // resuelto ni descontar; se dice aquí, sin llamar a la API.
-    if (
-      addNoDiscount &&
-      (discountValue > 0 || (priceInput !== undefined && referencePrice !== null && priceInput < referencePrice))
-    ) {
-      setItemAmountErrors({
-        [discountValue > 0 ? 'discount' : 'price']: NO_DISCOUNT_ALLOWED_NOTICE,
-      });
-      return;
-    }
-    // DX-204: tope del rol y motivo por encima del umbral, avisados aquí; la
-    // API los vuelve a aplicar. SEC-041: sobre el descuento EFECTIVO, que
-    // suma la rebaja del precio frente al de catálogo.
-    setAddReasonErrors(null);
-    const catalogPrice = referencePrice;
-    const effectivePrice = priceInput ?? catalogPrice;
-    const effective =
-      effectivePrice !== null ? effectiveDiscount(catalogPrice, effectivePrice, discountValue) : null;
-    if (discountRules && role && effective && exceedsCap(discountRules, role, effective.listPrice, effective.total)) {
-      const cap = capFor(discountRules, role);
-      setAddItemValidationError(
-        effective.priceReduction > 0 ? priceBelowCatalogCapMessage(cap) : roleCapMessage(cap),
-      );
-      return;
-    }
-    const discounted = (effective?.total ?? discountValue) > 0;
-    const reasonRequired =
-      discountRules !== null && effective !== null && needsReason(discountRules, effective.listPrice, effective.total);
-    const reasonProblems = discounted ? validateDiscountReason(addReason, reasonRequired) : null;
-    if (reasonProblems) {
-      setAddReasonErrors(reasonProblems);
-      return;
-    }
-
-    setAddItemSubmitting(true);
-    try {
-      const input: AddTreatmentPlanItemInput = {
-        toothNumber: tooth,
-        catalogItemId,
-        ...(selectedSurfaces.length ? { surfaces: selectedSurfaces } : {}),
-        // DX-105: el precio resuelto lo vuelve a calcular la API; solo se
-        // manda lo que el usuario escribió. Un fallo de vista previa tampoco
-        // convierte el precio de catálogo precargado en un precio manual.
-        ...(priceInput !== undefined && priceEdited ? { price: priceInput } : {}),
-        ...(discountValue > 0 ? { discount: discountValue } : {}),
-        ...(discounted ? reasonPayload(addReason) : {}),
-        ...(notes.trim() ? { notes: notes.trim() } : {}),
-      };
-      await addItem(token, selectedPlanId, input);
-      setToothNumber('');
-      setCatalogItemId('');
-      setPrice('');
-      setPriceEdited(false);
-      setDiscount('');
-      setAddReason(EMPTY_REASON);
-      setSurfaces(emptySurfacesState());
-      setNotes('');
-      // DX-051: un ítem aceptado nuevo recibe los sobrantes del reparto.
-      await Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
-    } catch (err) {
-      // Un 400 (FDI inválido / precio obligatorio si el ítem del catálogo no
-      // tiene defaultPrice) llega en inglés: apiErrorMessage lo dice en español.
-      setAddItemError(apiErrorMessage(err, copy.genericAddItemError));
-    } finally {
-      setAddItemSubmitting(false);
-    }
-  }
 
   if (loading) {
     return (
@@ -2243,253 +846,229 @@ export function TreatmentPlansTab({
   // DX-204: un presupuesto aceptado (firmado o no) o cerrado no se vuelve a
   // descontar.
   const discountable = Boolean(planDetail) && !signed && !closed && planDetail?.status !== 'ACCEPTED';
-  const addCurrency = planDetail?.currency ?? '';
-  const addDiscountInput = optionalAmount(discount, addCurrency);
-  const addPriceInput = optionalAmount(price, addCurrency);
-  const addDiscountValue = addDiscountInput ?? 0;
-  const addCatalogPrice = referencePrice;
-  const addPrice = addPriceInput ?? addCatalogPrice;
-  // SEC-041: descuento efectivo = rebaja frente al catálogo + descuento. Con
-  // un precio o descuento que no se entiende no hay aviso (el envío lo para).
-  const addEffective =
-    addPrice !== null && addDiscountInput !== null && addPriceInput !== null
-      ? effectiveDiscount(addCatalogPrice, addPrice, addDiscountValue)
-      : null;
-  const addBelowCatalog = addEffective !== null && addEffective.priceReduction > 0;
-  const addDiscounted = addEffective ? addEffective.total > 0 : addDiscountValue > 0;
-  const addReasonRequired =
-    discountRules !== null &&
-    addEffective !== null &&
-    needsReason(discountRules, addEffective.listPrice, addEffective.total);
   const statusChoices = planDetail ? patchableStatuses(planDetail.status, role) : [];
   const optionGroup = selectedPlan ? optionGroupOf(plans, selectedPlan) : [];
 
+  // Sin planes, crear el primero ES la acción de la pestaña (primaria); con
+  // planes, la primaria del bloque es «Agregar ítem» y «Nuevo plan» baja a
+  // secundaria (una primaria por vista, DESIGN.md).
+  const newPlanVariant = plans.length === 0 ? 'default' : 'secondary';
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       {refreshing && (
-        <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
+        <p role="status" aria-live="polite" className="t-caption text-muted">
           {copy.refreshing}
         </p>
       )}
 
-      <Card>
-        {/* A 390px la moneda y «Nuevo plan» no caben junto al título: bajan a
-            su propia fila (sin desbordar la tarjeta). */}
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>{copy.plansHeading}</CardTitle>
-          <div className="flex w-full items-center gap-2 sm:w-auto">
-            <CurrencySelect
-              id="tp-new-plan-currency"
-              token={token}
-              value={newPlanCurrency}
-              onChange={(code) => {
-                setNewPlanCurrency(code);
-                setCreatePlanError(null);
-              }}
-              placeholder={newPlanCurrency ? undefined : copy.newPlanCurrencyPlaceholder}
-              className="min-w-0 flex-1 sm:w-44 sm:flex-none"
-              ariaLabel={copy.newPlanCurrencyLabel}
-            />
-            <Button type="button" onClick={handleCreatePlan} disabled={creatingPlan}>
-              {creatingPlan ? copy.creatingPlan : copy.newPlan}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {createPlanError && <InlineError>{createPlanError}</InlineError>}
-          {planCreated && !createPlanError && (
-            <p role="status" className="text-sm font-medium text-primary">
-              {copy.planCreated}
-            </p>
-          )}
-          {planReused && !createPlanError && (
-            <p role="status" className="text-sm font-medium text-primary">
-              {copy.planReused}
-            </p>
-          )}
-          {plans.length === 0 ? (
-            <EmptyState role="status" title={copy.emptyPlansTitle} description={copy.emptyPlansDescription} />
-          ) : (
-            <FormField htmlFor="tp-plan-select" label={copy.selectPlanLabel} className="sm:max-w-xs">
-              <select
-                id="tp-plan-select"
-                value={selectedPlanId ?? ''}
-                onChange={(e) => setSelectedPlanId(e.target.value)}
-                className={fieldClass}
-              >
-                {plans.map((plan, index) => (
-                  <option key={plan.id} value={plan.id}>
-                    {copy.planOptionLabel(plan.createdAt, plan.status, index + 1, plan.optionLabel)}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          )}
-        </CardContent>
-      </Card>
+      {/* Bloques planos con cabecera de sección (UX v2): antes cada bloque era
+          una `Card` y los vacíos, tarjetas discontinuas dentro de ella
+          (tarjetas anidadas). */}
+      <section className="flex flex-col gap-4" aria-labelledby="tp-plans-heading">
+        <SectionHeader
+          titleId="tp-plans-heading"
+          title={copy.plansHeading}
+          actions={
+            // A 390px la moneda y «Nuevo plan» no caben junto al título: bajan
+            // a su propia fila.
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <CurrencySelect
+                id="tp-new-plan-currency"
+                token={token}
+                value={newPlanCurrency}
+                onChange={(code) => {
+                  setNewPlanCurrency(code);
+                  setCreatePlanError(null);
+                }}
+                placeholder={newPlanCurrency ? undefined : copy.newPlanCurrencyPlaceholder}
+                className="min-w-0 flex-1 sm:w-44 sm:flex-none"
+                ariaLabel={copy.newPlanCurrencyLabel}
+              />
+              <Button type="button" variant={newPlanVariant} onClick={handleCreatePlan} disabled={creatingPlan}>
+                {creatingPlan ? copy.creatingPlan : copy.newPlan}
+              </Button>
+            </div>
+          }
+        />
+        {createPlanError && <InlineError>{createPlanError}</InlineError>}
+        {planCreated && !createPlanError && (
+          <p role="status" className="text-sm font-medium text-success-text">
+            {copy.planCreated}
+          </p>
+        )}
+        {planReused && !createPlanError && (
+          <p role="status" className="text-sm font-medium text-ink">
+            {copy.planReused}
+          </p>
+        )}
+        {plans.length === 0 ? (
+          <EmptyState role="status" title={copy.emptyPlansTitle} description={copy.emptyPlansDescription} />
+        ) : (
+          <FormField htmlFor="tp-plan-select" label={copy.selectPlanLabel} className="sm:max-w-md">
+            <NativeSelect id="tp-plan-select" value={selectedPlanId ?? ''} onChange={(e) => setSelectedPlanId(e.target.value)}>
+              {plans.map((plan, index) => (
+                <option key={plan.id} value={plan.id}>
+                  {copy.planOptionLabel(plan.createdAt, plan.status, index + 1, plan.optionLabel)}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        )}
+      </section>
 
       {selectedPlanId && (
-        <Card>
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <CardTitle>{copy.detailHeading}</CardTitle>
-              {selectedPlan && (
-                <StatusBadge kind="treatmentPlan" status={selectedPlan.status} />
-              )}
-              {selectedPlan?.optionLabel ? (
-                <span className="text-sm font-medium text-muted">{selectedPlan.optionLabel}</span>
+        <section className="flex flex-col gap-4 border-t border-border-subtle pt-6" aria-labelledby="tp-detail-heading">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex min-w-0 flex-col gap-1">
+              <h2 id="tp-detail-heading" className="t-title text-ink">
+                {copy.detailHeading}
+              </h2>
+              {selectedPlan ? (
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <StatusBadge kind="treatmentPlan" status={selectedPlan.status} />
+                  {selectedPlan.optionLabel ? (
+                    <span className="text-sm font-medium text-muted">{selectedPlan.optionLabel}</span>
+                  ) : null}
+                </p>
               ) : null}
             </div>
             {planDetail && (
               <FormField htmlFor="tp-plan-status" label={copy.planStatusLabel} className="sm:w-56">
-                <select
+                {/* Solo el estado actual y sus transiciones (máquina de
+                    estados, DX-040): presentar y rechazar tienen botón
+                    propio, y aceptar es de odontólogo y ADMIN. */}
+                <NativeSelect
                   id="tp-plan-status"
                   value={planDetail.status}
                   disabled={updatingPlanStatus || statusChoices.length === 1}
                   onChange={(e) => handlePlanStatusChange(e.target.value as TreatmentPlanStatus)}
-                  className={cn(fieldClass, 'h-9')}
                 >
-                  {/* Solo el estado actual y sus transiciones (máquina de
-                      estados, DX-040): presentar y rechazar tienen botón
-                      propio, y aceptar es de odontólogo y ADMIN. */}
                   {statusChoices.map((status) => (
                     <option key={status} value={status}>
                       {PLAN_STATUS_LABELS[status]}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </FormField>
             )}
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {planDetailLoading && (
-              <div className="flex flex-col gap-3" role="status">
-                <span className="sr-only">{copy.loadingPlanDetail}</span>
-                <Skeleton className="h-5 w-1/3" />
-                <Skeleton className="h-16 w-full rounded-lg" />
-                <Skeleton className="h-16 w-full rounded-lg" />
-              </div>
-            )}
-            {/* El reintento de un fallo de escalón 1 bombea la reload key, no
-                llama a `refreshPlanDetail`. Las dos cargan lo mismo, pero
-                `refreshPlanDetail` es el camino de escalón 3 y su `catch`
-                lanza un toast: si el reintento vuelve a fallar, el aviso se
-                apilaría sobre esta misma superficie. La reload key re-dispara
-                el efecto, cuyo `isInitialLoad` sigue siendo cierto (la carga
-                inicial nunca fijó `loadedPlanIdRef`), así que el fallo se
-                queda en el escalón 1 donde le corresponde. */}
-            {planDetailError && (
-              <SectionError
-                description={planDetailError}
-                onRetry={() => setPlanDetailReloadKey((k) => k + 1)}
+          </div>
+
+          {planDetailLoading && (
+            <div className="flex flex-col gap-3" role="status">
+              <span className="sr-only">{copy.loadingPlanDetail}</span>
+              <Skeleton className="h-5 w-1/3" />
+              <Skeleton className="h-16 w-full rounded-lg" />
+              <Skeleton className="h-16 w-full rounded-lg" />
+            </div>
+          )}
+          {/* El reintento de un fallo de escalón 1 bombea la reload key, no
+              llama a `refreshPlanDetail`. Las dos cargan lo mismo, pero
+              `refreshPlanDetail` es el camino de escalón 3 y su `catch` lanza
+              un toast: si el reintento vuelve a fallar, el aviso se apilaría
+              sobre esta misma superficie. La reload key re-dispara el efecto,
+              cuyo `isInitialLoad` sigue siendo cierto (la carga inicial nunca
+              fijó `loadedPlanIdRef`), así que el fallo se queda en el escalón
+              1 donde le corresponde. */}
+          {planDetailError && (
+            <SectionError description={planDetailError} onRetry={() => setPlanDetailReloadKey((k) => k + 1)} />
+          )}
+
+          {!planDetailLoading && !planDetailError && planDetail && (
+            <>
+              {planDetailRefreshing && (
+                <p role="status" aria-live="polite" className="t-caption text-muted">
+                  {copy.refreshing}
+                </p>
+              )}
+              {planStatusError && <InlineError>{planStatusError}</InlineError>}
+              {itemActionError && <InlineError>{itemActionError}</InlineError>}
+
+              {/* El presupuesto del plan (DX-012): imprimirlo y aceptarlo con
+                  firma. Va antes de las cifras porque es lo que se presenta al
+                  paciente. */}
+              <PlanQuoteActions
+                token={token}
+                patientId={patientId}
+                plan={planDetail}
+                role={role}
+                onAccepted={handlePlanAccepted}
               />
-            )}
 
-            {!planDetailLoading && !planDetailError && planDetail && (
-              <>
-                {planDetailRefreshing && (
-                  <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
-                    {copy.refreshing}
-                  </p>
-                )}
-                {planStatusError && <InlineError>{planStatusError}</InlineError>}
-                {itemActionError && <InlineError>{itemActionError}</InlineError>}
+              {/* La opción que se le presenta al paciente (DX-040): presentar,
+                  rechazar, crear alternativa y comparar. */}
+              <PlanOptionsPanel
+                token={token}
+                plan={planDetail}
+                group={optionGroup}
+                role={role}
+                onChanged={handlePlanOptionsChanged}
+                onSelectPlan={setSelectedPlanId}
+              />
 
-                {/* El presupuesto del plan (DX-012): imprimirlo y aceptarlo
-                    con firma. Va antes de las cifras porque es lo que se
-                    presenta al paciente. */}
-                <PlanQuoteActions
-                  token={token}
-                  patientId={patientId}
-                  plan={planDetail}
-                  role={role}
-                  onAccepted={handlePlanAccepted}
-                />
+              {/* UNA región de dinero: las cuatro cifras del PLAN en una fila
+                  etiquetada; las del financiamiento se quedan bajo «Plan de
+                  pagos». */}
+              <PlanMoneySummary
+                token={token}
+                total={planDetail.total ?? 0}
+                currency={planDetail.currency}
+                balance={planBalance}
+              />
+              {/* La nota de alcance califica la región entera, por eso va
+                  pegada debajo y no repetida en cada número. */}
+              <p className="t-label text-muted">{copy.paymentsScopeNote}</p>
 
-                {/* La opción que se le presenta al paciente (DX-040):
-                    presentar, rechazar, crear alternativa y comparar. */}
-                <PlanOptionsPanel
-                  token={token}
-                  plan={planDetail}
-                  group={optionGroup}
-                  role={role}
-                  onChanged={handlePlanOptionsChanged}
-                  onSelectPlan={setSelectedPlanId}
-                />
-
-                {/* UNA región de dinero, no dos racimos de tarjetas. Antes el
-                    plan mostraba «Total» en su propia franja y luego tres
-                    tarjetas (A pagar / Pagado / Saldo), y más abajo el plan de
-                    pagos repetía otras tres — seis cifras con etiquetas de
-                    alcances distintos compitiendo por la misma atención, que es
-                    justo la plantilla de métrica-héroe que DESIGN.md prohíbe
-                    como estructura. Ahora las cuatro cifras del PLAN viven en
-                    una sola fila etiquetada; las del financiamiento se quedan
-                    bajo el encabezado «Plan de pagos», que es lo que las
-                    distingue. Ninguna cifra desapareció. */}
-                <PlanMoneySummary
-                  token={token}
-                  total={planDetail.total ?? 0}
-                  currency={planDetail.currency}
-                  balance={planBalance}
-                />
-                {/* La nota de alcance califica la región entera (las cuatro
-                    cifras y todo lo que cuelga de ellas), por eso va pegada
-                    debajo y no repetida en cada número. */}
-                <p className="t-label text-muted">{copy.paymentsScopeNote}</p>
-
-                {/* El estado de carga/fallo del saldo NO se repite aquí: vive
-                    una sola vez en la región «Abonos y saldo» de abajo, que es
-                    la que hace la petición. Duplicarlo daba dos `role="alert"`
-                    para un solo fallo. */}
-
-                <Separator />
-
+              <div className="flex flex-col gap-4 border-t border-border-subtle pt-6">
                 {/* El diente que trajo al usuario desde el odontograma, dicho
                     antes de la tabla para que se entienda por qué hay filas
                     resaltadas. */}
                 {focusedToothOnPlan && (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <p role="status" className="text-sm font-medium text-ink">
-                      {copy.focusedToothNotice(focusedToothOnPlan)}
-                    </p>
-                  </div>
+                  <p role="status" className="text-sm font-medium text-ink">
+                    {copy.focusedToothNotice(focusedToothOnPlan)}
+                  </p>
                 )}
 
-                {discountable && (planDetail.items ?? []).length > 0 ? (
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-muted tabular-nums">{copy.selectedCount(selectedItemIds.size)}</p>
+                {/* DX-343: destino del foco cuando la fila del cargo desaparece. */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 ref={itemsHeadingRef} tabIndex={-1} className="t-title text-ink">
+                    {copy.itemsTableCaption}
+                  </h3>
+                  {discountable && (planDetail.items ?? []).length > 0 ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setSelectedItemIds(
-                            selectedItemIds.size === (planDetail.items ?? []).length
-                              ? new Set()
-                              : new Set((planDetail.items ?? []).map((i) => i.id)),
-                          )
-                        }
-                      >
-                        {selectedItemIds.size === (planDetail.items ?? []).length ? copy.clearSelection : copy.selectAll}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={selectedItemIds.size === 0 || discountRules === null}
-                        onClick={() => {
-                          setBulkNotice(null);
-                          setBulkKey((k) => k + 1);
-                          setBulkOpen(true);
-                        }}
-                      >
-                        {copy.bulkDiscount}
-                      </Button>
+                        <span className="text-sm text-muted tabular-nums">{copy.selectedCount(selectedItemIds.size)}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setSelectedItemIds(
+                              selectedItemIds.size === (planDetail.items ?? []).length
+                                ? new Set()
+                                : new Set((planDetail.items ?? []).map((i) => i.id)),
+                            )
+                          }
+                        >
+                          {selectedItemIds.size === (planDetail.items ?? []).length
+                            ? copy.clearSelection
+                            : copy.selectAll}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={selectedItemIds.size === 0 || discountRules === null}
+                          onClick={() => {
+                            setBulkNotice(null);
+                            setBulkKey((k) => k + 1);
+                            setBulkOpen(true);
+                          }}
+                        >
+                          {copy.bulkDiscount}
+                        </Button>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
                 {planDetail.status === 'ACCEPTED' && !signed ? (
                   <p role="status" className="text-sm text-muted">
                     {copy.acceptedDiscountNotice}
@@ -2499,10 +1078,6 @@ export function TreatmentPlansTab({
                   {bulkNotice}
                 </p>
 
-                {/* DX-343: destino del foco cuando la fila del cargo desaparece. */}
-                <h3 ref={itemsHeadingRef} tabIndex={-1} className="text-base font-semibold text-ink">
-                  {copy.itemsTableCaption}
-                </h3>
                 {/* DX-343: tras un 409 la lista de ítems ya no es fiable. Si
                     releerla falla, cede su sitio al error de sección (escalón
                     1): no queda una tabla vieja con un aviso de «actualizando»
@@ -2516,445 +1091,207 @@ export function TreatmentPlansTab({
                     }}
                   />
                 ) : (
-                <>
-                {feeStale ? (
-                  <p role="status" className="text-sm text-muted">
-                    {copy.feeRefreshing}
-                  </p>
-                ) : null}
-                <PlanVisitsBoard key={planDetail.id} token={token} plan={planDetail} role={role} onChanged={refreshPlanDetail} renderItems={(visitItems, { visit, ordered }) => <ItemsTable
-                  items={visitItems}
-                  visit={visit}
-                  catalogById={catalogById}
-                  currency={planDetail.currency}
-                  feeStale={feeStale}
-                  feeRefs={feeReferences(ordered)}
-                  updatingItemId={updatingItemId}
-                  focusedTooth={focusedToothOnPlan}
-                  odontogramHref={odontogramHref}
-                  implantHref={implantHref}
-                  onStatusChange={handleItemStatusChange}
-                  onRemove={openRemoveConfirm}
-                  canLeaveDone={(item) => role === 'ADMIN' || item.performedById === sessionUserId}
-                  onCorrectAttribution={
-                    role === 'ADMIN' ? (itemId) => setMarkDone({ itemId, mode: 'correct' }) : undefined
-                  }
-                  onVoidFee={role === 'ADMIN' ? setFeeToVoid : undefined}
-                  itemBalances={itemBalances}
-                  fmt={sedeFmt}
-                  locked={signed}
-                  closed={closed}
-                  markDoneOnly={planDetail?.status === 'COMPLETED'}
-                  selection={
-                    discountable
-                      ? {
-                          selectedIds: selectedItemIds,
-                          onToggle: (itemId, checked) =>
-                            setSelectedItemIds((prev) => {
-                              const next = new Set(prev);
-                              if (checked) next.add(itemId);
-                              else next.delete(itemId);
-                              return next;
-                            }),
-                        }
-                      : undefined
-                  }
-                />} />
-                </>
-                )}
-
-                {canSeeBilling ? (
                   <>
-                    <Separator />
-
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        {/* La nota de alcance NO se repite aquí: vive una sola vez
-                            pegada a `PlanMoneySummary`, que es donde está el Saldo
-                            que califica. Decirla dos veces en la misma pantalla la
-                            convierte en ruido y sugiere que son dos alcances. */}
-                        <h3 className="text-base font-semibold text-ink">{copy.paymentsHeading}</h3>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={openPaymentForm}
-                          disabled={!billable}
-                          aria-describedby={billable ? undefined : 'plan-not-billable-hint'}
-                        >
-                          {copy.registerPayment}
-                        </Button>
-                      </div>
-                      {!billable && planDetail && (
-                        <p id="plan-not-billable-hint" className="text-sm text-muted">
-                          {copy.notBillableHint(PLAN_STATUS_LABELS[planDetail.status])}
-                        </p>
-                      )}
-
-                      {paymentsLoading && (
-                        <p role="status" className="text-sm text-muted">
-                          {copy.loadingBalance}
-                        </p>
-                      )}
-                      {paymentsError && (
-                        // Misma razón que en `planDetailError` arriba: la reload
-                        // key mantiene el fallo en el escalón 1 en vez de apilarle
-                        // un toast de escalón 3.
-                        <SectionError
-                          description={paymentsError}
-                          onRetry={() => setPaymentsReloadKey((k) => k + 1)}
+                    {feeStale ? (
+                      <p role="status" className="text-sm text-muted">
+                        {copy.feeRefreshing}
+                      </p>
+                    ) : null}
+                    <PlanVisitsBoard
+                      key={planDetail.id}
+                      token={token}
+                      plan={planDetail}
+                      role={role}
+                      onChanged={refreshPlanDetail}
+                      renderItems={(visitItems, { visit, ordered }) => (
+                        <ItemsTable
+                          items={visitItems}
+                          visit={visit}
+                          catalogById={catalogById}
+                          currency={planDetail.currency}
+                          feeStale={feeStale}
+                          feeRefs={feeReferences(ordered)}
+                          updatingItemId={updatingItemId}
+                          focusedTooth={focusedToothOnPlan}
+                          odontogramHref={odontogramHref}
+                          implantHref={implantHref}
+                          onStatusChange={handleItemStatusChange}
+                          onRemove={openRemoveConfirm}
+                          canLeaveDone={(item) => role === 'ADMIN' || item.performedById === sessionUserId}
+                          onCorrectAttribution={
+                            role === 'ADMIN' ? (itemId) => setMarkDone({ itemId, mode: 'correct' }) : undefined
+                          }
+                          onVoidFee={role === 'ADMIN' ? setFeeToVoid : undefined}
+                          itemBalances={itemBalances}
+                          fmt={sedeFmt}
+                          locked={signed}
+                          closed={closed}
+                          markDoneOnly={planDetail?.status === 'COMPLETED'}
+                          selection={
+                            discountable
+                              ? {
+                                  selectedIds: selectedItemIds,
+                                  onToggle: (itemId, checked) =>
+                                    setSelectedItemIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (checked) next.add(itemId);
+                                      else next.delete(itemId);
+                                      return next;
+                                    }),
+                                }
+                              : undefined
+                          }
                         />
                       )}
-
-                      {!paymentsLoading && !paymentsError && planBalance && (
-                        <>
-                          {paymentsRefreshing && (
-                            <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
-                              {copy.refreshing}
-                            </p>
-                          )}
-
-                          {/* Las tres tarjetas que vivían aquí (A pagar / Pagado /
-                              Saldo) subieron a `PlanMoneySummary`, junto al Total
-                              del plan: son cifras del MISMO plan y separarlas en
-                              dos racimos era lo que producía seis números con
-                              alcances distintos en una pantalla. Ninguna
-                              desapareció. */}
-                          <FormModal
-                            open={showPaymentForm}
-                            onOpenChange={setShowPaymentForm}
-                            title={copy.registerPayment}
-                            onSubmit={handleAddPayment}
-                            submitLabel={
-                              paymentMethodFields.duplicate ? paymentMethodFieldsCopy.duplicateSubmit : copy.addPaymentSubmit
-                            }
-                            submitting={addPaymentSubmitting}
-                            error={addPaymentValidationError ?? addPaymentError}
-                            size="lg"
-                            touchTargets
-                          >
-                            {/* Va antes de los campos: la sede a la que se
-                                atribuye el abono se lee ANTES de escribir el
-                                monto, no como una nota al pie ya con el dedo en
-                                «Registrar abono». */}
-                            {locationHint ? <p className="t-label text-muted">{locationHint}</p> : null}
-
-                            <div className="grid gap-4 sm:grid-cols-2">
-                              <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel} error={paymentAmountError}>
-                                <MoneyInput
-                                  id="tp-payment-amount"
-                                  currency={paymentCurrency}
-                                  requirePositive
-                                  value={paymentAmount}
-                                  onValueChange={(text) => {
-                                    setPaymentAmount(text);
-                                    setPaymentAmountError(null);
-                                  }}
-                                  aria-invalid={paymentAmountError ? true : undefined}
-                                  aria-describedby={paymentAmountError ? fieldErrorId('tp-payment-amount') : undefined}
-                                />
-                              </FormField>
-
-                              <FormField htmlFor="tp-payment-currency" label={copy.paymentCurrencyLabel}>
-                                <CurrencySelect
-                                  id="tp-payment-currency"
-                                  token={token}
-                                  value={paymentCurrency}
-                                  onChange={setPaymentCurrency}
-                                />
-                              </FormField>
-                            </div>
-
-                            {paymentInOtherCurrency && planDetail && planBalance ? (
-                              <PaymentRatePreview
-                                state={paymentRates}
-                                amount={previewPaymentAmount}
-                                paymentCurrency={paymentCurrency}
-                                planCurrency={planDetail.currency}
-                                planBalance={{
-                                  balance: planBalance.balance,
-                                  paymentsWithoutRate: planBalance.paymentsWithoutRate.length,
-                                }}
-                                date={paymentDate}
-                                fmt={sedeFmt}
-                              />
-                            ) : null}
-
-                            <div className="grid gap-4 sm:grid-cols-2">
-                              <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel}>
-                                {sedeZone.status === 'error' && paymentDate === '' ? (
-                                  <SedeConfigError
-                                    kind="timeZone"
-                                    variant="field"
-                                    retryId="tp-payment-date"
-                                    onRetry={sedeZone.retry}
-                                  />
-                                ) : (
-                                  <Input
-                                    id="tp-payment-date"
-                                    type="date"
-                                    value={paymentDate}
-                                    onChange={(e) => setPaymentDate(e.target.value)}
-                                  />
-                                )}
-                              </FormField>
-
-                              <PaymentMethodSelect
-                                fields={paymentMethodFields}
-                                id="tp-payment-method"
-                                label={copy.paymentMethodLabel}
-                              />
-                            </div>
-
-                            <PaymentReferenceFields fields={paymentMethodFields} idPrefix="tp-payment" />
-
-                            <FormField htmlFor="tp-payment-notes" label={copy.paymentNotesLabel}>
-                              <textarea
-                                id="tp-payment-notes"
-                                rows={2}
-                                value={paymentNotes}
-                                onChange={(e) => setPaymentNotes(e.target.value)}
-                                className={cn(fieldClass, 'h-auto')}
-                              />
-                            </FormField>
-                          </FormModal>
-
-                          {/* El detalle abono a abono se pliega; lo que decide si
-                              hace falta abrirlo —cuántos abonos hay— se queda
-                              leído en la propia fila, y el Saldo sigue arriba en
-                              `PlanMoneySummary`. En una pantalla financiera no se
-                              puede esconder una cifra que alguien necesita para
-                              decidir: se esconde la TABLA, nunca el número.
-                              Abierta por defecto cuando aún no hay ningún abono,
-                              para que el estado vacío enseñe el siguiente paso en
-                              vez de esconderlo tras un plegado. */}
-                          <Disclosure
-                            triggerId={PAYMENTS_TRIGGER_ID}
-                            summary={copy.paymentsHeading}
-                            meta={copy.paymentsDisclosureMeta(payments.length)}
-                            defaultOpen={payments.length === 0}
-                          >
-                            <PaymentsList
-                              payments={payments}
-                              voidingPaymentId={voidingPaymentId}
-                              onVoid={openVoidConfirm}
-                              onReceipt={setReceiptPaymentId}
-                              billable={billable}
-                              manualPaymentIds={manualPaymentIds}
-                              onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
-                              fmt={sedeFmt}
-                            />
-                          </Disclosure>
-
-                          <Separator />
-
-                          <PaymentPlanSection
-                            token={token}
-                            planId={selectedPlanId!}
-                            planCurrency={planBalance.planCurrency}
-                            billable={planBalance.billable}
-                            canCreate={billable}
-                            refreshSignal={paymentPlanRefreshSignal}
-                          />
-                        </>
-                      )}
-                    </div>
+                    />
                   </>
-                ) : null}
+                )}
+              </div>
 
-                <Separator />
-
-                {/* Firmado (DX-012): no se agregan ítems; `PlanQuoteActions`
-                    ya dice arriba que el plan quedó congelado. */}
-                {/* Cerrado (DX-109): tampoco se agregan ítems. */}
-                {closed && planDetail && !signed ? (
-                  <p role="status" className="text-sm text-muted">
-                    {planDetail.status === 'COMPLETED'
-                      ? copy.completedItemsNotice
-                      : copy.closedItemsNotice(PLAN_STATUS_LABELS[planDetail.status])}
-                  </p>
-                ) : null}
-                {signed || closed ? null : catalogItems.length === 0 ? (
-                  <EmptyState
-                    role="status"
-                    title={copy.emptyCatalogTitle}
-                    description={copy.emptyCatalogDescription}
-                    action={
-                      <Link
-                        href="/catalog"
-                        className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              {canSeeBilling ? (
+                <div className="flex flex-col gap-4 border-t border-border-subtle pt-6">
+                  {/* La nota de alcance NO se repite aquí: vive una sola vez
+                      pegada a `PlanMoneySummary`. */}
+                  <SectionHeader
+                    as="h3"
+                    title={copy.paymentsHeading}
+                    actions={
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={openPaymentForm}
+                        disabled={!billable}
+                        aria-describedby={billable ? undefined : 'plan-not-billable-hint'}
                       >
-                        {copy.manageCatalogCta}
-                      </Link>
+                        {copy.registerPayment}
+                      </Button>
                     }
                   />
-                ) : (
-                  <form onSubmit={handleAddItem} aria-label={copy.addItemHeading} className="flex flex-col gap-4">
-                    <h3 className="text-base font-semibold text-ink">{copy.addItemHeading}</h3>
+                  {!billable && planDetail && (
+                    <p id="plan-not-billable-hint" className="text-sm text-muted">
+                      {copy.notBillableHint(PLAN_STATUS_LABELS[planDetail.status])}
+                    </p>
+                  )}
 
-                    {/* El diente se TOCA en el mapa, no se transcribe de
-                        memoria: es el mismo `OdontogramChart` del tab de al
-                        lado. El campo de texto sigue ahí dentro del picker
-                        como segunda vía (más rápido si ya sabes el código, y
-                        único camino para un temporal, que el mapa no dibuja).
-                        Y el procedimiento usa el MISMO selector filtrado que
-                        el odontograma: antes esta era la peor afordancia de
-                        las dos —un `<select>` nativo sobre el catálogo
-                        entero, sin filtro— y estaba justo en la vía del
-                        dinero. */}
-                    <ToothPicker
-                      inputId="tp-tooth-number"
-                      value={toothNumber}
-                      onChange={setToothNumber}
-                    />
+                  {paymentsLoading && (
+                    <p role="status" className="text-sm text-muted">
+                      {copy.loadingBalance}
+                    </p>
+                  )}
+                  {paymentsError && (
+                    // Misma razón que en `planDetailError` arriba: la reload
+                    // key mantiene el fallo en el escalón 1 en vez de apilarle
+                    // un toast de escalón 3.
+                    <SectionError description={paymentsError} onRetry={() => setPaymentsReloadKey((k) => k + 1)} />
+                  )}
 
-                    <CatalogPicker
-                      items={catalogItems}
-                      value={catalogItemId || null}
-                      onChange={handleProcedureChange}
-                      idPrefix="tp-procedure"
-                      legend={copy.procedureLabel}
-                      // Un ítem de plan sólo puede ser un PROCEDURE, así que la
-                      // etiqueta de tipo se repetiría en todas las filas sin
-                      // decir nada.
-                      showKind={false}
-                    />
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField htmlFor="tp-price" label={copy.priceLabel} error={itemAmountErrors.price}>
-                        <MoneyInput
-                          id="tp-price"
-                          currency={addCurrency}
-                          value={price}
-                          disabled={addPriceLoading}
-                          aria-busy={addPriceLoading || undefined}
-                          className={addPriceLoading ? 'animate-pulse' : undefined}
-                          onValueChange={(text) => {
-                            setPrice(text);
-                            setPriceEdited(true);
-                            setItemAmountErrors((errors) => ({ ...errors, price: undefined }));
-                          }}
-                          aria-invalid={itemAmountErrors.price ? true : undefined}
-                          aria-describedby={
-                            [
-                              itemAmountErrors.price ? fieldErrorId('tp-price') : null,
-                              quoteReady && priceQuote.status === 'ready' ? 'tp-price-source' : null,
-                              addBelowCatalog ? 'tp-price-below-catalog' : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' ') || undefined
-                          }
-                        />
-                        {/* DX-105: de dónde sale el precio precargado. */}
-                        {addPriceLoading ? (
-                          <p role="status" className="text-xs text-muted">
-                            {copy.priceQuoteLoading}
-                          </p>
-                        ) : priceQuote.status === 'error' ? (
-                          <FieldError label={copy.priceQuoteError} onRetry={priceQuote.retry} />
-                        ) : quoteReady && selectedPlan ? (
-                          <PriceQuoteLine id="tp-price-source" quote={quoteReady} currency={addCurrency} />
-                        ) : null}
-                        {/* SEC-041: aviso, no bloqueo; la API decide con el
-                            tope del rol. */}
-                        <p id="tp-price-below-catalog" role="status" className="text-xs text-warning-text">
-                          {addBelowCatalog && addEffective && addCatalogPrice !== null && selectedPlan ? (
-                            <>
-                              <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>
-                              <span className="block">
-                                {copy.priceBelowCatalogDetail(
-                                  formatCurrency(addEffective.priceReduction, selectedPlan.currency),
-                                  formatCurrency(addCatalogPrice, selectedPlan.currency),
-                                )}
-                              </span>
-                            </>
-                          ) : null}
+                  {!paymentsLoading && !paymentsError && planBalance && (
+                    <>
+                      {paymentsRefreshing && (
+                        <p role="status" aria-live="polite" className="t-caption text-muted">
+                          {copy.refreshing}
                         </p>
-                      </FormField>
+                      )}
 
-                      <FormField
-                        htmlFor="tp-discount"
-                        label={copy.discountLabel}
-                        hint={addNoDiscount ? NO_DISCOUNT_ALLOWED_NOTICE : copy.discountHint}
-                        hintId="tp-discount-hint"
-                        error={itemAmountErrors.discount}
-                      >
-                        <MoneyInput
-                          id="tp-discount"
-                          currency={addCurrency}
-                          disabled={addNoDiscount}
-                          value={discount}
-                          onValueChange={(text) => {
-                            setDiscount(text);
-                            setItemAmountErrors((errors) => ({ ...errors, discount: undefined }));
-                          }}
-                          aria-invalid={itemAmountErrors.discount ? true : undefined}
-                          aria-describedby={
-                            [
-                              itemAmountErrors.discount ? fieldErrorId('tp-discount') : null,
-                              addNoDiscount && !itemAmountErrors.discount ? 'tp-discount-hint' : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' ') || undefined
+                      {paymentForm ? (
+                        <PlanPaymentFormModal
+                          key={`${planDetail.id}-${paymentForm.seq}`}
+                          token={token}
+                          open={paymentForm.open}
+                          onOpenChange={(open) =>
+                            setPaymentForm((prev) => (prev && !open ? { ...prev, open: false } : prev))
                           }
-                        />
-                      </FormField>
-
-                      {addDiscounted ? (
-                        <DiscountReasonFields
-                          idPrefix="tp-discount"
-                          value={addReason}
-                          onChange={setAddReason}
-                          required={addReasonRequired}
-                          thresholdPercent={discountRules?.reasonRequiredAbovePercent ?? null}
-                          errors={addReasonErrors}
+                          plan={planDetail}
+                          planBalance={planBalance}
+                          sedeZone={sedeZone}
+                          sedeFmt={sedeFmt}
+                          locationHint={locationHint}
+                          onRecorded={refreshBalanceAndPayments}
                         />
                       ) : null}
 
-                      <fieldset className="flex flex-col gap-2">
-                        <legend className="text-sm font-medium text-ink">{copy.surfacesLegend}</legend>
-                        <div className="flex flex-wrap gap-3">
-                          {SURFACE_ORDER.map((surface) => (
-                            <label
-                              key={surface}
-                              htmlFor={`tp-surface-${surface}`}
-                              className="flex items-center gap-1.5 text-sm text-ink"
-                            >
-                              <input
-                                id={`tp-surface-${surface}`}
-                                type="checkbox"
-                                checked={surfaces[surface]}
-                                onChange={(e) => handleSurfaceChange(surface, e.target.checked)}
-                              />
-                              {SURFACE_LABELS[surface]}
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
-                    </div>
+                      {/* El detalle abono a abono se pliega; lo que decide si
+                          hace falta abrirlo —cuántos abonos hay— se queda en la
+                          propia fila, y el Saldo sigue arriba. Se esconde la
+                          TABLA, nunca el número. Abierta por defecto cuando aún
+                          no hay ningún abono, para que el vacío enseñe el
+                          siguiente paso. */}
+                      <Disclosure
+                        triggerId={PAYMENTS_TRIGGER_ID}
+                        summary={copy.paymentsDisclosure}
+                        meta={copy.paymentsDisclosureMeta(payments.length)}
+                        defaultOpen={payments.length === 0}
+                      >
+                        <PlanPaymentsList
+                          payments={payments}
+                          voidingPaymentId={voidingPaymentId}
+                          onVoid={openVoidConfirm}
+                          onReceipt={setReceiptPaymentId}
+                          billable={billable}
+                          manualPaymentIds={manualPaymentIds}
+                          onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
+                          fmt={sedeFmt}
+                        />
+                      </Disclosure>
 
-                    <FormField htmlFor="tp-notes" label={copy.notesLabel}>
-                      <textarea
-                        id="tp-notes"
-                        rows={2}
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        className={cn(fieldClass, 'h-auto')}
-                      />
-                    </FormField>
+                      <div className="border-t border-border-subtle pt-6">
+                        <PaymentPlanSection
+                          token={token}
+                          planId={selectedPlanId!}
+                          planCurrency={planBalance.planCurrency}
+                          billable={planBalance.billable}
+                          canCreate={billable}
+                          refreshSignal={paymentPlanRefreshSignal}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : null}
 
-                    {addItemValidationError && <InlineError>{addItemValidationError}</InlineError>}
-                    {addItemError && <InlineError>{addItemError}</InlineError>}
-
-                    <Button type="submit" disabled={addItemSubmitting || addPriceLoading} className="self-start">
-                      {addItemSubmitting ? copy.addItemSubmitting : copy.addItemSubmit}
-                    </Button>
-                  </form>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
+              {/* Firmado (DX-012): no se agregan ítems; `PlanQuoteActions` ya
+                  dice arriba que el plan quedó congelado. Cerrado (DX-109):
+                  tampoco. */}
+              {closed && planDetail && !signed ? (
+                <p role="status" className="text-sm text-muted">
+                  {planDetail.status === 'COMPLETED'
+                    ? copy.completedItemsNotice
+                    : copy.closedItemsNotice(PLAN_STATUS_LABELS[planDetail.status])}
+                </p>
+              ) : null}
+              {signed || closed ? null : (
+                <div className="border-t border-border-subtle pt-6">
+                  {catalogItems.length === 0 ? (
+                    <EmptyState
+                      size="inline"
+                      role="status"
+                      title={copy.emptyCatalogTitle}
+                      description={copy.emptyCatalogDescription}
+                      action={
+                        <Button asChild variant="secondary" size="sm">
+                          <Link href="/catalog">{copy.manageCatalogCta}</Link>
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <PlanItemForm
+                      key={planDetail.id}
+                      token={token}
+                      patientId={patientId}
+                      plan={planDetail}
+                      catalogItems={catalogItems}
+                      catalogById={catalogById}
+                      discountRules={discountRules}
+                      role={role}
+                      onAdded={() => Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()])}
+                    />
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </section>
       )}
 
       {planDetail && discountRules ? (
@@ -3087,10 +1424,4 @@ export function TreatmentPlansTab({
       />
     </div>
   );
-}
-
-/** DX-390: cuántas formas de pago tiene el cobro dividido del abono (0 si es suelto). */
-function splitLinesOf(payments: Payment[], paymentId: string | null): number {
-  const splitId = payments.find((p) => p.id === paymentId)?.splitId;
-  return splitId ? payments.filter((p) => p.splitId === splitId).length : 0;
 }

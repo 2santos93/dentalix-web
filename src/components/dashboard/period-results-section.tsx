@@ -7,7 +7,7 @@ import { presetRange } from '@/lib/payments/cash-period';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { formatCurrency } from '@/lib/format/currency';
 import { isValidPeriod, MAX_PERIOD_DAYS } from '@/lib/reports/period-presets';
-import { metricValues } from '@/lib/reports/comparison-table';
+import type { DashboardCurrency } from '@/lib/locations/sede-regional-summary';
 import {
   getLocationsComparison,
   type ComparisonRow,
@@ -16,6 +16,7 @@ import {
   type LocationsComparison,
 } from '@/lib/reports/reports-api';
 import { MetricValue } from '@/components/reports/metric-value';
+import { activeValues, previousSample } from '@/components/reports/active-values';
 import { DateRangePicker } from '@/components/ui/date-picker';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -50,6 +51,7 @@ export const periodCopy = {
   convertedHint: (currency: string) => `Cada abono en otra moneda, a ${currency} con la tasa de su día.`,
   singleHint: (currency: string) => `Todo cobrado en ${currency}.`,
   perCurrencyHint: 'Por moneda, sin convertir',
+  backToDefault: (currency: string) => `Volver a ${currency}`,
   noActivity: 'Sin actividad en el período.',
   bySedeHeading: 'Por sede',
   bySedeDescription: 'Los mismos indicadores, sede por sede; los importes, por moneda.',
@@ -57,7 +59,7 @@ export const periodCopy = {
   sedeColumn: 'Sede',
   inactive: 'inactiva',
   notComparedNote:
-    '* Sin comparar: parte de la producción del período anterior no está atribuida a una sede, así que la variación no sería fiable.',
+    '«—» en Producción: parte de la producción del período anterior no está atribuida a una sede, así que la variación no sería fiable.',
 };
 const copy = periodCopy;
 
@@ -71,6 +73,9 @@ const STRIP: KpiKey[] = [
   'averageTicket',
   'occupancy',
 ];
+/** Indicadores calculados por cita: su base son las citas atendidas del período comparado (ver `deltaBase`). */
+const APPOINTMENT_RATES: ReadonlySet<KpiKey> = new Set(['noShowRate', 'occupancy', 'averageTicket']);
+
 /** Columnas de «Por sede»: lo que más cambia entre sedes. */
 const BY_SEDE: KpiKey[] = ['production', 'collected', 'completedAppointments', 'noShowRate', 'newPatients', 'occupancy'];
 
@@ -85,16 +90,18 @@ export function PeriodResultsSection({
   token,
   timeZone,
   scopeKey,
-  defaultCurrency,
-  currencyNeedsChoice,
+  currency: currencyState,
   fmt,
 }: {
   token: string;
   timeZone: string;
   scopeKey: string;
-  /** La moneda de la sede activa (o la común en «Todas»); `null` = hay que elegir. */
-  defaultCurrency: string | null;
-  currencyNeedsChoice: boolean;
+  /**
+   * La moneda del período (R1, `useDashboardCurrency`): la elegida y recordada
+   * por usuario y sede, la de la sede activa o la común; `currency: null` = hay
+   * que elegir. `null` mientras cargan las sedes.
+   */
+  currency: Extract<DashboardCurrency, { status: 'ready' }> | null;
   fmt: RegionalFormat | null;
 }) {
   const defaults = { from: presetRange('month', timeZone).from, to: presetRange('today', timeZone).to };
@@ -102,8 +109,7 @@ export function PeriodResultsSection({
   const [toInput, setTo] = useState<string | null>(null);
   const from = fromInput ?? defaults.from;
   const to = toInput ?? defaults.to;
-  const [currencyChoice, setCurrency] = useState('');
-  const currency = currencyChoice || defaultCurrency || '';
+  const currency = currencyState?.currency ?? '';
 
   const complete = from !== '' && to !== '';
   const rangeInvalid = complete && from > to;
@@ -168,10 +174,19 @@ export function PeriodResultsSection({
             id="dashboard-currency"
             token={token}
             value={currency}
-            onChange={setCurrency}
+            onChange={(code) => currencyState?.choose(code)}
             placeholder={currency ? undefined : copy.currencyPlaceholder}
           />
         </FormField>
+        {currencyState?.source === 'chosen' && currencyState.defaultCurrency ? (
+          <button
+            type="button"
+            onClick={currencyState.reset}
+            className="min-h-10 self-start rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:self-end pointer-coarse:min-h-11"
+          >
+            {copy.backToDefault(currencyState.defaultCurrency)}
+          </button>
+        ) : null}
       </div>
 
       {rangeInvalid || tooLong ? (
@@ -185,7 +200,7 @@ export function PeriodResultsSection({
             <IncomesFigure
               state={incomes}
               currency={currency}
-              currencyNeedsChoice={currencyNeedsChoice && !currencyChoice}
+              currencyNeedsChoice={currencyState !== null && currencyState.currency === null}
               fmt={fmt}
             />
             {comparison.status === 'error' ? (
@@ -287,18 +302,6 @@ function IncomesFigure({
   );
 }
 
-/**
- * Los valores de un indicador sin las monedas en las que no hubo nada ni antes
- * ni ahora (un «USD 0,00 · Sin comparar» no dice nada). Si no queda ninguna, se
- * devuelve la lista tal cual: el «—» del indicador es la respuesta honesta.
- */
-export function activeValues(row: ComparisonRow, key: KpiKey) {
-  const values = metricValues(row, key);
-  const quiet = (v: number | null) => v === null || v === 0;
-  const active = values.filter((m) => !(m.currency && quiet(m.value) && quiet(m.previous)));
-  return active.length > 0 ? active : values.slice(0, 1);
-}
-
 function kpiOf(report: LocationsComparison, key: KpiKey): KpiDefinition | undefined {
   return report.kpis.find((k) => k.key === key);
 }
@@ -324,6 +327,7 @@ function ComparisonFigures({ report, fmt }: { report: LocationsComparison; fmt: 
                     currency={metric.currency}
                     fmt={fmt}
                     align="start"
+                    sample={APPOINTMENT_RATES.has(key) ? previousSample(report.total) : undefined}
                   />
                 </dd>
               ))
@@ -380,6 +384,7 @@ function BySede({ report, fmt }: { report: LocationsComparison; fmt: RegionalFor
                   metric={metric}
                   currency={metric.currency}
                   fmt={fmt}
+                  sample={APPOINTMENT_RATES.has(key) ? previousSample(row) : undefined}
                 />
               ))}
             </span>

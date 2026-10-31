@@ -275,7 +275,7 @@ export function CountryCombobox<T extends ComboboxOption = CountryOption>({
             onClick={() => pick(item)}
             className={cn(
               'flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-ink sm:min-h-9',
-              index === active ? 'bg-surface-2' : 'hover:bg-surface-2',
+              index === active ? 'bg-surface-sunken' : 'hover:bg-surface-sunken',
             )}
           >
             <span className="min-w-0 break-words">{item.label}</span>

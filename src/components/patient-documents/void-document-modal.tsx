@@ -5,8 +5,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { voidPatientDocument, type PatientDocument } from '@/lib/patient-documents/patient-documents-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   title: 'Anular documento',
@@ -63,13 +62,13 @@ export function VoidDocumentModal({ open, onOpenChange, token, document, onVoide
       destructive
     >
       <FormField htmlFor="document-void-reason" label={copy.reasonLabel} hint={copy.reasonHint}>
-        <textarea
+        <Textarea
+          autoGrow
           id="document-void-reason"
           rows={3}
           value={reason}
           maxLength={500}
           onChange={(e) => setReason(e.target.value)}
-          className={cn(fieldClass, 'h-auto font-[inherit]')}
         />
       </FormField>
     </FormModal>

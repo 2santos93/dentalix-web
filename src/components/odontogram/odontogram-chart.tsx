@@ -347,7 +347,7 @@ export function OdontogramChart({
     const [top, bottom] =
       side === 'left' ? [copy.quadrant1, copy.quadrant4] : [copy.quadrant2, copy.quadrant3];
     return (
-      <div className="w-fit min-w-max rounded-xl border border-border bg-bg px-4 py-3">
+      <div className="w-fit min-w-max rounded-xl border border-border bg-canvas px-4 py-3">
         <QuadrantCaptions left={side === 'left' ? top : ''} right={side === 'right' ? top : ''} />
         <div role="group" aria-label={archLabel('upper', side)} className="flex items-end">
           {renderHalf(upper, 'upper', side, false)}
@@ -373,7 +373,7 @@ export function OdontogramChart({
           // `w-fit` para que el campo mida lo que miden las arcadas: así la línea
           // media, el plano oclusal y los rótulos de cuadrante enmarcan el dibujo
           // en vez de estirarse a todo el ancho de la página.
-          className="w-fit min-w-max rounded-xl border border-border bg-bg px-4 py-3 sm:px-6 sm:py-4"
+          className="w-fit min-w-max rounded-xl border border-border bg-canvas px-4 py-3 sm:px-6 sm:py-4"
         >
           <QuadrantCaptions left={copy.quadrant1} right={copy.quadrant2} />
           {renderArch(upper, 'upper')}

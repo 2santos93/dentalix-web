@@ -89,9 +89,9 @@ describe('PublicSlotOfferView (DX-435)', () => {
   });
 
   it('caducada o no disponible al abrir: lo dice y no ofrece botones', async () => {
-    get.mockResolvedValueOnce(offer({ state: 'EXPIRED', message: 'Esta oferta caducó', offer: null }));
+    get.mockResolvedValueOnce(offer({ state: 'EXPIRED', message: 'Este enlace ya no está disponible', offer: null }));
     render(<PublicSlotOfferView token="tok-1" />);
-    expect(await screen.findByRole('heading', { name: 'Esta oferta caducó' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Este enlace ya no está disponible' })).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 

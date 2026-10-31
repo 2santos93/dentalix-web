@@ -1,3 +1,5 @@
+import { saveBlob } from './save-blob';
+
 const BOM = '﻿';
 
 export interface SaveCsvOptions {
@@ -9,18 +11,10 @@ export interface SaveCsvOptions {
 }
 
 /**
- * Descarga un CSV ya generado (la API lo construye) como fichero, con un
- * enlace temporal al `Blob`. Única copia en la web: antes vivía repetida en
- * cada pantalla con exportación.
+ * Descarga un CSV ya generado (la API lo construye) como fichero (ver
+ * `saveBlob`). Antes vivía repetida en cada pantalla con exportación.
  */
 export function saveCsv(text: string, fileName: string, opts: SaveCsvOptions = {}): void {
   const content = opts.bom && !text.startsWith(BOM) ? `${BOM}${text}` : text;
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  saveBlob(new Blob([content], { type: 'text/csv;charset=utf-8' }), fileName);
 }

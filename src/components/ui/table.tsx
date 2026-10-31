@@ -58,7 +58,7 @@ function Table({ className, stack = true, ...props }: TableProps) {
         scrollable && 'scroll-x-shadows',
         // El anillo va por dentro (`-outline-offset-2`): la tarjeta que envuelve
         // la tabla recorta lo que se salga, así que un foco por fuera no se vería.
-        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text',
       )}
       // Rol, nombre y parada de tabulador SOLO cuando hay algo escondido: en una
       // tabla que cabe, una región de más es ruido para un lector de pantalla y
@@ -143,7 +143,8 @@ function TableHead({
   return (
     <th
       className={cn(
-        'h-11 px-4 text-left align-middle text-xs font-medium uppercase tracking-wide text-muted',
+        // Tipo frase, nunca mayúsculas espaciadas (DESIGN.md → Typography: Label).
+        'h-11 px-4 text-left align-middle t-label text-muted',
         className,
       )}
       {...props}
@@ -166,7 +167,7 @@ function TableCell({
         stack &&
           'max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-4 max-sm:px-0 max-sm:py-1.5',
         stack &&
-          'max-sm:before:content-[attr(data-label)] max-sm:before:text-xs max-sm:before:font-medium max-sm:before:uppercase max-sm:before:tracking-wide max-sm:before:text-muted',
+          'max-sm:before:content-[attr(data-label)] max-sm:before:text-xs max-sm:before:font-medium max-sm:before:text-muted',
         className,
       )}
       {...props}

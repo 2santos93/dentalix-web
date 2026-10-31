@@ -74,7 +74,7 @@ export function PublicPostOpView({ linkToken }: { linkToken: string }) {
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
@@ -124,7 +124,7 @@ export function PublicPostOpView({ linkToken }: { linkToken: string }) {
                 {copy.callLead}
                 <a
                   href={telHref(state.data.locationPhone)}
-                  className="inline-flex min-h-11 items-center gap-2 self-start text-base font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="inline-flex min-h-11 items-center gap-2 self-start text-base font-semibold text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                 >
                   <Phone aria-hidden className="size-5" />
                   <span className="tabular-nums">{state.data.locationPhone}</span>

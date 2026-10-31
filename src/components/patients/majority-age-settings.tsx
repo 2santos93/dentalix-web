@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useId, useState } from 'react';
-import { Lock, UserCheck } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getPatientSettings,
@@ -13,6 +13,9 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
+import { FormField } from '@/components/shared/form-field';
+import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import {
   Dialog,
   DialogClose,
@@ -45,16 +48,15 @@ const copy = {
   forbiddenHint: 'La ficha de cada paciente dice si es menor y a quién van sus avisos.',
 };
 
-// 44 px bajo `sm` (DESIGN.md, objetivo táctil de móvil).
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-11';
-
 /**
  * Una API anterior a esta pantalla no tiene la ruta: `/patients/settings` cae
  * en `GET /patients/:id` y responde 500 (id que no es UUID), que ya va al
  * `fallback`. El 404 se fija también, para que diga qué no cargó y no
  * «no encontramos lo que buscas».
  */
+/** Lo que trae una clínica nueva (la API). */
+const DEFAULT_MAJORITY_AGE = 18;
+
 const loadErrorOptions = { fallback: copy.loadError, byStatus: { 404: copy.loadError } };
 
 /**
@@ -105,7 +107,7 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
   }
   if (!settings) {
     return (
-      <div role="status" aria-label="Cargando" className="max-w-2xl rounded-xl border border-border bg-surface p-6">
+      <div role="status" aria-label="Cargando" className="rounded-xl border border-border bg-surface p-4 sm:p-6">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="mt-4 h-4 w-72" />
       </div>
@@ -132,32 +134,32 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-3">
-      <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-        <div className="flex min-w-0 items-start gap-3">
-          <UserCheck aria-hidden className="mt-0.5 size-5 shrink-0 text-muted" />
-          <div className="min-w-0">
-            <p className="font-medium text-ink">{copy.title}</p>
-            <p data-testid="majority-age" className="t-data text-ink tabular-nums">
-              {copy.years(settings.majorityAge)}
-            </p>
-            <p className="mt-1 text-sm text-muted">{copy.hint}</p>
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          className="shrink-0 max-sm:min-h-11 max-sm:w-full"
-          onClick={() => {
-            setDraft(settings.majorityAge);
-            setSaveError(null);
-            setNotice('');
-            setOpen(true);
-          }}
-        >
-          {copy.change}
-        </Button>
-      </div>
+    <div className="flex flex-col gap-3">
+      {/* Fila de política (plantilla de Ajustes): etiqueta y ayuda a la
+          izquierda; el valor en tipo dato y «Cambiar» (diálogo) a la derecha. */}
+      <SettingRows>
+        <SettingRow
+          label={copy.title}
+          description={copy.hint}
+          isDefault={settings.majorityAge === DEFAULT_MAJORITY_AGE}
+          value={<span data-testid="majority-age">{copy.years(settings.majorityAge)}</span>}
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              className="max-sm:min-h-11"
+              onClick={() => {
+                setDraft(settings.majorityAge);
+                setSaveError(null);
+                setNotice('');
+                setOpen(true);
+              }}
+            >
+              {copy.change}
+            </Button>
+          }
+        />
+      </SettingRows>
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
@@ -168,24 +170,21 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
               <DialogTitle>{copy.dialogTitle}</DialogTitle>
               <DialogDescription>{copy.dialogDescription}</DialogDescription>
             </DialogHeader>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor={fieldId} className="text-sm font-medium text-ink">
-                {copy.fieldLabel}
-              </label>
-              <select
+            <FormField htmlFor={fieldId} label={copy.fieldLabel}>
+              <NativeSelect
                 id={fieldId}
-                className={fieldClass}
                 value={draft}
                 onChange={(e) => setDraft(Number(e.target.value))}
                 disabled={saving}
+                selectClassName="max-sm:h-11"
               >
                 {options.map((age) => (
                   <option key={age} value={age}>
                     {copy.years(age)}
                   </option>
                 ))}
-              </select>
-            </div>
+              </NativeSelect>
+            </FormField>
             {saveError ? <InlineError variant="summary">{saveError}</InlineError> : null}
             <DialogFooter>
               <DialogClose asChild>

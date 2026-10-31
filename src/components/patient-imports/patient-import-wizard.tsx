@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Wizard } from '@/components/ui/wizard';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -156,7 +157,7 @@ function UploadStatus({ uploaded, done }: { uploaded: number | null; done: strin
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={percent}
-          className="h-2 w-full max-w-sm overflow-hidden rounded-full bg-surface-2"
+          className="h-2 w-full max-w-sm overflow-hidden rounded-full bg-surface-sunken"
         >
           <div
             className="h-full rounded-full bg-primary transition-[width] duration-200 motion-reduce:transition-none"
@@ -405,7 +406,7 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
     >
       {step === 0 ? (
         <section aria-labelledby={`${id}-upload`} className="flex flex-col gap-4">
-          <h2 id={`${id}-upload`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
+          <h2 id={`${id}-upload`} tabIndex={-1} className="t-title text-ink focus:outline-none">
             {wizardCopy.uploadTitle}
           </h2>
           {formatLoading ? (
@@ -449,7 +450,7 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
 
       {step === 1 && inspect ? (
         <section aria-labelledby={`${id}-mapping`} className="flex min-w-0 flex-col gap-6">
-          <h2 id={`${id}-mapping`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
+          <h2 id={`${id}-mapping`} tabIndex={-1} className="t-title text-ink focus:outline-none">
             {wizardCopy.mappingTitle}
           </h2>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -518,27 +519,20 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
 
       {step === 3 && dryRun ? (
         <section aria-labelledby={`${id}-confirm`} className="flex flex-col gap-5">
-          <h2 id={`${id}-confirm`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
+          <h2 id={`${id}-confirm`} tabIndex={-1} className="t-title text-ink focus:outline-none">
             {wizardCopy.confirmTitle}
           </h2>
           <Totals batch={dryRun} fmt={fmt} />
           {existing ? (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm font-medium text-ink">{wizardCopy.duplicatesLegend}</legend>
-              {(['SKIP', 'FILL_EMPTY'] as const).map((value) => (
-                <label key={value} className="flex min-h-11 items-center gap-3 text-sm text-ink">
-                  <input
-                    type="radio"
-                    name={`${id}-mode`}
-                    value={value}
-                    checked={mode === value}
-                    onChange={() => setMode(value)}
-                    className="size-4 accent-[var(--color-primary)]"
-                  />
-                  {value === 'SKIP' ? wizardCopy.skip : wizardCopy.fill}
-                </label>
-              ))}
-            </fieldset>
+            <RadioGroup
+              id={`${id}-mode`}
+              legend={wizardCopy.duplicatesLegend}
+              value={mode}
+              onValueChange={(value) => setMode(value as typeof mode)}
+            >
+              <RadioOption value="SKIP" label={wizardCopy.skip} />
+              <RadioOption value="FILL_EMPTY" label={wizardCopy.fill} />
+            </RadioGroup>
           ) : null}
           <ul className="flex max-w-prose list-disc flex-col gap-1 pl-5 text-sm text-muted">
             <li>{wizardCopy.consentNote}</li>
@@ -595,8 +589,8 @@ function Totals({ batch, fmt }: { batch: ImportBatchDetail; fmt: RegionalFormat 
     <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
       {items.map(([label, value]) => (
         <div key={label} className="flex flex-col gap-0.5 border-l border-border pl-3">
-          <dt className="text-xs font-medium text-muted">{label}</dt>
-          <dd className="text-base font-semibold tabular-nums text-ink">{sedeNumber(value, fmt)}</dd>
+          <dt className="t-overline">{label}</dt>
+          <dd className="t-title tnum text-ink">{sedeNumber(value, fmt)}</dd>
         </div>
       ))}
     </dl>
@@ -621,7 +615,7 @@ function DryRunResult({
   return (
     <section aria-label={wizardCopy.dryRunTitle} className="flex flex-col gap-4 border-t border-border pt-5">
       <div className="flex flex-col gap-1">
-        <h2 id={headingId} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
+        <h2 id={headingId} tabIndex={-1} className="t-title text-ink focus:outline-none">
           {wizardCopy.dryRunTitle}
         </h2>
         <p className="text-sm text-muted">{wizardCopy.dryRunHint}</p>
@@ -649,7 +643,7 @@ function DryRunResult({
             {batch.preview.map((row) => (
               <li
                 key={row.rowNumber}
-                className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-2 last:border-0"
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-4 py-2 last:border-0"
               >
                 <span className="min-w-0 break-words text-ink">
                   <span className="tabular-nums text-muted">{row.rowNumber} · </span>

@@ -29,7 +29,7 @@ describe('Ajustes → Horarios', () => {
     expect(screen.getByRole('region', { name: 'Horario de la sede' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Define los días y tramos en que la sede atiende. Las citas fuera de ese horario se rechazan. Para los plazos en días hábiles, mira Calendario de la sede.',
+        'Los días y tramos en que atiende la sede. Las citas fuera de ese horario se rechazan; los plazos en días hábiles están en Calendario de la sede.',
       ),
     ).toBeInTheDocument();
   });

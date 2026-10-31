@@ -115,7 +115,7 @@ function ThemeItem() {
       }}
       className={cn(
         'flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-ink outline-none transition-colors',
-        'data-[highlighted]:bg-surface-2 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'data-[highlighted]:bg-surface-sunken data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         ITEM,
       )}
     >
@@ -124,13 +124,14 @@ function ThemeItem() {
       <span
         aria-hidden
         className={cn(
-          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors',
-          isDark ? 'bg-primary' : 'bg-bg',
+          // Apagado: pista `border-input` (≥ 3:1), como el Switch de la UI.
+          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+          isDark ? 'bg-primary' : 'bg-border-input',
         )}
       >
         <span
           className={cn(
-            'inline-block h-5 w-5 rounded-full bg-surface shadow transition-transform',
+            'inline-block h-5 w-5 rounded-full bg-surface transition-transform',
             isDark ? 'translate-x-5' : 'translate-x-0.5',
           )}
         />

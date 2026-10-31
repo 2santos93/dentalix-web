@@ -8,6 +8,7 @@ import { E2E_REGION } from './support/regional';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 import { openPatientTab } from './support/patient-tabs';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (DX-262, correcciones de la revisión C1 e I2) en la demo, a 1440 y 390.
@@ -197,8 +198,8 @@ for (const viewport of [
     await expect(paidRow).toContainText('40.000,00', { timeout: 10_000 });
     await expect(paidRow).toContainText('60.000,00');
     await expect(summary.getByTestId('balance')).toContainText('85.000,00');
-    const movements = panel.getByRole('table', { name: 'Movimientos (abonos)' });
-    await expect(movements.getByRole('row').filter({ hasText: 'Saldo migrado · Cartera anterior' })).toHaveCount(1);
+    const movements = dataList(panel, 'Movimientos (abonos)');
+    await expect(dataListRows(movements).filter({ hasText: 'Saldo migrado · Cartera anterior' })).toHaveCount(1);
     await expectNoHorizontalScroll(page);
     await expectNoHorizontalScrollIn(page, 'main');
     await shoot(page, `dx262-abono-saldo-${viewport.name}`);
@@ -207,7 +208,9 @@ for (const viewport of [
     await page.goto(`${origin}/settings/importar-pacientes`);
     const history = page.getByRole('list', { name: 'Importaciones de la clínica' });
     const firstRow = history.getByRole('listitem').filter({ hasText: firstFile }).first();
-    await firstRow.getByRole('button', { name: `Retirar los saldos migrados de ${firstFile}` }).click();
+    // Informe y deshacer viven en el «⋯» del lote.
+    await firstRow.getByRole('button', { name: `Acciones de ${firstFile}` }).click();
+    await page.getByRole('menuitem', { name: 'Retirar saldos migrados', exact: true }).click();
     const undoDialog = page.getByRole('dialog');
     await undoDialog.getByRole('button', { name: 'Retirar saldos' }).click();
     await expect(undoDialog).toContainText(
@@ -218,10 +221,18 @@ for (const viewport of [
 
     // …y el de I2, sin abonos, se retira (el paciente no se toca).
     const secondRow = history.getByRole('listitem').filter({ hasText: onlyBalancesFile }).first();
-    await secondRow.getByRole('button', { name: `Retirar los saldos migrados de ${onlyBalancesFile}` }).click();
+    await secondRow.getByRole('button', { name: `Acciones de ${onlyBalancesFile}` }).click();
+    await page.getByRole('menuitem', { name: 'Retirar saldos migrados', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Retirar saldos' }).click();
     await expect(page.getByText('Saldos migrados retirados.')).toBeVisible();
-    await expect(secondRow.getByRole('button', { name: /Retirar los saldos migrados/ })).toHaveCount(0);
+    // Ya no se ofrece retirarlos: o el lote se queda sin «⋯», o su menú no lo trae.
+    const secondMenu = secondRow.getByRole('button', { name: `Acciones de ${onlyBalancesFile}` });
+    if ((await secondMenu.count()) > 0) {
+      await secondMenu.click();
+      await expect(page.getByRole('menu')).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: 'Retirar saldos migrados', exact: true })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+    }
   });
 }
 

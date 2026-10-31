@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'sonner';
 import { DomainsManager } from './domains-manager';
 import { normalizeHost } from './register-domain-modal';
+import { clinicAddress } from './clinic-address';
 import {
   deleteDomain,
   listDomains,
@@ -65,12 +66,25 @@ const disabled = domain({
 const expired = domain({ id: 'd-4', host: 'viejo.sonrisa.com', status: 'EXPIRED' });
 
 function item(host: string): HTMLElement {
-  const list = screen.getByRole('list', { name: 'Dominios propios' });
-  const li = within(list)
-    .getAllByRole('listitem')
+  // `hidden`: con un diálogo abierto, Radix oculta el resto a la accesibilidad.
+  const table = screen.getByRole('table', { name: 'Dominios propios', hidden: true });
+  const row = within(table)
+    .getAllByRole('row', { hidden: true })
     .find((el) => el.textContent?.includes(host));
-  if (!li) throw new Error(`sin fila para ${host}`);
-  return li;
+  if (!row) throw new Error(`sin fila para ${host}`);
+  return row;
+}
+
+/** Abre el «⋯» de la fila y elige una acción. */
+async function rowAction(user: ReturnType<typeof setupUser>, host: string, action: string) {
+  await user.click(screen.getByRole('button', { name: `Acciones de ${host}` }));
+  await user.click(await screen.findByRole('menuitem', { name: action }));
+}
+
+/** Toca la fila: abre el diálogo del dominio. */
+async function openDomain(user: ReturnType<typeof setupUser>, host: string): Promise<HTMLElement> {
+  await user.click(within(item(host)).getByRole('button', { name: host }));
+  return screen.findByRole('dialog', { name: host });
 }
 
 describe('DomainsManager (SEC-009)', () => {
@@ -85,39 +99,53 @@ describe('DomainsManager (SEC-009)', () => {
     expect(mockedList).not.toHaveBeenCalled();
   });
 
-  it('muestra cada estado: pendiente con su TXT, verificado, desactivado y expirado', async () => {
+  it('la lista dice el estado sin jerga de DNS; el TXT está en el diálogo del dominio', async () => {
+    const user = setupUser();
     render(<DomainsManager token="tok" allowed />);
-    await screen.findByRole('list', { name: 'Dominios propios' });
+    await screen.findByRole('table', { name: 'Dominios propios' });
     expect(screen.getByText('4 dominios')).toBeInTheDocument();
+    // Con filas, la primaria va en la barra.
+    expect(screen.getByRole('button', { name: 'Añadir dominio' })).toBeInTheDocument();
 
     const p = item('citas.sonrisa.com');
     expect(within(p).getByText('Pendiente')).toBeInTheDocument();
-    expect(within(p).getByText('_dentalix-verify.citas.sonrisa.com')).toBeInTheDocument();
-    expect(within(p).getByText('dentalix-verify=abc123')).toBeInTheDocument();
-    expect(within(p).getByRole('button', { name: 'Verificar citas.sonrisa.com' })).toBeInTheDocument();
+    expect(within(p).queryByText(/dentalix-verify/)).not.toBeInTheDocument();
+    expect(within(item('www.sonrisa.com')).getByText('Verificado')).toBeInTheDocument();
+    expect(within(item('old.sonrisa.com')).getByText('Desactivado')).toBeInTheDocument();
+    expect(within(item('old.sonrisa.com')).getByText(/dejó de abrir Dentalix/)).toBeInTheDocument();
+    expect(within(item('viejo.sonrisa.com')).getByText('Expirado')).toBeInTheDocument();
 
-    const v = item('www.sonrisa.com');
-    expect(within(v).getByText('Verificado')).toBeInTheDocument();
-    expect(within(v).queryByRole('button', { name: /verificar/i })).not.toBeInTheDocument();
-    expect(within(v).queryByText(/dentalix-verify=/)).not.toBeInTheDocument();
+    // Pendiente: el diálogo enseña el TXT y ofrece verificar.
+    let dialog = await openDomain(user, 'citas.sonrisa.com');
+    expect(within(dialog).getByText('_dentalix-verify.citas.sonrisa.com')).toBeInTheDocument();
+    expect(within(dialog).getByText('dentalix-verify=abc123')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Verificar' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-    const d = item('old.sonrisa.com');
-    expect(within(d).getByText('Desactivado')).toBeInTheDocument();
-    expect(within(d).getByText(/dejó de abrir Dentalix/)).toBeInTheDocument();
-    expect(
-      within(d).getByRole('button', { name: 'Verificar de nuevo old.sonrisa.com' }),
-    ).toBeInTheDocument();
+    // Verificado: ni TXT ni verificar.
+    dialog = await openDomain(user, 'www.sonrisa.com');
+    expect(within(dialog).queryByText(/dentalix-verify=/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /verificar/i })).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-    const e = item('viejo.sonrisa.com');
-    expect(within(e).getByText('Expirado')).toBeInTheDocument();
-    expect(within(e).queryByRole('button', { name: /verificar/i })).not.toBeInTheDocument();
-    expect(within(e).getByRole('button', { name: 'Eliminar viejo.sonrisa.com' })).toBeInTheDocument();
+    // El «⋯»: verificar solo donde se puede; eliminar siempre.
+    await user.click(screen.getByRole('button', { name: 'Acciones de old.sonrisa.com' }));
+    expect(await screen.findByRole('menuitem', { name: 'Verificar de nuevo' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Eliminar' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Acciones de viejo.sonrisa.com' }));
+    expect(await screen.findByRole('menuitem', { name: 'Eliminar' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /verificar/i })).not.toBeInTheDocument();
   });
 
-  it('vacío: explica que el subdominio ya funciona', async () => {
+  it('vacío: sin recuento y con la primaria dentro del vacío', async () => {
     mockedList.mockResolvedValue([]);
     render(<DomainsManager token="tok" allowed />);
     expect(await screen.findByText('Todavía no hay dominios propios.')).toBeInTheDocument();
+    expect(screen.queryByText(/0 dominios/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Añadir dominio' })).toHaveLength(1);
   });
 
   it('error de carga con reintento', async () => {
@@ -126,10 +154,10 @@ describe('DomainsManager (SEC-009)', () => {
     render(<DomainsManager token="tok" allowed />);
     const alert = await screen.findByRole('alert');
     await user.click(within(alert).getByRole('button', { name: /reintentar/i }));
-    expect(await screen.findByRole('list', { name: 'Dominios propios' })).toBeInTheDocument();
+    expect(await screen.findByRole('table', { name: 'Dominios propios' })).toBeInTheDocument();
   });
 
-  it('añade un dominio en un modal: valida y limpia lo pegado como URL', async () => {
+  it('añade un dominio en un modal: valida, limpia lo pegado como URL y abre su TXT', async () => {
     const user = setupUser();
     mockedList.mockResolvedValue([]);
     mockedRegister.mockResolvedValue({
@@ -151,8 +179,9 @@ describe('DomainsManager (SEC-009)', () => {
     await user.type(input, 'https://Citas.Nueva.com/login');
     await user.click(within(dialog).getByRole('button', { name: 'Añadir dominio' }));
     await waitFor(() => expect(mockedRegister).toHaveBeenCalledWith('tok', 'citas.nueva.com'));
-    expect(await screen.findByText('citas.nueva.com')).toBeInTheDocument();
-    expect(screen.getByText('_dentalix-verify.citas.nueva.com')).toBeInTheDocument();
+    const record = await screen.findByRole('dialog', { name: 'citas.nueva.com' });
+    expect(within(record).getByText('_dentalix-verify.citas.nueva.com')).toBeInTheDocument();
+    expect(within(item('citas.nueva.com')).getByText('Pendiente')).toBeInTheDocument();
   });
 
   it('el 409 de la API (verificado por otra cuenta) se ve en el modal', async () => {
@@ -163,7 +192,7 @@ describe('DomainsManager (SEC-009)', () => {
       }),
     );
     render(<DomainsManager token="tok" allowed />);
-    await screen.findByRole('list', { name: 'Dominios propios' });
+    await screen.findByRole('table', { name: 'Dominios propios' });
     await user.click(screen.getByRole('button', { name: 'Añadir dominio' }));
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText('Dominio'), 'citas.otra.com');
@@ -173,22 +202,23 @@ describe('DomainsManager (SEC-009)', () => {
     ).toBeInTheDocument();
   });
 
-  it('verificar: con TXT pasa a Verificado; sin TXT avisa y sigue Pendiente', async () => {
+  it('verificar desde el diálogo: sin TXT avisa y sigue Pendiente; con TXT pasa a Verificado', async () => {
     const user = setupUser();
     mockedVerify.mockResolvedValueOnce({ status: 'PENDING' });
     render(<DomainsManager token="tok" allowed />);
-    await screen.findByRole('list', { name: 'Dominios propios' });
+    await screen.findByRole('table', { name: 'Dominios propios' });
 
-    await user.click(screen.getByRole('button', { name: 'Verificar citas.sonrisa.com' }));
+    const dialog = await openDomain(user, 'citas.sonrisa.com');
+    await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
     await waitFor(() => expect(toast.info).toHaveBeenCalled());
-    expect(within(item('citas.sonrisa.com')).getByText('Pendiente')).toBeInTheDocument();
+    expect(within(dialog).getByText('Pendiente')).toBeInTheDocument();
 
     mockedVerify.mockResolvedValueOnce({ status: 'VERIFIED' });
-    await user.click(screen.getByRole('button', { name: 'Verificar citas.sonrisa.com' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
-    const row = item('citas.sonrisa.com');
-    expect(within(row).getByText('Verificado')).toBeInTheDocument();
-    expect(within(row).queryByText(/dentalix-verify=/)).not.toBeInTheDocument();
+    expect(within(dialog).getByText('Verificado')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/dentalix-verify=/)).not.toBeInTheDocument();
+    expect(within(item('citas.sonrisa.com')).getByText('Verificado')).toBeInTheDocument();
     expect(mockedVerify).toHaveBeenCalledWith('tok', 'd-1');
   });
 
@@ -198,8 +228,8 @@ describe('DomainsManager (SEC-009)', () => {
       new ApiError(410, 'x', { messages: ['Este dominio caducó sin verificarse (72 h).'] }),
     );
     render(<DomainsManager token="tok" allowed />);
-    await screen.findByRole('list', { name: 'Dominios propios' });
-    await user.click(screen.getByRole('button', { name: 'Verificar citas.sonrisa.com' }));
+    await screen.findByRole('table', { name: 'Dominios propios' });
+    await rowAction(user, 'citas.sonrisa.com', 'Verificar');
     await waitFor(() =>
       expect(mockedNotify).toHaveBeenCalledWith('Este dominio caducó sin verificarse (72 h).', {}),
     );
@@ -210,20 +240,20 @@ describe('DomainsManager (SEC-009)', () => {
     const user = setupUser();
     mockedVerify.mockRejectedValue(new ApiError(500, 'x'));
     render(<DomainsManager token="tok" allowed />);
-    await screen.findByRole('list', { name: 'Dominios propios' });
-    await user.click(screen.getByRole('button', { name: 'Verificar de nuevo old.sonrisa.com' }));
+    await screen.findByRole('table', { name: 'Dominios propios' });
+    await rowAction(user, 'old.sonrisa.com', 'Verificar de nuevo');
     await waitFor(() => expect(mockedNotify).toHaveBeenCalled());
     expect(mockedNotify.mock.calls[0][1]).toEqual({ onRetry: expect.any(Function) });
     expect(within(item('old.sonrisa.com')).getByText('Desactivado')).toBeInTheDocument();
   });
 
-  it('eliminar pide confirmación y quita el dominio de la lista', async () => {
+  it('eliminar (desde el «⋯») pide confirmación y quita el dominio de la lista', async () => {
     const user = setupUser();
     mockedDelete.mockResolvedValue(undefined);
     render(<DomainsManager token="tok" allowed />);
-    await screen.findByRole('list', { name: 'Dominios propios' });
+    await screen.findByRole('table', { name: 'Dominios propios' });
 
-    await user.click(screen.getByRole('button', { name: 'Eliminar www.sonrisa.com' }));
+    await rowAction(user, 'www.sonrisa.com', 'Eliminar');
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/Deja de abrir Dentalix al momento/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar dominio' }));
@@ -236,11 +266,21 @@ describe('DomainsManager (SEC-009)', () => {
     const user = setupUser();
     mockedDelete.mockRejectedValue(new ApiError(404, 'x', { messages: ['Dominio no encontrado.'] }));
     render(<DomainsManager token="tok" allowed />);
-    await screen.findByRole('list', { name: 'Dominios propios' });
-    await user.click(screen.getByRole('button', { name: 'Eliminar viejo.sonrisa.com' }));
+    await screen.findByRole('table', { name: 'Dominios propios' });
+    await rowAction(user, 'viejo.sonrisa.com', 'Eliminar');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar dominio' }));
     expect(await within(dialog).findByText('Dominio no encontrado.')).toBeInTheDocument();
+  });
+});
+
+describe('clinicAddress', () => {
+  it('el subdominio de la clínica; en local, con su puerto', () => {
+    expect(clinicAddress('demo.localhost:3001')).toBe('demo.localhost:3001');
+    expect(clinicAddress(null)).toBeNull();
+    expect(clinicAddress('localhost:3001')).toBeNull();
+    // Un dominio propio no dice cuál es el subdominio: no se inventa.
+    expect(clinicAddress('citas.miclinica.com')).toBeNull();
   });
 });
 

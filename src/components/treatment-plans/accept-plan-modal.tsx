@@ -174,12 +174,12 @@ export function AcceptPlanModal({
             aria-label={copy.summary}
             className="flex flex-col gap-3 rounded-lg border border-border p-4"
           >
-            <ul className="max-h-48 divide-y divide-hairline overflow-y-auto text-sm">
+            <ul className="max-h-48 divide-y divide-border-subtle overflow-y-auto text-sm">
               {quote.items.map((item) => (
                 <li key={item.id} className="flex items-baseline justify-between gap-3 py-2">
                   <span className="min-w-0">
                     <span className="block text-ink">{item.procedure}</span>
-                    <span className="block text-xs text-muted tabular-nums">{copy.tooth(item.toothNumber)}</span>
+                    <span className="block t-caption text-muted tabular-nums">{copy.tooth(item.toothNumber)}</span>
                   </span>
                   <span className="shrink-0 font-medium text-ink tabular-nums">
                     {formatCurrency(item.subtotal, quote.currency)}
@@ -196,7 +196,7 @@ export function AcceptPlanModal({
                 <span className="tabular-nums">{formatCurrency(total.net, total.currency)}</span>
               </p>
             ))}
-            <p className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+            <p className="flex flex-wrap items-center justify-between gap-2 t-caption text-muted">
               <span className="tabular-nums">
                 {copy.validity(quote.validityDays, formatCivilDate(quote.validUntil))}
               </span>
@@ -204,7 +204,7 @@ export function AcceptPlanModal({
                 href={planQuotePrintHref(patientId, planId)}
                 target="_blank"
                 rel="noopener"
-                className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="inline-flex items-center gap-1 font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {copy.viewFull}
                 <ExternalLink aria-hidden className="size-3.5" />
@@ -231,7 +231,7 @@ export function AcceptPlanModal({
             onChange={setSignature}
             disabled={submitting}
           />
-          <p className="text-xs text-muted">{copy.immutableNote}</p>
+          <p className="t-caption text-muted">{copy.immutableNote}</p>
         </>
       )}
     </FormModal>

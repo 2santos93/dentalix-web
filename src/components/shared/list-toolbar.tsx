@@ -8,18 +8,6 @@ const copy = {
   clear: 'Limpiar la búsqueda',
 };
 
-/**
- * Clase del `<select>` nativo para que case con el átomo `Input`. Se mantiene
- * nativo a propósito: en móvil abre la rueda del sistema, que es más rápida y
- * accesible que cualquier lista que dibujemos nosotros.
- *
- * Se exporta porque las vistas declaran sus propios filtros como children —
- * cada lista filtra por cosas distintas y no tiene sentido inventar aquí una
- * abstracción de "filtro" que solo sirva para el mínimo común.
- */
-export const toolbarFieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
-
 interface ListToolbarProps {
   /** Nombre accesible del campo, p. ej. "Buscar por nombre o documento". */
   searchLabel: string;
@@ -27,7 +15,7 @@ interface ListToolbarProps {
   /** Lo que se ha TECLEADO (sin rebotar). La vista se encarga del debounce. */
   value: string;
   onChange: (value: string) => void;
-  /** Selects y conmutadores de la vista. */
+  /** Filtros de la vista (`NativeSelect`, `SegmentedControl`…). */
   children?: React.ReactNode;
   /**
    * La acción primaria de la lista ("Nuevo paciente", "Agregar insumo"): un
@@ -112,7 +100,7 @@ export function ListToolbar({
               type="button"
               aria-label={copy.clear}
               onClick={() => onChange('')}
-              className="absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center pointer-coarse:size-9 justify-center rounded-md text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
             >
               <X className="size-3.5" aria-hidden />
             </button>

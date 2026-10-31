@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
 import { CalendarPlus, CornerDownLeft, Search, UserPlus, UserRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
@@ -118,6 +119,12 @@ export function CommandPalette({
 
   const go = React.useCallback(
     (href: string) => {
+      // Con cambios sin guardar, la paleta se cierra como con Esc (retira su
+      // entrada del historial) y la guarda pregunta antes de navegar.
+      if (hasUnsavedChanges() && requestNavigation(href)) {
+        onOpenChange(false);
+        return;
+      }
       skipBack();
       onOpenChange(false);
       router.push(href);

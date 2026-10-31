@@ -35,6 +35,16 @@ type Presentations<K extends string> = Record<K, StatusPresentation>;
 
 const s = (tone: StatusTone, label: string): StatusPresentation => ({ tone, label });
 
+// ── Clínica: sedación ───────────────────────────────────────────────────────
+
+/** Hoja de sedación: valorada, checklist y en curso son pasos en marcha; el egreso la cierra bien. */
+const sedationSheet = {
+  ASSESSED: s('info', 'Valorada'),
+  CHECKED: s('info', 'Checklist hecho'),
+  IN_PROGRESS: s('info', 'En curso'),
+  DISCHARGED: s('success', 'Egreso firmado'),
+} satisfies Presentations<Schemas['SedationSheetDto']['status']>;
+
 // ── Agenda ──────────────────────────────────────────────────────────────────
 
 const appointment = {
@@ -203,7 +213,7 @@ const inventoryStock = {
 
 /** Directorio del personal: miembro activo, invitación pendiente o inactivo. */
 const staff = {
-  ACTIVE: s('success', 'Aceptado'),
+  ACTIVE: s('success', 'Activo'),
   PENDING: s('warning', 'Pendiente'),
   INACTIVE: s('neutral', 'Inactivo'),
 } satisfies Presentations<Schemas['StaffDirectoryEntryDto']['status']>;
@@ -225,6 +235,21 @@ const tenantDomain = {
   EXPIRED: s('danger', 'Expirado'),
   DISABLED: s('neutral', 'Desactivado'),
 } satisfies Presentations<Schemas['TenantDomainState']>;
+
+/**
+ * Firma a distancia (DX-243). Enviado y abierto: en curso. Firmado por el
+ * paciente: falta la firma del profesional (una acción). Bloqueado: salió mal
+ * (anular y reenviar). Caducado y anulado: cerrados sin juicio.
+ */
+const signatureRequest = {
+  SENT: s('info', 'Enviado'),
+  OPENED: s('info', 'Abierto'),
+  LOCKED: s('danger', 'Bloqueado'),
+  EXPIRED: s('neutral', 'Caducado'),
+  REVOKED: s('neutral', 'Anulado'),
+  SIGNED_BY_PATIENT: s('warning', 'Firmado por paciente'),
+  COMPLETE: s('success', 'Completo'),
+} satisfies Presentations<Schemas['SignatureRequestStatus']>;
 
 export const STATUS_PRESENTATION = {
   appointment,
@@ -250,6 +275,8 @@ export const STATUS_PRESENTATION = {
   staff,
   invitationEmail,
   tenantDomain,
+  signatureRequest,
+  sedationSheet,
 } as const;
 
 export type StatusKind = keyof typeof STATUS_PRESENTATION;

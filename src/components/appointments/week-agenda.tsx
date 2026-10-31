@@ -48,7 +48,7 @@ interface WeekAgendaProps {
  * Presentational week agenda: a 7-column Mon..Sun grid. Each column groups
  * `appointments` falling on that local day (sorted by `start` ASC) and shows
  * time + patient + status badge per appointment — read-only, no status
- * <select> and no drag-and-drop (out of scope for the week view, see
+ * status select and no drag-and-drop (out of scope for the week view, see
  * `day-agenda.tsx` for those). Clicking a day header calls `onSelectDay` so
  * the caller (`AgendaView`) can switch back to the day view on that date.
  */
@@ -103,7 +103,7 @@ export function WeekAgenda({
               data-testid="week-day-header"
               data-date={date}
               onClick={() => onSelectDay(date)}
-              className="text-left text-sm font-medium text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg rounded"
+              className="text-left text-sm font-medium text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text rounded"
             >
               {weekDayHeader(date, clock.fmt)}
             </button>

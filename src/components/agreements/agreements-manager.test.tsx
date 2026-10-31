@@ -115,6 +115,33 @@ function catalogItem(id: string, category: string | null): DentalCatalogItem {
   };
 }
 
+/** Teléfono: `DataList` pinta tarjetas cuando `matchMedia` dice que sí. */
+let restorePhone: (() => void) | null = null;
+function mockPhone() {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: true,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  restorePhone = () => {
+    window.matchMedia = original;
+    restorePhone = null;
+  };
+}
+afterEach(() => restorePhone?.());
+
+/** Abre el «⋯» de la fila y elige la acción. */
+async function rowAction(user: ReturnType<typeof setupUser>, row: string, action: string) {
+  await user.click(screen.getByRole('button', { name: `Acciones de ${row}` }));
+  await user.click(await screen.findByRole('menuitem', { name: action }));
+}
+
 describe('AgreementsManager (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -136,21 +163,20 @@ describe('AgreementsManager (DX-105)', () => {
     expect(mockedList).not.toHaveBeenCalled();
   });
 
-  it('lista con pagador, tipo, condición, sede, vigencia, pacientes y estado', async () => {
+  it('lista con pagador, condición (que dice el tipo), sede, vigencia y pacientes', async () => {
     render(<AgreementsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Convenios' });
     const rows = within(table).getAllByRole('row');
     expect(rows[1]).toHaveTextContent('Convenio Sanitas');
     expect(rows[1]).toHaveTextContent('Sanitas');
-    expect(rows[1]).toHaveTextContent('Descuento porcentual');
     // DX-378 (FE-078): el % con el formato de la sede (es-CO: «15%»), no con «es» («15 %»).
-    expect(rows[1]).toHaveTextContent('15% · 2 categorías con porcentaje propio');
+    expect(rows[1]).toHaveTextContent('15% de descuento · 2 categorías con porcentaje propio');
     expect(rows[1]).toHaveTextContent('Toda la clínica');
     expect(rows[1]).toHaveTextContent('01/01/2026 – 31/12/2026');
     expect(rows[1]).toHaveTextContent('3');
-    expect(rows[1]).toHaveTextContent('Activo');
-    expect(rows[2]).toHaveTextContent('Lista de precios');
-    expect(rows[2]).toHaveTextContent('Lista Sura 2026');
+    // El estado solo se ve cuando es la excepción.
+    expect(rows[1]).not.toHaveTextContent('Activo');
+    expect(rows[2]).toHaveTextContent('Lista: Lista Sura 2026');
     expect(rows[2]).toHaveTextContent('Sede Norte');
     expect(rows[2]).toHaveTextContent('Sin límite');
     expect(rows[3]).toHaveTextContent('Inactivo');
@@ -174,8 +200,25 @@ describe('AgreementsManager (DX-105)', () => {
       'Solo un administrador podrá asignarlo. Si es una aseguradora o una empresa, reclasifica el pagador.';
     expect(rows[1]).not.toHaveTextContent(warning);
     expect(rows[2]).toHaveTextContent(warning);
-    const list = screen.getByRole('list', { name: 'Convenios' });
-    expect(within(list).getByText(warning)).toBeInTheDocument();
+  });
+
+  it('teléfono: la tarjeta conserva el aviso de SEC-047 y el número de pacientes', async () => {
+    mockPhone();
+    mockedList.mockResolvedValue([
+      porcentaje,
+      { ...porcentaje, id: 'ag-9', name: 'Cortesía socios', payer: { id: 'payer-9', name: 'Cortesía', type: 'OTHER' } },
+    ]);
+    render(<AgreementsManager token="tok" allowed />);
+    const list = await screen.findByRole('list', { name: 'Convenios' });
+    const cards = within(list).getAllByRole('listitem');
+    expect(
+      within(cards[1]).getByText(
+        'Solo un administrador podrá asignarlo. Si es una aseguradora o una empresa, reclasifica el pagador.',
+      ),
+    ).toBeInTheDocument();
+    expect(cards[0]).toHaveTextContent('3 pacientes');
+    expect(cards[0]).toHaveTextContent('Sanitas · 15% de descuento');
+    expect(within(cards[0]).getByRole('button', { name: 'Acciones de Convenio Sanitas' })).toBeInTheDocument();
   });
 
   // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
@@ -194,6 +237,8 @@ describe('AgreementsManager (DX-105)', () => {
     mockedList.mockResolvedValue([]);
     render(<AgreementsManager token="tok" allowed />);
     expect(await screen.findByText('Todavía no hay convenios.')).toBeInTheDocument();
+    expect(screen.queryByText('0 convenios')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Nuevo convenio' })).toHaveLength(1);
   });
 
   it('si falla cualquier carga, error con reintento', async () => {
@@ -239,7 +284,7 @@ describe('AgreementsManager (DX-105)', () => {
       .getAllByRole('row')
       .slice(1)
       .map((r) => within(r).getAllByRole('cell')[0].textContent);
-    expect(names).toEqual(['AntiguoSanitas', 'BetaSanitas', 'Convenio SanitasSanitas', 'Sura tarifasSanitas']);
+    expect(names).toEqual(['AntiguoInactivoSanitas', 'BetaSanitas', 'Convenio SanitasSanitas', 'Sura tarifasSanitas']);
   });
 
   it('desactiva y, si falla, avisa con reintento sin cambiar la lista', async () => {
@@ -248,16 +293,16 @@ describe('AgreementsManager (DX-105)', () => {
     render(<AgreementsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Convenios' });
 
-    await user.click(within(table).getByRole('button', { name: 'Desactivar «Convenio Sanitas»' }));
+    await rowAction(user, 'Convenio Sanitas', 'Desactivar');
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'ag-1', { active: false }));
-    expect(await within(table).findByRole('button', { name: 'Activar «Convenio Sanitas»' })).toBeInTheDocument();
+    await waitFor(() => expect(within(table).getAllByText('Inactivo')).toHaveLength(2));
 
     mockedUpdate.mockRejectedValueOnce(new ApiError(500, 'Caído'));
-    await user.click(within(table).getByRole('button', { name: 'Activar «Antiguo»' }));
+    await rowAction(user, 'Antiguo', 'Reactivar');
     await waitFor(() => expect(mockedNotify).toHaveBeenCalledTimes(1));
     expect(mockedNotify.mock.calls[0][0]).toBe('No pudimos cambiar el estado de «Antiguo».');
     expect(mockedNotify.mock.calls[0][1]).toEqual({ onRetry: expect.any(Function) });
-    expect(within(table).getByRole('button', { name: 'Activar «Antiguo»' })).toBeInTheDocument();
+    expect(within(table).getAllByText('Inactivo')).toHaveLength(2);
   });
 
   it('retira con confirmación y el foco pasa a «Nuevo convenio»', async () => {
@@ -265,9 +310,9 @@ describe('AgreementsManager (DX-105)', () => {
     mockedList.mockResolvedValue([inactivo]);
     mockedDelete.mockResolvedValue(undefined);
     render(<AgreementsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Convenios' });
+    await screen.findByRole('table', { name: 'Convenios' });
 
-    await user.click(within(table).getByRole('button', { name: 'Retirar «Antiguo»' }));
+    await rowAction(user, 'Antiguo', 'Retirar');
     await user.click(await screen.findByRole('button', { name: 'Retirar convenio' }));
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'ag-3'));
     await waitFor(() => expect(screen.queryByRole('table', { name: 'Convenios' })).not.toBeInTheDocument());
@@ -281,8 +326,14 @@ describe('AgreementsManager (DX-105)', () => {
     render(<AgreementsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Convenios' });
 
-    await user.click(within(table).getByRole('button', { name: 'Retirar «Convenio Sanitas»' }));
+    await rowAction(user, 'Convenio Sanitas', 'Retirar');
     const dialog = await screen.findByRole('dialog');
+    // La confirmación dice la consecuencia con el número de pacientes.
+    expect(
+      within(dialog).getByText(
+        'Tiene 3 pacientes asignados: no se puede retirar mientras los tenga. Desactívalo para que deje de aplicarse.',
+      ),
+    ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Retirar convenio' }));
     expect(await within(dialog).findByText(message)).toBeInTheDocument();
     expect(within(table).getByText('Convenio Sanitas')).toBeInTheDocument();

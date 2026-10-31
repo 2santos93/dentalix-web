@@ -469,12 +469,32 @@ export interface paths {
         post?: never;
         /**
          * Archivar paciente (borrado blando, solo ADMIN)
-         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención legal (15 años desde la última atención, 30 con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva, salvo que tenga citas programadas o confirmadas (409 `PATIENT_HAS_PENDING_APPOINTMENTS`: hay que cancelarlas o cerrarlas antes).
+         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención legal (15 años desde la última atención, 30 con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva, salvo que tenga citas programadas o confirmadas (409 `PATIENT_HAS_PENDING_APPOINTMENTS`: hay que cancelarlas o cerrarlas antes). DX-461: en la misma transacción anula sus enlaces públicos vivos (ofertas de hueco, firma y presupuesto a distancia, copia del PDF firmado y anamnesis): sus rutas públicas responden como a un enlace caducado y desarchivar no los reactiva. Si anuló alguno, queda un audit_event (UPDATE de PATIENT, `PATIENT_ARCHIVED_LINKS_REVOKED`) con cuántos de cada tipo.
          */
         delete: operations["PatientsController_archive"];
         options?: never;
         head?: never;
         patch: operations["PatientsController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/live-public-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enlaces públicos vivos que anularía archivar (solo ADMIN)
+         * @description DX-461. Para avisar en el diálogo de archivar: cuántas ofertas de hueco, firmas y presupuestos a distancia, copias del PDF firmado y anamnesis enviados siguen sirviendo hoy (sin usar, sin anular y sin caducar), en todas las sedes: el paciente es de la clínica. Solo números. 404 si el paciente no existe en la clínica o ya está archivado.
+         */
+        get: operations["PatientsController_livePublicLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/patients/{id}/retention": {
@@ -1509,6 +1529,22 @@ export interface paths {
         get: operations["AppointmentsController_list"];
         put?: never;
         post: operations["AppointmentsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/walk-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AppointmentsController_walkIn"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3381,6 +3417,66 @@ export interface paths {
          * @description Saca UN pendiente (sección + cita [+ ítem en TREATMENT]) de la lista con un motivo de la lista; «Otro» exige texto de 3–200. No cambia la cita, la historia ni el plan. Deja un `audit_event` CREATE CLOSING_QUEUE_DISMISSAL (CLOSING_QUEUE_DISMISSED) en la misma transacción, con quién, la sección y el código del motivo y la cita (y el ítem) en `params`; nunca el texto. El rol tiene que ver esa sección; la cita, ser de una sede permitida (y del propio DENTIST).
          */
         post: operations["ClosingQueueController_dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{locationId}/contingency-agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Descargar la agenda de contingencia de la sede, generada ahora (PDF)
+         * @description Citas de HOY y MAÑANA de la sede (días civiles en su zona IANA; horas en su zona, locale y reloj), sin canceladas ni inasistencias: hora, paciente, teléfono (formato internacional con la región de la sede), profesional, tipo de cita y alertas no clínicas (confirmada o no, en la clínica/atendida, primera visita, pidió que le llamen y «Alerta médica: ver ficha» como sí/no). Nunca notas ni motivo de la cita ni nada de la historia clínica. A4 apaisado. Auditado: EXPORT · LOCATION · CONTINGENCY_AGENDA_DOWNLOADED.
+         */
+        get: operations["ContingencyAgendaController_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{locationId}/contingency-agenda/nightly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado de la copia nocturna de la sede
+         * @description Cada noche, desde las 02:00 en la zona de la sede, se genera y guarda su agenda de contingencia (hoy y mañana); se conserva solo la última. Dice si hay copia, de qué día y cuándo se generó; sin datos de pacientes (no se audita).
+         */
+        get: operations["ContingencyAgendaController_nightly"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{locationId}/contingency-agenda/nightly/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Descargar la copia nocturna de la agenda de contingencia (PDF)
+         * @description La última copia guardada, tal cual se generó (puede ser de un día anterior: ver GET …/nightly). Citas de HOY y MAÑANA de la sede (días civiles en su zona IANA; horas en su zona, locale y reloj), sin canceladas ni inasistencias: hora, paciente, teléfono (formato internacional con la región de la sede), profesional, tipo de cita y alertas no clínicas (confirmada o no, en la clínica/atendida, primera visita, pidió que le llamen y «Alerta médica: ver ficha» como sí/no). Nunca notas ni motivo de la cita ni nada de la historia clínica. A4 apaisado. Auditado: EXPORT · LOCATION · CONTINGENCY_AGENDA_NIGHTLY_DOWNLOADED.
+         */
+        get: operations["ContingencyAgendaController_downloadNightly"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6723,6 +6819,20 @@ export interface components {
             /** Format: date */
             retentionUntil: string | null;
         };
+        LivePublicLinksDto: {
+            /** @description Ofertas de hueco con enlace pendientes (DX-435) */
+            slotOffers: number;
+            /** @description Consentimientos enviados a firmar a distancia sin firmar (DX-243) */
+            consentSignatures: number;
+            /** @description Presupuestos enviados a aceptar a distancia sin firmar (DX-415) */
+            budgetSignatures: number;
+            /** @description Enlaces de la copia del PDF firmado sin descargar (DX-443) */
+            signedPdfCopies: number;
+            /** @description Cuestionarios de salud (anamnesis) sin responder (DX-099) */
+            anamnesis: number;
+            /** @description Suma de todos los tipos */
+            total: number;
+        };
         SetRetentionExtensionDto: {
             /** @description Motivo (obligatorio). Queda en el rastro de retención del paciente con el autor y la fecha; no se copia al registro de auditoría. */
             reason: string;
@@ -8825,7 +8935,7 @@ export interface components {
             notes?: string;
             /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
             wantsEarlier?: boolean;
-            /** @description DX-446: «Agendar igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. Queda en `audit_event` (`reservedSlotOverride`). */
+            /** @description DX-446: «Agendar igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. El motivo queda en `appointment_reserved_overrides`; `audit_event` (`reservedSlotOverride`) solo guarda el id de esa fila y los bloques. */
             overrideReason?: string;
         };
         AppointmentTypeSummaryDto: {
@@ -8845,6 +8955,11 @@ export interface components {
          * @enum {string}
          */
         CancellationReasonCode: "ILLNESS" | "FORGOT" | "COST" | "TRANSPORT" | "WORK" | "CLINIC_RESCHEDULE" | "OTHER";
+        /**
+         * @description DX-470: señales de triaje de recepción (dolor, inflamación, infección, fiebre, sangrado, traumatismo). Datos de salud: no salen en la agenda (GET /appointments), ni en vistas públicas ni recordatorios.
+         * @enum {string}
+         */
+        TriageFlag: "PAIN" | "SWELLING" | "INFECTION" | "FEVER" | "BLEEDING" | "TRAUMA";
         /**
          * @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede).
          * @enum {string}
@@ -9021,6 +9136,14 @@ export interface components {
              * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
              */
             policyVersionId: string | null;
+            /** @description DX-470: señales de triaje de recepción (dolor, inflamación, infección, fiebre, sangrado, traumatismo). Datos de salud: no salen en la agenda (GET /appointments), ni en vistas públicas ni recordatorios. */
+            triageFlags: components["schemas"]["TriageFlag"][];
+            /** @description DX-470: nota de triaje (≤ 200). Mismo alcance que `triageFlags`. */
+            triageNote: string | null;
+            /** @description DX-470: nació en «Atender sin cita». */
+            walkIn: boolean;
+            /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
+            overbooked: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9033,7 +9156,7 @@ export interface components {
             planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
             /** @description DX-273: solo al sacar la cita de COMPLETED. El motivo y cómo queda el mínimo de la visita siguiente de cada plan afectado. */
             completedExit?: components["schemas"]["CompletedExitDto"];
-            /** @description DX-446: solo si la cita se agendó o movió a un hueco reservado saltándose la reserva (con `overrideReason`); queda en `audit_event`. */
+            /** @description DX-446: solo si la cita se agendó o movió a un hueco reservado saltándose la reserva (con `overrideReason`). El motivo queda en `appointment_reserved_overrides`, no en `audit_event`. */
             reservedOverride?: components["schemas"]["ReservedOverrideDto"];
         };
         PatientIncidentCountsDto: {
@@ -9138,6 +9261,10 @@ export interface components {
              * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
              */
             policyVersionId: string | null;
+            /** @description DX-470: nació en «Atender sin cita». */
+            walkIn: boolean;
+            /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
+            overbooked: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9148,6 +9275,153 @@ export interface components {
             coverage: components["schemas"]["CoverageSummaryDto"];
             /** @description DX-247: banderas médicas del paciente (alerta, premedicación, anamnesis al día / caducada / ausente). Sin alérgenos, condiciones, medicamentos ni notas. */
             medicalAlerts: components["schemas"]["MedicalAlertFlagsDto"];
+        };
+        WalkInNewPatientDto: {
+            firstName: string;
+            lastName: string;
+            phone: string;
+            /** @description Tipo de documento; sin él, OTHER (como el alta sin tipo). */
+            docType?: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel?: string | null;
+            docNumber?: string;
+        };
+        CreateWalkInDto: {
+            /**
+             * Format: uuid
+             * @description Paciente existente de la clínica. Exactamente uno de `patientId` o `newPatient`.
+             */
+            patientId?: string;
+            newPatient?: components["schemas"]["WalkInNewPatientDto"];
+            /**
+             * Format: uuid
+             * @description Profesional que atiende: de esta clínica y que atiende en la sede.
+             */
+            providerId: string;
+            /**
+             * Format: uuid
+             * @description Tipo de cita urgente (activo y con «Urgencia»). Sin él, el primer tipo urgente activo por nombre.
+             */
+            appointmentTypeId?: string;
+            /** @description Señales de triaje de recepción: PAIN (dolor), SWELLING (inflamación), INFECTION (infección), FEVER (fiebre), BLEEDING (sangrado), TRAUMA (traumatismo). Otro valor: 400. */
+            triageFlags?: components["schemas"]["TriageFlag"][];
+            triageNote?: string;
+            /** @description Sobrecupo AHORA con este motivo (el mismo mecanismo que «Agendar igualmente» de DX-446: queda en `appointment_reserved_overrides`, nunca en la auditoría). Sin él, el primer hueco reservado libre de hoy o 409 `NO_RESERVED_SLOT`. */
+            overbookReason?: string;
+        };
+        WalkInResultDto: {
+            planItemIds: string[];
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /**
+             * Format: uuid
+             * @description Sede donde ocurre la cita.
+             */
+            locationId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description Patient's first name, joined so a client can label the appointment without fetching the patient list. Null when the join is unavailable. */
+            patientFirstName: string | null;
+            patientLastName: string | null;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
+            reason: string | null;
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: uuid */
+            appointmentTypeId: string | null;
+            /** @description DX-121: tipo embebido (nombre, duración, color #RRGGBB). Se mantiene aunque el tipo se desactive o retire después. */
+            appointmentType: components["schemas"]["AppointmentTypeSummaryDto"] | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se generó el enlace de confirmación vigente (DX-005). null si nunca se envió o si la cita se reagendó / cambió de estado después.
+             */
+            confirmationSentAt: string | null;
+            /**
+             * Format: date-time
+             * @description El paciente pidió que lo llamen desde el enlace de confirmación (la cita sigue SCHEDULED).
+             */
+            callbackRequestedAt: string | null;
+            /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
+            wantsEarlier: boolean;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
+             */
+            arrivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo pasó al sillón.
+             */
+            seatedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo quedó listo para cobrar.
+             */
+            readyForCheckoutAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se canceló (reloj del servidor). Solo en CANCELLED; null en las canceladas antiguas.
+             */
+            cancelledAt: string | null;
+            /** @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía). */
+            cancelledByKind: components["schemas"]["CancellationByKind"] | null;
+            /** @description DX-279: motivo del catálogo cerrado. */
+            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
+            /** @description DX-279: detalle opcional del motivo (≤ 500). No sale en GET /appointments (como las notas). */
+            cancelReasonText: string | null;
+            /** @description DX-279: minutos de aviso entre la cancelación y el inicio (0 si ya había empezado). */
+            noticeMinutes: number | null;
+            /** @description DX-279: con menos aviso que el que pedía la política vigente de la sede. */
+            lateCancellation: boolean | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW).
+             */
+            noShowMarkedAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
+             */
+            policyVersionId: string | null;
+            /** @description DX-470: señales de triaje de recepción (dolor, inflamación, infección, fiebre, sangrado, traumatismo). Datos de salud: no salen en la agenda (GET /appointments), ni en vistas públicas ni recordatorios. */
+            triageFlags: components["schemas"]["TriageFlag"][];
+            /** @description DX-470: nota de triaje (≤ 200). Mismo alcance que `triageFlags`. */
+            triageNote: string | null;
+            /** @description DX-470: nació en «Atender sin cita». */
+            walkIn: boolean;
+            /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
+            overbooked: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Avisos en español que no impiden la operación (p. ej. «Fuera del horario del profesional en Sede Norte (jueves 22/10: 14:00–19:00).»). */
+            warnings: string[];
+            /** @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede). */
+            warningCodes: components["schemas"]["AppointmentWarningCode"][];
+            /** @description DX-273: tratamientos de esta cita que siguen reservados en OTRA cita viva (p. ej. al marcar «Llegó», la reserva se quedó en la cita futura). Solo citas de sedes permitidas al usuario (DX-089): las de otras sedes se omiten, salvo la de hoy con el paciente en la clínica, que sale con `heldInClinic` y sin cita, hora ni sede (DX-293). Vacío en una cita cancelada, no-show o completada. Si la cita que lo reservaba se cancela, se marca no-show o lo quita, la cita más temprana con el paciente en la clínica recupera la reserva en esa misma transacción (auditado `PLAN_ITEM_RESERVATION_RECOVERED`). Para moverla: `POST /appointments/:id/plan-items/:planItemId/claim` (no con `heldInClinic`: daría 409). */
+            planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
+            /** @description DX-273: solo al sacar la cita de COMPLETED. El motivo y cómo queda el mínimo de la visita siguiente de cada plan afectado. */
+            completedExit?: components["schemas"]["CompletedExitDto"];
+            /** @description DX-446: solo si la cita se agendó o movió a un hueco reservado saltándose la reserva (con `overrideReason`). El motivo queda en `appointment_reserved_overrides`, no en `audit_event`. */
+            reservedOverride?: components["schemas"]["ReservedOverrideDto"];
+            /** @description Se dio de alta un paciente nuevo en el mismo paso. */
+            patientCreated: boolean;
+            /**
+             * Format: uuid
+             * @description Fila del motivo del sobrecupo (`appointment_reserved_overrides`), o null.
+             */
+            overbookId: string | null;
         };
         OpeningDto: {
             /**
@@ -9204,6 +9478,16 @@ export interface components {
             planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
             /** @description DX-247: la misma alerta médica que la tarjeta de la agenda (solo banderas). */
             medicalAlerts: components["schemas"]["MedicalAlertFlagsDto"];
+            /** @description DX-470: la cita es de un tipo de urgencia (insignia «Urgencia» en el panel). */
+            urgent: boolean;
+            /** @description DX-470: llegó sin cita («Atender sin cita»). */
+            walkIn: boolean;
+            /** @description DX-470: atendida en sobrecupo. */
+            overbooked: boolean;
+            /** @description DX-470: señales de triaje de recepción. Solo para el personal con acceso a la sede del panel. */
+            triageFlags: components["schemas"]["TriageFlag"][];
+            /** @description DX-470: nota de triaje (≤ 200). */
+            triageNote: string | null;
         };
         InClinicViewDto: {
             /** @example 2026-10-19 */
@@ -9344,6 +9628,14 @@ export interface components {
              * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
              */
             policyVersionId: string | null;
+            /** @description DX-470: señales de triaje de recepción (dolor, inflamación, infección, fiebre, sangrado, traumatismo). Datos de salud: no salen en la agenda (GET /appointments), ni en vistas públicas ni recordatorios. */
+            triageFlags: components["schemas"]["TriageFlag"][];
+            /** @description DX-470: nota de triaje (≤ 200). Mismo alcance que `triageFlags`. */
+            triageNote: string | null;
+            /** @description DX-470: nació en «Atender sin cita». */
+            walkIn: boolean;
+            /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
+            overbooked: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9387,7 +9679,7 @@ export interface components {
             notes?: string;
             /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
             wantsEarlier?: boolean;
-            /** @description DX-446: «Mover igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. Queda en `audit_event` (`reservedSlotOverride`). */
+            /** @description DX-446: «Mover igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. El motivo queda en `appointment_reserved_overrides`; `audit_event` (`reservedSlotOverride`) solo guarda el id de esa fila y los bloques. */
             overrideReason?: string;
         };
         MoveToOpeningDto: {
@@ -11490,7 +11782,7 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
-             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en UTC−5) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC.
+             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en UTC−5) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC. DX-054: 400 si va a más de 24 h en el futuro (un día civil cuenta desde su primer instante en UTC+14); las fechas pasadas no tienen límite. También en el abono al saldo migrado.
              * @example 2026-10-16
              */
             paidAt: string;
@@ -11625,7 +11917,7 @@ export interface components {
         };
         RecordSplitPaymentDto: {
             /**
-             * @description El día civil `YYYY-MM-DD` (o un instante con `Z` o desfase) de TODO el cobro, como en un abono (DX-097).
+             * @description El día civil `YYYY-MM-DD` (o un instante con `Z` o desfase) de TODO el cobro, como en un abono (DX-097). DX-054: 400 si va a más de 24 h en el futuro.
              * @example 2026-10-30
              */
             paidAt: string;
@@ -11724,6 +12016,11 @@ export interface components {
             paymentsCount: number;
             /** @description DX-375: abonos vivos «sin tasa» (en otra moneda y sin tasa de su día): no cuentan en paid, así que el saldo está incompleto hasta que se registre la tasa (Ajustes › Tasa de cambio) y el barrido la congele. Vacío si no hay ninguno. */
             paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
+            /**
+             * @description DX-054: el proveedor de tasas no respondió a tiempo (el saldo espera como mucho 4 s a las conversiones en vivo). Los abonos que esperaban su tasa salen en paymentsWithoutRate y no suman en paid: el saldo está incompleto y volver a pedirlo lo completa cuando el proveedor responda. Nunca es un 500.
+             * @example false
+             */
+            rateProviderTimedOut: boolean;
             /**
              * @description Σ de lo imputado a los ítems
              * @example 150
@@ -13383,6 +13680,28 @@ export interface components {
             reasonCode: components["schemas"]["ClosingDismissalReason"];
             /** Format: date-time */
             createdAt: string;
+        };
+        ContingencyNightlyInfoDto: {
+            /** @description Hay una copia nocturna guardada para la sede. */
+            available: boolean;
+            /** @description La copia es la de HOY en la zona de la sede (cubre hoy y mañana). false si no hay copia o es de un día anterior. */
+            current: boolean;
+            /**
+             * Format: date
+             * @description «Hoy» (día civil en la zona de la sede) al generarla: cubre ese día y el siguiente. null sin copia.
+             * @example 2026-11-02
+             */
+            forDate: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se generó (UTC). null sin copia.
+             */
+            generatedAt: string | null;
+            /**
+             * @description Citas que lleva (sin canceladas ni inasistencias). null sin copia.
+             * @example 18
+             */
+            appointmentCount: number | null;
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -18230,6 +18549,41 @@ export interface operations {
             };
         };
     };
+    PatientsController_livePublicLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LivePublicLinksDto"];
+                };
+            };
+            /** @description Rol distinto de ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente inexistente o archivado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PatientsController_changeRetention: {
         parameters: {
             query?: never;
@@ -21286,6 +21640,58 @@ export interface operations {
             };
         };
     };
+    AppointmentsController_walkIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWalkInDto"];
+            };
+        };
+        responses: {
+            /** @description DX-470 «Atender sin cita», en una transacción: el paciente (existente por `patientId`, o alta mínima `newPatient` con nombre, apellido y teléfono) y una cita de tipo urgente DESDE AHORA ya en «En clínica» (ARRIVED, `arrivedAt` = reloj del servidor, `walkIn`), con las señales y la nota de triaje. Va al primer hueco RESERVED libre de hoy del profesional que admite el tipo urgente (DX-446); con `overbookReason`, en sobrecupo ahora (`overbooked`, motivo en `appointment_reserved_overrides`). Sede: la de X-Location-Id (o la de escritura de la sesión), entre las permitidas al usuario; autor, el del token. Queda en auditoría (`WALK_IN_PATIENT`, `WALK_IN_ARRIVAL`, `WALK_IN_OVERBOOK`) sin el triaje ni el motivo. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalkInResultDto"];
+                };
+            };
+            /** @description Datos inválidos: ni `patientId` ni `newPatient` (o los dos), señales fuera de las 6, nota de más de 200, motivo del sobrecupo fuera de 5–300, tipo no urgente o desactivado, o el profesional no atiende en la sede */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo RECEPTION, ASSISTANT y ADMIN (marcan la llegada); sede no permitida (`LOCATION_NOT_ALLOWED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o profesional que no son de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `NO_RESERVED_SLOT` (`canOverbook`): no queda hueco reservado libre hoy, se puede reintentar con `overbookReason`; `PATIENT_DUPLICATE` (`existingPatientId` y `existingPatient` con `id`, `firstName`, `lastName`): el documento del alta mínima ya es de otro paciente (se comprueba antes que el hueco); sin tipo urgente activo; un bloqueo que no deja agendar; el paciente ya está en otra cita a esa hora; u otra persona ocupó el hueco a la vez */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AppointmentsController_openings: {
         parameters: {
             query: {
@@ -23932,7 +24338,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de una cita (`cancellationFeeAppointmentId`): su precio, descuento y estado no cambian ni se quita, sea cual sea el rol; se anula con POST /appointments/{id}/cancellation-fee/void; firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién, cuándo o dónde (DX-305) de un ítem DONE, sin otro cambio */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de una cita (`cancellationFeeAppointmentId`): su precio, descuento y estado no cambian ni se quita, sea cual sea el rol; se anula con POST /appointments/{id}/cancellation-fee/void; firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién, cuándo o dónde (DX-305) de un ítem DONE, sin otro cambio; DX-054: cambiar el `price` de un ítem DONE (también en la misma petición que lo saca de DONE; repetir el mismo precio no cuenta): primero se devuelve a ACCEPTED */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24918,7 +25324,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. */
+            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-054: `paidAt` a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24965,7 +25371,7 @@ export interface operations {
                     "application/json": components["schemas"]["SplitPaymentDto"];
                 };
             };
-            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. */
+            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. DX-054: `paidAt` a más de 24 h en el futuro. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25018,7 +25424,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description Otra moneda que la del saldo, o el abono supera lo pendiente (mensaje en español) */
+            /** @description Otra moneda que la del saldo, o el abono supera lo pendiente (mensaje en español). DX-054: `paidAt` a más de 24 h en el futuro. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26331,6 +26737,144 @@ export interface operations {
             };
             /** @description Ya no está pendiente: se cerró o ya se había descartado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContingencyAgendaController_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sede de la clínica. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (attachment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description locationId no es un uuid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y recepción descargan la agenda de contingencia. / sede fuera de las permitidas al usuario (DX-089, code LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe en esta clínica (otra clínica, retirada o desactivada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no tiene zona horaria válida (LOCATION_TIMEZONE_REQUIRED) o formato regional y reloj (LOCATION_LOCALE_REQUIRED) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContingencyAgendaController_nightly: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sede de la clínica. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContingencyNightlyInfoDto"];
+                };
+            };
+            /** @description locationId no es un uuid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y recepción descargan la agenda de contingencia. / sede fuera de las permitidas al usuario (DX-089, code LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe en esta clínica (otra clínica, retirada o desactivada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContingencyAgendaController_downloadNightly: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sede de la clínica. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (attachment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description locationId no es un uuid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y recepción descargan la agenda de contingencia. / sede fuera de las permitidas al usuario (DX-089, code LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe en esta clínica (otra clínica, retirada o desactivada), o la sede aún no tiene copia nocturna */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

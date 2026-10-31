@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { ImplantLotSearch } from '@/components/implants/implant-lot-search';
 
 const copy = {
@@ -36,12 +35,11 @@ export default function ImplantSettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic" width="wide">
       <ImplantLotSearch
         token={accessToken}
         allowed={canSearchImplantLots(getTokenRole(accessToken))}
       />
-    </>
+    </SettingsPage>
   );
 }

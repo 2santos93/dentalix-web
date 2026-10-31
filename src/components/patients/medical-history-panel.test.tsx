@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MedicalHistoryPanel } from './medical-history-panel';
 import { getMedicalHistory, saveMedicalHistory } from '@/lib/patients/clinical-api';
@@ -57,6 +57,11 @@ const latest: MedicalHistory = {
   createdById: 'u1',
   createdAt: '2026-01-02T00:00:00.000Z',
 };
+
+/** El formulario va detrás de «Actualizar anamnesis» / «Registrar anamnesis». */
+async function openForm(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: /^(actualizar|registrar) anamnesis$/i }));
+}
 
 describe('MedicalHistoryPanel', () => {
   beforeEach(() => {
@@ -133,21 +138,64 @@ describe('MedicalHistoryPanel', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
   });
 
-  it('shows an empty state when there is no anamnesis yet (null), with an empty structured form to create one', async () => {
+  it('sin anamnesis no repite el aviso: ofrece «Registrar anamnesis» y el formulario sale vacío detrás', async () => {
     mockedGet.mockResolvedValue(null);
-    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" headingId="anam" />);
 
-    expect(await screen.findByText(/no hay.*anamnesis|aún no/i)).toBeInTheDocument();
-    // The structured editors render even with nothing to carry forward yet.
+    // «Sin anamnesis registrada» ya lo dice el aviso de la ficha: aquí no.
+    expect(await screen.findByRole('button', { name: 'Registrar anamnesis' })).toBeInTheDocument();
+    expect(screen.queryByText(/aún no hay anamnesis/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /agregar alergia/i })).not.toBeInTheDocument();
+
+    await openForm(user);
+    expect(screen.getByRole('heading', { name: 'Primera anamnesis' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /agregar alergia/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/notas/i)).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Guardar anamnesis' })).toBeDisabled();
+  });
+
+  it('la pestaña abre con el resumen de la versión vigente, no con el formulario', async () => {
+    mockedGet.mockResolvedValue(latest);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" headingId="anam" />);
+    expect(await screen.findByRole('region', { name: 'Anamnesis' })).toBeInTheDocument();
+    const term = await screen.findByText('Alergias', { selector: 'dt' });
+    expect(term.nextElementSibling).toHaveTextContent('Penicilina (moderada)');
+    expect(screen.queryByRole('button', { name: /agregar alergia/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actualizar anamnesis' })).toBeInTheDocument();
+  });
+
+  it('un embarazo «false» guardado no se presenta como «No»: queda «Sin responder»', async () => {
+    mockedGet.mockResolvedValue(latest);
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await openForm(user);
+    const g = screen.getByRole('radiogroup', { name: 'Embarazo' });
+    expect(within(g).getByRole('radio', { name: 'Sin responder' })).toBeChecked();
+    expect(within(g).getByRole('radio', { name: 'No' })).not.toBeChecked();
+  });
+
+  it('cancelar con cambios pide confirmación y, al descartar, vuelve al resumen sin guardar', async () => {
+    mockedGet.mockResolvedValue(latest);
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await openForm(user);
+    await user.type(screen.getByLabelText(/notas/i), ' (actualizado)');
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Descartar' }));
+    expect(screen.queryByLabelText(/notas/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actualizar anamnesis' })).toBeInTheDocument();
+    expect(mockedSave).not.toHaveBeenCalled();
   });
 
   it('loads the latest version into the structured allergy editor (carry-forward)', async () => {
     mockedGet.mockResolvedValue(latest);
+    const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
 
     await screen.findByText(/versión 2/i);
+    await openForm(user);
     expect(screen.getByDisplayValue('Penicilina')).toBeInTheDocument();
     expect(screen.getByLabelText(/notas/i)).toHaveValue('Paciente colaborador');
   });
@@ -159,6 +207,7 @@ describe('MedicalHistoryPanel', () => {
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/versión 2/i);
+    await openForm(user);
     screen.getByDisplayValue('Penicilina');
 
     await user.click(screen.getByRole('button', { name: /agregar alergia/i }));
@@ -166,7 +215,7 @@ describe('MedicalHistoryPanel', () => {
     expect(allergenInputs).toHaveLength(2);
     await user.type(allergenInputs[1], 'Látex');
 
-    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await user.click(screen.getByRole('button', { name: 'Guardar nueva versión' }));
 
     await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
     const [token, patientId, input] = mockedSave.mock.calls[0];
@@ -180,6 +229,8 @@ describe('MedicalHistoryPanel', () => {
     expect(input.familyHistory).toBe('Sin antecedentes relevantes');
 
     expect(await screen.findByText(/versión 3/i)).toBeInTheDocument();
+    // Guardado: el formulario se cierra y queda el resumen.
+    expect(screen.queryByRole('button', { name: /agregar alergia/i })).not.toBeInTheDocument();
   });
 
   it('carries forward embarazo/semanasEmbarazo across versions (safety flag, not just for display)', async () => {
@@ -193,15 +244,17 @@ describe('MedicalHistoryPanel', () => {
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/versión 2/i);
+    await openForm(user);
 
-    expect(screen.getByLabelText('Embarazo')).toBeChecked();
+    const embarazo = screen.getByRole('radiogroup', { name: 'Embarazo' });
+    expect(within(embarazo).getByRole('radio', { name: 'Sí' })).toBeChecked();
     expect(screen.getByLabelText(/semanas de embarazo/i)).toHaveValue(20);
 
     // An unrelated edit (adding an allergy) must not drop the safety flag.
     await user.click(screen.getByRole('button', { name: /agregar alergia/i }));
     const allergenInputs = screen.getAllByLabelText(/alérgeno/i);
     await user.type(allergenInputs[1], 'Látex');
-    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await user.click(screen.getByRole('button', { name: 'Guardar nueva versión' }));
 
     await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
     const [, , input] = mockedSave.mock.calls[0];
@@ -225,7 +278,7 @@ describe('MedicalHistoryPanel', () => {
     await screen.findByRole('alert');
 
     expect(screen.queryByRole('button', { name: /agregar alergia/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /guardar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /guardar|actualizar anamnesis/i })).not.toBeInTheDocument();
     expect(mockedSave).not.toHaveBeenCalled();
   });
 
@@ -242,6 +295,7 @@ describe('MedicalHistoryPanel', () => {
 
     await screen.findByText(/versión 2/i);
     expect(mockedGet).toHaveBeenCalledTimes(2);
+    await openForm(user);
     expect(screen.getByDisplayValue('Penicilina')).toBeInTheDocument();
   });
 
@@ -252,12 +306,12 @@ describe('MedicalHistoryPanel', () => {
 
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
-    await screen.findByText(/no hay.*anamnesis|aún no/i);
+    await openForm(user);
     // Add real content so the form differs from the (empty) baseline — an
     // all-empty first-visit form is now a no-op (dup guard), so the save only
     // fires when there's something to persist.
     await user.type(screen.getByLabelText(/notas/i), 'Primera visita');
-    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await user.click(screen.getByRole('button', { name: 'Guardar anamnesis' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Datos inválidos');
   });
@@ -267,15 +321,16 @@ describe('MedicalHistoryPanel', () => {
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/versión 2/i);
+    await openForm(user);
 
     // Form equals the latest saved version (carried forward on load) → saving
     // would create an identical duplicate version, so the button is disabled.
-    const save = screen.getByRole('button', { name: /guardar/i });
+    const save = screen.getByRole('button', { name: 'Guardar nueva versión' });
     expect(save).toBeDisabled();
 
     // A real change re-enables it, and no save fired for the unchanged state.
     await user.type(screen.getByLabelText(/notas/i), ' (actualizado)');
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Guardar nueva versión' })).toBeEnabled();
     expect(mockedSave).not.toHaveBeenCalled();
   });
 });

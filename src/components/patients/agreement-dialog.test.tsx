@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { agreementDto, coverageFor, patientAgreement } from './agreement-fixtures';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { typeDate } from './date-test-utils';
 
 jest.mock('../../lib/agreements/agreements-api', () => ({
   ...jest.requireActual('../../lib/agreements/agreements-api'),
@@ -129,7 +130,7 @@ describe('AgreementDialog (DX-105)', () => {
     await screen.findByRole('option', { name: /Sanitas 2026/ });
     await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
     await user.selectOptions(within(dialog).getByLabelText('Cobertura del pagador'), 'c1');
-    await user.type(within(dialog).getByLabelText('Vigente hasta'), '2027-01-31');
+    await typeDate(user, within(dialog).getByRole('group', { name: 'Vigente hasta' }), '2027-01-31');
     await user.type(within(dialog).getByLabelText('Notas'), '  Empresa X  ');
     await user.click(within(dialog).getByRole('button', { name: 'Asignar' }));
 
@@ -152,8 +153,8 @@ describe('AgreementDialog (DX-105)', () => {
     const dialog = await screen.findByRole('dialog');
     await screen.findByRole('option', { name: /Sanitas 2026/ });
     await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
-    await user.type(within(dialog).getByLabelText('Vigente desde'), '2027-03-01');
-    await user.type(within(dialog).getByLabelText('Vigente hasta'), '2027-01-01');
+    await typeDate(user, within(dialog).getByRole('group', { name: 'Vigente desde' }), '2027-03-01');
+    await typeDate(user, within(dialog).getByRole('group', { name: 'Vigente hasta' }), '2027-01-01');
     await user.click(within(dialog).getByRole('button', { name: 'Asignar' }));
     expect(
       await screen.findByText('La fecha de fin no puede ser anterior a la de inicio.'),

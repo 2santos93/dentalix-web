@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { ImplantLotSearch } from './implant-lot-search';
 import { downloadImplantLotCsv, searchImplantLots } from '@/lib/implants/implants-api';
 import { ApiError } from '@/lib/api/client';
@@ -32,6 +32,7 @@ describe('ImplantLotSearch (DX-191)', () => {
     const user = setupUser();
     render(<ImplantLotSearch token="t" allowed />);
     expect(screen.getByText('Busca un lote o una referencia')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Exportar CSV' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Buscar' }));
     expect(screen.getByText('Escribe un lote o una referencia para buscar.')).toBeInTheDocument();
     expect(mockedSearch).not.toHaveBeenCalled();
@@ -48,8 +49,10 @@ describe('ImplantLotSearch (DX-191)', () => {
     await user.type(screen.getByLabelText('Lote'), 'LOT-AB12');
     await user.click(screen.getByRole('button', { name: 'Buscar' }));
     expect(mockedSearch).toHaveBeenCalledWith('t', { lot: 'LOT-AB12', reference: '' });
-    const rows = await screen.findAllByTestId('implant-lot-row');
+    const table = await screen.findByRole('table', { name: 'Pacientes que recibieron el lote o la referencia' });
+    const rows = within(table).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', '/patients/p1?tab=implants');
     expect(rows[1]).toHaveTextContent('Mario Pérez');
     expect(rows[1]).toHaveTextContent('Diente 46');
     expect(rows[1]).toHaveTextContent('Dr. Segundo');
@@ -69,6 +72,7 @@ describe('ImplantLotSearch (DX-191)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos hacer la búsqueda.');
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByText('Ningún paciente de la clínica recibió ese lote')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeDisabled();
+    // Sin resultados no hay nada que exportar: el botón no se ofrece.
+    expect(screen.queryByRole('button', { name: 'Exportar CSV' })).not.toBeInTheDocument();
   });
 });

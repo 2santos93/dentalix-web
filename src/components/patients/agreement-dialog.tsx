@@ -10,13 +10,13 @@ import {
 } from '@/lib/patients/patient-agreement-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/errors/inline-error';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { agreementEligibility } from '@/lib/patients/agreement-eligibility';
 import { getTokenUserId } from '@/lib/auth/token-role';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { DatePicker } from '@/components/ui/date-picker';
 
 export const agreementDialogCopy = {
   assignTitle: 'Asignar convenio',
@@ -241,7 +241,7 @@ export function AgreementDialog({
       error={saveError}
     >
       <FormField htmlFor={agreementId} label={copy.agreement} error={fieldErrors.agreement}>
-        <select
+        <NativeSelect
           id={agreementId}
           value={draft.agreementId}
           disabled={agreements === null}
@@ -250,7 +250,6 @@ export function AgreementDialog({
           aria-describedby={
             fieldErrors.agreement ? fieldErrorId(agreementId) : blockedReason ? reasonId : undefined
           }
-          className={cn(fieldClass, 'h-10')}
         >
           <option value="">{copy.agreementPlaceholder}</option>
           {options.map((o) => (
@@ -258,14 +257,14 @@ export function AgreementDialog({
               {o.name} · {o.payer.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
 
       {loading ? (
         <FormField htmlFor={coverageId} label={copy.coverage}>
-          <select id={coverageId} disabled value="" className={cn(fieldClass, 'h-10')}>
+          <NativeSelect id={coverageId} disabled value="">
             <option value="">{copy.coveragesLoading}</option>
-          </select>
+          </NativeSelect>
         </FormField>
       ) : blockedReason ? (
         <InlineError id={reasonId} variant="summary">
@@ -278,14 +277,13 @@ export function AgreementDialog({
           hint={notice ?? (coverageRequired ? copy.coverageRequiredHint : copy.coverageHint)}
           error={fieldErrors.coverage}
         >
-          <select
+          <NativeSelect
             id={coverageId}
             value={selectedCoverage}
             aria-required={coverageRequired || undefined}
             onChange={(e) => set('coverageId', e.target.value)}
             aria-invalid={fieldErrors.coverage ? true : undefined}
             aria-describedby={fieldErrors.coverage ? fieldErrorId(coverageId) : undefined}
-            className={cn(fieldClass, 'h-10')}
           >
             <option value="">
               {coverageRequired ? copy.coveragePlaceholder : copy.coverageNone}
@@ -295,18 +293,16 @@ export function AgreementDialog({
                 {[c.payer.name, c.planName].filter(Boolean).join(' · ')}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField htmlFor={`${ids}-from`} label={copy.validFrom}>
-          <Input
+          <DatePicker
             id={`${ids}-from`}
-            type="date"
-            value={draft.validFrom}
-            onChange={(e) => set('validFrom', e.target.value)}
-            className="tabular-nums"
+            value={draft.validFrom || null}
+            onChange={(value) => set('validFrom', value ?? '')}
           />
         </FormField>
         <FormField
@@ -315,26 +311,24 @@ export function AgreementDialog({
           hint={copy.validToHint}
           error={fieldErrors.range}
         >
-          <Input
+          <DatePicker
             id={toId}
-            type="date"
-            value={draft.validTo}
-            onChange={(e) => set('validTo', e.target.value)}
+            value={draft.validTo || null}
+            onChange={(value) => set('validTo', value ?? '')}
             aria-invalid={fieldErrors.range ? true : undefined}
             aria-describedby={fieldErrors.range ? fieldErrorId(toId) : undefined}
-            className="tabular-nums"
           />
         </FormField>
       </div>
 
       <FormField htmlFor={`${ids}-notes`} label={copy.notes}>
-        <textarea
+        <Textarea
           id={`${ids}-notes`}
           value={draft.notes}
           maxLength={500}
           rows={3}
+          autoGrow
           onChange={(e) => set('notes', e.target.value)}
-          className={fieldClass}
         />
       </FormField>
     </FormModal>

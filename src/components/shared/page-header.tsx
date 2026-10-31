@@ -60,7 +60,7 @@ export function PageHeader({ title, description, meta, actions, back }: PageHead
           // 44 px de alto en móvil (objetivo táctil); en escritorio, una línea.
           <Link
             href={back.href}
-            className="mb-2 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg max-md:mb-0 max-md:min-h-11"
+            className="mb-2 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:mb-0 max-md:min-h-11"
           >
             <ChevronLeft aria-hidden className="size-4" />
             {back.label}

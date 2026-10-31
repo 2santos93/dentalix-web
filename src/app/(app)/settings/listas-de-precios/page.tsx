@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { PriceListsManager } from '@/components/price-lists/price-lists-manager';
 
 const copy = {
@@ -36,12 +35,11 @@ export default function PriceListsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
       <PriceListsManager
         token={accessToken}
         allowed={canManagePriceLists(getTokenRole(accessToken))}
       />
-    </>
+    </SettingsPage>
   );
 }

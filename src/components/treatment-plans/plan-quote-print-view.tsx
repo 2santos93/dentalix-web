@@ -128,7 +128,7 @@ export function PlanQuotePrintView({
   }, [data]);
 
   return (
-    <div className="quote-print-page flex min-h-full flex-1 flex-col bg-surface-2 print:min-h-0 print:bg-white">
+    <div className="quote-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
       {data ? <title>{copy.documentTitle(data.patient.name)}</title> : null}
       <div
         role="toolbar"
@@ -185,7 +185,7 @@ export function PlanQuotePrintView({
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {data ? (
-          <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
+          <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
             <PlanQuoteDocument
               quote={data}
               secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}

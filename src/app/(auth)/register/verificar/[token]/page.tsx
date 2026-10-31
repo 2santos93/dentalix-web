@@ -1,19 +1,18 @@
 import Link from 'next/link';
-import { SplitAuthLayout } from '@/components/layouts/split-auth-layout';
+import { AuthLayout } from '@/components/auth/auth-layout';
 import { VerifyRegistration } from '@/components/auth/verify-registration';
-import { randomHeroImage } from '@/lib/auth/hero-images';
 
 // Copy as constants (i18n-ready) — es first.
 const copy = {
-  title: 'Dentalix',
-  subtitle: 'Confirma tu registro',
-  heroCaption: 'Gestiona tu clínica con confianza',
+  task: 'Confirma tu registro',
+  caption: 'Gestiona tu clínica con confianza',
   loginPrompt: '¿Ya tienes cuenta?',
   loginLink: 'Inicia sesión',
 };
 
-// DX-029: destino del enlace del email de verificación del registro. `params`
-// es una Promise en esta versión de Next (ver AGENTS.md).
+// DX-029: destino del enlace del email de verificación del registro. La
+// clínica aún no existe: se titula con la tarea, nunca con la del host.
+// `params` es una Promise en esta versión de Next (ver AGENTS.md).
 export default async function VerifyRegistrationPage({
   params,
 }: {
@@ -21,21 +20,20 @@ export default async function VerifyRegistrationPage({
 }) {
   const { token } = await params;
   return (
-    <SplitAuthLayout
-      title={copy.title}
-      subtitle={copy.subtitle}
-      heroImage={randomHeroImage()}
-      heroCaption={copy.heroCaption}
+    <AuthLayout
+      clinic={null}
+      task={copy.task}
+      caption={copy.caption}
       footer={
         <>
           {copy.loginPrompt}{' '}
-          <Link href="/login" className="font-medium text-primary hover:underline">
+          <Link href="/login" className="font-medium text-primary-text hover:underline">
             {copy.loginLink}
           </Link>
         </>
       }
     >
       <VerifyRegistration verifyToken={token} />
-    </SplitAuthLayout>
+    </AuthLayout>
   );
 }

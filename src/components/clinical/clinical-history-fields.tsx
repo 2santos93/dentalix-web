@@ -6,12 +6,20 @@ import { ConditionChecklist } from '@/components/clinical/condition-checklist';
 import { HabitsEditor } from '@/components/clinical/habits-editor';
 import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  AnswerGroup,
+  YES_NO_CHOICES,
+  answerFromBoolean,
+  booleanFromAnswer,
+} from '@/components/clinical/answer-group';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 
 const copy = {
   pregnant: 'Embarazo', weeksPregnant: 'Semanas de embarazo', notes: 'Notas',
+  // El API guarda el embarazo como bandera (`safetyFlags.embarazo`): un «No»
+  // y una pregunta sin hacer se leen igual. Se dice, en vez de pintar «No».
+  pregnancyHint: 'Solo el «Sí» queda en la versión: al reabrirla, un «No» se verá «Sin responder».',
 };
 
 // `notes` is a section like the rest so a multi-step consumer (the create
@@ -33,39 +41,50 @@ export function ClinicalHistoryFields({ value, onChange, sections = ALL_SECTIONS
   const show = (s: Section) => sections.includes(s);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       {show('conditions') && (
         <>
           <ConditionChecklist
             value={value.conditions ?? []}
             onChange={(next) => onChange({ ...value, conditions: next })}
           />
-          <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-            <label className="flex items-center gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                aria-label={copy.pregnant}
-                checked={value.embarazo ?? false}
-                onChange={(e) => onChange({ ...value, embarazo: e.target.checked })}
-              />
-              {copy.pregnant}
-            </label>
-            {value.embarazo && (
-              <FormField htmlFor="ch-semanas-embarazo" label={copy.weeksPregnant}>
-                <Input
-                  id="ch-semanas-embarazo"
-                  type="number"
-                  value={value.semanasEmbarazo ?? ''}
-                  onChange={(e) =>
-                    onChange({
-                      ...value,
-                      semanasEmbarazo: e.target.value === '' ? undefined : Number(e.target.value),
-                    })
-                  }
-                />
-              </FormField>
-            )}
-          </div>
+          {/* Sigue a las condiciones, como una pregunta más de la lista. */}
+          <ul className="-mt-8 flex flex-col border-t border-border-subtle">
+            <AnswerGroup
+              id="ch-embarazo"
+              legend={copy.pregnant}
+              value={answerFromBoolean(value.embarazo)}
+              choices={YES_NO_CHOICES}
+              hint={copy.pregnancyHint}
+              onChange={(a) => {
+                const embarazo = booleanFromAnswer(a);
+                onChange({
+                  ...value,
+                  embarazo,
+                  semanasEmbarazo: embarazo ? value.semanasEmbarazo : undefined,
+                });
+              }}
+            >
+              {value.embarazo && (
+                <FormField htmlFor="ch-semanas-embarazo" label={copy.weeksPregnant}>
+                  <Input
+                    id="ch-semanas-embarazo"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    className="sm:max-w-32"
+                    value={value.semanasEmbarazo ?? ''}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        semanasEmbarazo: e.target.value === '' ? undefined : Number(e.target.value),
+                      })
+                    }
+                  />
+                </FormField>
+              )}
+            </AnswerGroup>
+          </ul>
         </>
       )}
 
@@ -86,15 +105,18 @@ export function ClinicalHistoryFields({ value, onChange, sections = ALL_SECTIONS
       {show('habits') && (
         <HabitsEditor
           value={value.habits ?? {}}
-          onChange={(next) => onChange({ ...value, habits: next })}
+          // Sin ninguna respuesta, el bloque no viaja (igual que la versión de origen).
+          onChange={(next) =>
+            onChange({ ...value, habits: Object.keys(next).length > 0 ? next : undefined })
+          }
         />
       )}
 
       {show('notes') && (
         <FormField htmlFor="ch-notes" label={copy.notes}>
-          <textarea
+          <Textarea
             id="ch-notes"
-            className={cn(fieldClass, 'min-h-24')}
+            autoGrow
             value={value.notes ?? ''}
             onChange={(e) => onChange({ ...value, notes: e.target.value })}
           />

@@ -71,13 +71,13 @@ export function FamilyAccountStatementSection({
     <section aria-labelledby={headingId} className="flex flex-col gap-3" data-testid="family-statement">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h2 id={headingId} className="text-lg font-semibold text-ink">
+          <h2 id={headingId} className="t-title text-ink">
             {copy.title}
           </h2>
           <p className="max-w-[68ch] text-sm text-muted">{copy.description}</p>
         </div>
         {data ? (
-          <Button asChild variant="outline" className="max-sm:h-11 max-sm:w-full">
+          <Button asChild variant="secondary" className="max-sm:w-full">
             <a href={familyAccountStatementPrintHref(patientId)} target="_blank" rel="noopener noreferrer">
               <Printer aria-hidden />
               {copy.print}
@@ -97,7 +97,7 @@ export function FamilyAccountStatementSection({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+          <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
             {data.members.map((m) => (
               <li
                 key={m.patient.id}
@@ -130,13 +130,13 @@ export function FamilyAccountStatementSection({
           </ul>
           {/* DX-262 (M1): el saldo incluye el saldo migrado. */}
           {data.totals.some((t) => t.openingBalance > 0) ? (
-            <p className="text-xs text-muted">{statementCopy.balanceIncludesOpening}</p>
+            <p className="t-caption text-muted">{statementCopy.balanceIncludesOpening}</p>
           ) : null}
           {data.totals.map((t) => (
             <p
               key={t.currency}
               data-testid="family-total"
-              className="flex flex-wrap justify-between gap-2 rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm font-semibold tabular-nums text-ink"
+              className="flex flex-wrap justify-between gap-2 rounded-xl border border-border bg-surface-sunken px-4 py-3 text-sm font-semibold tabular-nums text-ink"
             >
               <span>
                 {copy.totalsHeading} ({t.currency})

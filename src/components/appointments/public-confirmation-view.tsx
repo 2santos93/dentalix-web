@@ -1,4 +1,5 @@
 'use client';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useEffect, useId, useRef, useState } from 'react';
 import { 
   CalendarCheck,
@@ -107,12 +108,12 @@ function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointm
     },
   ];
   return (
-    <dl className="divide-y divide-hairline rounded-xl border border-border bg-surface">
+    <dl className="divide-y divide-border-subtle rounded-xl border border-border bg-surface">
       {/* Cada grupo solo lleva dt/dd (axe definition-list): el icono va
           dentro del dt, colocado a la izquierda. */}
       {rows.map(({ icon: Icon, label, value, sub }) => (
         <div key={label} className="relative min-w-0 py-3 pl-12 pr-4">
-          <dt className="text-xs font-medium tracking-wide text-muted">
+          <dt className="t-caption text-muted">
             <Icon aria-hidden className="absolute left-4 top-3.5 size-5 text-muted" />
             {label}
           </dt>
@@ -147,7 +148,7 @@ function CancellationPolicyNotice({
       data-testid="public-cancellation-policy"
       className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-4"
     >
-      <h2 id="cancellation-policy-title" className="flex items-center gap-2 text-base font-semibold text-ink">
+      <h2 id="cancellation-policy-title" className="t-title flex items-center gap-2 text-ink">
         <FileText aria-hidden className="size-4 shrink-0 text-muted" />
         {copy.policyTitle}
       </h2>
@@ -244,7 +245,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
@@ -281,7 +282,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
             {state.data.status === 'RESPONDED' && (
               <section aria-labelledby="confirmation-done" className="flex flex-col gap-4">
                 <div role="status" className="rounded-xl border border-border bg-surface px-4 py-4">
-                  <h2 id="confirmation-done" className="text-lg font-semibold text-ink">
+                  <h2 id="confirmation-done" className="t-title text-ink">
                     {copy.respondedTitle}
                   </h2>
                   {state.data.response && (
@@ -330,31 +331,19 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     <Phone aria-hidden /> {copy.callMe}
                   </Button>
                   {state.data.isLate && state.data.cancellationPolicy ? (
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-3">
-                        <input
-                          ref={ackRef}
-                          id={ackId}
-                          type="checkbox"
-                          checked={acknowledged}
-                          disabled={pending !== null}
-                          onChange={(e) => {
-                            setAcknowledged(e.target.checked);
-                            if (e.target.checked) setAckError(false);
-                          }}
-                          aria-invalid={ackError ? true : undefined}
-                          aria-describedby={ackError ? `${ackId}-error` : undefined}
-                          className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-                        />
-                        <label htmlFor={ackId} className="text-sm font-medium text-ink">
-                          {copy.acknowledge}
-                        </label>
-                      </div>
-                      {ackError ? (
-                        <InlineError id={`${ackId}-error`}>
-                          {copy.acknowledgeRequired(state.data.cancellationPolicy.noticeHours)}
-                        </InlineError>
-                      ) : null}
+                    <div className="rounded-lg border border-border bg-surface px-3 py-2">
+                      <Checkbox
+                        ref={ackRef}
+                        id={ackId}
+                        checked={acknowledged}
+                        disabled={pending !== null}
+                        onChange={(e) => {
+                          setAcknowledged(e.target.checked);
+                          if (e.target.checked) setAckError(false);
+                        }}
+                        label={copy.acknowledge}
+                        error={ackError ? copy.acknowledgeRequired(state.data.cancellationPolicy.noticeHours) : null}
+                      />
                     </div>
                   ) : null}
                   <Button

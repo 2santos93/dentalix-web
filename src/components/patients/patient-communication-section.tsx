@@ -25,7 +25,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { fieldClass } from '@/lib/ui/field-class';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { SectionHeader } from '@/components/ui/section-header';
 import { DATA_SECTION_CLASS, DATA_SECTION_HEADER_CLASS } from './data-section';
@@ -369,19 +370,18 @@ export function PatientCommunicationSection({
           error={saveError}
         >
           <FormField htmlFor={`${ids}-channel`} label={copy.channel}>
-            <select
+            <NativeSelect
               id={`${ids}-channel`}
               name="contactChannel"
               value={draft.channel}
               onChange={(e) => setDraft({ ...draft, channel: e.target.value as ContactChannel })}
-              className={fieldClass}
             >
               {CHANNELS.map((c) => (
                 <option key={c} value={c}>
                   {CHANNEL_LABELS[c]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
 
           <FormField
@@ -407,63 +407,40 @@ export function PatientCommunicationSection({
             />
           </FormField>
 
-          <div className="flex items-start gap-3">
-            <input
-              id={`${ids}-optin`}
-              type="checkbox"
-              checked={draft.optIn}
-              onChange={(e) => setDraft({ ...draft, optIn: e.target.checked })}
-              aria-describedby={`${ids}-optin-hint`}
-              className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-            />
-            <div className="flex flex-col gap-0.5">
-              <label htmlFor={`${ids}-optin`} className="text-sm font-medium text-ink">
-                {copy.optInLabel}
-              </label>
-              <p id={`${ids}-optin-hint`} className="text-xs text-muted">
-                {copy.optInHint}
-              </p>
-            </div>
-          </div>
+          <Checkbox
+            id={`${ids}-optin`}
+            checked={draft.optIn}
+            onChange={(e) => setDraft({ ...draft, optIn: e.target.checked })}
+            label={copy.optInLabel}
+            description={copy.optInHint}
+          />
 
           {draft.optIn && !alreadyOptedIn ? (
             <FormField htmlFor={`${ids}-source`} label={copy.optInSource}>
-              <select
+              <NativeSelect
                 id={`${ids}-source`}
                 name="whatsappOptInSource"
                 value={draft.optInSource}
                 onChange={(e) =>
                   setDraft({ ...draft, optInSource: e.target.value as WhatsappOptInSource })
                 }
-                className={fieldClass}
               >
                 {SOURCES.map((s) => (
                   <option key={s} value={s}>
                     {OPT_IN_SOURCE_LABELS[s]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FormField>
           ) : null}
 
-          <div className="flex items-start gap-3">
-            <input
-              id={`${ids}-optout`}
-              type="checkbox"
-              checked={draft.optOut}
-              onChange={(e) => setDraft({ ...draft, optOut: e.target.checked })}
-              aria-describedby={`${ids}-optout-hint`}
-              className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-            />
-            <div className="flex flex-col gap-0.5">
-              <label htmlFor={`${ids}-optout`} className="text-sm font-medium text-ink">
-                {copy.optOutLabel}
-              </label>
-              <p id={`${ids}-optout-hint`} className="text-xs text-muted">
-                {copy.optOutHint}
-              </p>
-            </div>
-          </div>
+          <Checkbox
+            id={`${ids}-optout`}
+            checked={draft.optOut}
+            onChange={(e) => setDraft({ ...draft, optOut: e.target.checked })}
+            label={copy.optOutLabel}
+            description={copy.optOutHint}
+          />
         </FormModal>
       ) : null}
     </section>

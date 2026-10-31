@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage, SettingsSection } from '@/components/settings/settings-page';
 import { CashSettingsForm } from '@/components/cash-sessions/cash-settings-form';
 import { PaymentMethodsManager } from '@/components/payment-methods/payment-methods-manager';
 import { canManagePaymentMethods } from '@/lib/payments/payment-methods-api';
@@ -13,7 +12,9 @@ import { canManagePaymentMethods } from '@/lib/payments/payment-methods-api';
 const copy = {
   title: 'Caja',
   description:
-    'Cómo se abre y se cierra la caja por turno en todas las sedes de la clínica, y con qué medios de pago se cobra.',
+    'Cómo se abre y se cierra la caja por turno, y con qué medios de pago se cobra.',
+  sessionsTitle: 'Turnos de caja',
+  sessionsHint: 'Cada cambio se aplica al momento.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -38,13 +39,12 @@ export default function CashSettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
-      <div className="flex flex-col gap-8">
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
+      <SettingsSection id="cash-settings-title" title={copy.sessionsTitle} description={copy.sessionsHint}>
         <CashSettingsForm token={accessToken} allowed={canManageCashSessions(getTokenRole(accessToken))} />
-        {/* DX-377: catálogo de medios de pago de la clínica. */}
-        <PaymentMethodsManager token={accessToken} allowed={canManagePaymentMethods(getTokenRole(accessToken))} />
-      </div>
-    </>
+      </SettingsSection>
+      {/* DX-377: catálogo de medios de pago de la clínica. */}
+      <PaymentMethodsManager token={accessToken} allowed={canManagePaymentMethods(getTokenRole(accessToken))} />
+    </SettingsPage>
   );
 }

@@ -167,7 +167,7 @@ export function PublicSignatureView({ linkToken }: { linkToken: string }) {
   );
 
   return (
-    <div style={publicBrandStyle(data?.clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(data?.clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
@@ -208,7 +208,7 @@ export function PublicSignatureView({ linkToken }: { linkToken: string }) {
                   className="size-10 shrink-0 rounded-lg object-contain"
                 />
               )}
-              <p className="min-w-0 break-words text-base font-semibold text-ink">{clinicName}</p>
+              <p className="t-title min-w-0 break-words text-ink">{clinicName}</p>
             </header>
 
             {step.kind === 'intro' && (
@@ -608,7 +608,7 @@ function DoneStep({
         >
           <CheckCircle2 className="size-5" />
         </span>
-        <h1 className="text-lg font-semibold text-ink">{budget ? copy.budgetDoneTitle : copy.doneTitle}</h1>
+        <h1 className="t-title text-ink">{budget ? copy.budgetDoneTitle : copy.doneTitle}</h1>
         <p className="max-w-sm text-sm text-muted">
           {budget ? copy.budgetDoneMessage(signed.clinic.name) : copy.doneMessage(signed.clinic.name)}
         </p>

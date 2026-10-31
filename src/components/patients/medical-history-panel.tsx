@@ -5,6 +5,8 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatDateTime } from '@/lib/format/date';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { DescriptionList, DescriptionItem } from '@/components/ui/description-list';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
@@ -14,15 +16,20 @@ import {
   saveMedicalHistory,
   type MedicalHistory,
 } from '@/lib/patients/clinical-api';
-import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
-import { DescriptionItem } from '@/components/ui/description-list';
+import {
+  ALLERGY_SEVERITY_LABELS,
+  type ClinicalHistoryValue,
+  type Habits,
+} from '@/lib/clinical/clinical-types';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
   loading: 'Cargando anamnesis…',
-  empty: 'Aún no hay anamnesis registrada para este paciente.',
-  emptyHint: 'Completa el formulario y guárdalo para registrar la primera anamnesis del paciente.',
+  heading: 'Anamnesis',
+  // Sin versión: el aviso «Sin anamnesis registrada» de arriba ya lo dice;
+  // aquí solo queda la acción, con una línea de qué hace.
+  emptyDescription: 'Registra la primera versión con lo que se le preguntó al paciente.',
   versionLabel: (v: number) => `Versión ${v}`,
   // El número solo no significa nada si no se puede alcanzar lo que cuenta.
   // Mientras el API no exponga la cadena de versiones (hoy `GET` devuelve solo
@@ -36,17 +43,35 @@ const copy = {
     'Cada corrección crea una versión nueva; las anteriores se conservan y no se sobrescriben.',
   unknownAuthor: 'autor no registrado',
   fieldFallback: '—',
-  allergiesCountLabel: 'Alergias registradas',
+  allergiesLabel: 'Alergias',
+  noAllergies: 'Ninguna registrada',
   conditionsLabel: 'Condiciones',
-  medicationsCountLabel: 'Medicamentos registrados',
+  positiveConditions: (labels: string) => `Sí: ${labels}`,
+  medicationsLabel: 'Medicamentos',
+  noMedications: 'Ninguno registrado',
+  pregnancyLabel: 'Embarazo',
+  pregnancyYes: (weeks?: number) => (weeks !== undefined ? `Sí · ${weeks} semanas` : 'Sí'),
+  habitsLabel: 'Hábitos',
+  // Sin respuestas no es «sin hábitos»: se dice que no se preguntó.
+  habitsUnanswered: 'Sin responder',
+  habitsNone: 'Ninguno marcado «Sí»',
   familyHistoryLabel: 'Antecedentes familiares',
   notesLabel: 'Notas',
-  formTitle: 'Guardar nueva versión',
-  // First visit (no anamnesis yet): "Guardar nueva versión" reads as a no-op
-  // when there's nothing to version, so the create affordance is labelled
-  // explicitly instead.
-  createTitle: 'Registrar anamnesis',
-  submit: 'Guardar',
+  // Con versión previa la acción es «Actualizar» (crea una versión nueva: no
+  // se edita la vigente); sin ninguna, «Registrar» — «nueva versión» de nada
+  // no significa nada.
+  update: 'Actualizar anamnesis',
+  create: 'Registrar anamnesis',
+  formTitle: 'Nueva versión de la anamnesis',
+  createTitle: 'Primera anamnesis',
+  formHint: 'Parte de la versión vigente. Al guardar se crea una versión nueva; la anterior se conserva.',
+  submit: 'Guardar nueva versión',
+  submitFirst: 'Guardar anamnesis',
+  cancel: 'Cancelar',
+  discardTitle: '¿Descartar los cambios?',
+  discardBody: 'Lo que escribiste en esta versión se perderá. La anamnesis vigente no cambia.',
+  discardConfirm: 'Descartar',
+  keepEditing: 'Seguir editando',
   // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
   genericLoadError: 'No pudimos cargar la anamnesis.',
   genericSaveError: 'No pudimos guardar la anamnesis. Intenta de nuevo.',
@@ -55,6 +80,8 @@ const copy = {
 interface MedicalHistoryPanelProps {
   token: string;
   patientId: string;
+  /** Id del título «Anamnesis» (destino de «Registrar en Historia clínica»). */
+  headingId?: string;
   /** DX-247: una versión nueva cambia las banderas de la cabecera: se releen. */
   onSaved?: () => void;
 }
@@ -86,8 +113,10 @@ function valueFromHistory(history: MedicalHistory | null): ClinicalHistoryValue 
     dentalHistory: history.dentalHistory ?? undefined,
     surgeries: history.surgeries,
     vitalSigns: history.vitalSigns ?? undefined,
-    embarazo: history.safetyFlags.embarazo,
-    semanasEmbarazo: history.safetyFlags.semanasEmbarazo,
+    // La bandera no distingue «No» de «sin preguntar»: solo un `true` es dato.
+    // Un `false` se trae como «Sin responder», nunca como un «No» afirmado.
+    embarazo: history.safetyFlags.embarazo ? true : undefined,
+    semanasEmbarazo: history.safetyFlags.embarazo ? history.safetyFlags.semanasEmbarazo : undefined,
     familyHistory: history.familyHistory ?? undefined,
     notes: history.notes ?? undefined,
   };
@@ -134,13 +163,28 @@ function valueEqualsHistory(value: ClinicalHistoryValue, history: MedicalHistory
   return deepEqual(value, valueFromHistory(history));
 }
 
-export function MedicalHistoryPanel({ token, patientId, onSaved }: MedicalHistoryPanelProps) {
+/** «Fuma · Bruxismo»: solo lo contestado «Sí»; nada se infiere de lo ausente. */
+function habitsYes(habits: Habits | null | undefined): string[] {
+  if (!habits) return [];
+  const out: string[] = [];
+  if (habits.tabaquismo?.activo) out.push('Fuma');
+  if (habits.alcohol?.activo) out.push('Consume alcohol');
+  if (habits.sustancias) out.push('Sustancias psicoactivas');
+  if (habits.bruxismo) out.push('Bruxismo');
+  return out;
+}
+
+export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: MedicalHistoryPanelProps) {
   const [latest, setLatest] = useState<MedicalHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [value, setValue] = useState<ClinicalHistoryValue>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // El formulario (largo) va detrás de una acción explícita: la pestaña abre
+  // con las evoluciones y el resumen de la versión vigente.
+  const [editing, setEditing] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   // Bumped by the retry action to re-run the load effect below.
   const [reloadKey, setReloadKey] = useState(0);
@@ -217,6 +261,7 @@ export function MedicalHistoryPanel({ token, patientId, onSaved }: MedicalHistor
       // Re-sync from the just-saved version (not an empty value) so the
       // next edit still carries forward whatever wasn't just changed.
       setValue(valueFromHistory(saved));
+      setEditing(false);
       onSaved?.();
     } catch (err) {
       setSaveError(apiErrorMessage(err, copy.genericSaveError));
@@ -230,46 +275,109 @@ export function MedicalHistoryPanel({ token, patientId, onSaved }: MedicalHistor
   // so an unchanged save can't produce a duplicate version.
   const isUnchanged = valueEqualsHistory(value, latest);
 
+  function startEditing() {
+    setValue(valueFromHistory(latest));
+    setSaveError(null);
+    setEditing(true);
+  }
+
+  function stopEditing() {
+    setValue(valueFromHistory(latest));
+    setSaveError(null);
+    setConfirmDiscard(false);
+    setEditing(false);
+    document.getElementById(headingId ?? '')?.focus();
+  }
+
+  function handleCancel() {
+    if (isUnchanged) stopEditing();
+    else setConfirmDiscard(true);
+  }
+
+  const habitsMarked = latest ? habitsYes(latest.habits) : [];
+  const positives = latest ? latest.conditions.filter((c) => c.estado === 'SI').map((c) => c.etiqueta) : [];
+
   return (
-    <AsyncSection
-      loading={loading}
-      error={loadError}
-      onRetry={handleRetry}
-      skeleton={
-        <p role="status" className="text-sm text-muted">
-          {copy.loading}
-        </p>
-      }
-    >
-      <div className="flex flex-col gap-6">
-        {latest ? (
-          <div className="rounded-lg border border-border bg-surface p-4">
-            <div className="mb-3 flex flex-col gap-0.5">
-              <p className="text-sm font-medium text-muted">
-                {copy.versionLabel(latest.version)}
-                <span className="ml-2 font-normal">{versionProvenance(latest)}</span>
-              </p>
-              <p className="t-label text-muted">{copy.appendOnlyNote}</p>
-            </div>
-            <dl className="grid gap-3 sm:grid-cols-2">
-              <DescriptionItem label={copy.allergiesCountLabel} numeric>{latest.allergies.length}</DescriptionItem>
+    <section aria-labelledby={headingId} className="flex flex-col gap-4">
+      {/* Cabecera de sección (mismo patrón que SectionHeader): el título es
+          enfocable porque «Registrar en Historia clínica» aterriza aquí. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2
+            id={headingId}
+            tabIndex={-1}
+            className="t-title scroll-mt-16 text-ink focus-visible:outline-none"
+          >
+            {copy.heading}
+          </h2>
+          {!loading && !loadError && !editing ? (
+            <p className="text-sm text-muted">
+              {latest ? copy.appendOnlyNote : copy.emptyDescription}
+            </p>
+          ) : null}
+        </div>
+        {!loading && !loadError && !editing ? (
+          <Button type="button" variant="secondary" onClick={startEditing} className="w-full sm:w-auto">
+            {latest ? copy.update : copy.create}
+          </Button>
+        ) : null}
+      </div>
+
+      <AsyncSection
+        loading={loading}
+        error={loadError}
+        onRetry={handleRetry}
+        skeleton={
+          <p role="status" className="text-sm text-muted">
+            {copy.loading}
+          </p>
+        }
+      >
+        {latest && !editing ? (
+          <div className="flex flex-col gap-4 border-t border-border-subtle pt-4">
+            <p className="t-caption text-muted">
+              <span className="font-medium text-ink">{copy.versionLabel(latest.version)}</span>
+              {' · '}
+              <span className="tnum">{versionProvenance(latest)}</span>
+            </p>
+            <DescriptionList columns={2}>
+              <DescriptionItem label={copy.allergiesLabel}>
+                {latest.allergies.length > 0
+                  ? latest.allergies
+                      .map((a) => `${a.alergeno} (${ALLERGY_SEVERITY_LABELS[a.severidad].toLowerCase()})`)
+                      .join(' · ')
+                  : <span className="text-muted">{copy.noAllergies}</span>}
+              </DescriptionItem>
               <DescriptionItem label={copy.conditionsLabel}>
                 <ConditionSummaryText conditions={latest.conditions} />
+                {positives.length > 0 ? (
+                  <span className="mt-0.5 block">{copy.positiveConditions(positives.join(' · '))}</span>
+                ) : null}
               </DescriptionItem>
-              <DescriptionItem label={copy.medicationsCountLabel} numeric>{latest.medications.length}</DescriptionItem>
+              <DescriptionItem label={copy.medicationsLabel}>
+                {latest.medications.length > 0
+                  ? latest.medications.map((m) => [m.nombre, m.dosis].filter(Boolean).join(' ')).join(' · ')
+                  : <span className="text-muted">{copy.noMedications}</span>}
+              </DescriptionItem>
+              {latest.safetyFlags.embarazo ? (
+                <DescriptionItem label={copy.pregnancyLabel}>
+                  {copy.pregnancyYes(latest.safetyFlags.semanasEmbarazo)}
+                </DescriptionItem>
+              ) : null}
+              <DescriptionItem label={copy.habitsLabel}>
+                {habitsMarked.length > 0 ? (
+                  habitsMarked.join(' · ')
+                ) : (
+                  <span className="text-muted">
+                    {latest.habits && Object.keys(latest.habits).length > 0 ? copy.habitsNone : copy.habitsUnanswered}
+                  </span>
+                )}
+              </DescriptionItem>
               <DescriptionItem label={copy.familyHistoryLabel}>{latest.familyHistory ?? copy.fieldFallback}</DescriptionItem>
-              <DescriptionItem label={copy.notesLabel}>{latest.notes ?? copy.fieldFallback}</DescriptionItem>
-            </dl>
+              <DescriptionItem label={copy.notesLabel} wide>{latest.notes ?? copy.fieldFallback}</DescriptionItem>
+            </DescriptionList>
           </div>
-        ) : (
-          <div
-            role="status"
-            className="rounded-lg border border-dashed border-border bg-surface p-4"
-          >
-            <p className="text-sm font-medium text-ink">{copy.empty}</p>
-            <p className="mt-1 text-sm text-muted">{copy.emptyHint}</p>
-          </div>
-        )}
+        ) : null}
 
         {/*
           AsyncSection swaps this whole subtree for the error+retry UI while
@@ -277,20 +385,47 @@ export function MedicalHistoryPanel({ token, patientId, onSaved }: MedicalHistor
           only what's edited, silently wiping the rest) never renders
           without a trustworthy baseline.
         */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <h3 className="text-base font-semibold text-ink">
-            {latest ? copy.formTitle : copy.createTitle}
-          </h3>
+        {editing ? (
+          <form
+            onSubmit={handleSubmit}
+            aria-labelledby={`${headingId}-form`}
+            className="flex flex-col gap-6 border-t border-border-subtle pt-4"
+          >
+            <div className="flex flex-col gap-1">
+              <h3 id={`${headingId}-form`} className="t-title text-ink">
+                {latest ? copy.formTitle : copy.createTitle}
+              </h3>
+              {latest ? <p className="text-sm text-muted">{copy.formHint}</p> : null}
+            </div>
 
-          <ClinicalHistoryFields value={value} onChange={setValue} />
+            <ClinicalHistoryFields value={value} onChange={setValue} />
 
-          {saveError && <InlineError variant="summary">{saveError}</InlineError>}
+            {saveError && <InlineError variant="summary">{saveError}</InlineError>}
 
-          <Button type="submit" loading={submitting} disabled={isUnchanged} className="self-start">
-            {copy.submit}
-          </Button>
-        </form>
-      </div>
-    </AsyncSection>
+            {/* Barra de acción pegajosa: el formulario es largo y el botón no
+                puede quedar a varias pantallas de la última respuesta. */}
+            <div className="sticky bottom-0 z-10 -mx-4 flex flex-col-reverse gap-2 border-t border-border bg-canvas px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:mx-0 sm:flex-row sm:px-0">
+              <Button type="button" variant="ghost" onClick={handleCancel} className="w-full sm:w-auto">
+                {copy.cancel}
+              </Button>
+              <Button type="submit" loading={submitting} disabled={isUnchanged} className="w-full sm:w-auto">
+                {latest ? copy.submit : copy.submitFirst}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </AsyncSection>
+
+      <ConfirmDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title={copy.discardTitle}
+        description={copy.discardBody}
+        confirmLabel={copy.discardConfirm}
+        cancelLabel={copy.keepEditing}
+        destructive
+        onConfirm={stopEditing}
+      />
+    </section>
   );
 }

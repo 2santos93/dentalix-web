@@ -26,6 +26,8 @@ describe('MajorityAgeSettingsSection (DX-328)', () => {
     mockedSave.mockResolvedValueOnce({ majorityAge: 16 });
     render(<MajorityAgeSettingsSection token="tok" allowed />);
     expect(await screen.findByTestId('majority-age')).toHaveTextContent('18 años');
+    // El valor de fábrica lleva el chip neutro «Por defecto» (SettingRow, B6).
+    expect(screen.getByText('Por defecto')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Cambiar' }));
     const dialog = await screen.findByRole('dialog', { name: 'Cambiar la mayoría de edad' });
@@ -34,6 +36,7 @@ describe('MajorityAgeSettingsSection (DX-328)', () => {
     await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', { majorityAge: 16 }));
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
     expect(screen.getByTestId('majority-age')).toHaveTextContent('16 años');
+    expect(screen.queryByText('Por defecto')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Mayoría de edad guardada.');
 
     mockedSave.mockRejectedValueOnce(new ApiError(400, API_MESSAGE));

@@ -23,8 +23,10 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
 import { notifyError } from '@/components/errors/notify';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { PageHeader } from '@/components/shared/page-header';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { EmptyState } from '@/components/shared/empty-state';
+import { Callout } from '@/components/ui/callout';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import type { RowAction } from '@/components/shared/row-actions';
 import { CancelAppointmentDialog } from '@/components/appointments/cancel-appointment-dialog';
 import { DismissClosingDialog } from '@/components/appointments/dismiss-closing-dialog';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
@@ -52,7 +54,6 @@ export const closingQueueCopy = {
   colProfessional: 'Profesional',
   colLocation: 'Sede',
   colProcedure: 'Procedimiento',
-  colActions: 'Acciones',
   noProfessional: 'Sin profesional',
   tooth: (n: string) => `diente ${n}`,
   attended: 'Atendida',
@@ -61,7 +62,6 @@ export const closingQueueCopy = {
   writeEvolution: 'Escribir evolución',
   markDone: 'Marcar hecho',
   dismiss: 'Descartar',
-  actionsLabel: (patient: string) => `Acciones para ${patient}`,
   statusSaved: (patient: string, label: string) => `${patient}: ${label}.`,
   statusError: 'No pudimos cambiar el estado de la cita.',
   evolutionSaved: (patient: string) => `Evolución registrada en la ficha de ${patient}.`,
@@ -237,16 +237,16 @@ export function ClosingQueueView({ token }: { token: string }) {
           {copy.staleInClinic(queue.staleInClinic)}{' '}
           <Link
             href="/agenda/en-clinica"
-            className="font-medium text-primary-text underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
+            className="font-medium text-primary-text underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
           >
             {copy.staleInClinicLink}
           </Link>
         </p>
       ) : null}
       {withoutZone.length > 0 ? (
-        <p role="note" className="mb-4 text-sm text-warning-text">
+        <Callout tone="warning" className="mb-4">
           {copy.withoutZone(withoutZone.map((l) => l.name).join(', '))}
-        </p>
+        </Callout>
       ) : null}
       <AsyncSection
         loading={loading}
@@ -281,7 +281,7 @@ export function ClosingQueueView({ token }: { token: string }) {
                         heading.scrollIntoView({ block: 'start' });
                         heading.focus();
                       }}
-                      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-ink hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text sm:min-h-9"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-ink hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-9"
                     >
                       {CLOSING_SECTION_TITLES[s]}
                       <span
@@ -302,49 +302,31 @@ export function ClosingQueueView({ token }: { token: string }) {
                   fmt={fmt}
                   rows={queue.outcome.items}
                   section="OUTCOME"
-                  actions={(row) => (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="min-h-11 sm:min-h-9"
-                        disabled={busy === row.appointmentId}
-                        onClick={() => void changeStatus(row, 'COMPLETED', copy.attended)}
-                      >
-                        {copy.attended}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="min-h-11 sm:min-h-9"
-                        disabled={busy === row.appointmentId}
-                        onClick={() => void changeStatus(row, 'NO_SHOW', copy.noShow)}
-                      >
-                        {copy.noShow}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="min-h-11 sm:min-h-9"
-                        disabled={busy === row.appointmentId}
-                        onClick={() =>
-                          setCancelling({
-                            appointmentId: row.appointmentId,
-                            patientName: row.patientName,
-                            status: row.status,
-                          })
-                        }
-                      >
-                        {copy.cancelled}
-                      </Button>
-                      <DismissButton
-                        disabled={busy === row.appointmentId}
-                        onClick={() =>
-                          setDismissing({ section: 'OUTCOME', appointmentId: row.appointmentId, subject: subjectOf(row) })
-                        }
-                      />
-                    </>
-                  )}
+                  actions={(row) => [
+                    {
+                      label: copy.attended,
+                      disabled: busy === row.appointmentId,
+                      onSelect: () => void changeStatus(row, 'COMPLETED', copy.attended),
+                    },
+                    {
+                      label: copy.noShow,
+                      disabled: busy === row.appointmentId,
+                      onSelect: () => void changeStatus(row, 'NO_SHOW', copy.noShow),
+                    },
+                    {
+                      label: copy.cancelled,
+                      disabled: busy === row.appointmentId,
+                      onSelect: () =>
+                        setCancelling({
+                          appointmentId: row.appointmentId,
+                          patientName: row.patientName,
+                          status: row.status,
+                        }),
+                    },
+                    dismissAction(busy === row.appointmentId, () =>
+                      setDismissing({ section: 'OUTCOME', appointmentId: row.appointmentId, subject: subjectOf(row) }),
+                    ),
+                  ]}
                 />
               </QueueSection>
             ) : null}
@@ -355,23 +337,12 @@ export function ClosingQueueView({ token }: { token: string }) {
                   fmt={fmt}
                   rows={queue.evolution.items}
                   section="EVOLUTION"
-                  actions={(row) => (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="min-h-11 sm:min-h-9"
-                        onClick={() => setEvolutionFor(row)}
-                      >
-                        {copy.writeEvolution}
-                      </Button>
-                      <DismissButton
-                        onClick={() =>
-                          setDismissing({ section: 'EVOLUTION', appointmentId: row.appointmentId, subject: subjectOf(row) })
-                        }
-                      />
-                    </>
-                  )}
+                  actions={(row) => [
+                    { label: copy.writeEvolution, onSelect: () => setEvolutionFor(row) },
+                    dismissAction(false, () =>
+                      setDismissing({ section: 'EVOLUTION', appointmentId: row.appointmentId, subject: subjectOf(row) }),
+                    ),
+                  ]}
                 />
               </QueueSection>
             ) : null}
@@ -384,30 +355,21 @@ export function ClosingQueueView({ token }: { token: string }) {
                   section="TREATMENT"
                   rowKey={(row) => `${row.appointmentId}-${row.planItemId}`}
                   procedure={(row) => `${row.procedureLabel} · ${copy.tooth(row.toothNumber)}`}
-                  actions={(row) => (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="min-h-11 sm:min-h-9"
-                        disabled={busy === row.planItemId}
-                        onClick={() => void openMarkDone(row)}
-                      >
-                        {copy.markDone}
-                      </Button>
-                      <DismissButton
-                        disabled={busy === row.planItemId}
-                        onClick={() =>
-                          setDismissing({
-                            section: 'TREATMENT',
-                            appointmentId: row.appointmentId,
-                            planItemId: row.planItemId,
-                            subject: `${subjectOf(row)} · ${row.procedureLabel} · ${copy.tooth(row.toothNumber)}`,
-                          })
-                        }
-                      />
-                    </>
-                  )}
+                  actions={(row) => [
+                    {
+                      label: copy.markDone,
+                      disabled: busy === row.planItemId,
+                      onSelect: () => void openMarkDone(row),
+                    },
+                    dismissAction(busy === row.planItemId, () =>
+                      setDismissing({
+                        section: 'TREATMENT',
+                        appointmentId: row.appointmentId,
+                        planItemId: row.planItemId,
+                        subject: `${subjectOf(row)} · ${row.procedureLabel} · ${copy.tooth(row.toothNumber)}`,
+                      }),
+                    ),
+                  ]}
                 />
               </QueueSection>
             ) : null}
@@ -514,12 +476,9 @@ export function ClosingQueueView({ token }: { token: string }) {
   );
 }
 
-function DismissButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
-  return (
-    <Button size="sm" variant="ghost" className="min-h-11 sm:min-h-9" disabled={disabled} onClick={onClick}>
-      {copy.dismiss}
-    </Button>
-  );
+/** «Descartar» cierra el pendiente sin hacerlo: va el último, separado y en rojo al enfocarlo. */
+function dismissAction(disabled: boolean, onSelect: () => void): RowAction {
+  return { label: copy.dismiss, disabled, destructive: true, separatorBefore: true, onSelect };
 }
 
 function QueueSection({
@@ -540,7 +499,7 @@ function QueueSection({
         <h2
           id={headingId}
           tabIndex={-1}
-          className="flex items-center gap-2 text-lg font-semibold text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
+          className="t-title flex items-center gap-2 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
         >
           {CLOSING_SECTION_TITLES[section]}
           <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold tabular-nums text-ink">
@@ -550,9 +509,7 @@ function QueueSection({
         <p className="text-sm text-muted">{CLOSING_SECTION_HINTS[section]}</p>
       </div>
       {total === 0 ? (
-        <p className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted">
-          {copy.sectionEmpty}
-        </p>
+        <EmptyState size="inline" title={copy.sectionEmpty} />
       ) : (
         <>
           {children}
@@ -574,51 +531,47 @@ function AppointmentTable<T extends ClosingAppointment>({
   fmt: RegionalFormat | null;
   rows: T[];
   section: ClosingQueueSection;
-  actions: (row: T) => React.ReactNode;
+  actions: (row: T) => RowAction[];
   procedure?: (row: T) => string;
   rowKey?: (row: T) => string;
 }) {
+  const columns: DataListColumn<T>[] = [
+    {
+      id: 'patient',
+      header: copy.colPatient,
+      mobile: 'primary',
+      // El testid marca cada pendiente (e2e cuenta las filas por sección).
+      cell: (row) => (
+        <span data-testid={`closing-row-${section}`} className="font-medium text-ink">
+          {row.patientName}
+        </span>
+      ),
+    },
+    {
+      id: 'when',
+      header: copy.colWhen,
+      // En la tarjeta, en la línea de apoyo: el nombre del paciente cabe entero.
+      mobile: 'meta',
+      cellClassName: 'tabular-nums',
+      cell: (row) => when(row, fmt),
+    },
+    {
+      id: 'professional',
+      header: copy.colProfessional,
+      cell: (row) => row.professionalName ?? copy.noProfessional,
+    },
+    { id: 'location', header: copy.colLocation, cell: (row) => row.locationName },
+    ...(procedure ? [{ id: 'procedure', header: copy.colProcedure, cell: procedure }] : []),
+  ];
   return (
-    <Table aria-label={CLOSING_SECTION_TITLES[section]}>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{copy.colPatient}</TableHead>
-          <TableHead>{copy.colWhen}</TableHead>
-          <TableHead>{copy.colProfessional}</TableHead>
-          <TableHead>{copy.colLocation}</TableHead>
-          {procedure ? <TableHead>{copy.colProcedure}</TableHead> : null}
-          <TableHead className="text-right">{copy.colActions}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={rowKey(row)} data-testid={`closing-row-${section}`}>
-            <TableCell data-label={copy.colPatient} className="font-medium text-ink">
-              <Link
-                href={`/patients/${row.patientId}`}
-                className="inline-flex min-h-6 items-center underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
-              >
-                {row.patientName}
-              </Link>
-            </TableCell>
-            <TableCell data-label={copy.colWhen} className="tabular-nums">
-              {when(row, fmt)}
-            </TableCell>
-            <TableCell data-label={copy.colProfessional}>{row.professionalName ?? copy.noProfessional}</TableCell>
-            <TableCell data-label={copy.colLocation}>{row.locationName}</TableCell>
-            {procedure ? <TableCell data-label={copy.colProcedure}>{procedure(row)}</TableCell> : null}
-            <TableCell data-label={copy.colActions} className="sm:text-right">
-              <div
-                role="group"
-                aria-label={copy.actionsLabel(row.patientName)}
-                className="flex flex-wrap gap-2 sm:justify-end"
-              >
-                {actions(row)}
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <DataList
+      label={CLOSING_SECTION_TITLES[section]}
+      rows={rows}
+      columns={columns}
+      getRowKey={rowKey}
+      getRowHref={(row) => `/patients/${row.patientId}`}
+      rowActions={actions}
+      getRowLabel={(row) => row.patientName}
+    />
   );
 }

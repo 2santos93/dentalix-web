@@ -4,6 +4,7 @@ import { accessTokenOf, registerAndLogin } from './support/auth';
 import { LATE_BROWSER_TIME, addDays, atSede, birthDateTurnedLastMonth, sedeDayFromToday } from './support/clock';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
+import { fillDate } from './support/dates';
 
 /**
  * e2e (DX-120): odontograma fase 2 contra la API y la base reales.
@@ -157,7 +158,8 @@ for (const viewport of VIEWPORTS) {
 
     // --- La carta de ayer: solo lectura, sin el 64 y con el 55 en la boca ---
     // Ayer de la SEDE, la misma zona en la que la API fecha la carta.
-    await page.getByLabel('Ver la carta al').fill(addDays(today, -1));
+    // DatePicker de segmentos (formato de la sede): se teclea por segmento.
+    await fillDate(page, 'Ver la carta al', addDays(today, -1));
     await expect(page.getByText(/· solo lectura/)).toBeVisible({ timeout: 10_000 });
     await expect(chart.getByRole('group', { name: 'Diente 55 (temporal), sano' })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('button', { name: 'Cambiar dentición' })).toHaveCount(0);

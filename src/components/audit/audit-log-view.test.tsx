@@ -97,6 +97,22 @@ beforeEach(() => {
   ]);
 });
 
+/** Escribe un extremo del periodo («Desde» o «Hasta») segmento a segmento, como en e2e. */
+async function typeRangeEnd(end: 'Desde' | 'Hasta', iso: string) {
+  const [year, month, day] = iso.split('-');
+  const values: Record<string, string> = { day, month, year };
+  const group = screen.getByRole('group', { name: 'Período' });
+  for (const segment of within(group).getAllByRole('spinbutton', { name: new RegExp(end) })) {
+    await userEvent.click(segment);
+    await userEvent.keyboard(values[segment.getAttribute('data-type') ?? '']);
+  }
+}
+
+async function typeRange(from: string, to: string) {
+  await typeRangeEnd('Desde', from);
+  await typeRangeEnd('Hasta', to);
+}
+
 describe('AuditLogView', () => {
   it('pinta cada evento con su hora y su zona, usuario, rol, acción, recurso, paciente e IP', async () => {
     mockedList.mockResolvedValue(page());
@@ -115,6 +131,12 @@ describe('AuditLogView', () => {
       '/patients/pat-1',
     );
     expect(within(first).getByText('203.0.113.7')).toBeInTheDocument();
+    // El User-Agent se lee como dispositivo; el crudo queda para el tooltip.
+    expect(within(first).getByText('iPad')).toBeInTheDocument();
+    expect(first).not.toHaveTextContent('Mozilla');
+    // Lecturas en neutro; el login fallido, en peligro.
+    expect(within(first).getByText('Consulta')).toHaveClass('bg-surface-active');
+    expect(within(second).getByText('Inicio de sesión fallido')).toHaveClass('bg-danger-subtle');
     // Sin sede (un inicio de sesión): la misma hora y la misma zona, sin otra hora.
     expect(within(second).getByText('15/10/2026 10:30 p. m.')).toBeInTheDocument();
     expect(within(second).queryByText(/^En /)).not.toBeInTheDocument();
@@ -428,9 +450,8 @@ describe('AuditLogView', () => {
     render(<AuditLogView token="tok" />);
     await screen.findByRole('table');
     const hint = screen.getByText(/^Horas y días en la hora de Bogotá \(America\/Bogota, UTC−5\)\. Lo más reciente, arriba\.$/);
-    for (const label of ['Desde', 'Hasta']) {
-      expect(screen.getByLabelText(label).getAttribute('aria-describedby')).toContain(hint.id);
-    }
+    // El campo del periodo (el grupo de react-aria) lleva la descripción.
+    expect(screen.getByRole('group', { name: 'Período' }).getAttribute('aria-describedby')).toContain(hint.id);
   });
 
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {
@@ -487,8 +508,7 @@ describe('AuditLogView', () => {
     mockedList.mockResolvedValue(page());
     render(<AuditLogView token="tok" />);
     await screen.findByRole('table');
-    await userEvent.type(screen.getByLabelText('Desde'), '2026-10-01');
-    await userEvent.type(screen.getByLabelText('Hasta'), '2026-10-16');
+    await typeRange('2026-10-01', '2026-10-16');
     await waitFor(() =>
       expect(mockedList).toHaveBeenLastCalledWith('tok', {
         limit: 50,
@@ -509,8 +529,7 @@ describe('AuditLogView', () => {
     expect(screen.getByText(/^Horas y días en la hora de Berlín \(Europe\/Berlin, UTC[+−]\d\)/)).toBeInTheDocument();
 
     // Berlín pasa a UTC+1 el 25/10: cada día se cuenta con su propio desfase.
-    await userEvent.type(screen.getByLabelText('Desde'), '2026-10-24');
-    await userEvent.type(screen.getByLabelText('Hasta'), '2026-10-25');
+    await typeRange('2026-10-24', '2026-10-25');
     await waitFor(() =>
       expect(mockedList).toHaveBeenLastCalledWith('tok', {
         limit: 50,
@@ -540,18 +559,16 @@ describe('AuditLogView', () => {
     render(<AuditLogView token="tok" />);
     await screen.findByRole('table');
     const calls = mockedList.mock.calls.length;
-    await userEvent.type(screen.getByLabelText('Hasta'), '2026-10-01');
-    await userEvent.type(screen.getByLabelText('Desde'), '2026-10-10');
+    await typeRangeEnd('Hasta', '2026-10-01');
+    await typeRangeEnd('Desde', '2026-10-10');
     expect(
       await screen.findByText('La fecha final no puede ser anterior a la inicial.'),
     ).toBeInTheDocument();
     // DX-362: con el error, las fechas siguen diciendo en qué zona se cuentan los días.
     const error = screen.getByText('La fecha final no puede ser anterior a la inicial.');
     const hint = screen.getByText(/^Horas y días en la hora de Bogotá/);
-    for (const label of ['Desde', 'Hasta']) {
-      const ids = screen.getByLabelText(label).getAttribute('aria-describedby')?.split(' ') ?? [];
-      expect(ids).toEqual(expect.arrayContaining([error.closest('[id]')!.id, hint.id]));
-    }
+    const ids = screen.getByRole('group', { name: 'Período' }).getAttribute('aria-describedby')?.split(' ') ?? [];
+    expect(ids).toEqual(expect.arrayContaining([error.closest('[id]')!.id, hint.id]));
     expect(mockedList.mock.calls.length).toBeLessThanOrEqual(calls + 1);
     expect(mockedList).not.toHaveBeenLastCalledWith(
       'tok',
@@ -595,6 +612,6 @@ describe('AuditLogView', () => {
     render(<AuditLogView token="tok" />);
     const status = await screen.findByText('Usuarios no disponibles');
     await userEvent.click(within(status.closest('[role="status"]') as HTMLElement).getByRole('button'));
-    expect(await screen.findByLabelText('Usuario')).toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'Usuario' })).toBeInTheDocument();
   });
 });

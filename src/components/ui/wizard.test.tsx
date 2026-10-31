@@ -58,3 +58,26 @@ it('WizardNav muestra el submitLabel en el último paso y llama onSubmit', async
   expect(onSubmit).toHaveBeenCalledTimes(1);
   expect(onNext).not.toHaveBeenCalled();
 });
+
+it('en teléfono resume el paso como «Paso N de M · Nombre» con una barra de progreso legible', () => {
+  render(
+    <Wizard steps={[...steps.slice(0, 2), { key: 'c', label: 'Paso C', optional: true }]} current={2} onStepChange={() => {}}>
+      <p>contenido</p>
+    </Wizard>,
+  );
+  const bar = screen.getByRole('progressbar', { name: 'Progreso' });
+  expect(bar).toHaveAttribute('aria-valuenow', '3');
+  expect(bar).toHaveAttribute('aria-valuemax', '3');
+  expect(bar).toHaveAttribute('aria-valuetext', 'Paso 3 de 3: Paso C');
+  expect(screen.getByText('Paso 3 de 3 · Paso C')).toBeInTheDocument();
+});
+
+it('marca los pasos opcionales con «(opcional)»', () => {
+  render(
+    <Wizard steps={[steps[0], { key: 'b', label: 'Paso B', optional: true }]} current={0} onStepChange={() => {}}>
+      <p>contenido</p>
+    </Wizard>,
+  );
+  expect(screen.getByRole('button', { name: /\(opcional\)\s*Paso B/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^1\s*Paso A$/ })).toBeInTheDocument();
+});

@@ -10,6 +10,7 @@ import {
 } from '@/lib/locations/location-store';
 import { cn } from '@/lib/utils';
 import { ChevronDown, MapPin } from 'lucide-react';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const copy = {
   label: 'Sede',
@@ -33,10 +34,6 @@ export function shortSedeLabel(name: string): string {
   return (meaningful[0] ?? words[0] ?? name).replace(/[,.;:]$/, '');
 }
 
-// `appearance-none` + chevron propio: el select nativo pinta su flecha con el
-// estilo del sistema, que no cuadra con el resto de controles (ui/select).
-const fieldClass =
-  'h-9 appearance-none rounded-lg border border-border bg-surface pl-8 pr-8 text-sm text-ink transition-colors hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg';
 
 /**
  * Selector de sede. Se muestra en cuanto la clínica tiene AL MENOS UNA sede.
@@ -180,16 +177,17 @@ export function LocationSwitcher({
   );
 
   // Un solo select invisible para el raíl y el teléfono: cubre el botón entero
-  // y abre el desplegable del sistema.
+  // y abre el desplegable del sistema. El foco lo pinta el botón que lo lleva.
   const overlaySelect = (name: string) => (
-    <select
+    <NativeSelect
       aria-label={name}
       value={active ?? ''}
       onChange={(e) => handleChange(e.target.value)}
-      className="absolute inset-0 w-full cursor-pointer appearance-none opacity-0 focus:outline-none"
+      className="absolute inset-0 opacity-0"
+      selectClassName="h-full pointer-coarse:h-full focus-visible:outline-none"
     >
       {options}
-    </select>
+    </NativeSelect>
   );
 
   if (variant === 'phone') {
@@ -203,10 +201,10 @@ export function LocationSwitcher({
     return (
       <span
         title={`${copy.label}: ${fullName}`}
-        className="relative inline-flex h-11 max-w-[6.5rem] shrink-0 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-within:ring-2 focus-within:ring-primary"
+        className="relative inline-flex h-11 max-w-[6.5rem] shrink-0 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
       >
         <MapPin aria-hidden className="size-4 shrink-0" />
-        <span aria-hidden className="min-w-0 truncate text-[13px] font-medium text-ink">
+        <span aria-hidden className="min-w-0 truncate text-[0.8125rem] font-medium text-ink">
           {short}
         </span>
         <ChevronDown aria-hidden className="size-3.5 shrink-0" />
@@ -222,7 +220,7 @@ export function LocationSwitcher({
     return (
       <label
         title={`${copy.label}: ${activeName}`}
-        className="relative flex size-10 items-center justify-center rounded-lg border border-border bg-surface text-muted transition-colors hover:bg-bg hover:text-ink focus-within:ring-2 focus-within:ring-primary"
+        className="relative flex size-10 items-center justify-center rounded-lg border border-border bg-surface text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
       >
         <span className="sr-only">{copy.label}</span>
         <MapPin aria-hidden className="size-4" />
@@ -235,34 +233,22 @@ export function LocationSwitcher({
   }
 
   return (
-    <label
-      className={cn(
-        'relative flex items-center',
-        variant === 'block' ? 'w-full' : 'inline-flex',
-      )}
-    >
+    <label className={cn('relative flex items-center', variant === 'block' ? 'w-full' : 'inline-flex')}>
       <span className="sr-only">{copy.label}</span>
-      <MapPin
-        aria-hidden
-        className="pointer-events-none absolute left-2.5 size-4 text-muted"
-      />
-      <select
+      <NativeSelect
         aria-label={copy.label}
         value={active ?? ''}
         onChange={(e) => handleChange(e.target.value)}
         className={cn(
-          fieldClass,
-          variant === 'block' && 'h-10 w-full',
-          variant === 'inline' && 'max-w-[12rem]',
-          variant === 'compact' && 'h-10 max-w-[8.5rem]',
+          variant === 'block' && 'w-full',
+          variant === 'inline' && 'w-auto max-w-[12rem]',
+          variant === 'compact' && 'w-auto max-w-[8.5rem]',
         )}
+        selectClassName="pl-8"
       >
         {options}
-      </select>
-      <ChevronDown
-        aria-hidden
-        className="pointer-events-none absolute right-2.5 size-4 text-muted"
-      />
+      </NativeSelect>
+      <MapPin aria-hidden className="pointer-events-none absolute left-2.5 size-4 text-muted" />
     </label>
   );
 }

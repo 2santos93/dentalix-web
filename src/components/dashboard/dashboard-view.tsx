@@ -4,10 +4,7 @@ import Link from 'next/link';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
-import {
-  activeSedeCurrency,
-  hasActiveLocationWithoutCurrency,
-} from '@/lib/locations/location-settings';
+import { sedeZoneNoteCopy, useDashboardCurrency, useSedeZoneNote } from '@/lib/locations/sede-regional-summary';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { PageHeader } from '@/components/shared/page-header';
@@ -22,7 +19,6 @@ import { MyProductionSection } from './my-production-section';
 import { PendingSection } from './pending-section';
 import { PeriodResultsSection } from './period-results-section';
 import { TodaySection } from './today-section';
-import { sedeTimeLabel } from './zone-label';
 
 export const dashboardCopy = {
   title: 'Inicio',
@@ -56,6 +52,10 @@ export function DashboardView({ token }: DashboardViewProps) {
   const timeZone = readyTimeZone(zone);
   const fmt = readyFormat(useSedeFormat(token));
   const locations = useLocationsState(token);
+  // R1: la nota de zona y la moneda del período salen de los helpers comunes
+  // (`sede-regional-summary.ts`), no de reglas locales de Inicio.
+  const zoneNote = useSedeZoneNote(token);
+  const currency = useDashboardCurrency(token);
 
   // Nombres del personal para la columna «Profesional» (best-effort: sin ellos
   // la fila no lo nombra, nunca enseña un UUID).
@@ -78,40 +78,27 @@ export function DashboardView({ token }: DashboardViewProps) {
   const ready = locations.status === 'ready' ? locations : null;
   const activeLocationId = ready?.activeLocationId ?? null;
   const activeSede = ready && activeLocationId ? ready.locations.find((l) => l.id === activeLocationId) : undefined;
-  // La sede cuya zona define «hoy»: la activa o, en «Todas», la principal (la misma regla que la API).
-  const zoneSede = ready ? (activeSede ?? ready.locations.find((l) => l.isActive)) : undefined;
   const scopeName = activeSede?.name ?? copy.allSedes;
   const scopeKey = activeLocationId ?? 'all';
 
-  const sedeCurrency = ready ? activeSedeCurrency(ready.locations, activeLocationId) : null;
-  const sedeWithoutCurrency =
-    ready !== null &&
-    sedeCurrency?.currency === null &&
-    (sedeCurrency.scope === 'sede' || hasActiveLocationWithoutCurrency(ready.locations));
-
   const description = role ? INICIO_DESCRIPTION[role] : INICIO_DESCRIPTION_FALLBACK;
-  const timeLabel = timeZone && zoneSede ? sedeTimeLabel(zoneSede.name, timeZone) : null;
+  const note = zoneNote.status === 'ready' ? zoneNote : null;
   const meta = (
     <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted" data-testid="dashboard-scope">
       <span className="font-medium text-ink">{scopeName}</span>
-      {timeLabel ? (
+      {note ? (
         <>
           <span aria-hidden>·</span>
+          <span data-testid="dashboard-zone-note">{note.text}</span>
           {/* Solo ADMIN puede cambiar la zona de una sede: para el resto es texto. */}
           {role === 'ADMIN' ? (
             <Link
-              href="/settings/sedes"
-              title={timeZone ?? undefined}
+              href={note.settingsHref}
               className="rounded-sm text-primary-text hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center"
-              data-testid="dashboard-zone-note"
             >
-              {timeLabel}
+              {sedeZoneNoteCopy.change}
             </Link>
-          ) : (
-            <span title={timeZone ?? undefined} data-testid="dashboard-zone-note">
-              {timeLabel}
-            </span>
-          )}
+          ) : null}
         </>
       ) : null}
     </p>
@@ -176,16 +163,15 @@ export function DashboardView({ token }: DashboardViewProps) {
         </div>
 
         {canSeeBlock('periodResults', role) ? (
-          sedeWithoutCurrency && sedeCurrency?.scope === 'sede' ? (
-            <SedeConfigError kind="currency" onRetry={locations.retry} />
+          currency.status === 'error' ? (
+            <SedeConfigError kind="currency" onRetry={currency.retry} />
           ) : (
             <PeriodResultsSection
               key={scopeKey}
               token={token}
               timeZone={timeZone}
               scopeKey={scopeKey}
-              defaultCurrency={sedeCurrency?.currency ?? null}
-              currencyNeedsChoice={sedeCurrency?.currency === null}
+              currency={currency.status === 'ready' ? currency : null}
               fmt={fmt}
             />
           )
