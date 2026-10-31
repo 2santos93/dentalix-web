@@ -1,15 +1,14 @@
 'use client';
 import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { InventoryItem } from '@/components/inventory/inventory-item-detail';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
+// El título, el enlace de vuelta y las acciones los pinta `InventoryItem` en su
+// `PageHeader`: el título es el nombre del insumo, que solo la vista conoce.
 const copy = {
-  backLink: 'Volver a inventario',
-  title: 'Detalle del insumo',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -42,15 +41,5 @@ export default function InventoryItemPage() {
     return null;
   }
 
-  return (
-    <div className="flex flex-1 flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link href="/inventory" className="text-sm font-medium text-primary hover:underline">
-          {copy.backLink}
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">{copy.title}</h1>
-      </div>
-      <InventoryItem token={accessToken} id={itemId} />
-    </div>
-  );
+  return <InventoryItem token={accessToken} id={itemId} />;
 }

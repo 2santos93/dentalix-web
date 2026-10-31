@@ -5,6 +5,7 @@ import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { axeViolations } from './support/axe';
 import { ageRateBacklog, E2E_DATABASE_URL, postponeRateRetry } from './support/db';
+import { fillDate } from './support/dates';
 import { expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
@@ -127,12 +128,12 @@ for (const viewport of VIEWPORTS) {
       // 3. Registrar la tasa de un día anterior: el formulario dice a qué abonos se aplicará.
       await page.getByRole('button', { name: 'Registrar tasa' }).first().click();
       const dialog = page.getByRole('dialog', { name: 'Registrar tasa' });
-      await dialog.getByLabel('Fecha').fill(sedeDay(-3));
+      await fillDate(dialog, 'Fecha', sedeDay(-3));
       await dialog.getByLabel('Moneda').selectOption('COP');
       const backupNotice = dialog.getByTestId('manual-rate-backup-notice');
       await expect(backupNotice).toContainText('anterior a «manual desde»');
       await expect(backupNotice).toContainText('así que ahora no se usará');
-      await dialog.getByLabel('Fecha').fill(day);
+      await fillDate(dialog, 'Fecha', day);
       await expect(backupNotice).toContainText('Servirá de respaldo al abono sin tasa de ese día que necesita la tasa de COP');
       await dialog.getByLabel(/^Tasa por 1/).fill('4000');
       expect(await axeViolations(page, dialog)).toEqual([]);
@@ -177,7 +178,10 @@ for (const viewport of VIEWPORTS) {
 
       // 5. La tasa ya la usa el abono: no se puede corregir.
       await page.goto(`${session.origin}/settings/tasa-de-cambio`);
-      await expect(page.getByRole('table', { name: 'Tasas manuales' })).toContainText('Usada en abonos');
+      // DataList: tabla desde 640 px, lista de tarjetas en el teléfono.
+      await expect(
+        page.getByRole(viewport.width < 640 ? 'list' : 'table', { name: 'Tasas manuales' }),
+      ).toContainText('Usada en abonos');
       if (QA_DIR) {
         await page.screenshot({ path: `${QA_DIR}/dx402-usada-${viewport.width}.png` });
       }

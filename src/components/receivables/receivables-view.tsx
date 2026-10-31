@@ -1,8 +1,8 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Building2, Download, Lock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Download, Lock, SlidersHorizontal } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -21,38 +21,39 @@ import { PaymentPromiseDialog } from '@/components/collections/payment-promise-d
 import { parseMoneyInput } from '@/lib/format/money';
 import { saveCsv } from '@/lib/files/save-csv';
 import { notifyError } from '@/components/errors/notify';
-import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DataList, DATA_LIST_PHONE_QUERY, type DataListColumn } from '@/components/ui/data-list';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageHeader } from '@/components/shared/page-header';
 import { Pagination } from '@/components/shared/pagination';
-import { ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
+import { ResultCount } from '@/components/shared/list-toolbar';
+import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { AgingSummary } from './aging-summary';
-import { DebtorCard } from './debtor-card';
+import { ScopeMarker } from './scope-marker';
 import {
   AgeCell,
+  AgeMeta,
   BucketList,
   bucketLineCount,
-  CollectionActions,
   CollectionCell,
+  ContactButtons,
   DebtCell,
-  DebtorActions,
   LastPayment,
   NextInstallment,
+  debtorCopy,
+  debtorRowActions,
   statementHref,
 } from './debtor-parts';
-import { cn } from '@/lib/utils';
 
 export const receivablesCopy = {
   title: 'Cartera',
   description:
-    'Lo que los pacientes deben, por antigüedad: a quién llamar primero. Cada saldo es el de su estado de cuenta, por moneda y sin convertir.',
-  scopeAll: 'Toda la clínica',
-  scopeLocation: (name: string) => `Deudas de ${name}`,
+    'Lo que deben los pacientes, por antigüedad: a quién llamar primero. Cada saldo es el de su estado de cuenta, por moneda y sin convertir.',
   ageLabel: 'Antigüedad',
   minBalanceLabel: 'Saldo mínimo',
   minBalancePlaceholder: 'Saldo mínimo',
@@ -65,14 +66,16 @@ export const receivablesCopy = {
   exported: 'Cartera exportada.',
   countNoun: 'deudor',
   countNounPlural: 'deudores',
-  tableLabel: 'Deudores de la sede, de la deuda más antigua a la más reciente',
   listLabel: 'Deudores',
+  moreFilters: 'Más filtros',
+  moreFiltersActive: (n: number) => `Más filtros (${n})`,
+  clearMoreFilters: 'Quitar estos filtros',
   colPatient: 'Paciente',
   colAge: 'Antigüedad',
   colDebt: 'Por cobrar',
   colLastPayment: 'Último abono',
   colNext: 'Próxima cuota',
-  colActions: 'Acciones',
+  colContact: 'Contacto',
   // Sin «Intenta de nuevo.»: AsyncSection → SectionError trae «Reintentar».
   loadError: 'No pudimos cargar la cartera.',
   badRequest: 'Algún filtro no es válido: revisa el saldo mínimo.',
@@ -107,12 +110,14 @@ function parseMinBalance(text: string, currency: string): number | undefined {
 
 /**
  * Cartera por antigüedad (DX-145): la lista de cobro de la sede activa. Mismo
- * patrón de lista que la caja y «Presupuestos por seguir»: filtros en la barra
- * con la acción primaria a la derecha («Exportar CSV», solo ADMIN), resumen por
- * tramo, conteo, lista y páginas. En escritorio es una tabla; bajo `sm` cada
- * deudor es una tarjeta con sus tramos y los botones a mano.
+ * patrón de lista que la caja: dos filtros a la vista (antigüedad y moneda) y
+ * el resto en «Más filtros», «Exportar CSV» secundario (solo ADMIN), resumen
+ * por tramo, conteo, `DataList` y páginas. Toda la fila abre el estado de
+ * cuenta; gestión y compromiso van en el «⋯».
  */
 export function ReceivablesView({ token }: { token: string }) {
+  const router = useRouter();
+  const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
   const isAdmin = getTokenRole(token) === 'ADMIN';
   const [ageFilter, setAgeFilter] = useState<string>('all');
   const [minBalanceText, setMinBalanceText] = useState('');
@@ -228,7 +233,6 @@ export function ReceivablesView({ token }: { token: string }) {
   const minBalanceParsed = parseMoneyInput(minBalanceText, currency === 'ALL' ? '' : currency);
   const minBalanceError =
     minBalanceText.trim() !== '' && !minBalanceParsed.ok ? receivablesCopy.minBalanceInvalid(minBalanceParsed.message) : null;
-  const minBalanceErrorId = 'receivables-min-balance-error';
 
   async function exportCsv() {
     setExporting(true);
@@ -248,111 +252,225 @@ export function ReceivablesView({ token }: { token: string }) {
 
   const items = data?.items ?? [];
   const location = data?.scope.location ?? null;
+  const anyApproximate = items.some((r) => r.ageApproximate);
+  // «Más filtros (n)»: cuenta solo lo que de verdad filtra (un saldo ilegible no).
+  const moreFiltersCount =
+    (minBalance !== undefined ? 1 : 0) + (promiseFilter !== 'all' ? 1 : 0) + (providerId !== 'ALL' ? 1 : 0);
+
+  function openNote(r: AgingRow) {
+    setDialog({ kind: 'note', row: r });
+  }
+  function openPromise(r: AgingRow) {
+    setDialog({ kind: 'promise', row: r });
+  }
+
+  // La fila entera abre el estado de cuenta; «Llamar» y «WhatsApp» como
+  // iconos en la tabla, y en el teléfono dentro del «⋯» (no caben botones en
+  // una tarjeta que ya es un enlace).
+  const columns: DataListColumn<AgingRow>[] = [
+    {
+      id: 'patient',
+      header: receivablesCopy.colPatient,
+      mobile: 'primary',
+      cell: (r) => (
+        <span className="block min-w-[9rem]">
+          <span className="block">{r.patient.fullName}</span>
+          {r.patient.phone ? (
+            <span className="block whitespace-nowrap text-xs font-normal text-muted tabular-nums">
+              {r.patient.phone}
+            </span>
+          ) : null}
+        </span>
+      ),
+      mobileCell: (r) => r.patient.fullName,
+    },
+    {
+      id: 'age',
+      header: receivablesCopy.colAge,
+      cell: (r) => <AgeCell row={r} />,
+      mobileCell: (r) => <AgeMeta row={r} />,
+    },
+    {
+      id: 'debt',
+      header: receivablesCopy.colDebt,
+      numeric: true,
+      mobile: 'trailing',
+      headerClassName: 'whitespace-nowrap',
+      cell: (r) => (
+        <>
+          <DebtCell currencies={r.currencies} />
+          {/* Con un solo tramo ya lo dice la antigüedad; con varios, el desglose. */}
+          {bucketLineCount(r) > 1 ? <BucketList currencies={r.currencies} className="mt-1" /> : null}
+        </>
+      ),
+      mobileCell: (r) => <DebtCell currencies={r.currencies} compact />,
+    },
+    {
+      id: 'last-payment',
+      header: receivablesCopy.colLastPayment,
+      mobile: 'hidden',
+      showFrom: 'xl',
+      headerClassName: 'whitespace-nowrap',
+      cell: (r) => <LastPayment row={r} />,
+    },
+    {
+      id: 'next',
+      header: receivablesCopy.colNext,
+      mobile: 'hidden',
+      showFrom: 'xl',
+      headerClassName: 'whitespace-nowrap',
+      cell: (r) => <NextInstallment row={r} />,
+    },
+    {
+      id: 'collection',
+      header: receivablesCopy.colCollection,
+      showFrom: 'lg',
+      cellClassName: 'max-w-[14rem]',
+      cell: (r) => <CollectionCell row={r} />,
+      mobileCell: (r) => (r.lastNote || r.promise ? <CollectionCell row={r} compact /> : null),
+    },
+    {
+      id: 'contact',
+      header: <span className="sr-only">{receivablesCopy.colContact}</span>,
+      mobile: 'hidden',
+      align: 'end',
+      cell: (r) => <ContactButtons row={r} clinicName={clinicName} />,
+    },
+  ];
 
   return (
     <>
       <PageHeader
         title={receivablesCopy.title}
         description={receivablesCopy.description}
-        meta={
-          data ? (
-            <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-muted">
-              <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
-              <span>{location ? receivablesCopy.scopeLocation(location.name) : receivablesCopy.scopeAll}</span>
-            </p>
-          ) : null
-        }
+        meta={data ? <ScopeMarker location={location} /> : null}
       />
 
       <div className="flex flex-col gap-3">
         {/* Sin acceso (403) no hay filas que filtrar ni exportar: solo el aviso. */}
         {!forbidden ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              <select
-                aria-label={receivablesCopy.ageLabel}
-                value={ageFilter}
-                onChange={(e) => {
-                  setAgeFilter(e.target.value);
-                  setPage(1);
-                }}
-                className={cn(toolbarFieldClass, 'sm:w-52')}
-              >
-                {AGE_FILTERS.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-              <Input
-                type="text"
-                inputMode="decimal"
-                aria-label={receivablesCopy.minBalanceLabel}
-                placeholder={receivablesCopy.minBalancePlaceholder}
-                value={minBalanceText}
-                onChange={(e) => setMinBalanceText(e.target.value)}
-                aria-invalid={minBalanceError ? true : undefined}
-                aria-describedby={minBalanceError ? minBalanceErrorId : undefined}
-                autoComplete="off"
-                className="tabular-nums sm:w-40"
-              />
-              <select
-                aria-label={receivablesCopy.currencyLabel}
-                value={currency}
-                onChange={(e) => {
-                  setCurrency(e.target.value);
-                  setPage(1);
-                }}
-                className={cn(toolbarFieldClass, 'sm:w-48')}
-              >
-                <option value="ALL">{receivablesCopy.currencyAll}</option>
-                {knownCurrencies.map((code) => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label={receivablesCopy.promiseLabel}
-                value={promiseFilter}
-                onChange={(e) => {
-                  setPromiseFilter(e.target.value);
-                  setPage(1);
-                }}
-                className={cn(toolbarFieldClass, 'sm:w-56')}
-              >
-                {PROMISE_FILTERS.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-              {providers.length > 0 ? (
-                <select
-                  aria-label={receivablesCopy.providerLabel}
-                  value={providerId}
-                  onChange={(e) => {
-                    setProviderId(e.target.value);
-                    setPage(1);
-                  }}
-                  className={cn(toolbarFieldClass, 'sm:w-56')}
+          // Teléfono: los dos filtros a lo ancho (sus textos no caben en media
+          // columna) y «Más filtros» + «Exportar CSV» lado a lado.
+          <div className="grid min-w-0 grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center">
+            <NativeSelect
+              aria-label={receivablesCopy.ageLabel}
+              value={ageFilter}
+              onChange={(e) => {
+                setAgeFilter(e.target.value);
+                setPage(1);
+              }}
+              className="col-span-2 sm:w-52"
+            >
+              {AGE_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </NativeSelect>
+            <NativeSelect
+              aria-label={receivablesCopy.currencyLabel}
+              value={currency}
+              onChange={(e) => {
+                setCurrency(e.target.value);
+                setPage(1);
+              }}
+              className="col-span-2 sm:w-48"
+            >
+              <option value="ALL">{receivablesCopy.currencyAll}</option>
+              {knownCurrencies.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </NativeSelect>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="secondary" className={isAdmin ? undefined : 'col-span-2'}>
+                  <SlidersHorizontal aria-hidden />
+                  {moreFiltersCount > 0
+                    ? receivablesCopy.moreFiltersActive(moreFiltersCount)
+                    : receivablesCopy.moreFilters}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="flex w-80 flex-col gap-4 p-4">
+                <FormField
+                  htmlFor="receivables-min-balance"
+                  label={receivablesCopy.minBalanceLabel}
+                  error={minBalanceError}
                 >
-                  <option value="ALL">{receivablesCopy.providerAll}</option>
-                  {providers.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.fullName}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              {minBalanceError ? (
-                <InlineError id={minBalanceErrorId} className="text-xs sm:basis-full">
-                  {minBalanceError}
-                </InlineError>
-              ) : null}
-            </div>
+                  <Input
+                    id="receivables-min-balance"
+                    type="text"
+                    inputMode="decimal"
+                    value={minBalanceText}
+                    onChange={(e) => setMinBalanceText(e.target.value)}
+                    aria-invalid={minBalanceError ? true : undefined}
+                    aria-describedby={minBalanceError ? fieldErrorId('receivables-min-balance') : undefined}
+                    autoComplete="off"
+                    className="tabular-nums"
+                  />
+                </FormField>
+                <FormField htmlFor="receivables-promise" label={receivablesCopy.promiseLabel}>
+                  <NativeSelect
+                    id="receivables-promise"
+                    value={promiseFilter}
+                    onChange={(e) => {
+                      setPromiseFilter(e.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    {PROMISE_FILTERS.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+                {providers.length > 0 ? (
+                  <FormField htmlFor="receivables-provider" label={receivablesCopy.providerLabel}>
+                    <NativeSelect
+                      id="receivables-provider"
+                      value={providerId}
+                      onChange={(e) => {
+                        setProviderId(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="ALL">{receivablesCopy.providerAll}</option>
+                      {providers.map((m) => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.fullName}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </FormField>
+                ) : null}
+                {moreFiltersCount > 0 || minBalanceText ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="self-start"
+                    onClick={() => {
+                      setMinBalanceText('');
+                      setPromiseFilter('all');
+                      setProviderId('ALL');
+                      setPage(1);
+                    }}
+                  >
+                    {receivablesCopy.clearMoreFilters}
+                  </Button>
+                ) : null}
+              </PopoverContent>
+            </Popover>
+            {/* Exportar nunca es la acción primaria de la cobranza: secundaria. */}
             {isAdmin ? (
-              <Button type="button" onClick={() => void exportCsv()} disabled={exporting || loading} className="shrink-0">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void exportCsv()}
+                disabled={exporting || loading}
+                className="sm:ml-auto"
+              >
                 <Download aria-hidden />
                 {exporting ? receivablesCopy.exporting : receivablesCopy.export}
               </Button>
@@ -373,14 +491,6 @@ export function ReceivablesView({ token }: { token: string }) {
           />
         ) : (
           <>
-            {!loading && !loadError && data ? (
-              <ResultCount
-                total={data.total}
-                noun={receivablesCopy.countNoun}
-                nounPlural={receivablesCopy.countNounPlural}
-              />
-            ) : null}
-
             <AsyncSection
               loading={loading}
               error={loadError}
@@ -390,97 +500,39 @@ export function ReceivablesView({ token }: { token: string }) {
               emptyDescription={receivablesCopy.emptyHint}
               skeleton={<TableSkeleton rows={5} />}
             >
+              {data ? <AgingSummary totals={data.totals} /> : null}
+
+              <ResultCount
+                total={data?.total ?? 0}
+                noun={receivablesCopy.countNoun}
+                nounPlural={receivablesCopy.countNounPlural}
+              />
+
+              <DataList
+                label={receivablesCopy.listLabel}
+                rows={items}
+                columns={columns}
+                getRowKey={(r) => r.patient.id}
+                getRowHref={(r) => statementHref(r.patient.id)}
+                getRowLabel={(r) => r.patient.fullName}
+                rowActions={(r) =>
+                  debtorRowActions({
+                    row: r,
+                    clinicName,
+                    withContact: isPhone,
+                    onStatement: (x) => router.push(statementHref(x.patient.id)),
+                    onNote: openNote,
+                    onPromise: openPromise,
+                  })
+                }
+              />
+
               {data ? (
-                <>
-                  <AgingSummary totals={data.totals} />
-                  <p className="text-xs text-muted tabular-nums">
-                    {receivablesCopy.asOf(data.asOf.split('-').reverse().join('/'))}
-                  </p>
-                </>
+                <div className="flex flex-col gap-1 text-xs text-muted">
+                  <p className="tabular-nums">{receivablesCopy.asOf(data.asOf.split('-').reverse().join('/'))}</p>
+                  {anyApproximate ? <p>{debtorCopy.approximateNote}</p> : null}
+                </div>
               ) : null}
-
-              {/* Escritorio: una tabla. */}
-              <Card className="overflow-hidden p-0 max-sm:hidden">
-                <Table aria-label={receivablesCopy.tableLabel}>
-                  <caption className="sr-only">{receivablesCopy.tableLabel}</caption>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead scope="col">{receivablesCopy.colPatient}</TableHead>
-                      <TableHead scope="col">{receivablesCopy.colAge}</TableHead>
-                      <TableHead scope="col" className="text-right">
-                        {receivablesCopy.colDebt}
-                      </TableHead>
-                      <TableHead scope="col">{receivablesCopy.colLastPayment}</TableHead>
-                      <TableHead scope="col">{receivablesCopy.colNext}</TableHead>
-                      <TableHead scope="col">{receivablesCopy.colCollection}</TableHead>
-                      <TableHead scope="col">
-                        <span className="sr-only">{receivablesCopy.colActions}</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((row) => (
-                      <TableRow key={row.patient.id} data-testid="debtor-row">
-                        <TableCell data-label={receivablesCopy.colPatient}>
-                          <Link
-                            href={statementHref(row.patient.id)}
-                            className="font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                          >
-                            {row.patient.fullName}
-                          </Link>
-                          {row.patient.phone ? (
-                            <span className="block text-xs text-muted tabular-nums">{row.patient.phone}</span>
-                          ) : null}
-                        </TableCell>
-                        <TableCell data-label={receivablesCopy.colAge}>
-                          <AgeCell row={row} />
-                        </TableCell>
-                        <TableCell className="text-right" data-label={receivablesCopy.colDebt}>
-                          <DebtCell currencies={row.currencies} />
-                          {/* Con un solo tramo ya lo dice la antigüedad; con
-                              varios, el desglose bajo el total. */}
-                          {bucketLineCount(row) > 1 ? (
-                            <BucketList currencies={row.currencies} className="mt-1 text-xs" />
-                          ) : null}
-                        </TableCell>
-                        <TableCell data-label={receivablesCopy.colLastPayment}>
-                          <LastPayment row={row} />
-                        </TableCell>
-                        <TableCell data-label={receivablesCopy.colNext}>
-                          <NextInstallment row={row} />
-                        </TableCell>
-                        <TableCell data-label={receivablesCopy.colCollection}>
-                          <CollectionCell row={row} />
-                        </TableCell>
-                        <TableCell data-label={receivablesCopy.colActions}>
-                          <div className="flex flex-col items-end gap-2">
-                            <DebtorActions row={row} clinicName={clinicName} />
-                            <CollectionActions
-                              row={row}
-                              onNote={(r) => setDialog({ kind: 'note', row: r })}
-                              onPromise={(r) => setDialog({ kind: 'promise', row: r })}
-                            />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
-
-              {/* Móvil: una tarjeta por deudor, sin scroll lateral. */}
-              <ul aria-label={receivablesCopy.listLabel} className="flex flex-col gap-3 sm:hidden">
-                {items.map((row) => (
-                  <li key={row.patient.id}>
-                    <DebtorCard
-                      row={row}
-                      clinicName={clinicName}
-                      onNote={(r) => setDialog({ kind: 'note', row: r })}
-                      onPromise={(r) => setDialog({ kind: 'promise', row: r })}
-                    />
-                  </li>
-                ))}
-              </ul>
             </AsyncSection>
 
             {!loadError ? (

@@ -72,6 +72,13 @@ async function fillRequired(user: ReturnType<typeof setupUser>) {
   await user.type(screen.getByLabelText('Importe'), '150.000');
 }
 
+/** El valor ISO de un campo de fecha (su `<input type="hidden">`). */
+function isoOf(name: string): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>(`input[type="hidden"][name="${name}"]`);
+  if (!input) throw new Error(`sin campo ${name}`);
+  return input;
+}
+
 describe('ExpenseFormModal (DX-274)', () => {
   beforeEach(() => {
     Object.assign(mockExpenseToday, { today: '2026-10-24', error: null });
@@ -86,7 +93,7 @@ describe('ExpenseFormModal (DX-274)', () => {
     const user = setupUser();
     Object.assign(mockExpenseToday, { today: null, error: 'Configura la zona horaria de esta sede.' });
     renderModal();
-    expect(screen.getByLabelText('Fecha de factura')).toHaveValue('');
+    expect(isoOf('invoiceDate')).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Registrar gasto' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(mockExpenseToday.retry).toHaveBeenCalledTimes(1);
@@ -108,8 +115,9 @@ describe('ExpenseFormModal (DX-274)', () => {
     const user = setupUser();
     const { onSaved, onOpenChange } = renderModal();
     expect(screen.getByLabelText('Sede')).toHaveValue('loc-1');
-    expect(screen.getByLabelText('Fecha de factura')).toHaveValue('2026-10-24');
-    expect(screen.getByLabelText('Fecha de factura')).toHaveAttribute('max', '2026-10-24');
+    // Campo segmentado con el día de la sede (nunca un <input type="date"> en el idioma del navegador).
+    expect(screen.getByRole('group', { name: 'Fecha de factura' })).toBeInTheDocument();
+    expect(isoOf('invoiceDate')).toHaveValue('2026-10-24');
     await fillRequired(user);
     await user.type(screen.getByLabelText('Proveedor'), '  Lab   Dental SAS ');
     await user.click(screen.getByRole('button', { name: 'Registrar gasto' }));
@@ -153,7 +161,7 @@ describe('ExpenseFormModal (DX-274)', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Ya está pagado' }));
     expect(screen.getByLabelText('Medio de pago')).toHaveValue('CASH');
     await user.click(screen.getByRole('checkbox', { name: 'Desde mi caja abierta' }));
-    expect(screen.getByLabelText('Fecha del pago')).toBeDisabled();
+    expect(screen.getByRole('group', { name: 'Fecha del pago' })).toHaveAttribute('aria-disabled', 'true');
     await user.click(screen.getByRole('button', { name: 'Registrar gasto' }));
     await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
     expect(mockedCreate.mock.calls[0][1].payment).toEqual({ amount: 150000, method: 'CASH', fromCashSession: true });

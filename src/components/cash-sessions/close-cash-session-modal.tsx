@@ -26,8 +26,8 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { Button } from '@/components/ui/button';
 import { MoneyInput } from '@/components/shared/money-input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { InlineError } from '@/components/errors/inline-error';
-import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -180,10 +180,11 @@ export function CloseCashSessionModal({
       submitting={submitting}
       error={error}
       size="lg"
+      touchTargets
     >
       <fieldset className="flex flex-col">
         <legend className="t-label mb-2 text-muted">{copy.countsLegend}</legend>
-        <ul className="divide-y divide-hairline rounded-lg border border-border">
+        <ul className="divide-y divide-border-subtle border-y border-border-subtle">
           {rows.map((row, index) => {
             const method = PAYMENT_METHOD_LABELS[row.method];
             // La diferencia se enseña cuando hay algo escrito: un «−80.000» antes
@@ -195,7 +196,7 @@ export function CloseCashSessionModal({
             return (
               <li
                 key={`${row.currency}-${row.method}`}
-                className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between"
+                className="flex flex-col gap-2 py-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="font-medium text-ink">{copy.rowLabel(method, row.currency)}</p>
@@ -268,9 +269,10 @@ export function CloseCashSessionModal({
       {showReason ? (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={reasonId}>{blind ? copy.blindReason : copy.reason}</Label>
-          <textarea
+          <Textarea
             id={reasonId}
             rows={2}
+            autoGrow
             maxLength={CASH_DIFFERENCE_REASON_MAX}
             value={reason}
             disabled={submitting}
@@ -278,7 +280,7 @@ export function CloseCashSessionModal({
               setReason(e.target.value);
               setFormError(null);
             }}
-            className={fieldClass}
+            className="max-h-48"
           />
           <p className="text-xs text-muted">{copy.reasonHint}</p>
         </div>
@@ -288,14 +290,15 @@ export function CloseCashSessionModal({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${baseId}-notes`}>{copy.notes}</Label>
-        <textarea
+        <Textarea
           id={`${baseId}-notes`}
           rows={2}
+          autoGrow
           maxLength={CASH_NOTES_MAX}
           value={notes}
           disabled={submitting}
           onChange={(e) => setNotes(e.target.value)}
-          className={fieldClass}
+          className="max-h-48"
         />
       </div>
     </FormModal>

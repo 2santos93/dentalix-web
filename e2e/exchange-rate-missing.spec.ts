@@ -186,7 +186,8 @@ test('ADMIN: la tasa registrada desde el aviso se puede corregir mientras ningú
   await expect(dialog).toBeHidden();
 
   const table = page.getByRole('table', { name: 'Tasas manuales' });
-  await table.getByRole('button', { name: new RegExp(`^Corregir la tasa de ${LOCAL} del `) }).click();
+  await table.getByRole('button', { name: new RegExp(`^Acciones de ${LOCAL} del `) }).click();
+  await page.getByRole('menuitem', { name: 'Corregir' }).click();
   const correct = page.getByRole('dialog', { name: new RegExp(`^Corregir la tasa de ${LOCAL} del `) });
   await correct.getByLabel(/^Tasa por 1 /).fill('4100');
   await correct.getByRole('button', { name: 'Guardar tasa' }).click();

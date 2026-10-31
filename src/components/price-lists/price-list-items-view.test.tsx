@@ -56,6 +56,13 @@ function render_() {
   return render(<PriceListItemsView token="tok" priceListId="pl-1" />);
 }
 
+/** Abre el «⋯» de la fila y devuelve los nombres de sus acciones. */
+async function menuOf(user: ReturnType<typeof setupUser>, row: string): Promise<string[]> {
+  await user.click(screen.getByRole('button', { name: `Acciones de ${row}` }));
+  const items = await screen.findAllByRole('menuitem');
+  return items.map((i) => i.textContent ?? '');
+}
+
 describe('PriceListItemsView (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -65,6 +72,7 @@ describe('PriceListItemsView (DX-105)', () => {
   });
 
   it('muestra el nombre, la moneda y cada fila con su precio de lista y de catálogo', async () => {
+    const user = setupUser();
     render_();
     expect(await screen.findByRole('heading', { name: 'Sura 2026' })).toBeInTheDocument();
     expect(screen.getByText(/Precios en COP/)).toBeInTheDocument();
@@ -85,12 +93,13 @@ describe('PriceListItemsView (DX-105)', () => {
     expect(rows[1]).toHaveTextContent(/80\.000/);
     expect(rows[1]).toHaveTextContent(/60\.000/);
     expect(rows[2]).toHaveTextContent('Sin precio');
-    expect(within(rows[2]).queryByRole('button', { name: /Quitar precio/ })).not.toBeInTheDocument();
     expect(mockedItems).toHaveBeenCalledWith('tok', 'pl-1', { page: 1, pageSize: 20 });
     expect(screen.getByRole('link', { name: 'Listas de precios' })).toHaveAttribute(
       'href',
       '/settings/listas-de-precios',
     );
+    // Sin precio de lista no hay nada que quitar: el «⋯» solo ofrece editarlo.
+    expect(await menuOf(user, 'Resina')).toEqual(['Editar precio']);
   });
 
   it('una lista que no existe lo dice y ofrece volver', async () => {
@@ -129,7 +138,7 @@ describe('PriceListItemsView (DX-105)', () => {
     const user = setupUser();
     render_();
     const table = await screen.findByRole('table', { name: 'Precios de la lista' });
-    await user.click(within(table).getByRole('button', { name: 'Editar precio de «Resina»' }));
+    await user.click(within(table).getByRole('button', { name: 'Resina' }));
     const dialog = await screen.findByRole('dialog');
     const field = within(dialog).getByLabelText('Precio de lista');
     expect(field).toHaveValue('');
@@ -141,14 +150,14 @@ describe('PriceListItemsView (DX-105)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const rows = within(table).getAllByRole('row');
     expect(rows[2]).toHaveTextContent(/45\.000,50/);
-    expect(within(rows[2]).getByRole('button', { name: 'Quitar precio de «Resina»' })).toBeInTheDocument();
+    expect(await menuOf(user, 'Resina')).toEqual(['Editar precio', 'Quitar precio']);
   });
 
   it('el modal se rellena con el precio actual', async () => {
     const user = setupUser();
     render_();
     const table = await screen.findByRole('table', { name: 'Precios de la lista' });
-    await user.click(within(table).getByRole('button', { name: 'Editar precio de «Profilaxis»' }));
+    await user.click(within(table).getByRole('button', { name: 'Profilaxis' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByLabelText('Precio de lista')).toHaveValue('60000');
   });
@@ -157,7 +166,7 @@ describe('PriceListItemsView (DX-105)', () => {
     const user = setupUser();
     render_();
     const table = await screen.findByRole('table', { name: 'Precios de la lista' });
-    await user.click(within(table).getByRole('button', { name: 'Editar precio de «Resina»' }));
+    await user.click(within(table).getByRole('button', { name: 'Resina' }));
     const dialog = await screen.findByRole('dialog');
 
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
@@ -174,7 +183,7 @@ describe('PriceListItemsView (DX-105)', () => {
     mockedReplace.mockRejectedValueOnce(new ApiError(400, 'El precio no puede ser negativo.'));
     render_();
     const table = await screen.findByRole('table', { name: 'Precios de la lista' });
-    await user.click(within(table).getByRole('button', { name: 'Editar precio de «Resina»' }));
+    await user.click(within(table).getByRole('button', { name: 'Resina' }));
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText('Precio de lista'), '100');
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
@@ -189,7 +198,8 @@ describe('PriceListItemsView (DX-105)', () => {
     const user = setupUser();
     render_();
     const table = await screen.findByRole('table', { name: 'Precios de la lista' });
-    await user.click(within(table).getByRole('button', { name: 'Quitar precio de «Profilaxis»' }));
+    await user.click(screen.getByRole('button', { name: 'Acciones de Profilaxis' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Quitar precio' }));
     expect(mockedReplace).not.toHaveBeenCalled();
     await user.click(await screen.findByRole('button', { name: 'Quitar precio' }));
     await waitFor(() =>
@@ -205,7 +215,8 @@ describe('PriceListItemsView (DX-105)', () => {
     mockedReplace.mockRejectedValueOnce(new ApiError(500, 'Caído'));
     render_();
     const table = await screen.findByRole('table', { name: 'Precios de la lista' });
-    await user.click(within(table).getByRole('button', { name: 'Quitar precio de «Profilaxis»' }));
+    await user.click(screen.getByRole('button', { name: 'Acciones de Profilaxis' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Quitar precio' }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Quitar precio' }));
     expect(await within(dialog).findByText('No pudimos quitar el precio.')).toBeInTheDocument();

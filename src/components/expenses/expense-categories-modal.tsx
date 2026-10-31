@@ -15,6 +15,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { fieldErrorId } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { PHONE_FULL_SCREEN } from './phone-full-screen';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -125,9 +126,9 @@ export function ExpenseCategoriesModal({ open, onOpenChange, token, categories }
     list = <p className="text-sm text-muted">{expenseCategoriesCopy.empty}</p>;
   } else {
     list = (
-      <ul aria-label={expenseCategoriesCopy.listLabel} className="divide-y divide-hairline rounded-lg border border-border">
+      <ul aria-label={expenseCategoriesCopy.listLabel} className="divide-y divide-border-subtle border-y border-border-subtle">
         {own.map((category) => (
-          <li key={category.id} className="flex min-h-11 items-center justify-between gap-3 px-3 py-1.5">
+          <li key={category.id} className="flex min-h-11 items-center justify-between gap-3 py-1.5">
             <span className="min-w-0 text-sm text-ink [overflow-wrap:anywhere]">{category.name}</span>
             <Button
               type="button"
@@ -149,7 +150,7 @@ export function ExpenseCategoriesModal({ open, onOpenChange, token, categories }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className={PHONE_FULL_SCREEN}>
         <DialogHeader>
           <DialogTitle>{expenseCategoriesCopy.title}</DialogTitle>
           <DialogDescription>{expenseCategoriesCopy.description}</DialogDescription>

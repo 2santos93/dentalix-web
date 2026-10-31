@@ -13,9 +13,9 @@ import { FormModal } from '@/components/shared/form-modal';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { MoneyInput } from '@/components/shared/money-input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { InlineError } from '@/components/errors/inline-error';
-import { fieldClass } from '@/lib/ui/field-class';
 
 const copy = {
   title: 'Abrir caja',
@@ -135,6 +135,7 @@ export function OpenCashSessionModal({
       submitLabel={copy.submit}
       submitting={submitting}
       error={error}
+      touchTargets
     >
       <fieldset className="flex flex-col gap-3">
         <legend className="t-label mb-1 text-muted">{copy.floatsLegend}</legend>
@@ -207,14 +208,15 @@ export function OpenCashSessionModal({
       </fieldset>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${baseId}-notes`}>{copy.notes}</Label>
-        <textarea
+        <Textarea
           id={`${baseId}-notes`}
           rows={2}
+          autoGrow
           maxLength={CASH_NOTES_MAX}
           value={notes}
           disabled={submitting}
           onChange={(e) => setNotes(e.target.value)}
-          className={fieldClass}
+          className="max-h-48"
         />
         <p className="text-xs text-muted">{copy.notesHint}</p>
       </div>

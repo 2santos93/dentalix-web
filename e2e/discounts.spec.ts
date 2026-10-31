@@ -253,8 +253,11 @@ for (const viewport of [
     await admin.goto(`${origin}/caja/descuentos`);
     await expect(admin.getByRole('heading', { name: 'Descuentos', level: 1 })).toBeVisible({ timeout: 15_000 });
     await expect(admin.getByTestId('discount-total-COP')).toBeVisible();
+    // DataList: filas de la tabla (escritorio) o tarjetas de la lista (teléfono).
     const rows =
-      viewport.width === 390 ? admin.getByTestId('discount-card') : admin.getByTestId('discount-row');
+      viewport.width === 390
+        ? admin.getByRole('list', { name: 'Descuentos del periodo' }).getByRole('listitem')
+        : admin.getByRole('table', { name: 'Descuentos del periodo' }).getByRole('row');
     await expect(rows.filter({ hasText: data.fullName }).first()).toBeVisible();
     // Los tres del 10 % y la rebaja de precio del 95 % (SEC-041).
     await expect(rows.filter({ hasText: data.fullName })).toHaveCount(4);

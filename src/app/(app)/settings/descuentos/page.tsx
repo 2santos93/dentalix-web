@@ -11,7 +11,7 @@ import { DiscountPolicyManager } from '@/components/discounts/discount-policy-ma
 const copy = {
   title: 'Descuentos',
   description:
-    'Cuánto puede descontar cada rol en un ítem del plan y cuándo hay que decir el motivo. Lo comprueba el servidor en cada descuento.',
+    'Cuánto puede descontar cada rol en un ítem del plan y cuándo hay que decir el motivo. Se aplica a cada descuento, en cualquier dispositivo.',
   checkingSession: 'Verificando sesión…',
 };
 

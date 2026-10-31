@@ -130,7 +130,8 @@ test('ADMIN crea «Sura EPS» en Ajustes y la ve activa; a 390 px sin scroll hor
   const table = page.getByRole('table', { name: 'Pagadores' });
   const row = table.getByRole('row', { name: new RegExp(payerName) });
   await expect(row).toContainText('Sistema público de salud');
-  await expect(row.getByRole('cell').nth(2)).toHaveText('Activo');
+  // Activo: sin marca (solo los inactivos la llevan).
+  await expect(row).not.toContainText('Inactivo');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByText(payerName).locator('visible=true').first()).toBeVisible();
@@ -181,7 +182,7 @@ test('an admin creates one payer of each type and none asks for a country', asyn
 
     const row = table.getByRole('row', { name: new RegExp(payer.name) });
     await expect(row.getByRole('cell').nth(1)).toHaveText(payer.label);
-    await expect(row.getByRole('cell').nth(2)).toHaveText('Activo');
+    await expect(row).not.toContainText('Inactivo');
   }
   await expect(table.getByRole('columnheader', { name: 'País' })).toHaveCount(0);
   await shot(page, 'payers-list');

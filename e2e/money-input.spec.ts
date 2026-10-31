@@ -5,6 +5,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { sedeDayFromToday } from './support/clock';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
+import { fillDate } from './support/dates';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -101,7 +102,7 @@ async function seedOverduePlan(
 function debtorIn(page: Page, width: number, fullName: string) {
   return width >= 640
     ? page.getByRole('row', { name: new RegExp(fullName) })
-    : page.getByRole('article', { name: fullName });
+    : page.getByRole('list', { name: 'Deudores' }).getByRole('listitem').filter({ hasText: fullName });
 }
 
 /** Normaliza los espacios duros de Intl para comparar importes. */
@@ -122,13 +123,15 @@ for (const v of viewports) {
     await expect(page.getByRole('heading', { name: 'Cartera', level: 1 })).toBeVisible({ timeout: 15_000 });
     const debtor = debtorIn(page, v.width, patient.fullName);
     await expect(debtor).toBeVisible({ timeout: 15_000 });
-    await debtor.getByRole('button', { name: `Compromiso de pago de ${patient.fullName}` }).click();
+    // Las acciones del deudor van en su «⋯».
+    await page.getByRole('button', { name: `Acciones de ${patient.fullName}` }).click();
+    await page.getByRole('menuitem', { name: 'Compromiso de pago' }).click();
     const promise = page.getByRole('dialog', { name: 'Compromiso de pago' });
     await expectDialogInsideViewport(page, promise);
     await promise.getByLabel('Moneda').selectOption('USD');
     // Lo ambiguo no se envía: el motivo sale junto al campo.
     await promise.getByLabel('Importe').fill('1.50.0');
-    await promise.getByLabel('Pagará hasta el').fill(sedeDayFromToday(7));
+    await fillDate(promise, 'Pagará hasta el', sedeDayFromToday(7));
     await promise.getByRole('button', { name: 'Guardar compromiso' }).click();
     await expect(promise.getByText(/No sabemos leer «1\.50\.0»/)).toBeVisible();
     await expect(promise.getByLabel('Importe')).toHaveAttribute('aria-invalid', 'true');

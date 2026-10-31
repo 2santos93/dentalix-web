@@ -63,7 +63,7 @@ describe('DiscountPolicyManager (DX-204)', () => {
       updatedAt: '2026-10-17T15:00:00.000Z',
     });
     render(<DiscountPolicyManager token="tok" allowed />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Editar topes' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Cambiar los topes de descuento' }));
     const dialog = screen.getByRole('dialog');
     const dentist = within(dialog).getByLabelText('Tope de odontólogo (%)');
     await userEvent.clear(dentist);

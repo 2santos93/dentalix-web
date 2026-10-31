@@ -32,13 +32,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { ExpenseFormModal } from './expense-form-modal';
+import { PHONE_FULL_SCREEN } from './phone-full-screen';
 import { ExpensePaymentModal } from './expense-payment-modal';
 import { ExpenseStatusBadges } from './expense-status-badges';
 import { ExpenseVoidModal } from './expense-void-modal';
 import type { ExpenseCategoriesState } from './use-expense-categories';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
-import { DescriptionItem } from '@/components/ui/description-list';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
+import { Callout } from '@/components/ui/callout';
 
 export const expenseDetailCopy = {
   title: 'Gasto',
@@ -271,8 +273,10 @@ export function ExpenseDetailModal({
     body = (
       <div className="flex min-w-0 flex-col gap-6">
         <div className="flex flex-col gap-3">
-          <ExpenseStatusBadges expense={detail} />
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+          <div>
+            <ExpenseStatusBadges expense={detail} />
+          </div>
+          <DescriptionList columns={3} className="grid-cols-2 gap-y-3 sm:grid-cols-3">
             <Field label={expenseDetailCopy.amount}>
               <span className="font-medium tabular-nums">{money(detail.amount)}</span>
             </Field>
@@ -297,7 +301,7 @@ export function ExpenseDetailModal({
                 {detail.description}
               </Field>
             ) : null}
-          </dl>
+          </DescriptionList>
           <p className="text-xs text-muted tabular-nums">
             {expenseDetailCopy.createdBy(
               detail.createdByName ?? expenseDetailCopy.someone,
@@ -305,13 +309,13 @@ export function ExpenseDetailModal({
             )}
           </p>
           {detail.voidedAt ? (
-            <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink">
+            <Callout tone="neutral">
               {expenseDetailCopy.voided(detail.voidedByName ?? expenseDetailCopy.someone, detail.voidReason ?? '')}
-            </p>
+            </Callout>
           ) : null}
         </div>
 
-        <section aria-labelledby="expense-receipt-title" className="flex flex-col gap-2 border-t border-hairline pt-4">
+        <section aria-labelledby="expense-receipt-title" className="flex flex-col gap-2 border-t border-border-subtle pt-4">
           <h3 id="expense-receipt-title" className="t-title text-ink">
             {expenseDetailCopy.receipt}
           </h3>
@@ -357,14 +361,14 @@ export function ExpenseDetailModal({
           )}
         </section>
 
-        <section aria-labelledby="expense-payments-title" className="flex flex-col gap-2 border-t border-hairline pt-4">
+        <section aria-labelledby="expense-payments-title" className="flex flex-col gap-2 border-t border-border-subtle pt-4">
           <h3 id="expense-payments-title" className="t-title text-ink">
             {expenseDetailCopy.payments}
           </h3>
           {detail.payments.length === 0 ? (
             <p className="text-sm text-muted">{expenseDetailCopy.noPayments}</p>
           ) : (
-            <ul className="divide-y divide-hairline rounded-lg border border-border">
+            <ul className="divide-y divide-border-subtle border-y border-border-subtle">
               {detail.payments.map((payment) => (
                 <PaymentRow
                   key={payment.id}
@@ -378,8 +382,8 @@ export function ExpenseDetailModal({
         </section>
 
         {live ? (
-          <div className="flex flex-col-reverse gap-2 border-t border-hairline pt-4 sm:flex-row sm:justify-end">
-            <Button type="button" variant="secondary" onClick={() => openSub({ kind: 'void-expense' })} className="max-sm:min-h-11">
+          <div className="flex flex-col-reverse gap-2 border-t border-border-subtle pt-4 sm:flex-row sm:justify-end">
+            <Button type="button" variant="destructive-ghost" onClick={() => openSub({ kind: 'void-expense' })} className="max-sm:min-h-11 sm:mr-auto">
               {expenseDetailCopy.voidExpense}
             </Button>
             <Button type="button" variant="secondary" onClick={() => openSub({ kind: 'edit' })} className="max-sm:min-h-11">
@@ -404,7 +408,7 @@ export function ExpenseDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl" onCloseAutoFocus={onCloseAutoFocus}>
+      <DialogContent className={cn('max-w-2xl', PHONE_FULL_SCREEN)} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader className="min-w-0 pr-8">
           <DialogTitle
             ref={titleRef}
@@ -488,7 +492,7 @@ function PaymentRow({ payment, canVoid, onVoid }: { payment: ExpensePayment; can
   const day = formatCivilDate(payment.paidOn);
   const voided = payment.voidedAt !== null;
   return (
-    <li className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className={cn('text-sm text-ink tabular-nums', voided && 'text-muted line-through')}>
           {day} · {PAYMENT_METHOD_LABELS[payment.method]} · <span className="font-medium">{amount}</span>
@@ -497,7 +501,7 @@ function PaymentRow({ payment, canVoid, onVoid }: { payment: ExpensePayment; can
           {payment.cashSessionId ? (
             <Link
               href={cashSessionHref(payment.cashSessionId)}
-              className="inline-flex min-h-11 items-center gap-1 text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
+              className="inline-flex min-h-11 items-center gap-1 text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
             >
               <Wallet aria-hidden className="size-3.5" />
               {expenseDetailCopy.fromCash} · {expenseDetailCopy.fromCashLink}
@@ -514,7 +518,7 @@ function PaymentRow({ payment, canVoid, onVoid }: { payment: ExpensePayment; can
       {canVoid ? (
         <Button
           type="button"
-          variant="ghost"
+          variant="destructive-ghost"
           size="sm"
           onClick={onVoid}
           aria-label={expenseDetailCopy.voidPaymentLabel(amount, day)}

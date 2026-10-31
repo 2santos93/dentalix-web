@@ -11,6 +11,9 @@ import {
 } from '@/lib/exchange/exchange-settings-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { getRateBacklogDay } from '@/lib/payments/rate-backlog-api';
+import { getExchangeRates } from '@/lib/exchange/exchange-api';
+import { listLocations } from '@/lib/locations/locations-api';
+import { todayRatesCopy } from './today-rates';
 import { ApiError } from '@/lib/api/api-error';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { setupUser } from '@/lib/test/user';
@@ -24,6 +27,11 @@ jest.mock('../../lib/exchange/exchange-settings-api', () => ({
   correctManualExchangeRate: jest.fn(),
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
+jest.mock('../../lib/exchange/exchange-api', () => ({ getExchangeRates: jest.fn() }));
+jest.mock('../../lib/locations/locations-api', () => ({
+  ...jest.requireActual('../../lib/locations/locations-api'),
+  listLocations: jest.fn(),
+}));
 jest.mock('../../lib/payments/rate-backlog-api', () => ({
   ...jest.requireActual('../../lib/payments/rate-backlog-api'),
   getRateBacklogDay: jest.fn(),
@@ -48,6 +56,8 @@ const mockedRegister = jest.mocked(registerManualExchangeRate);
 const mockedCorrect = jest.mocked(correctManualExchangeRate);
 const mockedCurrencies = jest.mocked(listCurrencies);
 const mockedDay = jest.mocked(getRateBacklogDay);
+const mockedRates = jest.mocked(getExchangeRates);
+const mockedLocations = jest.mocked(listLocations);
 const copy = exchangeRateCopy;
 const fmt = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 const AUTO = { source: 'AUTOMATIC', manualSince: null, baseCurrency: 'USD' } as const;
@@ -64,14 +74,41 @@ const ves: ManualExchangeRate = {
   inUse: false,
 };
 
+/** Una sede que cobra en `currency` (solo lo que lee la tasa de hoy). */
+function sede(currency: string | null) {
+  return { id: `loc-${currency}`, name: 'Sede', isActive: true, currency } as unknown as Awaited<
+    ReturnType<typeof listLocations>
+  >[number];
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedLocations.mockResolvedValue([sede('VES')]);
+  mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 36.5, EUR: 0.92 } });
   mockedCurrencies.mockResolvedValue([
     { code: 'USD', name: 'Dólar', symbol: '$' },
     { code: 'VES', name: 'Bolívar', symbol: 'Bs.' },
     { code: 'EUR', name: 'Euro', symbol: '€' },
   ]);
 });
+
+/** El grupo de segmentos del `DatePicker` «Fecha» del modal. */
+function dateGroup(dialog: HTMLElement): HTMLElement {
+  return within(dialog).getByRole('group', { name: rateFormCopy.date });
+}
+
+/** El día ISO que muestra el `DatePicker`. */
+function readDate(dialog: HTMLElement): string {
+  const group = dateGroup(dialog);
+  const part = (type: string) => group.querySelector(`[data-type="${type}"]`)?.getAttribute('aria-valuenow') ?? '';
+  return `${part('year')}-${part('month').padStart(2, '0')}-${part('day').padStart(2, '0')}`;
+}
+
+/** Escribe un día (dd/mm/aaaa, el orden de «es») segmento a segmento. */
+async function typeDate(user: ReturnType<typeof setupUser>, dialog: HTMLElement, ddmmyyyy: string) {
+  await user.click(within(dateGroup(dialog)).getAllByRole('spinbutton')[0]);
+  await user.keyboard(ddmmyyyy);
+}
 
 function renderView(allowed = true) {
   render(<ExchangeRateSettingsView token="tok" allowed={allowed} />);
@@ -109,8 +146,59 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     mockedList.mockResolvedValue([]);
     renderView();
     expect(await screen.findByText(copy.emptyTitle)).toBeInTheDocument();
-    expect(screen.getByText(copy.ratesAutomaticNote)).toBeInTheDocument();
+    expect(screen.getByText(copy.ratesHint.AUTOMATIC)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: copy.register })).toBeInTheDocument();
+  });
+
+  it('enseña arriba la tasa de hoy del proveedor para las monedas de las sedes', async () => {
+    mockedGet.mockResolvedValue(AUTO);
+    mockedList.mockResolvedValue([]);
+    renderView();
+    const today = await screen.findByTestId('exchange-rate-today');
+    expect(today).toHaveTextContent(todayRatesCopy.per('VES', 'USD'));
+    expect(today).toHaveTextContent(fmt.number(36.5, { min: 0, max: 8 }));
+    // Solo las monedas en las que cobran las sedes, no la lista entera del proveedor.
+    expect(today).not.toHaveTextContent('EUR');
+    expect(screen.getByText(todayRatesCopy.automatic(fmt.civilDate('2026-10-30')))).toBeInTheDocument();
+    expect(mockedRates).toHaveBeenCalledWith('tok', '2026-10-30');
+  });
+
+  it('con la fuente automática «Registrar tasa» no es la acción primaria', async () => {
+    mockedGet.mockResolvedValue(AUTO);
+    mockedList.mockResolvedValue([ves]);
+    renderView();
+    const button = await screen.findByRole('button', { name: copy.register });
+    expect(button.className).not.toMatch(/bg-primary\b/);
+  });
+
+  it('si el proveedor aún no dio la tasa de hoy, lo dice y deja volver a mirar', async () => {
+    mockedGet.mockResolvedValue(AUTO);
+    mockedList.mockResolvedValue([]);
+    mockedRates
+      .mockRejectedValueOnce(new ApiError(503, 'x', { code: 'EXCHANGE_RATE_UNAVAILABLE' }))
+      .mockResolvedValueOnce({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 36.5 } });
+    const user = setupUser();
+    renderView();
+    expect(await screen.findByText(todayRatesCopy.unavailableTitle)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: todayRatesCopy.retry }));
+    expect(await screen.findByTestId('exchange-rate-today')).toHaveTextContent(fmt.number(36.5, { min: 0, max: 8 }));
+  });
+
+  it('con la fuente manual y sin tasa de hoy de una moneda, lo dice', async () => {
+    mockedGet.mockResolvedValue(MANUAL);
+    mockedList.mockResolvedValue([ves]);
+    mockedRates.mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: {} });
+    renderView();
+    expect(await screen.findByTestId('exchange-rate-today')).toHaveTextContent(todayRatesCopy.missing);
+    expect(screen.getByText(todayRatesCopy.missingManual)).toBeInTheDocument();
+  });
+
+  it('si todas las sedes cobran en la moneda de referencia, no hay nada que convertir', async () => {
+    mockedGet.mockResolvedValue(AUTO);
+    mockedList.mockResolvedValue([]);
+    mockedLocations.mockResolvedValue([sede('USD')]);
+    renderView();
+    expect(await screen.findByText(todayRatesCopy.noCurrencies('USD'))).toBeInTheDocument();
   });
 
   it('lista las últimas tasas con fecha, moneda, tasa y autor en el formato de la sede', async () => {
@@ -123,7 +211,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(row).toHaveTextContent('VES');
     expect(row).toHaveTextContent(fmt.number(36.12345678, { min: 0, max: 8 }));
     expect(row).toHaveTextContent('Dra. Admin');
-    expect(screen.queryByText(copy.ratesAutomaticNote)).not.toBeInTheDocument();
+    expect(screen.queryByText(copy.ratesHint.AUTOMATIC)).not.toBeInTheDocument();
     // La fuente manual dice desde qué día rige, en el formato de la sede.
     expect(screen.getByTestId('exchange-rate-source')).toHaveTextContent(
       copy.manualSince(fmt.civilDate('2026-10-30')),
@@ -156,10 +244,12 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     renderView();
     await user.click(await screen.findByRole('button', { name: copy.register }));
     const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
-    const date = within(dialog).getByLabelText(rateFormCopy.date);
-    expect(date).toHaveValue('2026-10-30');
-    // Hoy de la sede es el máximo: el selector no ofrece días futuros.
-    expect(date).toHaveAttribute('max', '2026-10-30');
+    expect(readDate(dialog)).toBe('2026-10-30');
+    // Hoy de la sede es el máximo: un día futuro no se envía.
+    await typeDate(user, dialog, '31102026');
+    await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
+    expect(await within(dialog).findByText(rateFormCopy.dateFuture)).toBeInTheDocument();
+    await typeDate(user, dialog, '30102026');
     const select = within(dialog).getByLabelText(rateFormCopy.currency);
     await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
     // La moneda base (la da la API) no se ofrece.
@@ -244,7 +334,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(within(eurRow).queryByRole('button')).not.toBeInTheDocument();
     expect(
       within(vesRow).getByRole('button', {
-        name: copy.correctFor('VES', fmt.civilDate('2026-10-29')),
+        name: `Acciones de ${copy.rowLabel('VES', fmt.civilDate('2026-10-29'))}`,
       }),
     ).toBeInTheDocument();
   });
@@ -257,9 +347,10 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     renderView();
     await user.click(
       await screen.findByRole('button', {
-        name: copy.correctFor('VES', fmt.civilDate('2026-10-29')),
+        name: `Acciones de ${copy.rowLabel('VES', fmt.civilDate('2026-10-29'))}`,
       }),
     );
+    await user.click(await screen.findByRole('menuitem', { name: copy.correct }));
     const dialog = await screen.findByRole('dialog', {
       name: correctRateCopy.title('VES', fmt.civilDate('2026-10-29')),
     });
@@ -284,9 +375,10 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     renderView();
     await user.click(
       await screen.findByRole('button', {
-        name: copy.correctFor('VES', fmt.civilDate('2026-10-29')),
+        name: `Acciones de ${copy.rowLabel('VES', fmt.civilDate('2026-10-29'))}`,
       }),
     );
+    await user.click(await screen.findByRole('menuitem', { name: copy.correct }));
     const dialog = await screen.findByRole('dialog');
     await user.clear(within(dialog).getByLabelText(rateLabel));
     await user.type(within(dialog).getByLabelText(rateLabel), '37');
@@ -305,9 +397,10 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     renderView();
     await user.click(
       await screen.findByRole('button', {
-        name: copy.correctFor('VES', fmt.civilDate('2026-10-29')),
+        name: `Acciones de ${copy.rowLabel('VES', fmt.civilDate('2026-10-29'))}`,
       }),
     );
+    await user.click(await screen.findByRole('menuitem', { name: copy.correct }));
     const dialog = await screen.findByRole('dialog');
     await user.clear(within(dialog).getByLabelText(rateLabel));
     await user.type(within(dialog).getByLabelText(rateLabel), '37');
@@ -329,7 +422,10 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
       RATE_INPUT_COPY,
       correctRateCopy,
       fns: [
-        copy.ratesHint('USD'),
+        copy.ratesHint,
+        todayRatesCopy,
+        todayRatesCopy.automatic('30/10/2026'),
+        todayRatesCopy.noCurrencies('USD'),
         copy.colRate('USD'),
         rateFormCopy.rateHint('USD'),
         copy.manualSince('30/10/2026'),
@@ -364,8 +460,7 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
     const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
     const select = within(dialog).getByLabelText(rateFormCopy.currency);
     await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
-    const date = within(dialog).getByLabelText(rateFormCopy.date);
-    return { user, dialog, select, date };
+    return { user, dialog, select };
   }
 
   it('el día de inicio o posterior no lleva aviso ni pide nada', async () => {
@@ -376,9 +471,8 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
   });
 
   it('con un día anterior y sin moneda explica la regla y pide la moneda', async () => {
-    const { user, dialog, date } = await openForm();
-    await user.clear(date);
-    await user.type(date, '2026-10-28');
+    const { user, dialog } = await openForm();
+    await typeDate(user, dialog, '28102026');
     const notice = within(dialog).getByTestId('manual-rate-backup-notice');
     expect(notice).toHaveTextContent(backup.heading(SINCE));
     expect(notice).toHaveTextContent(backup.pickCurrency);
@@ -387,9 +481,8 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
 
   it('dice a cuántos abonos sin tasa de ese día se aplicará', async () => {
     mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 2, providerRateSaved: false, otherRatesMissing: NO_OTHER });
-    const { user, dialog, date, select } = await openForm();
-    await user.clear(date);
-    await user.type(date, '2026-10-28');
+    const { user, dialog, select } = await openForm();
+    await typeDate(user, dialog, '28102026');
     await user.selectOptions(select, 'VES');
     const notice = within(dialog).getByTestId('manual-rate-backup-notice');
     expect(notice).toHaveAttribute('role', 'status');
@@ -400,9 +493,8 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
 
   it('sin abonos pendientes ese día, avisa de que la tasa no se usará', async () => {
     mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 0, providerRateSaved: false, otherRatesMissing: NO_OTHER });
-    const { user, dialog, date, select } = await openForm();
-    await user.clear(date);
-    await user.type(date, '2026-10-28');
+    const { user, dialog, select } = await openForm();
+    await typeDate(user, dialog, '28102026');
     await user.selectOptions(select, 'VES');
     await waitFor(() =>
       expect(within(dialog).getByTestId('manual-rate-backup-notice')).toHaveTextContent(backup.none('VES')),
@@ -417,9 +509,8 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
       providerRateSaved: false,
       otherRatesMissing: { count: 2, currencies: ['COP', 'EUR'] },
     });
-    const { user, dialog, date, select } = await openForm();
-    await user.clear(date);
-    await user.type(date, '2026-10-28');
+    const { user, dialog, select } = await openForm();
+    await typeDate(user, dialog, '28102026');
     await user.selectOptions(select, 'VES');
     const notice = within(dialog).getByTestId('manual-rate-backup-notice');
     await waitFor(() => expect(notice).toHaveTextContent(backup.applies(1, 'VES')));
@@ -434,9 +525,8 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
       providerRateSaved: false,
       otherRatesMissing: { count: 1, currencies: ['EUR'] },
     });
-    const { user, dialog, date, select } = await openForm();
-    await user.clear(date);
-    await user.type(date, '2026-10-28');
+    const { user, dialog, select } = await openForm();
+    await typeDate(user, dialog, '28102026');
     await user.selectOptions(select, 'VES');
     const notice = within(dialog).getByTestId('manual-rate-backup-notice');
     await waitFor(() => expect(notice).toHaveTextContent(backup.onlyOther(1, 'VES', ['EUR'])));
@@ -445,9 +535,8 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
 
   it('si el proveedor ya tiene la tasa de ese día, avisa de que no se usará', async () => {
     mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 1, providerRateSaved: true, otherRatesMissing: NO_OTHER });
-    const { user, dialog, date, select } = await openForm();
-    await user.clear(date);
-    await user.type(date, '2026-10-28');
+    const { user, dialog, select } = await openForm();
+    await typeDate(user, dialog, '28102026');
     await user.selectOptions(select, 'VES');
     await waitFor(() =>
       expect(within(dialog).getByTestId('manual-rate-backup-notice')).toHaveTextContent(backup.provider),
@@ -456,9 +545,8 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
 
   it('si no se puede comprobar, explica la regla sin prometer nada', async () => {
     mockedDay.mockRejectedValue(new ApiError(500, 'boom'));
-    const { user, dialog, date, select } = await openForm();
-    await user.clear(date);
-    await user.type(date, '2026-10-28');
+    const { user, dialog, select } = await openForm();
+    await typeDate(user, dialog, '28102026');
     await user.selectOptions(select, 'VES');
     await waitFor(() =>
       expect(within(dialog).getByTestId('manual-rate-backup-notice')).toHaveTextContent(backup.unknown),
@@ -466,9 +554,8 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
   });
 
   it('con la fuente automática dice que la tasa no se usa y no pide nada', async () => {
-    const { user, dialog, date, select } = await openForm(AUTO);
-    await user.clear(date);
-    await user.type(date, '2026-10-28');
+    const { user, dialog, select } = await openForm(AUTO);
+    await typeDate(user, dialog, '28102026');
     await user.selectOptions(select, 'VES');
     expect(within(dialog).getByText(rateFormCopy.automaticNote)).toBeInTheDocument();
     expect(mockedDay).not.toHaveBeenCalled();
@@ -478,6 +565,6 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
     expect(copy.sourceDialogDescription).not.toMatch(/la toman de la fuente nueva/);
     expect(copy.sourceDialogDescription).toMatch(/respaldo/);
     expect(copy.sourceHints.MANUAL).toMatch(/respaldo/);
-    expect(copy.ratesHint('USD')).toMatch(/respaldo/);
+    expect(copy.ratesHint.MANUAL).toMatch(/respaldo/);
   });
 });

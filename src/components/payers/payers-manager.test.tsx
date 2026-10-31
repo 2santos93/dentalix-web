@@ -31,6 +31,33 @@ const sanitas: Payer = {
 const adeslas: Payer = { ...sanitas, id: 'payer-2', name: 'Adeslas', type: 'INSURER' };
 const acme: Payer = { ...sanitas, id: 'payer-3', name: 'Acme', type: 'EMPLOYER', active: false };
 
+/** Teléfono: `DataList` pinta tarjetas cuando `matchMedia` dice que sí. */
+function mockPhone() {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: true,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  restorePhone = () => {
+    window.matchMedia = original;
+    restorePhone = null;
+  };
+}
+let restorePhone: (() => void) | null = null;
+afterEach(() => restorePhone?.());
+
+/** Abre el «⋯» de la fila y elige la acción. */
+async function rowAction(user: ReturnType<typeof setupUser>, row: string, action: string) {
+  await user.click(screen.getByRole('button', { name: `Acciones de ${row}` }));
+  await user.click(await screen.findByRole('menuitem', { name: action }));
+}
+
 describe('PayersManager (DX-153)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -51,21 +78,24 @@ describe('PayersManager (DX-153)', () => {
       within(rows[0])
         .getAllByRole('columnheader')
         .map((h) => h.textContent),
-    ).toEqual(['Nombre', 'Tipo', 'Estado', 'Acciones']);
+    ).toEqual(['Nombre', 'Tipo', 'Acciones']);
     const cells = (row: HTMLElement) =>
       within(row)
         .getAllByRole('cell')
-        .slice(0, 3)
+        .slice(0, 2)
         .map((c) => c.textContent);
-    expect(cells(rows[1])).toEqual(['Sanitas', 'Sistema público de salud', 'Activo']);
-    expect(cells(rows[2])).toEqual(['Adeslas', 'Aseguradora', 'Activo']);
-    expect(cells(rows[3])).toEqual(['Acme', 'Empresa', 'Inactivo']);
+    // El estado solo se ve cuando es la excepción (inactivo).
+    expect(cells(rows[1])).toEqual(['Sanitas', 'Sistema público de salud']);
+    expect(cells(rows[2])).toEqual(['Adeslas', 'Aseguradora']);
+    expect(cells(rows[3])).toEqual(['AcmeInactivo', 'Empresa']);
+    expect(within(table).queryByText('Activo')).toBeNull();
     expect(within(table).queryByText('País')).toBeNull();
     expect(screen.getByText('3 pagadores')).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledWith('tok', { includeInactive: true });
   });
 
   it('la tarjeta móvil solo muestra la etiqueta del tipo', async () => {
+    mockPhone();
     render(<PayersManager token="tok" allowed />);
     const list = await screen.findByRole('list', { name: 'Pagadores' });
     const cards = within(list).getAllByRole('listitem');
@@ -73,11 +103,15 @@ describe('PayersManager (DX-153)', () => {
     expect(within(cards[1]).getByText('Aseguradora')).toBeInTheDocument();
     expect(within(cards[2]).getByText('Empresa')).toBeInTheDocument();
     expect(within(list).queryByText(/·/)).toBeNull();
+    // Toda la tarjeta abre la edición; el resto de acciones, en su «⋯».
+    expect(within(cards[0]).getByRole('button', { name: /^Sanitas/ })).toBeInTheDocument();
+    expect(within(cards[0]).getByRole('button', { name: 'Acciones de Sanitas' })).toBeInTheDocument();
   });
 
   // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
   it('legacy: una fila con un código de una API anterior muestra la etiqueta genérica', async () => {
     mockedList.mockResolvedValue([{ ...sanitas, type: 'EPS_CO' as never }]);
+    mockPhone();
     render(<PayersManager token="tok" allowed />);
     const list = await screen.findByRole('list', { name: 'Pagadores' });
     expect(within(within(list).getAllByRole('listitem')[0]).getByText('Sistema público de salud')).toBeInTheDocument();
@@ -93,6 +127,9 @@ describe('PayersManager (DX-153)', () => {
         'Crea las aseguradoras, planes prepago, sistemas públicos o empresas con las que trabajas para registrar la cobertura de tus pacientes.',
       ),
     ).toBeInTheDocument();
+    // Vacía: sin «0 pagadores»; la acción vive dentro del estado vacío.
+    expect(screen.queryByText('0 pagadores')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Nuevo pagador' })).toHaveLength(1);
   });
 
   it('error de carga con reintento', async () => {
@@ -125,7 +162,7 @@ describe('PayersManager (DX-153)', () => {
       .getAllByRole('row')
       .slice(1)
       .map((r) => within(r).getAllByRole('cell')[0].textContent);
-    expect(names).toEqual(['Acme', 'Adeslas', 'Bupa', 'Sanitas']);
+    expect(names).toEqual(['AcmeInactivo', 'Adeslas', 'Bupa', 'Sanitas']);
   });
 
   it('edita un pagador existente', async () => {
@@ -133,7 +170,8 @@ describe('PayersManager (DX-153)', () => {
     mockedUpdate.mockResolvedValue({ ...sanitas, name: 'Sanitas Colombia' });
     render(<PayersManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Pagadores' });
-    await user.click(within(table).getByRole('button', { name: 'Editar «Sanitas»' }));
+    // La fila abre la edición.
+    await user.click(within(table).getByRole('button', { name: 'Sanitas' }));
     const dialog = await screen.findByRole('dialog');
     const name = within(dialog).getByLabelText('Nombre');
     await user.clear(name);
@@ -154,16 +192,17 @@ describe('PayersManager (DX-153)', () => {
     render(<PayersManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Pagadores' });
 
-    await user.click(within(table).getByRole('button', { name: 'Desactivar «Sanitas»' }));
+    await rowAction(user, 'Sanitas', 'Desactivar');
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'payer-1', { active: false }));
-    expect(await within(table).findByRole('button', { name: 'Activar «Sanitas»' })).toBeInTheDocument();
+    // Sanitas pasa a llevar la marca de inactivo, como Acme.
+    await waitFor(() => expect(within(table).getAllByText('Inactivo')).toHaveLength(2));
 
     mockedUpdate.mockRejectedValueOnce(new ApiError(500, 'Caído'));
-    await user.click(within(table).getByRole('button', { name: 'Activar «Acme»' }));
+    await rowAction(user, 'Acme', 'Reactivar');
     await waitFor(() => expect(mockedNotify).toHaveBeenCalledTimes(1));
     expect(mockedNotify.mock.calls[0][0]).toBe('No pudimos cambiar el estado de «Acme».');
     expect(mockedNotify.mock.calls[0][1]).toEqual({ onRetry: expect.any(Function) });
-    expect(within(table).getByRole('button', { name: 'Activar «Acme»' })).toBeInTheDocument();
+    expect(within(table).getAllByText('Inactivo')).toHaveLength(2);
   });
 
   it('retira con confirmación', async () => {
@@ -171,9 +210,9 @@ describe('PayersManager (DX-153)', () => {
     mockedList.mockResolvedValue([sanitas]);
     mockedDelete.mockResolvedValue(undefined);
     render(<PayersManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Pagadores' });
+    await screen.findByRole('table', { name: 'Pagadores' });
 
-    await user.click(within(table).getByRole('button', { name: 'Retirar «Sanitas»' }));
+    await rowAction(user, 'Sanitas', 'Retirar');
     await user.click(await screen.findByRole('button', { name: 'Retirar pagador' }));
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'payer-1'));
     await waitFor(() =>
@@ -190,7 +229,7 @@ describe('PayersManager (DX-153)', () => {
     render(<PayersManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Pagadores' });
 
-    await user.click(within(table).getByRole('button', { name: 'Retirar «Sanitas»' }));
+    await rowAction(user, 'Sanitas', 'Retirar');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Retirar pagador' }));
 

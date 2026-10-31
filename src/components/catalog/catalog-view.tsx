@@ -13,39 +13,25 @@ import {
 import { Plus, Pencil, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { NativeSelect } from '@/components/ui/native-select';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
-import {
-  AsyncSection,
-  TableSkeleton,
-} from '@/components/shared/async-section';
+import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
-import { RowActions } from '@/components/shared/row-actions';
-import {
-  ListToolbar,
-  ResultCount,
-  toolbarFieldClass,
-} from '@/components/shared/list-toolbar';
+import type { RowAction } from '@/components/shared/row-actions';
+import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { notifyError } from '@/components/errors/notify';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
-import { cn } from '@/lib/utils';
 import { formatAmount, formatCurrency } from '@/lib/format/currency';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { clinicBaseCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 
 type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
 
@@ -116,7 +102,7 @@ const copy = {
   filterKindLabel: 'Filtrar por tipo',
   filterStatusLabel: 'Filtrar por estado',
   filterAll: 'Todos los tipos',
-  filterAllStatuses: 'Activos e inactivos',
+  filterAllStatuses: 'Todos los estados',
   filterActive: 'Solo activos',
   filterInactive: 'Solo inactivos',
   countNoun: 'ítem',
@@ -130,14 +116,14 @@ const copy = {
   colCode: 'Código',
   colPrice: 'Precio',
   colStatus: 'Estado',
-  colActions: 'Acciones',
   editAction: 'Editar',
   deactivate: 'Desactivar',
   activate: 'Activar',
   inactive: 'Inactivo',
-  active: 'Activo',
+  // Un procedimiento sin precio entra en un plan a 0: se señala en warning. Un
+  // diagnóstico no se cobra, así que su «sin precio» es lo normal y va en «—».
+  noPrice: 'Sin precio',
   priceFallback: '—',
-  categoryFallback: '',
 };
 
 /**
@@ -167,9 +153,23 @@ const DEFAULT_COLOR = '#0E7490';
  * siempre en USD). Mientras no se sabe la moneda — cargando, o si las sedes no
  * cargaron — el importe va sin símbolo: nunca con una moneda que no es la suya.
  */
-function formatPrice(price: number | null, currency: string | null | undefined): string {
-  if (price == null) return copy.priceFallback;
+function formatPrice(price: number, currency: string | null | undefined): string {
   return currency ? formatCurrency(price, currency) : formatAmount(price);
+}
+
+/** La celda de precio: importe, «Sin precio» (procedimiento) o nada (diagnóstico). */
+function PriceCell({
+  item,
+  currency,
+  fallback,
+}: {
+  item: DentalCatalogItem;
+  currency: string | null;
+  fallback: React.ReactNode;
+}) {
+  if (item.defaultPrice != null) return <>{formatPrice(item.defaultPrice, currency)}</>;
+  if (item.kind === 'PROCEDURE') return <Badge variant="warning">{copy.noPrice}</Badge>;
+  return <>{fallback}</>;
 }
 
 type KindFilter = 'ALL' | CatalogKind;
@@ -485,6 +485,79 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
 
   const isEditing = editingItem !== null;
 
+  // Línea de soporte bajo el nombre = la categoría (la especialidad), siempre;
+  // el tipo vive solo en su columna. En el teléfono: nombre y precio en la
+  // línea 1; categoría · tipo · «Inactivo» en la 2; el código queda en la ficha.
+  const columns: DataListColumn<DentalCatalogItem>[] = [
+    {
+      id: 'name',
+      header: copy.colName,
+      mobile: 'primary',
+      cell: (item) => (
+        <span className="flex flex-col">
+          {item.labelEs}
+          {item.category ? (
+            <span className="t-caption font-normal text-muted">{item.category}</span>
+          ) : null}
+        </span>
+      ),
+      mobileCell: (item) => item.labelEs,
+    },
+    {
+      id: 'kind',
+      header: copy.colKind,
+      cell: (item) => KIND_LABELS[item.kind],
+      // En la tarjeta la categoría no tiene línea propia: va delante del tipo.
+      mobileCell: (item) =>
+        item.category ? `${item.category} · ${KIND_LABELS[item.kind]}` : KIND_LABELS[item.kind],
+      cellClassName: 'text-muted',
+    },
+    {
+      id: 'code',
+      header: copy.colCode,
+      mobile: 'hidden',
+      cell: (item) => <span className="t-id text-muted">{item.code}</span>,
+    },
+    {
+      id: 'price',
+      header: copy.colPrice,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (item) => <PriceCell item={item} currency={currency} fallback={copy.priceFallback} />,
+      mobileCell: (item) =>
+        item.defaultPrice == null && item.kind === 'DIAGNOSIS' ? null : (
+          <PriceCell item={item} currency={currency} fallback={null} />
+        ),
+    },
+    {
+      id: 'status',
+      header: copy.colStatus,
+      // Solo lo anómalo lleva chip: un «Activo» verde en cada fila es ruido.
+      cell: (item) => (item.active ? null : <Badge variant="neutral">{copy.inactive}</Badge>),
+    },
+  ];
+
+  function rowActions(item: DentalCatalogItem): RowAction[] {
+    return [
+      {
+        label: copy.editAction,
+        icon: <Pencil />,
+        onSelect: () => openEdit(item),
+      },
+      {
+        // No hay DELETE en el catálogo a propósito: un ítem referenciado por un
+        // odontograma o un plan no puede desaparecer sin romper esa historia.
+        // Desactivar lo saca de los selectores y conserva el registro; por eso
+        // no va marcado como destructivo.
+        label: item.active ? copy.deactivate : copy.activate,
+        icon: item.active ? <EyeOff /> : <Eye />,
+        separatorBefore: true,
+        disabled: togglingId === item.id,
+        onSelect: () => void handleToggleActive(item),
+      },
+    ];
+  }
+
   return (
     <>
       <PageHeader
@@ -510,14 +583,14 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
             </Button>
           }
         >
-          <select
+          <NativeSelect
             aria-label={copy.filterKindLabel}
             value={kindFilter}
             onChange={(e) => {
               setKindFilter(e.target.value as KindFilter);
               setPage(1);
             }}
-            className={cn(toolbarFieldClass, 'sm:w-48')}
+            className="sm:w-48"
           >
             <option value="ALL">{copy.filterAll}</option>
             {KIND_OPTIONS.map((opt) => (
@@ -525,32 +598,34 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
                 {opt.label}
               </option>
             ))}
-          </select>
-          <select
+          </NativeSelect>
+          <NativeSelect
             aria-label={copy.filterStatusLabel}
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value as StatusFilter);
               setPage(1);
             }}
-            className={cn(toolbarFieldClass, 'sm:w-48')}
+            className="sm:w-48"
           >
             <option value="ALL">{copy.filterAllStatuses}</option>
             <option value="ACTIVE">{copy.filterActive}</option>
             <option value="INACTIVE">{copy.filterInactive}</option>
-          </select>
+          </NativeSelect>
         </ListToolbar>
 
         <FormModal
           open={showForm}
           onOpenChange={handleFormOpenChange}
           title={isEditing ? copy.editTitle : copy.createTitle}
-          description={copy.formDescription}
+          // Solo al crear: al editar, «Crea un procedimiento…» describía otra cosa.
+          description={isEditing ? undefined : copy.formDescription}
           onSubmit={handleSubmit}
           submitLabel={isEditing ? copy.editSubmit : copy.submit}
           submitting={saving}
           error={formError}
           size="lg"
+          touchTargets
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField htmlFor="catalog-name" label={copy.nameLabel}>
@@ -567,19 +642,18 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
               label={copy.kindLabel}
               hint={copy.kindHint}
             >
-              <select
+              <NativeSelect
                 id="catalog-kind"
                 required
                 value={kind}
                 onChange={(e) => setKind(e.target.value as CatalogKind)}
-                className={toolbarFieldClass}
               >
                 {KIND_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label} ({opt.example})
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FormField>
           </div>
 
@@ -646,22 +720,13 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
             </FormField>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="catalog-allow-discount"
-              className="flex min-h-11 items-center gap-2 text-sm text-ink md:min-h-0"
-            >
-              <input
-                id="catalog-allow-discount"
-                type="checkbox"
-                checked={allowDiscount}
-                onChange={(e) => setAllowDiscount(e.target.checked)}
-                className="size-4 accent-primary"
-              />
-              {copy.allowDiscountLabel}
-            </label>
-            <p className="text-xs text-muted">{copy.allowDiscountHint}</p>
-          </div>
+          <Checkbox
+            id="catalog-allow-discount"
+            checked={allowDiscount}
+            onChange={(e) => setAllowDiscount(e.target.checked)}
+            label={copy.allowDiscountLabel}
+            description={copy.allowDiscountHint}
+          />
         </FormModal>
 
         {currencyUnknown ? (
@@ -702,83 +767,22 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
           }
           skeleton={<TableSkeleton rows={5} />}
         >
-          <Card className="overflow-hidden p-0">
-            <Table aria-label={copy.tableLabel}>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>{copy.colName}</TableHead>
-                  <TableHead>{copy.colKind}</TableHead>
-                  <TableHead>{copy.colCode}</TableHead>
-                  <TableHead className="text-right">{copy.colPrice}</TableHead>
-                  <TableHead>{copy.colStatus}</TableHead>
-                  <TableHead className="w-px text-right">
-                    <span className="sr-only">{copy.colActions}</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell data-label={copy.colName}>
-                      <span className="flex items-center gap-2.5 font-medium text-ink">
-                        <span
-                          aria-hidden
-                          className="size-2.5 shrink-0 rounded-full ring-1 ring-inset ring-ink/10"
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <span className="flex flex-col">
-                          {item.labelEs}
-                          {item.category ? (
-                            <span className="text-xs font-normal text-muted">
-                              {item.category}
-                            </span>
-                          ) : null}
-                        </span>
-                      </span>
-                    </TableCell>
-                    <TableCell data-label={copy.colKind}>
-                      <Badge variant="muted">{KIND_LABELS[item.kind]}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted tabular-nums" data-label={copy.colCode}>
-                      {item.code}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colPrice}>
-                      {formatPrice(item.defaultPrice, currency)}
-                    </TableCell>
-                    <TableCell data-label={copy.colStatus}>
-                      <Badge variant={item.active ? 'success' : 'muted'}>
-                        {item.active ? copy.active : copy.inactive}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right" data-label={copy.colActions}>
-                      <RowActions
-                        label={copy.actionsFor(item.labelEs)}
-                        busy={togglingId === item.id}
-                        actions={[
-                          {
-                            label: copy.editAction,
-                            icon: <Pencil />,
-                            onSelect: () => openEdit(item),
-                          },
-                          {
-                            // No hay DELETE en el catálogo a propósito: un ítem
-                            // referenciado por un odontograma o un plan no puede
-                            // desaparecer sin romper esa historia. Desactivar lo
-                            // saca de los selectores y conserva el registro; por
-                            // eso no va marcado como destructivo.
-                            label: item.active ? copy.deactivate : copy.activate,
-                            icon: item.active ? <EyeOff /> : <Eye />,
-                            separatorBefore: true,
-                            onSelect: () => void handleToggleActive(item),
-                          },
-                        ]}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          <DataList
+            label={copy.tableLabel}
+            rows={items}
+            columns={columns}
+            getRowKey={(item) => item.id}
+            onRowClick={openEdit}
+            leading={(item) => (
+              <span
+                aria-hidden
+                className="size-2.5 shrink-0 rounded-full ring-1 ring-inset ring-border"
+                style={{ backgroundColor: item.color }}
+              />
+            )}
+            rowActions={rowActions}
+            getRowLabel={(item) => item.labelEs}
+          />
         </AsyncSection>
 
         <Pagination

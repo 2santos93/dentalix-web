@@ -13,8 +13,10 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { notifyError } from '@/components/errors/notify';
+import type { RowAction } from '@/components/shared/row-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { PayerFormModal } from './payer-form-modal';
 import { payerTypeLabel } from './payer-labels';
 
@@ -30,15 +32,10 @@ const copy = {
   tableLabel: 'Pagadores',
   colName: 'Nombre',
   colType: 'Tipo',
-  colStatus: 'Estado',
-  colActions: 'Acciones',
-  active: 'Activo',
   inactive: 'Inactivo',
-  edit: 'Editar',
   deactivate: 'Desactivar',
-  activate: 'Activar',
+  activate: 'Reactivar',
   remove: 'Retirar',
-  actionFor: (action: string, name: string) => `${action} «${name}»`,
   toggleError: (name: string) => `No pudimos cambiar el estado de «${name}».`,
   removeTitle: (name: string) => `¿Retirar «${name}»?`,
   removeDescription:
@@ -56,7 +53,8 @@ interface PayersManagerProps {
 /**
  * Gestión del catálogo de pagadores en /settings/pagadores (DX-153). Crear,
  * editar, desactivar (sale de los selectores) y retirar (borrado lógico; la API
- * lo rechaza con 409 si hay coberturas vivas).
+ * lo rechaza con 409 si hay coberturas vivas). La fila abre la edición; el
+ * resto de acciones van en su «⋯».
  */
 export function PayersManager({ token, allowed }: PayersManagerProps) {
   const [payers, setPayers] = useState<Payer[]>([]);
@@ -148,72 +146,63 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
     }
   }
 
-  function actions(payer: Payer) {
-    const toggleLabel = payer.active ? copy.deactivate : copy.activate;
-    return (
-      <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="max-md:h-11"
-          onClick={() => openModal(payer)}
-          aria-label={copy.actionFor(copy.edit, payer.name)}
-        >
-          {copy.edit}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="max-md:h-11"
-          loading={pendingId === payer.id}
-          onClick={() => void toggleActive(payer)}
-          aria-label={copy.actionFor(toggleLabel, payer.name)}
-        >
-          {toggleLabel}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="max-md:h-11"
-          onClick={() => {
-            setRemoveError(null);
-            setRemoving(payer);
-          }}
-          aria-label={copy.actionFor(copy.remove, payer.name)}
-        >
-          {copy.remove}
-        </Button>
-      </div>
-    );
+  function rowActions(payer: Payer): RowAction[] {
+    const busy = pendingId === payer.id;
+    return [
+      {
+        label: payer.active ? copy.deactivate : copy.activate,
+        onSelect: () => void toggleActive(payer),
+        disabled: busy,
+      },
+      {
+        label: copy.remove,
+        destructive: true,
+        separatorBefore: true,
+        disabled: busy,
+        onSelect: () => {
+          setRemoveError(null);
+          setRemoving(payer);
+        },
+      },
+    ];
   }
 
-  function status(payer: Payer) {
-    return (
-      <Badge variant={payer.active ? 'success' : 'muted'}>
-        {payer.active ? copy.active : copy.inactive}
-      </Badge>
-    );
-  }
+  const columns: DataListColumn<Payer>[] = [
+    {
+      id: 'name',
+      header: copy.colName,
+      mobile: 'primary',
+      // El estado solo se pinta cuando es la excepción: un «Activo» verde en
+      // cada fila no dice nada (critique-settings, pagadores P2).
+      cell: (p) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate">{p.name}</span>
+          {p.active ? null : <Badge variant="neutral">{copy.inactive}</Badge>}
+        </span>
+      ),
+    },
+    { id: 'type', header: copy.colType, cell: (p) => payerTypeLabel(p.type) },
+  ];
+
+  const isEmpty = !loading && !error && payers.length === 0;
+  const newButton = (
+    <Button ref={newButtonRef} type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
+      <Plus aria-hidden />
+      {copy.newPayer}
+    </Button>
+  );
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted" aria-live="polite">
-          {loading || error ? '' : copy.count(payers.length)}
-        </p>
-        <Button
-          ref={newButtonRef}
-          type="button"
-          onClick={() => openModal(null)}
-          className="w-full sm:w-auto"
-        >
-          <Plus aria-hidden />
-          {copy.newPayer}
-        </Button>
-      </div>
+    <div className="flex max-w-[720px] flex-col gap-3">
+      {/* Lista vacía: sin «0 pagadores» y la acción dentro del estado vacío. */}
+      {isEmpty ? null : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="t-body text-muted" aria-live="polite">
+            {loading || error ? '' : copy.count(payers.length)}
+          </p>
+          {newButton}
+        </div>
+      )}
 
       <AsyncSection
         loading={loading}
@@ -223,54 +212,17 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
         emptyTitle={copy.empty}
         emptyDescription={copy.emptyHint}
         emptyIcon={<Landmark aria-hidden />}
+        emptyAction={newButton}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colName}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colType}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {payers.map((p) => (
-              <tr key={p.id} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-3 font-medium">{p.name}</td>
-                <td className="px-4 py-3">{payerTypeLabel(p.type)}</td>
-                <td className="px-4 py-3">{status(p)}</td>
-                <td className="px-4 py-3">{actions(p)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {payers.map((p) => (
-            <li
-              key={p.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="min-w-0 break-words font-medium">{p.name}</span>
-                {status(p)}
-              </div>
-              <p className="text-xs text-muted">{payerTypeLabel(p.type)}</p>
-              {actions(p)}
-            </li>
-          ))}
-        </ul>
+        <DataList
+          label={copy.tableLabel}
+          rows={payers}
+          columns={columns}
+          getRowKey={(p) => p.id}
+          onRowClick={(p) => openModal(p)}
+          rowActions={rowActions}
+          getRowLabel={(p) => p.name}
+        />
       </AsyncSection>
 
       <PayerFormModal

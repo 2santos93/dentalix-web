@@ -62,6 +62,12 @@ const base: PriceList = {
 const sura: PriceList = { ...base, id: 'pl-2', name: 'Sura 2026', locationId: null, itemCount: 1 };
 const vieja: PriceList = { ...base, id: 'pl-3', name: 'Antigua', itemCount: 0, active: false };
 
+/** Abre el «⋯» de la fila y elige la acción. */
+async function rowAction(user: ReturnType<typeof setupUser>, row: string, action: string) {
+  await user.click(screen.getByRole('button', { name: `Acciones de ${row}` }));
+  await user.click(await screen.findByRole('menuitem', { name: action }));
+}
+
 describe('PriceListsManager (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -79,7 +85,7 @@ describe('PriceListsManager (DX-105)', () => {
     expect(mockedList).not.toHaveBeenCalled();
   });
 
-  it('lista con moneda, sede, número de precios y estado, y enlaza a los precios', async () => {
+  it('lista con moneda, sede y número de precios; la fila enlaza a los precios', async () => {
     render(<PriceListsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Listas de precios' });
     const rows = within(table).getAllByRole('row');
@@ -87,12 +93,13 @@ describe('PriceListsManager (DX-105)', () => {
     expect(rows[1]).toHaveTextContent('COP');
     expect(rows[1]).toHaveTextContent('Sede Norte');
     expect(rows[1]).toHaveTextContent('12');
-    expect(rows[1]).toHaveTextContent('Activa');
+    // El estado solo se ve cuando es la excepción.
+    expect(rows[1]).not.toHaveTextContent('Activa');
     expect(rows[2]).toHaveTextContent('Toda la clínica');
     expect(rows[3]).toHaveTextContent('Inactiva');
     expect(screen.getByText('3 listas')).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledWith('tok', { includeInactive: true });
-    expect(within(table).getByRole('link', { name: 'Precios «Tarifas Norte»' })).toHaveAttribute(
+    expect(within(table).getByRole('link', { name: 'Tarifas Norte' })).toHaveAttribute(
       'href',
       '/settings/listas-de-precios/pl-1',
     );
@@ -102,6 +109,9 @@ describe('PriceListsManager (DX-105)', () => {
     mockedList.mockResolvedValue([]);
     render(<PriceListsManager token="tok" allowed />);
     expect(await screen.findByText('Todavía no hay listas de precios.')).toBeInTheDocument();
+    // Vacía: sin «0 listas»; la acción vive dentro del estado vacío.
+    expect(screen.queryByText('0 listas')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Nueva lista' })).toHaveLength(1);
   });
 
   it('error de carga con reintento', async () => {
@@ -149,8 +159,8 @@ describe('PriceListsManager (DX-105)', () => {
     const user = setupUser();
     mockedUpdate.mockResolvedValue({ ...base, locationId: null });
     render(<PriceListsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Listas de precios' });
-    await user.click(within(table).getByRole('button', { name: 'Editar «Tarifas Norte»' }));
+    await screen.findByRole('table', { name: 'Listas de precios' });
+    await rowAction(user, 'Tarifas Norte', 'Editar datos');
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByLabelText('Moneda')).toBeDisabled();
     expect(within(dialog).getByText(/La lista ya tiene precios/)).toBeInTheDocument();
@@ -169,8 +179,8 @@ describe('PriceListsManager (DX-105)', () => {
     const user = setupUser();
     mockedUpdate.mockResolvedValue({ ...vieja, currency: 'EUR' });
     render(<PriceListsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Listas de precios' });
-    await user.click(within(table).getByRole('button', { name: 'Editar «Antigua»' }));
+    await screen.findByRole('table', { name: 'Listas de precios' });
+    await rowAction(user, 'Antigua', 'Editar datos');
     const dialog = await screen.findByRole('dialog');
     await waitFor(() => expect(within(dialog).getByLabelText('Moneda')).toBeEnabled());
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'EUR');
@@ -189,8 +199,8 @@ describe('PriceListsManager (DX-105)', () => {
     const message = 'Ya existe una lista de precios activa en esa sede.';
     mockedUpdate.mockRejectedValue(new ApiError(409, message));
     render(<PriceListsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Listas de precios' });
-    await user.click(within(table).getByRole('button', { name: 'Editar «Antigua»' }));
+    await screen.findByRole('table', { name: 'Listas de precios' });
+    await rowAction(user, 'Antigua', 'Editar datos');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
     expect(await within(dialog).findByText(message)).toBeInTheDocument();
@@ -202,16 +212,17 @@ describe('PriceListsManager (DX-105)', () => {
     render(<PriceListsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Listas de precios' });
 
-    await user.click(within(table).getByRole('button', { name: 'Desactivar «Tarifas Norte»' }));
+    const inactiveCount = within(table).getAllByText('Inactiva').length;
+    await rowAction(user, 'Tarifas Norte', 'Desactivar');
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'pl-1', { active: false }));
-    expect(await within(table).findByRole('button', { name: 'Activar «Tarifas Norte»' })).toBeInTheDocument();
+    await waitFor(() => expect(within(table).getAllByText('Inactiva')).toHaveLength(inactiveCount + 1));
 
     mockedUpdate.mockRejectedValueOnce(new ApiError(409, 'Ya hay una lista activa en esa sede.'));
-    await user.click(within(table).getByRole('button', { name: 'Activar «Antigua»' }));
+    await rowAction(user, 'Antigua', 'Reactivar');
     await waitFor(() => expect(mockedNotify).toHaveBeenCalledTimes(1));
     expect(mockedNotify.mock.calls[0][0]).toBe('Ya hay una lista activa en esa sede.');
     expect(mockedNotify.mock.calls[0][1]).toEqual({ onRetry: expect.any(Function) });
-    expect(within(table).getByRole('button', { name: 'Activar «Antigua»' })).toBeInTheDocument();
+    expect(within(table).getAllByText('Inactiva')).toHaveLength(inactiveCount + 1);
   });
 
   it('retira con confirmación y el foco pasa a «Nueva lista»', async () => {
@@ -219,9 +230,9 @@ describe('PriceListsManager (DX-105)', () => {
     mockedList.mockResolvedValue([vieja]);
     mockedDelete.mockResolvedValue(undefined);
     render(<PriceListsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Listas de precios' });
+    await screen.findByRole('table', { name: 'Listas de precios' });
 
-    await user.click(within(table).getByRole('button', { name: 'Retirar «Antigua»' }));
+    await rowAction(user, 'Antigua', 'Retirar');
     await user.click(await screen.findByRole('button', { name: 'Retirar lista' }));
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'pl-3'));
     await waitFor(() =>
@@ -237,7 +248,7 @@ describe('PriceListsManager (DX-105)', () => {
     render(<PriceListsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Listas de precios' });
 
-    await user.click(within(table).getByRole('button', { name: 'Retirar «Sura 2026»' }));
+    await rowAction(user, 'Sura 2026', 'Retirar');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Retirar lista' }));
     expect(await within(dialog).findByText(message)).toBeInTheDocument();

@@ -166,7 +166,7 @@ export function BulkDiscountModal({
 
       <section aria-label={bulkDiscountCopy.previewLabel} className="flex flex-col gap-2">
         <h3 className="text-sm font-medium text-ink">{bulkDiscountCopy.previewLabel}</h3>
-        <ul className="divide-y divide-hairline rounded-lg border border-border">
+        <ul className="divide-y divide-border-subtle rounded-lg border border-border">
           {preview.map(({ item, discount }) => (
             <li
               key={item.id}

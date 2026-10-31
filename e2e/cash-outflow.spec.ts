@@ -148,7 +148,7 @@ async function openExpenses(page: Page): Promise<void> {
 
 /** La lista visible de «Gastos»: la tabla en escritorio, las tarjetas en móvil. */
 function expensesListing(page: Page, narrow: boolean): Locator {
-  return narrow ? page.getByRole('list', { name: 'Gastos' }) : page.getByRole('table', { name: /^Gastos del periodo/ });
+  return page.getByRole(narrow ? 'list' : 'table', { name: /^Gastos del periodo/ });
 }
 
 /** Pestaña «Turnos» de la Caja con la caja de recepción ya abierta (por la API). */
@@ -264,10 +264,16 @@ for (const viewport of [
       await expect(page.getByText('Caja cerrada: el arqueo quedó guardado.')).toBeVisible({ timeout: 15_000 });
 
       // El informe imprimible: columna «Salidas», sección y la anulada aparte.
-      const row = page.getByRole('table', { name: 'Turnos de caja' }).getByRole('row').filter({ hasText: 'Cerrada' }).first();
+      const row = page
+        .getByRole(narrow ? 'list' : 'table', { name: 'Turnos de caja' })
+        .getByRole(narrow ? 'listitem' : 'row')
+        .filter({ hasText: 'Cerrada' })
+        .first();
+      // El informe de un cierre va en el «⋯» de su fila.
+      await row.getByRole('button', { name: /^Acciones de turno/ }).click();
       const [report] = await Promise.all([
         context.waitForEvent('page'),
-        row.getByRole('link', { name: /Informe de cierre/ }).click(),
+        page.getByRole('menuitem', { name: 'Informe de cierre' }).click(),
       ]);
       await report.setViewportSize({ width: viewport.width, height: viewport.height });
       const printed = report.getByTestId('cash-session-report');
@@ -340,7 +346,7 @@ for (const viewport of [
       await expect(form.getByLabel('Medio de pago')).toHaveValue('CASH');
       await form.getByLabel('Desde mi caja abierta').check();
       // Desde la caja el pago es de hoy: la fecha no se edita.
-      await expect(form.getByLabel('Fecha del pago')).toBeDisabled();
+      await expect(form.getByRole('group', { name: 'Fecha del pago' })).toHaveAttribute('aria-disabled', 'true');
       if (narrow) await expectDialogInsideViewport(page, form);
       await form.getByRole('button', { name: 'Registrar gasto' }).click();
       await expect(form).toBeHidden({ timeout: 15_000 });
@@ -353,7 +359,7 @@ for (const viewport of [
       await expect(listing).toContainText('Pagado');
 
       // El pago enlaza con la caja de la que salió.
-      await listing.getByRole('button', { name: /^Ver el gasto de Mensajería del / }).click();
+      await listing.getByRole('button', { name: /^Mensajería/ }).click();
       const detail = page.getByRole('dialog', { name: `Mensajería · ${supplier}` });
       const mine = await currentSession(page.request, admin);
       await expect(detail.getByRole('link', { name: /Salida de caja/ })).toHaveAttribute(
@@ -418,7 +424,7 @@ for (const viewport of [
       await expect(page.getByText('1 gasto', { exact: true })).toBeVisible({ timeout: 15_000 });
       const listing = expensesListing(page, narrow);
       await expect(listing).toContainText(supplier, { timeout: 15_000 });
-      await listing.getByRole('button', { name: /^Ver el gasto de Papelería del / }).click();
+      await listing.getByRole('button', { name: /^Papelería/ }).click();
       const detail = page.getByRole('dialog', { name: `Papelería · ${supplier}` });
       await expect(detail.getByRole('link', { name: /Salida de caja/ })).toHaveAttribute('href', `/caja/turnos/${shift.id}`, {
         timeout: 15_000,

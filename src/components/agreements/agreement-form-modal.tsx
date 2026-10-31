@@ -17,7 +17,10 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { AGREEMENT_KIND_LABELS } from './agreement-labels';
 
 const copy = {
@@ -26,7 +29,7 @@ const copy = {
   description:
     'Un convenio liga un pagador con un descuento porcentual o con una lista de precios. Se asigna al paciente desde su ficha.',
   name: 'Nombre',
-  namePlaceholder: 'Por ejemplo, Convenio Sanitas',
+  namePlaceholder: 'Por ejemplo, Seguros Horizonte −15 %',
   payer: 'Pagador',
   choosePayer: 'Elige un pagador',
   kind: 'Tipo',
@@ -66,10 +69,6 @@ const copy = {
 const KINDS = Object.keys(AGREEMENT_KIND_LABELS) as AgreementKind[];
 /** Tope de la API: categorías distintas por convenio. */
 const MAX_CATEGORY_ROWS = 50;
-
-// <select> nativo con el aspecto del átomo Input.
-const selectClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50 max-md:h-11';
 
 interface CategoryRow {
   key: number;
@@ -265,6 +264,7 @@ export function AgreementFormModal({
       submitting={submitting}
       error={error}
       size="lg"
+      touchTargets
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="agreement-name" label={copy.name} error={errors.name}>
@@ -283,7 +283,7 @@ export function AgreementFormModal({
           />
         </FormField>
         <FormField htmlFor="agreement-payer" label={copy.payer} error={errors.payer}>
-          <select
+          <NativeSelect
             id="agreement-payer"
             value={payerId}
             onChange={(e) => {
@@ -292,7 +292,6 @@ export function AgreementFormModal({
             }}
             aria-invalid={errors.payer ? true : undefined}
             aria-describedby={errors.payer ? fieldErrorId('agreement-payer') : undefined}
-            className={selectClass}
           >
             <option value="">{copy.choosePayer}</option>
             {payerOptions.map((p) => (
@@ -300,26 +299,25 @@ export function AgreementFormModal({
                 {p.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
       </div>
 
       <FormField htmlFor="agreement-kind" label={copy.kind}>
-        <select
+        <NativeSelect
           id="agreement-kind"
           value={kind}
           onChange={(e) => {
             setKind(e.target.value as AgreementKind);
             setErrors({});
           }}
-          className={selectClass}
         >
           {KINDS.map((k) => (
             <option key={k} value={k}>
               {AGREEMENT_KIND_LABELS[k]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
 
       {kind === 'PERCENT_DISCOUNT' ? (
@@ -347,19 +345,18 @@ export function AgreementFormModal({
           </FormField>
 
           <fieldset className="flex flex-col gap-3">
-            <legend className="text-sm font-medium text-ink">{copy.byCategory}</legend>
-            <p className="text-xs text-muted">{copy.byCategoryHint}</p>
+            <legend className="t-label text-ink">{copy.byCategory}</legend>
+            <p className="t-caption text-muted">{copy.byCategoryHint}</p>
             {rows.map((row, index) => (
               <div key={row.key} className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <label htmlFor={`agreement-cat-${row.key}`} className="text-xs text-muted">
+                  <label htmlFor={`agreement-cat-${row.key}`} className="t-caption text-muted">
                     {copy.category} {index + 1}
                   </label>
-                  <select
+                  <NativeSelect
                     id={`agreement-cat-${row.key}`}
                     value={row.category}
                     onChange={(e) => updateRow(row.key, { category: e.target.value })}
-                    className={selectClass}
                   >
                     <option value="">{copy.chooseCategory}</option>
                     {categoryChoices(row.category).map((c) => (
@@ -367,10 +364,10 @@ export function AgreementFormModal({
                         {c}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div className="flex flex-col gap-1 sm:w-32">
-                  <label htmlFor={`agreement-cat-pct-${row.key}`} className="text-xs text-muted">
+                  <label htmlFor={`agreement-cat-pct-${row.key}`} className="t-caption text-muted">
                     {copy.categoryPercent} {index + 1}
                   </label>
                   <Input
@@ -380,14 +377,13 @@ export function AgreementFormModal({
                     value={row.percent}
                     placeholder="20"
                     onChange={(e) => updateRow(row.key, { percent: e.target.value })}
-                    className="max-md:h-11"
                   />
                 </div>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="max-md:h-11 max-md:w-full"
+                  className="max-sm:w-full"
                   aria-label={copy.removeCategory(index + 1)}
                   onClick={() => {
                     setRows((prev) => prev.filter((r) => r.key !== row.key));
@@ -404,13 +400,13 @@ export function AgreementFormModal({
               </InlineError>
             ) : null}
             {categories.length === 0 ? (
-              <p className="text-xs text-muted">{copy.noCategories}</p>
+              <p className="t-caption text-muted">{copy.noCategories}</p>
             ) : (
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="sm"
-                className="self-start max-md:h-11"
+                className="self-start"
                 disabled={!canAddRow}
                 onClick={() =>
                   setRows((prev) => [...prev, { key: nextKey.current++, category: '', percent: '' }])
@@ -429,7 +425,7 @@ export function AgreementFormModal({
           hint={copy.priceListHint}
           error={errors.priceList}
         >
-          <select
+          <NativeSelect
             id="agreement-price-list"
             value={priceListId}
             onChange={(e) => {
@@ -438,7 +434,6 @@ export function AgreementFormModal({
             }}
             aria-invalid={errors.priceList ? true : undefined}
             aria-describedby={errors.priceList ? fieldErrorId('agreement-price-list') : undefined}
-            className={selectClass}
           >
             <option value="">{copy.choosePriceList}</option>
             {priceListOptions.map((l) => (
@@ -446,16 +441,15 @@ export function AgreementFormModal({
                 {l.name} ({l.currency})
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
       )}
 
       <FormField htmlFor="agreement-location" label={copy.location}>
-        <select
+        <NativeSelect
           id="agreement-location"
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
-          className={selectClass}
         >
           <option value="">{copy.wholeClinic}</option>
           {locationOptions.map((l) => (
@@ -463,28 +457,28 @@ export function AgreementFormModal({
               {l.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="agreement-valid-from" label={copy.validFrom} hint={copy.validityHint}>
-          <Input
+          <DatePicker
             id="agreement-valid-from"
-            type="date"
-            value={validFrom}
-            onChange={(e) => {
-              setValidFrom(e.target.value);
+            value={validFrom === '' ? null : validFrom}
+            max={validTo === '' ? undefined : validTo}
+            onChange={(next) => {
+              setValidFrom(next ?? '');
               setErrors((prev) => ({ ...prev, dates: undefined }));
             }}
           />
         </FormField>
         <FormField htmlFor="agreement-valid-to" label={copy.validTo} error={errors.dates}>
-          <Input
+          <DatePicker
             id="agreement-valid-to"
-            type="date"
-            value={validTo}
-            onChange={(e) => {
-              setValidTo(e.target.value);
+            value={validTo === '' ? null : validTo}
+            min={validFrom === '' ? undefined : validFrom}
+            onChange={(next) => {
+              setValidTo(next ?? '');
               setErrors((prev) => ({ ...prev, dates: undefined }));
             }}
             aria-invalid={errors.dates ? true : undefined}
@@ -494,19 +488,13 @@ export function AgreementFormModal({
       </div>
 
       {editing ? (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="agreement-active" className="flex min-h-11 items-center gap-2 text-sm text-ink">
-            <input
-              id="agreement-active"
-              type="checkbox"
-              checked={active}
-              onChange={(e) => setActive(e.target.checked)}
-              className="size-4 accent-primary"
-            />
-            {copy.active}
-          </label>
-          <p className="text-xs text-muted">{copy.activeHint}</p>
-        </div>
+        <Checkbox
+          id="agreement-active"
+          checked={active}
+          onChange={(e) => setActive(e.target.checked)}
+          label={copy.active}
+          description={copy.activeHint}
+        />
       ) : null}
     </FormModal>
   );

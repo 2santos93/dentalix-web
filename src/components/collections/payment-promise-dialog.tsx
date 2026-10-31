@@ -6,10 +6,10 @@ import { createPaymentPromise, type PaymentPromise } from '@/lib/collections/col
 import { todayLocal } from '@/lib/collections/presentation';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import { MoneyInput } from '@/components/shared/money-input';
 import { parseMoneyInput } from '@/lib/format/money';
-import { toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { CurrencySelect } from '@/components/shared/currency-select';
 
 export const promiseDialogCopy = {
@@ -127,18 +127,13 @@ export function PaymentPromiseDialog({
         </FormField>
         <FormField htmlFor="pp-currency" label={promiseDialogCopy.currency} error={errors.currency}>
           {options.length > 0 ? (
-            <select
-              id="pp-currency"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className={toolbarFieldClass}
-            >
+            <NativeSelect id="pp-currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {options.map((code) => (
                 <option key={code} value={code}>
                   {code}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           ) : (
             // Sin deuda conocida (la ficha de un paciente al día): todas las monedas.
             <CurrencySelect id="pp-currency" token={token} value={currency} onChange={setCurrency} />
@@ -146,14 +141,13 @@ export function PaymentPromiseDialog({
         </FormField>
       </div>
       <FormField htmlFor="pp-due" label={promiseDialogCopy.dueDate} error={errors.dueDate}>
-        <Input
+        <DatePicker
           id="pp-due"
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
+          value={dueDate || null}
+          onChange={(day) => setDueDate(day ?? '')}
+          min={today}
           aria-invalid={errors.dueDate ? true : undefined}
           aria-describedby={errors.dueDate ? fieldErrorId('pp-due') : undefined}
-          className="tabular-nums"
         />
       </FormField>
     </FormModal>

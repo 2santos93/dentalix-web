@@ -1,7 +1,6 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { ListOrdered, Lock, Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -15,8 +14,10 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { notifyError } from '@/components/errors/notify';
+import type { RowAction } from '@/components/shared/row-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { PriceListFormModal } from './price-list-form-modal';
 
 const copy = {
@@ -33,19 +34,14 @@ const copy = {
   colCurrency: 'Moneda',
   colLocation: 'Sede',
   colItems: 'Precios',
-  colStatus: 'Estado',
-  colActions: 'Acciones',
   wholeClinic: 'Toda la clínica',
   unknownLocation: 'Sede',
   items: (n: number) => (n === 1 ? '1 precio' : `${n} precios`),
-  active: 'Activa',
   inactive: 'Inactiva',
-  prices: 'Precios',
-  edit: 'Editar',
+  edit: 'Editar datos',
   deactivate: 'Desactivar',
-  activate: 'Activar',
+  activate: 'Reactivar',
   remove: 'Retirar',
-  actionFor: (action: string, name: string) => `${action} «${name}»`,
   toggleError: (name: string) => `No pudimos cambiar el estado de «${name}».`,
   removeTitle: (name: string) => `¿Retirar «${name}»?`,
   removeDescription:
@@ -63,7 +59,7 @@ interface PriceListsManagerProps {
 /**
  * Gestión de las listas de precios en /settings/listas-de-precios (DX-105).
  * Crear, editar, activar/desactivar y retirar; los precios de cada lista se
- * editan en su propia pantalla.
+ * editan en su propia pantalla, que es a donde lleva la fila.
  */
 export function PriceListsManager({ token, allowed }: PriceListsManagerProps) {
   const [lists, setLists] = useState<PriceList[]>([]);
@@ -168,85 +164,72 @@ export function PriceListsManager({ token, allowed }: PriceListsManagerProps) {
     }
   }
 
-  function actions(list: PriceList) {
-    const toggleLabel = list.active ? copy.deactivate : copy.activate;
-    return (
-      <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button
-          asChild
-          variant="secondary"
-          size="sm"
-          className="max-md:h-11"
-        >
-          <Link
-            href={`/settings/listas-de-precios/${list.id}`}
-            aria-label={copy.actionFor(copy.prices, list.name)}
-          >
-            {copy.prices}
-          </Link>
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="max-md:h-11"
-          onClick={() => openModal(list)}
-          aria-label={copy.actionFor(copy.edit, list.name)}
-        >
-          {copy.edit}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="max-md:h-11"
-          loading={pendingId === list.id}
-          onClick={() => void toggleActive(list)}
-          aria-label={copy.actionFor(toggleLabel, list.name)}
-        >
-          {toggleLabel}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="max-md:h-11"
-          onClick={() => {
-            setRemoveError(null);
-            setRemoving(list);
-          }}
-          aria-label={copy.actionFor(copy.remove, list.name)}
-        >
-          {copy.remove}
-        </Button>
-      </div>
-    );
+  function rowActions(list: PriceList): RowAction[] {
+    const busy = pendingId === list.id;
+    return [
+      { label: copy.edit, onSelect: () => openModal(list), disabled: busy },
+      {
+        label: list.active ? copy.deactivate : copy.activate,
+        onSelect: () => void toggleActive(list),
+        disabled: busy,
+      },
+      {
+        label: copy.remove,
+        destructive: true,
+        separatorBefore: true,
+        disabled: busy,
+        onSelect: () => {
+          setRemoveError(null);
+          setRemoving(list);
+        },
+      },
+    ];
   }
 
-  function status(list: PriceList) {
-    return (
-      <Badge variant={list.active ? 'success' : 'muted'}>
-        {list.active ? copy.active : copy.inactive}
-      </Badge>
-    );
-  }
+  const columns: DataListColumn<PriceList>[] = [
+    {
+      id: 'name',
+      header: copy.colName,
+      mobile: 'primary',
+      // El estado solo se pinta cuando es la excepción (critique-settings).
+      cell: (l) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate">{l.name}</span>
+          {l.active ? null : <Badge variant="neutral">{copy.inactive}</Badge>}
+        </span>
+      ),
+    },
+    { id: 'currency', header: copy.colCurrency, cell: (l) => l.currency, cellClassName: 'tabular-nums' },
+    { id: 'location', header: copy.colLocation, cell: (l) => locationLabel(l) },
+    {
+      id: 'items',
+      header: copy.colItems,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (l) => l.itemCount,
+      mobileCell: (l) => copy.items(l.itemCount),
+    },
+  ];
+
+  const isEmpty = !loading && !error && lists.length === 0;
+  const newButton = (
+    <Button ref={newButtonRef} type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
+      <Plus aria-hidden />
+      {copy.newList}
+    </Button>
+  );
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted" aria-live="polite">
-          {loading || error ? '' : copy.count(lists.length)}
-        </p>
-        <Button
-          ref={newButtonRef}
-          type="button"
-          onClick={() => openModal(null)}
-          className="w-full sm:w-auto"
-        >
-          <Plus aria-hidden />
-          {copy.newList}
-        </Button>
-      </div>
+    <div className="flex max-w-[720px] flex-col gap-3">
+      {/* Lista vacía: sin «0 listas» y la acción dentro del estado vacío. */}
+      {isEmpty ? null : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="t-body text-muted" aria-live="polite">
+            {loading || error ? '' : copy.count(lists.length)}
+          </p>
+          {newButton}
+        </div>
+      )}
 
       <AsyncSection
         loading={loading}
@@ -256,64 +239,19 @@ export function PriceListsManager({ token, allowed }: PriceListsManagerProps) {
         emptyTitle={copy.empty}
         emptyDescription={copy.emptyHint}
         emptyIcon={<ListOrdered aria-hidden />}
+        emptyAction={newButton}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colName}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colCurrency}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colLocation}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                {copy.colItems}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {lists.map((l) => (
-              <tr key={l.id} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-3 font-medium">{l.name}</td>
-                <td className="px-4 py-3 tabular-nums">{l.currency}</td>
-                <td className="px-4 py-3">{locationLabel(l)}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{l.itemCount}</td>
-                <td className="px-4 py-3">{status(l)}</td>
-                <td className="px-4 py-3">{actions(l)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {lists.map((l) => (
-            <li
-              key={l.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="min-w-0 break-words font-medium">{l.name}</span>
-                {status(l)}
-              </div>
-              <p className="text-xs text-muted">
-                {l.currency} · {locationLabel(l)} · {copy.items(l.itemCount)}
-              </p>
-              {actions(l)}
-            </li>
-          ))}
-        </ul>
+        {/* La fila abre sus precios, que es a lo que se viene; editar los
+            datos, desactivar y retirar van en el «⋯». */}
+        <DataList
+          label={copy.tableLabel}
+          rows={lists}
+          columns={columns}
+          getRowKey={(l) => l.id}
+          getRowHref={(l) => `/settings/listas-de-precios/${l.id}`}
+          rowActions={rowActions}
+          getRowLabel={(l) => l.name}
+        />
       </AsyncSection>
 
       <PriceListFormModal

@@ -117,6 +117,68 @@ describe('CatalogView', () => {
     expect(screen.getAllByRole('row')).toHaveLength(2); // cabecera + 1 ítem
   });
 
+  it('el tipo va solo en su columna; bajo el nombre, la categoría; el código en `t-id`', async () => {
+    const caries: DentalCatalogItem = { ...item1, id: 'c2', code: 'DX-CARIES', kind: 'DIAGNOSIS', labelEs: 'Caries', category: 'Diagnóstico', defaultPrice: null };
+    mockedList.mockResolvedValue(page([item1, caries]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    const row = within(table).getByRole('row', { name: /profilaxis/i });
+    expect(within(row).getAllByText('Procedimiento')).toHaveLength(1);
+    expect(within(row).getByText('PROF')).toHaveClass('t-id');
+  });
+
+  it('un procedimiento sin precio lo dice en warning; un diagnóstico sin precio no', async () => {
+    const sinPrecio: DentalCatalogItem = { ...item1, id: 'c2', code: 'RES', labelEs: 'Resina', defaultPrice: null };
+    const caries: DentalCatalogItem = { ...item1, id: 'c3', code: 'DX', kind: 'DIAGNOSIS', labelEs: 'Caries', defaultPrice: null };
+    mockedList.mockResolvedValue(page([sinPrecio, caries]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    expect(within(within(table).getByRole('row', { name: /resina/i })).getByText('Sin precio')).toBeInTheDocument();
+    const dx = within(table).getByRole('row', { name: /caries/i });
+    expect(within(dx).queryByText('Sin precio')).not.toBeInTheDocument();
+    expect(within(dx).getByText('—')).toBeInTheDocument();
+  });
+
+  it('solo los inactivos llevan chip de estado; los activos van limpios', async () => {
+    const inactivo: DentalCatalogItem = { ...item1, id: 'c2', code: 'OLD', labelEs: 'Amalgama', active: false };
+    mockedList.mockResolvedValue(page([item1, inactivo]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    expect(within(table).queryByText(/^activo$/i)).not.toBeInTheDocument();
+    expect(within(within(table).getByRole('row', { name: /amalgama/i })).getByText('Inactivo')).toBeInTheDocument();
+    expect(screen.getByLabelText(/filtrar por estado/i)).toHaveDisplayValue('Todos los estados');
+  });
+
+  it('tocar la fila abre el ítem en edición', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue(page([item1]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    await user.click(within(table).getByRole('button', { name: /^profilaxis/i }));
+    expect(await screen.findByRole('dialog', { name: 'Editar ítem' })).toBeInTheDocument();
+  });
+
+  it('en el teléfono cada ítem es una tarjeta de dos líneas, sin fila «ACCIONES»', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: true, media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      mockedList.mockResolvedValue(page([item1]));
+      render(<CatalogView token="tok" />);
+      const list = await screen.findByRole('list', { name: /catálogo/i });
+      const card = within(list).getByRole('button', { name: /^profilaxis/i });
+      expect(card).toHaveTextContent('Preventiva · Procedimiento');
+      expect(card).not.toHaveTextContent('PROF');
+      expect(within(list).queryByText(/^acciones$/i)).not.toBeInTheDocument();
+      expect(within(list).getByRole('button', { name: 'Acciones de Profilaxis' })).toBeInTheDocument();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it('pide la primera página al montar, sin filtros', async () => {
     mockedList.mockResolvedValue(page([item1]));
 
