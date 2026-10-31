@@ -3,12 +3,13 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
-import { CalendarCheck, MessageCircle, MessageCircleReply, Phone, PhoneCall } from 'lucide-react';
+import { CalendarCheck, Link2, MessageCircle, MessageCircleReply, Phone, PhoneCall } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { whatsAppUrl } from '@/lib/appointments/confirmation-message';
 import {
   createWaitlistOffer,
+  linkOfferChannels,
   listOpeningCandidates,
   moveAppointmentToOpening,
   offerMessage,
@@ -17,7 +18,9 @@ import {
   type OpeningCandidate,
   type OpeningCandidates,
   type OpeningSlot,
+  type SlotLinkOffers,
 } from '@/lib/appointments/opening-candidates';
+import { LinkOfferDialog } from './link-offer-dialog';
 import { scheduleFromWaitlist, type AppointmentWrite } from '@/lib/appointments/waitlist-api';
 import { longAppointmentDay } from '@/lib/appointments/confirmation-message';
 import { sedeTime, sedeTimeRange, type SedeClock } from '@/lib/locations/sede-clock';
@@ -87,7 +90,47 @@ export const fillOpeningCopy = {
   offerRecorded: (name: string) => `Oferta a ${name} registrada.`,
   offerError: 'No pudimos registrar la oferta. Intenta de nuevo.',
   assignError: 'No pudimos asignar el hueco. Intenta de nuevo.',
+  // DX-435: oferta con enlace (el primero que acepta se queda el hueco).
+  select: (name: string) => `Elegir a ${name} para la oferta con enlace`,
+  selectedCount: (n: number) => (n === 1 ? '1 elegido' : `${n} elegidos`),
+  sendLinkOffer: 'Enviar oferta con enlace',
+  linkTooLate: 'Faltan menos de 20 minutos: ya no da tiempo a ofrecerlo por enlace.',
+  linkNoChannel: 'Sin correo ni WhatsApp: llámalo',
+  slotOffersSent: (n: number) => `Oferta enviada (${n})`,
+  slotAcceptedBy: (name: string) => `Aceptado por ${name}`,
+  slotExpired: 'Caducado',
+  linkStates: {
+    OPEN: 'Enlace enviado',
+    ACCEPTED: 'Aceptó por enlace',
+    DECLINED: 'Rechazó el enlace',
+    EXPIRED: 'Enlace caducado',
+    TAKEN: 'Lo ocupó otro',
+  } satisfies Record<NonNullable<OpeningCandidate['linkOfferState']>, string>,
+  linkAccepted: (name: string) => `${name} aceptó el hueco por enlace.`,
 };
+
+/** DX-435: con ofertas con enlace sin responder, el panel se refresca solo. */
+export const LINK_OFFER_POLL_MS = 15_000;
+
+const LINK_STATE_VARIANT = {
+  OPEN: 'warning',
+  ACCEPTED: 'success',
+  DECLINED: 'muted',
+  EXPIRED: 'muted',
+  TAKEN: 'muted',
+} as const;
+
+/** «Oferta enviada (n)», «Aceptado por …» o «Caducado» del hueco; `null` si no hay enlaces. */
+export function slotLinkOffersLabel(summary: SlotLinkOffers | undefined): string | null {
+  if (!summary || summary.total === 0) return null;
+  if (summary.acceptedBy) {
+    return fillOpeningCopy.slotAcceptedBy(
+      `${summary.acceptedBy.firstName} ${summary.acceptedBy.lastName}`.trim(),
+    );
+  }
+  if (summary.pending > 0) return fillOpeningCopy.slotOffersSent(summary.pending);
+  return summary.expired ? fillOpeningCopy.slotExpired : null;
+}
 
 interface FillOpeningPanelProps {
   open: boolean;
@@ -148,6 +191,10 @@ export function FillOpeningPanel({
   // El grupo de resultados abierto: «Llamé» (oferta nueva por teléfono) o
   // «Anotar respuesta» (a la oferta pendiente de este hueco, p. ej. el WhatsApp).
   const [outcomeFor, setOutcomeFor] = useState<{ key: string; mode: OutcomeMode } | null>(null);
+  // DX-435: candidatos elegidos para la oferta con enlace y su modal.
+  const [selected, setSelected] = useState<string[]>([]);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const acceptedRef = React.useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,9 +218,36 @@ export function FillOpeningPanel({
   }, [token, slot, reloadKey]);
 
   const reload = () => setReloadKey((k) => k + 1);
+
+  // DX-435: mientras haya enlaces sin responder, sondeo (sin el esqueleto: los
+  // datos se quedan a la vista) para ver «Aceptado por …» sin recargar.
+  const pendingLinks = open ? (data?.linkOffers?.pending ?? 0) : 0;
+  useEffect(() => {
+    if (pendingLinks === 0) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setReloadKey((k) => k + 1);
+    }, LINK_OFFER_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [pendingLinks]);
+
+  // Alguien aceptó desde el enlace: aviso y la agenda se pone al día.
+  const acceptedBy = data?.linkOffers?.acceptedBy ?? null;
+  useEffect(() => {
+    if (!acceptedBy) return;
+    const key = `${acceptedBy.patientId}:${acceptedBy.at ?? ''}`;
+    if (acceptedRef.current === key) return;
+    const first = acceptedRef.current === null && loading;
+    acceptedRef.current = key;
+    if (first) return;
+    toast.success(fillOpeningCopy.linkAccepted(`${acceptedBy.firstName} ${acceptedBy.lastName}`.trim()));
+    onAgendaStale();
+  }, [acceptedBy, loading, onAgendaStale]);
   const keyOf = (c: OpeningCandidate) => c.waitlistEntryId ?? c.appointmentId ?? c.patientId;
   const items = (data?.items ?? []).filter((c) => !gone.includes(keyOf(c)));
   const cap = data?.offerCap ?? 2;
+  const linkOpen = canAct && (data?.linkOfferOpen ?? false) && !acceptedBy;
+  const selectedCandidates = items.filter((c) => selected.includes(keyOf(c)));
+  const slotLinkLabel = slotLinkOffersLabel(data?.linkOffers);
 
   async function recordCall(c: OpeningCandidate, outcome: OfferOutcome) {
     setBusyKey(keyOf(c));
@@ -285,6 +359,18 @@ export function FillOpeningPanel({
           </SheetDescription>
         </SheetHeader>
         <SheetBody className="flex flex-col gap-3 px-4 sm:px-6">
+          {/* Fuera del ternario: «Aceptado por …» sigue a la vista aunque la
+              lista quede vacía (el que aceptó ya no es candidato). */}
+          {slotLinkLabel ? (
+            <Badge
+              data-testid="slot-link-offers"
+              role="status"
+              className="self-start"
+              variant={acceptedBy ? 'success' : (data?.linkOffers.pending ?? 0) > 0 ? 'warning' : 'muted'}
+            >
+              {slotLinkLabel}
+            </Badge>
+          ) : null}
           {loading && !data ? (
             <div role="status" aria-live="polite" className="flex flex-col gap-2">
               <span className="sr-only">{fillOpeningCopy.loading}</span>
@@ -318,10 +404,34 @@ export function FillOpeningPanel({
             />
           ) : (
             <>
-              <p className="text-xs tabular-nums text-muted" aria-live="polite">
-                {fillOpeningCopy.count(items.length)}
-                {data?.truncated ? ` · ${fillOpeningCopy.truncated}` : ''}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs tabular-nums text-muted" aria-live="polite">
+                  {fillOpeningCopy.count(items.length)}
+                  {data?.truncated ? ` · ${fillOpeningCopy.truncated}` : ''}
+                </p>
+              </div>
+              {canAct && !acceptedBy ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2">
+                  {linkOpen ? (
+                    <>
+                      <span className="text-xs tabular-nums text-muted" aria-live="polite">
+                        {fillOpeningCopy.selectedCount(selectedCandidates.length)}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="ml-auto"
+                        disabled={selectedCandidates.length === 0}
+                        onClick={() => setLinkDialogOpen(true)}
+                      >
+                        <Link2 aria-hidden /> {fillOpeningCopy.sendLinkOffer}
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted">{fillOpeningCopy.linkTooLate}</p>
+                  )}
+                </div>
+              ) : null}
               <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
                 {items.map((c) => (
                   <CandidateRow
@@ -332,8 +442,17 @@ export function FillOpeningPanel({
                     clock={clock}
                     providerName={providerName}
                     locationName={locationName}
-                    canAct={canAct}
+                    // Con el hueco ya aceptado por enlace no queda nada que ofrecer
+                    // ni asignar (la agenda ya lo muestra ocupado).
+                    canAct={canAct && !acceptedBy}
                     busy={busyKey === keyOf(c)}
+                    selectable={linkOpen && (linkOfferChannels(c).LINK_EMAIL || linkOfferChannels(c).LINK_WA_ME) && c.offersToday < cap && c.linkOfferState !== 'OPEN'}
+                    selected={selected.includes(keyOf(c))}
+                    onToggleSelected={() =>
+                      setSelected((prev) =>
+                        prev.includes(keyOf(c)) ? prev.filter((k) => k !== keyOf(c)) : [...prev, keyOf(c)],
+                      )
+                    }
                     outcomeMode={outcomeFor?.key === keyOf(c) ? outcomeFor.mode : null}
                     onToggleOutcome={(mode) =>
                       setOutcomeFor((prev) =>
@@ -351,6 +470,22 @@ export function FillOpeningPanel({
             </>
           )}
         </SheetBody>
+        {linkDialogOpen ? (
+          <LinkOfferDialog
+            open
+            onOpenChange={setLinkDialogOpen}
+            token={token}
+            slot={slot}
+            clock={clock}
+            providerName={providerName}
+            locationName={locationName}
+            candidates={selectedCandidates}
+            onSent={() => {
+              setSelected([]);
+              reload();
+            }}
+          />
+        ) : null}
       </SheetContent>
     </Sheet>
   );
@@ -367,6 +502,10 @@ interface CandidateRowProps {
   locationName: string;
   canAct: boolean;
   busy: boolean;
+  /** DX-435: se puede elegir para la oferta con enlace. */
+  selectable: boolean;
+  selected: boolean;
+  onToggleSelected: () => void;
   outcomeMode: OutcomeMode | null;
   onToggleOutcome: (mode: OutcomeMode) => void;
   onWhatsApp: (href: string) => void;
@@ -383,6 +522,9 @@ function CandidateRow({
   locationName,
   canAct,
   busy,
+  selectable,
+  selected,
+  onToggleSelected,
   outcomeMode,
   onToggleOutcome,
   onWhatsApp,
@@ -410,11 +552,27 @@ function CandidateRow({
       )
     : null;
   const outcomeGroupId = React.useId();
+  const selectId = React.useId();
+  const channels = linkOfferChannels(c);
 
   return (
     <li data-testid="opening-candidate" className="flex flex-col gap-2 px-4 py-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="min-w-0 break-words text-sm font-semibold text-ink">{name}</p>
+        {selectable ? (
+          <label htmlFor={selectId} className="flex min-h-6 min-w-0 cursor-pointer items-start gap-2">
+            <input
+              id={selectId}
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelected}
+              aria-label={fillOpeningCopy.select(name)}
+              className="mt-0.5 size-4 shrink-0 accent-primary"
+            />
+            <span className="min-w-0 break-words text-sm font-semibold text-ink">{name}</span>
+          </label>
+        ) : (
+          <p className="min-w-0 break-words text-sm font-semibold text-ink">{name}</p>
+        )}
         <div className="flex shrink-0 flex-wrap gap-1">
           {c.priority === 'URGENT' ? <Badge variant="danger">{fillOpeningCopy.urgent}</Badge> : null}
           <Badge variant="muted">
@@ -434,8 +592,15 @@ function CandidateRow({
         {c.preferredWindow ? <p>{fillOpeningCopy.prefers(c.preferredWindow)}</p> : null}
         <div className="flex flex-wrap items-center gap-2 tabular-nums">
           <span>{fillOpeningCopy.offersToday(c.offersToday, cap)}</span>
-          {c.offeredForSlot ? <Badge variant="warning">{fillOpeningCopy.offered}</Badge> : null}
+          {c.linkOfferState ? (
+            <Badge variant={LINK_STATE_VARIANT[c.linkOfferState]}>{fillOpeningCopy.linkStates[c.linkOfferState]}</Badge>
+          ) : c.offeredForSlot ? (
+            <Badge variant="warning">{fillOpeningCopy.offered}</Badge>
+          ) : null}
         </div>
+        {canAct && !channels.LINK_EMAIL && !channels.LINK_WA_ME ? (
+          <p className="text-muted">{fillOpeningCopy.linkNoChannel}</p>
+        ) : null}
         {c.whatsappBlocked ? (
           <p className="text-warning">
             {c.whatsappBlockedReason === 'NO_OPT_IN'

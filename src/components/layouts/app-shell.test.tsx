@@ -94,7 +94,8 @@ describe('AppShell', () => {
   // Cada entrada copia el `@Roles(...)` del endpoint de su pantalla (DX-070):
   // DASHBOARD_ROLES, CATALOG_READ_ROLES, INVENTORY_ROLES, STAFF_WRITE_ROLES,
   // AUDIT_READ_ROLES (DX-009), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
-  // RECEIVABLES_ROLES (Cartera, DX-145) y REPORT_ROLES (Reportes, DX-014).
+  // RECEIVABLES_ROLES (Cartera, DX-145) y REPORT_ROLES + PRODUCTION_REPORT_ROLES
+  // (Reportes, DX-014 y DX-423).
   const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
     ADMIN: {
       visible: [
@@ -114,8 +115,8 @@ describe('AppShell', () => {
       hidden: [],
     },
     DENTIST: {
-      visible: ['Pacientes', 'Agenda', 'Catálogo'],
-      hidden: ['Dashboard', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      visible: ['Pacientes', 'Agenda', 'Catálogo', 'Reportes'],
+      hidden: ['Dashboard', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
     },
     ASSISTANT: {
       visible: ['Pacientes', 'Agenda', 'Catálogo', 'Inventario'],

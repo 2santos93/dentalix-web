@@ -137,6 +137,24 @@ describe('apiFetch', () => {
     expect((err as ApiError).holidayId).toBe('hol-1');
     expect((err as ApiError).locationId).toBeNull();
   });
+
+  it('DX-390: expone la `line` del 409 de referencia repetida de un cobro dividido', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      headers: { get: () => null },
+      json: async () => ({
+        statusCode: 409,
+        code: 'PAYMENT_REFERENCE_DUPLICATE',
+        message: 'Esta referencia ya se usó…',
+        line: 1,
+      }),
+    }) as unknown as typeof fetch;
+    const err = await apiFetch('/treatment-plans/p/split-payments', { method: 'POST', body: {} }).catch(
+      (e: unknown) => e,
+    );
+    expect((err as ApiError).line).toBe(1);
+  });
 });
 
 describe('apiFetch — refresh por cookie (DX-062)', () => {

@@ -1,7 +1,6 @@
 import type { ClinicRole } from '@/lib/me/me-api';
 import { canWriteClinicalHistory } from '@/lib/clinical/clinical-roles';
 import { canReadAccountStatement } from '@/lib/account-statement/account-statement-api';
-import { canUseConsents } from '@/lib/consents/consents-api';
 import { canUsePerio } from '@/lib/perio/perio-api';
 import { canUsePrescriptions } from '@/lib/prescriptions/prescriptions-api';
 import { canReadAuditLog } from '@/lib/audit/audit-api';
@@ -21,7 +20,10 @@ export type PatientTabAccess = Record<PatientDetailTabKey, boolean>;
  *   (todos menos recepción; ver medical-history, clinical-entries, odontogram
  *   y treatment-plans en la API).
  * - Estado de cuenta: `PAYMENT_ROLES` (ADMIN y recepción).
- * - Consentimientos, periodontograma y recetas: `CLINICAL_ROLES`.
+ * - Periodontograma y recetas: `CLINICAL_ROLES`.
+ * - Consentimientos: los cuatro roles (DX-243: recepción envía a firmar a
+ *   distancia y ve el estado; los documentos firmados, solo `CLINICAL_ROLES`,
+ *   que la pestaña decide por dentro).
  * - Autorizaciones (Ley 1581), Implantes (DX-191), Documentos (DX-151) y
  *   Datos: los cuatro roles.
  * - Accesos (auditoría de la ficha, DX-009): `AUDIT_READ_ROLES` (solo ADMIN).
@@ -37,7 +39,7 @@ export function patientTabAccess(role: ClinicRole | null): PatientTabAccess {
     odontogram: clinical,
     'treatment-plans': clinical,
     'account-statement': canReadAccountStatement(role),
-    consents: canUseConsents(role),
+    consents: role !== null,
     perio: canUsePerio(role),
     prescriptions: canUsePrescriptions(role),
     implants: canReadImplants(role),

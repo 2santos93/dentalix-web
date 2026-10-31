@@ -111,6 +111,23 @@ export async function signPatientConsent(
   return apiFetch<PatientConsent>(consentsPath(patientId), { method: 'POST', body: input, token });
 }
 
+/**
+ * `POST /patients/:id/consents/:consentId/countersign` (DX-243) — la firma del
+ * profesional de uno firmado a distancia. Solo el profesional elegido al
+ * enviarlo (403 si no); 409 si ya firmó.
+ */
+export async function countersignPatientConsent(
+  token: string,
+  patientId: string,
+  consentId: string,
+  professionalSignature: string,
+): Promise<PatientConsentSummary> {
+  return apiFetch<PatientConsentSummary>(
+    `${consentsPath(patientId)}/${encodeURIComponent(consentId)}/countersign`,
+    { method: 'POST', body: { professionalSignature }, token },
+  );
+}
+
 /** `GET /patients/:id/consents/:consentId` — documento completo con firmas. */
 export async function getPatientConsent(
   token: string,

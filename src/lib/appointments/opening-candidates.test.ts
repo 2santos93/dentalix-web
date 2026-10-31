@@ -2,6 +2,7 @@ import {
   canOfferOpenings,
   canSeeOpeningCandidates,
   freeGaps,
+  linkOfferMessage,
   offerMessage,
 } from './opening-candidates';
 import { locationClock } from '@/lib/locations/sede-clock';
@@ -38,6 +39,22 @@ describe('offerMessage (DX-210)', () => {
     });
     expect(text).toBe(
       'Hola Ana, te escribimos de Sede Norte. Se liberó un hueco el martes, 20 de octubre a las 10:00 a. m. con Dra. Pérez. ¿Te gustaría tomarlo? Respóndenos por aquí y te lo reservamos.',
+    );
+  });
+});
+
+describe('linkOfferMessage (DX-435)', () => {
+  it('el mismo texto mínimo con el enlace para aceptar (el primero que acepta se lo queda)', () => {
+    const text = linkOfferMessage({
+      firstName: 'Ana María',
+      start: at('10:00'),
+      locationName: 'Sede Norte',
+      providerName: null,
+      clock: CLOCK,
+      url: 'https://demo.dentalix.app/hueco/abc',
+    });
+    expect(text).toBe(
+      'Hola Ana, te escribimos de Sede Norte. Se liberó un hueco el martes, 20 de octubre a las 10:00 a. m. Si te viene bien, acéptalo aquí (se lo queda el primero que lo acepte): https://demo.dentalix.app/hueco/abc',
     );
   });
 });

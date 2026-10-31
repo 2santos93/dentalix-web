@@ -57,4 +57,7 @@ export const SIGNED_ACCEPTANCE: NonNullable<PlanQuote['acceptance']> = {
   acceptedByName: 'Dra. Laura Gómez',
   acceptanceHash: 'd'.repeat(64),
   integrityOk: true,
+  ipAddress: null,
+  userAgent: null,
+  remote: null,
 };

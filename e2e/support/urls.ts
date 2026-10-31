@@ -5,7 +5,7 @@
  * specs:
  *
  *   E2E_WEB_PORT=3101 E2E_API_URL=http://localhost:3100/api/v1 \
- *   NEXT_PUBLIC_API_URL=http://localhost:3100/api/v1 npm run test:e2e
+ *   API_URL=http://localhost:3100/api/v1 npm run test:e2e
  */
 export const WEB_PORT = process.env.E2E_WEB_PORT ?? '3001';
 export const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000/api/v1';

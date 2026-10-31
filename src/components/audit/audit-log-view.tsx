@@ -20,6 +20,7 @@ import {
   AUDIT_RESOURCE_OPTIONS,
   actorRoleLabel,
   communicationDetail,
+  confirmationLinkDetail,
   implantSearchDetail,
   isPatientOptOut,
   staffLoginDetail,
@@ -27,6 +28,7 @@ import {
   locationNameMap,
   type LocationNames,
   cashSessionDetail,
+  sedationDetail,
   scheduleChangeDetail,
   cancellationDetail,
   healthRegistrationDetail,
@@ -37,6 +39,7 @@ import {
   importBatchDetail,
   planItemAttributionDetail,
   anamnesisDetail,
+  signatureRequestDetail,
 } from '@/lib/audit/audit-labels';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
@@ -523,10 +526,12 @@ function AuditRow({
 }) {
   const detail =
     communicationDetail(event.metadata) ??
+    confirmationLinkDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
     staffLoginDetail(event.metadata) ??
     staffDetail(event.metadata, locationNames) ??
     cashSessionDetail(event.metadata) ??
+    sedationDetail(event.metadata) ??
     scheduleChangeDetail(event.metadata) ??
     cancellationDetail(event.metadata) ??
     patientFlowDetail(event.metadata) ??
@@ -536,7 +541,8 @@ function AuditRow({
     clinicSettingsDetail(event.metadata) ??
     locationCalendarDetail(event.metadata) ??
     exchangeRateBackupDetail(event.metadata) ??
-    anamnesisDetail(event.metadata);
+    anamnesisDetail(event.metadata) ??
+    signatureRequestDetail(event.metadata);
   return (
     <TableRow>
       <TableCell className="tabular-nums" data-label={copy.colWhen}>

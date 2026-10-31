@@ -114,6 +114,12 @@ load_env() {
   # DX-099: el cuestionario público de anamnesis (por IP y por token).
   export RATE_LIMIT_ANAMNESIS_LIMIT=100000
   export RATE_LIMIT_ANAMNESIS_TOKEN_LIMIT=100000
+  # DX-243: la firma a distancia pública (por IP y por token).
+  export RATE_LIMIT_SIGNATURE_LIMIT=100000
+  export RATE_LIMIT_SIGNATURE_TOKEN_LIMIT=100000
+  # DX-435: la oferta de hueco pública (por IP y por token).
+  export RATE_LIMIT_SLOT_OFFER_LIMIT=100000
+  export RATE_LIMIT_SLOT_TOKEN_LIMIT=100000
   # SEC-046: lecturas de un fichero de importación (inspect, dry-run y hoja de
   # saldos), 10 por minuto por clínica + usuario en un balde común. Los specs
   # de importación y de saldos migrados leen con el mismo ADMIN de la demo
@@ -123,13 +129,18 @@ load_env() {
   # Topes de email en BD (DX-088): la suite reenvía una invitación al momento
   # de crearla; sin esto el enfriamiento de 60 s respondería 429.
   export MAIL_RECIPIENT_COOLDOWN_SECONDS=0
+  # DX-243: el spec de firma a distancia envía a la misma paciente de la demo
+  # en cada corrida; con el tope diario de 5 una segunda corrida del día daría
+  # 429 al enviar el enlace.
+  export MAIL_RECIPIENT_DAILY_LIMIT=100000
   export RATE_LIMIT_PASSWORD_RESET_LIMIT=100000
   # DX-010: los emails se dejan como JSON en $STATE_DIR/mail (FileMailer, solo
   # dev/e2e) para que Playwright abra el enlace de «Restablecer contraseña».
   export MAIL_TRANSPORT=file
   export MAIL_FILE_DIR="$STATE_DIR/mail"
-  # La web: las NEXT_PUBLIC_* se incrustan en el build y el rewrite /api/v1.
-  export NEXT_PUBLIC_API_URL="$API_URL"
+  # La web lee API_URL en runtime (DX-083: proxy /api/v1 y SSR; `next start`
+  # no arranca sin ella en producción). NEXT_PUBLIC_ROOT_DOMAIN sí se incrusta.
+  export API_URL
   # Igual que el build de ci.yml y que `next dev` sin .env (default del código).
   export NEXT_PUBLIC_ROOT_DOMAIN=dentalix.local
   export NEXT_TELEMETRY_DISABLED=1

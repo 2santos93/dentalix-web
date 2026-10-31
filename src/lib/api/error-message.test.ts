@@ -28,6 +28,9 @@ describe('isHumanSpanish — heurística de idioma', () => {
     // SEC-050 y DX-382: los 409 de «Anular cargo».
     'El cargo ya está cobrado: los abonos de «Cargos administrativos» lo cubren. Anula antes el abono y después el cargo.',
     'Hay abonos todavía sin convertir a la moneda del plan; registra la tasa del día o espera un minuto y vuelve a intentarlo',
+    // DX-253: los 409 de «Anular abono» cuyo saldo a favor ya se movió.
+    'No se puede anular: el abono es referencia de la devolución DEV-BOG-000001, que no se deshace. Pide a administración que revise el caso.',
+    'No se puede anular: parte del saldo a favor de este plan ya se traspasó o se devolvió y, sin este abono, el plan quedaría debiendo ese dinero. Pide a administración que revise el caso.',
   ])('reconoce como español: %s', (msg) => {
     expect(isHumanSpanish(msg)).toBe(true);
   });

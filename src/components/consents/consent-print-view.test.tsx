@@ -30,6 +30,10 @@ function consentFixture(overrides: Partial<PatientConsentDocument> = {}): Patien
     contentHash: 'f'.repeat(64),
     signedAt: '2026-10-16T15:00:00.000Z',
     recordedById: 'u1',
+    remote: null,
+    professionalSignedAt: '2026-10-16T15:00:00.000Z',
+    complete: true,
+    remoteIpAddress: null,
     clinic: { name: 'Clínica Sonrisas', logoUrl: 'https://cdn.example.com/logo.png' },
     patient: { id: 'p1', firstName: 'Ana', lastName: 'Pérez', docType: 'NATIONAL_ID', docTypeLabel: null, docTypeName: 'ID local', docNumber: 'DOC-1020' },
     integrityOk: true,
@@ -132,5 +136,66 @@ describe('ConsentPrintView', () => {
     render(<ConsentPrintView token="tok" patientId="p1" consentId="c1" />);
     expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el consentimiento.');
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+  });
+});
+
+describe('ConsentDocument firmado a distancia (DX-243)', () => {
+  const remote = {
+    signatureRequestId: 'sr-1',
+    channel: 'EMAIL' as const,
+    destinationMasked: 'an***@example.com',
+    sentAt: '2026-10-16T12:00:00.000Z',
+    openedAt: '2026-10-16T13:00:00.000Z',
+    verifiedAt: '2026-10-16T13:01:00.000Z',
+    professionalUserId: 'u2',
+  };
+
+  it('sin la firma del profesional: lo dice, no pinta su firma y muestra las evidencias', () => {
+    render(
+      <ConsentDocument
+        consent={consentFixture({
+          remote,
+          professionalSignature: null,
+          professionalSignedAt: null,
+          complete: false,
+          remoteIpAddress: '203.0.113.7',
+        })}
+      />,
+    );
+    expect(screen.queryByRole('img', { name: 'Firma de Dra. Laura Gómez' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Pendiente de la firma del profesional').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Falta la firma del profesional/)).toBeInTheDocument();
+    const evidence = screen.getByRole('region', { name: 'Firma a distancia (evidencias)' });
+    expect(within(evidence).getByText('Enviado por email a an***@example.com')).toBeInTheDocument();
+    expect(within(evidence).getByText('203.0.113.7')).toBeInTheDocument();
+  });
+
+  it('completo: las dos firmas y sin aviso', () => {
+    render(<ConsentDocument consent={consentFixture({ remote, remoteIpAddress: '203.0.113.7' })} />);
+    expect(screen.getByRole('img', { name: 'Firma de Dra. Laura Gómez' })).toBeInTheDocument();
+    expect(screen.queryByText(/Falta la firma del profesional/)).not.toBeInTheDocument();
+  });
+
+  it('firmado por el responsable: las evidencias lo dicen con su nombre, no «por el paciente»', () => {
+    render(
+      <ConsentDocument
+        consent={consentFixture({
+          remote,
+          signerType: 'GUARDIAN',
+          signerName: 'Claudia Navarro',
+          professionalSignature: null,
+          professionalSignedAt: null,
+          complete: false,
+          remoteIpAddress: '203.0.113.7',
+        })}
+      />,
+    );
+    const evidence = screen.getByRole('region', { name: 'Firma a distancia (evidencias)' });
+    expect(within(evidence).getByText(/^Firmado por el responsable \(Claudia Navarro\)/)).toBeInTheDocument();
+    expect(within(evidence).getByText(/^IP de quien firmó/)).toBeInTheDocument();
+    expect(screen.queryByText(/por el paciente/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/^Firmado a distancia por el responsable \(Claudia Navarro\)\. Falta la firma del profesional/),
+    ).toBeInTheDocument();
   });
 });

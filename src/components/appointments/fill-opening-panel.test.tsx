@@ -1,9 +1,11 @@
+import * as React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { FillOpeningPanel } from './fill-opening-panel';
 import { ApiError } from '@/lib/api/client';
 import {
+  createLinkOffer,
   createWaitlistOffer,
   listOpeningCandidates,
   moveAppointmentToOpening,
@@ -26,6 +28,7 @@ jest.mock('../../lib/appointments/opening-candidates', () => {
     createWaitlistOffer: jest.fn(),
     moveAppointmentToOpening: jest.fn(),
     recordOfferOutcome: jest.fn(),
+    createLinkOffer: jest.fn(),
   };
 });
 jest.mock('../../lib/appointments/waitlist-api', () => ({
@@ -38,6 +41,7 @@ const mockedList = listOpeningCandidates as jest.MockedFunction<typeof listOpeni
 const mockedOffer = createWaitlistOffer as jest.MockedFunction<typeof createWaitlistOffer>;
 const mockedMove = moveAppointmentToOpening as jest.MockedFunction<typeof moveAppointmentToOpening>;
 const mockedOutcome = recordOfferOutcome as jest.MockedFunction<typeof recordOfferOutcome>;
+const mockedLinkOffer = createLinkOffer as jest.MockedFunction<typeof createLinkOffer>;
 const mockedSchedule = scheduleFromWaitlist as jest.MockedFunction<typeof scheduleFromWaitlist>;
 
 const SLOT: OpeningSlot = {
@@ -69,6 +73,8 @@ function candidate(over: Partial<OpeningCandidate> & { patientId: string }): Ope
     offersToday: 0,
     offeredForSlot: false,
     pendingOfferId: null,
+    emailBlockedReason: null,
+    linkOfferState: null,
     ...over,
   };
 }
@@ -82,6 +88,8 @@ function view(items: OpeningCandidate[]): OpeningCandidates {
     timeZone: 'UTC',
     providerOffSchedule: false,
     offerCap: 2,
+    linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
+    linkOfferOpen: true,
     items,
     truncated: false,
   };
@@ -363,5 +371,162 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(screen.queryByRole('button', { name: /Asignar/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Anotar/ })).not.toBeInTheDocument();
+  });
+
+  describe('DX-435: oferta con enlace', () => {
+    const offerResult = (patientId: string, url: string | null, whatsappPhone: string | null) =>
+      ({ id: `o-${patientId}`, patientId, url, whatsappPhone }) as Awaited<ReturnType<typeof createLinkOffer>>;
+
+    it('elige varios, envía por WhatsApp y deja un «Abrir WhatsApp» por paciente con el enlace en el texto', async () => {
+      const carla = candidate({ patientId: 'p-carla', patientFirstName: 'Carla', patientLastName: 'Paz' });
+      mockedList.mockResolvedValue(view([ana, carla]));
+      mockedLinkOffer
+        .mockResolvedValueOnce(offerResult('p-ana', 'https://demo.dentalix.app/hueco/aaa', '573101234567'))
+        .mockResolvedValueOnce(offerResult('p-carla', 'https://demo.dentalix.app/hueco/ccc', '573101234567'));
+      renderPanel();
+      const send = await screen.findByRole('button', { name: 'Enviar oferta con enlace' });
+      expect(send).toBeDisabled();
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Elegir a Ana Ríos para la oferta con enlace' }));
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Elegir a Carla Paz para la oferta con enlace' }));
+      expect(screen.getByText('2 elegidos')).toBeInTheDocument();
+      await userEvent.click(send);
+      const dialog = await screen.findByRole('dialog', { name: 'Enviar oferta con enlace' });
+      await userEvent.click(within(dialog).getByRole('radio', { name: /WhatsApp/ }));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar oferta' }));
+      const open = await within(dialog).findByRole('link', { name: 'Abrir WhatsApp con la oferta para Ana Ríos' });
+      expect(decodeURIComponent(open.getAttribute('href') ?? '')).toContain('https://demo.dentalix.app/hueco/aaa');
+      expect(decodeURIComponent(open.getAttribute('href') ?? '')).not.toMatch(/Endodoncia|Ríos/);
+      expect(mockedLinkOffer).toHaveBeenCalledTimes(2);
+      expect(mockedLinkOffer).toHaveBeenCalledWith('tok', SLOT, expect.objectContaining({ patientId: 'p-ana' }), 'LINK_WA_ME');
+    });
+
+    it('por email: quien no tiene correo queda fuera y el error de uno no frena a los demás', async () => {
+      const sinCorreo = candidate({
+        patientId: 'p-sin',
+        patientFirstName: 'Sara',
+        patientLastName: 'Luna',
+        emailBlockedReason: 'NO_EMAIL',
+      });
+      const carla = candidate({ patientId: 'p-carla', patientFirstName: 'Carla', patientLastName: 'Paz' });
+      mockedList.mockResolvedValue(view([ana, sinCorreo, carla]));
+      mockedLinkOffer
+        .mockRejectedValueOnce(new ApiError(409, 'Ya se le ofrecieron 2 huecos hoy'))
+        .mockResolvedValueOnce(offerResult('p-carla', null, null));
+      renderPanel();
+      for (const name of ['Ana Ríos', 'Sara Luna', 'Carla Paz']) {
+        await userEvent.click(await screen.findByRole('checkbox', { name: `Elegir a ${name} para la oferta con enlace` }));
+      }
+      await userEvent.click(screen.getByRole('button', { name: 'Enviar oferta con enlace' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Enviar oferta con enlace' });
+      expect(within(dialog).getByText(/Sin este canal \(no se les envía\): Sara Luna/)).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar oferta' }));
+      const results = await within(dialog).findByTestId('link-offer-results');
+      expect(results).toHaveTextContent('Ana Ríos · Ya se le ofrecieron 2 huecos hoy');
+      expect(results).toHaveTextContent('Carla Paz · Correo en camino');
+      expect(mockedLinkOffer).toHaveBeenCalledTimes(2);
+      expect(mockedLinkOffer).toHaveBeenLastCalledWith('tok', SLOT, expect.objectContaining({ patientId: 'p-carla' }), 'LINK_EMAIL');
+    });
+
+    it('el hueco muestra «Oferta enviada (n)», «Aceptado por …» o «Caducado»', async () => {
+      mockedList.mockResolvedValueOnce({
+        ...view([{ ...ana, linkOfferState: 'OPEN' }]),
+        linkOffers: { pending: 2, total: 2, acceptedBy: null, expired: false },
+      });
+      renderPanel();
+      expect(await screen.findByTestId('slot-link-offers')).toHaveTextContent('Oferta enviada (2)');
+      expect(screen.getByText('Enlace enviado')).toBeInTheDocument();
+    });
+
+    it('con ofertas pendientes sondea y, al aceptar alguien, dice «Aceptado por …» y refresca la agenda', async () => {
+      jest.useFakeTimers();
+      try {
+        mockedList
+          .mockResolvedValueOnce({
+            ...view([{ ...ana, linkOfferState: 'OPEN' }]),
+            linkOffers: { pending: 1, total: 1, acceptedBy: null, expired: false },
+          })
+          .mockResolvedValue({
+            ...view([{ ...ana, linkOfferState: 'ACCEPTED' }]),
+            linkOffers: {
+              pending: 0,
+              total: 1,
+              acceptedBy: { patientId: 'p-ana', firstName: 'Ana', lastName: 'Ríos', at: '2031-03-03T10:00:00.000Z' },
+              expired: false,
+            },
+          });
+        const { onAgendaStale } = renderPanel();
+        expect(await screen.findByText('Oferta enviada (1)')).toBeInTheDocument();
+        await React.act(async () => {
+          jest.advanceTimersByTime(15_000);
+        });
+        expect(await screen.findByText('Aceptado por Ana Ríos')).toBeInTheDocument();
+        expect(onAgendaStale).toHaveBeenCalled();
+        expect(toast.success).toHaveBeenCalledWith('Ana Ríos aceptó el hueco por enlace.');
+        expect(screen.queryByRole('button', { name: 'Enviar oferta con enlace' })).not.toBeInTheDocument();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('todas caducadas: «Caducado»; con menos de 20 minutos no se ofrece por enlace', async () => {
+      mockedList.mockResolvedValueOnce({
+        ...view([{ ...ana, linkOfferState: 'EXPIRED' }]),
+        linkOffers: { pending: 0, total: 1, acceptedBy: null, expired: true },
+        linkOfferOpen: false,
+      });
+      renderPanel();
+      expect(await screen.findByTestId('slot-link-offers')).toHaveTextContent('Caducado');
+      expect(screen.getByText(/Faltan menos de 20 minutos/)).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('«Aceptado por …» sigue a la vista aunque ya no quede ningún candidato', async () => {
+      mockedList.mockResolvedValueOnce({
+        ...view([]),
+        linkOffers: {
+          pending: 0,
+          total: 1,
+          acceptedBy: { patientId: 'p-ana', firstName: 'Ana', lastName: 'Ríos', at: '2031-03-03T10:00:00.000Z' },
+          expired: false,
+        },
+      });
+      renderPanel();
+      expect(await screen.findByText('Nadie en la lista cabe en este hueco')).toBeInTheDocument();
+      expect(screen.getByTestId('slot-link-offers')).toHaveTextContent('Aceptado por Ana Ríos');
+    });
+
+    it('tras enviar, el modal sigue diciendo a cuántos se envió (no «0 pacientes» ni «Ninguno…»)', async () => {
+      mockedList.mockResolvedValue(view([ana]));
+      mockedLinkOffer.mockResolvedValueOnce(offerResult('p-ana', null, null));
+      renderPanel();
+      await userEvent.click(
+        await screen.findByRole('checkbox', { name: 'Elegir a Ana Ríos para la oferta con enlace' }),
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Enviar oferta con enlace' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Enviar oferta con enlace' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar oferta' }));
+      expect(await within(dialog).findByTestId('link-offer-results')).toHaveTextContent('Ana Ríos · Correo en camino');
+      expect(within(dialog).getByText(/^Un paciente recibe/)).toBeInTheDocument();
+      expect(within(dialog).queryByText(/0 pacientes/)).not.toBeInTheDocument();
+      expect(within(dialog).queryByText(/Ninguno de los elegidos/)).not.toBeInTheDocument();
+    });
+
+    it('con el hueco ya aceptado por enlace no ofrece «Asignar» ni «Ofrecer por WhatsApp»', async () => {
+      const carla = candidate({ patientId: 'p-carla', patientFirstName: 'Carla', patientLastName: 'Paz' });
+      mockedList.mockResolvedValueOnce({
+        ...view([carla]),
+        linkOffers: {
+          pending: 0,
+          total: 2,
+          acceptedBy: { patientId: 'p-ana', firstName: 'Ana', lastName: 'Ríos', at: '2031-03-03T10:00:00.000Z' },
+          expired: false,
+        },
+      });
+      renderPanel();
+      expect(await screen.findByText('Carla Paz')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Asignar/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Llamé/ })).not.toBeInTheDocument();
+    });
   });
 });

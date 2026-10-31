@@ -20,6 +20,26 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Variables de entorno
+
+Copia `.env.example` a `.env.local`. La URL de la API y el origen de los
+ficheros son variables de **servidor** que se leen en runtime (DX-083), así la
+misma imagen sirve en staging y en producción:
+
+| Variable | Para qué | Por defecto (fuera de producción) |
+|---|---|---|
+| `API_URL` | Destino del proxy `/api/v1` (`src/proxy.ts`), SSR y subida de la importación | `http://localhost:3000/api/v1` |
+| `FILES_ORIGIN` | Origen del bucket en la CSP (`img-src`, `frame-src`, `connect-src`) | el origen de `API_URL` |
+| `NEXT_PUBLIC_ROOT_DOMAIN` | Dominio raíz de las clínicas; se incrusta al compilar (build-arg de la imagen) | `dentalix.local` |
+
+**Migración**: `NEXT_PUBLIC_API_URL` y `NEXT_PUBLIC_FILES_ORIGIN` ya no se
+leen. Si siguen en tu `.env.local`, renómbralas a `API_URL` y `FILES_ORIGIN`;
+la web avisa al arrancar mientras no lo hagas. En producción (`next start` o
+la imagen) la web no arranca sin una `API_URL` http(s) válida.
+
+Imagen de producción: `Dockerfile` (`output: 'standalone'`); runbook en
+`dentalix-docs/docs/operacion/despliegue.md`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseTenantFromHost } from './lib/tenant';
 import { buildCsp, generateNonce } from './lib/security/csp';
-import { API_PROXY_MAX_BODY_BYTES, API_PROXY_PATH, apiOrigin, filesOrigin } from './lib/api/api-base';
+import {
+  API_PROXY_MAX_BODY_BYTES,
+  API_PROXY_PATH,
+  apiOrigin,
+  apiProxyDestination,
+  apiUrl,
+  filesOrigin,
+} from './lib/api/api-base';
 
 /** Cuerpo del 413 con el formato de errores de la API (DX-259). */
 export const API_BODY_TOO_LARGE = {
@@ -11,20 +18,31 @@ export const API_BODY_TOO_LARGE = {
 };
 
 /**
- * DX-259 (OPS-038): una petición a `/api/v1/*` con más cuerpo del que el
- * rewrite copia (`API_PROXY_MAX_BODY_BYTES`, 1 MB) se rechaza aquí con 413,
- * antes de llamar a la API y por su `Content-Length`, sin leer el cuerpo. Sin
- * esto Next copiaba el primer MB, lo reenviaba con el `Content-Length`
- * original, la API cortaba la conexión al ver el tamaño y el cliente recibía
- * un 500. Un cuerpo sin `Content-Length` (chunked) no pasa por aquí: Next
- * copia como mucho 1 MB y la API lo rechaza igual.
+ * `/api/v1/*` del host de la clínica → la API (DX-062). Aquí y no en
+ * `rewrites()` de next.config (DX-083, OPS-041): esas reglas se fijan al
+ * compilar (routes-manifest), y así la URL de la API (`API_URL`) se lee en
+ * RUNTIME y la misma imagen sirve contra cualquier API. Next reenvía la
+ * reescritura externa igual que un rewrite (mismo proxy, `X-Forwarded-Host`
+ * con el host de la clínica, tope de cuerpo `proxyClientMaxBodySize`).
+ * Ojo: en una reescritura externa Next devuelve al navegador la cabecera
+ * `x-middleware-rewrite` con el destino, o sea, con `API_URL`. Si la API
+ * interna no debe ser conocida, el ingress tiene que quitar esa cabecera de
+ * las respuestas (runbook de despliegue).
+ *
+ * DX-259 (OPS-038): una petición con más cuerpo del que Next copia
+ * (`API_PROXY_MAX_BODY_BYTES`, 1 MB) se rechaza antes con 413, por su
+ * `Content-Length` y sin leer el cuerpo. Sin esto Next copiaba el primer MB,
+ * lo reenviaba con el `Content-Length` original, la API cortaba la conexión
+ * al ver el tamaño y el cliente recibía un 500. Un cuerpo sin
+ * `Content-Length` (chunked) no se rechaza aquí: Next copia como mucho 1 MB y
+ * la API lo rechaza igual.
  */
-function guardApiBody(req: NextRequest): NextResponse {
+function proxyToApi(req: NextRequest): NextResponse {
   const length = Number(req.headers.get('content-length'));
   if (Number.isFinite(length) && length > API_PROXY_MAX_BODY_BYTES) {
     return NextResponse.json(API_BODY_TOO_LARGE, { status: 413, headers: { Connection: 'close' } });
   }
-  return NextResponse.next();
+  return NextResponse.rewrite(apiProxyDestination(req.nextUrl, apiUrl()));
 }
 
 /**
@@ -32,6 +50,10 @@ function guardApiBody(req: NextRequest): NextResponse {
  * token en la URL y datos de salud en la página: ni se manda el Referer a
  * terceros (el logo de la clínica en otro dominio), ni se guarda en cachés, ni
  * se indexa. Van en la respuesta, además de los metadatos de la página.
+ * DX-243: lo mismo para la firma a distancia (`/firmar/<token>`), que tras el
+ * código muestra el consentimiento. DX-435: y para la oferta de hueco
+ * (`/hueco/<token>`), cuyo token de un solo uso reserva una cita. DX-443: y
+ * para la copia del PDF firmado (`/copia/<token>`), de un solo uso.
  */
 export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',
@@ -39,8 +61,10 @@ export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'X-Robots-Tag': 'noindex, nofollow',
 };
 
+const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar', '/hueco', '/copia'];
+
 function isHealthFormPath(pathname: string): boolean {
-  return pathname === '/anamnesis' || pathname.startsWith('/anamnesis/');
+  return HEALTH_FORM_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 /**
@@ -54,7 +78,7 @@ function isHealthFormPath(pathname: string): boolean {
  *    de next-themes en el layout).
  */
 export function proxy(req: NextRequest) {
-  if (req.nextUrl.pathname.startsWith(`${API_PROXY_PATH}/`)) return guardApiBody(req);
+  if (req.nextUrl.pathname.startsWith(`${API_PROXY_PATH}/`)) return proxyToApi(req);
   const tenant = parseTenantFromHost(req.headers.get('host'));
   const nonce = generateNonce();
   const csp = buildCsp({
@@ -78,16 +102,14 @@ export function proxy(req: NextRequest) {
   return res;
 }
 
-// Las páginas: todo salvo `/api` (se reescribe tal cual hacia la API, y
-// `/api/import-upload/*`, la subida de la importación de pacientes, que NO
-// debe pasar por aquí: Next copiaría su cuerpo en memoria y lo cortaría en
-// 1 MB; ver `import-upload-proxy.ts`), los
-// estáticos de Next y el favicon. Y (DX-259) `/api/v1/*` solo cuando la
-// petición trae cuerpo (`Content-Length`), para el tope de 1 MB: los GET a la
-// API no pasan por aquí.
+// Las páginas: todo salvo `/api` (la API va por la segunda regla, y
+// `/api/import-upload/*`, la subida de la importación de pacientes, NO debe
+// pasar por aquí: Next copiaría su cuerpo en memoria y lo cortaría en 1 MB;
+// ver `import-upload-proxy.ts`), los estáticos de Next y el favicon. Y
+// `/api/v1/*` entero (DX-083): aquí se reescribe hacia la API en runtime.
 export const config = {
   matcher: [
     { source: '/((?!api/|_next/static|_next/image|favicon.ico).*)' },
-    { source: '/api/v1/:path*', has: [{ type: 'header', key: 'content-length' }] },
+    { source: '/api/v1/:path*' },
   ],
 };

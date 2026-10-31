@@ -19,7 +19,6 @@ import {
 // (generada) y `src/shared/money/currency-decimals.ts`. Si la API la regenera,
 // se copia aquí el mismo conjunto `minorUnits = 0` (R7).
 import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
-import cldr47CurrencyFractions from './__fixtures__/cldr-47-currency-fractions.fixture.json';
 
 const RULES: DiscountRules = {
   maxPercentByRole: { ADMIN: 100, DENTIST: 10, ASSISTANT: 0, RECEPTION: 0 },
@@ -134,13 +133,16 @@ describe('ZERO_DECIMAL_CURRENCIES (GLOBAL-G1, R7)', () => {
       expect(ZERO_DECIMAL_CURRENCIES.has(code)).toBe(true);
     }
     expect(ZERO_DECIMAL_CURRENCIES.size).toBe(29);
-    // Independent official CLDR 47 extraction, not the host's Intl/ICU data.
-    // Newer ICU gives RSD 2 digits; the reviewed API/web policy retains 0.
-    // This is a versioned CLDR policy, not a claim about current ISO minor units.
-    const cldrDigits: Record<string, number> = cldr47CurrencyFractions.digits;
-    for (const code of iso4217ZeroDecimal.minorUnitsZero) {
-      expect([code, cldrDigits[code]]).toEqual([code, 0]);
-    }
+    // La copia coincide con la referencia versionada de la API
+    // (`prisma/reference/iso4217-zero-decimal.json`, CLDR 47), fijada aquí en
+    // literal: no se compara con el Intl del Node del host, que cambia con su
+    // versión de ICU (TST-046: RSD da 0 decimales con ICU 77 y 2 con ICU 78).
+    expect(iso4217ZeroDecimal.minorUnitsZero).toEqual([
+      'AFN', 'ALL', 'BIF', 'CLP', 'DJF', 'GNF', 'IRR', 'ISK', 'JPY', 'KMF',
+      'KPW', 'KRW', 'LAK', 'LBP', 'MGA', 'MMK', 'PYG', 'RSD', 'RWF', 'SOS',
+      'SYP', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF', 'YER',
+    ]);
+    expect(currencyDecimals('RSD')).toBe(0);
     expect(currencyDecimals('vnd')).toBe(0);
     expect(currencyDecimals('EUR')).toBe(2);
   });

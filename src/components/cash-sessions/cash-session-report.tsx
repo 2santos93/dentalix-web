@@ -84,6 +84,9 @@ const copy = {
   colCategory: 'Categoría',
   colSupplier: 'Proveedor',
   noOutflows: 'Sin salidas de caja en este turno.',
+  // DX-253: devoluciones de saldo a favor en efectivo (restan en «Salidas»).
+  creditRefundsLabel: 'Devoluciones de saldo a favor',
+  colRefund: 'Comprobante',
   outflowBookedElsewhere:
     'Anulada con la caja ya cerrada: aquí sigue restando y la anulación es un ajuste en otra caja.',
   historyTitle: 'Historial',
@@ -449,10 +452,43 @@ function outflowSubject(outflow: { category: string; supplier: string | null }):
 function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso: string) => string }) {
   const zone = session.timeZone;
   const { outflows, voidedOutflows } = session;
+  const creditRefunds = session.creditRefunds ?? [];
   const voidedId = React.useId();
-  if (outflows.length === 0 && voidedOutflows.length === 0) return <p className="text-muted">{copy.noOutflows}</p>;
+  if (outflows.length === 0 && voidedOutflows.length === 0 && creditRefunds.length === 0) {
+    return <p className="text-muted">{copy.noOutflows}</p>;
+  }
   return (
     <div className="flex flex-col gap-2">
+      {creditRefunds.length > 0 ? (
+        <div className="overflow-hidden rounded-lg border border-border">
+          <Table aria-label={copy.creditRefundsLabel}>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead scope="col">{copy.colTime}</TableHead>
+                <TableHead scope="col">{copy.colRefund}</TableHead>
+                <TableHead scope="col">{copy.colPatient}</TableHead>
+                <TableHead scope="col">{copy.colBy}</TableHead>
+                <TableHead scope="col" className="text-right">{copy.colAmount}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {creditRefunds.map((r) => (
+                <TableRow key={r.id} className="cash-report-row">
+                  <TableCell data-label={copy.colTime} className="tabular-nums">
+                    {formatTimeInZone(r.createdAt, zone)}
+                  </TableCell>
+                  <TableCell data-label={copy.colRefund} className="tabular-nums">{r.number}</TableCell>
+                  <TableCell data-label={copy.colPatient}>{r.patient.fullName}</TableCell>
+                  <TableCell data-label={copy.colBy}>{r.createdBy.fullName ?? '—'}</TableCell>
+                  <TableCell data-label={copy.colAmount} className="text-right font-medium tabular-nums">
+                    {formatCurrency(r.amount, r.currency)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : null}
       {outflows.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-border">
           <Table aria-label={copy.outflowsLabel}>

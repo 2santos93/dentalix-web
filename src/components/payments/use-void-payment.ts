@@ -17,6 +17,8 @@ const copy = {
   // 400: el motivo no pasó la validación del servidor (mensaje en inglés).
   badReason: 'Revisa el motivo: debe tener entre 3 y 300 caracteres.',
   voided: (subject: string) => `Abono anulado: ${subject}.`,
+  // DX-390: anular una línea de un cobro dividido anula todas y su recibo.
+  voidedSplit: (lines: number, subject: string) => `Cobro anulado: ${lines} formas de pago y su recibo · ${subject}.`,
 };
 
 /**
@@ -40,6 +42,8 @@ export interface VoidPaymentTarget {
   /** Día civil del pago en la zona de su sede (`paidOn`, YYYY-MM-DD; DX-097). */
   paidOn: string;
   patientName?: string;
+  /** DX-390: formas de pago de su cobro dividido (se anulan juntas); `null`/ausente si es suelto. */
+  splitLines?: number | null;
 }
 
 export function voidPaymentSubject(target: VoidPaymentTarget): string {
@@ -50,6 +54,19 @@ export function voidPaymentSubject(target: VoidPaymentTarget): string {
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+/**
+ * El aviso tras anular: el abono, o (DX-390) el cobro dividido entero con su
+ * recibo, que es lo que la API anula. Del cobro no se repite el importe de la
+ * línea pulsada: no es lo que se anuló.
+ */
+function voidedNotice(target: VoidPaymentTarget): string {
+  if (target.splitLines && target.splitLines > 1) {
+    const rest = [formatCivilDate(target.paidOn), target.patientName].filter(Boolean).join(' · ');
+    return copy.voidedSplit(target.splitLines, rest);
+  }
+  return copy.voided(voidPaymentSubject(target));
 }
 
 /**
@@ -82,7 +99,7 @@ export function useVoidPayment(token: string, onVoided: () => void) {
     setError(null);
     try {
       await voidPayment(token, target.id, reason);
-      setNotice(copy.voided(voidPaymentSubject(target)));
+      setNotice(voidedNotice(target));
       setTarget(null);
       onVoided();
     } catch (err) {

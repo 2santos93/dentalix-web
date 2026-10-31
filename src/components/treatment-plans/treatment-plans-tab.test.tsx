@@ -288,6 +288,8 @@ const plan2Detail = { ...plan2, items: [item1], total: item1.price };
 const payment1: Payment = {
   id: 'pay-1',
   tenantId: 't1',
+  splitId: null,
+  splitLine: null,
   treatmentPlanId: 'plan-1',
   openingBalanceId: null,
   patientId: 'pat-1',
@@ -313,13 +315,14 @@ const balance1: PlanBalance = {
   billable: 130000,
   paid: 50000,
   balance: 80000,
+  creditMovements: 0,
   paymentsCount: 1,
   ...BALANCE_WITHOUT_ALLOCATIONS,
 };
 
 /** Empty balance/payments — the default for tests that don't exercise the abonos block. */
 function emptyBalance(): PlanBalance {
-  return { planCurrency: 'USD', billable: 0, paid: 0, balance: 0, paymentsCount: 0, ...BALANCE_WITHOUT_ALLOCATIONS };
+  return { planCurrency: 'USD', billable: 0, paid: 0, creditMovements: 0, balance: 0, paymentsCount: 0, ...BALANCE_WITHOUT_ALLOCATIONS };
 }
 
 /**
@@ -1777,7 +1780,7 @@ describe('TreatmentPlansTab', () => {
       ...plan1Detail,
       status: 'ACCEPTED' as const,
       items: [{ ...item1, status: 'ACCEPTED' as const }, item2],
-      acceptance: { signerName: 'Ana García', acceptedAt: '2026-10-16T15:30:00.000Z' },
+      acceptance: { signerName: 'Ana García', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null },
     };
 
     it('ofrece «Imprimir presupuesto» y «Aceptar con firma» en un plan sin firmar', async () => {

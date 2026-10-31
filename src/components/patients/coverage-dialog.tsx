@@ -40,6 +40,8 @@ export const coverageDialogCopy = {
   validFrom: 'Vigente desde',
   validTo: 'Vigente hasta',
   validToHint: 'Déjala vacía si no tiene fecha de fin.',
+  // SEC-053: quien no es ADMIN y cambia la vigencia de una verificada.
+  validityVerifiedHint: 'Cambiar las fechas quita la verificación del administrador.',
   rangeInvalid: 'La fecha de fin no puede ser anterior a la de inicio.',
   primary: 'Principal',
   primaryOnlyHint: 'Es la única cobertura: es la principal.',
@@ -91,6 +93,11 @@ interface CoverageDialogProps {
    * principal y el control queda marcado y deshabilitado.
    */
   onlyCoverage?: boolean;
+  /**
+   * SEC-053: quien edita es ADMIN. Si no lo es, cambiar la vigencia de una
+   * cobertura verificada la deja «Sin verificar» y el modal lo avisa.
+   */
+  editorIsAdmin?: boolean;
   onSaved: (saved: PatientCoverage) => void;
   /** Se creó un pagador desde el enlace: el padre lo suma a `payers`. */
   onPayerCreated: (payer: Payer) => void;
@@ -110,6 +117,7 @@ export function CoverageDialog({
   payers,
   canCreatePayer,
   onlyCoverage = false,
+  editorIsAdmin = false,
   onSaved,
   onPayerCreated,
 }: CoverageDialogProps) {
@@ -213,6 +221,10 @@ export function CoverageDialog({
         ? memberNumberCopy.hint
         : undefined;
   const toId = `${ids}-to`;
+  const toHint =
+    editing && coverage.verifiedAt && !editorIsAdmin
+      ? `${copy.validToHint} ${copy.validityVerifiedHint}`
+      : copy.validToHint;
   const primaryId = `${ids}-primary`;
   const primaryHint = onlyCoverage
     ? copy.primaryOnlyHint
@@ -324,7 +336,8 @@ export function CoverageDialog({
           <FormField
             htmlFor={toId}
             label={copy.validTo}
-            hint={copy.validToHint}
+            hint={toHint}
+            hintId={`${toId}-hint`}
             error={fieldErrors.range}
           >
             <Input
@@ -333,7 +346,7 @@ export function CoverageDialog({
               value={draft.validTo}
               onChange={(e) => set('validTo', e.target.value)}
               aria-invalid={fieldErrors.range ? true : undefined}
-              aria-describedby={fieldErrors.range ? fieldErrorId(toId) : undefined}
+              aria-describedby={fieldErrors.range ? fieldErrorId(toId) : `${toId}-hint`}
               className="tabular-nums"
             />
           </FormField>

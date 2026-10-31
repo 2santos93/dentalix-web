@@ -91,7 +91,7 @@ describe('PlanQuoteActions (DX-012)', () => {
     renderActions(
       plan({
         status: 'ACCEPTED',
-        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z' },
+        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null },
       }),
     );
     expect(screen.getByRole('status')).toHaveTextContent(
