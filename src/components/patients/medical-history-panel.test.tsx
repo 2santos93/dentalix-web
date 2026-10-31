@@ -76,6 +76,20 @@ describe('MedicalHistoryPanel', () => {
     expect(await screen.findByText(/registrada el .* por Dra\. Ana Ríos/i)).toBeInTheDocument();
   });
 
+  it('el resumen de condiciones dice «sin responder» (atenuado) y no cuenta la ausencia como «No»', async () => {
+    mockedGet.mockResolvedValue({
+      ...latest,
+      conditions: [{ codigo: 'DIABETES', etiqueta: 'Diabetes', estado: 'SI', esAlerta: true }],
+    });
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+
+    const term = await screen.findByText('Condiciones', { selector: 'dt' });
+    const dd = term.nextElementSibling as HTMLElement;
+    expect(dd).toHaveTextContent('1 Sí · 14 sin responder');
+    expect(dd).not.toHaveTextContent(/\bNo\b/);
+    expect(screen.getAllByText('14 sin responder')[0]).toHaveClass('text-muted');
+  });
+
   it('un texto largo sin espacios parte la línea en vez de ensanchar la ficha a 390 px', async () => {
     // jsdom no maqueta: se fija lo que lo hace posible. Sin `min-w-0` la celda
     // de la rejilla mide lo que el texto entero (p. ej. una URL pegada) y

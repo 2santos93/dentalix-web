@@ -166,8 +166,42 @@ export const ALLERGY_SEVERITY_LABELS: Record<AllergySeverity, string> = {
 export const CONDITION_STATUS_LABELS: Record<ConditionStatus, string> = {
   SI: 'Sí',
   NO: 'No',
-  DESCONOCE: 'Desconoce',
+  DESCONOCE: 'No sabe',
 };
+
+/**
+ * Una condición que la versión no recoge NO se preguntó (o no se contestó):
+ * se muestra «Sin responder», nunca «No». Un hallazgo negativo que nadie
+ * registró no puede aparecer en la HC (documento médico-legal).
+ */
+export const CONDITION_UNANSWERED_LABEL = 'Sin responder';
+
+export interface ConditionSummary {
+  si: number;
+  no: number;
+  desconoce: number;
+  /** Condiciones del checklist estándar que la versión no contesta. */
+  sinResponder: number;
+}
+
+/**
+ * Cuenta las respuestas de una lista de condiciones frente al checklist
+ * estándar. La ausencia cuenta como «sin responder», nunca como «No».
+ * Las condiciones fuera del checklist se cuentan por su estado.
+ */
+export function summarizeConditions(conditions: readonly Condition[] | null | undefined): ConditionSummary {
+  const byCode = new Map((conditions ?? []).map((c) => [c.codigo, c.estado]));
+  const summary: ConditionSummary = { si: 0, no: 0, desconoce: 0, sinResponder: 0 };
+  for (const { codigo } of STANDARD_CONDITIONS) {
+    if (!byCode.has(codigo)) summary.sinResponder += 1;
+  }
+  for (const estado of byCode.values()) {
+    if (estado === 'SI') summary.si += 1;
+    else if (estado === 'NO') summary.no += 1;
+    else summary.desconoce += 1;
+  }
+  return summary;
+}
 
 // Checklist estándar de condiciones. Los `codigo` marcados abajo alimentan
 // `deriveSafetyFlags` en el backend (dentalix-api-clinhist/src/modules/

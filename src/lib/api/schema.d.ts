@@ -6033,7 +6033,10 @@ export interface components {
             codigo: string;
             /** @example Hipertensión */
             etiqueta: string;
-            /** @enum {string} */
+            /**
+             * @description SI = la tiene, NO = no la tiene (respuesta explícita), DESCONOCE = el paciente no lo sabe. «Sin responder» no es un estado: la condición se omite de la lista.
+             * @enum {string}
+             */
             estado: "SI" | "NO" | "DESCONOCE";
             esAlerta: boolean;
             nota?: string;
@@ -6104,6 +6107,7 @@ export interface components {
         };
         SaveMedicalHistoryDto: {
             allergies?: components["schemas"]["AllergyDto"][];
+            /** @description Solo las condiciones que se contestaron (Sí / No / No sabe). Una condición del checklist que no figura está «Sin responder»: nunca se interpreta como «No». */
             conditions?: components["schemas"]["ConditionDto"][];
             medications?: components["schemas"]["MedicationDto"][];
             habits?: components["schemas"]["HabitsDto"];
@@ -7489,6 +7493,7 @@ export interface components {
             patientId: string;
             version: number;
             allergies: components["schemas"]["AllergyDto"][];
+            /** @description Solo las condiciones que se contestaron (Sí / No / No sabe). Una condición del checklist que no figura está «Sin responder»: nunca se interpreta como «No». */
             conditions: components["schemas"]["ConditionDto"][];
             medications: components["schemas"]["MedicationDto"][];
             habits: components["schemas"]["HabitsDto"] | null;

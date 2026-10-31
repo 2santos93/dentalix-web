@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CONDITION_UNANSWERED_LABEL } from '@/lib/clinical/clinical-types';
 
 const copy = {
   back: 'Anamnesis por revisar',
@@ -112,7 +113,9 @@ function DiffRow({ entry }: { entry: HistoryDiffEntry }) {
           )}
           {entry.before !== null && entry.after !== null && <span aria-hidden> → </span>}
           {entry.after !== null && (
-            <span className="text-ink">
+            // «Sin responder» (condición que la versión no recoge) va atenuado:
+            // no es un hallazgo, es la falta de uno.
+            <span className={entry.after === CONDITION_UNANSWERED_LABEL ? 'text-muted' : 'text-ink'}>
               <span className="sr-only">{copy.after}: </span>
               {entry.after}
             </span>

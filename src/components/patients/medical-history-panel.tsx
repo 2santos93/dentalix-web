@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
+import { ConditionSummaryText } from '@/components/clinical/condition-summary';
 import {
   getMedicalHistory,
   saveMedicalHistory,
@@ -36,7 +37,7 @@ const copy = {
   unknownAuthor: 'autor no registrado',
   fieldFallback: '—',
   allergiesCountLabel: 'Alergias registradas',
-  conditionsCountLabel: 'Condiciones registradas',
+  conditionsLabel: 'Condiciones',
   medicationsCountLabel: 'Medicamentos registrados',
   familyHistoryLabel: 'Antecedentes familiares',
   notesLabel: 'Notas',
@@ -252,7 +253,9 @@ export function MedicalHistoryPanel({ token, patientId, onSaved }: MedicalHistor
             </div>
             <dl className="grid gap-3 sm:grid-cols-2">
               <DescriptionItem label={copy.allergiesCountLabel} numeric>{latest.allergies.length}</DescriptionItem>
-              <DescriptionItem label={copy.conditionsCountLabel} numeric>{latest.conditions.length}</DescriptionItem>
+              <DescriptionItem label={copy.conditionsLabel}>
+                <ConditionSummaryText conditions={latest.conditions} />
+              </DescriptionItem>
               <DescriptionItem label={copy.medicationsCountLabel} numeric>{latest.medications.length}</DescriptionItem>
               <DescriptionItem label={copy.familyHistoryLabel}>{latest.familyHistory ?? copy.fieldFallback}</DescriptionItem>
               <DescriptionItem label={copy.notesLabel}>{latest.notes ?? copy.fieldFallback}</DescriptionItem>

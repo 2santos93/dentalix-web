@@ -102,9 +102,6 @@
     "checkbox": 1,
     "textarea": 1
   },
-  "src/components/clinical/condition-checklist.tsx": {
-    "select": 1
-  },
   "src/components/clinical/habits-editor.tsx": {
     "checkbox": 7
   },

@@ -24,6 +24,7 @@ import { isEmailAddress } from '@/lib/format/email';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
+import { ConditionSummaryText } from '@/components/clinical/condition-summary';
 import {
   EMPTY_SELECTION,
   decisionsFromSelection,
@@ -52,7 +53,7 @@ const copy = {
   requiredError: 'Nombre, apellido y tipo de documento son obligatorios para continuar.',
   summaryTitle: 'Resumen de la historia clínica',
   summaryAllergies: (n: number) => `Alergias registradas: ${n}`,
-  summaryConditions: (n: number) => `Condiciones marcadas: ${n}`,
+  summaryConditions: 'Condiciones: ',
   summaryMedications: (n: number) => `Medicamentos registrados: ${n}`,
   noClinicalHistoryNote:
     'La historia clínica (antecedentes, alergias, medicamentos y hábitos) la completará el equipo clínico desde la ficha del paciente.',
@@ -464,7 +465,10 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
               <div className="flex flex-col gap-1 rounded-lg border border-border p-3 text-sm text-ink">
                 <p className="t-label text-ink">{copy.summaryTitle}</p>
                 <p>{copy.summaryAllergies(history.allergies?.length ?? 0)}</p>
-                <p>{copy.summaryConditions(history.conditions?.length ?? 0)}</p>
+                <p>
+                  {copy.summaryConditions}
+                  <ConditionSummaryText conditions={history.conditions} />
+                </p>
                 <p>{copy.summaryMedications(history.medications?.length ?? 0)}</p>
               </div>
             ) : (
