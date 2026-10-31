@@ -10,6 +10,8 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { DateField } from '@/components/ui/date-field';
 import {
   DOC_TYPES,
   docTypeOptionLabel,
@@ -36,10 +38,6 @@ const copy = {
   sex: 'Sexo',
   emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',
 };
-
-// Native <select> styled like the Input atom (same class/rationale as staff-view.tsx).
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 const SEXES: { value: Patient['sex']; label: string }[] = [
   { value: 'M', label: 'Masculino' },
@@ -122,7 +120,7 @@ const GROUPS: { title: string; fields: TextFieldSpec[] }[] = [
 
 type TextState = Record<TextKey, string>;
 
-/** `birthDate` llega ISO completo y el <input type="date"> quiere YYYY-MM-DD. */
+/** `birthDate` llega ISO completo y el `DateField` quiere YYYY-MM-DD. */
 function textStateFrom(patient: Patient): TextState {
   const state = {} as TextState;
   for (const group of GROUPS) {
@@ -291,6 +289,18 @@ export function PatientEditModal({
   function textField(f: TextFieldSpec) {
     const id = `pe-${f.key}`;
     const error = f.key === 'email' ? emailError : f.key === 'phone' ? phoneError : null;
+    if (f.type === 'date') {
+      return (
+        <FormField key={f.key} htmlFor={id} label={f.label}>
+          <DateField
+            id={id}
+            value={text[f.key] || null}
+            onChange={(value) => setText((prev) => ({ ...prev, [f.key]: value ?? '' }))}
+            showAge={f.key === 'birthDate'}
+          />
+        </FormField>
+      );
+    }
     return (
       <FormField key={f.key} htmlFor={id} label={f.label} error={error}>
         <Input
@@ -326,14 +336,14 @@ export function PatientEditModal({
       <div className="flex flex-col gap-6">
         {GROUPS.map((group) => (
           <section key={group.title} className="flex flex-col gap-3">
-            <h3 className="text-sm font-medium text-muted">{group.title}</h3>
+            <h3 className="t-label text-muted">{group.title}</h3>
             <div className="grid gap-4 sm:grid-cols-2">
               {group.title === copy.identification ? (
                 <>
                   {group.fields.filter((f) => f.key === 'firstName' || f.key === 'lastName').map(textField)}
                   {/* El tipo junto a su número, y su nombre libre debajo (R7). */}
                   <FormField htmlFor="pe-doc-type" label={copy.docType}>
-                    <select
+                    <NativeSelect
                       id="pe-doc-type"
                       value={docType}
                       onChange={(e) => {
@@ -346,14 +356,13 @@ export function PatientEditModal({
                         );
                         setDocTypeLabelError(null);
                       }}
-                      className={fieldClass}
                     >
                       {DOC_TYPES.map((t) => (
                         <option key={t} value={t}>
                           {docTypeOptionLabel(t, docTypeNames)}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </FormField>
                   {group.fields.filter((f) => f.key === 'docNumber').map(textField)}
                   <DocTypeLabelField
@@ -369,18 +378,17 @@ export function PatientEditModal({
                   />
                   {group.fields.filter((f) => f.key === 'birthDate').map(textField)}
                   <FormField htmlFor="pe-sex" label={copy.sex}>
-                    <select
+                    <NativeSelect
                       id="pe-sex"
                       value={sex}
                       onChange={(e) => setSex(e.target.value as Patient['sex'])}
-                      className={fieldClass}
                     >
                       {SEXES.map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </FormField>
                 </>
               ) : (
