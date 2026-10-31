@@ -1,19 +1,25 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { FileSignature, Plus, Printer } from 'lucide-react';
+import { FileSignature, PenLine, Plus, Printer } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   SIGNER_TYPE_LABELS,
+  canUseConsents,
   consentPrintHref,
   listPatientConsents,
   type PatientConsent,
   type PatientConsentSummary,
 } from '@/lib/consents/consents-api';
 import { formatDateTime } from '@/lib/format/date';
+import type { ClinicRole } from '@/lib/me/me-api';
 import { AsyncSection } from '@/components/shared/async-section';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PatientSignatureRequestsSection } from '@/components/signature-requests/patient-signature-requests-section';
+import { CountersignConsentModal } from './countersign-consent-modal';
 import { NewConsentModal } from './new-consent-modal';
 
 const copy = {
@@ -34,11 +40,25 @@ const copy = {
   version: (v: number) => `Versión ${v} de la plantilla`,
   print: 'Ver e imprimir',
   printHint: (title: string) => `${title} (se abre en otra pestaña)`,
+  // DX-243: firma a distancia.
+  receptionSupport:
+    'Envía consentimientos a firmar a distancia y sigue su estado. El documento firmado lo ven los profesionales.',
+  colStatus: 'Estado',
+  complete: 'Completo',
+  pendingProfessional: 'Falta firma del profesional',
+  remote: 'A distancia',
+  countersign: 'Firmar como profesional',
+  countersignHint: (title: string) => ` · ${title}`,
+  countersigned: 'Consentimiento completo: firmaste como profesional.',
 };
 
 interface PatientConsentsTabProps {
   token: string;
   patientId: string;
+  /** Rol en esta clínica: recepción solo ve y usa la firma a distancia. */
+  role: ClinicRole | null;
+  /** Usuario de la sesión: firma como profesional lo que se le envió a él. */
+  userId: string | null;
 }
 
 function TabSkeleton() {
@@ -56,8 +76,51 @@ function TabSkeleton() {
  * firmados del paciente (append-only: no hay acciones de editar ni borrar) y
  * el modal «Nuevo consentimiento». Cada fila abre la vista imprimible en otra
  * pestaña, como el estado de cuenta.
+ *
+ * DX-243: arriba, «Firma a distancia» (enviar a firmar por email y el estado
+ * de cada envío; también para recepción, que no ve los documentos). Un
+ * consentimiento firmado a distancia solo está «Completo» cuando firma el
+ * profesional elegido al enviarlo: a él le sale «Firmar como profesional».
  */
-export function PatientConsentsTab({ token, patientId }: PatientConsentsTabProps) {
+export function PatientConsentsTab({ token, patientId, role, userId }: PatientConsentsTabProps) {
+  const clinical = canUseConsents(role);
+  const [signaturesKey, setSignaturesKey] = useState(0);
+
+  if (!clinical) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-ink">{copy.heading}</h2>
+          <p className="max-w-[68ch] text-sm text-muted">{copy.receptionSupport}</p>
+        </div>
+        <PatientSignatureRequestsSection token={token} patientId={patientId} clinical={false} />
+      </div>
+    );
+  }
+  return (
+    <ClinicalConsents
+      token={token}
+      patientId={patientId}
+      userId={userId}
+      signaturesKey={signaturesKey}
+      onCountersigned={() => setSignaturesKey((k) => k + 1)}
+    />
+  );
+}
+
+function ClinicalConsents({
+  token,
+  patientId,
+  userId,
+  signaturesKey,
+  onCountersigned,
+}: {
+  token: string;
+  patientId: string;
+  userId: string | null;
+  signaturesKey: number;
+  onCountersigned: () => void;
+}) {
   const [consents, setConsents] = useState<PatientConsentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +128,8 @@ export function PatientConsentsTab({ token, patientId }: PatientConsentsTabProps
   const [modalOpen, setModalOpen] = useState(false);
   // Cada apertura monta un modal nuevo: nada (ni una firma) pasa de una a otra.
   const [modalKey, setModalKey] = useState(0);
+  const [countersigning, setCountersigning] = useState<PatientConsentSummary | null>(null);
+  const [countersignKey, setCountersignKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +163,45 @@ export function PatientConsentsTab({ token, patientId }: PatientConsentsTabProps
     setModalOpen(true);
   }
 
+  function handleCountersigned(updated: PatientConsentSummary) {
+    setConsents((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    toast.success(copy.countersigned);
+    onCountersigned();
+  }
+
+  function status(consent: PatientConsentSummary) {
+    return (
+      <span className="flex flex-wrap items-center gap-1.5">
+        <Badge variant={consent.complete ? 'success' : 'warning'}>
+          {consent.complete ? copy.complete : copy.pendingProfessional}
+        </Badge>
+        {consent.remote ? <Badge variant="muted">{copy.remote}</Badge> : null}
+      </span>
+    );
+  }
+
+  /** Solo el profesional elegido al enviarlo firma lo que falta (la API lo exige). */
+  function countersignButton(consent: PatientConsentSummary) {
+    if (consent.complete || !consent.remote || consent.remote.professionalUserId !== userId) {
+      return null;
+    }
+    return (
+      <Button
+        type="button"
+        size="sm"
+        className="w-full sm:w-auto"
+        onClick={() => {
+          setCountersignKey((k) => k + 1);
+          setCountersigning(consent);
+        }}
+      >
+        <PenLine aria-hidden />
+        {copy.countersign}
+        <span className="sr-only">{copy.countersignHint(consent.title)}</span>
+      </Button>
+    );
+  }
+
   function printLink(consent: PatientConsentSummary) {
     return (
       <Button asChild variant="secondary" size="sm" className="w-full sm:w-auto">
@@ -112,6 +216,12 @@ export function PatientConsentsTab({ token, patientId }: PatientConsentsTabProps
 
   return (
     <div className="flex flex-col gap-4">
+      <PatientSignatureRequestsSection
+        token={token}
+        patientId={patientId}
+        clinical
+        refreshKey={signaturesKey}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-ink">{copy.heading}</h2>
@@ -151,6 +261,9 @@ export function PatientConsentsTab({ token, patientId }: PatientConsentsTabProps
               <th scope="col" className="px-4 py-3 font-medium text-muted">
                 {copy.colProfessional}
               </th>
+              <th scope="col" className="px-4 py-3 font-medium text-muted">
+                {copy.colStatus}
+              </th>
               <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
                 <span className="sr-only">{copy.colActions}</span>
               </th>
@@ -170,7 +283,13 @@ export function PatientConsentsTab({ token, patientId }: PatientConsentsTabProps
                   {copy.signer(consent.signerName, SIGNER_TYPE_LABELS[consent.signerType])}
                 </td>
                 <td className="px-4 py-3 text-muted">{consent.professionalName}</td>
-                <td className="px-4 py-3 text-right">{printLink(consent)}</td>
+                <td className="px-4 py-3">{status(consent)}</td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex flex-col items-end gap-2">
+                    {countersignButton(consent)}
+                    {printLink(consent)}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -188,11 +307,27 @@ export function PatientConsentsTab({ token, patientId }: PatientConsentsTabProps
                 {copy.signer(consent.signerName, SIGNER_TYPE_LABELS[consent.signerType])} ·{' '}
                 <span className="text-muted">{consent.professionalName}</span>
               </p>
+              {status(consent)}
+              {countersignButton(consent)}
               {printLink(consent)}
             </li>
           ))}
         </ul>
       </AsyncSection>
+
+      {countersigning ? (
+        <CountersignConsentModal
+          key={countersignKey}
+          open
+          onOpenChange={(open) => {
+            if (!open) setCountersigning(null);
+          }}
+          token={token}
+          patientId={patientId}
+          consent={countersigning}
+          onSigned={handleCountersigned}
+        />
+      ) : null}
 
       <NewConsentModal
         key={modalKey}

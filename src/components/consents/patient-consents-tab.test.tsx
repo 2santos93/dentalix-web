@@ -12,6 +12,13 @@ jest.mock('../../lib/consents/consents-api', () => ({
 jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   listPlans: jest.fn().mockResolvedValue([]),
 }));
+jest.mock('../../lib/signature-requests/signature-requests-api', () => ({
+  ...jest.requireActual('../../lib/signature-requests/signature-requests-api'),
+  listSignatureRequests: jest.fn().mockResolvedValue([]),
+}));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 
 const mockedList = listPatientConsents as jest.MockedFunction<typeof listPatientConsents>;
 
@@ -30,21 +37,44 @@ const consent = {
   contentHash: 'a'.repeat(64),
   signedAt: '2026-10-16T15:00:00.000Z',
   recordedById: 'u1',
+  remote: null,
+  professionalSignedAt: '2026-10-16T15:00:00.000Z',
+  complete: true,
 };
+
+const remoteConsent = {
+  ...consent,
+  id: 'c2',
+  signerType: 'PATIENT' as const,
+  signerName: 'Ana Pérez',
+  remote: {
+    signatureRequestId: 'sr-1',
+    channel: 'EMAIL' as const,
+    destinationMasked: 'an***@example.com',
+    sentAt: '2026-10-16T12:00:00.000Z',
+    openedAt: '2026-10-16T13:00:00.000Z',
+    verifiedAt: '2026-10-16T13:01:00.000Z',
+    professionalUserId: 'u-dentist',
+  },
+  professionalSignedAt: null,
+  complete: false,
+};
+
+const CLINICAL = { role: 'DENTIST' as const, userId: 'u-dentist' };
 
 describe('PatientConsentsTab', () => {
   beforeEach(() => mockedList.mockReset());
 
   it('carga con esqueleto (estado de carga anunciado)', () => {
     mockedList.mockReturnValue(new Promise(() => {}));
-    const { container } = render(<PatientConsentsTab token="tok" patientId="p1" />);
+    const { container } = render(<PatientConsentsTab token="tok" patientId="p1" {...CLINICAL} />);
     expect(screen.getByRole('status', { name: /cargando consentimientos/i })).toBeInTheDocument();
     expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
   });
 
   it('estado vacío que enseña qué hacer', async () => {
     mockedList.mockResolvedValue([]);
-    render(<PatientConsentsTab token="tok" patientId="p1" />);
+    render(<PatientConsentsTab token="tok" patientId="p1" {...CLINICAL} />);
     expect(
       await screen.findByText('Este paciente no tiene consentimientos firmados.'),
     ).toBeInTheDocument();
@@ -55,7 +85,7 @@ describe('PatientConsentsTab', () => {
     const user = setupUser();
     mockedList.mockRejectedValueOnce(new ApiError(500, 'Se cayó'));
     mockedList.mockResolvedValueOnce([consent]);
-    render(<PatientConsentsTab token="tok" patientId="p1" />);
+    render(<PatientConsentsTab token="tok" patientId="p1" {...CLINICAL} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar los consentimientos.');
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
@@ -66,7 +96,7 @@ describe('PatientConsentsTab', () => {
 
   it('lista firmante, profesional y un enlace a la vista imprimible; sin editar ni borrar', async () => {
     mockedList.mockResolvedValue([consent]);
-    render(<PatientConsentsTab token="tok" patientId="p1" />);
+    render(<PatientConsentsTab token="tok" patientId="p1" {...CLINICAL} />);
 
     const table = await screen.findByRole('table', { name: 'Consentimientos firmados' });
     const row = within(table).getAllByRole('row')[1];
@@ -82,8 +112,36 @@ describe('PatientConsentsTab', () => {
   it('«Nuevo consentimiento» abre el modal', async () => {
     const user = setupUser();
     mockedList.mockResolvedValue([]);
-    render(<PatientConsentsTab token="tok" patientId="p1" />);
+    render(<PatientConsentsTab token="tok" patientId="p1" {...CLINICAL} />);
     await user.click(await screen.findByRole('button', { name: /nuevo consentimiento/i }));
     expect(await screen.findByRole('dialog', { name: 'Nuevo consentimiento' })).toBeInTheDocument();
+  });
+
+  it('DX-243: «Completo» o «Falta firma del profesional»; solo el profesional elegido ve «Firmar como profesional»', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([remoteConsent, consent]);
+    render(<PatientConsentsTab token="tok" patientId="p1" {...CLINICAL} />);
+    const table = await screen.findByRole('table', { name: 'Consentimientos firmados' });
+    const [, remoteRow, onScreenRow] = within(table).getAllByRole('row');
+    expect(remoteRow).toHaveTextContent('Falta firma del profesional');
+    expect(remoteRow).toHaveTextContent('A distancia');
+    expect(onScreenRow).toHaveTextContent('Completo');
+    expect(within(onScreenRow).queryByRole('button', { name: /firmar como profesional/i })).not.toBeInTheDocument();
+    await user.click(within(remoteRow).getByRole('button', { name: /firmar como profesional/i }));
+    expect(await screen.findByRole('dialog', { name: 'Firmar como profesional' })).toBeInTheDocument();
+  });
+
+  it('DX-243: otro profesional no ve el botón de firmar lo que no le enviaron', async () => {
+    mockedList.mockResolvedValue([remoteConsent]);
+    render(<PatientConsentsTab token="tok" patientId="p1" role="ADMIN" userId="u-admin" />);
+    const table = await screen.findByRole('table', { name: 'Consentimientos firmados' });
+    expect(within(table).queryByRole('button', { name: /firmar como profesional/i })).not.toBeInTheDocument();
+  });
+
+  it('DX-243: recepción ve solo la firma a distancia (no pide los documentos firmados)', async () => {
+    render(<PatientConsentsTab token="tok" patientId="p1" role="RECEPTION" userId="u-rec" />);
+    expect(await screen.findByRole('button', { name: /enviar a firmar/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /nuevo consentimiento/i })).not.toBeInTheDocument();
+    expect(mockedList).not.toHaveBeenCalled();
   });
 });

@@ -32,6 +32,8 @@ function guardApiBody(req: NextRequest): NextResponse {
  * token en la URL y datos de salud en la página: ni se manda el Referer a
  * terceros (el logo de la clínica en otro dominio), ni se guarda en cachés, ni
  * se indexa. Van en la respuesta, además de los metadatos de la página.
+ * DX-243: lo mismo para la firma a distancia (`/firmar/<token>`), que tras el
+ * código muestra el consentimiento.
  */
 export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',
@@ -39,8 +41,10 @@ export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'X-Robots-Tag': 'noindex, nofollow',
 };
 
+const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar'];
+
 function isHealthFormPath(pathname: string): boolean {
-  return pathname === '/anamnesis' || pathname.startsWith('/anamnesis/');
+  return HEALTH_FORM_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 /**

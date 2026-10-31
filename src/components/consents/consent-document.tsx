@@ -18,6 +18,18 @@ const copy = {
   footerVersion: (v: number) => `Plantilla, versión ${v}`,
   tampered:
     'La huella no coincide con el contenido guardado: este documento pudo alterarse fuera de Dentalix.',
+  // DX-243: firmado por el paciente a distancia.
+  professionalPending: 'Pendiente de la firma del profesional',
+  incomplete:
+    'Firmado por el paciente a distancia. Falta la firma del profesional: hasta entonces no está completo.',
+  remoteHeading: 'Firma a distancia (evidencias)',
+  remoteChannel: (to: string) => `Enviado por email a ${to}`,
+  remoteSent: 'Enviado',
+  remoteOpened: 'Abierto',
+  remoteVerified: 'Código verificado',
+  remoteSigned: 'Firmado por el paciente',
+  remoteIp: 'IP del paciente',
+  professionalSignedAt: 'Firma del profesional',
 };
 
 interface ConsentDocumentProps {
@@ -101,12 +113,16 @@ export function ConsentDocument({ consent }: ConsentDocumentProps) {
             </figcaption>
           </figure>
           <figure className="flex flex-col gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element -- data URL de la firma; next/image no la optimiza */}
-            <img
-              src={consent.professionalSignature}
-              alt={copy.professionalSignatureAlt(consent.professionalName)}
-              className="h-28 w-full object-contain object-left-bottom"
-            />
+            {consent.professionalSignature ? (
+              // eslint-disable-next-line @next/next/no-img-element -- data URL de la firma; next/image no la optimiza
+              <img
+                src={consent.professionalSignature}
+                alt={copy.professionalSignatureAlt(consent.professionalName)}
+                className="h-28 w-full object-contain object-left-bottom"
+              />
+            ) : (
+              <p className="flex h-28 items-end text-sm italic text-[#6b7280]">{copy.professionalPending}</p>
+            )}
             <figcaption className="border-t border-[#111827] pt-2 text-sm">
               <span className="block font-medium">{consent.professionalName}</span>
               <span className="text-[#4b5563]">{copy.professional}</span>
@@ -115,10 +131,40 @@ export function ConsentDocument({ consent }: ConsentDocumentProps) {
         </div>
       </section>
 
+      {consent.remote ? (
+        <section aria-label={copy.remoteHeading} className="mt-8 text-xs text-[#4b5563]">
+          <h2 className="text-sm font-semibold text-[#111827]">{copy.remoteHeading}</h2>
+          <p className="mt-1">{copy.remoteChannel(consent.remote.destinationMasked)}</p>
+          <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 print:grid-cols-2">
+            {(
+              [
+                [copy.remoteSent, formatDateTime(consent.remote.sentAt)],
+                [copy.remoteOpened, formatDateTime(consent.remote.openedAt)],
+                [copy.remoteVerified, formatDateTime(consent.remote.verifiedAt)],
+                [copy.remoteSigned, formatDateTime(consent.signedAt)],
+                [copy.remoteIp, consent.remoteIpAddress ?? copy.noDocument],
+                [
+                  copy.professionalSignedAt,
+                  consent.professionalSignedAt
+                    ? formatDateTime(consent.professionalSignedAt)
+                    : copy.professionalPending,
+                ],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label} className="flex gap-2">
+                <dt>{label}:</dt>
+                <dd className="tabular-nums text-[#111827]">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : null}
+
       <footer className="mt-10 flex flex-col gap-2 border-t border-[#d1d5db] pt-4 text-xs text-[#4b5563]">
         {!consent.integrityOk ? (
           <p className="font-medium text-[#be123c]">{copy.tampered}</p>
         ) : null}
+        {!consent.complete ? <p className="font-medium text-[#b45309]">{copy.incomplete}</p> : null}
         <p>
           {copy.footerSignedAt}:{' '}
           <span className="tabular-nums text-[#111827]">{formatDateTime(consent.signedAt)}</span> ·{' '}
