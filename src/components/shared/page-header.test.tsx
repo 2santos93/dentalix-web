@@ -21,11 +21,13 @@ describe('PageHeader', () => {
 });
 
 describe('Pantallas de ajustes (DX-282)', () => {
-  // Cada pantalla del índice vuelve al índice desde su cabecera.
+  // Cada pantalla del índice vuelve al índice desde su cabecera: con
+  // `PageHeader back={SETTINGS_BACK}` o con la plantilla `SettingsPage` (B6),
+  // cuya vuelta por defecto es `SETTINGS_BACK`.
   const pages = SETTINGS_SECTIONS.flatMap((section) => section.entries.map((entry) => entry.href));
 
   it.each(pages)('%s enlaza «← Ajustes» en el PageHeader', (href) => {
     const file = path.join(process.cwd(), 'src/app/(app)', href, 'page.tsx');
-    expect(readFileSync(file, 'utf8')).toMatch(/<PageHeader[^>]*\bback=\{SETTINGS_BACK\}/);
+    expect(readFileSync(file, 'utf8')).toMatch(/<PageHeader[^>]*\bback=\{SETTINGS_BACK\}|<SettingsPage\b(?![^>]*\bback=)/);
   });
 });
