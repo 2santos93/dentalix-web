@@ -25,6 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { EmptyState } from '@/components/shared/empty-state';
+import { NativeSelect } from '@/components/ui/native-select';
 import { FormField } from '@/components/shared/form-field';
 import { ProviderWeekEditor } from './provider-week-editor';
 import { ProviderOverrides } from './provider-overrides';
@@ -50,9 +51,6 @@ const copy = {
   readOnly: 'Solo un administrador puede cambiar los horarios de los profesionales.',
   strictTitle: 'Citas fuera de horario',
 };
-
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:max-w-xs';
 
 function PanelSkeleton() {
   return (
@@ -123,9 +121,9 @@ export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPane
   return (
     <div className="flex flex-col gap-8">
       <FormField htmlFor="provider-schedule-provider" label={copy.provider}>
-        <select
+        <NativeSelect
           id="provider-schedule-provider"
-          className={fieldClass}
+          className="sm:max-w-xs"
           value={selected.providerId}
           onChange={(e) => setProviderId(e.target.value)}
         >
@@ -134,7 +132,7 @@ export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPane
               {p.fullName}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
 
       {providerLocations.length === 0 ? (

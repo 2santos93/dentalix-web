@@ -1,4 +1,5 @@
 'use client';
+import { Switch } from '@/components/ui/switch';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -74,21 +75,14 @@ export function StrictScheduleSetting({ token, canEdit }: { token: string; canEd
   }
 
   return (
-    <label className="flex max-w-prose items-start gap-3 text-sm">
-      <input
-        type="checkbox"
-        className="mt-0.5 size-4 shrink-0 accent-[var(--color-primary)]"
-        checked={strict}
-        disabled={saving}
-        aria-describedby="strict-schedule-hint"
-        onChange={(e) => void toggle(e.target.checked)}
-      />
-      <span className="flex flex-col gap-0.5">
-        <span className="font-medium text-ink">{copy.label}</span>
-        <span id="strict-schedule-hint" className="text-xs text-muted">
-          {copy.hint}
-        </span>
-      </span>
-    </label>
+    // Se aplica al momento (sin «Guardar»): un Switch, no una casilla.
+    <Switch
+      className="max-w-prose"
+      checked={strict}
+      disabled={saving}
+      onChange={(e) => void toggle(e.target.checked)}
+      label={copy.label}
+      description={copy.hint}
+    />
   );
 }

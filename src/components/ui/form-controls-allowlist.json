@@ -184,27 +184,11 @@
   "src/components/location-calendar/working-weekdays-form.tsx": {
     "checkbox": 1
   },
-  "src/components/locations/business-hours-form.tsx": {
-    "checkbox": 1
-  },
   "src/components/locations/location-switcher.tsx": {
     "select": 2
   },
-  "src/components/locations/provider-overrides.tsx": {
-    "checkbox": 1,
-    "select": 1
-  },
-  "src/components/locations/provider-schedules-panel.tsx": {
-    "select": 1
-  },
-  "src/components/locations/provider-week-editor.tsx": {
-    "checkbox": 1
-  },
   "src/components/locations/regional-settings-fields.tsx": {
     "radio": 1
-  },
-  "src/components/locations/strict-schedule-setting.tsx": {
-    "checkbox": 1
   },
   "src/components/odontogram/catalog-picker.tsx": {
     "radio": 1,

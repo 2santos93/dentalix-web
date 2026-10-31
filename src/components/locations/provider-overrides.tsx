@@ -18,6 +18,10 @@ import {
 import { civilDateLabel } from '@/lib/format/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
+import { TimeField } from '@/components/ui/date-field';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -52,9 +56,6 @@ const copy = {
   removeError: 'No pudimos quitar la excepción. Intenta de nuevo.',
   removed: 'Excepción quitada.',
 };
-
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 
 function dateLabel(date: string): string {
   return civilDateLabel(date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -172,7 +173,7 @@ export function ProviderOverrides({
           <CalendarX2 className="size-4 shrink-0" aria-hidden /> {copy.empty}
         </p>
       ) : (
-        <ul aria-label={copy.title} className="divide-y divide-hairline rounded-xl border border-border bg-surface">
+        <ul aria-label={copy.title} className="divide-y divide-border-subtle rounded-xl border border-border bg-surface">
           {overrides.map((o) => {
             const label = dateLabel(o.date);
             return (
@@ -222,9 +223,8 @@ export function ProviderOverrides({
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField htmlFor="override-location" label={copy.location}>
-            <select
+            <NativeSelect
               id="override-location"
-              className={fieldClass}
               value={locationId}
               onChange={(e) => setLocationId(e.target.value)}
             >
@@ -233,57 +233,37 @@ export function ProviderOverrides({
                   {l.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
           <FormField htmlFor="override-date" label={copy.date}>
-            <Input
-              id="override-date"
-              type="date"
-              required
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="tabular-nums"
-            />
+            <DatePicker id="override-date" required value={date || null} onChange={(v) => setDate(v ?? '')} />
           </FormField>
         </div>
-        <label className="flex min-h-11 items-center gap-3 text-sm text-ink">
-          <input
-            type="checkbox"
-            className="size-4 accent-[var(--color-primary)]"
-            checked={off}
-            onChange={(e) => setOff(e.target.checked)}
-          />
-          {copy.off}
-        </label>
+        <Checkbox label={copy.off} checked={off} onChange={(e) => setOff(e.target.checked)} />
         {!off ? (
           <div className="flex flex-col gap-2">
             {ranges.map((r, i) => (
               <div key={i} className="flex flex-wrap items-center gap-1.5">
-                <Input
-                  type="time"
-                  step={300}
+                <TimeField
                   required
                   aria-label={copy.from(i + 1)}
-                  value={r.start}
-                  onChange={(e) => setRanges((prev) => prev.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))}
-                  className="h-9 w-[6.75rem] px-2 tabular-nums"
+                  value={r.start || null}
+                  onChange={(v) => setRanges((prev) => prev.map((x, j) => (j === i ? { ...x, start: v ?? '' } : x)))}
+                  className="w-32"
                 />
                 <span aria-hidden className="text-muted">–</span>
-                <Input
-                  type="time"
-                  step={300}
+                <TimeField
                   required
                   aria-label={copy.to(i + 1)}
-                  value={r.end}
-                  onChange={(e) => setRanges((prev) => prev.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))}
-                  className="h-9 w-[6.75rem] px-2 tabular-nums"
+                  value={r.end || null}
+                  onChange={(v) => setRanges((prev) => prev.map((x, j) => (j === i ? { ...x, end: v ?? '' } : x)))}
+                  className="w-32"
                 />
                 {ranges.length > 1 ? (
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="size-9 p-0"
+                    variant="destructive-ghost"
+                    size="icon-sm"
                     aria-label={copy.removeRange(i + 1)}
                     onClick={() => setRanges((prev) => prev.filter((_, j) => j !== i))}
                   >

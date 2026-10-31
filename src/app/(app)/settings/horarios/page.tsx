@@ -5,8 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canEditProviderSchedules } from '@/lib/locations/provider-schedule-api';
 import { localDateString } from '@/lib/locations/provider-schedule';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { BusinessHoursForm } from '@/components/locations/business-hours-form';
 import { ProviderSchedulesPanel } from '@/components/locations/provider-schedules-panel';
 import { ScheduleRoster } from '@/components/locations/schedule-roster';
@@ -21,7 +20,7 @@ import {
 const copy = {
   title: 'Horarios',
   description: {
-    sede: 'Define los días y tramos en que la sede atiende. Las citas fuera de ese horario se rechazan. Para los plazos en días hábiles, mira Calendario de la sede.',
+    sede: 'Los días y tramos en que atiende la sede. Las citas fuera de ese horario se rechazan; los plazos en días hábiles están en Calendario de la sede.',
     profesionales:
       'En qué sede atiende cada profesional cada día, y las fechas con un horario distinto.',
     cuadrante: 'La semana de cada profesional, con la sede en la que está cada día.',
@@ -74,14 +73,21 @@ function SchedulesRoute() {
   const canEdit = canEditProviderSchedules(getTokenRole(accessToken));
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description[tab]} />
-      <ScheduleTabs active={tab} onChange={changeTab} />
-      <div role="tabpanel" id={schedulePanelId(tab)} aria-labelledby={scheduleTabId(tab)}>
-        {tab === 'sede' ? <BusinessHoursForm token={accessToken} /> : null}
-        {tab === 'profesionales' ? <ProviderSchedulesPanel token={accessToken} canEdit={canEdit} /> : null}
-        {tab === 'cuadrante' ? <ScheduleRoster token={accessToken} today={today} /> : null}
+    // El cuadrante es una tabla de la semana: ancho completo. Los formularios, 720 px.
+    <SettingsPage
+      title={copy.title}
+      description={copy.description[tab]}
+      scope="sede"
+      width={tab === 'cuadrante' ? 'wide' : 'form'}
+    >
+      <div className="flex flex-col gap-6">
+        <ScheduleTabs active={tab} onChange={changeTab} />
+        <div role="tabpanel" id={schedulePanelId(tab)} aria-labelledby={scheduleTabId(tab)}>
+          {tab === 'sede' ? <BusinessHoursForm token={accessToken} /> : null}
+          {tab === 'profesionales' ? <ProviderSchedulesPanel token={accessToken} canEdit={canEdit} /> : null}
+          {tab === 'cuadrante' ? <ScheduleRoster token={accessToken} today={today} /> : null}
+        </div>
       </div>
-    </>
+    </SettingsPage>
   );
 }

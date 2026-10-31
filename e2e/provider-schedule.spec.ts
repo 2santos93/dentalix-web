@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './support/test';
-import { fillDate } from './support/dates';
+import { fillDate, fillTime } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -93,8 +93,9 @@ async function useSede(page: Page, id: string | null) {
 async function setRange(page: Page, day: string, sede: string, from: string, to: string) {
   const group = page.getByRole('group', { name: day, exact: true });
   await group.getByRole('button', { name: `Agregar tramo en ${sede}` }).click();
-  await group.getByLabel(`Desde, ${day}, ${sede}, tramo 1`).fill(from);
-  await group.getByLabel(`Hasta, ${day}, ${sede}, tramo 1`).fill(to);
+  // Los tramos son `TimeField` (B6): se escriben por segmentos.
+  await fillTime(group, `Desde, ${day}, ${sede}, tramo 1`, from);
+  await fillTime(group, `Hasta, ${day}, ${sede}, tramo 1`, to);
 }
 
 test('ADMIN define la rotación en dos sedes, copia el lunes al miércoles, añade una excepción y el cuadrante lo muestra', async ({
@@ -116,7 +117,7 @@ test('ADMIN define la rotación en dos sedes, copia el lunes al miércoles, aña
   await copyDialog.getByRole('checkbox', { name: 'Miércoles' }).check();
   await copyDialog.getByRole('button', { name: 'Copiar' }).click();
   await expect(copyDialog).toBeHidden();
-  await expect(page.getByLabel(`Desde, Miércoles, ${sedeAName}, tramo 1`)).toHaveValue('08:00');
+  await expect(page.getByRole('group', { name: `Desde, Miércoles, ${sedeAName}, tramo 1` })).toHaveText(/08\D*00/);
 
   // Un tramo del jueves en las dos sedes a la vez: no se guarda.
   await setRange(page, 'Jueves', sedeB, '14:00', '19:00');
@@ -137,7 +138,7 @@ test('ADMIN define la rotación en dos sedes, copia el lunes al miércoles, aña
   await page.getByRole('button', { name: 'Añadir excepción' }).click();
   const overrideDialog = page.getByRole('dialog', { name: 'Nueva excepción' });
   await overrideDialog.getByLabel('Sede', { exact: true }).selectOption({ label: sedeB });
-  await overrideDialog.getByLabel('Fecha').fill(NEXT_THURSDAY);
+  await fillDate(overrideDialog, 'Fecha', NEXT_THURSDAY);
   await overrideDialog.getByLabel('Nota (opcional)').fill('Congreso');
   await overrideDialog.getByRole('button', { name: 'Guardar excepción' }).click();
   await expect(overrideDialog).toBeHidden({ timeout: 10_000 });
