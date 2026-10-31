@@ -10,7 +10,7 @@ import { AnamnesisSettingsSection } from '@/components/clinical/anamnesis-settin
 
 const copy = {
   title: 'Historia clínica',
-  description: 'Cuánto vale la anamnesis antes de pedir que se revise, en todas las sedes de la clínica.',
+  description: 'Cuánto tiempo es válida la anamnesis antes de pedir que se revise, en todas las sedes de la clínica.',
   checkingSession: 'Verificando sesión…',
 };
 

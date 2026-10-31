@@ -14,8 +14,8 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export const noteTemplateFormCopy = {
   createTitle: 'Nueva plantilla de evolución',
@@ -229,13 +229,13 @@ export function NoteTemplateFormModal({
       </div>
 
       <FormField htmlFor="tpl-body" label={copy.body} hint={copy.bodyHint}>
-        <textarea
+        <Textarea
           id="tpl-body"
           rows={4}
           value={body}
           maxLength={5000}
           onChange={(e) => setBody(e.target.value)}
-          className={cn(fieldClass, 'h-auto font-mono text-[13px]')}
+          className="font-mono text-[13px]"
           required
         />
       </FormField>
@@ -300,20 +300,19 @@ export function NoteTemplateFormModal({
                     />
                   </FormField>
                   <FormField htmlFor={`${base}-type`} label={copy.type}>
-                    <select
+                    <NativeSelect
                       id={`${base}-type`}
                       value={p.type}
                       onChange={(e) =>
                         update(p.key, { type: e.target.value as NotePromptType, defaultValue: '' })
                       }
-                      className={cn(fieldClass, 'h-10')}
                     >
                       {(['ONE', 'MULTI', 'TEXT'] as const).map((t) => (
                         <option key={t} value={t}>
                           {copy.types[t]}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </FormField>
                 </div>
                 {p.type === 'TEXT' ? (
@@ -328,20 +327,18 @@ export function NoteTemplateFormModal({
                 ) : (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <FormField htmlFor={`${base}-options`} label={copy.options} hint={copy.optionsHint}>
-                      <textarea
+                      <Textarea
                         id={`${base}-options`}
                         rows={3}
                         value={p.options}
                         onChange={(e) => update(p.key, { options: e.target.value })}
-                        className={cn(fieldClass, 'h-auto')}
                       />
                     </FormField>
                     <FormField htmlFor={`${base}-default`} label={copy.defaultValue}>
-                      <select
+                      <NativeSelect
                         id={`${base}-default`}
                         value={options.includes(p.defaultValue) ? p.defaultValue : ''}
                         onChange={(e) => update(p.key, { defaultValue: e.target.value })}
-                        className={cn(fieldClass, 'h-10')}
                       >
                         <option value="">{copy.noDefault}</option>
                         {options.map((o) => (
@@ -349,7 +346,7 @@ export function NoteTemplateFormModal({
                             {o}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </FormField>
                   </div>
                 )}

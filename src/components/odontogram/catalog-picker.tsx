@@ -106,7 +106,7 @@ export function CatalogPicker({
               id={`${idPrefix}-${item.id}`}
               value={item.id}
               className={
-                'items-center border-b border-border-subtle px-3 last:border-0 transition-colors hover:bg-surface-sunken has-checked:bg-surface-sunken'
+                'items-center border-b border-border-subtle px-3 last:border-0 transition-colors hover:bg-surface-sunken has-checked:bg-surface-sunken [&>span:last-child]:flex-1'
               }
               label={
                 <span className="flex min-w-0 items-center gap-2">
