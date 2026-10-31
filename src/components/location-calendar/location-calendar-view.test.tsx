@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { typeDate } from '@/components/appointments/date-segments-for-tests';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import { LocationCalendarView, locationCalendarCopy } from './location-calendar-view';
 import { listLocations } from '@/lib/locations/locations-api';
 import { createHoliday, getLocationCalendar, setWorkingWeekdays } from '@/lib/locations/location-calendar-api';
@@ -8,6 +8,11 @@ import { setActiveLocationId } from '@/lib/locations/location-store';
 import { ApiError } from '@/lib/api/api-error';
 import { clinicLocation } from '@/lib/test/locations';
 import { setupUser } from '@/lib/test/user';
+
+// Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
+// pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
+// (mismo arreglo que perio-exam-editor). No cambia ninguna aserción.
+configure({ asyncUtilTimeout: 5_000 });
 
 // La URL de prueba: `router.replace` la cambia y la vista vuelve a leerla.
 let search = new URLSearchParams();

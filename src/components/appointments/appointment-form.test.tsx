@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppointmentForm } from './appointment-form';
 import { createAppointment } from '@/lib/appointments/appointments-api';
@@ -13,6 +13,11 @@ import { caracasSede, utcSede } from '@/lib/test/sede-clock';
 import { wallInstant } from '@/lib/time/wall-clock';
 import { ApiError } from '@/lib/api/api-error';
 import { dateGroup, readTime, typeDate, typeTime } from './date-segments-for-tests';
+
+// Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
+// pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
+// (mismo arreglo que perio-exam-editor). No cambia ninguna aserción.
+configure({ asyncUtilTimeout: 5_000 });
 
 // PatientForm (rendered inside the "Crear paciente" dialog) calls
 // useRouter() — mock it the same way patient-form.test.tsx does, since it's

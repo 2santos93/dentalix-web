@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { clearSegments, dateGroup, typeDate, typeTime } from './date-segments-for-tests';
 import { ScheduleBlockDialog } from './schedule-block-dialog';
@@ -11,6 +11,11 @@ import {
 import { clinicLocation } from '@/lib/test/locations';
 import { testAgendaClock } from '@/lib/test/sede-clock';
 import { listAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+
+// Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
+// pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
+// (mismo arreglo que perio-exam-editor). No cambia ninguna aserción.
+configure({ asyncUtilTimeout: 5_000 });
 
 /** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
 const CLOCK = testAgendaClock();

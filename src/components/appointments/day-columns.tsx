@@ -511,7 +511,8 @@ export function DayColumns({
                           // DX-446: el hueco reservado lleva el color de su tipo (inline,
                           // abajo); el bloqueo normal, el rayado de aviso sobre warning-subtle.
                           reservedColor
-                            ? 'border-l-4 [border-left-style:solid]'
+                            ? // Sin franja lateral gruesa (DESIGN): el color del tipo va en el borde y el fondo.
+                              'border-x'
                             : 'border-warning/50 bg-warning-subtle [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]',
                         )}
                         style={{
@@ -520,7 +521,6 @@ export function DayColumns({
                           ...(reservedColor
                             ? {
                                 borderColor: `color-mix(in oklab, ${reservedColor} 55%, transparent)`,
-                                borderLeftColor: reservedColor,
                                 backgroundColor: `color-mix(in oklab, ${reservedColor} ${block.released ? 4 : 12}%, transparent)`,
                               }
                             : {}),
