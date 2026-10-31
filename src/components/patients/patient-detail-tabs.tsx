@@ -35,7 +35,7 @@ interface PatientDetailTabsProps {
    * pasa a los roles que pueden leerlo.
    */
   accountStatementLabel?: string;
-  /** Etiqueta de la pestaña «Autorizaciones» (Ley 1581, DX-037). */
+  /** Etiqueta de la pestaña «Autorizaciones» (DX-037). */
   dataConsentsLabel?: string;
   /** «Consentimientos» (DX-006): sin etiqueta no existe (recepción no la ve). */
   consentsLabel?: string;

@@ -1,6 +1,6 @@
 import { zoneOffsetMinutes } from '@/lib/time/wall-clock';
 // Nombre en español de las ciudades de zona que no se escriben igual que en su
-// id IANA («Bogotá», «Ciudad de México»). Es solo un rótulo: ninguna zona se
+// id IANA («Ciudad de México», «São Paulo»). Es solo un rótulo: ninguna zona se
 // elige ni se sustituye por esta tabla.
 import zoneCityNamesEs from './zone-city-names-es.json';
 

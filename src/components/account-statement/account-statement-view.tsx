@@ -108,7 +108,7 @@ const copy = {
   colActions: 'Acciones',
   voidAction: 'Anular',
   receiptAction: 'Recibo',
-  // El «⋯» de cada movimiento: «Acciones de abono de 150.000,00 COP del 15/10/2026».
+  // El «⋯» de cada movimiento: «Acciones de abono de 150,00 USD del 15/10/2026».
   rowLabel: (amount: string, date: string) => `abono de ${amount} del ${date}`,
   colDue: 'Vencimiento',
   colInstallment: 'Cuota',

@@ -60,7 +60,7 @@ export function quoteFromRates(day: RatesOfDay, from: string, to: string): RateQ
 }
 
 /**
- * «1 USD = 4.000,00 COP»: con la moneda mayor a la izquierda, para que la
+ * «1 USD = 18,50 MXN»: con la moneda mayor a la izquierda, para que la
  * cifra nunca sea un 0,000… ilegible. `money` pinta un importe con su moneda.
  */
 export function ratePairLabel(
@@ -86,7 +86,7 @@ export function convertWithRate(amount: number, rate: Pick<RateQuote, 'fromPerBa
 }
 
 /**
- * La tasa que congeló un abono (DX-375), legible: «1 USD = COP 4.000,00» con
+ * La tasa que congeló un abono (DX-375), legible: «1 USD = MXN 18,50» con
  * la moneda mayor a la izquierda, sale de las dos tasas por unidad base que
  * guardó, la fuente y el día. Cifra y día con el formato de la sede y el
  * código ISO (DX-378); sin formato de la sede, «—» en su lugar. `null` si no

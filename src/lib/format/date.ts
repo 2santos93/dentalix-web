@@ -176,8 +176,8 @@ export function zonedDayStart(day: string, timeZone: string): string | null {
 }
 
 /**
- * Nombre legible de una zona IANA para rótulos (DX-097): «Bogotá» para
- * `America/Bogota`, «Caracas» para `America/Caracas`; en las demás, la ciudad
+ * Nombre legible de una zona IANA para rótulos (DX-097): «Ciudad de México» para
+ * `America/Mexico_City`, «Caracas» para `America/Caracas`; en las demás, la ciudad
  * del id (`zoneCityName`).
  */
 export function zoneCityLabel(timeZone: string): string {

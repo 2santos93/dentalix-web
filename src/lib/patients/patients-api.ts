@@ -99,12 +99,12 @@ export interface Patient {
   emergencyContactName?: string | null;
   emergencyContactRelationship?: string | null;
   emergencyContactPhone?: string | null;
-  /** DEPRECADO (DX-203), solo lectura: el acudiente es un responsable. */
+  /** DEPRECADO (DX-203), solo lectura: el tutor es un responsable. */
   guardianName?: string | null;
   /** DEPRECADO (DX-203), solo lectura. */
   guardianDocNumber?: string | null;
   createdById: string | null;
-  // DX-039 · retención legal de la HC (Res. 839/2017). Opcionales: los
+  // DX-039 · retención de la HC (15 años por defecto, ampliable). Opcionales: los
   // fixtures anteriores no los traen; la API siempre los manda.
   lastAttentionAt?: string | null;
   retentionExtended?: RetentionExtension;

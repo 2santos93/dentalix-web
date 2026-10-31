@@ -70,7 +70,7 @@ function parsePercent(text: string): number | null {
 
 /**
  * «Descuento %» sobre los ítems seleccionados del plan (DX-204). La vista
- * previa usa el mismo redondeo y el mismo tope que la API (COP sin
+ * previa usa el mismo redondeo y el mismo tope que la API (JPY sin
  * decimales, EUR a céntimos, nunca por encima del tope del rol ítem a ítem);
  * la API vuelve a comprobarlo todo y sus mensajes llegan en español. El padre
  * lo monta con una `key` por apertura.

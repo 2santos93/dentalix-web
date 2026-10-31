@@ -36,7 +36,7 @@ const copy = {
   countNoun: 'paciente',
   countNounPlural: 'pacientes',
   genericError: 'No pudimos cargar los pacientes.',
-  // Filtra por la cobertura del paciente (DX-153): «Cobertura: Sura EPS» se
+  // Filtra por la cobertura del paciente (DX-153): «Cobertura: Aseguradora Norte» se
   // entiende; «Todos los pagadores» suelto no decía qué filtraba.
   payerFilterLabel: 'Cobertura',
   allPayers: 'Todas',
