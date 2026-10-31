@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { AnamnesisInboxView } from './anamnesis-inbox-view';
 import { AnamnesisReviewView } from './anamnesis-review-view';
 import { PatientAnamnesisSection } from './patient-anamnesis-section';
+import { AnamnesisSendDialog } from './anamnesis-send-dialog';
 import { NetworkError } from '@/lib/api/api-error';
 import {
   acceptAnamnesis,
@@ -148,12 +149,46 @@ describe('Revisión de la anamnesis (DX-099)', () => {
 });
 
 describe('Bloque de la ficha (DX-099)', () => {
-  it('«Anamnesis pendiente de revisión» con «Revisar» para quien revisa, y «Enviar anamnesis»', async () => {
+  it('«Anamnesis pendiente de revisión» con «Revisar» para quien revisa', async () => {
     patientList.mockResolvedValue([submission()]);
-    render(<PatientAnamnesisSection token="t" patientId="p1" canReview />);
+    render(<PatientAnamnesisSection token="t" patientId="p1" canReview onSend={jest.fn()} />);
     expect(await screen.findByText('Anamnesis pendiente de revisión')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Revisar' })).toHaveAttribute('href', '/anamnesis-por-revisar/s1');
+    // Con anamnesis (o sin saber aún), no hay aviso: enviar vive en el menú «⋯».
+    expect(screen.queryByRole('button', { name: 'Enviar anamnesis' })).not.toBeInTheDocument();
+  });
+
+  it('sin anamnesis: UN aviso con «Enviar anamnesis» y «Registrar en Historia clínica»', async () => {
+    patientList.mockResolvedValue([]);
+    const onSend = jest.fn();
+    const onRegister = jest.fn();
+    render(
+      <PatientAnamnesisSection
+        token="t"
+        patientId="p1"
+        canReview
+        status="MISSING"
+        onSend={onSend}
+        onRegister={onRegister}
+      />,
+    );
+    expect(screen.getByText('Sin anamnesis registrada')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar anamnesis' }));
+    expect(onSend).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar en Historia clínica' }));
+    expect(onRegister).toHaveBeenCalled();
+  });
+
+  it('recepción (sin Historia clínica) no ve «Registrar»; con anamnesis y sin enlaces no pinta nada', async () => {
+    patientList.mockResolvedValue([]);
+    const { rerender, container } = render(
+      <PatientAnamnesisSection token="t" patientId="p1" canReview={false} status="MISSING" onSend={jest.fn()} />,
+    );
     expect(screen.getByRole('button', { name: 'Enviar anamnesis' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Registrar en Historia clínica' })).not.toBeInTheDocument();
+    rerender(<PatientAnamnesisSection token="t" patientId="p1" canReview={false} status="CURRENT" onSend={jest.fn()} />);
+    await waitFor(() => expect(patientList).toHaveBeenCalled());
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 
   it('un enlace más nuevo (esperando o anulado) no tapa la anamnesis que sigue por revisar', async () => {
@@ -162,15 +197,21 @@ describe('Bloque de la ficha (DX-099)', () => {
       submission({ id: 's2', status: 'PENDING_PATIENT', submittedAt: null }),
       submission({ id: 's1', status: 'SUBMITTED' }),
     ]);
-    render(<PatientAnamnesisSection token="t" patientId="p1" canReview />);
+    render(<PatientAnamnesisSection token="t" patientId="p1" canReview onSend={jest.fn()} />);
     expect(await screen.findByText('Anamnesis pendiente de revisión')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Revisar' })).toHaveAttribute('href', '/anamnesis-por-revisar/s1');
     // Y el último enlace sigue a la vista.
     expect(screen.getByText('Caducada o anulada')).toBeInTheDocument();
   });
 
-  it('recepción no ve «Revisar»; enviar muestra el enlace y WhatsApp', async () => {
+  it('recepción no ve «Revisar»', async () => {
     patientList.mockResolvedValue([submission()]);
+    render(<PatientAnamnesisSection token="t" patientId="p1" canReview={false} onSend={jest.fn()} />);
+    await screen.findByText('Anamnesis pendiente de revisión');
+    expect(screen.queryByRole('link', { name: 'Revisar' })).not.toBeInTheDocument();
+  });
+
+  it('el diálogo «Enviar anamnesis» genera el enlace con un clic explícito y avisa a la ficha', async () => {
     create.mockResolvedValue({
       id: 's2',
       patientId: 'p1',
@@ -181,14 +222,16 @@ describe('Bloque de la ficha (DX-099)', () => {
       whatsappUnavailableReason: null,
       consentRequired: false,
     });
-    render(<PatientAnamnesisSection token="t" patientId="p1" canReview={false} />);
-    await screen.findByText('Anamnesis pendiente de revisión');
-    expect(screen.queryByRole('link', { name: 'Revisar' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Enviar anamnesis' }));
+    const onCreated = jest.fn();
+    render(<AnamnesisSendDialog open onOpenChange={jest.fn()} token="t" patientId="p1" onCreated={onCreated} />);
+    const dialog = screen.getByRole('dialog', { name: 'Anamnesis por enlace' });
+    expect(create).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enviar anamnesis' }));
     expect(await screen.findByDisplayValue('http://demo.localhost:3001/anamnesis/abc')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Abrir WhatsApp/ })).toHaveAttribute(
       'href',
       'https://wa.me/573001234567?text=Hola',
     );
+    expect(onCreated).toHaveBeenCalled();
   });
 });

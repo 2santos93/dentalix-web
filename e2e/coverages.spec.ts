@@ -227,7 +227,9 @@ test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cab
   await shot(page, 'coverage-section', section);
 
   // Edita «Vigente hasta» a mañana: la cobertura vuelve a estar vigente.
-  await row.getByRole('button', { name: `Editar la cobertura de ${payerName}` }).click();
+  // «Editar» y «Quitar» viven en el menú «⋯» de la fila (UX v2 · K3).
+  await row.getByRole('button', { name: `Acciones de la cobertura de ${payerName}` }).click();
+  await page.getByRole('menuitem', { name: 'Editar' }).click();
   const edit = page.getByRole('dialog', { name: 'Editar cobertura' });
   await edit.getByLabel('Vigente hasta').fill(tomorrow);
   await edit.getByRole('button', { name: 'Guardar' }).click();

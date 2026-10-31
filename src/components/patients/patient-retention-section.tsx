@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { Archive, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   archivePatient,
@@ -13,12 +13,13 @@ import {
   type RetentionExtension,
 } from '@/lib/patients/patients-api';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { fieldClass } from '@/lib/ui/field-class';
+import { NativeSelect } from '@/components/ui/native-select';
+import { SectionHeader } from '@/components/ui/section-header';
+import { DATA_SECTION_CLASS } from './data-section';
 
 /** `YYYY-MM-DD` (o ISO) → `DD/MM/AAAA`, sin pasar por la zona del navegador. */
 export function formatCivilDate(value: string): string {
@@ -32,6 +33,13 @@ const RETENTION_MESSAGE_MAX = 400;
 
 const copy = {
   sectionLabel: 'Retención legal de la historia clínica',
+  sectionTitle: 'Retención legal',
+  // Chip corto de la cabecera; la frase completa está en «Datos».
+  chip: {
+    until: (date: string) => `Retención hasta ${date}`,
+    permanent: 'Retención permanente',
+    expired: (date: string) => `Retención vencida el ${date}`,
+  },
   until: (date: string) => `Historia en retención legal hasta ${date}`,
   permanent: 'Historia en retención legal permanente',
   expired: (date: string) => `Retención legal vencida el ${date}`,
@@ -130,30 +138,91 @@ function reasonError(reason: string): string | null {
   return reason.trim().length < RETENTION_REASON_MIN ? copy.reasonTooShort : null;
 }
 
-interface PatientRetentionSectionProps {
+/** Las tres acciones de ADMIN, que viven en el menú «⋯» de la cabecera. */
+export type RetentionDialog = 'retention' | 'suppress' | 'archive';
+
+export const retentionActionLabels = {
+  retention: copy.changeRetention,
+  suppress: copy.suppress,
+  archive: copy.archive,
+} satisfies Record<RetentionDialog, string>;
+
+/**
+ * Chip de la cabecera: la retención es un estado normal y esperado, no un
+ * riesgo — tono neutro, nunca ámbar junto a «Sin anamnesis» (critique-core §7).
+ * `null` sin atenciones clínicas: no hay nada que decir en la cabecera.
+ */
+export function retentionChip(patient: Patient): { text: string; hint: string | null } | null {
+  const status = statusOf(patient);
+  const hint = patient.underRetention ? copy.hint[patient.retentionExtended ?? 'NONE'] : null;
+  switch (status.kind) {
+    case 'until':
+      return { text: copy.chip.until(status.date), hint };
+    case 'permanent':
+      return { text: copy.chip.permanent, hint };
+    case 'expired':
+      return { text: copy.chip.expired(status.date), hint };
+    case 'none':
+      return null;
+  }
+}
+
+/**
+ * Retención legal de la HC en la pestaña «Datos» (DX-039): el aviso con la
+ * fecha hasta la que se conserva, el plazo y la supresión parcial si la hubo.
+ * Lo ven todos. Los controles (ADMIN) están en el menú «⋯» de la cabecera:
+ * son acciones raras y legalmente delicadas, no van a la vista en cada pestaña.
+ */
+export function PatientRetentionSection({ patient }: { patient: Patient }) {
+  const status = statusOf(patient);
+  return (
+    <section aria-label={copy.sectionLabel} className={DATA_SECTION_CLASS}>
+      <SectionHeader as="h2" title={copy.sectionTitle} />
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <p className="flex flex-wrap items-center gap-2 text-sm text-ink">
+          <ShieldCheck aria-hidden className="size-4 shrink-0 text-muted" />
+          <span className="tnum">{statusText(status)}</span>
+          {patient.retentionExtended === 'DOUBLE' ? (
+            <Badge variant="neutral">{copy.double}</Badge>
+          ) : null}
+        </p>
+        {patient.underRetention ? (
+          <p className="text-sm text-muted">{copy.hint[patient.retentionExtended ?? 'NONE']}</p>
+        ) : null}
+        {patient.partiallySuppressedAt ? (
+          <p className="text-sm text-muted tnum">
+            {copy.suppressed(formatCivilDate(patient.partiallySuppressedAt))}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+interface PatientRetentionDialogsProps {
   patient: Patient;
   token: string;
-  /** Solo ADMIN ve los controles; el servidor vuelve a exigirlo (403). */
-  isAdmin: boolean;
+  /** Qué modal está abierto (lo abre el menú «⋯» de la cabecera). */
+  dialog: RetentionDialog | null;
+  onDialogChange: (dialog: RetentionDialog | null) => void;
   onUpdated: (patient: Patient) => void;
   onArchived: () => void;
 }
 
 /**
- * Retención legal de la HC en la ficha (DX-039): el aviso con la fecha hasta
- * la que se conserva y, para ADMIN, los modales para cambiar la retención
- * extendida, la supresión parcial y archivar. Si la API rechaza el archivo con
- * 409 (`CLINICAL_RECORD_RETENTION`), el modal muestra su mensaje en español.
+ * Los modales de retención (DX-039) — cambiar la retención extendida,
+ * supresión parcial y archivar —, controlados desde fuera. Si la API rechaza
+ * el archivo con 409 (`CLINICAL_RECORD_RETENTION`), el modal muestra su
+ * mensaje en español. El servidor vuelve a exigir ADMIN (403).
  */
-export function PatientRetentionSection({
+export function PatientRetentionDialogs({
   patient,
   token,
-  isAdmin,
+  dialog,
+  onDialogChange,
   onUpdated,
   onArchived,
-}: PatientRetentionSectionProps) {
-  const status = statusOf(patient);
-  const [dialog, setDialog] = useState<'retention' | 'suppress' | 'archive' | null>(null);
+}: PatientRetentionDialogsProps) {
   const [extension, setExtension] = useState<RetentionExtension>(
     patient.retentionExtended ?? 'NONE',
   );
@@ -162,16 +231,20 @@ export function PatientRetentionSection({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  function open(next: 'retention' | 'suppress' | 'archive') {
-    setExtension(patient.retentionExtended ?? 'NONE');
-    setReason('');
-    setFieldError(null);
-    setError(null);
-    setDialog(next);
+  // Cada apertura empieza limpia (antes lo hacía `open()` en la propia sección).
+  const [openedFor, setOpenedFor] = useState<RetentionDialog | null>(null);
+  if (dialog !== openedFor) {
+    setOpenedFor(dialog);
+    if (dialog) {
+      setExtension(patient.retentionExtended ?? 'NONE');
+      setReason('');
+      setFieldError(null);
+      setError(null);
+    }
   }
 
   function close(isOpen: boolean) {
-    if (!isOpen && !busy) setDialog(null);
+    if (!isOpen && !busy) onDialogChange(null);
   }
 
   async function run(action: () => Promise<void>, fallback: string) {
@@ -179,7 +252,7 @@ export function PatientRetentionSection({
     setError(null);
     try {
       await action();
-      setDialog(null);
+      onDialogChange(null);
     } catch (err) {
       setError(apiErrorMessage(err, { fallback, maxLength: RETENTION_MESSAGE_MAX }));
     } finally {
@@ -213,49 +286,7 @@ export function PatientRetentionSection({
   }
 
   return (
-    <section
-      aria-label={copy.sectionLabel}
-      className="flex flex-col gap-3 rounded-lg border border-hairline bg-surface p-4 sm:flex-row sm:items-start sm:justify-between"
-    >
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant={status.kind === 'until' || status.kind === 'permanent' ? 'warning' : 'muted'}
-            className="gap-1.5"
-          >
-            <ShieldCheck aria-hidden className="size-3.5 shrink-0" />
-            <span className="tnum">{statusText(status)}</span>
-          </Badge>
-          {patient.retentionExtended === 'DOUBLE' ? (
-            <Badge variant="outline">{copy.double}</Badge>
-          ) : null}
-        </div>
-        {patient.underRetention ? (
-          <p className="text-sm text-muted">{copy.hint[patient.retentionExtended ?? 'NONE']}</p>
-        ) : null}
-        {patient.partiallySuppressedAt ? (
-          <p className="text-sm text-muted tnum">
-            {copy.suppressed(formatCivilDate(patient.partiallySuppressedAt))}
-          </p>
-        ) : null}
-      </div>
-
-      {isAdmin ? (
-        <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
-          <Button type="button" variant="secondary" size="sm" onClick={() => open('retention')}>
-            {copy.changeRetention}
-          </Button>
-          {patient.underRetention ? (
-            <Button type="button" variant="secondary" size="sm" onClick={() => open('suppress')}>
-              {copy.suppress}
-            </Button>
-          ) : null}
-          <Button type="button" variant="secondary" size="sm" onClick={() => open('archive')}>
-            <Archive aria-hidden className="size-4" /> {copy.archive}
-          </Button>
-        </div>
-      ) : null}
-
+    <>
       {dialog === 'retention' ? (
         <FormModal
           open
@@ -268,19 +299,18 @@ export function PatientRetentionSection({
           error={error}
         >
           <FormField htmlFor="retention-extension" label={copy.retentionLabel}>
-            <select
+            <NativeSelect
               id="retention-extension"
               name="retentionExtended"
               value={extension}
               onChange={(e) => setExtension(e.target.value as RetentionExtension)}
-              className={fieldClass}
             >
               {(Object.keys(copy.options) as RetentionExtension[]).map((value) => (
                 <option key={value} value={value}>
                   {copy.options[value]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
           <ReasonField
             id="retention-reason"
@@ -327,6 +357,6 @@ export function PatientRetentionSection({
           }, copy.archiveError)
         }
       />
-    </section>
+    </>
   );
 }

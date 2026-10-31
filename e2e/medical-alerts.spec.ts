@@ -428,7 +428,9 @@ test('la cabecera del plan y del odontograma lleva la alerta; «Sin cambios hoy�
   }
   await shot(page, 'ficha-odontograma-alerta-1440');
 
-  await page.goto(`${origin}/patients/${patients.ana}?tab=treatment-plans`);
+  // La cabecera dice «Anamnesis caducada» en todas las pestañas; la línea de
+  // revisión con «Sin cambios hoy» vive en «Historia clínica» (UX v2 · K3).
+  await page.goto(`${origin}/patients/${patients.ana}?tab=clinical-history`);
   await expect(page.getByTestId('record-medical-alert')).toContainText('Anamnesis caducada', { timeout: 15_000 });
   const review = page.getByTestId('anamnesis-review');
   await expect(review).toHaveAttribute('data-status', 'EXPIRED');

@@ -47,9 +47,15 @@ function buildAlertLines(data: MedicalHistory): string[] {
 interface ClinicalAlertBannerProps {
   token: string;
   patientId: string;
+  /**
+   * La ficha ya dice «Sin anamnesis registrada» en su aviso (con «Enviar
+   * anamnesis» y «Registrar»): aquí no se repite. Solo calla ESE estado; el
+   * fallo de la comprobación y «sin alertas» se siguen diciendo.
+   */
+  hideNoHistory?: boolean;
 }
 
-export function ClinicalAlertBanner({ token, patientId }: ClinicalAlertBannerProps) {
+export function ClinicalAlertBanner({ token, patientId, hideNoHistory = false }: ClinicalAlertBannerProps) {
   const [data, setData] = useState<MedicalHistory | null>(null);
   // Se sigue aparte de `data`: si el fallo se guardara como `data = null`,
   // "no pudimos preguntar" y "no hay alergias registradas" serían el mismo
@@ -121,6 +127,7 @@ export function ClinicalAlertBanner({ token, patientId }: ClinicalAlertBannerPro
   // `data === null` con la petición resuelta = el paciente no tiene ninguna
   // versión de anamnesis. No es lo mismo que tenerla y salir limpia.
   if (!data) {
+    if (hideNoHistory) return null;
     return (
       <p role="status" className="text-sm text-muted">
         {copy.noHistory}

@@ -1,22 +1,29 @@
 'use client';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { 
+import { ClipboardList, NotebookPen } from 'lucide-react';
+import {
   listPatientAnamnesisRequests,
   revokeAnamnesisRequest,
-  type AnamnesisSubmission
+  type AnamnesisSubmission,
 } from '@/lib/anamnesis/anamnesis-api';
 import { formatDateTime } from '@/lib/format/date';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
-import { AnamnesisLinkPanel } from './anamnesis-link-panel';
+import { Callout } from '@/components/ui/callout';
+import type { AnamnesisStatus } from '@/lib/clinical/medical-alerts';
 
 const copy = {
   heading: 'Anamnesis del paciente',
+  // Una sola frase para lo que antes se decía cuatro veces (chip, dos líneas y
+  // la tarjeta): la cabecera lleva el chip «Sin anamnesis»; aquí, qué hacer.
+  missingTitle: 'Sin anamnesis registrada',
+  missingBody: 'Nadie ha preguntado todavía por alergias ni condiciones: regístrala antes de tratar.',
+  send: 'Enviar anamnesis',
+  register: 'Registrar en Historia clínica',
   loadError: 'No pudimos cargar el estado de la anamnesis por enlace.',
   pending: (when: string) => `Recibida el ${when}. La historia clínica no cambia hasta que un odontólogo la acepte.`,
   waiting: (when: string) => `Enlace enviado; caduca el ${when}.`,
@@ -45,22 +52,44 @@ function detail(s: AnamnesisSubmission): string | null {
 }
 
 /**
- * Bloque de la ficha (DX-099): el estado del último cuestionario enviado por
- * enlace (esperando al paciente, aceptada…), toda anamnesis aún por revisar
- * («Anamnesis pendiente de revisión», aunque haya un enlace más nuevo) y
- * «Enviar anamnesis». Lo ven los cuatro roles; «Revisar» solo quien ve la
- * bandeja (la API no le da las respuestas a recepción).
+ * Bloque de anamnesis al principio de las pestañas «Datos» e «Historia
+ * clínica» (DX-099, DX-247). Sustituye a la tarjeta y a las dos frases que
+ * había encima de las pestañas:
+ *
+ * - Sin anamnesis: UN aviso (`Callout` de aviso) con «Enviar anamnesis» y
+ *   «Registrar en Historia clínica».
+ * - `reviewLine`: la línea de revisión (al día / caducada, «Sin cambios hoy»)
+ *   que la página pasa donde toca.
+ * - El estado de los cuestionarios por enlace: toda anamnesis aún por revisar
+ *   («Anamnesis pendiente de revisión», aunque haya un enlace más nuevo) y el
+ *   último enlace enviado. «Revisar», solo quien ve la bandeja (la API no le da
+ *   las respuestas a recepción).
+ *
+ * «Enviar anamnesis» abre el diálogo de la página (`onSend`), el mismo que el
+ * menú «⋯» de la cabecera. Sin nada que decir, no pinta nada.
  */
 export function PatientAnamnesisSection({
   token,
   patientId,
   canReview,
+  status = null,
+  onSend,
+  onRegister,
+  reviewLine = null,
+  refreshKey = 0,
 }: {
   token: string;
   patientId: string;
   canReview: boolean;
+  /** Estado de la anamnesis (banderas médicas); `null` mientras se comprueba o si falló. */
+  status?: AnamnesisStatus | null;
+  onSend: () => void;
+  /** Lleva a la anamnesis de «Historia clínica»; sin él (recepción) no se ofrece. */
+  onRegister?: () => void;
+  reviewLine?: ReactNode;
+  /** Sube al generar un enlace nuevo: se relee el estado. */
+  refreshKey?: number;
 }) {
-  const ids = useId();
   const [rows, setRows] = useState<AnamnesisSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +113,7 @@ export function PatientAnamnesisSection({
     return () => {
       cancelled = true;
     };
-  }, [token, patientId, reloadKey]);
+  }, [token, patientId, reloadKey, refreshKey]);
 
   const reload = () => setReloadKey((k) => k + 1);
   // Lo que se ve: toda anamnesis aún por revisar (un enlace más nuevo, esperando
@@ -104,39 +133,61 @@ export function PatientAnamnesisSection({
     }
   }
 
+  const missing = status === 'MISSING';
+  // Mientras carga no se reserva hueco: el bloque aparece si hay algo que decir.
+  const showRows = !loading && !error && visible.length > 0;
+  if (!missing && !reviewLine && !showRows && !error) return null;
+
   return (
     <section
-      aria-labelledby={`${ids}-heading`}
+      aria-label={copy.heading}
       data-testid="patient-anamnesis-section"
-      className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:p-6"
+      className="flex min-w-0 flex-col gap-3"
     >
-      <h2 id={`${ids}-heading`} className="text-base font-semibold text-ink">
-        {copy.heading}
-      </h2>
-      {loading ? (
-        <div role="status" aria-label="Cargando" className="flex flex-col gap-2">
-          <Skeleton className="h-6 w-56" />
-          <Skeleton className="h-4 w-72" />
-        </div>
-      ) : error ? (
+      {missing ? (
+        <Callout
+          tone="warning"
+          title={copy.missingTitle}
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={onSend}>
+                <ClipboardList aria-hidden /> {copy.send}
+              </Button>
+              {onRegister ? (
+                <Button type="button" variant="ghost" size="sm" onClick={onRegister}>
+                  <NotebookPen aria-hidden /> {copy.register}
+                </Button>
+              ) : null}
+            </div>
+          }
+        >
+          {copy.missingBody}
+        </Callout>
+      ) : null}
+      {reviewLine}
+      {error ? (
         <SectionError
           description={error}
-          className="py-8"
+          className="py-4"
           onRetry={() => {
             setLoading(true);
+            setError(null);
             reload();
           }}
         />
-      ) : visible.length > 0 ? (
-        <ul className="flex flex-col gap-3">
+      ) : showRows ? (
+        <ul className="flex flex-col divide-y divide-border-subtle">
           {visible.map((item) => (
-            <li key={item.id} className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex flex-col gap-1">
-                <StatusBadge kind="anamnesisSubmission" status={item.status} className="self-start" />
+            <li
+              key={item.id}
+              className="flex flex-col gap-2 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <StatusBadge kind="anamnesisSubmission" status={item.status} />
                 {detail(item) && <p className="text-sm text-muted tabular-nums">{detail(item)}</p>}
               </div>
               {item.status === 'SUBMITTED' && canReview && (
-                <Button asChild variant="secondary" className="min-h-11 sm:min-h-10">
+                <Button asChild variant="secondary" size="sm" className="self-start sm:self-auto">
                   <Link href={`/anamnesis-por-revisar/${item.id}`}>{copy.review}</Link>
                 </Button>
               )}
@@ -144,7 +195,8 @@ export function PatientAnamnesisSection({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="min-h-11 sm:min-h-10"
+                  size="sm"
+                  className="self-start sm:self-auto"
                   loading={revoking}
                   onClick={() => void handleRevoke(item.id)}
                 >
@@ -155,7 +207,6 @@ export function PatientAnamnesisSection({
           ))}
         </ul>
       ) : null}
-      <AnamnesisLinkPanel token={token} patientId={patientId} onCreated={reload} />
     </section>
   );
 }
