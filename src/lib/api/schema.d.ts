@@ -1221,7 +1221,7 @@ export interface paths {
         put?: never;
         /**
          * Registra anestesia local en la evolución (inalterable)
-         * @description El servidor calcula los mg, el acumulado del PACIENTE a menos de 24 h de la administración (todas sus evoluciones y sedes de la clínica, DX-418) y la fracción del máximo por peso. Al llegar al 100 % (o con alergia a anestésicos) responde 409 salvo `overrideReason`, que queda sellado y auditado. Dos registros simultáneos del mismo paciente se serializan (bloqueo por paciente): el segundo calcula con el primero.
+         * @description El servidor calcula los mg, el acumulado del PACIENTE en la ventana de 24 h que contiene la administración con más acumulado (todas sus evoluciones y sedes de la clínica, DX-418) y la fracción del máximo por peso. Al llegar al 100 % (o con alergia a anestésicos) responde 409 salvo `overrideReason`, que queda sellado y auditado. Dos registros simultáneos del mismo paciente se serializan (bloqueo por paciente): el segundo calcula con el primero.
          */
         post: operations["AnesthesiaController_record"];
         delete?: never;
@@ -1241,7 +1241,7 @@ export interface paths {
         put?: never;
         /**
          * Previsualiza la dosis acumulada con un anestésico más
-         * @description No guarda nada. Lee la anamnesis vigente (peso y alergias) y lo ya registrado al paciente a menos de 24 h de `administeredAt` (por defecto, ahora) en cualquier evolución y sede de la clínica (DX-418).
+         * @description No guarda nada. Lee la anamnesis vigente (peso y alergias) y lo ya registrado al paciente en la ventana de 24 h que contiene `administeredAt` (por defecto, ahora; la de más acumulado) en cualquier evolución y sede de la clínica (DX-418).
          */
         post: operations["AnesthesiaController_check"];
         delete?: never;
@@ -7647,18 +7647,18 @@ export interface components {
         };
         AnesthesiaDoseWindowDto: {
             /**
-             * @description DX-418: ventana MÓVIL de 24 h alrededor de la administración, no el día civil de la sede: las dosis máximas de anestésico local son por sesión / 24 h, y con el día civil 3 carpules a las 23:30 y 3 a las 00:30 empezarían de cero.
+             * @description DX-418: ventana MÓVIL de 24 h, no el día civil de la sede: las dosis máximas de anestésico local son por sesión / 24 h, y con el día civil 3 carpules a las 23:30 y 3 a las 00:30 empezarían de cero. Es la ventana de 24 h que contiene la administración con más acumulado: «ahora», las últimas 24 h; anotada tarde, puede ser la que acaba en una dosis posterior ya registrada. Nunca suma dosis a más de 24 h entre sí.
              * @example 24
              */
             hours: number;
             /**
              * Format: date-time
-             * @description Inicio (excluido)
+             * @description Inicio (incluido)
              */
             from: string;
             /**
              * Format: date-time
-             * @description Fin (excluido)
+             * @description Fin (incluido)
              */
             to: string;
             /** @description Lo ya registrado, por evolución y profesional, en orden de administración */
@@ -7687,7 +7687,7 @@ export interface components {
             weightKg?: number;
             /**
              * Format: date-time
-             * @description Hora de la administración; por defecto, ahora. No puede ser futura. Centra la ventana de 24 h del acumulado del paciente (DX-418): manda la misma al previsualizar y al guardar.
+             * @description Hora de la administración; por defecto, ahora. No puede ser futura. Decide la ventana de 24 h del acumulado del paciente, que la contiene (DX-418): manda la misma al previsualizar y al guardar.
              */
             administeredAt?: string;
         };
@@ -7713,7 +7713,7 @@ export interface components {
             weightKg?: number;
             /**
              * Format: date-time
-             * @description Hora de la administración; por defecto, ahora. No puede ser futura. Centra la ventana de 24 h del acumulado del paciente (DX-418): manda la misma al previsualizar y al guardar.
+             * @description Hora de la administración; por defecto, ahora. No puede ser futura. Decide la ventana de 24 h del acumulado del paciente, que la contiene (DX-418): manda la misma al previsualizar y al guardar.
              */
             administeredAt?: string;
             technique: components["schemas"]["AnesthesiaTechnique"];
