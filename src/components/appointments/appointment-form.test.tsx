@@ -630,6 +630,22 @@ describe('AppointmentForm', () => {
         overrideReason: 'Dolor agudo',
       });
     });
+
+    it('el motivo recibe el foco y, si cambia la hora, ya no ofrece agendar igualmente la cita anterior', async () => {
+      const user = userEvent.setup();
+      mockedCreateAppointment.mockRejectedValueOnce(reservedError(true));
+      await renderFormAndWaitForLoad();
+      await fillValidForm(user);
+      await user.click(screen.getByRole('button', { name: /^agendar cita$/i }));
+
+      await screen.findByRole('button', { name: /agendar igualmente/i });
+      expect(screen.getByLabelText(/motivo para agendar igualmente/i)).toHaveFocus();
+
+      const end = screen.getByLabelText(/hora de fin/i);
+      await user.clear(end);
+      await user.type(end, '10:00');
+      expect(screen.queryByRole('button', { name: /agendar igualmente/i })).not.toBeInTheDocument();
+    });
   });
 
   it('calls onCreated with the created appointment on success', async () => {

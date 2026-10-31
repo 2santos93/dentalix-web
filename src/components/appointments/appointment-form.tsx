@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PatientMedicalAlertsNotice } from '@/components/clinical/appointment-medical-alerts';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -52,7 +52,7 @@ import { endSentence } from '@/lib/format/text';
 const copy = {
   // DX-446: hueco reservado (409 RESERVED_SLOT) y «Agendar igualmente».
   overrideReasonLabel: 'Motivo para agendar igualmente',
-  overrideReasonHint: 'Queda registrado en la auditoría. No escribas datos clínicos.',
+  overrideReasonHint: 'Queda registrado con tu nombre. No escribas datos clínicos.',
   overrideSubmit: 'Agendar igualmente',
   overrideReasonLength: 'Escribe un motivo de entre 5 y 300 caracteres.',
   wantsEarlierLabel: 'Adelantar si hay hueco',
@@ -233,6 +233,18 @@ export function AppointmentForm({
   const [overridable, setOverridable] = useState<CreateAppointmentInput | null>(null);
   const [overrideReason, setOverrideReason] = useState('');
   const [overrideError, setOverrideError] = useState<string | null>(null);
+  const overrideInputRef = useRef<HTMLInputElement>(null);
+  // Si cambia la cita (paciente, profesional, tipo, día u horas), «Agendar
+  // igualmente» ya no vale: reintentaría la cita ANTERIOR. El panel solo se
+  // ofrece para la cita que chocó; si no, hay que volver a enviar.
+  const slotKey = [patientId, providerId, appointmentTypeId, date, startTime, endTime, locationId ?? ''].join('|');
+  const [overridableKey, setOverridableKey] = useState<string | null>(null);
+  const overrideFor = overridable !== null && overridableKey === slotKey ? overridable : null;
+  // Al aparecer el motivo, el foco va a él (teclado y lector de pantalla).
+  const showOverride = overrideFor !== null;
+  useEffect(() => {
+    if (showOverride) overrideInputRef.current?.focus();
+  }, [showOverride]);
   const [submitting, setSubmitting] = useState(false);
   const [showPatientDialog, setShowPatientDialog] = useState(false);
   // DX-378: la fecha y las horas son las del reloj de la sede de la cita (la
@@ -455,17 +467,15 @@ export function AppointmentForm({
       onCreated(created);
     } catch (err) {
       setSaveError(apiErrorMessage(err, copy.genericSaveError));
-      setOverridable(
-        err instanceof ApiError && err.code === 'RESERVED_SLOT' && err.canOverride === true
-          ? { ...input, overrideReason: undefined }
-          : null,
-      );
+      const canRetry = err instanceof ApiError && err.code === 'RESERVED_SLOT' && err.canOverride === true;
+      setOverridable(canRetry ? { ...input, overrideReason: undefined } : null);
+      setOverridableKey(canRetry ? slotKey : null);
     }
   }
 
   /** DX-446: reintenta la misma cita con el motivo (5–300 caracteres). */
   async function handleOverride() {
-    if (!overridable) return;
+    if (!overrideFor) return;
     const reasonText = overrideReason.trim();
     if (reasonText.length < 5 || reasonText.length > 300) {
       setOverrideError(copy.overrideReasonLength);
@@ -474,7 +484,7 @@ export function AppointmentForm({
     setOverrideError(null);
     setSubmitting(true);
     try {
-      await save({ ...overridable, overrideReason: reasonText });
+      await save({ ...overrideFor, overrideReason: reasonText });
     } finally {
       setSubmitting(false);
     }
@@ -818,12 +828,13 @@ export function AppointmentForm({
       })()}
       {validationError && <InlineError>{validationError}</InlineError>}
       {saveError && <InlineError>{saveError}</InlineError>}
-      {overridable && (
+      {overrideFor && (
         <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-2 p-3">
           <label htmlFor="appointment-override-reason" className="text-sm font-medium text-ink">
             {copy.overrideReasonLabel}
           </label>
           <input
+            ref={overrideInputRef}
             id="appointment-override-reason"
             type="text"
             maxLength={300}
