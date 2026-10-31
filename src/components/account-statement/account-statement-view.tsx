@@ -481,8 +481,18 @@ function StatementBody({
             getRowKey={(inst) => `${inst.paymentPlanId}-${inst.kind}-${inst.sequence ?? 0}`}
             columns={[
               { id: 'due', header: copy.colDue, cell: (inst) => <span className="tabular-nums">{formatCivilDate(inst.dueDate)}</span> },
-              { id: 'installment', header: copy.colInstallment, cell: (inst) => <span className="tabular-nums">{installmentLabel(inst)}</span> },
-              { id: 'plan', header: copy.colPlan, cell: (inst) => <span className="text-muted">{planName(inst.treatmentPlanId)}</span> },
+              {
+                id: 'installment',
+                header: copy.colInstallment,
+                cellClassName: 'whitespace-nowrap',
+                cell: (inst) => <span className="tabular-nums">{installmentLabel(inst)}</span>,
+              },
+              {
+                id: 'plan',
+                header: copy.colPlan,
+                cellClassName: 'whitespace-nowrap',
+                cell: (inst) => <span className="text-muted">{planName(inst.treatmentPlanId)}</span>,
+              },
               { id: 'amount', header: copy.colAmount, numeric: true, cell: (inst) => formatCurrency(inst.amount, inst.currency) },
               {
                 id: 'outstanding',
@@ -568,6 +578,13 @@ function StatementBody({
                     <span className={cn('font-medium', m.voided ? 'text-muted line-through' : 'text-ink')}>
                       {formatCurrency(m.amount, m.currency)}
                     </span>
+                  </span>
+                ),
+                // En el teléfono el «Anulado» lo dice la línea 2 («Anulado por …»);
+                // en la 1 recortaba la fecha.
+                mobileCell: (m) => (
+                  <span className={cn('font-medium', m.voided ? 'text-muted line-through' : 'text-ink')}>
+                    {formatCurrency(m.amount, m.currency)}
                   </span>
                 ),
               },
