@@ -224,7 +224,7 @@ export function SingleFileField({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(progress * 100)}
-              className="h-2 w-full overflow-hidden rounded-full bg-surface-2"
+              className="h-2 w-full overflow-hidden rounded-full bg-surface-sunken"
             >
               <div
                 className={cn(

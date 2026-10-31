@@ -51,6 +51,18 @@ export function RowActions({
   busy = false,
   className,
 }: RowActionsProps) {
+  const trigger = React.useRef<HTMLButtonElement>(null);
+  const pending = React.useRef<(() => void) | null>(null);
+
+  // La acción elegida corre DESPUÉS de que el menú se cierre y devuelva el foco
+  // a su «⋯»: si abre un Dialog, el diálogo recuerda el «⋯» (no la opción, que
+  // desaparece) y al cerrarse el foco vuelve a la fila, no a <body>.
+  const runPending = React.useCallback(() => {
+    const run = pending.current;
+    pending.current = null;
+    run?.();
+  }, []);
+
   if (actions.length === 0) {
     // Sin acciones no se pinta un botón muerto: un disparador que abre un menú
     // vacío es peor que no tener botón. La celda se queda con su guion.
@@ -60,15 +72,16 @@ export function RowActions({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        ref={trigger}
         aria-label={label}
         disabled={busy}
         className={cn(
-          'relative z-10 inline-flex size-9 items-center justify-center rounded-lg text-muted transition-colors',
-          'hover:bg-surface-2 hover:text-ink',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+          'relative z-10 inline-flex size-9 pointer-coarse:size-11 items-center justify-center rounded-lg text-muted transition-colors',
+          'hover:bg-surface-sunken hover:text-ink',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
           // Mientras el menú está abierto el botón se queda marcado: si no,
           // con el foco dentro del panel nada indica de qué fila salió.
-          'data-[state=open]:bg-surface-2 data-[state=open]:text-ink',
+          'data-[state=open]:bg-surface-sunken data-[state=open]:text-ink',
           'disabled:pointer-events-none disabled:opacity-50',
           className,
         )}
@@ -79,14 +92,25 @@ export function RowActions({
           <MoreHorizontal className="size-4" aria-hidden />
         )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent>
+      <DropdownMenuContent
+        onCloseAutoFocus={(event) => {
+          if (!pending.current) return;
+          event.preventDefault();
+          trigger.current?.focus();
+          runPending();
+        }}
+      >
         {actions.map((action, i) => (
           <React.Fragment key={action.label}>
             {action.separatorBefore && i > 0 ? <DropdownMenuSeparator /> : null}
             <DropdownMenuItem
               disabled={action.disabled}
               destructive={action.destructive}
-              onSelect={action.onSelect}
+              onSelect={() => {
+                pending.current = action.onSelect;
+                // Red de seguridad: si el menú no avisa del cierre, corre igual.
+                window.setTimeout(runPending, 0);
+              }}
             >
               {action.icon}
               {action.label}

@@ -59,7 +59,7 @@ function DropdownMenuItem({
         // `data-highlighted` es el estado de Radix que unifica ratón y teclado:
         // usar `hover:` dejaría la navegación con flechas sin resaltar.
         'flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-ink outline-none transition-colors',
-        'data-[highlighted]:bg-surface-2',
+        'data-[highlighted]:bg-surface-sunken',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted',
         destructive &&
@@ -84,7 +84,7 @@ function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       className={cn(
         'relative flex cursor-pointer select-none items-center gap-2.5 rounded-lg py-2 pl-8 pr-2.5 text-sm text-ink outline-none transition-colors',
-        'data-[highlighted]:bg-surface-2',
+        'data-[highlighted]:bg-surface-sunken',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
       )}
@@ -92,7 +92,7 @@ function DropdownMenuCheckboxItem({
     >
       <span className="absolute left-2.5 flex size-4 items-center justify-center rounded border border-border">
         <DropdownMenuPrimitive.ItemIndicator>
-          <Check className="size-3 text-primary" aria-hidden />
+          <Check className="size-3 text-primary-text" aria-hidden />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}

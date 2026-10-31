@@ -35,7 +35,7 @@ export function PublicNotice({
     <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface px-6 py-12 text-center">
       <span
         aria-hidden
-        className="mb-1 flex size-10 items-center justify-center rounded-full bg-surface-2 text-muted"
+        className="mb-1 flex size-10 items-center justify-center rounded-full bg-surface-sunken text-muted"
       >
         <Icon className="size-5" />
       </span>

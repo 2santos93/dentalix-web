@@ -131,7 +131,7 @@ export function FormModal({
             <div
               ref={errorRef}
               tabIndex={-1}
-              className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
             >
               <InlineError variant="summary">{error}</InlineError>
             </div>

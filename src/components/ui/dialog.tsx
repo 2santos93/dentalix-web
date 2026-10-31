@@ -71,7 +71,7 @@ const DialogContent = React.forwardRef<
           // Radix no cierra si el clic ya viene con `preventDefault`.
           onClick={closeDisabled ? (e) => e.preventDefault() : undefined}
           className={cn(
-            'absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden',
+            'absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text print:hidden',
             // DX-395: en móvil, «Cerrar» con el área táctil mínima (44 px).
             'max-sm:right-2 max-sm:top-2 max-sm:inline-flex max-sm:size-11 max-sm:items-center max-sm:justify-center',
             closeDisabled && 'cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted',

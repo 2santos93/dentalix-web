@@ -16,7 +16,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RowActions } from '@/components/shared/row-actions';
-import { afterMenuCloses } from './after-menu-closes';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -213,16 +212,15 @@ export function PatientResponsiblePartiesSection({
                     label={copy.actionsLabel(party.fullName)}
                     className="shrink-0"
                     actions={[
-                      { label: copy.edit, onSelect: () => afterMenuCloses(() => setDialog({ party })) },
+                      { label: copy.edit, onSelect: () => setDialog({ party }) },
                       {
                         label: copy.remove,
                         destructive: true,
                         separatorBefore: true,
-                        onSelect: () =>
-                          afterMenuCloses(() => {
-                            setRemoveError(null);
-                            setRemoving(party);
-                          }),
+                        onSelect: () => {
+                          setRemoveError(null);
+                          setRemoving(party);
+                        },
                       },
                     ]}
                   />
