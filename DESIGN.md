@@ -570,7 +570,7 @@ screen it opens; a group with no visible entries disappears.
   no scroll (expanded ~5px to spare, rail ~3px; `e2e/sidebar-scrollbars.spec.ts` guards it).
   A new entry must *replace* one, never just be appended; the rail's 44px targets cannot
   shrink. Precedent (M2, DX-439): «Pendiente de cerrar» joined *Atención* and **Auditoría
-  moved into Ajustes → «Datos y seguridad»** (next to «Accesos de soporte»): it already lived
+  moved into Ajustes** (since B6 under «Herramientas y registros», next to «Accesos de soporte»): it already lived
   at `/settings/auditoria`, it is a monthly ADMIN-only check, not daily work, and the ⌘K
   palette still finds it by typing. Its page carries «← Ajustes» like every settings screen.
   The next candidate to fold is a low-frequency admin screen, never a daily queue.
@@ -616,6 +616,55 @@ screen it opens; a group with no visible entries disappears.
   Enter. Accent-insensitive matching. Full-screen on phones.
 - **System chrome:** `viewport-fit=cover` and a `theme-color` per scheme set to the canvas
   token (light `#F7F9FC`, dark `#0B0F14`) — never the accent.
+
+### Settings pages
+Every screen under `/settings` uses ONE template, `src/components/settings/` (B6). The
+index (`settings-sections.ts`) is the complete map — *Tu cuenta* (Mi perfil) · Clínica y
+sedes · Agenda · Cobro · Historia clínica · Datos y seguridad · *Herramientas y registros*
+(Importar pacientes, Implantes, Accesos de soporte, Auditoría: tools and logs, not
+policies) — and each entry's label is **exactly** its page's title.
+
+- **Frame** (`app/(app)/settings/layout.tsx` → `SettingsShell`): from `xl` (≥1280px) a
+  persistent **sub-navigation** (220px, sticky, own scroll, `border-subtle` rule) lists the
+  same groups as plain links (caption headings, no icons, active = `primary-subtle` +
+  `primary-subtle-text`, `aria-current="page"`); its «Ajustes» heading links to the index.
+  Below `xl`, and on the index itself, there is no sub-nav: the index is the entry and each
+  page carries «‹ Ajustes». Nothing to adopt — the layout wraps every settings route.
+- **`SettingsPage`** `title description scope width actions back`: «‹ Ajustes» (hidden at
+  `xl`, where the sub-nav replaces it; a `back` to another page — a sede's sheet back to
+  «Sedes» — always shows), Display title, ONE support line (≤68ch, ≤2 lines, no second
+  paragraph), and the **scope line** (`scope="clinic"` «Aplica a toda la clínica» ·
+  `"sede"` «Por sede» · a node: «Editando: Sede Norte», status chips). Content column
+  **720px, left-aligned**; `width="wide"` only for real tables (≥5 columns) and logs. Never
+  centered. Sections are 40px apart.
+- **`SettingsSection`** `title description actions as`: `SectionHeader` + one help line;
+  no icons, no eyebrows. Its region is named by its title.
+- **`SettingRows` + `SettingRow`** `label description value action children isDefault
+  inline`: the one row for a policy value — one bordered card per section, hairline rows,
+  label + muted help left; right, the control (Switch, a short field) **or** the current
+  value in `t-data` + a secondary «Cambiar» that opens a dialog. `isDefault` → neutral
+  «Por defecto» chip. On phones the control drops under the text, except `inline` (a Switch).
+- **Saving — one model per page.** A form's only Save is **`SaveBar`**
+  (`save-bar.tsx`): «Cambios sin guardar · Descartar · Guardar», rendered at the END of the
+  form, `sticky bottom-3` in the scrolling area (so it rides the viewport's foot while the
+  form is dirty and rests in place at the end), and **absent when nothing changed** — never
+  a permanently visible disabled Save, never a Save per field or per row. Pair it with
+  **`useSettingsDraft(saved)`** → `{ draft, setDraft, update, dirty, discard, commit }`
+  (dirty = draft ≠ saved; a reload of `saved` only replaces an untouched draft; dirty
+  pages warn on unload). `form="<id>"` makes Guardar submit the form (validation stays in
+  `onSubmit`); `error` shows the save failure (rung 4) inside the bar; give the button a
+  `saveAriaLabel` when a page has more than one form. Values edited in a dialog («Cambiar»,
+  versioned policies) keep the dialog's own Save and need no bar.
+- **Per sede:** a setting that is per sede is reached through its sede, not through a
+  second sede `<select>`: `/settings/sedes` is the list, `/settings/sedes/[id]` the sede's
+  sheet (data + regional config, registration, cancellation policy, calendar). Pages that
+  edit «the active sede» say which one («Editando: Sede Norte») and follow the global
+  switcher.
+- **Weeks** start where the sede's locale starts them (`weekOrder(locale)` in
+  `components/locations/week-order.ts`; Monday when the locale has no region).
+- **Lists** in settings follow Tables (`DataList`, row → edit, `RowActions` «⋯»;
+  Desactivar = reversible, Eliminar = irreversible with consequences). Empty list: no
+  «0 items» count, the primary lives inside the `EmptyState`.
 
 ### Odontogram (signature)
 - FDI-numbered tooth map on a paper field; teeth are precise vector marks, 5 selectable surfaces
