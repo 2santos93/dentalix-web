@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { apiLogin, apiPost, createLocationViaApi, registerClinicViaApi, type ApiSession } from './support/api';
 import { fillRegistrationLocation, loginAs, waitForHydratedForm } from './support/auth';
+import { dataList, dataListRows } from './support/data-list';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { registrationTokenFor } from './support/mail';
 import { pickRegional, type RegionalSettings } from './support/regional';
@@ -365,7 +366,8 @@ test('en A: los recuentos de la importación y el tamaño de un documento con lo
       await expect(queued.getByText('Subido')).toBeVisible({ timeout: 30_000 });
       await page.reload();
     }
-    const row = panel.getByRole('row').filter({ hasText: name }).first();
+    // DataList: fila de tabla a 1440, tarjeta (listitem) a 390.
+    const row = dataListRows(dataList(panel, /^Documentos$/)).filter({ hasText: name }).first();
     await expect(row).toContainText('1.5 KB', { timeout: 15_000 });
     await row.scrollIntoViewIfNeeded();
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
