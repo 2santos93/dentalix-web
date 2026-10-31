@@ -5,10 +5,11 @@ import { ApiError } from '@/lib/api/client';
 import {
   createScheduleBlock,
   listAffectedAppointments,
-  type ScheduleBlock,
+  type SavedScheduleBlock,
 } from '@/lib/appointments/schedule-blocks-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { testAgendaClock } from '@/lib/test/sede-clock';
+import { listAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 
 /** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
 const CLOCK = testAgendaClock();
@@ -17,8 +18,23 @@ jest.mock('../../lib/appointments/schedule-blocks-api', () => ({
   createScheduleBlock: jest.fn(),
   listAffectedAppointments: jest.fn(),
 }));
+jest.mock('../../lib/appointments/appointment-types-api', () => ({
+  listAppointmentTypes: jest.fn(),
+}));
 const mockedCreate = createScheduleBlock as jest.MockedFunction<typeof createScheduleBlock>;
 const mockedAffected = listAffectedAppointments as jest.MockedFunction<typeof listAffectedAppointments>;
+const mockedTypes = listAppointmentTypes as jest.MockedFunction<typeof listAppointmentTypes>;
+const typeOf = (id: string, name: string, isUrgent: boolean) => ({
+  id,
+  tenantId: 't1',
+  name,
+  durationMinutes: 30,
+  color: isUrgent ? '#DC2626' : '#16A34A',
+  active: true,
+  isUrgent,
+  createdAt: '',
+  updatedAt: '',
+});
 
 const tokenWithLoc = (loc: string[]): string => {
   const b64url = (value: string) =>
@@ -37,7 +53,7 @@ const locations = [
   clinicLocation({ id: 'loc-1', name: 'Sede principal', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' }),
   clinicLocation({ id: 'loc-2', name: 'Sede Norte', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' }),
 ];
-const created = { id: 'b-1' } as ScheduleBlock;
+const created = { id: 'b-1' } as SavedScheduleBlock;
 const local = (day: string, hhmm: string) => new Date(`${day}T${hhmm}:00`).toISOString();
 
 function renderDialog(props: Partial<React.ComponentProps<typeof ScheduleBlockDialog>> = {}) {
@@ -230,5 +246,65 @@ describe('ScheduleBlockDialog (DX-122)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
     expect(mockedCreate).toHaveBeenCalledWith(token, expect.objectContaining({ locationId: 'loc-1' }));
+  });
+});
+
+describe('ScheduleBlockDialog — hueco reservado (DX-446)', () => {
+  beforeEach(() => {
+    mockedCreate.mockReset().mockResolvedValue(created);
+    mockedAffected.mockReset().mockResolvedValue({ items: [], total: 0 });
+    mockedTypes
+      .mockReset()
+      .mockResolvedValue([typeOf('lim', 'Limpieza', false), typeOf('urg', 'Consulta de urgencia', true)]);
+  });
+
+  it('«Reservado para…»: urgencias marcadas, sede obligatoria y «Liberar a partir de»', async () => {
+    const onCreated = renderDialog();
+    await userEvent.selectOptions(screen.getByLabelText('Motivo'), 'RESERVED');
+    const urgent = await screen.findByRole('checkbox', { name: /Consulta de urgencia/ });
+    expect(urgent).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Limpieza/ })).not.toBeChecked();
+    // Un reservado es de una sede: no se ofrece «Todas las sedes».
+    expect(screen.queryByRole('option', { name: 'Todas las sedes' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Permitir agendar encima (con aviso)')).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Liberar a partir de (opcional)'), '11:00');
+    await userEvent.type(screen.getByLabelText('Nota (opcional)'), 'Urgencias');
+    await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
+    expect(mockedCreate.mock.calls[0][1]).toMatchObject({
+      providerId: 'prov-2',
+      locationId: 'loc-1',
+      start: local(DAY, '15:00'),
+      end: local(DAY, '15:30'),
+      kind: 'RESERVED',
+      allowsBooking: false,
+      reservedForTypeIds: ['urg'],
+      releaseAtMinute: 660,
+      note: 'Urgencias',
+    });
+  });
+
+  it('sin tipos marcados o con la liberación tras el inicio, no envía', async () => {
+    renderDialog();
+    await userEvent.selectOptions(screen.getByLabelText('Motivo'), 'RESERVED');
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Consulta de urgencia/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
+    expect(await screen.findByText(/Marca al menos un tipo/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Limpieza/ }));
+    await userEvent.type(screen.getByLabelText('Liberar a partir de (opcional)'), '16:00');
+    await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
+    expect(await screen.findByText(/tiene que ser antes de la hora de inicio/)).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('si los tipos no cargan, el campo se cambia por un error con reintento', async () => {
+    mockedTypes.mockRejectedValueOnce(new Error('boom'));
+    renderDialog();
+    await userEvent.selectOptions(screen.getByLabelText('Motivo'), 'RESERVED');
+    expect(await screen.findByText('Tipos no disponibles')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /reintentar/i }));
+    expect(await screen.findByRole('checkbox', { name: /Consulta de urgencia/ })).toBeChecked();
   });
 });

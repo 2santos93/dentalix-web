@@ -1,12 +1,12 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createScheduleBlock,
   listAffectedAppointments,
   type AffectedAppointmentsPage,
-  type ScheduleBlock,
+  type SavedScheduleBlock,
 } from '@/lib/appointments/schedule-blocks-api';
 import {
   SCHEDULE_BLOCK_KINDS,
@@ -25,6 +25,8 @@ import { SEDE_TIME_ZONE_ERROR } from '@/lib/locations/use-sede-time-zone';
 import { timeToMinutes } from '@/lib/locations/schedule-api';
 import { addCivilDays, wallDay, wallInstant } from '@/lib/time/wall-clock';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
+import { listAppointmentTypes, type AppointmentType } from '@/lib/appointments/appointment-types-api';
+import { FieldError } from '@/components/errors/field-error';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -61,6 +63,21 @@ const copy = {
   affectedMore: (n: number) => (n === 1 ? 'y 1 cita más.' : `y ${n} citas más.`),
   back: 'Volver y cambiar el bloqueo',
   genericError: 'No pudimos crear el bloqueo. Intenta de nuevo.',
+  // DX-446: hueco reservado para ciertos tipos de cita.
+  reservedKind: 'Reservado para…',
+  reservedTypes: 'Tipos de cita permitidos',
+  reservedTypesHint: 'Solo estos tipos se pueden agendar en el hueco (marca al menos uno).',
+  urgentBadge: 'Urgencia',
+  typesLoading: 'Cargando tipos de cita…',
+  typesError: 'Tipos no disponibles',
+  typesEmpty: 'No hay tipos de cita activos. Créalos en Ajustes → Tipos de cita.',
+  releaseAt: 'Liberar a partir de (opcional)',
+  releaseHint:
+    'Desde esa hora de la sede, el día del hueco, se puede agendar cualquier tipo de cita. Vacío: no se libera.',
+  reservedNeedsType: 'Marca al menos un tipo de cita para el hueco reservado.',
+  reservedNeedsLocation: 'Un hueco reservado es de una sede: elige la sede.',
+  reservedOneDay: 'Un hueco reservado tiene que caber en un solo día.',
+  releaseBeforeStart: '«Liberar a partir de» tiene que ser antes de la hora de inicio.',
 };
 
 const selectClass =
@@ -101,7 +118,7 @@ interface ScheduleBlockDialogProps {
    * demás), así que ni elige profesional ni puede bloquear la sede.
    */
   ownProviderId?: string | null;
-  onCreated: (block: ScheduleBlock) => void;
+  onCreated: (block: SavedScheduleBlock) => void;
 }
 
 /**
@@ -147,6 +164,38 @@ export function ScheduleBlockDialog({
   const [allowsBooking, setAllowsBooking] = useState(false);
   const [allowsTouched, setAllowsTouched] = useState(false);
   const [note, setNote] = useState('');
+  // DX-446: tipos permitidos y liberación de un hueco reservado.
+  const [types, setTypes] = useState<AppointmentType[] | null>(null);
+  const [typesError, setTypesError] = useState(false);
+  const [typesReload, setTypesReload] = useState(0);
+  const [reservedTypeIds, setReservedTypeIds] = useState<string[]>([]);
+  const [releaseAt, setReleaseAt] = useState('');
+  const reserved = kind === 'RESERVED';
+
+  useEffect(() => {
+    if (!reserved || types !== null) return;
+    let cancelled = false;
+    listAppointmentTypes(token)
+      .then((list) => {
+        if (cancelled) return;
+        // Urgencias primero y ya marcadas: es para lo que se reserva casi siempre.
+        const sorted = [...list].sort((a, b) => Number(b.isUrgent) - Number(a.isUrgent));
+        setTypes(sorted);
+        setReservedTypeIds((current) =>
+          current.length > 0 ? current : sorted.filter((t) => t.isUrgent).map((t) => t.id),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setTypesError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reserved, types, token, typesReload]);
+
+  function toggleType(id: string, checked: boolean) {
+    setReservedTypeIds((current) => (checked ? [...current, id] : current.filter((t) => t !== id)));
+  }
   const [affected, setAffected] = useState<AffectedAppointmentsPage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -159,6 +208,15 @@ export function ScheduleBlockDialog({
     // vacaciones son días enteros y no. Solo mientras la persona no lo toque.
     setWholeDays(next === 'VACATION');
     if (!allowsTouched) setAllowsBooking(next === 'LUNCH');
+    if (next === 'RESERVED') {
+      // Un reservado es por horas, de una sede y no deja agendar libremente.
+      setAllowsBooking(false);
+      setFromTime('15:00');
+      setToTime('15:30');
+      if (!providerLocationId) {
+        setProviderLocationId(locations.find((l) => l.id === activeLocationId)?.id ?? locations[0]?.id ?? '');
+      }
+    }
     setAffected(null);
   }
 
@@ -199,6 +257,26 @@ export function ScheduleBlockDialog({
       setError(copy.backwards);
       return;
     }
+    const releaseAtMinute = reserved && releaseAt ? timeToMinutes(releaseAt) : null;
+    if (reserved) {
+      if (!blockLocationId) {
+        setError(copy.reservedNeedsLocation);
+        return;
+      }
+      if (fromDate !== toDate) {
+        setError(copy.reservedOneDay);
+        return;
+      }
+      if (reservedTypeIds.length === 0) {
+        setError(copy.reservedNeedsType);
+        return;
+      }
+      const startMinute = timeToMinutes(fromTime);
+      if (releaseAtMinute !== null && startMinute !== null && releaseAtMinute >= startMinute) {
+        setError(copy.releaseBeforeStart);
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       // Primer envío: ¿hay citas dentro? Se enseñan y se pide confirmación.
@@ -213,8 +291,9 @@ export function ScheduleBlockDialog({
         ...target,
         ...r,
         kind,
-        allowsBooking,
+        allowsBooking: reserved ? false : allowsBooking,
         note: note.trim() || undefined,
+        ...(reserved ? { reservedForTypeIds: reservedTypeIds, releaseAtMinute } : {}),
         confirmAffected: affected !== null && affected.total > 0,
       });
       onCreated(block);
@@ -320,7 +399,7 @@ export function ScheduleBlockDialog({
                   value={providerLocationId}
                   onChange={(e) => setProviderLocationId(e.target.value)}
                 >
-                  {!restricted && <option value="">{copy.allLocations}</option>}
+                  {!restricted && !reserved && <option value="">{copy.allLocations}</option>}
                   {locations.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.name}
@@ -356,20 +435,24 @@ export function ScheduleBlockDialog({
             >
               {SCHEDULE_BLOCK_KINDS.map((k) => (
                 <option key={k} value={k}>
-                  {SCHEDULE_BLOCK_KIND_LABELS[k]}
+                  {k === 'RESERVED' ? copy.reservedKind : SCHEDULE_BLOCK_KIND_LABELS[k]}
                 </option>
               ))}
             </select>
           </FormField>
-          <label className="flex items-center gap-2 self-end pb-2 text-sm text-ink">
-            <input
-              type="checkbox"
-              checked={wholeDays}
-              onChange={(e) => setWholeDays(e.target.checked)}
-              className="size-4 accent-[var(--color-primary)]"
-            />
-            {copy.wholeDays}
-          </label>
+          {reserved ? (
+            <span aria-hidden="true" />
+          ) : (
+            <label className="flex items-center gap-2 self-end pb-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={wholeDays}
+                onChange={(e) => setWholeDays(e.target.checked)}
+                className="size-4 accent-[var(--color-primary)]"
+              />
+              {copy.wholeDays}
+            </label>
+          )}
 
           <FormField htmlFor="block-from-date" label={copy.fromDate}>
             <Input
@@ -413,18 +496,81 @@ export function ScheduleBlockDialog({
             </>
           )}
 
-          <label className="flex items-center gap-2 text-sm text-ink sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={allowsBooking}
-              onChange={(e) => {
-                setAllowsBooking(e.target.checked);
-                setAllowsTouched(true);
-              }}
-              className="size-4 accent-[var(--color-primary)]"
-            />
-            {copy.allowsBooking}
-          </label>
+          {reserved ? (
+            <>
+              <fieldset className="sm:col-span-2" aria-describedby="block-reserved-types-hint">
+                <legend className="mb-1.5 text-xs font-semibold tracking-wide text-ink">{copy.reservedTypes}</legend>
+                <p id="block-reserved-types-hint" className="mb-2 text-xs text-muted">
+                  {copy.reservedTypesHint}
+                </p>
+                {typesError ? (
+                  <FieldError
+                    label={copy.typesError}
+                    className="h-10"
+                    onRetry={() => {
+                      setTypesError(false);
+                      setTypes(null);
+                      setTypesReload((k) => k + 1);
+                    }}
+                  />
+                ) : types === null ? (
+                  <p className="text-sm text-muted" aria-live="polite">
+                    {copy.typesLoading}
+                  </p>
+                ) : types.length === 0 ? (
+                  <p className="text-sm text-muted">{copy.typesEmpty}</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {types.map((t) => (
+                      <li key={t.id}>
+                        <label className="flex min-h-10 items-center gap-2 text-sm text-ink">
+                          <input
+                            type="checkbox"
+                            checked={reservedTypeIds.includes(t.id)}
+                            onChange={(e) => toggleType(t.id, e.target.checked)}
+                            className="size-4 accent-[var(--color-primary)]"
+                          />
+                          <span aria-hidden="true" className="size-3 shrink-0 rounded-sm" style={{ backgroundColor: t.color }} />
+                          <span className="min-w-0 break-words">{t.name}</span>
+                          {t.isUrgent ? (
+                            <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
+                              {copy.urgentBadge}
+                            </span>
+                          ) : null}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </fieldset>
+              <FormField htmlFor="block-release-at" label={copy.releaseAt} className="sm:col-span-2">
+                <Input
+                  id="block-release-at"
+                  type="time"
+                  step={300}
+                  value={releaseAt}
+                  aria-describedby="block-release-hint"
+                  onChange={(e) => setReleaseAt(e.target.value)}
+                />
+                <p id="block-release-hint" className="mt-1 text-xs text-muted">
+                  {copy.releaseHint}
+                </p>
+              </FormField>
+            </>
+          ) : (
+            <label className="flex items-center gap-2 text-sm text-ink sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={allowsBooking}
+                onChange={(e) => {
+                  setAllowsBooking(e.target.checked);
+                  setAllowsTouched(true);
+                }}
+                className="size-4 accent-[var(--color-primary)]"
+              />
+              {copy.allowsBooking}
+            </label>
+          )}
 
           <FormField htmlFor="block-note" label={copy.note} className="sm:col-span-2">
             <Input

@@ -41,6 +41,7 @@ import {
 import { PatientForm } from '@/components/patients/patient-form';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { ApiError } from '@/lib/api/api-error';
 import { useProviderDay } from '@/components/appointments/use-provider-day';
 import { fitsRanges } from '@/lib/locations/provider-schedule';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -49,6 +50,11 @@ import { endSentence } from '@/lib/format/text';
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
 const copy = {
+  // DX-446: hueco reservado (409 RESERVED_SLOT) y «Agendar igualmente».
+  overrideReasonLabel: 'Motivo para agendar igualmente',
+  overrideReasonHint: 'Queda registrado en la auditoría. No escribas datos clínicos.',
+  overrideSubmit: 'Agendar igualmente',
+  overrideReasonLength: 'Escribe un motivo de entre 5 y 300 caracteres.',
   wantsEarlierLabel: 'Adelantar si hay hueco',
   wantsEarlierHint:
     'El paciente quiere venir antes: saldrá como candidato cuando se libere un hueco en un día anterior.',
@@ -222,6 +228,11 @@ export function AppointmentForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const providerDay = useProviderDay(token, providerId, date, locationId);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // DX-446: la cita que chocó con un hueco reservado, si quien agenda puede
+  // saltárselo con motivo.
+  const [overridable, setOverridable] = useState<CreateAppointmentInput | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideError, setOverrideError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPatientDialog, setShowPatientDialog] = useState(false);
   // DX-378: la fecha y las horas son las del reloj de la sede de la cita (la
@@ -378,6 +389,8 @@ export function AppointmentForm({
     e.preventDefault();
     setValidationError(null);
     setSaveError(null);
+    setOverridable(null);
+    setOverrideError(null);
 
     if (!patientId || !providerId || !date || !startTime || !endTime) {
       setValidationError(copy.validationMissingFields);
@@ -427,11 +440,41 @@ export function AppointmentForm({
         ...(reason.trim() ? { reason: reason.trim() } : {}),
         ...(wantsEarlier ? { wantsEarlier: true } : {}),
       };
+      await save(input);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function save(input: CreateAppointmentInput) {
+    try {
       const created = await (locationId ? createAppointment(token,input,locationId) : createAppointment(token,input));
       resetForm();
+      setOverridable(null);
+      setOverrideReason('');
       onCreated(created);
     } catch (err) {
       setSaveError(apiErrorMessage(err, copy.genericSaveError));
+      setOverridable(
+        err instanceof ApiError && err.code === 'RESERVED_SLOT' && err.canOverride === true
+          ? { ...input, overrideReason: undefined }
+          : null,
+      );
+    }
+  }
+
+  /** DX-446: reintenta la misma cita con el motivo (5–300 caracteres). */
+  async function handleOverride() {
+    if (!overridable) return;
+    const reasonText = overrideReason.trim();
+    if (reasonText.length < 5 || reasonText.length > 300) {
+      setOverrideError(copy.overrideReasonLength);
+      return;
+    }
+    setOverrideError(null);
+    setSubmitting(true);
+    try {
+      await save({ ...overridable, overrideReason: reasonText });
     } finally {
       setSubmitting(false);
     }
@@ -775,6 +818,30 @@ export function AppointmentForm({
       })()}
       {validationError && <InlineError>{validationError}</InlineError>}
       {saveError && <InlineError>{saveError}</InlineError>}
+      {overridable && (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-2 p-3">
+          <label htmlFor="appointment-override-reason" className="text-sm font-medium text-ink">
+            {copy.overrideReasonLabel}
+          </label>
+          <input
+            id="appointment-override-reason"
+            type="text"
+            maxLength={300}
+            value={overrideReason}
+            aria-invalid={overrideError ? true : undefined}
+            aria-describedby={overrideError ? 'appointment-override-error' : 'appointment-override-hint'}
+            onChange={(e) => setOverrideReason(e.target.value)}
+            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          />
+          <p id="appointment-override-hint" className="text-xs text-muted">
+            {copy.overrideReasonHint}
+          </p>
+          {overrideError && <InlineError id="appointment-override-error">{overrideError}</InlineError>}
+          <Button type="button" variant="secondary" className="self-start" loading={submitting} onClick={() => void handleOverride()}>
+            {copy.overrideSubmit}
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="submit" loading={submitting}>

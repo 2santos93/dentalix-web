@@ -42,6 +42,11 @@ export class ApiError extends Error {
    * 409 de referencia repetida (DX-390): el motivo se pide en esa línea.
    */
   public readonly line: number | null;
+  /**
+   * DX-446: en el 409 `RESERVED_SLOT` (hueco reservado), si quien agenda puede
+   * reintentar con motivo («Agendar igualmente»). `null` si no viene.
+   */
+  public readonly canOverride: boolean | null;
 
   constructor(
     public readonly status: number,
@@ -54,6 +59,7 @@ export class ApiError extends Error {
       locationId?: string | null;
       holidayId?: string | null;
       line?: number | null;
+      canOverride?: boolean | null;
     } = {},
   ) {
     super(message);
@@ -65,6 +71,7 @@ export class ApiError extends Error {
     this.locationId = details.locationId ?? null;
     this.holidayId = details.holidayId ?? null;
     this.line = details.line ?? null;
+    this.canOverride = details.canOverride ?? null;
   }
 }
 

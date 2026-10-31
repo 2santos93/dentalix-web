@@ -11,6 +11,7 @@ import { getPatientMedicalAlerts } from '@/lib/clinical/medical-alerts';
 import { listLocations } from '@/lib/locations/locations-api';
 import { caracasSede, utcSede } from '@/lib/test/sede-clock';
 import { wallInstant } from '@/lib/time/wall-clock';
+import { ApiError } from '@/lib/api/api-error';
 
 // PatientForm (rendered inside the "Crear paciente" dialog) calls
 // useRouter() — mock it the same way patient-form.test.tsx does, since it's
@@ -77,6 +78,7 @@ const endodoncia = {
   durationMinutes: 90,
   color: '#7C3AED',
   active: true,
+  isUrgent: false,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -587,6 +589,47 @@ describe('AppointmentForm', () => {
     expect(new Date(input.start).getTime()).toBeLessThan(new Date(input.end ?? '').getTime());
     expect(input.start).toBe(new Date(`${FUTURE_DATE}T09:00:00`).toISOString());
     expect(input.end).toBe(new Date(`${FUTURE_DATE}T09:30:00`).toISOString());
+  });
+
+  describe('hueco reservado (DX-446)', () => {
+    const reservedMessage =
+      'Ese horario está reservado para urgencias (Consulta de urgencia). Elige otro hueco o usa un tipo permitido.';
+    const reservedError = (canOverride: boolean) =>
+      new ApiError(409, reservedMessage, { messages: [reservedMessage], code: 'RESERVED_SLOT', canOverride });
+
+    it('sin permiso: el 409 se lee en el formulario y no ofrece agendar igualmente', async () => {
+      const user = userEvent.setup();
+      mockedCreateAppointment.mockRejectedValue(reservedError(false));
+      await renderFormAndWaitForLoad();
+      await fillValidForm(user);
+      await user.click(screen.getByRole('button', { name: /^agendar cita$/i }));
+
+      expect(await screen.findByText(reservedMessage)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /agendar igualmente/i })).not.toBeInTheDocument();
+    });
+
+    it('con permiso: pide el motivo y reintenta con `overrideReason`', async () => {
+      const user = userEvent.setup();
+      mockedCreateAppointment
+        .mockRejectedValueOnce(reservedError(true))
+        .mockResolvedValueOnce(createdAppointment);
+      await renderFormAndWaitForLoad();
+      await fillValidForm(user);
+      await user.click(screen.getByRole('button', { name: /^agendar cita$/i }));
+
+      const force = await screen.findByRole('button', { name: /agendar igualmente/i });
+      await user.click(force);
+      expect(await screen.findByText(/entre 5 y 300 caracteres/i)).toBeInTheDocument();
+      expect(mockedCreateAppointment).toHaveBeenCalledTimes(1);
+
+      await user.type(screen.getByLabelText(/motivo para agendar igualmente/i), 'Dolor agudo');
+      await user.click(force);
+      await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalledTimes(2));
+      expect(mockedCreateAppointment.mock.calls[1][1]).toMatchObject({
+        patientId: 'pat-1',
+        overrideReason: 'Dolor agudo',
+      });
+    });
   });
 
   it('calls onCreated with the created appointment on success', async () => {
