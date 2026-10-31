@@ -262,12 +262,17 @@ test('an admin finds a country by searching and saves the location', async ({ pa
   await expect(locationRow(page, 'Sede Abiyán')).toContainText('Côte d’Ivoire');
 });
 
-test('the picker lists every country', async ({ page }) => {
-  await loginAs(page, origin, adminEmail, password);
-  const dialog = await openNewLocation(page);
-  const field = countryField(dialog);
-  await expect(field).toHaveValue('');
-  await field.click();
-  await expect(field).toHaveAttribute('aria-expanded', 'true');
-  await expect(dialog.getByRole('listbox', { name: 'Países' }).getByRole('option')).toHaveCount(250);
+// Sin país propuesto (zona sin país, ver arriba): la lista entera, sin filtrar.
+test.describe('the picker in a zone of no country', () => {
+  test.use({ timezoneId: NO_COUNTRY_ZONE });
+
+  test('the picker lists every country', async ({ page }) => {
+    await loginAs(page, origin, adminEmail, password);
+    const dialog = await openNewLocation(page);
+    const field = countryField(dialog);
+    await expect(field).toHaveValue('');
+    await field.click();
+    await expect(field).toHaveAttribute('aria-expanded', 'true');
+    await expect(dialog.getByRole('listbox', { name: 'Países' }).getByRole('option')).toHaveCount(250);
+  });
 });
