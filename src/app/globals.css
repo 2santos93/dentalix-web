@@ -440,13 +440,38 @@
  */
 .implant-card-print-root {
   color-scheme: light;
+  /* Toda la paleta clara v2 salvo el acento (el de la clínica se hereda):
+     con solo los nombres v1, `text-warning-text` y demás `*-text`/`*-subtle`
+     tomaban el valor OSCURO sobre la hoja blanca (1.59:1 en el informe). */
+  --color-canvas: #F7F9FC;
   --color-surface: #FFFFFF;
-  --color-surface-2: #F1F5F9;
-  --color-ink: #0F172A;
-  --color-muted: #64748B;
-  --color-border: #E2E8F0;
-  --color-hairline: #EEF2F7;
-  --color-danger: #BE123C;
+  --color-surface-sunken: #F1F5F8;
+  --color-surface-active: #E8EDF3;
+  --color-border-subtle: #E5E9EE;
+  --color-border: #D8DFE6;
+  --color-border-input: #838D98;
+  --color-ink: #151C26;
+  --color-muted: #5B6472;
+  --color-faint: #6D7582;
+  --color-success: #287C42;
+  --color-success-fg: #FFFFFF;
+  --color-success-subtle: #E5F9E8;
+  --color-success-text: #1C5F31;
+  --color-warning: #EFA831;
+  --color-warning-fg: #151C26;
+  --color-warning-subtle: #FEF3DD;
+  --color-warning-text: #834B14;
+  --color-danger: #C52C2A;
+  --color-danger-fg: #FFFFFF;
+  --color-danger-subtle: #FEEEEE;
+  --color-danger-text: #A92321;
+  --color-info: #2D6AC1;
+  --color-info-fg: #FFFFFF;
+  --color-info-subtle: #ECF3FE;
+  --color-info-text: #1A52A1;
+  --color-bg: var(--color-canvas);
+  --color-surface-2: var(--color-surface-sunken);
+  --color-hairline: var(--color-border-subtle);
 }
 @media print {
   html:has(.implant-card-print-page) {
@@ -502,17 +527,38 @@
  */
 .cash-report-print-root {
   color-scheme: light;
-  --color-bg: #F7F9FC;
+  /* Toda la paleta clara v2 salvo el acento (el de la clínica se hereda):
+     con solo los nombres v1, `text-warning-text` y demás `*-text`/`*-subtle`
+     tomaban el valor OSCURO sobre la hoja blanca (1.59:1 en el informe). */
+  --color-canvas: #F7F9FC;
   --color-surface: #FFFFFF;
-  --color-surface-2: #F1F5F9;
-  --color-ink: #0F172A;
-  --color-muted: #64748B;
-  --color-border: #E2E8F0;
-  --color-hairline: #EEF2F7;
-  --color-danger: #BE123C;
-  --color-warning: #B45309;
-  --color-success: #15803D;
-  --color-success-text: #166534;
+  --color-surface-sunken: #F1F5F8;
+  --color-surface-active: #E8EDF3;
+  --color-border-subtle: #E5E9EE;
+  --color-border: #D8DFE6;
+  --color-border-input: #838D98;
+  --color-ink: #151C26;
+  --color-muted: #5B6472;
+  --color-faint: #6D7582;
+  --color-success: #287C42;
+  --color-success-fg: #FFFFFF;
+  --color-success-subtle: #E5F9E8;
+  --color-success-text: #1C5F31;
+  --color-warning: #EFA831;
+  --color-warning-fg: #151C26;
+  --color-warning-subtle: #FEF3DD;
+  --color-warning-text: #834B14;
+  --color-danger: #C52C2A;
+  --color-danger-fg: #FFFFFF;
+  --color-danger-subtle: #FEEEEE;
+  --color-danger-text: #A92321;
+  --color-info: #2D6AC1;
+  --color-info-fg: #FFFFFF;
+  --color-info-subtle: #ECF3FE;
+  --color-info-text: #1A52A1;
+  --color-bg: var(--color-canvas);
+  --color-surface-2: var(--color-surface-sunken);
+  --color-hairline: var(--color-border-subtle);
 }
 @page cash-report {
   size: A4;
