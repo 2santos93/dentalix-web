@@ -73,7 +73,7 @@ const copy = {
   colEmail: 'Correo electrónico',
   colRole: 'Rol',
   colStatus: 'Estado',
-  statusActive: 'Aceptado',
+  statusActive: 'Activo',
   statusPending: 'Pendiente',
   statusInactive: 'Inactivo',
   resend: 'Reenviar invitación',

@@ -490,9 +490,7 @@ function actorName(event: AuditEvent): string {
 
 /** El tono de la acción: neutro para leer, semántico para lo que cambia o alerta. */
 function actionTone(action: AuditAction): NonNullable<BadgeProps['variant']> {
-  const variant = AUDIT_ACTION_VARIANT[action];
-  // `muted` es el alias v1 de las lecturas: en v2, neutro.
-  return variant === 'muted' ? 'neutral' : variant;
+  return AUDIT_ACTION_VARIANT[action];
 }
 
 function PatientLink({ event }: { event: AuditEvent }) {

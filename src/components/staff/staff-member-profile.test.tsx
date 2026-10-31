@@ -63,7 +63,7 @@ describe('StaffMemberProfile', () => {
 
     // Patrón de ficha: el nombre es el título de la página.
     expect(await screen.findByRole('heading', { level: 1, name: 'Ana Ríos' })).toBeInTheDocument();
-    expect(screen.getByText('Aceptado')).toBeInTheDocument();
+    expect(screen.getByText('Activo')).toBeInTheDocument();
     expect(screen.getByLabelText(/nombre completo/i)).toHaveValue('Ana Ríos');
   });
 
@@ -221,7 +221,7 @@ describe('StaffMemberProfile', () => {
     await user.click(screen.getByRole('button', { name: /reactivar acceso/i }));
 
     await waitFor(() => expect(mockedReactivate).toHaveBeenCalledWith('tok', 'u1'));
-    expect(await screen.findByText('Aceptado')).toBeInTheDocument();
+    expect(await screen.findByText('Activo')).toBeInTheDocument();
   });
 
   it('un fallo al desactivar cierra el diálogo y ofrece reintentar en el toast', async () => {

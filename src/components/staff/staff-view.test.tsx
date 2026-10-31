@@ -74,7 +74,7 @@ describe('StaffView', () => {
     const filaMiembro = within(table).getByText('ana@clinic.com').closest('tr')!;
     const filaInvitacion = within(table).getByText('beto@clinic.com').closest('tr')!;
 
-    expect(within(filaMiembro).getByText('Aceptado')).toBeInTheDocument();
+    expect(within(filaMiembro).getByText('Activo')).toBeInTheDocument();
     expect(within(filaInvitacion).getByText('Pendiente')).toBeInTheDocument();
   });
 
@@ -117,13 +117,13 @@ describe('StaffView', () => {
     expect(within(filaMiembro).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('un desactivado se muestra como Inactivo, no como Aceptado', async () => {
+  it('un desactivado se muestra como Inactivo, no como Activo', async () => {
     mockedList.mockResolvedValue(page([inactivo]));
     render(<StaffView token="tok" />);
 
     const table = await screen.findByRole('table', { name: /personal/i });
     expect(within(table).getByText('Inactivo')).toBeInTheDocument();
-    expect(within(table).queryByText('Aceptado')).not.toBeInTheDocument();
+    expect(within(table).queryByText('Activo')).not.toBeInTheDocument();
   });
 
   it('buscar consulta al servidor con el término', async () => {
