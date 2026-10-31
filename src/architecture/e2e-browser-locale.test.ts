@@ -72,7 +72,7 @@ describe('arquitectura: el navegador de la suite e2e no tiene región (DX-312)',
       expect.arrayContaining(['playwright.config.ts', 'e2e/support/regional.ts', 'e2e/staff-invitation.spec.ts', REGIONAL_LOCALE_SPEC]),
     );
     const spec = readFileSync(join(ROOT, REGIONAL_LOCALE_SPEC), 'utf8');
-    expect(spec).toContain("test.use({ locale: 'es-VE' });");
+    expect(spec).toMatch(/test\.use\(\{ locale: 'es-VE'[,}]/);
     // Fuera de su fichero, la misma línea es una infracción.
     expect(browserLocaleHits('e2e/other.spec.ts', spec)).toEqual([
       expect.stringMatching(/^e2e\/other\.spec\.ts:\d+: locale: 'es-VE'$/),
