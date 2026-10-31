@@ -266,6 +266,7 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
       new Intl.NumberFormat('es', {
         style: 'currency',
         currency: 'COP',
+        currencyDisplay: 'code',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(amount),

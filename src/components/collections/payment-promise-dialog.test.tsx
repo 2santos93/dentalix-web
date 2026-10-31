@@ -61,7 +61,7 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     await userEvent.type(screen.getByLabelText('Importe'), '150.50');
     await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'USD');
     await typeDate(due);
-    expect(await screen.findByText(/^Se guardará: 150,50\sUS\$$/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Se guardará: 150,50\sUSD$/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', { amount: 150.5, currency: 'USD', dueDate: due }),

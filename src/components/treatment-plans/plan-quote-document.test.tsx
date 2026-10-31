@@ -210,7 +210,7 @@ describe('DX-376: segunda moneda opcional al imprimir', () => {
   it('añade el total en la 2.ª moneda con la tasa, su fuente, su fecha y la frase de importe orientativo', () => {
     render(<PlanQuoteDocument quote={planQuoteFixture()} secondCurrency={SECOND} />);
     const totals = screen.getByTestId('quote-totals');
-    expect(text(within(totals).getByTestId('quote-second-total'))).toContain('Total orientativo (USD)825,00 US$');
+    expect(text(within(totals).getByTestId('quote-second-total'))).toContain('Total orientativo (USD)825,00 USD');
     const note = text(screen.getByTestId('quote-second-currency'));
     expect(note).toContain('Tasa: 1 USD = 4000,00 COP (manual, 30/10/2026).');
     expect(note).toContain('El importe en USD es orientativo y se calcula con la tasa del día del pago.');

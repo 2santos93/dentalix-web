@@ -12,6 +12,12 @@ const ISO_ZERO_DECIMAL: ReadonlySet<string> = new Set(iso4217ZeroDecimal.minorUn
  * during render, tears down the whole subtree. This never throws: on any
  * failure it falls back to `` `${currency} ${amount}` ``. Use this everywhere
  * instead of constructing `Intl.NumberFormat` inline.
+ *
+ * Siempre con el código ISO de la moneda («450,00 USD»), nunca un símbolo: en
+ * un producto bimonetario «US$» o «$» no dicen lo mismo en cada país, y el
+ * resto de pantallas ya pintan el código (DX-378, `moneyWithCode`). Donde se
+ * conoce la sede, mejor `sedeMoney`/`moneyWithCode`, que además usan su
+ * formato.
  */
 export function formatCurrency(
   amount: number,
@@ -28,6 +34,7 @@ export function formatCurrency(
     return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
+      currencyDisplay: 'code',
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
     }).format(amount);

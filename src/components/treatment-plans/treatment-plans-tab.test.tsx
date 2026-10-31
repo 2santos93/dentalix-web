@@ -359,10 +359,10 @@ async function pickRowAction(
   await user.click(await screen.findByRole('menuitem', { name: item }));
 }
 
-const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
+const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
 /**
  * `Intl.NumberFormat`'s `es` output places a NBSP (` `) between the
- * amount and the `US$` symbol. Testing Library's default text normalizer
+ * amount and the `USD` code (DX-378: never a symbol). Testing Library's default text normalizer
  * collapses whitespace (including NBSP, matched by `\s`) in the DOM node's
  * text content down to a plain space before comparing — but it does NOT run
  * that same normalization over a plain-string query — so asserting against

@@ -114,9 +114,10 @@ for (const viewport of [
       await page.unroute(matcher, handler);
 
       if (screen.name === 'catalogo') {
-        // La clínica demo trabaja en USD: precios en su moneda («450,00 US$»,
-        // formato del catálogo), nunca en la de otro país.
-        await expect(page.getByText(/\d\sUS\$$/).first()).toBeVisible();
+        // La clínica demo trabaja en USD: precios en su moneda con el código
+        // ISO («450,00 USD», DX-378: nunca «US$»), nunca en la de otro país.
+        await expect(page.getByText(/\d\sUSD$/).first()).toBeVisible();
+        await expect(page.getByText(/US\$/)).toHaveCount(0);
         await expect(page.getByText(/\d\s(?:COP|EUR|€|VES|Bs)/)).toHaveCount(0);
         await screenshot(page, `catalogo-usd-${viewport.width}.png`, testInfo.outputPath('qa'));
       }

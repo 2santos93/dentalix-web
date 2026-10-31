@@ -62,7 +62,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
       await screen.findByRole('option', { name: /Dólar/ });
       await userEvent.selectOptions(select, 'USD');
       const total = await screen.findByTestId('quote-second-total');
-      expect((total.textContent ?? '').replace(/\s/g, ' ')).toContain('825,00 US$');
+      expect((total.textContent ?? '').replace(/\s/g, ' ')).toContain('825,00 USD');
       expect(mockedRates).toHaveBeenCalledWith('tok', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
       expect(screen.getByTestId('quote-second-currency')).toHaveTextContent(/automática/);
     });

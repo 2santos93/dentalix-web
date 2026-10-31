@@ -251,7 +251,7 @@ describe.each(formNames)('%s (DX-241)', (name) => {
     const previewId = (input.getAttribute('aria-describedby') ?? '').split(' ').find((id) => id.endsWith('-preview'));
     const preview = document.getElementById(previewId ?? '');
     expect(preview).toHaveAttribute('aria-live', 'polite');
-    await waitFor(() => expect(preview).toHaveTextContent(/^Se guardará: 150,50\sUS\$$/));
+    await waitFor(() => expect(preview).toHaveTextContent(/^Se guardará: 150,50\sUSD$/));
     expect(within(document.body).getAllByText(/^Se guardará:/)).toHaveLength(1);
   });
 });

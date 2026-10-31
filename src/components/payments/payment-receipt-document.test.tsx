@@ -193,7 +193,7 @@ describe('DX-376: abono en otra moneda', () => {
     const doc = text(screen.getByTestId('receipt-document'));
     expect(doc).toContain('1825,00 VES');
     expect(doc).toContain('Equivalente en USD');
-    expect(doc).toContain('50,00 US$');
+    expect(doc).toContain('50,00 USD');
     expect(doc).toContain('Tasa aplicada: 1 USD = 36,50 VES (manual, 29/10/2026)');
   });
 
@@ -206,7 +206,7 @@ describe('DX-376: abono en otra moneda', () => {
     render(<PaymentReceiptDocument receipt={inVes(other)} />);
     const doc = text(screen.getByTestId('receipt-document'));
     expect(doc).toContain('Tasa aplicada: 1 USD = 40,00 VES (automática, 30/10/2026)');
-    expect(doc).toContain('45,63 US$');
+    expect(doc).toContain('45,63 USD');
   });
 
   it('un abono «sin tasa» lo dice en lugar de la tasa y el equivalente', () => {

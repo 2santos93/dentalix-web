@@ -38,7 +38,7 @@ const suffix = rawSuffix
   .toLowerCase()
   .slice(0, 8);
 
-const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
+const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
 function figure(amount: number): string {
   return usd.format(amount).split(/\s/)[0];
 }

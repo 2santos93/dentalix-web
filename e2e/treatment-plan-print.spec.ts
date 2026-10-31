@@ -39,7 +39,7 @@ const suffix = rawSuffix
 
 // Mismo formateador que la app (`formatCurrency`, locale `es`). Solo la cifra
 // («1.200.000,00»): entre ella y «COP» va un espacio duro.
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP' });
+const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP', currencyDisplay: 'code' });
 function figure(amount: number): string {
   return cop.format(amount).split(/\s/)[0];
 }
