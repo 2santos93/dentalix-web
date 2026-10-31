@@ -139,29 +139,25 @@ describe('PatientEditModal', () => {
     expect(input.email).toBeNull();
   });
 
-  it('omite firstName en vez de mandar null al borrarlo (NOT NULL en el schema)', async () => {
+  it('vaciar firstName nunca manda null (NOT NULL en el schema): el envío se frena', async () => {
     // `firstName`/`lastName` son NOT NULL en Prisma; un `null` se cuela
-    // pasando de largo `@IsOptional()` (que salta TODOS los validadores,
-    // incluido `@MinLength`) y revienta en un 500 al llegar a Postgres.
+    // pasando de largo `@IsOptional()` y revienta en un 500 al llegar a
+    // Postgres. Aunque el envío llegue a `onSubmit` (el modal es `noValidate`),
+    // la validación propia lo frena; `buildPatch` además lo omitiría.
     mockedUpdate.mockResolvedValue(patient);
     render(
       <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
     );
 
     const firstNameInput = screen.getByLabelText(/^nombre$/i);
-    fireEvent.change(firstNameInput, { target: { value: '' } });
-    // El input es `required`: un click normal dispararía la validación
-    // nativa del navegador y ni llegaría a `onSubmit`. Se dispara el submit
-    // directo para probar la guarda de `buildPatch` en sí (defensa en
-    // profundidad, no sólo el `required` del DOM).
+    fireEvent.change(firstNameInput, { target: { value: '   ' } });
     fireEvent.submit(firstNameInput.closest('form')!);
 
-    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
-    const [, , input] = mockedUpdate.mock.calls[0];
-    expect(input).not.toHaveProperty('firstName');
+    expect(await screen.findByText(/escribe el nombre/i)).toBeInTheDocument();
+    expect(mockedUpdate).not.toHaveBeenCalled();
   });
 
-  it('el required en Nombre bloquea el guardado antes de llegar al backend', async () => {
+  it('Nombre vacío bloquea el guardado antes de llegar al backend y lo dice junto al campo', async () => {
     const user = userEvent.setup();
     render(
       <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
@@ -171,6 +167,10 @@ describe('PatientEditModal', () => {
     await user.click(screen.getByRole('button', { name: /guardar/i }));
 
     expect(mockedUpdate).not.toHaveBeenCalled();
+    const name = screen.getByLabelText(/^nombre$/i);
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription(/escribe el nombre/i);
+    expect(name).toHaveFocus();
   });
 
   it('no reenvía un campo que no cambió, aunque tuviera valor', async () => {

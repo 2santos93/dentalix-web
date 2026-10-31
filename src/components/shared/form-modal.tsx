@@ -66,6 +66,38 @@ interface FormModalProps {
    * bloquea también Escape y el fondo en su `onOpenChange`.
    */
   lockCloseWhileSubmitting?: boolean;
+  /**
+   * Bajo `sm` (<640px) el modal es una hoja a pantalla completa con el pie
+   * pegado abajo y la primaria a todo el ancho. `false` lo deja flotante
+   * (confirmaciones de dos líneas).
+   */
+  fullScreenOnMobile?: boolean;
+  /**
+   * El formulario valida TODOS sus campos él mismo (rung 4, junto a cada
+   * campo): no queda ni la red de seguridad del navegador para los campos de
+   * texto `required`. Ver `submitWithFallback`.
+   */
+  ownValidation?: boolean;
+}
+
+/**
+ * El formulario del modal es `noValidate`: un `required` nativo de una
+ * casilla o un grupo de radios (`Checkbox`, `RadioGroup`, que pintan su propio
+ * error) nunca se adelanta a la validación del formulario. Los campos de texto
+ * (`input`, `textarea`, `select`) con `required`/`pattern` conservan el aviso
+ * del navegador como red de seguridad mientras su pantalla no valide ella misma
+ * (`ownValidation`).
+ */
+function firstNativeInvalidTextControl(form: HTMLFormElement): HTMLElement | null {
+  for (const el of Array.from(form.elements)) {
+    if (el instanceof HTMLInputElement) {
+      if (el.type === 'radio' || el.type === 'checkbox' || el.type === 'hidden') continue;
+    } else if (!(el instanceof HTMLTextAreaElement) && !(el instanceof HTMLSelectElement)) {
+      continue;
+    }
+    if (el.willValidate && !el.validity.valid) return el;
+  }
+  return null;
 }
 
 /**
@@ -100,6 +132,8 @@ export function FormModal({
   touchTargets = false,
   onCloseAutoFocus,
   lockCloseWhileSubmitting = false,
+  fullScreenOnMobile = true,
+  ownValidation = false,
 }: FormModalProps) {
   const submitHintId = React.useId();
   const errorRef = React.useRef<HTMLDivElement>(null);
@@ -117,6 +151,7 @@ export function FormModal({
         className={cn(size === 'lg' && 'max-w-2xl', touchTargets && TOUCH_TARGETS)}
         onCloseAutoFocus={onCloseAutoFocus}
         closeDisabled={lockCloseWhileSubmitting && submitting}
+        fullScreenOnMobile={fullScreenOnMobile}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -126,7 +161,21 @@ export function FormModal({
             sin él, una tabla ancha dentro de su marco con scroll (QA DX-407:
             la de constantes a 390 px) ensancha el formulario entero en vez de
             desplazarse dentro de su marco. */}
-        <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-4">
+        {/* `noValidate`: un `required` nativo de RadioGroup o Checkbox no se
+            adelanta a la validación propia (ver firstNativeInvalidTextControl). */}
+        <form
+          onSubmit={(event) => {
+            const invalid = ownValidation ? null : firstNativeInvalidTextControl(event.currentTarget);
+            if (invalid) {
+              event.preventDefault();
+              (invalid as HTMLInputElement).reportValidity();
+              return;
+            }
+            onSubmit(event);
+          }}
+          noValidate
+          className="flex min-w-0 flex-col gap-4"
+        >
           {error ? (
             <div
               ref={errorRef}
@@ -137,7 +186,16 @@ export function FormModal({
             </div>
           ) : null}
           {children}
-          <div className="flex flex-col gap-2">
+          <div
+            data-slot="form-modal-footer"
+            className={cn(
+              'flex flex-col gap-2',
+              // En la hoja del teléfono el pie se queda abajo mientras se
+              // desplaza el formulario (la primaria, a todo el ancho, siempre a mano).
+              fullScreenOnMobile &&
+                'max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-4 max-sm:-mb-4 max-sm:mt-auto max-sm:border-t max-sm:border-border-subtle max-sm:bg-surface max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]',
+            )}
+          >
             {/* Con la prop (aunque valga null) el hueco queda reservado —dos
                 líneas en móvil, una desde sm— para que la explicación cambie o
                 se vacíe sin mover el pie ni el resto del diálogo. */}

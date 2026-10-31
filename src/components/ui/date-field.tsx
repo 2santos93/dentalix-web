@@ -129,10 +129,13 @@ export function useIsoDraft<V, Iso>(value: Iso, onChange: (value: Iso) => void, 
   const valueKey = convert.key(value);
   const [draft, setDraft] = React.useState<V>(() => convert.toDraft(value));
   const [seen, setSeen] = React.useState(valueKey);
+  // Lo último que el campo emitió y fuera aún no ha contestado; `null` = nada.
   const [emitted, setEmitted] = React.useState<string | null>(null);
   if (valueKey !== seen) {
     setSeen(valueKey);
+    // Si el valor nuevo no es el eco de lo emitido, viene de fuera: manda.
     if (valueKey !== emitted) setDraft(convert.toDraft(value));
+    setEmitted(null);
   }
   const change = useStableCallback((next: V) => {
     setDraft(next);

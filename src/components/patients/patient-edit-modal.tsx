@@ -36,6 +36,8 @@ const copy = {
   administrative: 'Administrativo',
   docType: 'Tipo de documento',
   sex: 'Sexo',
+  firstNameMissing: 'Escribe el nombre del paciente.',
+  lastNameMissing: 'Escribe el apellido del paciente.',
   emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',
 };
 
@@ -50,8 +52,8 @@ const SEXES: { value: Patient['sex']; label: string }[] = [
 /**
  * Columnas `NOT NULL`: un vaciado se OMITE, nunca viaja como `null`. El
  * backend hoy responde 400 si igual llegara (ver `@NotNullable()` en
- * `UpdatePatientDto`), y el `required` del `<input>` lo bloquea antes en el
- * navegador — pero el tipo es la primera de las tres barreras.
+ * `UpdatePatientDto`), y el formulario lo frena antes junto al campo —
+ * pero el tipo es la primera de las tres barreras.
  */
 type RequiredTextKey = 'firstName' | 'lastName';
 
@@ -173,6 +175,9 @@ export function PatientEditModal({
   const [docTypeLabelError, setDocTypeLabelError] = useState<string | null>(null);
   const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  // Nombre y apellido no se vacían: el formulario lo dice junto al campo (el
+  // modal no deja que el `required` nativo se adelante, ver FormModal).
+  const [nameErrors, setNameErrors] = useState<Partial<Record<RequiredTextKey, string>>>({});
   const emailRef = React.useRef<HTMLInputElement>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const phoneRef = React.useRef<HTMLInputElement>(null);
@@ -251,6 +256,15 @@ export function PatientEditModal({
     e.preventDefault();
     setError(null);
     setPhoneError(null);
+    const missing: Partial<Record<RequiredTextKey, string>> = {};
+    if (!text.firstName.trim()) missing.firstName = copy.firstNameMissing;
+    if (!text.lastName.trim()) missing.lastName = copy.lastNameMissing;
+    setNameErrors(missing);
+    const firstMissing = (['firstName', 'lastName'] as const).find((k) => missing[k]);
+    if (firstMissing) {
+      document.getElementById(`pe-${firstMissing}`)?.focus();
+      return;
+    }
     // La regla de `@IsEmail()` de la API (el navegador acepta «ana@x»). Solo
     // si cambió: un email guardado no viaja y no hay que frenar por él.
     const email = text.email.trim();
@@ -288,7 +302,14 @@ export function PatientEditModal({
 
   function textField(f: TextFieldSpec) {
     const id = `pe-${f.key}`;
-    const error = f.key === 'email' ? emailError : f.key === 'phone' ? phoneError : null;
+    const error =
+      f.key === 'email'
+        ? emailError
+        : f.key === 'phone'
+          ? phoneError
+          : f.key === 'firstName' || f.key === 'lastName'
+            ? (nameErrors[f.key] ?? null)
+            : null;
     if (f.type === 'date') {
       return (
         <FormField key={f.key} htmlFor={id} label={f.label}>
@@ -315,6 +336,7 @@ export function PatientEditModal({
             setText((prev) => ({ ...prev, [f.key]: e.target.value }));
             if (f.key === 'email') setEmailError(null);
             if (f.key === 'phone') setPhoneError(null);
+            if (f.key === 'firstName' || f.key === 'lastName') setNameErrors((prev) => ({ ...prev, [f.key]: undefined }));
           }}
         />
       </FormField>
@@ -328,6 +350,7 @@ export function PatientEditModal({
       title={copy.title}
       description={copy.description}
       onSubmit={handleSubmit}
+      ownValidation
       submitLabel={saving ? copy.submitting : copy.submit}
       submitting={saving}
       error={error}
