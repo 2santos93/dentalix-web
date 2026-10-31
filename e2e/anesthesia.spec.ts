@@ -22,6 +22,11 @@ import { openPatientTab } from './support/patient-tabs';
  * en otra evolución del mismo día la barra ya marca 108 mg con el desglose
  * (evolución y profesional), y otros 3 carpules dan 216 mg · 154 % y piden
  * confirmación y motivo.
+ *
+ * DX-420: niño de 8 años y 20 kg con lidocaína: el máximo es el pediátrico
+ * de la AAPD (4,4 mg/kg = 88 mg) con la fuente a la vista, «quedan X mg ≈ Y
+ * carpules» y la barra de epinefrina en mg; en una niña de 3 años la
+ * articaína avisa de la edad mínima y exige confirmación y motivo.
  */
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
@@ -103,7 +108,7 @@ for (const viewport of VIEWPORTS) {
 
     const anesthetic = dialog.getByLabel('Anestésico');
     await expect(anesthetic).toBeVisible({ timeout: 10_000 });
-    await anesthetic.selectOption({ label: 'Articaína 4 % con epinefrina 1:100.000 · 1,7 ml' });
+    await anesthetic.selectOption({ label: 'Articaína 4 % con epinefrina 1:100.000 · 1,7 ml · desde 4 años' });
     await dialog.getByLabel('Carpules').fill('3');
     await dialog.getByLabel('Técnica').selectOption('NERVE_BLOCK');
     await dialog.getByLabel('Zona o dientes (FDI)').fill('85');
@@ -191,6 +196,13 @@ async function seedTwoEntries(
   const catalog = await post<{ id: string; sampleCode: string | null }[]>('/anesthetics/samples', {});
   const lidocaine = catalog.find((p) => p.sampleCode === 'LIDOCAINE_2_EPI');
   expect(lidocaine, 'falta la lidocaína de ejemplo').toBeTruthy();
+  // El criterio de DX-418 se escribió con el máximo de adulto (7 mg/kg): esta
+  // clínica quita el pediátrico del catálogo (DX-420, editable por el ADMIN).
+  const patched = await request.patch(`${API_URL}/anesthetics/${lidocaine!.id}`, {
+    headers,
+    data: { pediatricMaxMgPerKg: null },
+  });
+  expect(patched.ok(), `PATCH del anestésico falló: ${await patched.text()}`).toBeTruthy();
   await post(`/patients/${patient.id}/clinical-entries/${morning.id}/anesthesia`, {
     anestheticId: lidocaine!.id,
     carpules: 3,
@@ -252,5 +264,106 @@ for (const viewport of VIEWPORTS) {
       page.getByText('Acumulado del paciente en 24 h: 216 mg · 154 % del máximo').locator('visible=true'),
     ).toBeVisible();
     await expectNoHorizontalScroll(page);
+  });
+}
+
+async function seedChildren(
+  request: APIRequestContext,
+  origin: string,
+  accessToken: string,
+  lastName: string,
+  tag: string,
+) {
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    'X-Tenant-Host': new URL(origin).host,
+  };
+  async function post<T>(path: string, data: object): Promise<T> {
+    const res = await request.post(`${API_URL}${path}`, { headers, data });
+    expect(res.ok(), `POST ${path} falló: ${await res.text()}`).toBeTruthy();
+    return (await res.json()) as T;
+  }
+  async function child(firstName: string, birthDate: string, doc: string) {
+    const patient = await post<{ id: string }>('/patients', {
+      firstName,
+      lastName,
+      docType: 'NATIONAL_ID',
+      docNumber: `${doc}${tag}`.slice(0, 20),
+      sex: 'F',
+      birthDate,
+    });
+    await post(`/patients/${patient.id}/clinical-entries`, {
+      reason: 'Pulpotomía',
+      notes: `Pulpotomía de 75 (${firstName})`,
+    });
+    return patient.id;
+  }
+  await post('/anesthetics/samples', {});
+  return {
+    school: await child('Vera', '2018-03-01', 'AP'),
+    toddler: await child('Nora', new Date(Date.now() - 3 * 365.25 * 86_400_000).toISOString().slice(0, 10), 'AT'),
+  };
+}
+
+for (const viewport of VIEWPORTS) {
+  test(`DX-420: máximo pediátrico con fuente, «quedan», epinefrina y edad mínima (${viewport.name})`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const tag = `p${suffix}${viewport.width}`;
+    const origin = await registerAndLogin(page, {
+      subdomain: `test-clinic-anesthesia-ped-${tag}`,
+      clinicName: `Clinica Anestesia Pediatrica ${tag}`,
+      fullName: 'Ana Pediatría',
+      email: `test.user.anesthesia.ped.${tag}@example.com`,
+      password,
+    });
+    const seeded = await seedChildren(page.request, origin, await accessTokenOf(page), `Pediatria${tag}`, tag);
+
+    // Niña de 8 años, 20 kg, 1 carpule de lidocaína.
+    await page.goto(`${origin}/patients/${seeded.school}`);
+    await openPatientTab(page, 'Historia clínica');
+    await page
+      .getByRole('button', { name: /Anestesia de la evolución del/ })
+      .locator('visible=true')
+      .click();
+    let dialog = page.getByRole('dialog', { name: 'Anestesia local' });
+    await dialog.getByLabel('Anestésico').selectOption({ label: 'Lidocaína 2 % con epinefrina 1:100.000 · 1,8 ml' });
+    await dialog.getByLabel('Carpules').fill('1');
+    await dialog.getByLabel('Peso del paciente (kg)').fill('20');
+    const bar = dialog.getByRole('region', { name: 'Acumulado del paciente en las últimas 24 h' });
+    await expect(bar).toContainText('Máximo 88 mg (4,4 mg/kg)', { timeout: 10_000 });
+    await expect(bar).toContainText('Fuente: AAPD');
+    await expect(bar).toContainText('Quedan 52 mg ≈ 1,25 carpules de 1,8 ml');
+    await expect(bar.getByRole('meter', { name: 'Epinefrina por cita' })).toHaveAttribute(
+      'aria-valuetext',
+      '0,018 de 0,2 mg · 9 %',
+    );
+    await expectNoHorizontalScroll(page);
+    await dialog.getByRole('button', { name: 'Registrar anestesia' }).click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+
+    // Niña de 3 años: la articaína no se recomienda en menores de 4.
+    await page.goto(`${origin}/patients/${seeded.toddler}`);
+    await openPatientTab(page, 'Historia clínica');
+    await page
+      .getByRole('button', { name: /Anestesia de la evolución del/ })
+      .locator('visible=true')
+      .click();
+    dialog = page.getByRole('dialog', { name: 'Anestesia local' });
+    await dialog
+      .getByLabel('Anestésico')
+      .selectOption({ label: 'Articaína 4 % con epinefrina 1:100.000 · 1,7 ml · desde 4 años' });
+    await dialog.getByLabel('Carpules').fill('0,5');
+    await dialog.getByLabel('Peso del paciente (kg)').fill('14');
+    await expect(dialog.getByText(/no recomendada en menores de 4 años/)).toBeVisible({ timeout: 10_000 });
+    await dialog.getByRole('button', { name: 'Registrar anestesia' }).click();
+    await expect(dialog.getByText('Marca la confirmación para guardar pese al aviso.')).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await dialog.getByRole('checkbox', { name: /Confirmo que conozco el aviso/ }).check();
+    await dialog.getByLabel('Motivo').fill('Sin alternativa en el gabinete, valorada con la familia');
+    await dialog.getByRole('button', { name: 'Registrar anestesia' }).click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
   });
 }

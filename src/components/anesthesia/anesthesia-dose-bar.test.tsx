@@ -9,7 +9,7 @@ import type { AnesthesiaDoseSummary } from '@/lib/anesthesia/anesthesia-api';
 
 function summary(overrides: Partial<AnesthesiaDoseSummary>): AnesthesiaDoseSummary {
   return {
-    rulesVersion: 'ANESTHESIA_DOSE_V2',
+    rulesVersion: 'ANESTHESIA_DOSE_V3',
     weightKg: 20,
     totalMg: 72,
     byAnesthetic: [
@@ -21,11 +21,16 @@ function summary(overrides: Partial<AnesthesiaDoseSummary>): AnesthesiaDoseSumma
         mg: 72,
         maxMg: 140,
         percent: 51,
+        maxMgPerKg: 7,
+        maxSource: 'Malamed',
       },
     ],
     percent: 51,
     level: 'OK',
     alerts: [],
+    adjustment: { pediatric: false, infant: false, sedation: false, factor: 1, ageYears: 30 },
+    epinephrine: { totalMg: 0.036, maxMg: 0.2, percent: 18, cardiac: false, level: 'OK' },
+    remaining: null,
     ...overrides,
   };
 }
@@ -33,7 +38,7 @@ function summary(overrides: Partial<AnesthesiaDoseSummary>): AnesthesiaDoseSumma
 describe('AnesthesiaDoseBar (DX-307, DX-418)', () => {
   it('bajo el 80 %: barra con el % y sin aviso', () => {
     render(<AnesthesiaDoseBar summary={summary({})} />);
-    const meter = screen.getByRole('meter');
+    const meter = screen.getByRole('meter', { name: doseBarCopy.label });
     expect(meter).toHaveAttribute('aria-valuenow', '51');
     expect(screen.getByText(/72 mg · 51 % del máximo/)).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -49,8 +54,8 @@ describe('AnesthesiaDoseBar (DX-307, DX-418)', () => {
   it('desde el 100 %: alerta de bloqueo y la barra llena aunque pase de 100', () => {
     render(<AnesthesiaDoseBar summary={summary({ percent: 146, totalMg: 204, level: 'EXCEEDED' })} />);
     expect(screen.getByRole('alert')).toHaveTextContent(doseBarCopy.exceeded);
-    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '100');
-    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', '146 % del máximo');
+    expect(screen.getByRole('meter', { name: doseBarCopy.label })).toHaveAttribute('aria-valuenow', '100');
+    expect(screen.getByRole('meter', { name: doseBarCopy.label })).toHaveAttribute('aria-valuetext', '146 % del máximo');
   });
 
   it('con varios anestésicos explica la suma de fracciones', () => {
@@ -61,8 +66,8 @@ describe('AnesthesiaDoseBar (DX-307, DX-418)', () => {
           totalMg: 140,
           level: 'EXCEEDED',
           byAnesthetic: [
-            { name: 'Lidocaína', activeIngredient: 'Lidocaína', concentrationPct: 2, carpules: 2, mg: 72, maxMg: 140, percent: 51 },
-            { name: 'Articaína', activeIngredient: 'Articaína', concentrationPct: 4, carpules: 1, mg: 68, maxMg: 140, percent: 49 },
+            { name: 'Lidocaína', activeIngredient: 'Lidocaína', concentrationPct: 2, carpules: 2, mg: 72, maxMg: 140, percent: 51, maxMgPerKg: 7, maxSource: 'Malamed' },
+            { name: 'Articaína', activeIngredient: 'Articaína', concentrationPct: 4, carpules: 1, mg: 68, maxMg: 140, percent: 49, maxMgPerKg: 7, maxSource: 'Malamed' },
           ],
         })}
       />,
@@ -73,7 +78,7 @@ describe('AnesthesiaDoseBar (DX-307, DX-418)', () => {
 
   it('sin peso: no hay barra y dice que falta el peso', () => {
     render(<AnesthesiaDoseBar summary={summary({ percent: null, weightKg: null, level: 'NO_WEIGHT' })} />);
-    expect(screen.queryByRole('meter')).not.toBeInTheDocument();
+    expect(screen.queryByRole('meter', { name: doseBarCopy.label })).not.toBeInTheDocument();
     expect(screen.getByText('Dosis máxima no calculada: falta el peso.')).toBeInTheDocument();
   });
 
@@ -137,5 +142,57 @@ describe('AnesthesiaDoseBar (DX-307, DX-418)', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('La hora de la anestesia no puede ser futura');
     screen.getByRole('button', { name: doseBarCopy.retry }).click();
     expect(onRetry).toHaveBeenCalled();
+  });
+});
+
+describe('AnesthesiaDoseBar (DX-420)', () => {
+  const pediatric = summary({
+    totalMg: 36,
+    percent: 41,
+    byAnesthetic: [
+      {
+        name: 'Lidocaína 2 %',
+        activeIngredient: 'Lidocaína',
+        concentrationPct: 2,
+        carpules: 1,
+        mg: 36,
+        maxMg: 88,
+        percent: 41,
+        maxMgPerKg: 4.4,
+        maxSource: 'AAPD, Use of Local Anesthesia for Pediatric Dental Patients (revisión 2023): 4,4 mg/kg en menores de 12 años',
+      },
+    ],
+    adjustment: { pediatric: true, infant: false, sedation: false, factor: 1, ageYears: 8 },
+    epinephrine: { totalMg: 0.018, maxMg: 0.2, percent: 9, cardiac: false, level: 'OK' },
+    remaining: { name: 'Lidocaína 2 %', mg: 52, carpules: 1.25, mlPerCarpule: 1.8, limitedBy: 'DOSE', epinephrineMg: 0.182 },
+  });
+
+  it('niño de 20 kg: máximo 88 mg (4,4 mg/kg) con la fuente y «quedan X mg ≈ Y carpules»', () => {
+    render(<AnesthesiaDoseBar summary={pediatric} />);
+    expect(screen.getByText('Máximo 88 mg (4,4 mg/kg)')).toBeInTheDocument();
+    expect(screen.getByText(/Fuente: AAPD/)).toBeInTheDocument();
+    expect(screen.getByText('Quedan 52 mg ≈ 1,25 carpules de 1,8 ml')).toBeInTheDocument();
+  });
+
+  it('barra de epinefrina en mg junto a la del anestésico', () => {
+    render(<AnesthesiaDoseBar summary={pediatric} />);
+    const meter = screen.getByRole('meter', { name: doseBarCopy.epinephrineLabel });
+    expect(meter).toHaveAttribute('aria-valuenow', '9');
+    expect(meter).toHaveAttribute('aria-valuetext', '0,018 de 0,2 mg · 9 %');
+    expect(screen.getByText(doseBarCopy.epinephrineScope(false))).toBeInTheDocument();
+  });
+
+  it('cuando limita la epinefrina lo dice', () => {
+    render(
+      <AnesthesiaDoseBar
+        summary={{
+          ...pediatric,
+          epinephrine: { totalMg: 0.036, maxMg: 0.04, percent: 90, cardiac: true, level: 'WARNING' },
+          remaining: { name: 'Lidocaína 2 %', mg: 8, carpules: 0, mlPerCarpule: 1.8, limitedBy: 'EPINEPHRINE', epinephrineMg: 0.004 },
+        }}
+      />,
+    );
+    expect(screen.getByText('Limita la epinefrina: quedan 0,004 mg.')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(doseBarCopy.epinephrineWarning);
   });
 });
