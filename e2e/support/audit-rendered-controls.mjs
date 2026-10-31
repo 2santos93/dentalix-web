@@ -12,8 +12,16 @@ const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const reports = [];
-  for (const { html, selector } of snapshots) {
+  for (const { html, selector, viewport = { width: 1440, height: 900 } } of snapshots) {
+    await page.setViewportSize(viewport);
     await page.setContent(`<html lang="es"><head><title>Component audit</title><style>${css.css}</style></head><body class="bg-surface text-ink"><main>${html}</main></body></html>`);
+    // La geometría corresponde al estado final de las animaciones finitas.
+    // Los spinners infinitos no forman parte de la transición de entrada.
+    await page.evaluate(async () => {
+      const finite = document.getAnimations().filter(animation =>
+        Number.isFinite(animation.effect?.getComputedTiming().endTime));
+      await Promise.all(finite.map(animation => animation.finished));
+    });
     await page.addScriptTag({ content: readFileSync(new URL(import.meta.resolve('axe-core/axe.min.js')), 'utf8') });
     const controls = page.locator(`${selector}:visible`);
     const count = await controls.count();
@@ -24,7 +32,12 @@ try {
       // Audit all default rules on the actual control, without disabled rules or exclusions.
       reports.push(await control.evaluate(async element => {
         const result = await window.axe.run(element);
+        const { width, height } = element.getBoundingClientRect();
         return { version: result.testEngine.version, html: element.outerHTML,
+          geometry: { width, height },
+          spans: [...element.querySelectorAll('span')].map(span => ({
+            text: span.textContent, width: span.getBoundingClientRect().width, scrollWidth: span.scrollWidth,
+          })),
           violations: result.violations.map(v => ({ id: v.id, impact: v.impact,
             nodes: v.nodes.map(n => ({ html: n.html, summary: n.failureSummary })) })) };
       }));

@@ -119,7 +119,7 @@ test('cancelar → ofertar a 2 → el primero acepta desde el móvil → agenda 
   await expect(page.getByTestId('day-column').first()).toBeVisible({ timeout: 15_000 });
 
   await column(page, dentist.fullName)
-    .getByRole('button', { name: new RegExp(`Detalle de la cita de 10:00–10:30 · Gabi ${last}`) })
+    .getByRole('button', { name: new RegExp(`10:00–10:30 · Gabi ${last}.*Detalle de la cita`) })
     .click();
   const detail = page.getByRole('dialog').filter({ hasText: 'Estado' });
   await chooseAppointmentStatus(detail.getByRole('combobox', { name: /^Estado: / }), 'Cancelada');
@@ -163,7 +163,7 @@ test('cancelar → ofertar a 2 → el primero acepta desde el móvil → agenda 
   await page.keyboard.press('Escape');
   await expect(
     column(page, dentist.fullName).getByRole('button', {
-      name: new RegExp(`Detalle de la cita de 10:00–10:30 · Ana ${last}`),
+      name: new RegExp(`10:00–10:30 · Ana ${last}.*Detalle de la cita`),
     }),
   ).toBeVisible({ timeout: 15_000 });
 
