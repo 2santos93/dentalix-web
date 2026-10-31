@@ -13,10 +13,11 @@ import { openSection } from './support/nav';
  *
  * Además se siembra por la API un deudor propio de esta corrida con un plan de
  * cuotas que venció hace más de un año, así que siempre encabeza el filtro
- * «Más de 90 días». Recepción entra por el menú, filtra y ve su fila (1440 px)
- * o su tarjeta (390 px, sin scroll lateral) con «Llamar», un WhatsApp
- * prellenado sin importes y el enlace al estado de cuenta. No ve «Exportar CSV»
- * (solo ADMIN).
+ * «Más de 90 días». Recepción entra por el menú, filtra y ve su fila (1440 px:
+ * «Llamar» y WhatsApp como iconos, la fila abre el estado de cuenta) o su
+ * tarjeta (390 px, sin scroll lateral: la tarjeta abre el estado de cuenta y
+ * «Llamar»/«WhatsApp» van en su «⋯»), con un WhatsApp prellenado sin importes.
+ * No ve «Exportar CSV» (solo ADMIN).
  */
 const origin = tenantOrigin('demo');
 const DEMO_PASSWORD = 'DemoDentalix2026!';
@@ -103,10 +104,9 @@ test('recepción abre Cartera desde el menú y filtra más de 90 días (1440 px)
     'tel:3005550199',
   );
   expectSafeWhatsApp(await row.getByRole('link', { name: `WhatsApp a ${fullName}` }).getAttribute('href'));
-  await expect(row.getByRole('link', { name: `Estado de cuenta de ${fullName}` })).toHaveAttribute(
-    'href',
-    `/patients/${patientId}?tab=account-statement`,
-  );
+  // Toda la fila abre el estado de cuenta: su enlace es el del nombre.
+  const statement = row.getByRole('link', { name: new RegExp(`^${fullName}`) });
+  await expect(statement).toHaveAttribute('href', `/patients/${patientId}?tab=account-statement`);
   // Todas las filas filtradas tienen deuda de más de 90 días.
   const ages = await page.getByRole('table').getByText(/^\d+ días$/).allTextContents();
   expect(ages.length).toBeGreaterThan(0);
@@ -116,26 +116,40 @@ test('recepción abre Cartera desde el menú y filtra más de 90 días (1440 px)
   await expectNoHorizontalScroll(page);
 
   // El enlace lleva al estado de cuenta del paciente.
-  await row.getByRole('link', { name: `Estado de cuenta de ${fullName}` }).click();
+  await statement.click();
   await expect(page).toHaveURL(new RegExp(`/patients/${patientId}\\?tab=account-statement`));
 });
 
-test('a 390 px cada deudor es una tarjeta con sus botones, sin scroll lateral', async ({ page }) => {
+test('a 390 px cada deudor es una tarjeta que abre su estado de cuenta; Llamar y WhatsApp en su «⋯»', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openCarteraAsReception(page);
 
-  const card = page.getByRole('article', { name: fullName });
+  const card = page.getByRole('list', { name: 'Deudores' }).getByRole('listitem').filter({ hasText: fullName });
   await expect(card).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('table')).toBeHidden();
-  const call = card.getByRole('link', { name: `Llamar a ${fullName}: 300 555 0199` });
-  const whatsapp = card.getByRole('link', { name: `WhatsApp a ${fullName}` });
-  await expect(call).toBeVisible();
-  expectSafeWhatsApp(await whatsapp.getAttribute('href'));
-  // Al alcance del pulgar: 44 px de alto como mínimo.
-  for (const button of [call, whatsapp]) {
-    const box = await button.boundingBox();
+  await expect(card.getByRole('link')).toHaveAttribute('href', `/patients/${patientId}?tab=account-statement`);
+  const menu = page.getByRole('button', { name: `Acciones de ${fullName}` });
+  // Al alcance del pulgar: la tarjeta y su «⋯», 44 px de alto como mínimo.
+  for (const target of [card.getByRole('link'), menu]) {
+    const box = await target.boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
   }
+  // WhatsApp abre wa.me con el mensaje sin importes (se intercepta window.open).
+  await page.evaluate(() => {
+    (window as unknown as { __opened: string[] }).__opened = [];
+    window.open = ((url: string) => {
+      (window as unknown as { __opened: string[] }).__opened.push(url);
+      return null;
+    }) as typeof window.open;
+  });
+  await menu.click();
+  await expect(page.getByRole('menuitem', { name: 'Llamar al 300 555 0199' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'WhatsApp' }).click();
+  const opened = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
+  expect(opened).toHaveLength(1);
+  expectSafeWhatsApp(opened[0]);
   await expectNoHorizontalScroll(page);
 });
 
@@ -165,14 +179,15 @@ test('a 390 px los importes de cada tarjeta no se salen de ella (deudas de millo
   await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
   await page.goto(`${origin}/caja/cartera`);
   // La demo tiene deudores de más de un millón con varios tramos (p. ej. 1.535.000 COP).
-  await expect(page.getByRole('article').first()).toBeVisible({ timeout: 15_000 });
-  const overflowing = await page.getByRole('article').evaluateAll((cards) =>
+  const cards = page.getByRole('list', { name: 'Deudores' }).getByRole('listitem');
+  await expect(cards.first()).toBeVisible({ timeout: 15_000 });
+  const overflowing = await cards.evaluateAll((cards) =>
     cards.flatMap((card) => {
       const right = card.getBoundingClientRect().right;
       const worst = Math.max(
         ...[...card.querySelectorAll('*')].map((el) => el.getBoundingClientRect().right),
       );
-      return worst > right ? [`${card.querySelector('h3')?.textContent}: ${Math.round(worst - right)} px`] : [];
+      return worst > right ? [`${card.textContent?.slice(0, 40)}: ${Math.round(worst - right)} px`] : [];
     }),
   );
   expect(overflowing, 'contenido fuera de la tarjeta').toEqual([]);

@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BadgePercent, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatDateTime } from '@/lib/format/date';
 import { getDiscountPolicy, type DiscountPolicy } from '@/lib/discounts/discounts-api';
@@ -11,20 +11,24 @@ import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SectionHeader } from '@/components/ui/section-header';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DiscountPolicyModal, POLICY_ROLES } from './discount-policy-modal';
 
 export const policyManagerCopy = {
   loadError: 'No pudimos cargar la política de descuentos.',
   forbiddenTitle: 'Solo administración cambia los topes de descuento.',
   forbiddenHint: 'Si necesitas dar un descuento mayor que el de tu rol, pídeselo a quien administra la clínica.',
+  sectionTitle: 'Topes por rol',
   tableLabel: 'Tope de descuento por rol',
   colRole: 'Rol',
-  colMax: 'Descuento máximo por ítem',
+  colMax: 'Máximo por ítem',
   percent: (n: number) => `${n} %`,
   threshold: (n: number) => `Motivo obligatorio por encima del ${n} %.`,
   defaults: 'Valores por defecto',
   updatedAt: (when: string) => `Cambiada el ${when}.`,
-  edit: 'Editar topes',
+  edit: 'Cambiar',
+  editLabel: 'Cambiar los topes de descuento',
   saved: 'Política de descuentos guardada.',
   reportLink: 'Ver el informe de descuentos',
 };
@@ -37,7 +41,7 @@ interface DiscountPolicyManagerProps {
 
 /**
  * Ajustes → Descuentos (DX-204): el tope de cada rol y el umbral del motivo,
- * con «Editar topes» en un modal. Lo que se cambia aplica a los descuentos
+ * de solo lectura, con «Cambiar» en un modal (un solo modelo de guardado). Lo que se cambia aplica a los descuentos
  * que se den desde ahora.
  */
 export function DiscountPolicyManager({ token, allowed }: DiscountPolicyManagerProps) {
@@ -84,7 +88,8 @@ export function DiscountPolicyManager({ token, allowed }: DiscountPolicyManagerP
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    // Columna de ajustes: 720px, alineada a la izquierda (crítica de ajustes).
+    <div className="flex max-w-[720px] flex-col gap-4">
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
@@ -96,74 +101,67 @@ export function DiscountPolicyManager({ token, allowed }: DiscountPolicyManagerP
       >
         {policy ? (
           <>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-ink">
-                {policyManagerCopy.threshold(policy.reasonRequiredAbovePercent)}{' '}
-                <span className="text-muted">
-                  {policy.isDefault || !policy.updatedAt
-                    ? ''
-                    : policyManagerCopy.updatedAt(formatDateTime(policy.updatedAt))}
-                </span>
-              </p>
-              <Button
-                type="button"
-                onClick={() => {
-                  setModalKey((k) => k + 1);
-                  setEditing(true);
-                }}
-                className="w-full sm:w-auto"
-              >
-                <BadgePercent aria-hidden />
-                {policyManagerCopy.edit}
-              </Button>
-            </div>
+            <section aria-labelledby="discount-policy-title" className="flex flex-col gap-3">
+              <SectionHeader
+                titleId="discount-policy-title"
+                title={
+                  <span className="inline-flex flex-wrap items-center gap-2">
+                    {policyManagerCopy.sectionTitle}
+                    {policy.isDefault ? <Badge variant="neutral">{policyManagerCopy.defaults}</Badge> : null}
+                  </span>
+                }
+                description={
+                  <>
+                    <span className="text-ink">{policyManagerCopy.threshold(policy.reasonRequiredAbovePercent)}</span>
+                    {policy.isDefault || !policy.updatedAt ? null : (
+                      <> {policyManagerCopy.updatedAt(formatDateTime(policy.updatedAt))}</>
+                    )}
+                  </>
+                }
+                actions={
+                  // Valor editado en diálogo: «Cambiar» secundario, sin barra de guardar en la página.
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    aria-label={policyManagerCopy.editLabel}
+                    onClick={() => {
+                      setModalKey((k) => k + 1);
+                      setEditing(true);
+                    }}
+                    className="max-sm:w-full"
+                  >
+                    {policyManagerCopy.edit}
+                  </Button>
+                }
+              />
 
-            <table
-              aria-label={policyManagerCopy.tableLabel}
-              className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-            >
-              <thead>
-                <tr className="border-b border-border bg-surface-2 text-left">
-                  <th scope="col" className="px-4 py-3 font-medium text-muted">
-                    {policyManagerCopy.colRole}
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                    {policyManagerCopy.colMax}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {POLICY_ROLES.map((role) => (
-                  <tr key={role} className="border-b border-hairline last:border-0">
-                    <td className="px-4 py-3 font-medium">{ROLE_LABELS[role]}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {policyManagerCopy.percent(policy.maxPercentByRole[role])}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <ul aria-label={policyManagerCopy.tableLabel} className="flex flex-col gap-3 md:hidden">
-              {POLICY_ROLES.map((role) => (
-                <li
-                  key={role}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-                >
-                  <span className="font-medium">{ROLE_LABELS[role]}</span>
-                  <span className="tabular-nums">{policyManagerCopy.percent(policy.maxPercentByRole[role])}</span>
-                </li>
-              ))}
-            </ul>
-
-            {policy.isDefault ? (
-              <div>
-                <Badge variant="muted">{policyManagerCopy.defaults}</Badge>
+              <div className="overflow-hidden rounded-xl border border-border bg-surface">
+                <Table aria-label={policyManagerCopy.tableLabel} stack={false}>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead scope="col">{policyManagerCopy.colRole}</TableHead>
+                      <TableHead scope="col" className="text-right">
+                        {policyManagerCopy.colMax}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {POLICY_ROLES.map((role) => (
+                      <TableRow key={role} className="hover:bg-transparent">
+                        <TableCell className="font-medium text-ink">{ROLE_LABELS[role]}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {policyManagerCopy.percent(policy.maxPercentByRole[role])}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            ) : null}
+            </section>
+
             <Link
               href="/caja/descuentos"
-              className="self-start text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="self-start text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
             >
               {policyManagerCopy.reportLink}
             </Link>

@@ -7,8 +7,8 @@ import {
   type DiscountReasonCode,
 } from '@/lib/discounts/discount-rules';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { toolbarFieldClass } from '@/components/shared/list-toolbar';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
 
 export const reasonFieldsCopy = {
   reason: 'Motivo del descuento',
@@ -90,14 +90,13 @@ export function DiscountReasonFields({
         hint={required && thresholdPercent !== null ? reasonFieldsCopy.requiredHint(thresholdPercent) : undefined}
         error={errors?.reason}
       >
-        <select
+        <NativeSelect
           id={reasonId}
           value={value.reason}
           aria-required={required || undefined}
           aria-invalid={errors?.reason ? true : undefined}
           aria-describedby={errors?.reason ? fieldErrorId(reasonId) : undefined}
           onChange={(e) => onChange({ ...value, reason: e.target.value as DiscountReasonCode | '' })}
-          className={cn(toolbarFieldClass, 'w-full')}
         >
           <option value="">{reasonFieldsCopy.choose}</option>
           {DISCOUNT_REASON_OPTIONS.map((code) => (
@@ -105,7 +104,7 @@ export function DiscountReasonFields({
               {DISCOUNT_REASON_LABELS[code]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
       {value.reason ? (
         <FormField
@@ -114,15 +113,15 @@ export function DiscountReasonFields({
           hint={`${reasonFieldsCopy.noteHint} ${reasonFieldsCopy.noteCounter(value.note.length)}`}
           error={errors?.note}
         >
-          <textarea
+          <Textarea
             id={noteId}
             rows={2}
+            autoGrow
             value={value.note}
             maxLength={DISCOUNT_REASON_NOTE_MAX}
             aria-invalid={errors?.note ? true : undefined}
             aria-describedby={errors?.note ? fieldErrorId(noteId) : undefined}
             onChange={(e) => onChange({ ...value, note: e.target.value })}
-            className={cn(toolbarFieldClass, 'h-auto w-full py-2')}
           />
         </FormField>
       ) : null}

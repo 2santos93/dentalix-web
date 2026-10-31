@@ -108,6 +108,29 @@ function report(items: DiscountReportItem[], overrides: Partial<DiscountReport> 
   };
 }
 
+/** La primera fila de datos de la tabla (DataList en escritorio). */
+async function findRow(): Promise<HTMLElement> {
+  const table = await screen.findByRole('table', { name: 'Descuentos del periodo' });
+  return within(table).getAllByRole('row')[1];
+}
+
+function mockPhone(): () => void {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: true,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  return () => {
+    window.matchMedia = original;
+  };
+}
+
 describe('DiscountReportView (DX-204)', () => {
   beforeEach(() => {
     mockedReport.mockReset();
@@ -124,7 +147,7 @@ describe('DiscountReportView (DX-204)', () => {
     const summary = await screen.findByTestId('discount-total-COP');
     expect(within(summary).getByText('15%')).toBeInTheDocument();
     expect(within(summary).getByText(/^COP\s180,000\.00$/)).toBeInTheDocument();
-    expect(within(screen.getByTestId('discount-row')).getByText(/^\d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument();
+    expect(within(await findRow()).getByText(/^\d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument();
   });
 
   it('DX-378: sin formato de la sede, su error con Reintentar en lugar del informe', async () => {
@@ -132,7 +155,7 @@ describe('DiscountReportView (DX-204)', () => {
     mockedReport.mockResolvedValue(report([row()]));
     render(<DiscountReportView token="tok" />);
     expect(await screen.findByText(SEDE_LOCALE_ERROR)).toBeInTheDocument();
-    expect(screen.queryByTestId('discount-row')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
   it('pide el mes en curso hasta hoy y muestra total, % sobre el bruto y el detalle', async () => {
@@ -148,8 +171,14 @@ describe('DiscountReportView (DX-204)', () => {
     const summary = await screen.findByTestId('discount-total-COP');
     expect(within(summary).getByText('15 %')).toBeInTheDocument();
     expect(within(summary).getByText(/180\.000,00/)).toBeInTheDocument();
-    expect(screen.getByText('Descuentos dados en Sede principal')).toBeInTheDocument();
-    const tableRow = screen.getByTestId('discount-row');
+    expect(screen.getByTestId('scope-marker')).toHaveTextContent('Sede principal');
+    // La moneda y los ítems encabezan la fila del resumen; no son una métrica más.
+    expect(within(summary).getByText('COP · 1 ítem')).toBeInTheDocument();
+    const tableRow = await findRow();
+    expect(within(tableRow).getByRole('link', { name: 'Ana Pérez' })).toHaveAttribute(
+      'href',
+      '/patients/pat-1?tab=treatment-plans',
+    );
     expect(within(tableRow).getByText('Ana Pérez')).toBeInTheDocument();
     expect(within(tableRow).getByText('Promoción o campaña')).toBeInTheDocument();
     expect(within(tableRow).getByText('Campaña de octubre')).toBeInTheDocument();
@@ -170,7 +199,7 @@ describe('DiscountReportView (DX-204)', () => {
       ]),
     );
     render(<DiscountReportView token="tok" />);
-    const tableRow = await screen.findByTestId('discount-row');
+    const tableRow = await findRow();
     expect(within(tableRow).getByText(/−200\.000,00/)).toBeInTheDocument();
     expect(within(tableRow).getByText(/20 % de 1\.000\.000,00/)).toBeInTheDocument();
     expect(within(tableRow).getByText(/Precio rebajado a 800\.000,00/)).toBeInTheDocument();
@@ -206,10 +235,10 @@ describe('DiscountReportView (DX-204)', () => {
     render(<DiscountReportView token="tok" />);
     // M1: las rebajas de convenio tienen su propio total, aparte de DX-204.
     const summary = await screen.findByTestId('agreement-total-COP');
-    expect(within(summary).getByText('1 ítem con rebaja de convenio')).toBeInTheDocument();
+    expect(within(summary).getByText('COP · 1 ítem con rebaja de convenio')).toBeInTheDocument();
     expect(within(summary).getByText(/2\.000\.000,00/)).toBeInTheDocument();
     expect(screen.queryByTestId('discount-total-COP')).not.toBeInTheDocument();
-    const tableRow = screen.getByTestId('discount-row');
+    const tableRow = await findRow();
     expect(within(tableRow).getByText(/Convenio «Cortesía socios»/)).toHaveTextContent(/−\s?2\.000\.000,00.*100 %/);
     expect(within(tableRow).getByText('Convenio asignado por Dr. Owner')).toBeInTheDocument();
     expect(within(tableRow).getByText('Ítem creado por Dra. Ríos')).toBeInTheDocument();
@@ -220,17 +249,6 @@ describe('DiscountReportView (DX-204)', () => {
     expect(within(tableRow).getByTestId('discount-author')).toHaveTextContent('Dr. Owner');
     // Sin descuento propio: no se pinta un «−0» como si lo hubiera.
     expect(within(tableRow).queryByText(/^−\s?0,00/)).not.toBeInTheDocument();
-    const card = screen.getByTestId('discount-card');
-    expect(within(card).getByText(/Convenio «Cortesía socios»/)).toBeInTheDocument();
-    expect(within(card).getByText(/Convenio asignado por Dr\. Owner/)).toBeInTheDocument();
-    expect(within(card).queryByText(/Sin registrar/)).not.toBeInTheDocument();
-    // QA D1: en la tarjeta móvil la frase del convenio no va en la cabecera que
-    // no se encoge (desbordaba 390 px): va en su propio párrafo, que parte líneas.
-    const header = within(card).getByTestId('discount-card-amount');
-    expect(within(header).queryByText(/Convenio «/)).not.toBeInTheDocument();
-    const phrase = within(card).getByText(/Convenio «Cortesía socios»/);
-    expect(phrase.tagName).toBe('P');
-    expect(phrase).toHaveClass('break-words');
   });
 
   it('B5: sin quien asignó el convenio, el autor es quien creó el ítem', async () => {
@@ -255,16 +273,66 @@ describe('DiscountReportView (DX-204)', () => {
       ),
     );
     render(<DiscountReportView token="tok" />);
-    const tableRow = await screen.findByTestId('discount-row');
+    const tableRow = await findRow();
     expect(within(tableRow).getByTestId('discount-author')).toHaveTextContent('Dra. Ríos');
   });
 
-  it('en móvil, cada descuento es una tarjeta (lista apilada)', async () => {
-    mockedReport.mockResolvedValue(report([row(), row({ itemId: 'item-2', reason: null, reasonNote: null })]));
+  it('«Sin motivo» se marca como aviso (warning), no se apaga en muted', async () => {
+    mockedReport.mockResolvedValue(report([row({ reason: null, reasonNote: null })]));
     render(<DiscountReportView token="tok" />);
-    const list = await screen.findByRole('list', { name: 'Descuentos' });
-    expect(within(list).getAllByTestId('discount-card')).toHaveLength(2);
-    expect(within(list).getByText('Sin motivo')).toBeInTheDocument();
+    const badge = within(await findRow()).getByText('Sin motivo');
+    expect(badge).toHaveClass('bg-warning-subtle');
+  });
+
+  describe('teléfono (<640px)', () => {
+    let restore: () => void;
+    beforeEach(() => {
+      restore = mockPhone();
+    });
+    afterEach(() => restore());
+
+    it('cada descuento es una tarjeta compacta que abre los planes del paciente', async () => {
+      mockedReport.mockResolvedValue(report([row(), row({ itemId: 'item-2', reason: null, reasonNote: null })]));
+      render(<DiscountReportView token="tok" />);
+      const list = await screen.findByRole('list', { name: 'Descuentos del periodo' });
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      const cards = within(list).getAllByRole('listitem');
+      expect(cards).toHaveLength(2);
+      expect(within(cards[0]).getByRole('link')).toHaveAttribute('href', '/patients/pat-1?tab=treatment-plans');
+      expect(within(list).getByText('Sin motivo')).toBeInTheDocument();
+    });
+
+    it('SEC-047 / QA D1: la frase del convenio va en la línea 2 (que parte), no junto al importe', async () => {
+      mockedReport.mockResolvedValue(
+        report(
+          [
+            row({
+              agreementName: 'Cortesía socios',
+              basePrice: 2000000,
+              price: 0,
+              itemDiscount: 0,
+              discount: 0,
+              percent: 0,
+              reason: null,
+              reasonNote: null,
+              discountByName: null,
+              agreementReduction: 2000000,
+              agreementPercent: 100,
+              agreementAssignedByName: 'Dr. Owner',
+            }),
+          ],
+          { totals: [], agreementTotals: [{ currency: 'COP', items: 1, reduction: 2000000 }] },
+        ),
+      );
+      render(<DiscountReportView token="tok" />);
+      const card = within(await screen.findByRole('list', { name: 'Descuentos del periodo' })).getByRole('listitem');
+      expect(card).toHaveTextContent(/Convenio «Cortesía socios»/);
+      expect(card).toHaveTextContent('Dado por: Dr. Owner');
+      expect(card).not.toHaveTextContent('Sin registrar');
+      const amount = within(card).getByTestId('discount-card-amount');
+      expect(amount).not.toHaveTextContent(/Convenio «/);
+      expect(amount).toHaveTextContent(/−\s?2\.000\.000,00/);
+    });
   });
 
   it('estado de carga, luego vacío', async () => {
@@ -281,7 +349,7 @@ describe('DiscountReportView (DX-204)', () => {
     render(<DiscountReportView token="tok" />);
     expect(await screen.findByText('No pudimos cargar el informe de descuentos.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /reintentar/i }));
-    expect(await screen.findByTestId('discount-row')).toBeInTheDocument();
+    expect(await findRow()).toBeInTheDocument();
   });
 
   it('un rol sin acceso ve el aviso, sin filtros ni exportar', async () => {
@@ -298,7 +366,7 @@ describe('DiscountReportView (DX-204)', () => {
     const createObjectURL = jest.fn(() => 'blob:x');
     Object.assign(URL, { createObjectURL, revokeObjectURL: jest.fn() });
     render(<DiscountReportView token="tok" />);
-    await screen.findByTestId('discount-row');
+    await findRow();
     await userEvent.selectOptions(await screen.findByLabelText('Quién lo dio'), 'dr-1');
     await waitFor(() =>
       expect(mockedReport).toHaveBeenLastCalledWith('tok', {
