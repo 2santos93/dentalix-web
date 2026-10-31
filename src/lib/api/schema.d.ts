@@ -691,7 +691,7 @@ export interface paths {
         head?: never;
         /**
          * Editar una cobertura; null vacía los campos opcionales (DX-153)
-         * @description SEC-049: cambiar el pagador o el nº de afiliado borra la verificación y deja la cobertura declarada por quien la edita.
+         * @description SEC-049: cambiar el pagador o el nº de afiliado borra la verificación y deja la cobertura declarada por quien la edita. SEC-053: si quien edita no es ADMIN, cambiar la vigencia (`validFrom`/`validTo`) de una cobertura de pagador externo también la borra; un ADMIN la corrige sin perderla. Las notas, el plan, el titular o la principal no la tocan.
          */
         patch: operations["PatientCoveragesController_update"];
         trace?: never;

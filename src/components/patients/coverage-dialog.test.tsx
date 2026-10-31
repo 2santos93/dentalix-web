@@ -303,5 +303,39 @@ describe('CoverageDialog (DX-153)', () => {
         'Cambiarlo quita la verificación del administrador.',
       );
     });
+
+    describe('vigencia de una verificada (SEC-053)', () => {
+      const verified: PatientCoverage = {
+        ...existing,
+        payer: { id: 'pay-ext', name: 'Aseguradora Norte', type: 'EMPLOYER', active: true },
+        memberNumber: '1020304050',
+        validFrom: '2025-01-01',
+        validTo: '2025-12-31',
+        verifiedAt: '2025-02-01T10:00:00.000Z',
+        verifiedById: 'admin-1',
+        verifiedByName: 'Ana Gómez',
+      };
+
+      it('quien no es ADMIN ve que cambiar las fechas quita la verificación', () => {
+        setup({ coverage: verified, payers: [external] });
+        expect(screen.getByLabelText('Vigente hasta')).toHaveAccessibleDescription(
+          'Déjala vacía si no tiene fecha de fin. Cambiar las fechas quita la verificación del administrador.',
+        );
+      });
+
+      it('el ADMIN solo ve la ayuda de siempre', () => {
+        setup({ coverage: verified, payers: [external], editorIsAdmin: true });
+        expect(screen.getByLabelText('Vigente hasta')).toHaveAccessibleDescription(
+          'Déjala vacía si no tiene fecha de fin.',
+        );
+      });
+
+      it('sin verificar no avisa', () => {
+        setup({ coverage: { ...verified, verifiedAt: null, verifiedById: null }, payers: [external] });
+        expect(screen.getByLabelText('Vigente hasta')).toHaveAccessibleDescription(
+          'Déjala vacía si no tiene fecha de fin.',
+        );
+      });
+    });
   });
 });
