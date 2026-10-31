@@ -126,6 +126,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   ANESTHETIC_PRODUCT: 'Catálogo de anestésicos',
   ANESTHESIA_ADMINISTRATION: 'Anestesia de evolución',
   SEDATION_RECORD: 'Hoja de sedación',
+  PATIENT_CREDIT: 'Saldo a favor',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

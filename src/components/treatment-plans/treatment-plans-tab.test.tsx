@@ -315,13 +315,14 @@ const balance1: PlanBalance = {
   billable: 130000,
   paid: 50000,
   balance: 80000,
+  creditMovements: 0,
   paymentsCount: 1,
   ...BALANCE_WITHOUT_ALLOCATIONS,
 };
 
 /** Empty balance/payments — the default for tests that don't exercise the abonos block. */
 function emptyBalance(): PlanBalance {
-  return { planCurrency: 'USD', billable: 0, paid: 0, balance: 0, paymentsCount: 0, ...BALANCE_WITHOUT_ALLOCATIONS };
+  return { planCurrency: 'USD', billable: 0, paid: 0, creditMovements: 0, balance: 0, paymentsCount: 0, ...BALANCE_WITHOUT_ALLOCATIONS };
 }
 
 /**

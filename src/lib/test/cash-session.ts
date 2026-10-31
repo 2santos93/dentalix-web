@@ -74,6 +74,7 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
     voidedPayments: [],
     outflows: [],
     voidedOutflows: [],
+    creditRefunds: [],
     adjustments: [],
     laterAdjustments: [],
     closing: null,
