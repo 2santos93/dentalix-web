@@ -52,7 +52,9 @@ const copy = {
   pregnancyLabel: 'Embarazo',
   pregnancyYes: (weeks?: number) => (weeks !== undefined ? `Sí · ${weeks} semanas` : 'Sí'),
   habitsLabel: 'Hábitos',
-  habitsNone: 'Sin hábitos marcados',
+  // Sin respuestas no es «sin hábitos»: se dice que no se preguntó.
+  habitsUnanswered: 'Sin responder',
+  habitsNone: 'Ninguno marcado «Sí»',
   familyHistoryLabel: 'Antecedentes familiares',
   notesLabel: 'Notas',
   // Con versión previa la acción es «Actualizar» (crea una versión nueva: no
@@ -363,9 +365,13 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
                 </DescriptionItem>
               ) : null}
               <DescriptionItem label={copy.habitsLabel}>
-                {habitsMarked.length > 0
-                  ? habitsMarked.join(' · ')
-                  : <span className="text-muted">{copy.habitsNone}</span>}
+                {habitsMarked.length > 0 ? (
+                  habitsMarked.join(' · ')
+                ) : (
+                  <span className="text-muted">
+                    {latest.habits && Object.keys(latest.habits).length > 0 ? copy.habitsNone : copy.habitsUnanswered}
+                  </span>
+                )}
               </DescriptionItem>
               <DescriptionItem label={copy.familyHistoryLabel}>{latest.familyHistory ?? copy.fieldFallback}</DescriptionItem>
               <DescriptionItem label={copy.notesLabel} wide>{latest.notes ?? copy.fieldFallback}</DescriptionItem>

@@ -463,6 +463,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
   return (
     <section className="flex flex-col gap-3">
       <SectionHeader
+        className="sm:items-center"
         title={heading}
         actions={
           <Button
@@ -559,8 +560,8 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
                   {formatCivilDate(entry.entryDate)}
                   {renderAppointment(entry)}
                 </td>
-                <td className="px-4 py-3 text-ink">{entry.reason ?? copy.reasonFallback}</td>
-                <td className="whitespace-pre-line px-4 py-3 text-ink">
+                <td className="px-4 py-3 align-top text-ink">{entry.reason ?? copy.reasonFallback}</td>
+                <td className="whitespace-pre-line px-4 py-3 align-top text-ink">
                   {entry.notes}
                   {renderDiagnoses(entry)}
                   {renderAnesthesia(entry)}

@@ -68,7 +68,11 @@ export function AnswerGroup<V extends string>({
         hint={hint}
         onValueChange={(v) => onChange(v as V | typeof UNANSWERED)}
         optionsClassName={
-          choices.length > 3 ? 'grid grid-cols-2 gap-2 sm:grid-cols-4' : 'grid grid-cols-3 gap-2 sm:max-w-md'
+          // Teléfono: rejilla a todo el ancho (objetivos grandes). Desde `sm`, cada
+          // respuesta mide lo que su texto: la fila entera cabe en una línea.
+          choices.length > 3
+            ? 'grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:flex-wrap'
+            : 'grid grid-cols-[auto_1fr_1fr] gap-2 sm:flex sm:flex-row sm:flex-wrap'
         }
       >
         {choices.map((choice, i) => (
@@ -78,6 +82,7 @@ export function AnswerGroup<V extends string>({
             value={choice.value}
             title={choice.label}
             layout="inline"
+            className="sm:min-w-24"
           />
         ))}
       </RadioGroup>
