@@ -19,7 +19,7 @@ export function sedeNumber(value: number, fmt: RegionalFormat | null): string {
 
 /**
  * Un importe con los separadores de la sede y SIEMPRE el código ISO de su
- * moneda («COP 2.195.000,00», «2.195.000,00 COP», «USD 1,234.50»), nunca un
+ * moneda («MXN 2.195.000,00», «2.195.000,00 MXN», «USD 1,234.50»), nunca un
  * símbolo: en un producto bimonetario «$» no dice si son pesos o dólares
  * (DX-378). Mismos decimales que `formatCurrency`: 2, o 0 en una moneda sin
  * unidad menor con importe entero. Nunca lanza: un código que Intl no acepta

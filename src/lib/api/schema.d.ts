@@ -528,7 +528,7 @@ export interface paths {
         put?: never;
         /**
          * Supresión parcial de datos no clínicos (solo ADMIN)
-         * @description DX-039. Para un paciente cuya HC está en retención (y por eso no se puede archivar): vacía teléfono, email, dirección, notas administrativas y contacto de emergencia, y retira la autorización de marketing vigente. Conserva la HC y la identificación que exige (nombre, documento, nacimiento, sexo, residencia, estado civil, ocupación, aseguradora, médico y acudiente). Motivo obligatorio. 409 `NOT_UNDER_RETENTION` si la HC no está en retención (se archiva).
+         * @description DX-039. Para un paciente cuya HC está en retención (y por eso no se puede archivar): vacía teléfono, email, dirección, notas administrativas y contacto de emergencia, y retira la autorización de marketing vigente. Conserva la HC y la identificación que exige (nombre, documento, nacimiento, sexo, residencia, estado civil, ocupación, aseguradora, médico y tutor). Motivo obligatorio. 409 `NOT_UNDER_RETENTION` si la HC no está en retención (se archiva).
          */
         post: operations["PatientsController_suppress"];
         delete?: never;
@@ -6011,7 +6011,7 @@ export interface components {
             locationId: string | null;
             /**
              * @description Zona IANA de la sede del evento (o de la sede principal): la hora se muestra en ella.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
             actor: components["schemas"]["AuditActorDto"] | null;
@@ -6028,7 +6028,7 @@ export interface components {
             nextCursor: string | null;
             /**
              * @description Zona de la sede activa (o de la principal), para interpretar los días de los filtros.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
         };
@@ -6438,7 +6438,7 @@ export interface components {
             emergencyContactPhone: string | null;
             /**
              * @deprecated
-             * @description DEPRECADO (DX-203), solo lectura: el acudiente es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
+             * @description DEPRECADO (DX-203), solo lectura: el tutor es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
              */
             guardianName: string | null;
             /**
@@ -6557,7 +6557,7 @@ export interface components {
             emergencyContactPhone: string | null;
             /**
              * @deprecated
-             * @description DEPRECADO (DX-203), solo lectura: el acudiente es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
+             * @description DEPRECADO (DX-203), solo lectura: el tutor es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
              */
             guardianName: string | null;
             /**
@@ -6720,7 +6720,7 @@ export interface components {
             emergencyContactPhone: string | null;
             /**
              * @deprecated
-             * @description DEPRECADO (DX-203), solo lectura: el acudiente es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
+             * @description DEPRECADO (DX-203), solo lectura: el tutor es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
              */
             guardianName: string | null;
             /**
@@ -6975,7 +6975,7 @@ export interface components {
             relationship: components["schemas"]["ResponsibleRelationship"];
             isPayer: boolean;
             receivesNotices: boolean;
-            /** @description Copiado del acudiente antiguo de la ficha (guardianName, DEPRECADO). */
+            /** @description Copiado del tutor antiguo de la ficha (guardianName, DEPRECADO). */
             migratedFromGuardian: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -7175,7 +7175,7 @@ export interface components {
             isPrimary: boolean;
             notes: string | null;
             /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTHER. */
-            migratedFromInsurerEps: boolean;
+            migratedFromLegacyInsurer: boolean;
             /**
              * Format: uuid
              * @description SEC-049: quién puso por última vez el pagador o el nº de afiliado (en las anteriores, quien la creó). Un rol que no es ADMIN no puede asignar un convenio con una cobertura que declaró él y nadie verificó.
@@ -7619,7 +7619,7 @@ export interface components {
         PriceListDto: {
             /** Format: uuid */
             id: string;
-            /** @example Convenio Sura EPS */
+            /** @example Convenio Empresa Alfa */
             name: string;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -7806,7 +7806,7 @@ export interface components {
             today: string;
             /**
              * @description Zona IANA de esa sede.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
             lastReview: components["schemas"]["AnamnesisLastReviewDto"] | null;
@@ -9002,7 +9002,7 @@ export interface components {
             locationName: string | null;
             /**
              * @description Zona IANA de esa sede: la fecha se muestra en ella. null si no está permitida.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string | null;
             /**
@@ -9436,7 +9436,7 @@ export interface components {
             end: string;
         };
         OpeningsDto: {
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             durationMinutes: number;
             openings: components["schemas"]["OpeningDto"][];
@@ -9494,7 +9494,7 @@ export interface components {
             date: string;
             /** Format: uuid */
             locationId: string;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             /**
              * @description G1-B: formato regional (BCP 47) de la sede: las horas se pintan con él.
@@ -10157,7 +10157,7 @@ export interface components {
             id: string;
             /** @example Sede Norte */
             name: string;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
         };
         RosterAssignmentDto: {
@@ -10471,7 +10471,7 @@ export interface components {
             start: string;
             /** Format: date-time */
             end: string;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             /** @description DX-233: el profesional del hueco no trabaja todo ese hueco en la sede según su horario (entonces no hay candidatos). Sin `providerId`, false. */
             providerOffSchedule: boolean;
@@ -10616,11 +10616,11 @@ export interface components {
             start: string;
             /** Format: date-time */
             end: string;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             /**
              * @description Locale de la sede: la página pinta el día y la hora como la sede.
-             * @example es-CO
+             * @example es
              */
             locale: string | null;
             /** @example h12 */
@@ -13155,7 +13155,7 @@ export interface components {
             address: string | null;
             /**
              * @description IANA de la sede.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
         };
@@ -13336,7 +13336,7 @@ export interface components {
             isActive: boolean;
             /**
              * @description Zona con la que la sede corta sus días (null en el total)
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string | null;
             /** @description ¿Hubo producción, cobros o citas (atendidas o no-show) en el período? */
@@ -13517,7 +13517,7 @@ export interface components {
             locationName: string;
             /**
              * @description Zona de la sede donde se realizó: la fecha se pinta con ella
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
             /** @example 16 */
@@ -13963,7 +13963,7 @@ export interface components {
             /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
             differences: components["schemas"]["CashMoneyDto"][];
             notes: string | null;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             /** @description Arqueo ciego para quien consulta: `expected` y `payments` vienen a null hasta cerrar. */
             blindHidden: boolean;
@@ -14456,7 +14456,7 @@ export interface components {
             policyText: string;
             /** @description Texto de la casilla GENERAL (datos personales). */
             generalText: string;
-            /** @description Texto de la casilla SENSITIVE_HEALTH. Debe decir que el titular «no está obligado» a autorizar, qué «datos sensibles» se tratan y su «finalidad» (Dec. 1377, art. 6); si falta alguna, 400. */
+            /** @description Texto de la casilla SENSITIVE_HEALTH (datos sensibles de salud): lo que el paciente autoriza de forma expresa y separada. */
             sensitiveHealthText: string;
             /** @description Texto de la casilla MARKETING (finalidades comerciales). */
             marketingText: string;
@@ -28078,7 +28078,7 @@ export interface operations {
                     "application/json": components["schemas"]["PrivacyPolicyVersionDto"];
                 };
             };
-            /** @description Texto vacío o el de datos sensibles no incluye las frases obligatorias. */
+            /** @description Algún texto está vacío. */
             400: {
                 headers: {
                     [name: string]: unknown;

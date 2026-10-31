@@ -27,12 +27,12 @@ export function patientAgreement(over: Partial<PatientAgreement> = {}): PatientA
     patientId: 'p1',
     agreement: {
       id: 'ag1',
-      name: 'Sanitas 2026',
+      name: 'Sanavida 2026',
       kind: 'PERCENT_DISCOUNT',
       active: true,
       validFrom: null,
       validTo: null,
-      payer: { id: 'pay-1', name: 'Sanitas', type: 'PUBLIC_SYSTEM' },
+      payer: { id: 'pay-1', name: 'Sanavida', type: 'PUBLIC_SYSTEM' },
     },
     coverageId: null,
     validFrom: null,
@@ -50,7 +50,7 @@ export function coverageFor(
   payer: { id: string; name: string },
   planName: string | null,
   status: PatientCoverage['status'] = 'ACTIVE',
-  migratedFromInsurerEps = false,
+  migratedFromLegacyInsurer = false,
 ): PatientCoverage {
   return {
     id,
@@ -63,7 +63,7 @@ export function coverageFor(
     validTo: null,
     isPrimary: true,
     notes: null,
-    migratedFromInsurerEps,
+    migratedFromLegacyInsurer,
     declaredById: null,
     verifiedAt: null,
     verifiedById: null,

@@ -3,7 +3,7 @@ import { COVERAGE_EXPIRED_LABEL, CoverageChip } from './coverage-chip';
 
 const summary = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED') => ({
   status,
-  payerName: 'Sanitas',
+  payerName: 'Sanavida',
   planName: null,
   validTo: '2026-01-31',
 });

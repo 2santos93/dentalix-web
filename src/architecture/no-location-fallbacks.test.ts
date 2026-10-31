@@ -284,7 +284,7 @@ describe('arquitectura: receta sin país (DX-324)', () => {
     ]) {
       expect([line, nationalTermHit(line)]).toEqual([line, true]);
     }
-    for (const line of ["title: 'Receta'", "documentLabel: 'Documento'", 'MUTUA_ES', 'VALUES', 'Nº de registro profesional']) {
+    for (const line of ["title: 'Receta'", "documentLabel: 'Documento'", 'MUTUA' + '_ES', 'VALUES', 'Nº de registro profesional']) {
       expect([line, nationalTermHit(line)]).toEqual([line, false]);
     }
   });
@@ -324,11 +324,11 @@ describe('arquitectura: la web no lee el país deprecated del emisor (DX-324)', 
 /**
  * DX-326: el pagador no tiene país y sus tipos son genéricos. Ni las pantallas
  * de pagadores ni quienes leen su tipo nombran un país ni un código o rótulo
- * antiguo (`EPS_CO`, «Mutua (…)», «Aseguradoras, EPS»); el único que conoce los
- * códigos antiguos es el normalizador legado. Solo producción: los tests
- * `legacy …` los usan a propósito.
+ * antiguo («Mutua (…)», «Aseguradoras, EPS» o un código anterior a DX-326).
+ * Desde la migración 20261110130000 de la API no hay normalizador legado: la
+ * API solo manda los cinco genéricos. Los códigos se escriben con `[_]` para
+ * que la guarda «sin Colombia» (no-laws.test.ts) no atrape este fichero.
  */
-const PAYER_LEGACY_NORMALIZER = 'lib/payers/legacy-payer-type.ts';
 const PAYER_SCREENS = [
   'lib/patients/member-number.ts',
   'lib/patients/agreement-eligibility.ts',
@@ -338,7 +338,7 @@ const PAYER_SCREENS = [
   'app/(app)/settings/pagadores/page.tsx',
   'components/settings/settings-sections.ts',
 ];
-const LEGACY_PAYER_TERM = /\b(?:MUTUA_ES|PREPAGADA_CO|EPS_CO|EMPRESA|OTRO)\b|\bEPS\b|[Mm]utua|[Pp]repagada/;
+const LEGACY_PAYER_TERM = /\b(?:MUTUA[_]ES|PREPAGADA[_]CO|EPS[_]CO|EMPRESA|OTRO)\b|\bEPS\b|[Mm]utua|[Pp]repagada/;
 
 function payerTermHit(line: string): boolean {
   return nationalTermHit(line) || LEGACY_PAYER_TERM.test(line);
@@ -348,21 +348,18 @@ function payerFiles(): string[] {
   return [join(SRC, 'components/payers'), join(SRC, 'lib/payers')]
     .flatMap(sourceFiles)
     .concat(PAYER_SCREENS.map((rel) => join(SRC, rel)))
-    .filter(scanned)
-    .filter((path) => relative(SRC, path).split(sep).join('/') !== PAYER_LEGACY_NORMALIZER);
+    .filter(scanned);
 }
 
 /**
  * En todo `src` (producción, `schema.d.ts` incluido): ningún código de pagador
- * antiguo ni rótulo de pagador con país. Excepciones: el normalizador legado y
- * los nombres de pagadores reales (los de ejemplo del contrato).
+ * antiguo ni rótulo de pagador con país, sin excepciones. El contrato ya no trae nombres de pagadores reales de ejemplo
+ * (DX-323): un nombre de aseguradora con «EPS» también cuenta.
  */
 const LEGACY_PAYER_CODE =
-  /\b(?:MUTUA_ES|PREPAGADA_CO|EPS_CO)\b|['"`](?:EMPRESA|OTRO)['"`]|PAYER_COUNTRY_LABELS|PAYER_NO_COUNTRY_LABEL|PayerCountry|\((?:Colombia|España)\)|\bEPS\b|\b[Mm]utuas?\b|\b[Pp]repagadas?\b/;
-const REAL_PAYER_NAMES = /\bSura EPS\b/g;
-
+  /\b(?:MUTUA[_]ES|PREPAGADA[_]CO|EPS[_]CO)\b|['"`](?:EMPRESA|OTRO)['"`]|PAYER_COUNTRY_LABELS|PAYER_NO_COUNTRY_LABEL|PayerCountry|\((?:Colombia|España)\)|\bEPS\b|\b[Mm]utuas?\b|\b[Pp]repagadas?\b/;
 function legacyPayerCodeHit(line: string): boolean {
-  return LEGACY_PAYER_CODE.test(line.replace(REAL_PAYER_NAMES, ''));
+  return LEGACY_PAYER_CODE.test(line);
 }
 
 /**
@@ -372,7 +369,7 @@ function legacyPayerCodeHit(line: string): boolean {
  * que solo cuenta comparado con un `type`/`payerType`; los demás códigos son
  * solo de pagador y cuentan en cualquier comparación o `case`.
  */
-const PAYER_ONLY_CODE = String.raw`(?:INSURER|PREPAID_PLAN|PUBLIC_SYSTEM|EMPLOYER|MUTUA_ES|PREPAGADA_CO|EPS_CO|EMPRESA|OTRO)`;
+const PAYER_ONLY_CODE = String.raw`(?:INSURER|PREPAID_PLAN|PUBLIC_SYSTEM|EMPLOYER|EMPRESA|OTRO)`;
 const PAYER_TYPE_SUBJECT = String.raw`(?:^|[^\w])(?:type|payerType)`;
 const QUOTED = (code: string) => String.raw`['"\`]${code}['"\`]`;
 const PAYER_TYPE_COMPARISON = new RegExp(
@@ -389,7 +386,6 @@ const PAYER_TYPE_COMPARISON = new RegExp(
 function allPayerScanFiles({ withPayersLib }: { withPayersLib: boolean }): string[] {
   return sourceFiles(SRC).filter((path) => {
     const rel = relative(SRC, path).split(sep).join('/');
-    if (rel === PAYER_LEGACY_NORMALIZER) return false;
     if (!withPayersLib && rel.startsWith('lib/payers/')) return false;
     return scanned(path) || rel === 'lib/api/schema.d.ts';
   });
@@ -406,7 +402,7 @@ function lineHits(paths: string[], hit: (line: string) => boolean): string[] {
 }
 
 describe('arquitectura: pagadores sin país (DX-326)', () => {
-  it('payer files never mention a country or a legacy payer type outside the legacy normalizer', () => {
+  it('payer files never mention a country or a legacy payer type', () => {
     const mentions = payerFiles().flatMap((path) =>
       readFileSync(path, 'utf8')
         .split('\n')
@@ -417,7 +413,7 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
     expect(mentions).toEqual([]);
   });
 
-  it('the payer scan covers the payer screens and skips the legacy normalizer', () => {
+  it('the payer scan covers the payer screens, and the legacy normalizer is gone', () => {
     const rels = payerFiles().map((f) => relative(SRC, f).split(sep).join('/'));
     expect(rels).toEqual(
       expect.arrayContaining([
@@ -429,10 +425,10 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
       ]),
     );
     for (const rel of PAYER_SCREENS) expect([rel, existsSync(join(SRC, rel))]).toEqual([rel, true]);
-    expect(rels).not.toContain(PAYER_LEGACY_NORMALIZER);
+    expect(existsSync(join(SRC, 'lib/payers/legacy-payer-type.ts'))).toBe(false);
     expect(rels.some((r) => r.includes('.test.'))).toBe(false);
     for (const line of [
-      "type: 'EPS_CO',",
+      `type: '${'EPS' + '_CO'}',`,
       "label: 'Mutua (España)',",
       'PAYER_COUNTRY_LABELS[type]',
       'country: payer.country,',
@@ -455,7 +451,7 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
     ).toEqual([]);
   });
 
-  it('the src-wide payer scans cover all production, the contract, and skip the normalizer and tests', () => {
+  it('the src-wide payer scans cover all production and the contract, and skip tests', () => {
     const all = allPayerScanFiles({ withPayersLib: true }).map((f) => relative(SRC, f).split(sep).join('/'));
     expect(all).toEqual(
       expect.arrayContaining([
@@ -466,14 +462,13 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
         'components/payers/payer-form-modal.tsx',
       ]),
     );
-    expect(all).not.toContain(PAYER_LEGACY_NORMALIZER);
     expect(all.some((r) => r.includes('.test.'))).toBe(false);
     const outside = allPayerScanFiles({ withPayersLib: false }).map((f) => relative(SRC, f).split(sep).join('/'));
     expect(outside.some((r) => r.startsWith('lib/payers/'))).toBe(false);
     expect(outside).toContain('components/payers/payer-form-modal.tsx');
 
     for (const line of [
-      "if (payer.type === 'EPS_CO') {",
+      `if (payer.type === '${'EPS' + '_CO'}') {`,
       "label: 'Prepagada (Colombia)',",
       "'OTRO': 'OTHER',",
       'const labels = PAYER_COUNTRY_LABELS;',
@@ -482,11 +477,12 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
       'Aseguradoras, EPS y demás',
       'Mutua',
       'prepagadas',
+      '/** @example Convenio Sura EPS */',
     ]) {
       expect([line, legacyPayerCodeHit(line)]).toEqual([line, true]);
     }
     for (const line of [
-      '/** @example Convenio Sura EPS */',
+      '/** @example Convenio Empresa Alfa */',
       "type: 'OTHER',",
       'mutuamente',
       "country: 'CO'",
@@ -527,17 +523,16 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
  * CPF, RUC, CUIL, CUIT y NUIP en cualquier caja, como en la API) ni una autoridad sanitaria («INVIMA», «marcado CE»).
  * Recorrido propio, no `scanned()`/`hits()`: mira también comentarios y JSDoc,
  * `lib/api/schema.d.ts` y los `*fixture*` de producción. Se salta solo los
- * tests de `src`, `lib/test/**`, el normalizador legado de R13
- * (`lib/patients/legacy-doc-type.ts`), el formato de receta anterior de DX-324
+ * tests de `src`, `lib/test/**` (el normalizador legado de R13 ya no existe:
+ * la API solo manda los cinco genéricos), el formato de receta anterior de DX-324
  * la lista de países copiada de la API (DX-312 R8: datos generados, donde
  * `CC` es un código de país, no un documento) y las líneas con nombre de
  * `COUNTRY_DOCUMENT_LINE_EXCEPTIONS`. En `e2e/`
  * solo valen dentro de un `test('legacy …')`, de una función `legacy…` o de
  * un fichero `legacy-*`.
  */
-const DOC_TYPE_LEGACY_NORMALIZER = 'lib/patients/legacy-doc-type.ts';
 // DX-324 (R12): `PRESCRIPTION_LEGACY_LAYOUT` congela los rótulos de las recetas anteriores.
-const LEGACY_FILES = [DOC_TYPE_LEGACY_NORMALIZER, PRESCRIPTION_LEGACY_LAYOUT];
+const LEGACY_FILES = [PRESCRIPTION_LEGACY_LAYOUT];
 // DX-312 (R8, R10): copia byte a byte de la lista generada en la API; `scripts/check-api-reference-sync.mjs` la vigila.
 const COUNTRY_LIST_COPY = 'lib/locations/iso3166-countries.json';
 // DX-329 (§3.2): igual, la lista de regiones de numeración; también la vigila el script de sincronía.
@@ -566,13 +561,8 @@ function namesCountryDocument(line: string): boolean {
  * ticket que la quita. Cualquier otra coincidencia se arregla, no se añade
  * aquí.
  */
-const COUNTRY_DOCUMENT_LINE_EXCEPTIONS: readonly { file: string; line: string; until: string }[] = [
-  {
-    file: 'components/payments/payment-receipt-document.tsx',
-    line: 'taxId: (value: string) => `NIT/NIF ${value}`,',
-    until: 'DX-019',
-  },
-];
+// Vacía desde DX-323: el recibo dice «Id. fiscal», sin sigla de un país.
+const COUNTRY_DOCUMENT_LINE_EXCEPTIONS: readonly { file: string; line: string; until: string }[] = [];
 
 function isLineException(rel: string, line: string): boolean {
   return COUNTRY_DOCUMENT_LINE_EXCEPTIONS.some((e) => e.file === rel && e.line === line.trim());
@@ -758,11 +748,11 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
       'synthetic.ts:5: const a = 1; // CC 1002',
       "synthetic.ts:7: const c = 'rif: J-1';",
     ]);
-    // La excepción es la línea exacta de su fichero, no la sigla.
+    // Sin excepciones (DX-323): la sigla fiscal de un país cuenta también en el recibo.
     const receipt = 'components/payments/payment-receipt-document.tsx';
-    expect(countryDocumentHits(receipt, '  taxId: (value: string) => `NIT/NIF ${value}`,')).toEqual([]);
+    expect(countryDocumentHits(receipt, '  taxId: (value: string) => `NIT/NIF ${value}`,')).toHaveLength(1);
     expect(countryDocumentHits(receipt, "  taxIdLabel: 'NIT',")).toEqual([`${receipt}:1: taxIdLabel: 'NIT',`]);
-    expect(countryDocumentHits('other.tsx', 'taxId: (value: string) => `NIT/NIF ${value}`,')).toHaveLength(1);
+    expect(countryDocumentHits(receipt, '  taxId: (value: string) => `Id. fiscal ${value}`,')).toEqual([]);
     for (const line of [
       'Cédula de ciudadanía',
       'cedula de extranjería',

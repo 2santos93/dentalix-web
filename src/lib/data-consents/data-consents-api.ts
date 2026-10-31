@@ -2,7 +2,7 @@ import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
-// DX-037 · Autorización de tratamiento de datos (Ley 1581). Los tipos salen
+// DX-037 · Autorización de tratamiento de datos. Los tipos salen
 // tal cual del contrato generado (los DTO del backend llevan @ApiProperty).
 export type PrivacyPolicies = components['schemas']['PrivacyPoliciesDto'];
 export type PrivacyPolicyVersion = components['schemas']['PrivacyPolicyVersionDto'];
@@ -50,7 +50,7 @@ export const EMPTY_SELECTION: ConsentSelection = {
 
 /**
  * Solo una casilla MARCADA es una decisión. Una sin marcar no genera fila: el
- * silencio no cuenta como autorización (Dec. 1377, art. 7) ni como negativa.
+ * silencio no cuenta como autorización ni como negativa.
  */
 export function decisionsFromSelection(selection: ConsentSelection): ConsentDecision[] {
   return CONSENT_SCOPES.filter((scope) => selection[scope]).map((scope) => ({

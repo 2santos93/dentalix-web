@@ -376,8 +376,8 @@ describe('DayColumns · chip «Saldo vencido» (DX-150)', () => {
 
 describe('DayColumns · chip «Cobertura vencida» (DX-153)', () => {
   it('la tarjeta con cobertura vencida lleva la marca y la anuncia en su nombre accesible; el resto, nada', () => {
-    const expired = { status: 'EXPIRED' as const, payerName: 'Sura EPS', planName: null, validTo: '2026-01-31' };
-    const active = { status: 'ACTIVE' as const, payerName: 'Sura EPS', planName: null, validTo: null };
+    const expired = { status: 'EXPIRED' as const, payerName: 'Surco Salud', planName: null, validTo: '2026-01-31' };
+    const active = { status: 'ACTIVE' as const, payerName: 'Surco Salud', planName: null, validTo: null };
     renderColumns({
       appointments: [
         { ...endo, coverage: active },

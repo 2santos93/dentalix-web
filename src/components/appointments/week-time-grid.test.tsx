@@ -195,13 +195,13 @@ it('DX-153: la tarjeta con cobertura vencida lleva la marca Â«Cobertura vencidaÂ
       appointments={[
         appointment({
           id: 'a1',
-          coverage: { status: 'EXPIRED', payerName: 'Sura EPS', planName: null, validTo: '2026-01-31' },
+          coverage: { status: 'EXPIRED', payerName: 'Surco Salud', planName: null, validTo: '2026-01-31' },
         }),
         appointment({
           id: 'a2',
           start: '2026-03-10T09:00:00.000Z',
           end: '2026-03-10T09:30:00.000Z',
-          coverage: { status: 'ACTIVE', payerName: 'Sura EPS', planName: null, validTo: null },
+          coverage: { status: 'ACTIVE', payerName: 'Surco Salud', planName: null, validTo: null },
         }),
       ]}
       weekStart={WEEK_START}

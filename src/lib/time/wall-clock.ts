@@ -41,8 +41,8 @@ export function civilWeekStart(day: string): string {
 }
 
 /**
- * Desfase de `timeZone` respecto de UTC en ese instante, en minutos (Bogotá
- * −300, Berlín +60 o +120 según el horario de verano): el reloj de pared leído
+ * Desfase de `timeZone` respecto de UTC en ese instante, en minutos (Caracas
+ * −240, Berlín +60 o +120 según el horario de verano): el reloj de pared leído
  * como UTC menos el instante, sin sus segundos.
  */
 export function zoneOffsetMinutes(instant: Date | string, timeZone: string): number {

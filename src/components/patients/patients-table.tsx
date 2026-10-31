@@ -40,7 +40,7 @@ function ageText(patient: Patient): string | null {
   return years === null ? null : copy.age(years);
 }
 
-/** «Sura EPS», «Sura EPS · Cobertura vencida»; nada sin cobertura. */
+/** «Aseguradora Norte», «Aseguradora Norte · Cobertura vencida»; nada sin cobertura. */
 function coverageText(patient: Patient): string | null {
   const c = patient.coverage;
   if (!c || c.status === 'NONE' || !c.payerName) return null;

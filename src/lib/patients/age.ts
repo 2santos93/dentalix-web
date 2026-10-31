@@ -10,7 +10,7 @@
  * Vivía dentro de `patient-data-panel.tsx`. Se extrae aquí porque la cabecera
  * de la ficha (`patient-record-header.tsx`) muestra la misma edad: la
  * decisión clínica (dosis, dentición temporal vs. permanente, si hace falta
- * acudiente) no puede depender de abrir una pestaña.
+ * tutor) no puede depender de abrir una pestaña.
  */
 export function ageFrom(birthDate: string | null): number | null {
   if (!birthDate) return null;

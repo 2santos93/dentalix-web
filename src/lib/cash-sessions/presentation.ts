@@ -14,7 +14,7 @@ export function sessionStatusLabel(session: Pick<CashSessionSummary, 'status' | 
   return statusLabel('cashSession', sessionStatusKey(session));
 }
 
-/** «50.000,00 COP · 10,00 USD», o «Sin fondo». */
+/** «50,00 EUR · 10,00 USD», o «Sin fondo». */
 export function moneyList(items: readonly { currency: string; amount: number }[], empty = 'Sin fondo'): string {
   if (items.length === 0) return empty;
   return items.map((i) => formatCurrency(i.amount, i.currency)).join(' · ');

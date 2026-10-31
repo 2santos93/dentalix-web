@@ -59,7 +59,7 @@ const base: PriceList = {
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
-const sura: PriceList = { ...base, id: 'pl-2', name: 'Sura 2026', locationId: null, itemCount: 1 };
+const surco: PriceList = { ...base, id: 'pl-2', name: 'Surco 2026', locationId: null, itemCount: 1 };
 const vieja: PriceList = { ...base, id: 'pl-3', name: 'Antigua', itemCount: 0, active: false };
 
 /** Abre el «⋯» de la fila y elige la acción. */
@@ -71,7 +71,7 @@ async function rowAction(user: ReturnType<typeof setupUser>, row: string, action
 describe('PriceListsManager (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedList.mockResolvedValue([base, sura, vieja]);
+    mockedList.mockResolvedValue([base, surco, vieja]);
     mockedLocations.mockResolvedValue([norte, madrid]);
     mockedCurrencies.mockResolvedValue([
       { code: 'COP', name: 'Peso colombiano', symbol: '$' },
@@ -248,10 +248,10 @@ describe('PriceListsManager (DX-105)', () => {
     render(<PriceListsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Listas de precios' });
 
-    await rowAction(user, 'Sura 2026', 'Retirar');
+    await rowAction(user, 'Surco 2026', 'Retirar');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Retirar lista' }));
     expect(await within(dialog).findByText(message)).toBeInTheDocument();
-    expect(within(table).getByText('Sura 2026')).toBeInTheDocument();
+    expect(within(table).getByText('Surco 2026')).toBeInTheDocument();
   });
 });

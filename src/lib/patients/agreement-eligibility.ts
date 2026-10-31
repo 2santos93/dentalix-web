@@ -27,7 +27,7 @@ export const agreementEligibilityCopy = {
 type PayerType = Agreement['payer']['type'];
 type CoverageLike = Pick<
   PatientCoverage,
-  'id' | 'status' | 'migratedFromInsurerEps' | 'declaredById' | 'verifiedAt'
+  'id' | 'status' | 'migratedFromLegacyInsurer' | 'declaredById' | 'verifiedAt'
 > & {
   payer: Pick<PatientCoverage['payer'], 'id'>;
 };
@@ -47,7 +47,7 @@ export type AgreementEligibility<C extends CoverageLike> =
  */
 function trustedFor(c: CoverageLike, role: ClinicRole | null, userId: string | null): boolean {
   if (role === 'ADMIN') return true;
-  if (c.verifiedAt || c.migratedFromInsurerEps) return true;
+  if (c.verifiedAt || c.migratedFromLegacyInsurer) return true;
   return c.declaredById === null || c.declaredById !== userId;
 }
 
@@ -66,7 +66,7 @@ export function agreementEligibility<C extends CoverageLike>(
         notice: agreementEligibilityCopy.reclassify(agreement.payer.name),
       };
     }
-    const migrated = live.filter((c) => c.migratedFromInsurerEps);
+    const migrated = live.filter((c) => c.migratedFromLegacyInsurer);
     return migrated.length > 0
       ? { kind: 'needs-coverage', coverages: migrated }
       : { kind: 'blocked', reason: agreementEligibilityCopy.adminOnly };

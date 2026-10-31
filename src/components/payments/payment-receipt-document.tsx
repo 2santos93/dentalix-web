@@ -18,7 +18,7 @@ const copy = {
   fiscalPending: 'Datos fiscales pendientes',
   // Excepción con nombre de la guarda de DX-327 hasta DX-019, que dará a la
   // clínica el nombre de su identificación fiscal.
-  taxId: (value: string) => `NIT/NIF ${value}`,
+  taxId: (value: string) => `Id. fiscal ${value}`,
   location: (name: string, address: string | null) => (address ? `${name} · ${address}` : name),
   voidedStamp: 'ANULADO',
   voidedDetail: (when: string, reason: string) => `Anulado el ${when}. Motivo: ${reason}`,

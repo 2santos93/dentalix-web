@@ -173,7 +173,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
 
   const [history, setHistory] = useState<ClinicalHistoryValue>({});
 
-  // Autorización Ley 1581 (DX-037): ninguna casilla empieza marcada.
+  // Autorización de tratamiento de datos (DX-037): ninguna casilla empieza marcada.
   const [consentSelection, setConsentSelection] = useState(EMPTY_SELECTION);
   const [consentPolicy, setConsentPolicy] = useState<PrivacyPolicyVersion | null>(null);
 

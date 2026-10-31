@@ -27,14 +27,13 @@ it('lleva el número, la clínica y la sede, el paciente enmascarado, el abono, 
   expect(screen.queryByText(/anulado/i)).not.toBeInTheDocument();
 });
 
-// «NIT/NIF» es la línea que el recibo imprime hoy (payment-receipt-document.tsx,
-// excepción con nombre de la guarda de DX-327); se va con DX-019.
-it('sin razón social o NIT/NIF avisa «Datos fiscales pendientes» y el recibo sale igual', () => {
+// La línea fiscal dice «Id. fiscal», sin la sigla de ningún país (DX-323).
+it('sin razón social o identificación fiscal avisa «Datos fiscales pendientes» y el recibo sale igual', () => {
   render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
   expect(screen.getByText('Datos fiscales pendientes')).toBeInTheDocument();
 });
 
-it('con datos fiscales muestra razón social, NIT/NIF y dirección de la clínica', () => {
+it('con datos fiscales muestra razón social, identificación fiscal y dirección de la clínica', () => {
   const receipt = paymentReceiptFixture();
   render(
     <PaymentReceiptDocument
@@ -55,7 +54,7 @@ it('con datos fiscales muestra razón social, NIT/NIF y dirección de la clínic
   );
   const doc = screen.getByTestId('receipt-document');
   expect(doc).toHaveTextContent('Sonrisas S.A.S.');
-  expect(doc).toHaveTextContent('NIT/NIF 900123456-7');
+  expect(doc).toHaveTextContent('Id. fiscal 900123456-7');
   expect(doc).toHaveTextContent('Cra 7 # 72-10, Bogotá');
   expect(screen.queryByText('Datos fiscales pendientes')).not.toBeInTheDocument();
 });

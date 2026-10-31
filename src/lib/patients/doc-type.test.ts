@@ -74,9 +74,9 @@ describe('doc-type', () => {
     expect(dtoDocTypeName({ docType: 'TAX_ID' })).toBe('Identificación fiscal');
   });
 
-  it('legacy codes from an older API resolve to their generic name, never a label', () => {
-    expect(documentTypeName('CC', null, {})).toBe('Documento nacional');
-    expect(documentTypeName('CE', null, { RESIDENCE_PERMIT: 'ID local' })).toBe('ID local');
+  it('an unknown code renders as is and never takes a local name', () => {
+    expect(documentTypeName('XX', null, {})).toBe('XX');
+    expect(documentTypeName('constructor', null, { NATIONAL_ID: 'ID local' })).toBe('constructor');
   });
 
   it('normalizeDocTypeLabel trims, joins inner spaces and turns empty into null', () => {

@@ -147,7 +147,7 @@ export function PatientDataPanel({ patient, docTypeNames = {} }: PatientDataPane
             { label: copy.emergencyContact, value: patient.emergencyContactName ?? null },
             { label: copy.relationship, value: patient.emergencyContactRelationship ?? null },
             { label: copy.emergencyPhone, value: patient.emergencyContactPhone ?? null },
-            // DX-203: el acudiente vive en «Responsable y familia».
+            // DX-203: el tutor vive en «Responsable y familia».
           ]}
         />
         <Block

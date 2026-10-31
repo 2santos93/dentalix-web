@@ -266,10 +266,10 @@ test('supresión parcial: error de la API visible y el modal sigue abierto', asy
   renderDialogs(patient());
   await user.click(screen.getByRole('button', { name: 'Supresión parcial' }));
   const dialog = await screen.findByRole('dialog');
-  await user.type(within(dialog).getByLabelText('Motivo'), 'Reclamo del titular Ley 1581');
+  await user.type(within(dialog).getByLabelText('Motivo'), 'Reclamo del titular de los datos');
   await user.click(within(dialog).getByRole('button', { name: 'Suprimir datos' }));
   expect(await within(dialog).findByText(/no tienes permiso/i)).toBeInTheDocument();
   expect(mockedSuppress).toHaveBeenCalledWith('tok', 'p1', {
-    reason: 'Reclamo del titular Ley 1581',
+    reason: 'Reclamo del titular de los datos',
   });
 });

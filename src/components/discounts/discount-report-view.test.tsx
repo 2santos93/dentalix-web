@@ -256,7 +256,7 @@ describe('DiscountReportView (DX-204)', () => {
       report(
         [
           row({
-            agreementName: 'Sura',
+            agreementName: 'Surco',
             basePrice: 100000,
             itemDiscount: 0,
             discount: 0,

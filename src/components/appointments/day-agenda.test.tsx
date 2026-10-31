@@ -323,7 +323,7 @@ describe('DayAgenda · cobertura (DX-153)', () => {
   it('muestra el chip «Cobertura vencida» solo en la cita con cobertura vencida', () => {
     const expired = {
       status: 'EXPIRED' as const,
-      payerName: 'Sura EPS',
+      payerName: 'Surco Salud',
       planName: null,
       validTo: '2026-01-31',
     };

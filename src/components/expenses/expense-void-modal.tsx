@@ -30,7 +30,7 @@ interface ExpenseVoidModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   kind: 'expense' | 'payment';
-  /** Qué se anula, p. ej. «Laboratorio · 150.000,00 COP · 20/10/2026». */
+  /** Qué se anula, p. ej. «Laboratorio · 150,00 USD · 20/10/2026». */
   subject: string;
   /** Recibe el motivo ya recortado y válido. */
   onConfirm: (reason: string) => void;

@@ -436,7 +436,7 @@ export function RecordPaymentModal({
     }
     // DX-097: se manda el DÍA (`YYYY-MM-DD`), no la medianoche UTC: la API lo
     // guarda al mediodía de la sede, así cae en ese día de caja en su zona
-    // (medianoche UTC sería la tarde del día anterior en Bogotá).
+    // (medianoche UTC sería la tarde del día anterior en una sede al oeste de UTC).
     const paidAt = form.date;
     if (isSplit && plan) {
       await submitSplit(plan.id, paidAt, amount);

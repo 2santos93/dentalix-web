@@ -25,10 +25,10 @@ const payer = (id: string, name: string): Payer => ({
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 });
-const payers = [payer('payer-1', 'Sanitas'), payer('payer-2', 'Sura EPS')];
+const payers = [payer('payer-1', 'Sanavida'), payer('payer-2', 'Surco Salud')];
 const priceList: PriceList = {
   id: 'pl-1',
-  name: 'Lista Sura 2026',
+  name: 'Lista Surco 2026',
   currency: 'COP',
   locationId: null,
   active: true,
@@ -49,8 +49,8 @@ const categories = ['Endodoncia', 'Preventiva', 'Restauradora'];
 
 const existing: Agreement = {
   id: 'ag-1',
-  name: 'Convenio Sanitas',
-  payer: { id: 'payer-1', name: 'Sanitas', type: 'PREPAID_PLAN' },
+  name: 'Convenio Sanavida',
+  payer: { id: 'payer-1', name: 'Sanavida', type: 'PREPAID_PLAN' },
   kind: 'PERCENT_DISCOUNT',
   percent: 15,
   percentByCategory: { Preventiva: 20 },
@@ -116,7 +116,7 @@ describe('AgreementFormModal (DX-105)', () => {
   it('valida con los mensajes de la API antes de enviar', async () => {
     const user = setupUser();
     const { dialog } = setup();
-    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sura');
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Surco');
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));
     expect(await within(dialog).findByText('Elige el pagador del convenio.')).toBeInTheDocument();
     expect(within(dialog).getByText('Indica el porcentaje del convenio.')).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe('AgreementFormModal (DX-105)', () => {
   it('cambiar a lista de precios pide la lista', async () => {
     const user = setupUser();
     const { dialog } = setup();
-    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sura');
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Surco');
     await user.selectOptions(within(dialog).getByLabelText('Pagador'), 'payer-2');
     await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'PRICE_LIST');
     expect(within(dialog).queryByLabelText('Descuento general (%)')).not.toBeInTheDocument();
@@ -143,7 +143,7 @@ describe('AgreementFormModal (DX-105)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', {
-        name: 'Convenio Sura',
+        name: 'Convenio Surco',
         payerId: 'payer-2',
         kind: 'PRICE_LIST',
         priceListId: 'pl-1',
@@ -154,7 +154,7 @@ describe('AgreementFormModal (DX-105)', () => {
   it('crea un descuento con porcentajes por categoría, sede y vigencia', async () => {
     const user = setupUser();
     const { dialog, onSaved, onOpenChange } = setup();
-    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sanitas');
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sanavida');
     await user.selectOptions(within(dialog).getByLabelText('Pagador'), 'payer-1');
     await user.type(within(dialog).getByLabelText('Descuento general (%)'), '12,5');
     await user.click(within(dialog).getByRole('button', { name: 'Añadir categoría' }));
@@ -166,7 +166,7 @@ describe('AgreementFormModal (DX-105)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', {
-        name: 'Convenio Sanitas',
+        name: 'Convenio Sanavida',
         payerId: 'payer-1',
         kind: 'PERCENT_DISCOUNT',
         percent: 12.5,
@@ -183,7 +183,7 @@ describe('AgreementFormModal (DX-105)', () => {
   it('las filas de categoría: no repiten categoría, exigen porcentaje y se quitan', async () => {
     const user = setupUser();
     const { dialog } = setup();
-    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sanitas');
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sanavida');
     await user.selectOptions(within(dialog).getByLabelText('Pagador'), 'payer-1');
     await user.type(within(dialog).getByLabelText('Descuento general (%)'), '10');
 
@@ -210,7 +210,7 @@ describe('AgreementFormModal (DX-105)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', {
-        name: 'Convenio Sanitas',
+        name: 'Convenio Sanavida',
         payerId: 'payer-1',
         kind: 'PERCENT_DISCOUNT',
         percent: 10,
@@ -221,7 +221,7 @@ describe('AgreementFormModal (DX-105)', () => {
   it('una fecha de fin anterior al inicio no se envía', async () => {
     const user = setupUser();
     const { dialog } = setup();
-    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sanitas');
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sanavida');
     await user.selectOptions(within(dialog).getByLabelText('Pagador'), 'payer-1');
     await user.type(within(dialog).getByLabelText('Descuento general (%)'), '10');
     await typeDate(user, dialog, 'Vigente desde', '01062026');
@@ -236,7 +236,7 @@ describe('AgreementFormModal (DX-105)', () => {
   it('edita: precarga todo y manda el PATCH completo, con activo', async () => {
     const user = setupUser();
     const { dialog } = setup(existing);
-    expect(within(dialog).getByLabelText('Nombre')).toHaveValue('Convenio Sanitas');
+    expect(within(dialog).getByLabelText('Nombre')).toHaveValue('Convenio Sanavida');
     expect(within(dialog).getByLabelText('Pagador')).toHaveValue('payer-1');
     expect(within(dialog).getByLabelText('Descuento general (%)')).toHaveValue('15');
     expect(within(dialog).getByLabelText('Categoría 1')).toHaveValue('Preventiva');
@@ -249,7 +249,7 @@ describe('AgreementFormModal (DX-105)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
     await waitFor(() =>
       expect(mockedUpdate).toHaveBeenCalledWith('tok', 'ag-1', {
-        name: 'Convenio Sanitas',
+        name: 'Convenio Sanavida',
         payerId: 'payer-1',
         kind: 'PERCENT_DISCOUNT',
         percent: 15,
@@ -293,7 +293,7 @@ describe('AgreementFormModal (DX-105)', () => {
     };
     const { dialog } = setup(withList, { payers: [payers[1]], priceLists: [] });
     expect(within(dialog).getByLabelText('Pagador')).toHaveValue('payer-1');
-    expect(within(dialog).getByRole('option', { name: 'Sanitas' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: 'Sanavida' })).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Lista de precios')).toHaveValue('pl-9');
   });
 
@@ -301,7 +301,7 @@ describe('AgreementFormModal (DX-105)', () => {
     const user = setupUser();
     mockedCreate.mockRejectedValue(new ApiError(409, 'Ya existe un convenio con ese nombre.'));
     const { dialog, onOpenChange } = setup();
-    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sanitas');
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sanavida');
     await user.selectOptions(within(dialog).getByLabelText('Pagador'), 'payer-1');
     await user.type(within(dialog).getByLabelText('Descuento general (%)'), '10');
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));

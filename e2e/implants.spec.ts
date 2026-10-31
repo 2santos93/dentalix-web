@@ -1,5 +1,6 @@
-import { test, expect, type APIRequestContext } from './support/test';
+import { test, expect, type APIRequestContext, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 import { expectNoHorizontalScroll } from './support/layout';
@@ -10,7 +11,8 @@ import { expectNoHorizontalScroll } from './support/layout';
  *   1. Odontograma → diente 36 → «Registrar implante»: el formulario abre con
  *      el diente puesto; se registra el implante y, desde la sección, el pilar.
  *   2. «Tarjeta de implante» abre la vista imprimible: nombre y documento del
- *      paciente, centro y los dos componentes; «Imprimir» registra la entrega;
+ *      paciente, centro y los dos componentes, sin base legal de un país
+ *      (DX-325); «Imprimir» registra la entrega;
  *      el PDF sale en UNA hoja en A4 y en carta.
  *   3. Ajustes → Implantes: el lote devuelve los dos pacientes que lo
  *      recibieron y se exporta a CSV.
@@ -25,6 +27,35 @@ const subdomain = `test-clinic-impl-${suffix}`;
 const email = `test.user.impl.${suffix}@example.com`;
 const password = 'Password123!';
 const LOT = `LOT-${suffix}`.slice(0, 40).toUpperCase();
+const QA_DIR = process.env.E2E_QA_DIR;
+
+const VIEWPORTS = [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+] as const;
+
+/**
+ * La captura `${name}-${width}-${scheme}.png` a 1440 y 390 px, en claro y
+ * oscuro, sin scroll horizontal; deja la página a 1440.
+ */
+async function shoot(page: Page, name: string): Promise<void> {
+  if (!QA_DIR) return;
+  mkdirSync(QA_DIR, { recursive: true });
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await expectNoHorizontalScroll(page);
+    // Sin el hover del último clic y sin transiciones de color a medias.
+    await page.mouse.move(0, 0);
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await expect(page.locator('html')).toHaveClass(scheme === 'dark' ? /\bdark\b/ : /^(?!.*\bdark\b)/);
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))));
+      await page.screenshot({ path: `${QA_DIR}/${name}-${viewport.width}-${scheme}.png`, fullPage: false });
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+  }
+  await page.setViewportSize(VIEWPORTS[0]);
+}
 
 function api(request: APIRequestContext, origin: string, token: string) {
   const headers = { 'X-Tenant-Host': new URL(origin).host, Authorization: `Bearer ${token}` };
@@ -118,6 +149,9 @@ test('registrar desde el odontograma, imprimir la tarjeta y buscar por lote (144
   await expect(card).toContainText(`Clinica Implantes ${suffix}`);
   await expect(card).toContainText('021.5310');
   await expect(card).toContainText('RC-ABUT-4');
+  // DX-325: la tarjeta no cita la norma de ningún país.
+  await expect(card).not.toContainText(/Res\.|Reglamento|RD \d|\(CO\)|\(ES\)/);
+  await shoot(cardPage, 'implant-card');
   await cardPage.getByRole('button', { name: 'Imprimir y registrar la entrega' }).click();
   await expect(card).toContainText('Tarjeta entregada al paciente el');
   await cardPage.emulateMedia({ media: 'print' });
