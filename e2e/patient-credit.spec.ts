@@ -18,7 +18,7 @@ import { openPatientTab } from './support/patient-tabs';
  */
 const API = API_URL;
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
-const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase();
+const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
 const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
 const money = (amount: number) => usd.format(amount);
 
@@ -84,7 +84,7 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     const tag = `${suffix}${viewport.width}`;
     const origin = await registerAndLogin(page, {
-      subdomain: `test-clinic-sf-${tag}`.slice(0, 40),
+      subdomain: `test-clinic-sf-${tag}`,
       clinicName: `Clinica Saldo Favor ${tag}`,
       fullName: 'Test User',
       email: `test.user.saldofavor.${tag}@example.com`,
