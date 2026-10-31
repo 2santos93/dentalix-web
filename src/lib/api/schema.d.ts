@@ -7175,7 +7175,7 @@ export interface components {
             isPrimary: boolean;
             notes: string | null;
             /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTHER. */
-            migratedFromInsurerEps: boolean;
+            migratedFromLegacyInsurer: boolean;
             /**
              * Format: uuid
              * @description SEC-049: quién puso por última vez el pagador o el nº de afiliado (en las anteriores, quien la creó). Un rol que no es ADMIN no puede asignar un convenio con una cobertura que declaró él y nadie verificó.

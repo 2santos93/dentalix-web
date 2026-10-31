@@ -1,11 +1,10 @@
-import { normalizeDocType } from './legacy-doc-type';
 import type { DocType } from './patients-api';
 
 /**
  * DX-327: tipos de documento del paciente, iguales para cualquier clínica y
  * sin país (spec R2). El nombre que ve cada clínica sale de `documentTypeName`
- * (R17), el único resolvedor de la web; los códigos anteriores viven solo en
- * `legacy-doc-type.ts`.
+ * (R17), el único resolvedor de la web. La API solo manda estos cinco (los
+ * códigos anteriores los retiró la migración 20261110130000).
  */
 export const DOC_TYPES: readonly DocType[] = [
   'NATIONAL_ID',
@@ -88,8 +87,7 @@ export type ClinicDocumentTypeNames = Readonly<Partial<Record<DocType, string | 
 
 /**
  * R17: etiqueta del paciente, si no el nombre local de la clínica para su
- * tipo, si no el genérico. Un código que no es genérico se normaliza; si
- * tampoco se reconoce, se pinta tal cual.
+ * tipo, si no el genérico. Un código que no se reconoce se pinta tal cual.
  */
 export function documentTypeName(
   type: string,
@@ -97,7 +95,7 @@ export function documentTypeName(
   clinicNames: ClinicDocumentTypeNames,
 ): string {
   if (label) return label;
-  const generic = normalizeDocType(type);
+  const generic = (DOC_TYPES as readonly string[]).includes(type) ? (type as DocType) : null;
   if (!generic) return type;
   const local = Object.hasOwn(clinicNames, generic) ? clinicNames[generic] : null;
   return local || DOC_TYPE_LABEL[generic];

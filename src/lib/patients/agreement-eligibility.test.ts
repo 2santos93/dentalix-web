@@ -7,13 +7,13 @@ const cov = (
   id: string,
   payerId: string,
   status: 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED' = 'ACTIVE',
-  migratedFromInsurerEps = false,
+  migratedFromLegacyInsurer = false,
   extra: { declaredById?: string | null; verifiedAt?: string | null } = {},
 ) => ({
   id,
   payer: { id: payerId },
   status,
-  migratedFromInsurerEps,
+  migratedFromLegacyInsurer,
   declaredById: 'user-other' as string | null,
   verifiedAt: null as string | null,
   ...extra,
@@ -65,17 +65,6 @@ describe('agreementEligibility (SEC-047)', () => {
     expect(agreementEligibilityCopy.reclassify('Cortesía')).toBe(
       'El pagador «Cortesía» es de tipo «Otro / interno»: solo un administrador puede asignar este convenio. Si es una aseguradora o una empresa, reclasifica el pagador en Ajustes › Pagadores.',
     );
-  });
-
-  // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
-  it('legacy: un pagador OTRO de una API anterior sigue siendo interno, solo ADMIN', () => {
-    const legacy = { id: 'pay-old', name: 'Cortesía', type: 'OTRO' as never };
-    const coverages = [cov('c3', legacy.id)];
-    expect(agreementEligibility({ payer: legacy }, coverages, 'ADMIN', ME).kind).toBe('optional-coverage');
-    expect(agreementEligibility({ payer: legacy }, coverages, 'DENTIST', ME)).toEqual({
-      kind: 'blocked',
-      reason: agreementEligibilityCopy.adminOnly,
-    });
   });
 
   it('M2: una cobertura MIGRADA y vigente del pagador OTHER habilita a cualquier rol', () => {

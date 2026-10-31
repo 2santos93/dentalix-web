@@ -99,14 +99,6 @@ describe('PayerFormModal (DX-153)', () => {
     expect(type).not.toHaveAttribute('aria-describedby');
   });
 
-  // Excepción G5.3 (DX-334): tipos de pagador anteriores a DX-326.
-  it('legacy: un pagador OTRO de una API anterior también anuncia la pista interna', () => {
-    const { dialog } = setup({ ...sanavida, type: 'OTRO' as Payer['type'] });
-    const type = within(dialog).getByLabelText('Tipo');
-    expect(type).toHaveValue('OTHER');
-    expect(type).toHaveAccessibleDescription(OTHER_HINT);
-  });
-
   it('valida el nombre antes de enviar', async () => {
     const user = setupUser();
     const { dialog } = setup();
@@ -155,10 +147,9 @@ describe('PayerFormModal (DX-153)', () => {
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
-  // Excepción G5.3 (DX-334): tipos de pagador anteriores a DX-326.
-  it('legacy type from an older API seeds its generic type', () => {
-    const { dialog } = setup({ ...sanavida, type: 'EPS_CO' as Payer['type'] });
-    expect(within(dialog).getByLabelText('Tipo')).toHaveValue('PUBLIC_SYSTEM');
+  it('an unknown type seeds no type, so it has to be chosen', () => {
+    const { dialog } = setup({ ...sanavida, type: 'XX' as Payer['type'] });
+    expect(within(dialog).getByLabelText('Tipo')).toHaveValue('');
   });
 
   it('muestra el mensaje de la API y deja el modal abierto', async () => {

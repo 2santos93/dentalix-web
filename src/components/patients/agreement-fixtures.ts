@@ -50,7 +50,7 @@ export function coverageFor(
   payer: { id: string; name: string },
   planName: string | null,
   status: PatientCoverage['status'] = 'ACTIVE',
-  migratedFromInsurerEps = false,
+  migratedFromLegacyInsurer = false,
 ): PatientCoverage {
   return {
     id,
@@ -63,7 +63,7 @@ export function coverageFor(
     validTo: null,
     isPrimary: true,
     notes: null,
-    migratedFromInsurerEps,
+    migratedFromLegacyInsurer,
     declaredById: null,
     verifiedAt: null,
     verifiedById: null,

@@ -60,7 +60,7 @@ function coverage(over: Partial<PatientCoverage> = {}): PatientCoverage {
     validTo: '2027-01-31',
     isPrimary: true,
     notes: null,
-    migratedFromInsurerEps: false,
+    migratedFromLegacyInsurer: false,
     declaredById: null,
     verifiedAt: null,
     verifiedById: null,

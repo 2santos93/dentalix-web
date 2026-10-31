@@ -3,8 +3,7 @@ import * as React from 'react';
 import { useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { createPayer, updatePayer, type Payer, type PayerType } from '@/lib/payers/payers-api';
-import { normalizePayerType } from '@/lib/payers/legacy-payer-type';
-import { PAYER_TYPES, isExternalPayer } from '@/lib/payers/payer-type';
+import { PAYER_TYPES, isExternalPayer, payerTypeOf } from '@/lib/payers/payer-type';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
@@ -50,10 +49,9 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
   const editing = payer !== null;
   const [name, setName] = useState(payer?.name ?? '');
   // SEC-047: sin tipo por defecto. OTHER marca un pagador interno (sus convenios
-  // solo los asigna ADMIN), así que nunca se elige sin querer. Un código de una
-  // réplica anterior de la API se siembra como su tipo genérico.
+  // solo los asigna ADMIN), así que nunca se elige sin querer.
   const [type, setType] = useState<PayerType | ''>(
-    payer ? (normalizePayerType(payer.type) ?? '') : '',
+    payer ? (payerTypeOf(payer.type) ?? '') : '',
   );
   const [typeError, setTypeError] = useState<string | null>(null);
   // La pista de SEC-047 sale con un tipo interno; la misma regla que el resto.

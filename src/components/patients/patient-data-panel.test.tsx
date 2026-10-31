@@ -202,7 +202,7 @@ describe('PatientDataPanel · sin aseguradora en texto libre (DX-322)', () => {
   it('patient data panel never shows a legacy insurer row', () => {
     // DX-322: el texto libre de aseguradora sale del contrato; aunque una
     // respuesta antigua lo traiga, la ficha no lo pinta.
-    const stale = { ...patient({ occupation: 'Docente', coverage: coverage('NONE') }), insurerEps: 'Sanavida' };
+    const stale = { ...patient({ occupation: 'Docente', coverage: coverage('NONE') }), legacyInsurerName: 'Sanavida' };
     render(<PatientDataPanel patient={stale} />);
     expect(screen.queryByText('Aseguradora (dato anterior)')).not.toBeInTheDocument();
     expect(screen.queryByText('Aseguradora / EPS')).not.toBeInTheDocument();

@@ -47,7 +47,7 @@ const existing: PatientCoverage = {
   validTo: null,
   isPrimary: false,
   notes: null,
-  migratedFromInsurerEps: false,
+  migratedFromLegacyInsurer: false,
   declaredById: null,
   verifiedAt: null,
   verifiedById: null,
@@ -266,7 +266,7 @@ describe('CoverageDialog (DX-153)', () => {
           type: 'EMPLOYER',
           active: true,
         },
-        migratedFromInsurerEps: true,
+        migratedFromLegacyInsurer: true,
       };
       mockedUpdate.mockResolvedValue(legacy);
       setup({ coverage: legacy, payers: [external] });

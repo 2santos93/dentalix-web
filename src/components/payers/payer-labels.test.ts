@@ -14,15 +14,10 @@ describe('payer labels (DX-326)', () => {
     }
   });
 
-  // Excepción G5.3 (DX-334): tipos de pagador anteriores a DX-326.
-  it('legacy codes from an older API render their generic label', () => {
-    expect(payerTypeLabel('EPS_CO')).toBe('Sistema público de salud');
-    expect(payerTypeLabel('MUTUA_ES')).toBe('Aseguradora');
-    expect(payerTypeLabel('OTRO')).toBe('Otro / interno (cortesía, empleados)');
-  });
-
   it('an unknown code renders as is', () => {
     expect(payerTypeLabel('X')).toBe('X');
+    // Un código retirado ya no se traduce: la API no lo manda (migración 20261110130000).
+    expect(payerTypeLabel('OTRO')).toBe('OTRO');
     expect(payerTypeLabel('constructor')).toBe('constructor');
   });
 });

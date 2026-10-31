@@ -221,18 +221,6 @@ describe('AgreementsManager (DX-105)', () => {
     expect(within(cards[0]).getByRole('button', { name: 'Acciones de Convenio Sanavida' })).toBeInTheDocument();
   });
 
-  // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
-  it('legacy: un convenio de pagador OTRO de una API anterior sigue avisando de que es interno', async () => {
-    mockedList.mockResolvedValue([
-      { ...porcentaje, id: 'ag-9', name: 'Cortesía socios', payer: { id: 'payer-9', name: 'Cortesía', type: 'OTRO' as never } },
-    ]);
-    render(<AgreementsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Convenios' });
-    expect(within(table).getAllByRole('row')[1]).toHaveTextContent(
-      'Solo un administrador podrá asignarlo. Si es una aseguradora o una empresa, reclasifica el pagador.',
-    );
-  });
-
   it('vacío: enseña qué hacer', async () => {
     mockedList.mockResolvedValue([]);
     render(<AgreementsManager token="tok" allowed />);

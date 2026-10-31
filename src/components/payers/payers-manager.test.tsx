@@ -108,14 +108,12 @@ describe('PayersManager (DX-153)', () => {
     expect(within(cards[0]).getByRole('button', { name: 'Acciones de Sanavida' })).toBeInTheDocument();
   });
 
-  // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
-  it('legacy: una fila con un código de una API anterior muestra la etiqueta genérica', async () => {
-    mockedList.mockResolvedValue([{ ...sanavida, type: 'EPS_CO' as never }]);
+  it('una fila con un tipo desconocido lo muestra tal cual, sin romper la lista', async () => {
+    mockedList.mockResolvedValue([{ ...sanavida, type: 'XX' as never }]);
     mockPhone();
     render(<PayersManager token="tok" allowed />);
     const list = await screen.findByRole('list', { name: 'Pagadores' });
-    expect(within(within(list).getAllByRole('listitem')[0]).getByText('Sistema público de salud')).toBeInTheDocument();
-    expect(screen.queryByText('EPS_CO')).toBeNull();
+    expect(within(within(list).getAllByRole('listitem')[0]).getByText('XX')).toBeInTheDocument();
   });
 
   it('vacío: dice que aún no hay pagadores y cuáles crear', async () => {

@@ -263,7 +263,17 @@ const COLOMBIA_TERMS: ReadonlyArray<[string, RegExp]> = [
   ],
   ['sigla nacional', new RegExp('\\b(?:' + ['EP' + 'S', 'RI' + 'PS', 'CU' + 'PS', 'RE' + 'PS', 'DI' + 'AN', 'NI' + 'T'].join('|') + ')\\b')],
   ['figura legal de un país', new RegExp('acudi' + 'ente', 'i')],
+  ['identificador interno', new RegExp('\\b(?:MUTUA' + '_ES|PREPAGADA' + '_CO|EPS' + '_CO)\\b|[Ii]nsurer' + 'Eps')],
 ];
+
+/** Todo fichero de texto bajo `dir` (tests y e2e incluidos). */
+function allTextFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : allTextFiles(path);
+    return /\.(ts|tsx|js|mjs|json|md)$/.test(entry.name) ? [path] : [];
+  });
+}
 
 function colombiaHit(line: string): string | null {
   const hit = COLOMBIA_TERMS.find(([, pattern]) => pattern.test(line));
@@ -288,6 +298,22 @@ describe('arquitectura: sin Colombia (DX-323, DX-325)', () => {
     expect(hits).toEqual([]);
   });
 
+  it('no file of src or e2e, tests included, names a Colombian internal identifier', () => {
+    // Desde la migración 20261110130000 de la API ningún código de pagador ni
+    // campo del contrato lleva el nombre de un país; la web no los traduce.
+    const self = join(__dirname, 'no-laws.test.ts');
+    const files = [...allTextFiles(SRC), ...allTextFiles(join(SRC, '..', 'e2e'))].filter((f) => f !== self);
+    expect(files.length).toBeGreaterThan(800);
+    const hits = files.flatMap((file) =>
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .flatMap((line, i) => (colombiaHit(line) === 'identificador interno' ? [`${rel(file)}:${i + 1}`] : [])),
+    );
+    expect(hits).toEqual([]);
+    expect(existsSync(join(SRC, 'lib/payers/legacy-payer-type.ts'))).toBe(false);
+    expect(existsSync(join(SRC, 'lib/patients/legacy-doc-type.ts'))).toBe(false);
+  });
+
   it('the Colombia patterns catch each retired form and skip neutral text', () => {
     for (const line of [
       `// ${'Colom' + 'bia'} (UTC-5)`,
@@ -305,6 +331,11 @@ describe('arquitectura: sin Colombia (DX-323, DX-325)', () => {
       `  taxId: (value: string) => \`${'NI' + 'T'}/NIF \${value}\`,`,
       `  LEGAL_GUARDIAN: '${'Acudi' + 'ente'} o tutor legal',`,
       `'el código ${'RI' + 'PS'}'`,
+      `  ${'EPS' + '_CO'}`,
+      `type: '${'PREPAGADA' + '_CO'}'`,
+      `${'MUTUA' + '_ES'}: 'INSURER',`,
+      `  migratedFrom${'Insurer' + 'Eps'}: boolean;`,
+      `expect(input).not.toHaveProperty('${'insurer' + 'Eps'}');`,
     ]) {
       expect({ line, caught: colombiaHit(line) !== null }).toEqual({ line, caught: true });
     }
@@ -312,7 +343,8 @@ describe('arquitectura: sin Colombia (DX-323, DX-325)', () => {
       ' * @example UTC',
       ' * @example es',
       "const ZERO = ['COP', 'CLP', 'JPY'];",
-      '  EPS_CO',
+      '  PUBLIC_SYSTEM',
+      '  migratedFromLegacyInsurer: boolean;',
       '  taxId: (value: string) => `Id. fiscal ${value}`,',
       "  LEGAL_GUARDIAN: 'Tutor legal',",
       "'+00 000 000 0001'",
