@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { CheckCircle2, LinkIcon, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -73,6 +73,8 @@ export const publicSignatureCopy = {
   doneMessage: (clinic: string) =>
     `${clinic} ya tiene tu firma. El documento queda completo cuando lo firme el profesional.`,
   signedAt: (when: string) => `Firmado el ${when}.`,
+  signedByGuardian: (name: string, when: string) => `Firmado por el responsable (${name}) el ${when}.`,
+  signatureAlt: (name: string) => `Firma de ${name}`,
   hash: 'Huella del documento (SHA-256)',
   print: 'Imprimir o guardar en PDF',
 };
@@ -89,7 +91,7 @@ type Step =
   | { kind: 'intro' }
   | { kind: 'code'; notice?: string }
   | { kind: 'document'; session: string }
-  | { kind: 'done'; copy: PublicSignedCopy };
+  | { kind: 'done'; copy: PublicSignedCopy; signature: string };
 
 /** El reloj de la sede que envió el enlace (sus fechas, en su zona y su formato). */
 function clockOf(location: PublicSignature['location']): SedeClock | null {
@@ -215,11 +217,11 @@ export function PublicSignatureView({ linkToken }: { linkToken: string }) {
                 linkToken={linkToken}
                 session={step.session}
                 onSessionExpired={sessionExpired}
-                onSigned={(signed) => setStep({ kind: 'done', copy: signed })}
+                onSigned={(signed, signature) => setStep({ kind: 'done', copy: signed, signature })}
                 onGone={gone}
               />
             )}
-            {step.kind === 'done' && <DoneStep signed={step.copy} clock={clock} />}
+            {step.kind === 'done' && <DoneStep signed={step.copy} signature={step.signature} clock={clock} />}
           </>
         )}
       </main>
@@ -297,6 +299,7 @@ function CodeStep({
   onGone: (locked?: boolean) => void;
 }) {
   const ids = useId();
+  const codeRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
@@ -308,6 +311,7 @@ function CodeStep({
     e.preventDefault();
     if (!/^\d{6}$/.test(code)) {
       setError(copy.codeInvalid);
+      codeRef.current?.focus();
       return;
     }
     setVerifying(true);
@@ -322,6 +326,8 @@ function CodeStep({
       }
       setError(apiErrorMessage(err, copy.verifyError));
       setCode('');
+      // Para escribir otro sin buscar el campo; el motivo va enlazado.
+      codeRef.current?.focus();
     } finally {
       setVerifying(false);
     }
@@ -351,6 +357,7 @@ function CodeStep({
       ) : null}
       <FormField htmlFor={`${ids}-code`} label={copy.codeLabel} hint={copy.codeHint(data.destinationMasked)}>
         <Input
+          ref={codeRef}
           id={`${ids}-code`}
           value={code}
           onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -393,7 +400,8 @@ function DocumentStep({
   linkToken: string;
   session: string;
   onSessionExpired: () => void;
-  onSigned: (signed: PublicSignedCopy) => void;
+  /** La copia firmada y la firma que se acaba de enviar (para la copia imprimible). */
+  onSigned: (signed: PublicSignedCopy, signature: string) => void;
   onGone: () => void;
 }) {
   const ids = useId();
@@ -462,7 +470,7 @@ function DocumentStep({
         accepted: true,
         ...(doc.signerDocumentRequired ? { signerDocument: signerDocument.trim() } : {}),
       });
-      onSigned(signed);
+      onSigned(signed, signature);
     } catch (err) {
       if (err instanceof ApiError && err.code === SIGNATURE_SESSION_REQUIRED) onSessionExpired();
       else if (isGone(err)) onGone();
@@ -543,7 +551,17 @@ function DocumentStep({
   );
 }
 
-function DoneStep({ signed, clock }: { signed: PublicSignedCopy; clock: SedeClock | null }) {
+function DoneStep({
+  signed,
+  signature,
+  clock,
+}: {
+  signed: PublicSignedCopy;
+  /** La firma (PNG en data URL) que se acaba de enviar: la misma que guarda la clínica. */
+  signature: string;
+  clock: SedeClock | null;
+}) {
+  const signedAt = when(signed.signedAt, clock);
   return (
     <section className="flex flex-col gap-5">
       <div
@@ -563,11 +581,21 @@ function DoneStep({ signed, clock }: { signed: PublicSignedCopy; clock: SedeCloc
         <p className="text-sm font-semibold">{signed.clinic.name}</p>
         <h2 className="text-lg font-semibold">{signed.title}</h2>
         <p className="mt-3 whitespace-pre-line text-[0.9375rem] leading-relaxed">{signed.body}</p>
-        <p className="mt-4 text-sm">
+        {/* eslint-disable-next-line @next/next/no-img-element -- data URL de la firma recién dibujada; next/image no aporta nada */}
+        <img
+          src={signature}
+          alt={copy.signatureAlt(signed.signerName)}
+          className="mt-4 h-24 w-auto max-w-full border-b border-[#d1d5db] object-contain"
+        />
+        <p className="mt-2 text-sm">
           {signed.signerName}
           {signed.signerDocument ? ` · ${signed.signerDocument}` : ''}
         </p>
-        <p className="text-sm tabular-nums">{copy.signedAt(when(signed.signedAt, clock))}</p>
+        <p className="text-sm tabular-nums">
+          {signed.signerType === 'GUARDIAN'
+            ? copy.signedByGuardian(signed.signerName, signedAt)
+            : copy.signedAt(signedAt)}
+        </p>
         <p className="mt-3 text-xs text-[#4b5563]">
           {copy.hash}: <span className="break-all font-mono">{signed.contentHash}</span>
         </p>

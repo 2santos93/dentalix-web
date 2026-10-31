@@ -146,6 +146,12 @@ describe('PublicSignatureView (DX-243)', () => {
     );
     expect(await screen.findByRole('heading', { name: 'Documento firmado' })).toBeInTheDocument();
     expect(screen.getByText('a'.repeat(64))).toBeInTheDocument();
+    // La copia que imprime lleva la firma que acaba de dibujar.
+    expect(screen.getByRole('img', { name: 'Firma de Laura Castro' })).toHaveAttribute(
+      'src',
+      'data:image/png;base64,FIRMA',
+    );
+    expect(screen.getByText(/^Firmado el .*30 de octubre de 2026/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /imprimir o guardar en pdf/i })).toBeInTheDocument();
   });
 
@@ -162,7 +168,7 @@ describe('PublicSignatureView (DX-243)', () => {
     expect(screen.getByText('Escribe tu documento de identidad.')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Tu documento de identidad'), 'C01');
     mockedSign.mockResolvedValue({
-      ...documentFixture(),
+      ...documentFixture({ signerType: 'GUARDIAN', signerName: 'Claudia Navarro' }),
       signerDocument: 'C01',
       signedAt: '2026-10-30T14:30:00.000Z',
       contentHash: 'b'.repeat(64),
@@ -171,6 +177,11 @@ describe('PublicSignatureView (DX-243)', () => {
     await waitFor(() =>
       expect(mockedSign).toHaveBeenCalledWith('tok', 'S'.repeat(43), expect.objectContaining({ signerDocument: 'C01' })),
     );
+    // La copia firmada dice que firmó el responsable, con su nombre.
+    expect(
+      await screen.findByText(/^Firmado por el responsable \(Claudia Navarro\) el .*30 de octubre de 2026/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Firma de Claudia Navarro' })).toBeInTheDocument();
   });
 
   it('código incorrecto: el motivo con los intentos que quedan; el quinto bloquea («Enlace no válido»)', async () => {
@@ -188,6 +199,11 @@ describe('PublicSignatureView (DX-243)', () => {
     await user.type(input, '111111');
     await user.click(screen.getByRole('button', { name: 'Ver el documento' }));
     expect(await screen.findByText('Código incorrecto. Te quedan 4 intentos.')).toBeInTheDocument();
+    // El foco vuelve al código (vacío), enlazado al motivo.
+    const retry = screen.getByLabelText('Código de 6 dígitos');
+    await waitFor(() => expect(retry).toHaveFocus());
+    expect(retry).toHaveValue('');
+    expect(retry).toHaveAccessibleDescription(/Código incorrecto\. Te quedan 4 intentos\./);
     await user.type(screen.getByLabelText('Código de 6 dígitos'), '222222');
     await user.click(screen.getByRole('button', { name: 'Ver el documento' }));
     expect(await screen.findByRole('heading', { name: 'Enlace no válido' })).toBeInTheDocument();
