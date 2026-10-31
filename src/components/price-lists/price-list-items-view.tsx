@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ListOrdered } from 'lucide-react';
+import { ChevronLeft, ListOrdered } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listPriceListItems,
@@ -18,8 +18,10 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
+import type { RowAction } from '@/components/shared/row-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { PriceListItemPriceModal } from './price-list-item-price-modal';
 
 const copy = {
@@ -46,19 +48,16 @@ const copy = {
   colCategory: 'Categoría',
   colCatalogPrice: 'Precio de catálogo',
   colListPrice: 'Precio de lista',
-  colActions: 'Acciones',
   noPrice: 'Sin precio',
   noCategory: '—',
   noCatalogPrice: '—',
   editPrice: 'Editar precio',
   removePrice: 'Quitar precio',
-  actionFor: (action: string, name: string) => `${action} de «${name}»`,
   removeTitle: (name: string) => `¿Quitar el precio de «${name}»?`,
   removeDescription:
     'El procedimiento deja de tener precio en esta lista y vuelve a usar el del catálogo.',
   removeConfirm: 'Quitar precio',
   removeError: 'No pudimos quitar el precio.',
-  listPriceLabel: 'Precio de lista',
   catalogPriceLabel: 'Catálogo',
 };
 
@@ -74,8 +73,8 @@ interface PriceListItemsViewProps {
 /**
  * Precios de una lista (DX-105): directorio paginado del catálogo de
  * procedimientos con el precio de lista de cada uno. Se edita de a uno, en un
- * modal por fila (no hay edición en rejilla): «Guardar» manda el `PUT` con una
- * sola fila y «Quitar precio» lo manda con `price: null`.
+ * modal que abre la fila (no hay edición en rejilla): «Guardar» manda el `PUT`
+ * con una sola fila y «Quitar precio» (en el «⋯») lo manda con `price: null`.
  */
 export function PriceListItemsView({ token, priceListId }: PriceListItemsViewProps) {
   const [list, setList] = useState<PriceList | null>(null);
@@ -197,13 +196,16 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
     }
   }
 
+  // Mientras no hay lista que nombrar, la vuelta va sola, igual que en la
+  // cabecera: el mismo enlace en el mismo sitio.
   const backLink = (
-    <Button asChild variant="ghost" size="sm" className="mb-3 -ml-3 max-md:h-11">
-      <Link href="/settings/listas-de-precios">
-        <ArrowLeft aria-hidden />
-        {copy.back}
-      </Link>
-    </Button>
+    <Link
+      href="/settings/listas-de-precios"
+      className="mb-4 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:min-h-11"
+    >
+      <ChevronLeft aria-hidden className="size-4" />
+      {copy.back}
+    </Link>
   );
 
   if (listLoading) {
@@ -253,52 +255,56 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
     return row.defaultPrice === null ? copy.noCatalogPrice : formatCurrency(row.defaultPrice, currency);
   }
 
-  function actions(row: PriceListItemRow) {
-    return (
-      <div className="flex flex-wrap gap-2 md:justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="max-md:h-11"
-          onClick={() => openEdit(row)}
-          aria-label={copy.actionFor(copy.editPrice, row.labelEs)}
-        >
-          {copy.editPrice}
-        </Button>
-        {row.price !== null ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="max-md:h-11"
-            onClick={() => {
-              setRemoveError(null);
-              setRemoving(row);
-            }}
-            aria-label={copy.actionFor(copy.removePrice, row.labelEs)}
-          >
-            {copy.removePrice}
-          </Button>
-        ) : null}
-      </div>
-    );
+  function rowActions(row: PriceListItemRow): RowAction[] {
+    const items: RowAction[] = [{ label: copy.editPrice, onSelect: () => openEdit(row) }];
+    if (row.price !== null) {
+      items.push({
+        label: copy.removePrice,
+        destructive: true,
+        separatorBefore: true,
+        onSelect: () => {
+          setRemoveError(null);
+          setRemoving(row);
+        },
+      });
+    }
+    return items;
   }
+
+  const columns: DataListColumn<PriceListItemRow>[] = [
+    { id: 'code', header: copy.colCode, cell: (r) => r.code, cellClassName: 't-id text-muted' },
+    { id: 'name', header: copy.colName, mobile: 'primary', cell: (r) => r.labelEs },
+    {
+      id: 'category',
+      header: copy.colCategory,
+      cell: (r) => r.category ?? copy.noCategory,
+      mobileCell: (r) => r.category,
+    },
+    {
+      id: 'catalog',
+      header: copy.colCatalogPrice,
+      numeric: true,
+      cell: (r) => catalogPriceText(r),
+      mobileCell: (r) =>
+        r.defaultPrice === null ? null : `${copy.catalogPriceLabel}: ${catalogPriceText(r)}`,
+    },
+    { id: 'list', header: copy.colListPrice, numeric: true, mobile: 'trailing', cell: priceCell },
+  ];
 
   return (
     <>
-      {backLink}
       <PageHeader
-          title={list.name}
-          description={copy.description(currency)}
-          meta={
-            list.active ? undefined : (
-              <Badge variant="muted" className="mt-3">
-                {copy.inactiveBadge}
-              </Badge>
-            )
-          }
-        />
+        back={{ href: '/settings/listas-de-precios', label: copy.back }}
+        title={list.name}
+        description={copy.description(currency)}
+        meta={
+          list.active ? undefined : (
+            <Badge variant="neutral" className="mt-3">
+              {copy.inactiveBadge}
+            </Badge>
+          )
+        }
+      />
 
       <div className="flex flex-col gap-3">
         <ListToolbar
@@ -324,7 +330,7 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
             isSearching ? (
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => {
                   setSearchInput('');
@@ -338,70 +344,16 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
           }
           skeleton={<TableSkeleton rows={5} />}
         >
-          <table
-            aria-label={copy.tableLabel}
-            className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-          >
-            <thead>
-              <tr className="border-b border-border bg-surface-2 text-left">
-                <th scope="col" className="px-4 py-3 font-medium text-muted">
-                  {copy.colCode}
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium text-muted">
-                  {copy.colName}
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium text-muted">
-                  {copy.colCategory}
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                  {copy.colCatalogPrice}
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                  {copy.colListPrice}
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                  <span className="sr-only">{copy.colActions}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((row) => (
-                <tr key={row.catalogItemId} className="border-b border-hairline last:border-0">
-                  <td className="px-4 py-3 tabular-nums text-muted">{row.code}</td>
-                  <td className="px-4 py-3 font-medium">{row.labelEs}</td>
-                  <td className="px-4 py-3">{row.category ?? copy.noCategory}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{catalogPriceText(row)}</td>
-                  <td className="px-4 py-3 text-right">{priceCell(row)}</td>
-                  <td className="px-4 py-3">{actions(row)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-            {items.map((row) => (
-              <li
-                key={row.catalogItemId}
-                className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="min-w-0 break-words font-medium">{row.labelEs}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-muted">{row.code}</span>
-                </div>
-                {row.category ? <p className="text-xs text-muted">{row.category}</p> : null}
-                <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                  <span>
-                    <span className="text-xs text-muted">{copy.listPriceLabel}: </span>
-                    {priceCell(row)}
-                  </span>
-                  <span className="text-xs text-muted">
-                    {copy.catalogPriceLabel}: <span className="tabular-nums">{catalogPriceText(row)}</span>
-                  </span>
-                </p>
-                {actions(row)}
-              </li>
-            ))}
-          </ul>
+          {/* La fila abre «Editar precio», el trabajo de esta pantalla. */}
+          <DataList
+            label={copy.tableLabel}
+            rows={items}
+            columns={columns}
+            getRowKey={(r) => r.catalogItemId}
+            onRowClick={openEdit}
+            rowActions={rowActions}
+            getRowLabel={(r) => r.labelEs}
+          />
         </AsyncSection>
 
         <Pagination

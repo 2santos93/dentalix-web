@@ -122,14 +122,16 @@ test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento;
   await expect(row).toContainText('COP');
   await expect(row).toContainText('Toda la clínica');
   await expect(row).toContainText('0');
-  await expect(row.getByText('Activa', { exact: true })).toBeVisible();
+  // Activa: sin marca (solo las inactivas la llevan).
+  await expect(row.getByText('Inactiva', { exact: true })).toHaveCount(0);
   await shot(page, 'ajustes-listas-1440');
 
   const lists = await page.request.get(`${API_URL}/price-lists`, { headers: session.headers });
   priceListId = ((await lists.json()) as { id: string; name: string }[]).find((l) => l.name === listName)!.id;
 
   // Precios de la lista: «Editar precio» del procedimiento.
-  await row.getByRole('link', { name: `Precios «${listName}»` }).click();
+  // La fila abre los precios de la lista.
+  await row.getByRole('link', { name: listName }).click();
   await expect(page).toHaveURL(new RegExp(`/settings/listas-de-precios/${priceListId}$`));
   await page.getByLabel('Buscar por código, nombre o categoría').fill(procedureLabel);
   const itemRow = page.getByRole('row').filter({ hasText: procedureLabel });
@@ -137,7 +139,8 @@ test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento;
   await expect(itemRow).toContainText('Sin precio');
   await expect(itemRow).toContainText(figure(CATALOG_PRICE));
 
-  await itemRow.getByRole('button', { name: `Editar precio de «${procedureLabel}»` }).click();
+  // La fila abre «Editar precio».
+  await itemRow.getByRole('button', { name: procedureLabel, exact: true }).click();
   const priceDialog = page.getByRole('dialog', { name: 'Editar precio' });
   await expect(priceDialog).toContainText(`Precio de catálogo: ${money(CATALOG_PRICE)}`);
   await priceDialog.getByLabel('Precio de lista').fill(String(LIST_PRICE));
@@ -164,7 +167,11 @@ test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento;
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByText(procedureLabel).locator('visible=true').first()).toBeVisible();
   await expectNoHorizontalScroll(page);
-  await page.getByRole('button', { name: `Editar precio de «${procedureLabel}»` }).locator('visible=true').first().click();
+  await page
+    .getByRole('button', { name: new RegExp(`^${procedureLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) })
+    .locator('visible=true')
+    .first()
+    .click();
   const modal390 = page.getByRole('dialog', { name: 'Editar precio' });
   await expectDialogInsideViewport(page, modal390);
   await expectNoHorizontalScroll(page);
@@ -194,11 +201,12 @@ test('ADMIN crea el convenio «Sura −20 %» y lo ve activo; a 390 px sin scrol
   const table = page.getByRole('table', { name: 'Convenios' });
   const row = table.getByRole('row', { name: new RegExp(agreementName) });
   await expect(row).toContainText(payerName);
-  await expect(row).toContainText('Descuento porcentual');
-  await expect(row).toContainText('20 %');
+  // La condición dice el tipo: «20 % de descuento».
+  await expect(row).toContainText('20 % de descuento');
   await expect(row).toContainText('Toda la clínica');
   await expect(row).toContainText('Sin límite');
-  await expect(row.getByText('Activo', { exact: true })).toBeVisible();
+  // Activo: sin marca (solo los inactivos la llevan).
+  await expect(row.getByText('Inactivo', { exact: true })).toHaveCount(0);
   await shot(page, 'ajustes-convenios-1440');
 
   await page.setViewportSize({ width: 390, height: 844 });

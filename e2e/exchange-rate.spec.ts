@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { addStaffViaApi, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { axeInBothThemes } from './support/axe';
+import { fillDate, readDate } from './support/dates';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
@@ -40,6 +41,11 @@ let adminEmail: string;
 let receptionEmail: string;
 
 /** Hoy en la zona de la sede de e2e (la misma regla que la pantalla). */
+/** Mañana en la zona de la sede (YYYY-MM-DD). */
+function sedeTomorrow(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: E2E_REGION.timeZone! }).format(new Date(Date.now() + 86_400_000));
+}
+
 function sedeToday(): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: E2E_REGION.timeZone,
@@ -78,8 +84,12 @@ async function fillRate(page: Page, rate: string): Promise<Locator> {
   await page.getByRole('button', { name: 'Registrar tasa' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Registrar tasa' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel('Fecha')).toHaveValue(sedeToday());
-  await expect(dialog.getByLabel('Fecha')).toHaveAttribute('max', sedeToday());
+  await expect.poll(() => readDate(dialog, 'Fecha')).toBe(sedeToday());
+  // Hoy de la sede es el máximo: mañana no se envía.
+  await fillDate(dialog, 'Fecha', sedeTomorrow());
+  await dialog.getByRole('button', { name: 'Registrar tasa' }).click();
+  await expect(dialog.getByText('Ese día aún no ha llegado en la sede.')).toBeVisible();
+  await fillDate(dialog, 'Fecha', sedeToday());
   const currency = dialog.getByLabel('Moneda');
   await expect(currency.locator(`option[value="${CURRENCY}"]`)).toHaveCount(1, { timeout: 15_000 });
   // La moneda base de las tasas (la da la API) no se ofrece.
