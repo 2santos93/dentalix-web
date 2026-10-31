@@ -24,7 +24,7 @@ export const RELATIONSHIPS: ResponsibleRelationship[] = [
 export const RELATIONSHIP_LABELS: Record<ResponsibleRelationship, string> = {
   MOTHER: 'Madre',
   FATHER: 'Padre',
-  LEGAL_GUARDIAN: 'Acudiente o tutor legal',
+  LEGAL_GUARDIAN: 'Tutor legal',
   GRANDPARENT: 'Abuelo/a',
   SIBLING: 'Hermano/a',
   SPOUSE: 'Cónyuge o pareja',
@@ -100,7 +100,7 @@ const GUARDIAN_RELATIONSHIPS: ResponsibleRelationship[] = ['LEGAL_GUARDIAN', 'MO
 
 /**
  * El responsable que firma un consentimiento como tutor (DX-006): primero
- * acudiente, madre o padre (el pagador antes), luego el pagador y si no el
+ * tutor legal, madre o padre (el pagador antes), luego el pagador y si no el
  * primero. null sin responsables.
  */
 export function consentGuardian(parties: readonly ResponsibleParty[]): ResponsibleParty | null {
