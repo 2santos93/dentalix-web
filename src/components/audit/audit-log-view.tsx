@@ -495,9 +495,6 @@ function actionTone(action: AuditAction): NonNullable<BadgeProps['variant']> {
   return variant === 'muted' ? 'neutral' : variant;
 }
 
-/** Cabeceras en tipo frase (DESIGN.md → Caption: nunca en mayúsculas). */
-const headerClassName = 'normal-case tracking-normal';
-
 function PatientLink({ event }: { event: AuditEvent }) {
   if (!event.patient) return null;
   return (
@@ -522,7 +519,6 @@ function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
       id: 'when',
       header: copy.colWhen,
       mobile: 'trailing',
-      headerClassName,
       cell: ({ time }) => (
         <div className="t-data min-w-0">
           <time dateTime={time.iso} className="whitespace-nowrap text-ink">
@@ -545,7 +541,6 @@ function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
       id: 'actor',
       header: copy.colActor,
       mobile: 'primary',
-      headerClassName,
       cell: ({ event }) => (
         <span className="flex min-w-0 flex-col">
           <span className="block">{actorName(event)}</span>
@@ -557,7 +552,6 @@ function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
     {
       id: 'action',
       header: copy.colAction,
-      headerClassName,
       cell: ({ event }) => <Badge variant={actionTone(event.action)}>{AUDIT_ACTION_LABELS[event.action]}</Badge>,
       // En el teléfono la acción ya va en la línea 1; esta posición de la
       // línea 2 lleva el rol y, si su reloj marca otra, la hora de la sede.
@@ -576,7 +570,6 @@ function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
     {
       id: 'resource',
       header: copy.colResource,
-      headerClassName,
       cell: ({ event, detail }) => (
         <div className="min-w-0">
           {AUDIT_RESOURCE_LABELS[event.resourceType]}
@@ -599,7 +592,6 @@ function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
       ? {
           id: 'patient',
           header: copy.colPatient,
-          headerClassName,
           cell: ({ event }) => (event.patient ? <PatientLink event={event} /> : <span className="text-muted">—</span>),
           mobileCell: ({ event }) => (event.patient ? <PatientLink event={event} /> : null),
         }
@@ -607,7 +599,6 @@ function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
     {
       id: 'origin',
       header: copy.colOrigin,
-      headerClassName,
       cell: ({ event }) => <OriginCell ip={event.ip} userAgent={event.userAgent} />,
       mobileCell: ({ event }) => originText(event.ip, event.userAgent),
     },

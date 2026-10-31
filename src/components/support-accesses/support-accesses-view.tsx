@@ -34,9 +34,6 @@ const copy = {
 
 const PAGE_SIZE = 20;
 
-/** Cabeceras en tipo frase (DESIGN.md → Caption: nunca en mayúsculas). */
-const headerClassName = 'normal-case tracking-normal';
-
 /**
  * Tabla en tablet y escritorio; en el teléfono, tarjeta: quién y cuándo en la
  * línea 1; por qué, hasta cuándo y el origen debajo.
@@ -46,7 +43,6 @@ const columns: DataListColumn<SupportAccess>[] = [
     id: 'who',
     header: copy.colWho,
     mobile: 'primary',
-    headerClassName,
     cell: (a) => (
       <span className="flex min-w-0 flex-col">
         <span>{a.userFullName}</span>
@@ -59,21 +55,18 @@ const columns: DataListColumn<SupportAccess>[] = [
     id: 'when',
     header: copy.colWhen,
     mobile: 'trailing',
-    headerClassName,
     cellClassName: 't-data whitespace-nowrap',
     cell: (a) => formatDateTime(a.createdAt),
   },
   {
     id: 'reason',
     header: copy.colReason,
-    headerClassName,
     cell: (a) => <span className="block max-w-md whitespace-pre-line break-words">{a.reason}</span>,
     mobileCell: (a) => a.reason,
   },
   {
     id: 'until',
     header: copy.colUntil,
-    headerClassName,
     cellClassName: 't-data whitespace-nowrap',
     cell: (a) => formatDateTime(a.expiresAt),
     mobileCell: (a) => copy.until(formatDateTime(a.expiresAt)),
@@ -81,7 +74,6 @@ const columns: DataListColumn<SupportAccess>[] = [
   {
     id: 'origin',
     header: copy.colOrigin,
-    headerClassName,
     cell: (a) => <OriginCell ip={a.ip} userAgent={a.userAgent} />,
     mobileCell: (a) => (
       <>

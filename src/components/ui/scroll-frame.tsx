@@ -30,7 +30,7 @@ export function ScrollFrame({ label, className, children }: ScrollFrameProps) {
       className={cn(
         'min-w-0 max-w-full overflow-x-auto',
         overflows && 'scroll-x-shadows',
-        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text',
         className,
       )}
       {...(overflows ? { role: 'region', tabIndex: 0, 'aria-label': label } : {})}
