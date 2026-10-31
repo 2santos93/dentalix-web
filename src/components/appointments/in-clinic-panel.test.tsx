@@ -59,6 +59,11 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
       anamnesisReviewedAt: '2026-09-01T00:00:00.000Z',
     },
     planItemsReservedElsewhere: [],
+    urgent: false,
+    walkIn: false,
+    overbooked: false,
+    triageFlags: [],
+    triageNote: null,
     ...overrides,
   };
 }
@@ -132,6 +137,41 @@ describe('InClinicPanel (DX-200)', () => {
       within(screen.getByTestId('in-clinic-group-readyForCheckout')).getByText('Por cobrar 7 min'),
     ).toBeInTheDocument();
     expect(screen.getByText('4 pacientes')).toBeInTheDocument();
+  });
+
+  it('DX-470: la urgencia sin cita sale con su insignia, sus señales y la nota', () => {
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({
+            waiting: [
+              item({
+                appointmentId: 'u1',
+                urgent: true,
+                walkIn: true,
+                overbooked: true,
+                triageFlags: ['PAIN', 'SWELLING'],
+                triageNote: 'Muela 36',
+              }),
+              item({ appointmentId: 'n1', patientFirstName: 'Berta' }),
+            ],
+          }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const [urgent, normal] = screen.getAllByTestId('in-clinic-item');
+    const triage = within(urgent).getByRole('list', { name: 'Señales de triaje de Ana Ríos' });
+    expect(within(triage).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Urgencia',
+      'Sin cita',
+      'Sobrecupo',
+      'Dolor',
+      'Inflamación',
+    ]);
+    expect(within(urgent).getByText('Muela 36')).toBeInTheDocument();
+    expect(within(normal).queryByTestId('in-clinic-triage')).not.toBeInTheDocument();
   });
 
   it('in-clinic panel shows 12 h for an h12 location and 24 h for an h23 location', () => {
