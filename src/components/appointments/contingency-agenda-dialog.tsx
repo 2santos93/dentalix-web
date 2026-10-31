@@ -13,9 +13,8 @@ import { saveBlob } from '@/lib/files/save-blob';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { locationRegionalFormat, locationTimeZone } from '@/lib/locations/location-settings';
 import { useSessionLocations } from '@/lib/locations/session-locations';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 import {
   Dialog,
   DialogClose,
@@ -198,19 +197,18 @@ export function ContingencyAgendaDialog({ open, onOpenChange, token, defaultLoca
                 <label htmlFor={selectId} className="text-sm font-medium text-ink">
                   {copy.location}
                 </label>
-                <select
+                <NativeSelect
                   id={selectId}
                   value={locationId ?? ''}
                   disabled={busy}
                   onChange={(e) => pickLocation(e.target.value)}
-                  className={cn(fieldClass, 'w-full')}
                 >
                   {list.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </>
             )}
           </div>
