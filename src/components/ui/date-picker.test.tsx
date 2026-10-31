@@ -67,6 +67,38 @@ describe('DatePicker', () => {
   });
 });
 
+describe('robustez frente al padre', () => {
+  it('un padre que pasa un onChange nuevo y se repinta en cada tecla no la vuelve a montar ni recibe fechas a medias', async () => {
+    const user = userEvent.setup();
+    const seen: Array<string | null> = [];
+    function Parent() {
+      const [value, setValue] = useState<string | null>(null);
+      const [, setRenders] = useState(0);
+      return (
+        <div onKeyUp={() => setRenders((n) => n + 1)}>
+          <DatePicker
+            aria-label="Fecha"
+            value={value}
+            // Función nueva en cada render, como hace un formulario sin useCallback.
+            onChange={(v) => {
+              seen.push(v);
+              setValue(v);
+            }}
+          />
+        </div>
+      );
+    }
+    render(<Parent />);
+    const segments = within(screen.getByRole('group', { name: 'Fecha' })).getAllByRole('spinbutton');
+    await user.click(segments[0]);
+    await user.keyboard('05102026');
+    const after = within(screen.getByRole('group', { name: 'Fecha' })).getAllByRole('spinbutton');
+    after.forEach((el, i) => expect(el).toBe(segments[i]));
+    expect(segments[2]).toHaveFocus();
+    expect(seen.filter((v) => v !== null)).toEqual(['2026-10-05']);
+  });
+});
+
 describe('DateRangePicker', () => {
   function Controlled({ onValue, initial = null }: { onValue: (v: IsoRange | null) => void; initial?: IsoRange | null }) {
     const [value, setValue] = useState<IsoRange | null>(initial);

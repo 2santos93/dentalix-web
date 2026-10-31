@@ -196,7 +196,7 @@ export function DatePicker(props: DatePickerProps) {
         <AriaDatePicker
           id={id}
           value={draft}
-          onChange={(next: CalendarDate | null) => setDraft(next)}
+          onChange={setDraft}
           minValue={minValue}
           maxValue={maxValue}
           isRequired={required}

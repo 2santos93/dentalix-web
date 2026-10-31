@@ -134,14 +134,27 @@ export function useIsoDraft<V, Iso>(value: Iso, onChange: (value: Iso) => void, 
     setSeen(valueKey);
     if (valueKey !== emitted) setDraft(convert.toDraft(value));
   }
-  const change = (next: V) => {
+  const change = useStableCallback((next: V) => {
     setDraft(next);
     const iso = convert.toIso(next);
     const key = convert.key(iso);
     setEmitted(key);
     if (key !== valueKey) onChange(iso);
-  };
+  });
   return [draft, change] as const;
+}
+
+/**
+ * Callback de referencia estable que siempre llama a la última versión: un
+ * padre que pasa un `onChange` nuevo en cada render no cambia nada dentro del
+ * campo (react-aria no recibe props nuevas por eso).
+ */
+export function useStableCallback<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+  const latest = React.useRef(fn);
+  React.useLayoutEffect(() => {
+    latest.current = fn;
+  });
+  return React.useCallback((...args: A) => latest.current(...args), []);
 }
 
 const dayDraft: DraftConvert<CalendarDate | null, string | null> = {
@@ -244,6 +257,7 @@ export function TimeField(props: TimeFieldProps) {
   const { id, value, onChange, min, max, label, required, disabled, autoFocus, className } = props;
   const { hourCycle } = useDateLocale();
   const time = React.useMemo(() => isoToTime(value), [value]);
+  const handleChange = useStableCallback((next: { hour: number; minute: number } | null) => onChange(timeToIso(next)));
   const minValue = React.useMemo(() => isoToTime(min) ?? undefined, [min]);
   const maxValue = React.useMemo(() => isoToTime(max) ?? undefined, [max]);
   return (
@@ -252,7 +266,7 @@ export function TimeField(props: TimeFieldProps) {
         <AriaTimeField
           id={id}
           value={time}
-          onChange={(next) => onChange(timeToIso(next))}
+          onChange={handleChange}
           minValue={minValue}
           maxValue={maxValue}
           hourCycle={hourCycle === 'h12' ? 12 : hourCycle === 'h23' ? 24 : undefined}
