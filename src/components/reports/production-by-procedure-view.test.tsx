@@ -130,6 +130,7 @@ function report(overrides: Partial<ProductionByProcedure> = {}): ProductionByPro
       },
     ],
     unattributed: [],
+    undated: [],
     hasActivity: true,
     ...overrides,
   };
@@ -185,7 +186,7 @@ describe('ProductionByProcedureView (DX-423)', () => {
     );
     render(<ProductionByProcedureView token="t" />);
     await screen.findByRole('table');
-    expect(screen.getByRole('note')).toHaveTextContent('«Sin atribuir»');
+    expect(screen.getByRole('note')).toHaveTextContent('«Sin atribuir»: procedimientos realizados en el período sin sede');
     expect(
       within(screen.getByTestId('production-unattributed')).getByText(/95,00/, {
         selector: 'td.font-medium',
@@ -312,6 +313,47 @@ describe('ProductionByProcedureView (DX-423)', () => {
       to: '2026-10-24',
     });
     expect(screen.getByText('Reporte exportado.')).toBeInTheDocument();
+  });
+
+  it('sin fecha: aviso bajo la tabla con los importes, no una fila', async () => {
+    mockedGet.mockResolvedValue(
+      report({ undated: [{ currency: 'COP', count: 2, gross: 95, discounts: 0, net: 95 }] }),
+    );
+    render(<ProductionByProcedureView token="t" />);
+    await screen.findByRole('table');
+    const note = screen.getByTestId('production-undated');
+    expect(note).toHaveAttribute('role', 'note');
+    expect(note).toHaveTextContent('2 procedimientos realizados sin fecha');
+    expect(note).toHaveTextContent(/95,00\s*COP|COP\s*95,00/);
+    expect(screen.queryByTestId('production-unattributed')).not.toBeInTheDocument();
+  });
+
+  it('vacío con «sin fecha»: estado vacío y el aviso debajo', async () => {
+    mockedGet.mockResolvedValue(
+      report({
+        rows: [],
+        categoryTotals: [],
+        totals: [],
+        hasActivity: false,
+        undated: [{ currency: 'COP', count: 1, gross: 90000, discounts: 0, net: 90000 }],
+      }),
+    );
+    render(<ProductionByProcedureView token="t" />);
+    expect(await screen.findByText('No hay procedimientos realizados en este período')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByTestId('production-undated')).toHaveTextContent('1 procedimiento realizado sin fecha');
+  });
+
+  it('390 px: la fila de categoría es una celda fija (como la primera columna) y el resto, vacío del mismo fondo', async () => {
+    render(<ProductionByProcedureView token="t" />);
+    await screen.findByRole('table');
+    const header = within(table()).getByRole('columnheader', { name: 'Operatoria' });
+    expect(header).toHaveClass('sticky', 'left-0');
+    expect(header).not.toHaveAttribute('colspan');
+    const filler = header.nextElementSibling as HTMLElement;
+    expect(filler.tagName).toBe('TD');
+    expect(filler).toHaveAttribute('colspan', '8');
+    expect(filler).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('vacío: el estado que enseña a cambiar el período', async () => {

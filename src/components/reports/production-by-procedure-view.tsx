@@ -79,7 +79,9 @@ export const productionCopy = {
   total: 'Total',
   unattributed: 'Sin atribuir',
   unattributedNote:
-    '«Sin atribuir»: procedimientos realizados sin fecha o sin sede de realización (anteriores a registrarlas). No entran en la tabla porque no se sabe en qué período ni en qué sede; se atribuyen desde el plan del paciente.',
+    '«Sin atribuir»: procedimientos realizados en el período sin sede de realización (anteriores a registrarla). Van en su propia línea, fuera de las categorías; se atribuyen desde el plan del paciente.',
+  undatedNote: (count: number, amounts: string) =>
+    `Además hay ${count} ${count === 1 ? 'procedimiento realizado' : 'procedimientos realizados'} sin fecha («Sin atribuir»: ${amounts}). No son de ningún período, así que no entran en la tabla; se atribuyen desde el plan del paciente.`,
   noValue: '—',
   loadError: 'No pudimos cargar la producción por procedimiento.',
   badRequest: 'El período no es válido: «Desde» no puede ser posterior a «Hasta» y caben como mucho 24 meses.',
@@ -172,10 +174,14 @@ function LineRow({
   switch (line.kind) {
     case 'category':
       return (
+        // Una celda fija a la izquierda (como la primera columna) y el resto
+        // vacío con el mismo fondo: con colSpan sobre todo el ancho, el nombre
+        // se iba con el scroll lateral a 390 px.
         <tr className="bg-bg">
-          <th scope="colgroup" colSpan={9} className={cn(firstCol, 'bg-bg t-label pt-4 text-ink')}>
+          <th scope="colgroup" className={cn(firstCol, 'whitespace-nowrap bg-bg t-label pt-4 text-ink')}>
             {line.category}
           </th>
+          <td colSpan={8} aria-hidden="true" className="bg-bg" />
         </tr>
       );
     case 'procedure': {
@@ -633,6 +639,24 @@ export function ProductionByProcedureView({ token }: { token: string }) {
           ) : null}
         </AsyncSection>
       )}
+
+      {data && fmt && !invalidPeriod && !showLoading && !loadError && data.undated.length > 0 ? (
+        <p
+          role="note"
+          data-testid="production-undated"
+          className="flex max-w-[80ch] items-start gap-1.5 self-start rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
+        >
+          <span aria-hidden className="font-semibold text-warning">
+            *
+          </span>
+          <span>
+            {productionCopy.undatedNote(
+              data.undated.reduce((n, u) => n + u.count, 0),
+              data.undated.map((u) => moneyWithCode(u.net, u.currency, fmt)).join(' · '),
+            )}
+          </span>
+        </p>
+      ) : null}
     </div>
   );
 }

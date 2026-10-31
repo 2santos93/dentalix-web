@@ -12732,9 +12732,11 @@ export interface components {
             categoryTotals: components["schemas"]["CategoryTotalsDto"][];
             /** @description Total por moneda: nunca se suman monedas distintas */
             totals: components["schemas"]["ProductionTotalsDto"][];
-            /** @description Realizados «Sin atribuir» (sin fecha o sin sede de realización, DX-305), por moneda: sin fecha no caen en ningún período, así que salen sea cual sea. Los que no tienen sede solo los ve quien ve todas las sedes sin elegir una */
+            /** @description «Sin atribuir» del período (DX-305), por moneda: realizados con `completedAt` en el período pero sin sede de realización (una línea de la tabla). Solo los ve quien ve todas las sedes sin elegir una */
             unattributed: components["schemas"]["ProductionAmountsDto"][];
-            /** @description ¿Hay filas o «Sin atribuir»? */
+            /** @description Realizados SIN FECHA (`completedAt` nulo), por moneda: no son de ningún período; la pantalla los avisa bajo la tabla y el CSV los pone al final como «Sin fecha». Los que tienen sede, si es de las visibles; los que no, solo para quien ve todas sin elegir una. No cuentan para `hasActivity` */
+            undated: components["schemas"]["ProductionAmountsDto"][];
+            /** @description ¿Hay filas o «Sin atribuir» en el período? (lo sin fecha no cuenta) */
             hasActivity: boolean;
         };
         ProductionItemDto: {

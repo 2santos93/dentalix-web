@@ -60,9 +60,9 @@ test('ADMIN a 1440 px: filas por categoría y código, totales por moneda, detal
   // La demo cobra en COP: un total por moneda, nunca mezclado.
   const totals = page.getByTestId('production-total');
   await expect(totals.first()).toContainText('COP');
-  // DX-305: el «Sin atribuir» de la demo (sin sede ni fecha) y su aviso.
-  await expect(page.getByTestId('production-unattributed').first()).toBeVisible();
-  await expect(page.getByRole('note')).toContainText('«Sin atribuir»');
+  // DX-305: el «Sin atribuir» de la demo no tiene fecha: aviso bajo la tabla,
+  // no una fila.
+  await expect(page.getByTestId('production-undated')).toContainText('sin fecha («Sin atribuir»');
 
   // «Cómo se calcula» de la diferencia frente al catálogo.
   await table.getByRole('button', { name: 'Cómo se calcula: Diferencia' }).focus();
@@ -98,6 +98,7 @@ test('ADMIN a 1440 px: filas por categoría y código, totales por moneda, detal
   expect(kind('Subtotal')).toBe(await page.getByTestId('production-subtotal').count());
   expect(kind('Total')).toBe(await totals.count());
   expect(kind('Sin atribuir')).toBe(await page.getByTestId('production-unattributed').count());
+  expect(kind('Sin fecha (fuera del período)')).toBeGreaterThan(0);
   expect(csv).not.toContain(patientName);
   await expect(page.getByText('Reporte exportado.')).toBeVisible();
 
@@ -127,8 +128,38 @@ test('ADMIN a 390 px: tabla con scroll horizontal en su marco y cabecera fija', 
   const after = await header.boundingBox();
   expect(after?.y).toBeCloseTo(before?.y ?? 0, 0);
   expect(after?.x).toBeCloseTo(before?.x ?? 0, 0);
+  // La subcabecera de cada categoría también queda fija a la izquierda: su
+  // nombre no se va con el scroll lateral (arriba del todo, a la derecha).
+  await region.evaluate((el) => {
+    el.scrollIntoView({ block: 'start' });
+    el.scrollTop = 0;
+    el.scrollLeft = el.scrollWidth;
+  });
+  const frameBox = await region.boundingBox();
+  const category = region.locator('th[scope="colgroup"]').first();
+  const categoryBox = await category.boundingBox();
+  expect(categoryBox?.x ?? -1).toBeGreaterThanOrEqual((frameBox?.x ?? 0) - 1);
+  expect((categoryBox?.x ?? 0) + (categoryBox?.width ?? 0)).toBeLessThanOrEqual((frameBox?.x ?? 0) + (frameBox?.width ?? 0));
+  await expect(category).toBeVisible();
+  // Dentro de los 390 px de la pantalla (antes quedaba en x = −387).
+  expect(categoryBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect((categoryBox?.x ?? 0) + (categoryBox?.width ?? 0)).toBeLessThanOrEqual(390);
   // Con el teclado: el marco es una parada de tabulador con nombre.
   await expect(region).toHaveAttribute('tabindex', '0');
+});
+
+test('ADMIN: un período sin realizados (enero de 2020) muestra el estado vacío, con el aviso de «sin fecha»', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openProduction(page);
+  await page.getByLabel('Período').selectOption('custom');
+  await page.getByLabel('Desde').fill('2020-01-01');
+  await page.getByLabel('Hasta').fill('2020-01-31');
+  await expect(page.getByText('No hay procedimientos realizados en este período')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('table', { name: TABLE })).toHaveCount(0);
+  await expect(page.getByTestId('production-undated')).toBeVisible();
 });
 
 test('DENTIST: solo su producción, sin filtro de profesional', async ({ page }) => {
