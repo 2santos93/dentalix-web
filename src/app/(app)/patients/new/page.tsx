@@ -45,7 +45,7 @@ export default function NewPatientPage() {
 
   return (
     // Columna de formulario alineada al borde del contenido, como el resto de pantallas.
-    <div className="w-full max-w-3xl">
+    <div className="w-full max-w-4xl">
       <PageHeader
         back={{ href: '/patients', label: copy.backLink }}
         title={copy.title}

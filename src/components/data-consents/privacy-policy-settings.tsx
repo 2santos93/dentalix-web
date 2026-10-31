@@ -296,7 +296,7 @@ function PolicyBody({ policy }: { policy: PrivacyPolicyVersion }) {
           type="button"
           variant="link"
           size="sm"
-          className="self-start max-sm:min-h-11"
+          className="self-start px-0 max-sm:min-h-11"
           aria-expanded={expanded}
           aria-controls={regionId}
           onClick={() => setExpanded((v) => !v)}

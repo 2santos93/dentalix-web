@@ -78,6 +78,6 @@ it('marca los pasos opcionales con «(opcional)»', () => {
       <p>contenido</p>
     </Wizard>,
   );
-  expect(screen.getByRole('button', { name: /Paso B \(opcional\)/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /\(opcional\)\s*Paso B/ })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /^1\s*Paso A$/ })).toBeInTheDocument();
 });

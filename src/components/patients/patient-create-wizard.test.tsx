@@ -77,7 +77,7 @@ describe('PatientCreateWizard', () => {
     const user = userEvent.setup();
     mockedCreatePatient.mockResolvedValue(CREATED);
     render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
-    expect(screen.getByRole('button', { name: /Antecedentes \(opcional\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /\(opcional\)\s*Antecedentes/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^1\s*Datos$/ })).toBeInTheDocument();
     // Sin datos, «Crear paciente» marca lo que falta y no envía.
     await user.click(screen.getByRole('button', { name: /crear paciente/i }));

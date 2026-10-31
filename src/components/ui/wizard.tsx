@@ -84,13 +84,14 @@ export function Wizard({ steps, current, onStepChange, children }: WizardProps) 
                   !isActive && !isDone && 'border-border text-muted',
                 )}
               >
-                <span className="tnum">{i + 1}</span>
-                <span className="block w-full truncate whitespace-nowrap">
-                  {step.label}
+                {/* «(opcional)» junto al número: la etiqueta conserva todo el ancho. */}
+                <span className="tnum">
+                  {i + 1}
                   {step.optional ? (
                     <span className="t-caption font-normal text-muted"> {copy.optional}</span>
                   ) : null}
                 </span>
+                <span className="block w-full truncate whitespace-nowrap">{step.label}</span>
               </button>
             </li>
           );

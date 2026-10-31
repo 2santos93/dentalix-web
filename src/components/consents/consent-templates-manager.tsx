@@ -133,7 +133,14 @@ export function ConsentTemplatesManager({ token, allowed }: ConsentTemplatesMana
 
   const columns: DataListColumn<ConsentTemplate>[] = [
     { id: 'title', header: copy.colTitle, cell: (t) => t.title, mobile: 'primary' },
-    { id: 'status', header: copy.colStatus, cell: status, mobile: 'trailing' },
+    // En el teléfono el estado va en la línea 2: el título (largo, con prefijos
+    // comunes) necesita todo el ancho de la línea 1.
+    {
+      id: 'status',
+      header: copy.colStatus,
+      cell: status,
+      mobileCell: (t) => (t.active ? copy.active : copy.inactive),
+    },
     {
       id: 'version',
       header: copy.colVersion,
