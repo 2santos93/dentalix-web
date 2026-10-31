@@ -169,7 +169,8 @@ export function accentFamily(brand: string): AccentFamily | null {
   return { light: deriveLight(hex, o), dark: deriveDark(o) };
 }
 
-const VARS: Record<keyof AccentTokens, string> = {
+/** The CSS custom property each accent token is written to. */
+export const ACCENT_VARS: Record<keyof AccentTokens, string> = {
   primary: '--color-primary',
   primaryFg: '--color-primary-fg',
   primaryHover: '--color-primary-hover',
@@ -182,8 +183,8 @@ const VARS: Record<keyof AccentTokens, string> = {
 /** CSS declarations (`--color-primary:#…;…`) for one theme's accent family. */
 export function accentDeclarations(tokens: AccentTokens, important = false): string {
   const bang = important ? ' !important' : '';
-  return (Object.keys(VARS) as (keyof AccentTokens)[])
-    .map((key) => `${VARS[key]}:${tokens[key]}${bang}`)
+  return (Object.keys(ACCENT_VARS) as (keyof AccentTokens)[])
+    .map((key) => `${ACCENT_VARS[key]}:${tokens[key]}${bang}`)
     .join(';');
 }
 
