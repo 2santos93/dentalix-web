@@ -17,6 +17,7 @@ import {
   ChartColumn,
   FileClock,
   ClipboardCheck,
+  ListChecks,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -35,6 +36,8 @@ import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
 import { useAnamnesisInboxCount } from '@/components/anamnesis/use-anamnesis-inbox-count';
+import { ClosingQueueCountProvider, useClosingQueueCount } from '@/components/appointments/closing-queue-count';
+import { CLOSING_QUEUE_HREF, canSeeClosingQueue } from '@/lib/appointments/closing-queue-api';
 
 const ANAMNESIS_HREF = '/anamnesis-por-revisar';
 
@@ -64,6 +67,14 @@ const NAV: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN'] },
   { href: '/patients', label: 'Pacientes', icon: Users },
   { href: '/agenda', label: 'Agenda', icon: Calendar },
+  // DX-439: «Pendiente de cerrar» (CLOSING_QUEUE_ROLES en la API), con su
+  // contador: lo que el usuario tiene sin cerrar de días anteriores.
+  {
+    href: CLOSING_QUEUE_HREF,
+    label: 'Pendiente de cerrar',
+    icon: ListChecks,
+    roles: ['ADMIN', 'DENTIST', 'RECEPTION'],
+  },
   // Dato financiero: mismos roles que PAYMENT_ROLES en la API.
   { href: '/caja', label: 'Caja', icon: Wallet, roles: ['ADMIN', 'RECEPTION'] },
   // Cartera por antigüedad (DX-145): RECEIVABLES_ROLES en la API. Vive bajo
@@ -141,7 +152,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return <SessionLocationsProvider token={token}>
     <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
-      <AppShellContent>{children}</AppShellContent>
+      {/* DX-439: una sola lectura del contador para el menú y la Agenda. */}
+      <ClosingQueueCountProvider token={token} enabled={canSeeClosingQueue(getTokenRole(token))} pathname={pathname}>
+        <AppShellContent>{children}</AppShellContent>
+      </ClosingQueueCountProvider>
     </InClinicProvider>
   </SessionLocationsProvider>;
 }
@@ -182,15 +196,20 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     role === 'ADMIN' || role === 'DENTIST' || role === 'ASSISTANT',
     pathname,
   );
+  // DX-439: pendientes de cierre de las secciones de su rol, en sus sedes.
+  const closingQueueCount = useClosingQueueCount();
+  const closingCount = canSeeClosingQueue(role) ? closingQueueCount : 0;
+  /** Contador de bandeja de una entrada (anamnesis, pendiente de cerrar). */
+  const inboxCount = (href: string) =>
+    href === ANAMNESIS_HREF ? anamnesisCount : href === CLOSING_QUEUE_HREF ? closingCount : 0;
   /** Nombre accesible de una entrada: la Agenda dice además quién espera. */
   const navLabel = (href: string, label: string) =>
     href === '/agenda' && waitingForYou > 0
       ? `${label} · ${waitingForYouLabel(waitingForYou)}`
-      : href === ANAMNESIS_HREF && anamnesisCount > 0
-        ? `${label} · ${anamnesisCount}`
+      : inboxCount(href) > 0
+        ? `${label} · ${inboxCount(href)}`
         : label;
-  const hasCount = (href: string) =>
-    (href === '/agenda' && waitingForYou > 0) || (href === ANAMNESIS_HREF && anamnesisCount > 0);
+  const hasCount = (href: string) => (href === '/agenda' && waitingForYou > 0) || inboxCount(href) > 0;
   // Activa la entrada MÁS específica que case: en /caja/cartera es «Cartera»,
   // no también «Caja».
   const activeHref = longestMatch(nav, pathname)?.href;
@@ -310,8 +329,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             >
               <Icon className="size-4 shrink-0" />
               {!collapsed && label}
-              {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
-                <InboxCount count={anamnesisCount} variant={collapsed ? 'rail' : 'full'} />
+              {inboxCount(href) > 0 && (
+                <InboxCount count={inboxCount(href)} variant={collapsed ? 'rail' : 'full'} />
               )}
             </Link>
             {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className={cn('rounded-full focus-visible:outline-2 focus-visible:outline-primary', collapsed && 'absolute right-0 -top-1')}>
@@ -394,9 +413,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <Icon className="size-5 shrink-0" />
-                {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
-                  <InboxCount count={anamnesisCount} variant="rail" />
-                )}
+                {inboxCount(href) > 0 && <InboxCount count={inboxCount(href)} variant="rail" />}
               </Link>
               {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className="rounded-full focus-visible:outline-2 focus-visible:outline-primary">
                 <WaitingForYouCount count={waitingForYou} variant="inline" />

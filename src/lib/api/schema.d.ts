@@ -3275,6 +3275,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/closing-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * «Pendiente de cerrar»: las tres secciones con su contador
+         * @description Lo que quedó sin cerrar de días ANTERIORES a hoy (en la zona de la sede de cada cita; por defecto los últimos 14 días hasta ayer): (1) citas en SCHEDULED/CONFIRMED, (2) COMPLETED sin evolución viva ligada y (3) COMPLETED con un ítem ligado aún en ACCEPTED que no reserva otra cita. Lo descartado con motivo no sale. ADMIN ve las tres; un DENTIST, la 2 y la 3 de SUS citas; RECEPTION, la 1. Solo las sedes permitidas al usuario (DX-089). Sin notas ni datos clínicos: paciente, hora, sede, profesional y, en la 3, procedimiento y diente.
+         */
+        get: operations["ClosingQueueController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/closing-queue/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contador del menú de «Pendiente de cerrar»
+         * @description Los mismos filtros y alcance que la lista, solo los números (sin pacientes, sin auditoría). Lo que quedó sin cerrar de días ANTERIORES a hoy (en la zona de la sede de cada cita; por defecto los últimos 14 días hasta ayer): (1) citas en SCHEDULED/CONFIRMED, (2) COMPLETED sin evolución viva ligada y (3) COMPLETED con un ítem ligado aún en ACCEPTED que no reserva otra cita. Lo descartado con motivo no sale. ADMIN ve las tres; un DENTIST, la 2 y la 3 de SUS citas; RECEPTION, la 1. Solo las sedes permitidas al usuario (DX-089). Sin notas ni datos clínicos: paciente, hora, sede, profesional y, en la 3, procedimiento y diente.
+         */
+        get: operations["ClosingQueueController_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/closing-queue/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Descartar un pendiente con motivo
+         * @description Saca UN pendiente (sección + cita [+ ítem en TREATMENT]) de la lista con un motivo de la lista; «Otro» exige texto de 3–200. No cambia la cita, la historia ni el plan. Deja un `audit_event` CREATE CLOSING_QUEUE_DISMISSAL (CLOSING_QUEUE_DISMISSED) en la misma transacción, con quién, la sección y el código del motivo y la cita (y el ítem) en `params`; nunca el texto. El rol tiene que ver esa sección; la cita, ser de una sede permitida (y del propio DENTIST).
+         */
+        post: operations["ClosingQueueController_dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cash-sessions/settings": {
         parameters: {
             query?: never;
@@ -5582,7 +5642,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -10602,6 +10662,11 @@ export interface components {
              * @description DX-305: SOLO para que un ADMIN corrija la sede donde se realizó un ítem ya DONE (403 a otro rol; 403 si no es de sus sedes permitidas, DX-089; 400 si no es de esta clínica). Obligatoria, junto con `performedById` y `completedAt`, al atribuir un ítem «Sin atribuir» (400 si falta alguno). Al pasar a DONE la pone la sede del request (400 si llega). Auditado con el antes y el después
              */
             performedLocationId?: string;
+            /**
+             * Format: uuid
+             * @description DX-439: SOLO al pasar a DONE, la cita ATENDIDA (COMPLETED, viva) que lleva el ítem (vínculo vivo): la sede donde se realizó y la fecha de realización son las de la cita (su sede y su inicio), no la sede activa ni la hora actual. 400 sin pasar a DONE; 409 si la cita no está atendida o no lleva el ítem; 403 si su sede no es de las permitidas al usuario (DX-089)
+             */
+            appointmentId?: string;
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
         };
@@ -13013,6 +13078,153 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        /**
+         * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
+         * @enum {string}
+         */
+        ClosingQueueSection: "OUTCOME" | "EVOLUTION" | "TREATMENT";
+        ClosingAppointmentDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @example Ana Pérez */
+            patientName: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            status: components["schemas"]["AppointmentStatus"];
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /**
+             * @description Zona IANA de la sede: la hora se pinta en ella
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /** Format: uuid */
+            professionalId: string;
+            professionalName: string | null;
+        };
+        ClosingAppointmentSectionDto: {
+            /** @description Cuántos hay (exacto) */
+            total: number;
+            /** @description Del más antiguo al más reciente; como mucho 200 */
+            items: components["schemas"]["ClosingAppointmentDto"][];
+        };
+        /** @enum {string} */
+        ToothSurface: "MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL";
+        ClosingTreatmentDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @example Ana Pérez */
+            patientName: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            status: components["schemas"]["AppointmentStatus"];
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /**
+             * @description Zona IANA de la sede: la hora se pinta en ella
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /** Format: uuid */
+            professionalId: string;
+            professionalName: string | null;
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            planItemId: string;
+            /** @example RES-1 */
+            procedureCode: string;
+            /** @example Resina */
+            procedureLabel: string;
+            /**
+             * @description Diente FDI
+             * @example 16
+             */
+            toothNumber: string;
+            surfaces: components["schemas"]["ToothSurface"][];
+        };
+        ClosingTreatmentSectionDto: {
+            /** @description Cuántos hay (exacto) */
+            total: number;
+            /** @description Del más antiguo al más reciente; como mucho 200 */
+            items: components["schemas"]["ClosingTreatmentDto"][];
+        };
+        ClosingLocationOptionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        ClosingQueueDto: {
+            /** @description El «desde» pedido; null = por defecto */
+            from: string | null;
+            /** @description El «hasta» pedido; null = ayer */
+            to: string | null;
+            /** @example 14 */
+            defaultDays: number;
+            /** @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME */
+            sections: components["schemas"]["ClosingQueueSection"][];
+            /** @description (1) Citas de días anteriores en SCHEDULED o CONFIRMED. null si el rol no ve la sección. */
+            outcome: components["schemas"]["ClosingAppointmentSectionDto"] | null;
+            /** @description (2) Citas COMPLETED sin ninguna evolución viva ligada (una anulada no cuenta). null si el rol no la ve. */
+            evolution: components["schemas"]["ClosingAppointmentSectionDto"] | null;
+            /** @description (3) Ítems ligados (vínculo vivo) de citas COMPLETED que siguen en ACCEPTED y que ninguna otra cita viva reserva ahora ni atendió después, con procedimiento y diente. null si el rol no la ve. */
+            treatment: components["schemas"]["ClosingTreatmentSectionDto"] | null;
+            /** @description Citas de días anteriores aún «en la clínica» (llegó, en sillón, listo para cobrar): las cierra DX-237, aquí solo se cuentan. null sin la sección 1. */
+            staleInClinic: number | null;
+            /** @description Suma de las secciones visibles */
+            total: number;
+            /** @description Sedes que puede filtrar el usuario */
+            locations: components["schemas"]["ClosingLocationOptionDto"][];
+            /** @description Sedes del alcance sin zona horaria válida: sin «hoy» sus citas no se pueden listar; se configura la zona en Ajustes → Sedes */
+            locationsWithoutZone: components["schemas"]["ClosingLocationOptionDto"][];
+        };
+        ClosingQueueCountDto: {
+            total: number;
+            outcome: number | null;
+            evolution: number | null;
+            treatment: number | null;
+        };
+        /**
+         * @description PATIENT_DECLINED_TODAY «Paciente no quiso el tratamiento hoy», PAPER_NOTE «Nota en papel / se registra después», DUPLICATE_APPOINTMENT «Cita duplicada», OTHER «Otro» (con texto)
+         * @enum {string}
+         */
+        ClosingDismissalReason: "PATIENT_DECLINED_TODAY" | "PAPER_NOTE" | "DUPLICATE_APPOINTMENT" | "OTHER";
+        CreateClosingDismissalDto: {
+            section: components["schemas"]["ClosingQueueSection"];
+            /** Format: uuid */
+            appointmentId: string;
+            /**
+             * Format: uuid
+             * @description El ítem del plan: obligatorio en TREATMENT y solo en ella
+             */
+            planItemId?: string;
+            /** @description PATIENT_DECLINED_TODAY «Paciente no quiso el tratamiento hoy», PAPER_NOTE «Nota en papel / se registra después», DUPLICATE_APPOINTMENT «Cita duplicada», OTHER «Otro» (con texto) */
+            reasonCode: components["schemas"]["ClosingDismissalReason"];
+            /** @description Obligatorio con OTHER (3–200 caracteres, contados como caracteres y no como unidades UTF-16; sin espacios de los bordes); con otro motivo no se guarda */
+            reasonText?: string;
+        };
+        ClosingDismissalDto: {
+            /** Format: uuid */
+            id: string;
+            section: components["schemas"]["ClosingQueueSection"];
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            planItemId: string | null;
+            reasonCode: components["schemas"]["ClosingDismissalReason"];
+            /** Format: date-time */
+            createdAt: string;
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -15550,8 +15762,6 @@ export interface components {
             name: string;
             payerName: string;
         };
-        /** @enum {string} */
-        ToothSurface: "MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL";
         PublicBudgetItemDto: {
             toothNumber: string;
             surfaces: components["schemas"]["ToothSurface"][];
@@ -25731,6 +25941,141 @@ export interface operations {
             };
             /** @description Solo la administración y los odontólogos ven la producción por procedimiento. / Solo puedes ver tu propia producción. / sede fuera de las del usuario */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClosingQueueController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo las citas de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta). Sin él, la sede activa (X-Location-Id) o, sin ella, todas las que ve. */
+                locationId?: string;
+                /** @description Primer día (AAAA-MM-DD, en la zona de la sede de cada cita). Por defecto, los 14 días que acaban en «hasta». El período, con «hasta» o sin él (entonces hasta ayer), es como mucho de 92 días: 400 si no. */
+                from?: string;
+                /** @description Último día (inclusive). Por defecto y como mucho, AYER en la zona de cada sede: las citas de hoy nunca salen. Como mucho 92 días desde «desde» (400 si no). */
+                to?: string;
+                /** @description Solo las citas de este profesional (usuario). Un DENTIST solo ve las suyas: pedir otro es 403. */
+                professionalId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosingQueueDto"];
+                };
+            };
+            /** @description Fechas inválidas o período de más de 92 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración, los odontólogos y recepción ven «Pendiente de cerrar». / un DENTIST pidiendo las citas de otro / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClosingQueueController_count: {
+        parameters: {
+            query?: {
+                /** @description Solo las citas de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta). Sin él, la sede activa (X-Location-Id) o, sin ella, todas las que ve. */
+                locationId?: string;
+                /** @description Primer día (AAAA-MM-DD, en la zona de la sede de cada cita). Por defecto, los 14 días que acaban en «hasta». El período, con «hasta» o sin él (entonces hasta ayer), es como mucho de 92 días: 400 si no. */
+                from?: string;
+                /** @description Último día (inclusive). Por defecto y como mucho, AYER en la zona de cada sede: las citas de hoy nunca salen. Como mucho 92 días desde «desde» (400 si no). */
+                to?: string;
+                /** @description Solo las citas de este profesional (usuario). Un DENTIST solo ve las suyas: pedir otro es 403. */
+                professionalId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosingQueueCountDto"];
+                };
+            };
+            /** @description Fechas inválidas o período de más de 92 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración, los odontólogos y recepción ven «Pendiente de cerrar». / un DENTIST pidiendo las citas de otro / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClosingQueueController_dismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClosingDismissalDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosingDismissalDto"];
+                };
+            };
+            /** @description Sin motivo o con uno fuera de la lista, «Otro» sin texto de 3–200, o el ítem que falta (TREATMENT) o sobra */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol que no cierra esa sección, la cita de otro profesional (DENTIST) o de una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita no existe en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya no está pendiente: se cerró o ya se había descartado */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
