@@ -580,7 +580,7 @@ export function PatientDocumentsTab({
       cell: (doc) => {
         const voided = doc.voidedAt !== null;
         return (
-          <span data-status={voided ? 'VOIDED' : 'ACTIVE'} className="[overflow-wrap:anywhere]">
+          <span data-document-status={voided ? 'VOIDED' : 'ACTIVE'} className="[overflow-wrap:anywhere]">
             <span className="sr-only">{doc.inlineViewable ? copy.viewVerb : copy.downloadVerb}</span>
             <span className={cn(voided ? 'text-muted line-through' : 'text-ink')}>{doc.originalName}</span>
           </span>

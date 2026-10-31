@@ -200,7 +200,7 @@ export function DocumentTypeNamesSettingsSection({
       {saveError ? <InlineError variant="summary">{saveError}</InlineError> : null}
       {/* Guardar fuera de la tarjeta, debajo y a la izquierda (como el resto de Ajustes). */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <Button type="submit" loading={saving} className="max-sm:w-full">
+        <Button type="submit" loading={saving} className="max-sm:min-h-11 max-sm:w-full">
           {copy.save}
         </Button>
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>

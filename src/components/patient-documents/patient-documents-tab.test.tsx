@@ -173,7 +173,7 @@ describe('PatientDocumentsTab (DX-151)', () => {
     expect(active).toHaveTextContent('10/10/2026');
     expect(active).toHaveTextContent('11, 21');
     expect(active).toHaveTextContent('Dra. Laura Ruiz');
-    expect(within(voided).getByText('sonrisa.jpg', VISIBLE).closest('[data-status]')).toHaveAttribute('data-status', 'VOIDED');
+    expect(within(voided).getByText('sonrisa.jpg', VISIBLE).closest('[data-document-status]')).toHaveAttribute('data-document-status', 'VOIDED');
     expect(within(voided).getByText('sonrisa.jpg', VISIBLE)).toHaveClass('line-through');
     expect(voided).toHaveTextContent('Anulado');
     expect(voided).toHaveTextContent('Motivo: Paciente equivocado');

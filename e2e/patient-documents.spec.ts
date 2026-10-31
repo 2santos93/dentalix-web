@@ -318,7 +318,7 @@ test('subir, filtrar, ver, descargar y anular documentos; acceso desde el diente
   await voidDialog.getByRole('button', { name: 'Anular documento' }).click();
   await expect(voidDialog).toBeHidden();
   const voidedRow = documentRow(panel, 'radiografia.png');
-  await expect(voidedRow.locator('[data-status]')).toHaveAttribute('data-status', 'VOIDED');
+  await expect(voidedRow.locator('[data-document-status]')).toHaveAttribute('data-document-status', 'VOIDED');
   await expect(voidedRow.getByText('Anulado', { exact: true })).toBeVisible();
   await expect(voidedRow).toContainText('Motivo: Foto de otro paciente');
   await expect(voidedRow.locator('span:not(.sr-only)', { hasText: /^radiografia\.png$/ })).toHaveCSS(
