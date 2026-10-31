@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { LAW_NAME } from './law-citation';
 
 /**
  * DX-369: la landing pública describe sus garantías (auditoría, historia
@@ -13,9 +14,6 @@ const SRC = join(__dirname, '..');
 const MARKETING = join(SRC, 'components', 'marketing');
 const LANDING_ROUTE_FILES = ['app/page.tsx', 'app/layout.tsx'];
 
-/** Nombres de regímenes de protección de datos y salud, y leyes o decretos con número. */
-export const LAW_NAME =
-  /\b(?:h[aá]beas\s+data|lgpd|gdpr|rgpd|hipaa|ccpa|lopdgdd|lopd|lfpdppp|pipeda)\b|\b(?:ley|decreto|reglamento)\s+(?:org[aá]nica\s+|estatutaria\s+|\(ue\)\s+)?(?:n\.?[º°o]\s*)?\d/i;
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

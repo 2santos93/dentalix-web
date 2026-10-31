@@ -13762,7 +13762,7 @@ export interface components {
             policyText: string;
             /** @description Texto de la casilla GENERAL (datos personales). */
             generalText: string;
-            /** @description Texto de la casilla SENSITIVE_HEALTH. Debe decir que el titular «no está obligado» a autorizar, qué «datos sensibles» se tratan y su «finalidad» (Dec. 1377, art. 6); si falta alguna, 400. */
+            /** @description Texto de la casilla SENSITIVE_HEALTH (datos sensibles de salud): lo que el paciente autoriza de forma expresa y separada. */
             sensitiveHealthText: string;
             /** @description Texto de la casilla MARKETING (finalidades comerciales). */
             marketingText: string;
@@ -26929,7 +26929,7 @@ export interface operations {
                     "application/json": components["schemas"]["PrivacyPolicyVersionDto"];
                 };
             };
-            /** @description Texto vacío o el de datos sensibles no incluye las frases obligatorias. */
+            /** @description Algún texto está vacío. */
             400: {
                 headers: {
                     [name: string]: unknown;

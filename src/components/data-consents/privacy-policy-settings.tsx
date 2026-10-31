@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { Check, FileText, X } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   CONSENT_SCOPES,
@@ -12,7 +12,7 @@ import {
   type PrivacyPolicyVersion,
   type PublishPrivacyPolicyInput,
 } from '@/lib/data-consents/data-consents-api';
-import { POLICY_TEMPLATE, checkSensitiveHealthText } from '@/lib/data-consents/policy-template';
+import { POLICY_TEMPLATE, unfilledPlaceholders } from '@/lib/data-consents/policy-template';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { formatDate } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -23,7 +23,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
 import { usePrivacyPolicies } from './use-privacy-policies';
 
 const copy = {
@@ -37,11 +36,10 @@ const copy = {
   generalText: 'Casilla «Datos personales»',
   sensitiveText: 'Casilla «Datos sensibles de salud»',
   marketingText: 'Casilla «Comunicaciones comerciales»',
-  checklist: 'El texto de datos sensibles debe informar (Dec. 1377, art. 6):',
-  present: 'incluido',
-  missing: 'falta',
+  sensitiveHint: 'Conviene que diga que autorizar es voluntario, qué datos de salud se tratan y para qué.',
   emptyRequired: 'Completa los cuatro textos antes de publicar.',
-  missingRequired: 'Al texto de datos sensibles le falta información obligatoria.',
+  placeholders: (remaining: string[]) =>
+    `Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: ${remaining.join(', ')}.`,
   genericError: 'No pudimos publicar la política. Intenta de nuevo.',
   loadError: 'No pudimos cargar la política de tratamiento de datos.',
   emptyTitle: 'La clínica aún no ha publicado su política de tratamiento de datos.',
@@ -85,7 +83,6 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
 
   const current = data?.current ?? null;
   const previous = data?.history.filter((p) => p.id !== current?.id) ?? [];
-  const checks = checkSensitiveHealthText(draft.sensitiveHealthText);
 
   function openModal() {
     setDraft(draftFrom(current));
@@ -99,8 +96,9 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
       setError(copy.emptyRequired);
       return;
     }
-    if (checks.some((c) => !c.present)) {
-      setError(copy.missingRequired);
+    const remaining = unfilledPlaceholders(draft);
+    if (remaining.length > 0) {
+      setError(copy.placeholders(remaining));
       return;
     }
     setSubmitting(true);
@@ -203,31 +201,15 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
           value={draft.generalText}
           onChange={(generalText) => setDraft({ ...draft, generalText })}
         />
-        <div className="flex flex-col gap-2">
-          <PolicyTextarea
-            id="pps-sensitive"
-            label={copy.sensitiveText}
-            rows={4}
-            value={draft.sensitiveHealthText}
-            onChange={(sensitiveHealthText) => setDraft({ ...draft, sensitiveHealthText })}
-            describedBy="pps-sensitive-checks"
-          />
-          <div id="pps-sensitive-checks" className="flex flex-col gap-1 text-sm">
-            <p className="text-muted">{copy.checklist}</p>
-            <ul className="flex flex-col gap-1">
-              {checks.map((c) => (
-                <li
-                  key={c.element}
-                  className={cn('flex items-center gap-2', c.present ? 'text-success' : 'text-danger')}
-                >
-                  {c.present ? <Check className="size-4" aria-hidden /> : <X className="size-4" aria-hidden />}
-                  <span className="text-ink">{c.label}</span>
-                  <span className="sr-only">: {c.present ? copy.present : copy.missing}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+        <PolicyTextarea
+          id="pps-sensitive"
+          label={copy.sensitiveText}
+          rows={4}
+          value={draft.sensitiveHealthText}
+          onChange={(sensitiveHealthText) => setDraft({ ...draft, sensitiveHealthText })}
+          hint={copy.sensitiveHint}
+          hintId="pps-sensitive-hint"
+        />
         <PolicyTextarea
           id="pps-marketing"
           label={copy.marketingText}
@@ -246,6 +228,8 @@ function PolicyTextarea({
   onChange,
   rows = 3,
   describedBy,
+  hint,
+  hintId,
 }: {
   id: string;
   label: string;
@@ -253,15 +237,17 @@ function PolicyTextarea({
   onChange: (value: string) => void;
   rows?: number;
   describedBy?: string;
+  hint?: string;
+  hintId?: string;
 }) {
   return (
-    <FormField htmlFor={id} label={label}>
+    <FormField htmlFor={id} label={label} hint={hint} hintId={hintId}>
       <textarea
         id={id}
         rows={rows}
         required
         value={value}
-        aria-describedby={describedBy}
+        aria-describedby={[describedBy, hint ? hintId : undefined].filter(Boolean).join(' ') || undefined}
         onChange={(e) => onChange(e.target.value)}
         className={fieldClass}
       />

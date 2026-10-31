@@ -32,8 +32,8 @@ interface ConsentScopeFieldsProps {
 }
 
 /**
- * El texto vigente de la política y una casilla POR SCOPE (Dec. 1377: los
- * datos sensibles van aparte). Ninguna viene marcada: la casilla la marca
+ * El texto vigente de la política y una casilla POR SCOPE (los datos
+ * sensibles van aparte). Ninguna viene marcada: la casilla la marca
  * quien atiende al paciente, ante su autorización expresa. Lo usan el alta
  * del paciente y «Registrar autorización» de la ficha.
  */
