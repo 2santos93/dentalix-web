@@ -78,6 +78,7 @@ function usdBalance(overrides: Partial<PlanBalance> = {}): PlanBalance {
     billable: 500,
     paid: 0,
     balance: 500,
+    creditMovements: 0,
     paymentsCount: 0,
     paymentsWithoutRate: [],
     allocated: 0,

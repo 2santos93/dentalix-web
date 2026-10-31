@@ -91,6 +91,7 @@ function copBalance(balance: number): PlanBalance {
     billable: 3000000,
     paid: 3000000 - balance,
     balance,
+    creditMovements: 0,
     paymentsCount: 1,
     paymentsWithoutRate: [],
     allocated: 0,

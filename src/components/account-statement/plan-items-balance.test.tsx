@@ -40,6 +40,7 @@ function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {
     billable: 150,
     paid: 120,
     balance: 30,
+    creditMovements: 0,
     paymentsCount: 1,
     paymentsWithoutRate: [],
     allocated: 120,

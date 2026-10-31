@@ -501,6 +501,7 @@ describe('cobrado por ítem de cada plan (DX-051)', () => {
     billable: 3000000,
     paid: 1200000,
     balance: 1800000,
+    creditMovements: 0,
     paymentsCount: 2,
     paymentsWithoutRate: [],
     allocated: 1200000,
