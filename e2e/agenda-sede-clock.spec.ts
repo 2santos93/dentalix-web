@@ -152,7 +152,7 @@ test('la agenda (día, semana, mes y detalle) pinta la hora de la sede en 12 h, 
     // Semana: la cita en la columna de SU día y con su hora.
     await openAgenda(page, 'Semana', futureDay);
     const weekCard = page.getByTestId('week-grid-appointment').filter({ hasText: futurePatient });
-    await expect(weekCard).toHaveAccessibleName(new RegExp(`^${range}`), { timeout: 15_000 });
+    await expect(weekCard).toHaveAccessibleName(new RegExp(`^Agend\\. · ${futurePatient} · ${range}`), { timeout: 15_000 });
     await expect(page.locator(`[data-testid="week-grid-day-column"]`).filter({ has: weekCard })).toHaveCount(1);
     const columns = page.getByTestId('week-grid-day-column');
     const headers = page.getByTestId('week-day-header');

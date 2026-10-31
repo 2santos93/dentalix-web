@@ -304,10 +304,10 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           className={cn(
             // El menú largo cede altura y se desplaza dentro del sidebar;
             // la marca y la cuenta permanecen dentro de la ventana.
-            'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto scroll-py-2 py-2',
+            'flex min-h-0 flex-1 flex-col overflow-y-auto scroll-py-2 py-2',
             // 63 px interiores − 15 px de barra clásica − 4 px de padding = 44 px útiles;
             // con h-11, cada enlace del carril es un objetivo táctil de 44×44.
-            collapsed ? 'px-0.5' : 'px-3',
+            collapsed ? 'gap-0.5 px-0.5' : 'gap-1 px-3',
           )}
         >
           {nav.map(({ href, label, icon: Icon }) => (
