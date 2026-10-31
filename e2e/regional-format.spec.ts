@@ -437,54 +437,62 @@ test('modal de sede: reloj bajo la vista previa; A pasa a 24 h y el panel lo pin
   expect(a.hourCycle).toBe('h23');
 });
 
-for (const viewport of VIEWPORTS) {
-  test(`${viewport.name} px: registro por la UI con el reloj que sugiere el navegador`, async ({ page, request }) => {
-    test.setTimeout(90_000);
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    const tag = `${suffix}${viewport.width}`;
-    const email = `registro.g1b.${tag}@example.com`;
-    const sub = `g1b-registro-${tag}`;
-    const regOrigin = tenantOrigin(sub);
+// R1: con una zona de un solo país (la de la suite, America/Bogota → Colombia)
+// el registro propone el país y su formato (es-CO) y el reloj sale de ese
+// formato, no del navegador. Esta prueba mira el reloj del NAVEGADOR, así que
+// abre el registro en una zona que no es de ningún país.
+test.describe('registro con el reloj del navegador', () => {
+  test.use({ timezoneId: 'Etc/UTC' });
 
-    await page.goto(`${regOrigin}/register`);
-    await waitForHydratedForm(page);
-    const browserCycle = await page.evaluate(() => {
-      const hc = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
-      return hc === 'h11' || hc === 'h12' ? 'h12' : hc === 'h23' || hc === 'h24' ? 'h23' : null;
+  for (const viewport of VIEWPORTS) {
+    test(`${viewport.name} px: registro por la UI con el reloj que sugiere el navegador`, async ({ page, request }) => {
+      test.setTimeout(90_000);
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const tag = `${suffix}${viewport.width}`;
+      const email = `registro.g1b.${tag}@example.com`;
+      const sub = `g1b-registro-${tag}`;
+      const regOrigin = tenantOrigin(sub);
+
+      await page.goto(`${regOrigin}/register`);
+      await waitForHydratedForm(page);
+      const browserCycle = await page.evaluate(() => {
+        const hc = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
+        return hc === 'h11' || hc === 'h12' ? 'h12' : hc === 'h23' || hc === 'h24' ? 'h23' : null;
+      });
+      expect(browserCycle, 'el navegador de la prueba declara un reloj').not.toBeNull();
+      const label = browserCycle === 'h12' ? '12 h' : '24 h';
+      const clock = page.getByRole('radiogroup', { name: 'Reloj' });
+      await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
+      await expect(clock).toContainText('Sugerido por tu navegador.');
+
+      await page.getByLabel('Nombre de la clínica').fill(`Clínica Registro ${tag}`);
+      await page.getByLabel('Subdominio').fill(sub);
+      await page.getByLabel('Nombre completo').fill('Lucía Registro');
+      await page.getByLabel('Correo electrónico').fill(email);
+      await page.getByLabel('Contraseña', { exact: true }).fill(password);
+      // Sin `hourCycle`: se queda el que sugirió el navegador.
+      await fillRegistrationLocation(page, { country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES' });
+      await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
+      if (viewport.width === 390) await expectNoHorizontalScroll(page);
+      await clock.scrollIntoViewIfNeeded();
+      await shoot(page, 'registro-reloj', viewport.width);
+
+      const sent = page.waitForRequest(
+        (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/auth/register'),
+      );
+      await page.getByRole('button', { name: 'Crear cuenta' }).click();
+      expect((await sent).postDataJSON()).toMatchObject({ locationHourCycle: browserCycle });
+      await expect(page.getByRole('heading', { name: 'Revisa tu correo' })).toBeVisible({ timeout: 10_000 });
+
+      const token = await registrationTokenFor(email);
+      const verify = await request.post(`${API_URL}/auth/register/verify`, { data: { token, password } });
+      expect(verify.ok(), await verify.text()).toBeTruthy();
+      const [location] = await locationsOf(request, await apiLogin(request, regOrigin, email, password));
+      expect(location.hourCycle).toBe(browserCycle);
+      expect(location.regionalSettingsReviewedAt, 'la sede elegida en el registro nace revisada').not.toBeNull();
     });
-    expect(browserCycle, 'el navegador de la prueba declara un reloj').not.toBeNull();
-    const label = browserCycle === 'h12' ? '12 h' : '24 h';
-    const clock = page.getByRole('radiogroup', { name: 'Reloj' });
-    await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
-    await expect(clock).toContainText('Sugerido por tu navegador.');
-
-    await page.getByLabel('Nombre de la clínica').fill(`Clínica Registro ${tag}`);
-    await page.getByLabel('Subdominio').fill(sub);
-    await page.getByLabel('Nombre completo').fill('Lucía Registro');
-    await page.getByLabel('Correo electrónico').fill(email);
-    await page.getByLabel('Contraseña', { exact: true }).fill(password);
-    // Sin `hourCycle`: se queda el que sugirió el navegador.
-    await fillRegistrationLocation(page, { country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES' });
-    await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
-    if (viewport.width === 390) await expectNoHorizontalScroll(page);
-    await clock.scrollIntoViewIfNeeded();
-    await shoot(page, 'registro-reloj', viewport.width);
-
-    const sent = page.waitForRequest(
-      (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/auth/register'),
-    );
-    await page.getByRole('button', { name: 'Crear cuenta' }).click();
-    expect((await sent).postDataJSON()).toMatchObject({ locationHourCycle: browserCycle });
-    await expect(page.getByRole('heading', { name: 'Revisa tu correo' })).toBeVisible({ timeout: 10_000 });
-
-    const token = await registrationTokenFor(email);
-    const verify = await request.post(`${API_URL}/auth/register/verify`, { data: { token, password } });
-    expect(verify.ok(), await verify.text()).toBeTruthy();
-    const [location] = await locationsOf(request, await apiLogin(request, regOrigin, email, password));
-    expect(location.hourCycle).toBe(browserCycle);
-    expect(location.regionalSettingsReviewedAt, 'la sede elegida en el registro nace revisada').not.toBeNull();
-  });
-}
+  }
+});
 
 test('una sede con el reloj en NULL: el aviso de formato de sede en la importación y el 409 de la API en el panel, nunca otro reloj', async ({
   page,

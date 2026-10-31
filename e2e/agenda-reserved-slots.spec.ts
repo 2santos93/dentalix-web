@@ -4,7 +4,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { sedeDayFromToday } from './support/clock';
 import { API_URL, tenantOrigin } from './support/urls';
-import { fillTime } from './support/dates';
+import { fillDate, fillTime } from './support/dates';
 
 /**
  * e2e DX-446: huecos reservados para urgencias.
@@ -99,7 +99,7 @@ function column(page: Page, name: string): Locator {
 async function openDay(page: Page) {
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(DAY);
+  await fillDate(page, 'Fecha', DAY);
   await expect(page.getByTestId('day-column').first()).toBeVisible({ timeout: 15_000 });
 }
 

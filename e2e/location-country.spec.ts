@@ -163,8 +163,14 @@ test('registering a clinic in a country outside the old pair', async ({ page, re
   await shoot(page, 'locations-list', page.getByRole('region', { name: 'Sedes de la clínica' }));
 });
 
+// R1: el país se propone primero por la ZONA del navegador si es de un solo
+// país (la de la suite, America/Bogota, propondría Colombia) y, si no, por la
+// región explícita del idioma (DX-312 P1). Estas dos pruebas miran la regla del
+// idioma, así que abren el navegador en una zona que no es de ningún país.
+const NO_COUNTRY_ZONE = 'Etc/UTC';
+
 test.describe('a browser in es-VE', () => {
-  test.use({ locale: 'es-VE' });
+  test.use({ locale: 'es-VE', timezoneId: NO_COUNTRY_ZONE });
 
   test('a browser in es-VE suggests Venezuela with its mark', async ({ page }) => {
     await page.goto(`${tenantOrigin(`pais-ve-${suffix}`)}/register`);
@@ -179,17 +185,29 @@ test.describe('a browser in es-VE', () => {
   });
 });
 
-test('the suite browser suggests no country', async ({ page }) => {
-  await page.goto(`${tenantOrigin(`pais-es-${suffix}`)}/register`);
-  await waitForHydratedForm(page);
-  expect(await page.evaluate(() => [...navigator.languages])).toEqual([E2E_BROWSER_LOCALE]);
-  await expect(countryField(page)).toHaveValue('');
-  await expect(countryField(page)).not.toHaveAccessibleDescription(new RegExp(SUGGESTED));
+test.describe('the suite language in a zone of no country', () => {
+  test.use({ timezoneId: NO_COUNTRY_ZONE });
 
-  await loginAs(page, origin, adminEmail, password);
-  const dialog = await openNewLocation(page);
-  await expect(countryField(dialog)).toHaveValue('');
-  await expect(countryField(dialog)).not.toHaveAccessibleDescription(new RegExp(SUGGESTED));
+  test('the suite browser suggests no country', async ({ page }) => {
+    await page.goto(`${tenantOrigin(`pais-es-${suffix}`)}/register`);
+    await waitForHydratedForm(page);
+    expect(await page.evaluate(() => [...navigator.languages])).toEqual([E2E_BROWSER_LOCALE]);
+    await expect(countryField(page)).toHaveValue('');
+    await expect(countryField(page)).not.toHaveAccessibleDescription(new RegExp(SUGGESTED));
+
+    await loginAs(page, origin, adminEmail, password);
+    const dialog = await openNewLocation(page);
+    await expect(countryField(dialog)).toHaveValue('');
+    await expect(countryField(dialog)).not.toHaveAccessibleDescription(new RegExp(SUGGESTED));
+  });
+});
+
+test('the suite browser, in a zone of a single country, suggests that country', async ({ page }) => {
+  // America/Bogota (playwright.config.ts) es solo de Colombia: R1 lo propone, marcado y editable.
+  await page.goto(`${tenantOrigin(`pais-zona-${suffix}`)}/register`);
+  await waitForHydratedForm(page);
+  await expect(countryField(page)).toHaveValue('Colombia');
+  await expect(countryField(page)).toHaveAccessibleDescription(new RegExp(`^${SUGGESTED}`));
 });
 
 test("a location's phone hint names its default prefix", async ({ page, request }) => {
