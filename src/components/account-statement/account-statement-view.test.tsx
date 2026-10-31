@@ -523,6 +523,7 @@ describe('cobrado por ítem de cada plan (DX-051)', () => {
     allocated: 1200000,
     unallocated: 0,
     unconvertedPaymentsCount: 0,
+    rateProviderTimedOut: false,
     manualPaymentIds: [],
     items: [
       {

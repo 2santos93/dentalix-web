@@ -97,6 +97,7 @@ function copBalance(balance: number): PlanBalance {
     allocated: 0,
     unallocated: 0,
     unconvertedPaymentsCount: 0,
+    rateProviderTimedOut: false,
     manualPaymentIds: [],
     items: [],
   };

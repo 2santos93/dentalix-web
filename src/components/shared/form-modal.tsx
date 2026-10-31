@@ -1,5 +1,6 @@
 'use client';
 import * as React from 'react';
+import { RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -44,6 +45,12 @@ interface FormModalProps {
    * below it, and an off-screen banner reads as "nothing happened".
    */
   error?: string | null;
+  /**
+   * Reintento del envío junto al banner, para un fallo que no es del
+   * formulario (sin red, servidor caído): la Way-Out Rule de DESIGN.md.
+   * Reenvía lo que ya está escrito; no aparece en errores de validación.
+   */
+  errorRetry?: { label: string; onRetry: () => void } | null;
   /** `lg` widens for denser, multi-column forms. */
   size?: 'default' | 'lg';
   /** Renders the submit as a destructive action. */
@@ -127,6 +134,7 @@ export function FormModal({
   submitHint,
   hideSubmit = false,
   error,
+  errorRetry = null,
   size = 'default',
   destructive = false,
   touchTargets = false,
@@ -183,6 +191,19 @@ export function FormModal({
               className="rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
             >
               <InlineError variant="summary">{error}</InlineError>
+              {errorRetry ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2"
+                  disabled={submitting}
+                  onClick={errorRetry.onRetry}
+                >
+                  <RotateCw aria-hidden="true" />
+                  {errorRetry.label}
+                </Button>
+              ) : null}
             </div>
           ) : null}
           {children}

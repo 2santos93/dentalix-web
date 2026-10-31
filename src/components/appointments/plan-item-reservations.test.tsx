@@ -70,6 +70,11 @@ function item(overrides: Partial<InClinicItem> = {}): InClinicItem {
       anamnesisReviewedAt: '2026-09-01T00:00:00.000Z',
     },
     planItemsReservedElsewhere: [reserved],
+    urgent: false,
+    walkIn: false,
+    overbooked: false,
+    triageFlags: [],
+    triageNote: null,
     ...overrides,
   };
 }

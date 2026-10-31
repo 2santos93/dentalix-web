@@ -57,7 +57,13 @@ export const PAYMENT_IN_PLAN_CURRENCY = {
  */
 export const BALANCE_WITHOUT_ALLOCATIONS: Pick<
   PlanBalance,
-  'allocated' | 'unallocated' | 'unconvertedPaymentsCount' | 'manualPaymentIds' | 'items' | 'paymentsWithoutRate'
+  | 'allocated'
+  | 'unallocated'
+  | 'unconvertedPaymentsCount'
+  | 'manualPaymentIds'
+  | 'items'
+  | 'paymentsWithoutRate'
+  | 'rateProviderTimedOut'
 > = {
   // DX-375: ningún abono «sin tasa».
   paymentsWithoutRate: [],
@@ -66,4 +72,6 @@ export const BALANCE_WITHOUT_ALLOCATIONS: Pick<
   unconvertedPaymentsCount: 0,
   manualPaymentIds: [],
   items: [],
+  // DX-054: el proveedor de tasas respondió a tiempo.
+  rateProviderTimedOut: false,
 };
