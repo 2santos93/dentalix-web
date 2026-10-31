@@ -433,6 +433,9 @@ dentition). Sunken track, selected segment on surface with ink — never a solid
 when choosing opens a confirmation. `size sm | md`, `fullWidthOnMobile`. Sections with
 their own content use Tabs, not this.
 
+### Wizard
+`Wizard steps current onStepChange` (`ui/wizard.tsx`): from `sm`, one row of step buttons with one-line labels on a shared underline (`aria-current="step"`); below `sm`, «Paso 2 de 5 · Antecedentes» + a thin `progressbar` — labels never hyphenate. `optional: true` adds «(opcional)»; a wizard whose later steps are optional offers its final action (e.g. «Crear paciente») from step 1, in a bottom action bar that sticks on phones.
+
 ### Tabs
 `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` (Radix), or `TabBar` when the page renders
 the panels itself (URL-synced tabs: caja, gastos, reportes, horarios, patient record).

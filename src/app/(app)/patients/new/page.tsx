@@ -1,8 +1,6 @@
 'use client';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PatientCreateWizard } from '@/components/patients/patient-create-wizard';
 import { PageHeader } from '@/components/shared/page-header';
@@ -13,7 +11,8 @@ import { canWriteClinicalHistory } from '@/lib/clinical/clinical-roles';
 // until next-intl wiring lands.
 const copy = {
   title: 'Nuevo paciente',
-  backLink: 'Volver a pacientes',
+  backLink: 'Pacientes',
+  description: 'Para crearlo bastan nombre, apellido y tipo de documento; lo demás se puede completar después.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -45,14 +44,13 @@ export default function NewPatientPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
-      <Link
-        href="/patients"
-        className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-      >
-        <ArrowLeft className="size-4" /> {copy.backLink}
-      </Link>
-      <PageHeader title={copy.title} />
+    // Columna de formulario alineada al borde del contenido, como el resto de pantallas.
+    <div className="w-full max-w-3xl">
+      <PageHeader
+        back={{ href: '/patients', label: copy.backLink }}
+        title={copy.title}
+        description={copy.description}
+      />
       <PatientCreateWizard
         token={accessToken}
         canWriteClinicalHistory={canWriteClinicalHistory(getTokenRole(accessToken))}

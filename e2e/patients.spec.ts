@@ -58,12 +58,12 @@ test('create patient via the UI -> it appears in the patients list', async ({ pa
   await page.getByLabel('Sexo').selectOption('F');
 
   const createError = page.locator('p[role="alert"]');
-  // El alta de paciente es un WIZARD de 5 pasos y el submit ("Guardar") vive en
+  // El alta de paciente es un WIZARD de 5 pasos; «Crear paciente» está en todos (solo el 1.º es obligatorio) y vive en
   // el último; con nombre, apellido y tipo de documento se puede saltar directo al final (ver
   // `goToStep` en patient-create-wizard.tsx). Antes esto pulsaba un botón "Crear
   // paciente" que ya no existe, y el spec se colgaba 30s en el click.
   await page.getByRole('button', { name: /Autorización de datos/ }).click();
-  await page.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: 'Crear paciente' }).click();
 
   // Redirect back to /patients on success — surface the real API error
   // instead of hanging if creation failed.

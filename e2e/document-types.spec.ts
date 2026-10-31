@@ -212,7 +212,7 @@ test('a national number with a letter prefix is saved and shown as typed', async
   await shoot(page, 'patient-create', type);
 
   await page.getByRole('button', { name: /Autorización de datos/ }).click();
-  await page.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: 'Crear paciente' }).click();
   await expect(page).toHaveURL(/\/patients\/[0-9a-f-]{36}$/, { timeout: 15_000 });
   await expect(identity(page)).toContainText(`ID local ${docNumber}`);
   await expect(dataValue(page, 'Número de documento')).toHaveText(docNumber);
