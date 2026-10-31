@@ -1,8 +1,11 @@
 import type { ClinicRole } from '@/lib/me/me-api';
-// Copia byte a byte de `prisma/reference/iso4217-zero-decimal.json` de la API: no se edita aquí.
-// La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
-// divergen. Ver src/lib/money/README.md.
-import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
+import {
+  type RoundingDigits,
+  basisPoints,
+  percentOfCentsInUnits,
+  unitCents,
+  unitsToAmount,
+} from '@/lib/money/line-rounding';
 
 /**
  * Reglas de descuento de la clínica en la web (DX-204). Son un AVISO antes de
@@ -103,10 +106,6 @@ export function noDiscountAllowed(item: { allowDiscount?: boolean } | null | und
   return item?.allowDiscount === false;
 }
 
-function basisPoints(percent: number): bigint {
-  return BigInt(Math.round(percent * 100));
-}
-
 function exceeds(price: number, discount: number, percent: number): boolean {
   return cents(discount) * BigInt(10000) > cents(price) * basisPoints(percent);
 }
@@ -138,41 +137,24 @@ export function discountPercent(price: number, discount: number): number {
 }
 
 /**
- * Unidad a la que se redondea un descuento en bloque: la misma lista que usa
- * la API (`shared/money/currency-decimals.ts`, R7): el conjunto anterior más
- * todas las monedas ISO 4217 sin decimales, copiadas en
- * `lib/money/iso4217-zero-decimal.json`. Es solo para el redondeo del
- * descuento: los campos de importe admiten 2 decimales en cualquier moneda,
- * como la API (DX-241).
- */
-export const ZERO_DECIMAL_CURRENCIES: ReadonlySet<string> = new Set([
-  ...iso4217ZeroDecimal.previousSet,
-  ...iso4217ZeroDecimal.minorUnitsZero,
-]);
-
-export function currencyDecimals(currency: string): 0 | 2 {
-  return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? 0 : 2;
-}
-
-/**
- * Descuento de un ítem al aplicarle `percent` % en bloque: redondeado a la
- * unidad de la moneda (mitad hacia arriba), nunca por encima del tope del rol
- * ni del precio. Mismo cálculo que la API (vista previa del diálogo).
+ * Descuento de un ítem al aplicarle `percent` % en bloque: una línea,
+ * redondeada a los `digits` de redondeo de la moneda del plan (los da la API:
+ * `currencyDigits.roundingDigits`, DX-340), la mitad hacia arriba, nunca por
+ * encima del tope del rol ni del precio. Mismo cálculo que la API (vista
+ * previa del diálogo); sin lista de monedas en la web.
  */
 export function discountForPercent(
   price: number,
   percent: number,
-  currency: string,
+  digits: RoundingDigits,
   capPercent: number,
 ): number {
-  const unit = BigInt(10) ** BigInt(2 - currencyDecimals(currency));
   const priceCents = cents(price);
-  const scale = unit * BigInt(10000);
-  const rounded = (priceCents * basisPoints(percent) + scale / BigInt(2)) / scale;
-  const capped = (priceCents * basisPoints(capPercent)) / scale;
-  const whole = priceCents / unit;
+  const rounded = percentOfCentsInUnits(priceCents, basisPoints(percent), digits, 'half-up');
+  const capped = percentOfCentsInUnits(priceCents, basisPoints(capPercent), digits, 'floor');
+  const whole = priceCents / unitCents(digits);
   let units = rounded;
   if (capped < units) units = capped;
   if (whole < units) units = whole;
-  return Number(units * unit) / 100;
+  return unitsToAmount(units, digits);
 }

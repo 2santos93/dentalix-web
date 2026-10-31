@@ -1,4 +1,4 @@
-import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
+import cldrFormatDigits from '@/lib/money/cldr-format-digits-zero.json';
 import { civilNoonUtc } from '@/lib/time/civil-day';
 
 /**
@@ -68,8 +68,11 @@ export interface RegionalFormat {
   wallParts(instant: Date, timeZone: string): WallParts;
 }
 
-/** Monedas que se PINTAN sin decimales (`minorUnitsZero`; `previousSet` solo cuenta para redondear). */
-const ISO_ZERO_DECIMAL_CURRENCIES: ReadonlySet<string> = new Set(iso4217ZeroDecimal.minorUnitsZero);
+/**
+ * Monedas que se PINTAN sin decimales: dígitos de FORMATO de CLDR 47, fijados
+ * (DX-340). Redondear importes usa `roundingDigits` de la API, no esta lista.
+ */
+const CLDR_ZERO_FORMAT_DIGITS: ReadonlySet<string> = new Set(cldrFormatDigits.cldrDigitsZero);
 
 const HOUR_CYCLES: readonly string[] = ['h12', 'h23'];
 const BIDI_MARKS_RE = /[\u200e\u200f\u061c]/g;
@@ -269,7 +272,7 @@ function build(locale: string, hourCycle: HourCycle): RegionalFormat {
         }).format(value / 100),
       ),
     money: (amount, currency) => {
-      const digits = ISO_ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) && Number.isInteger(amount) ? 0 : 2;
+      const digits = CLDR_ZERO_FORMAT_DIGITS.has(currency.toUpperCase()) && Number.isInteger(amount) ? 0 : 2;
       try {
         return stripBidi(
           numberFormatter(locale, {
