@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { tenantOrigin } from './urls';
 import { registrationTokenFor } from './mail';
-import { chooseCountry, E2E_REGION, type RegionalSettings } from './regional';
+import { chooseCountry, E2E_REGION, pickRegional, type RegionalSettings } from './regional';
 import { HOUR_CYCLE_LABELS } from '../../src/lib/locations/regional-settings';
 
 /** Cookie HttpOnly del refresh token (DX-062), del host de la clínica. */
@@ -157,8 +157,8 @@ export async function fillRegistrationLocation(
 ): Promise<void> {
   await chooseCountry(page, region.country);
   await page.getByLabel('Moneda', { exact: true }).selectOption(region.currency);
-  await page.getByLabel('Zona horaria', { exact: true }).fill(region.timeZone);
-  await page.getByLabel('Formato regional', { exact: true }).fill(region.locale);
+  await pickRegional(page.getByLabel('Zona horaria', { exact: true }), region.timeZone);
+  await pickRegional(page.getByLabel('Formato regional', { exact: true }), region.locale);
   if (region.hourCycle) {
     await page.getByRole('radio', { name: HOUR_CYCLE_LABELS[region.hourCycle], exact: true }).check();
   }

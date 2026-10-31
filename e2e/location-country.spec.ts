@@ -5,7 +5,7 @@ import { apiLogin, apiPost, registerClinicViaApi, type ApiSession } from './supp
 import { loginAs, waitForHydratedForm } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
 import { registrationTokenFor } from './support/mail';
-import { chooseCountry, E2E_BROWSER_LOCALE, type RegionalSettings } from './support/regional';
+import { chooseCountry, E2E_BROWSER_LOCALE, pickRegional, type RegionalSettings } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -129,8 +129,8 @@ test('registering a clinic in a country outside the old pair', async ({ page, re
   await page.getByLabel('Contraseña', { exact: true }).fill(password);
   await searchCountry(page, 'venez', 'Venezuela');
   await page.getByLabel('Moneda', { exact: true }).selectOption(VENEZUELA.currency);
-  await page.getByLabel('Zona horaria', { exact: true }).fill(VENEZUELA.timeZone);
-  await page.getByLabel('Formato regional', { exact: true }).fill(VENEZUELA.locale);
+  await pickRegional(page.getByLabel('Zona horaria', { exact: true }), VENEZUELA.timeZone);
+  await pickRegional(page.getByLabel('Formato regional', { exact: true }), VENEZUELA.locale);
   await page.getByRole('radio', { name: '12 h', exact: true }).check();
   await shoot(page, 'register-country', page.getByRole('group', { name: 'Tu sede' }));
 
@@ -232,8 +232,8 @@ test('an admin finds a country by searching and saves the location', async ({ pa
   await list.getByRole('option', { name: 'Côte d’Ivoire', exact: true }).click();
   await expect(field).toHaveValue('Côte d’Ivoire');
   await dialog.getByLabel('Moneda', { exact: true }).selectOption('XOF');
-  await dialog.getByLabel('Zona horaria', { exact: true }).fill('Africa/Abidjan');
-  await dialog.getByLabel('Formato regional', { exact: true }).fill('fr-CI');
+  await pickRegional(dialog.getByLabel('Zona horaria', { exact: true }), 'Africa/Abidjan');
+  await pickRegional(dialog.getByLabel('Formato regional', { exact: true }), 'fr-CI');
   await dialog.getByRole('radio', { name: '24 h', exact: true }).check();
   const created = page.waitForRequest(
     (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/locations'),

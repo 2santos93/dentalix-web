@@ -6,7 +6,7 @@ import { apiLogin, apiPost, createLocationViaApi, registerClinicViaApi, type Api
 import { fillRegistrationLocation, loginAs, waitForHydratedForm } from './support/auth';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { registrationTokenFor } from './support/mail';
-import type { RegionalSettings } from './support/regional';
+import { pickRegional, type RegionalSettings } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 import { regionalFormat, type HourCycle } from '../src/lib/format/regional-format';
 
@@ -369,8 +369,8 @@ test('modal de sede: reloj bajo la vista previa; A pasa a 24 h y el panel lo pin
     await page.getByRole('button', { name: 'Nueva sede' }).click();
     const create = page.getByRole('dialog', { name: 'Nueva sede' });
     await expect(create).toBeVisible();
-    await create.getByLabel('Zona horaria', { exact: true }).fill('Europe/Berlin');
-    await create.getByLabel('Formato regional', { exact: true }).fill('de-DE');
+    await pickRegional(create.getByLabel('Zona horaria', { exact: true }), 'Europe/Berlin');
+    await pickRegional(create.getByLabel('Formato regional', { exact: true }), 'de-DE');
     await create.getByRole('radio', { name: '12 h', exact: true }).check();
     // M7, en Chromium: un número de-DE exacto y la hora de 12 h del ejemplo.
     await expect(create.getByText(/^Vista previa: 12\.345,67 · \d{2}\.\d{2}\.\d{4}/)).toBeVisible();
