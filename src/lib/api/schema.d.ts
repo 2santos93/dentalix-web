@@ -3015,6 +3015,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/{id}/credit-transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Traspasar saldo a favor de este plan a otro plan vivo
+         * @description Mismo paciente y misma moneda; importe ≤ saldo a favor del origen. Deja dos asientos inmutables (salida y entrada) sin tocar los abonos.
+         */
+        post: operations["PatientCreditController_transfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/credit-refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Devolver saldo a favor del plan al paciente
+         * @description Con comprobante numerado por sede (serie DEV-…). En efectivo, egreso de la caja abierta de quien devuelve; con «exigir caja abierta» y sin caja, 409.
+         */
+        post: operations["PatientCreditController_refund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/credit-refunds/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comprobante de una devolución (para imprimir) */
+        get: operations["PatientCreditController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/credit-movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Traspasos y devoluciones de saldo a favor del paciente */
+        get: operations["PatientCreditController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-credit/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tope de recepción para mover saldo a favor */
+        get: operations["PatientCreditController_getPolicy"];
+        /** Cambiar el tope de recepción (solo ADMIN) */
+        put: operations["PatientCreditController_updatePolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/locations-comparison": {
         parameters: {
             query?: never;
@@ -5286,7 +5378,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "SIGNATURE_REQUEST";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -10972,7 +11064,12 @@ export interface components {
              */
             paid: number;
             /**
-             * @description billable - paid
+             * @description DX-253: Σ traspasos y devoluciones de saldo a favor del plan en planCurrency, con signo (los abonos no cambian).
+             * @example 0
+             */
+            creditMovements: number;
+            /**
+             * @description billable - paid - creditMovements
              * @example 200
              */
             balance: number;
@@ -11626,6 +11723,11 @@ export interface components {
              */
             paid: number;
             /**
+             * @description DX-253: Σ traspasos y devoluciones de saldo a favor en esta moneda, con signo. balance = budgeted + openingBalance − paid − creditMovements
+             * @example 0
+             */
+            creditMovements: number;
+            /**
              * @description budgeted + openingBalance - paid (negativo = saldo a favor)
              * @example 1950000
              */
@@ -11669,6 +11771,11 @@ export interface components {
              * @example 1200000
              */
             paid: number;
+            /**
+             * @description DX-253: Σ asientos del saldo a favor del plan en su moneda, con signo (traspasos recibidos − dados − devoluciones). Los abonos no cambian.
+             * @example -200000
+             */
+            creditMovements: number;
             /** @description Abonos vivos del plan hechos en otra moneda (sin convertir) */
             paidOtherCurrencies: components["schemas"]["AccountStatementOtherCurrencyDto"][];
             /** @example 1800000 */
@@ -12041,6 +12148,163 @@ export interface components {
             /** @description Por moneda, de TODAS las filas filtradas (no solo la página) */
             totals: components["schemas"]["AgingTotalDto"][];
         };
+        TransferCreditDto: {
+            /**
+             * Format: uuid
+             * @description Plan vivo del mismo paciente.
+             */
+            targetPlanId: string;
+            /** @example 200000 */
+            amount: number;
+            /** @description La moneda del plan de origen (ISO 4217). */
+            currency: string;
+            reason?: string | null;
+        };
+        CreditTransferResultDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            sourcePlanId: string;
+            /** Format: uuid */
+            targetPlanId: string;
+            currency: string;
+            amount: number;
+            reason: string | null;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description Saldo a favor que le queda al plan de origen. */
+            sourceCreditAfter: number;
+        };
+        RefundCreditDto: {
+            /** @example 100000 */
+            amount: number;
+            /** @description La moneda del plan (ISO 4217). */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            reason: string;
+            /** @description Abonos del plan que se devuelven (al menos uno). */
+            paymentIds: string[];
+        };
+        RefundReceiptClinicDto: {
+            name: string;
+        };
+        RefundReceiptLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string | null;
+            /**
+             * @description IANA de la sede.
+             * @example America/Bogota
+             */
+            timeZone: string;
+        };
+        RefundReceiptPatientDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            documentType: string;
+            docTypeLabel: string | null;
+            docNumber: string | null;
+        };
+        RefundReceiptPlanDto: {
+            /** Format: uuid */
+            id: string;
+            label: string | null;
+            createdAt: string;
+        };
+        RefundPaymentRefDto: {
+            /** Format: uuid */
+            id: string;
+            paidAt: string;
+            amount: number;
+            currency: string;
+            receiptNumber: string;
+        };
+        RefundReceiptByDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string | null;
+        };
+        RefundReceiptSnapshotDto: {
+            number: string;
+            issuedAt: string;
+            clinic: components["schemas"]["RefundReceiptClinicDto"];
+            location: components["schemas"]["RefundReceiptLocationDto"];
+            patient: components["schemas"]["RefundReceiptPatientDto"];
+            plan: components["schemas"]["RefundReceiptPlanDto"];
+            amount: number;
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            reason: string;
+            payments: components["schemas"]["RefundPaymentRefDto"][];
+            creditBefore: number;
+            creditAfter: number;
+            refundedBy: components["schemas"]["RefundReceiptByDto"];
+            /** Format: uuid */
+            cashSessionId: string | null;
+        };
+        CreditRefundDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example DEV-BOG-000001 */
+            number: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            treatmentPlanId: string;
+            currency: string;
+            amount: number;
+            method: components["schemas"]["PaymentMethod"];
+            reason: string;
+            /** Format: uuid */
+            cashSessionId: string | null;
+            paymentIds: string[];
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            createdAt: string;
+            snapshot: components["schemas"]["RefundReceiptSnapshotDto"];
+        };
+        CreditTransferDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            sourcePlanId: string;
+            /** Format: uuid */
+            targetPlanId: string;
+            currency: string;
+            amount: number;
+            reason: string | null;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PatientCreditMovementsDto: {
+            transfers: components["schemas"]["CreditTransferDto"][];
+            refunds: components["schemas"]["CreditRefundDto"][];
+        };
+        CreditPolicyDto: {
+            /** @description Tope de RECEPTION por traspaso o devolución, en la moneda del plan (0 = no puede). ADMIN no tiene tope. */
+            receptionMaxAmount: number;
+        };
+        UpdateCreditPolicyDto: {
+            /** @example 0 */
+            receptionMaxAmount: number;
+        };
         KpiDefinitionDto: {
             /** @enum {string} */
             key: "production" | "collected" | "collectionRate" | "completedAppointments" | "noShowRate" | "newPatients" | "averageTicket" | "occupancy";
@@ -12278,6 +12542,20 @@ export interface components {
             /** @description Anulada con la caja ya cerrada: sigue restando aquí y la anulación es un ajuste OUTFLOW_VOID en otra caja. */
             bookedAsAdjustment: boolean;
         };
+        CashCreditRefundDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example DEV-BOG-000001 */
+            number: string;
+            amount: number;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            reason: string;
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: components["schemas"]["CashStaffRefDto"];
+            patient: components["schemas"]["CashPatientRefDto"];
+        };
         /**
          * @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada.
          * @enum {string}
@@ -12409,6 +12687,8 @@ export interface components {
             outflows: components["schemas"]["CashOutflowDto"][];
             /** @description Salidas anuladas: no restan salvo si se anularon con la caja cerrada */
             voidedOutflows: components["schemas"]["CashVoidedOutflowDto"][];
+            /** @description DX-253: devoluciones de saldo a favor en efectivo del turno: restan en el esperado de CASH (dentro de «Salidas»). */
+            creditRefunds: components["schemas"]["CashCreditRefundDto"][];
             /** @description Ajustes que cuentan en esta caja */
             adjustments: components["schemas"]["CashAdjustmentDto"][];
             /** @description Ajustes nacidos de esta caja ya cerrada, que cuentan en otra */
@@ -23548,6 +23828,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description DX-253: el abono (o una línea de su cobro dividido) es referencia de una devolución de saldo a favor, o del plan ya se traspasó o devolvió saldo a favor y sin este abono quedaría al descubierto */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PaymentReceiptsController_view: {
@@ -24126,6 +24413,237 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo la administración puede exportar la cartera. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCreditController_transfer: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description UUID. Repetir la MISMA petición con la misma clave devuelve el movimiento original (DX-109); con otro cuerpo, 422. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferCreditDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditTransferResultDto"];
+                };
+            };
+            /** @description Importe mayor que el saldo a favor, otra moneda, el mismo plan o un plan de otro paciente. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DENTIST/ASSISTANT, o RECEPTION por encima del tope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan inexistente o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El destino está cancelado o rechazado, o el saldo cambió a la vez. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otro cuerpo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCreditController_refund: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description UUID. Repetir la MISMA petición con la misma clave devuelve el movimiento original (DX-109); con otro cuerpo, 422. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCreditDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditRefundDto"];
+                };
+            };
+            /** @description Importe mayor que el saldo a favor, otra moneda, sin motivo o abonos de referencia que no son del plan. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DENTIST/ASSISTANT, o RECEPTION por encima del tope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan inexistente o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El saldo cambió a la vez (otra devolución) o falta la caja abierta exigida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otro cuerpo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCreditController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditRefundDto"];
+                };
+            };
+            /** @description Inexistente o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCreditController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCreditMovementsDto"];
+                };
+            };
+            /** @description Paciente inexistente o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCreditController_getPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPolicyDto"];
+                };
+            };
+        };
+    };
+    PatientCreditController_updatePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCreditPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPolicyDto"];
+                };
+            };
+            /** @description Solo la administración cambia el tope de saldo a favor de recepción. */
             403: {
                 headers: {
                     [name: string]: unknown;
