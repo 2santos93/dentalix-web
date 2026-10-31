@@ -223,7 +223,8 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
             <span className="font-medium text-ink">{copy.optionCount(row.options.length)}</span>
             <ul aria-label={copy.optionsLabel(row.patientName)} className="flex flex-col gap-0.5">
               {row.options.map((o) => (
-                <li key={o.planId} className="t-caption text-muted tabular-nums">
+                // Una línea por opción (Z1): a 1440 px el monto bajaba solo a otra línea.
+                <li key={o.planId} className="t-caption whitespace-nowrap text-muted tabular-nums">
                   {o.optionLabel ?? copy.noOption} · {formatCurrency(o.total, o.currency)}
                 </li>
               ))}
@@ -240,7 +241,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
       header: copy.colAmount,
       numeric: true,
       mobile: 'trailing',
-      cell: (row) => <span className="font-medium text-ink">{followUpAmount(row.options)}</span>,
+      cell: (row) => <span className="whitespace-nowrap font-medium text-ink">{followUpAmount(row.options)}</span>,
     },
     {
       id: 'presented',
