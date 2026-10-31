@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Download, Eye, FileText, Upload } from 'lucide-react';
+import { Ban, Download, Eye, FileText, Upload } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
@@ -31,9 +31,13 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { fieldClass } from '@/lib/ui/field-class';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { NativeSelect } from '@/components/ui/native-select';
+import { DateField } from '@/components/ui/date-field';
+import { SectionHeader } from '@/components/ui/section-header';
+import { FormField } from '@/components/shared/form-field';
 import { cn } from '@/lib/utils';
 import { DocumentViewerDialog } from './document-viewer-dialog';
 import { ToothChipsInput } from './tooth-chips-input';
@@ -45,8 +49,7 @@ const copy = {
   heading: 'Documentos',
   support:
     'Radiografías, fotos, remisiones, consentimientos firmados en papel e informes del paciente. Un documento subido no se edita ni se borra: se anula con motivo.',
-  dropTitle: 'Arrastra aquí los archivos',
-  dropOr: 'o',
+  dropTitle: 'Arrastra aquí los archivos o',
   choose: 'Elegir archivos',
   inputLabel: 'Archivos para subir',
   dropActive: 'Suelta para añadirlos a la cola',
@@ -89,7 +92,7 @@ const copy = {
   colDate: 'Fecha clínica',
   colTeeth: 'Dientes',
   colAuthor: 'Subido por',
-  colActions: 'Acciones',
+  colDetail: 'Archivo',
   noDate: 'Sin fecha',
   noTeeth: '—',
   uploadedBy: (who: string, when: string) => `${who} · ${when}`,
@@ -98,6 +101,8 @@ const copy = {
     `Anulado el ${when} por ${who}. Motivo: ${reason}`,
   unknownUser: 'un usuario',
   view: 'Ver',
+  viewVerb: 'Ver ',
+  downloadVerb: 'Descargar ',
   download: 'Descargar',
   void: 'Anular',
   downloadError: 'No pudimos descargar el documento.',
@@ -432,40 +437,31 @@ export function PatientDocumentsTab({
 
         {editable || item.status === 'uploading' || item.status === 'waiting' ? (
           <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-            <div className="flex min-w-0 flex-col gap-1">
-              <label htmlFor={field('category')} className="t-label text-muted">
-                {copy.category}
-              </label>
-              <select
+            <FormField htmlFor={field('category')} label={copy.category} className="min-w-0">
+              <NativeSelect
                 id={field('category')}
                 value={item.category}
                 disabled={locked}
                 onChange={(e) =>
                   updateItem(item.key, { category: e.target.value as PatientDocumentCategory })
                 }
-                className={cn(fieldClass, 'h-11 sm:h-10')}
               >
                 {PATIENT_DOCUMENT_CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {PATIENT_DOCUMENT_CATEGORY_LABELS[c]}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className="flex min-w-0 flex-col gap-1">
-              <label htmlFor={field('date')} className="t-label text-muted">
-                {copy.clinicalDate}
-              </label>
-              <input
+              </NativeSelect>
+            </FormField>
+            <FormField htmlFor={field('date')} label={copy.clinicalDate} className="min-w-0">
+              <DateField
                 id={field('date')}
-                type="date"
                 max={todayLocal()}
-                value={item.clinicalDate}
+                value={item.clinicalDate || null}
                 disabled={locked}
-                onChange={(e) => updateItem(item.key, { clinicalDate: e.target.value })}
-                className={cn(fieldClass, 'h-11 sm:h-10')}
+                onChange={(value) => updateItem(item.key, { clinicalDate: value ?? '' })}
               />
-            </div>
+            </FormField>
             <ToothChipsInput
               id={field('teeth')}
               label={copy.teeth}
@@ -474,20 +470,16 @@ export function PatientDocumentsTab({
               onChange={(teeth) => updateItem(item.key, { teeth })}
               onInvalidChange={(teethInvalid) => updateItem(item.key, { teethInvalid })}
             />
-            <div className="flex min-w-0 flex-col gap-1">
-              <label htmlFor={field('notes')} className="t-label text-muted">
-                {copy.notes}
-              </label>
-              <input
+            <FormField htmlFor={field('notes')} label={copy.notes} className="min-w-0">
+              <Input
                 id={field('notes')}
                 type="text"
                 maxLength={500}
                 value={item.notes}
                 disabled={locked}
                 onChange={(e) => updateItem(item.key, { notes: e.target.value })}
-                className={cn(fieldClass, 'h-11 sm:h-10')}
               />
-            </div>
+            </FormField>
           </div>
         ) : null}
 
@@ -573,96 +565,130 @@ export function PatientDocumentsTab({
     );
   }
 
-  function documentRow(doc: PatientDocument) {
-    const voided = doc.voidedAt !== null;
-    const isDownloading = downloading.has(doc.id);
-    return (
-      <TableRow key={doc.id} data-status={voided ? 'VOIDED' : 'ACTIVE'}>
-        <TableCell data-label={copy.colCategory}>
-          <Badge variant={voided ? 'muted' : 'secondary'}>{PATIENT_DOCUMENT_CATEGORY_LABELS[doc.category]}</Badge>
-        </TableCell>
-        <TableCell data-label={copy.colName} className="min-w-0 max-sm:flex-wrap">
-          <div className="flex min-w-0 flex-col gap-1 max-sm:items-end max-sm:text-right">
-            <div className="flex flex-wrap items-center gap-2 max-sm:justify-end">
-              <span className={cn('font-medium [overflow-wrap:anywhere]', voided ? 'text-muted line-through' : 'text-ink')}>
-                {doc.originalName}
-              </span>
-              {voided ? <StatusBadge kind="clinicalRecord" status="VOIDED" /> : null}
-            </div>
-            <span className="text-xs tabular-nums text-muted">{formatFileSize(doc.sizeBytes, fmt)}</span>
-            {doc.notes ? <span className="text-xs text-muted [overflow-wrap:anywhere]">{doc.notes}</span> : null}
-            {voided ? (
-              <span className="text-xs text-ink [overflow-wrap:anywhere]">
-                {copy.voidedDetail(
-                  formatDateTime(doc.voidedAt),
-                  doc.voidedByName ?? copy.unknownUser,
-                  doc.voidReason ?? '',
-                )}
-              </span>
-            ) : null}
-          </div>
-        </TableCell>
-        <TableCell data-label={copy.colDate} className="tabular-nums">
-          {doc.clinicalDate ? formatCivilDate(doc.clinicalDate) : <span className="text-muted">{copy.noDate}</span>}
-        </TableCell>
-        <TableCell data-label={copy.colTeeth} className="tabular-nums">
-          {doc.toothNumbers.length > 0 ? doc.toothNumbers.join(', ') : <span className="text-muted">{copy.noTeeth}</span>}
-        </TableCell>
-        <TableCell data-label={copy.colAuthor} className="text-sm max-sm:text-right">
+  /** Tocar el documento lo abre (o lo descarga si el navegador no lo enseña). */
+  function openDocument(doc: PatientDocument) {
+    if (doc.inlineViewable) setViewing(doc);
+    else void download(doc);
+  }
+
+  const columns: DataListColumn<PatientDocument>[] = [
+    {
+      id: 'name',
+      header: copy.colName,
+      mobile: 'primary',
+      cell: (doc) => {
+        const voided = doc.voidedAt !== null;
+        return (
+          <span data-status={voided ? 'VOIDED' : 'ACTIVE'} className="[overflow-wrap:anywhere]">
+            <span className="sr-only">{doc.inlineViewable ? copy.viewVerb : copy.downloadVerb}</span>
+            <span className={cn(voided ? 'text-muted line-through' : 'text-ink')}>{doc.originalName}</span>
+          </span>
+        );
+      },
+    },
+    {
+      id: 'category',
+      header: copy.colCategory,
+      mobile: 'trailing',
+      cell: (doc) =>
+        doc.voidedAt !== null ? (
+          <StatusBadge kind="clinicalRecord" status="VOIDED" />
+        ) : (
+          <Badge variant="neutral">{PATIENT_DOCUMENT_CATEGORY_LABELS[doc.category]}</Badge>
+        ),
+    },
+    {
+      id: 'date',
+      header: copy.colDate,
+      cell: (doc) =>
+        doc.clinicalDate ? (
+          <span className="tnum">{formatCivilDate(doc.clinicalDate)}</span>
+        ) : (
+          <span className="text-muted">{copy.noDate}</span>
+        ),
+      mobileCell: (doc) => (doc.clinicalDate ? formatCivilDate(doc.clinicalDate) : null),
+    },
+    {
+      id: 'teeth',
+      header: copy.colTeeth,
+      cell: (doc) =>
+        doc.toothNumbers.length > 0 ? (
+          <span className="tnum">{doc.toothNumbers.join(', ')}</span>
+        ) : (
+          <span className="text-muted">{copy.noTeeth}</span>
+        ),
+      mobileCell: (doc) => (doc.toothNumbers.length > 0 ? doc.toothNumbers.join(', ') : null),
+    },
+    {
+      id: 'detail',
+      header: copy.colDetail,
+      cell: (doc) => (
+        <span className="flex min-w-0 flex-col gap-0.5 text-xs text-muted">
+          <span className="tnum">{formatFileSize(doc.sizeBytes, fmt)}</span>
+          {doc.notes ? <span className="[overflow-wrap:anywhere]">{doc.notes}</span> : null}
+          {doc.voidedAt !== null ? (
+            <span className="text-ink [overflow-wrap:anywhere]">
+              {copy.voidedDetail(formatDateTime(doc.voidedAt), doc.voidedByName ?? copy.unknownUser, doc.voidReason ?? '')}
+            </span>
+          ) : null}
+        </span>
+      ),
+      mobileCell: (doc) =>
+        [
+          formatFileSize(doc.sizeBytes, fmt),
+          doc.notes,
+          doc.voidedAt !== null
+            ? copy.voidedDetail(formatDateTime(doc.voidedAt), doc.voidedByName ?? copy.unknownUser, doc.voidReason ?? '')
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+    },
+    {
+      id: 'author',
+      header: copy.colAuthor,
+      showFrom: 'lg',
+      cell: (doc) => (
+        <span className="text-sm">
           {copy.uploadedBy(doc.uploadedByName ?? copy.unknownUser, formatDateTime(doc.uploadedAt))}
-        </TableCell>
-        <TableCell data-label={copy.colActions} className="max-sm:block max-sm:before:hidden">
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            {doc.inlineViewable ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="max-sm:min-h-11"
-                onClick={() => setViewing(doc)}
-              >
-                <Eye aria-hidden />
-                {copy.view}
-                <span className="sr-only">{copy.fileFor(doc.originalName)}</span>
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="max-sm:min-h-11"
-              loading={isDownloading}
-              disabled={isDownloading}
-              onClick={() => void download(doc)}
-            >
-              <Download aria-hidden />
-              {copy.download}
-              <span className="sr-only">{copy.fileFor(doc.originalName)}</span>
-            </Button>
-            {canVoidPatientDocument(role, doc, userId) ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="max-sm:min-h-11"
-                onClick={() => setVoiding(doc)}
-              >
-                {copy.void}
-                <span className="sr-only">{copy.fileFor(doc.originalName)}</span>
-              </Button>
-            ) : null}
-          </div>
-        </TableCell>
-      </TableRow>
-    );
+        </span>
+      ),
+      mobile: 'hidden',
+    },
+  ];
+
+  function documentActions(doc: PatientDocument) {
+    return [
+      ...(doc.inlineViewable
+        ? [{ label: copy.view, icon: <Eye aria-hidden />, onSelect: () => setViewing(doc) }]
+        : []),
+      {
+        label: copy.download,
+        icon: <Download aria-hidden />,
+        disabled: downloading.has(doc.id),
+        onSelect: () => void download(doc),
+      },
+      ...(canVoidPatientDocument(role, doc, userId)
+        ? [
+            {
+              label: copy.void,
+              icon: <Ban aria-hidden />,
+              destructive: true,
+              separatorBefore: true,
+              onSelect: () => setVoiding(doc),
+            },
+          ]
+        : []),
+    ];
   }
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <div>
-        <h2 className="text-lg font-semibold text-ink">{copy.heading}</h2>
-        <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
-      </div>
+      <SectionHeader
+        as="h2"
+        title={copy.heading}
+        description={<span className="block max-w-[68ch]">{copy.support}</span>}
+      />
 
       {canUpload ? (
         <section aria-label={copy.queueLabel} className="flex flex-col gap-3">
@@ -684,26 +710,34 @@ export function PatientDocumentsTab({
               setDragging(false);
               addFiles(e.dataTransfer.files);
             }}
+            // Una fila compacta con borde sólido: no se confunde con el vacío
+            // de la lista (antes, dos cajas discontinuas iguales).
             className={cn(
-              'flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors',
+              'flex flex-col gap-3 rounded-lg border px-4 py-3 transition-colors sm:flex-row sm:items-center',
               dragging ? 'border-primary-border bg-primary-subtle' : 'border-border bg-surface',
             )}
           >
-            <Upload className="size-6 text-muted" aria-hidden />
-            <p className="text-sm font-medium text-ink">{dragging ? copy.dropActive : copy.dropTitle}</p>
-            <p className="text-sm text-muted">{copy.dropOr}</p>
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <Upload className="mt-0.5 size-5 shrink-0 text-muted" aria-hidden />
+              <div className="min-w-0">
+                {/* En el teléfono no se arrastra: solo el botón. */}
+                <p className="hidden text-sm font-medium text-ink sm:block">
+                  {dragging ? copy.dropActive : copy.dropTitle}
+                </p>
+                <p id={hintId} className="max-w-[60ch] text-xs text-muted">
+                  {patientDocumentFileCopy.allowed}
+                </p>
+              </div>
+            </div>
             <Button
               type="button"
               variant="secondary"
-              className="max-sm:min-h-11 max-sm:w-full"
+              className="max-sm:w-full"
               aria-describedby={hintId}
               onClick={() => inputRef.current?.click()}
             >
               {copy.choose}
             </Button>
-            <p id={hintId} className="max-w-[60ch] text-xs text-muted">
-              {patientDocumentFileCopy.allowed}
-            </p>
             <input
               ref={inputRef}
               type="file"
@@ -722,7 +756,7 @@ export function PatientDocumentsTab({
           {queue.length > 0 ? (
             <div className="flex flex-col gap-2">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <h3 className="t-label text-muted">{copy.queueHeading}</h3>
+                <h3 className="t-title text-ink">{copy.queueHeading}</h3>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {queue.some((item) => item.status === 'done') ? (
                     <Button
@@ -761,44 +795,44 @@ export function PatientDocumentsTab({
       ) : null}
 
       <div className="flex flex-col gap-3">
-        <div role="group" aria-label={copy.filtersLabel} className="grid gap-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,12rem)]">
-          <div className="flex min-w-0 flex-col gap-1">
-            <label htmlFor={`${ids}-filter-category`} className="t-label text-muted">
-              {copy.category}
-            </label>
-            <select
-              id={`${ids}-filter-category`}
-              value={category}
-              onChange={(e) => setCategory(e.target.value as PatientDocumentCategory | '')}
-              className={cn(fieldClass, 'h-11 sm:h-10')}
-            >
-              <option value="">{copy.allCategories}</option>
-              {PATIENT_DOCUMENT_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {PATIENT_DOCUMENT_CATEGORY_LABELS[c]}
-                </option>
-              ))}
-            </select>
+        {/* Sin documentos no hay nada que filtrar: los filtros salen con el primero. */}
+        {docs.length > 0 || filtered ? (
+          <div
+            role="group"
+            aria-label={copy.filtersLabel}
+            className="grid gap-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,12rem)]"
+          >
+            <FormField htmlFor={`${ids}-filter-category`} label={copy.category} className="min-w-0">
+              <NativeSelect
+                id={`${ids}-filter-category`}
+                value={category}
+                onChange={(e) => setCategory(e.target.value as PatientDocumentCategory | '')}
+              >
+                <option value="">{copy.allCategories}</option>
+                {PATIENT_DOCUMENT_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {PATIENT_DOCUMENT_CATEGORY_LABELS[c]}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+            <FormField htmlFor={`${ids}-filter-tooth`} label={copy.tooth} className="min-w-0">
+              <NativeSelect
+                id={`${ids}-filter-tooth`}
+                value={tooth}
+                onChange={(e) => setTooth(e.target.value)}
+                selectClassName="tnum"
+              >
+                <option value="">{copy.allTeeth}</option>
+                {FDI_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
           </div>
-          <div className="flex min-w-0 flex-col gap-1">
-            <label htmlFor={`${ids}-filter-tooth`} className="t-label text-muted">
-              {copy.tooth}
-            </label>
-            <select
-              id={`${ids}-filter-tooth`}
-              value={tooth}
-              onChange={(e) => setTooth(e.target.value)}
-              className={cn(fieldClass, 'h-11 tabular-nums sm:h-10')}
-            >
-              <option value="">{copy.allTeeth}</option>
-              {FDI_OPTIONS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        ) : null}
 
         {sedeFormat.status === 'error' ? (
           <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} locationId={sedeFormat.locationId} />
@@ -814,23 +848,15 @@ export function PatientDocumentsTab({
           emptyIcon={<FileText aria-hidden />}
           skeleton={<TabSkeleton />}
         >
-          <div className="overflow-hidden rounded-lg border border-border bg-surface">
-            <Table aria-label={copy.heading}>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{copy.colCategory}</TableHead>
-                  <TableHead>{copy.colName}</TableHead>
-                  <TableHead>{copy.colDate}</TableHead>
-                  <TableHead>{copy.colTeeth}</TableHead>
-                  <TableHead>{copy.colAuthor}</TableHead>
-                  <TableHead className="text-right">
-                    <span className="sr-only">{copy.colActions}</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>{docs.map(documentRow)}</TableBody>
-            </Table>
-          </div>
+          <DataList
+            label={copy.heading}
+            rows={docs}
+            columns={columns}
+            getRowKey={(doc) => doc.id}
+            onRowClick={openDocument}
+            getRowLabel={(doc) => doc.originalName}
+            rowActions={documentActions}
+          />
         </AsyncSection>
       </div>
 
