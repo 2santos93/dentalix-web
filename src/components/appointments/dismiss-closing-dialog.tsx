@@ -1,0 +1,190 @@
+'use client';
+import { useId, useState } from 'react';
+import { apiErrorMessage } from '@/lib/api/error-message';
+import {
+  CLOSING_DISMISSAL_REASONS,
+  CLOSING_DISMISSAL_REASON_LABELS,
+  DISMISSAL_TEXT_MAX,
+  DISMISSAL_TEXT_MIN,
+  dismissClosingItem,
+  type ClosingDismissalReason,
+  type ClosingQueueSection,
+} from '@/lib/appointments/closing-queue-api';
+import { FormModal } from '@/components/shared/form-modal';
+import { fieldErrorId } from '@/components/shared/form-field';
+import { InlineError } from '@/components/errors/inline-error';
+import { Label } from '@/components/ui/label';
+import { fieldClass } from '@/lib/ui/field-class';
+import { cn } from '@/lib/utils';
+
+export const dismissClosingCopy = {
+  title: 'Descartar de «Pendiente de cerrar»',
+  description: (subject: string) =>
+    `${subject}. Sale de la lista sin cambiar la cita, la historia ni el plan, y queda en el registro de auditoría.`,
+  reason: 'Motivo',
+  reasonRequired: 'Elige un motivo.',
+  other: 'Escribe el motivo',
+  otherRequired: `Escribe el motivo (de ${DISMISSAL_TEXT_MIN} a ${DISMISSAL_TEXT_MAX} caracteres).`,
+  counter: (n: number) => `${n}/${DISMISSAL_TEXT_MAX}`,
+  submit: 'Descartar',
+  back: 'Volver',
+  genericError: 'No pudimos descartar el pendiente. Intenta de nuevo.',
+};
+
+const copy = dismissClosingCopy;
+
+interface DismissClosingDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  token: string;
+  section: ClosingQueueSection;
+  appointmentId: string;
+  planItemId?: string;
+  /** Qué se descarta, p. ej. «Ana Pérez · 30/10/2026 09:00». */
+  subject: string;
+  onDone: () => void;
+}
+
+/**
+ * DX-439: descartar UN pendiente con un motivo de la lista; «Otro» pide texto
+ * (3–200). La API comprueba que sigue pendiente y que el rol lo cierra.
+ */
+export function DismissClosingDialog({
+  open,
+  onOpenChange,
+  token,
+  section,
+  appointmentId,
+  planItemId,
+  subject,
+  onDone,
+}: DismissClosingDialogProps) {
+  const id = useId();
+  const reasonName = `${id}-reason`;
+  const otherId = `${id}-other`;
+  const counterId = `${id}-counter`;
+  const [reasonCode, setReasonCode] = useState<ClosingDismissalReason | null>(null);
+  const [text, setText] = useState('');
+  const [errors, setErrors] = useState<{ reason?: string; other?: string }>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const trimmed = text.trim();
+    const next = {
+      reason: reasonCode === null ? copy.reasonRequired : undefined,
+      other:
+        reasonCode === 'OTHER' && (trimmed.length < DISMISSAL_TEXT_MIN || trimmed.length > DISMISSAL_TEXT_MAX)
+          ? copy.otherRequired
+          : undefined,
+    };
+    if (next.reason || next.other) {
+      setErrors(next);
+      document.getElementById(next.reason ? `${reasonName}-${CLOSING_DISMISSAL_REASONS[0]}` : otherId)?.focus();
+      return;
+    }
+    if (reasonCode === null) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await dismissClosingItem(token, {
+        section,
+        appointmentId,
+        ...(planItemId ? { planItemId } : {}),
+        reasonCode,
+        ...(reasonCode === 'OTHER' ? { reasonText: trimmed } : {}),
+      });
+      onDone();
+    } catch (err) {
+      setError(apiErrorMessage(err, copy.genericError));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <FormModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title={copy.title}
+      description={copy.description(subject)}
+      onSubmit={handleSubmit}
+      submitLabel={copy.submit}
+      cancelLabel={copy.back}
+      submitting={submitting}
+      error={error}
+      touchTargets
+    >
+      <fieldset
+        role="radiogroup"
+        className="flex flex-col gap-2"
+        aria-invalid={errors.reason ? true : undefined}
+        aria-describedby={errors.reason ? fieldErrorId(reasonName) : undefined}
+      >
+        <legend className="mb-1.5 text-sm font-medium text-ink">{copy.reason}</legend>
+        {CLOSING_DISMISSAL_REASONS.map((code) => {
+          const optionId = `${reasonName}-${code}`;
+          return (
+            <label
+              key={code}
+              htmlFor={optionId}
+              className={cn(
+                'flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 transition-colors hover:bg-bg',
+                reasonCode === code && 'border-primary',
+              )}
+            >
+              <input
+                id={optionId}
+                type="radio"
+                name={reasonName}
+                value={code}
+                checked={reasonCode === code}
+                disabled={submitting}
+                onChange={() => {
+                  setReasonCode(code);
+                  setErrors({});
+                }}
+                className="size-5 shrink-0 accent-[var(--color-primary)]"
+              />
+              <span className="text-sm font-medium text-ink">{CLOSING_DISMISSAL_REASON_LABELS[code]}</span>
+            </label>
+          );
+        })}
+        {errors.reason ? (
+          <InlineError id={fieldErrorId(reasonName)} className="text-xs">
+            {errors.reason}
+          </InlineError>
+        ) : null}
+      </fieldset>
+
+      {reasonCode === 'OTHER' ? (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={otherId}>{copy.other}</Label>
+          <textarea
+            id={otherId}
+            rows={2}
+            maxLength={DISMISSAL_TEXT_MAX}
+            value={text}
+            disabled={submitting}
+            aria-invalid={errors.other ? true : undefined}
+            aria-describedby={errors.other ? `${fieldErrorId(otherId)} ${counterId}` : counterId}
+            onChange={(e) => {
+              setText(e.target.value);
+              setErrors((x) => ({ ...x, other: undefined }));
+            }}
+            className={cn(fieldClass, errors.other && 'border-danger')}
+          />
+          <p id={counterId} className="self-end text-xs tabular-nums text-muted">
+            {copy.counter(text.length)}
+          </p>
+          {errors.other ? (
+            <InlineError id={fieldErrorId(otherId)} className="text-xs">
+              {errors.other}
+            </InlineError>
+          ) : null}
+        </div>
+      ) : null}
+    </FormModal>
+  );
+}
