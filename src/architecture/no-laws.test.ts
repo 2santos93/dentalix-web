@@ -31,11 +31,11 @@ const landingFiles = (): string[] => [
 ];
 
 /** Cada línea de los ficheros que cumple `cites`, como `ruta:línea: texto`. */
-function offending(files: string[], cites: (line: string) => boolean): string[] {
+function offending(files: string[], cites: (line: string, file: string) => boolean): string[] {
   return files.flatMap((file) =>
     readFileSync(file, 'utf8')
       .split('\n')
-      .flatMap((line, i) => (cites(line) ? [`${rel(file)}:${i + 1}: ${line.trim()}`] : [])),
+      .flatMap((line, i) => (cites(line, rel(file)) ? [`${rel(file)}:${i + 1}: ${line.trim()}`] : [])),
   );
 }
 
@@ -84,7 +84,16 @@ describe('arquitectura: landing sin leyes ni regímenes (DX-369)', () => {
 const COMMENT_LINE = /^\s*(?:\*|\/\/|\/\*)/;
 const API_SCHEMA = 'lib/api/schema.d.ts';
 const LAW_CITATION_FILE = 'architecture/law-citation.ts';
-const LAW_EXCEPTIONS = ['lib/prescriptions/legacy-prescription-layout.ts'];
+const PRESCRIPTION_LEGACY_LAYOUT = 'lib/prescriptions/legacy-prescription-layout.ts';
+/**
+ * Líneas exactas (sin sangría) que pueden citar una norma, cada una en su
+ * fichero. Cualquier otra cita, también en ese fichero, falla. Armadas por
+ * partes, como los casos de la autoprueba.
+ */
+const LAW_LINE_EXCEPTIONS: readonly { file: string; line: string }[] = [
+  { file: PRESCRIPTION_LEGACY_LAYOUT, line: "subtitle: 'Decr" + "eto 780 de 2016, art. 2.5.3.10.16'," },
+  { file: PRESCRIPTION_LEGACY_LAYOUT, line: "subtitle: 'Real Decr" + "eto 1718/2010, art. 3'," },
+];
 const DX325_FILES = [
   'components/implants/implant-card-document.tsx',
   'components/data-consents/privacy-policy-settings.tsx',
@@ -92,7 +101,23 @@ const DX325_FILES = [
   API_SCHEMA,
 ];
 
-const citesLawInCode = (line: string): boolean => !COMMENT_LINE.test(line) && citesLaw(line);
+/** Comentarios de bloque cerrados al principio de la línea: no ocultan el código que los sigue. */
+const LEADING_BLOCK_COMMENTS = /^(?:\s*\/\*.*?\*\/)+/;
+
+/** El código de la línea: sin los bloques del principio y vacío si lo que queda es un comentario. */
+function codeOf(line: string): string {
+  const rest = line.replace(LEADING_BLOCK_COMMENTS, '');
+  return COMMENT_LINE.test(rest) ? '' : rest;
+}
+
+const citesLawInCode = (line: string): boolean => citesLaw(codeOf(line));
+
+function isLawLineException(file: string, line: string): boolean {
+  return LAW_LINE_EXCEPTIONS.some((e) => e.file === file && e.line === line.trim());
+}
+
+/** El predicado de la guarda: una cita en código que no es una de las líneas fijadas. */
+const lawHit = (line: string, file: string): boolean => citesLawInCode(line) && !isLawLineException(file, line);
 
 function productionFiles(): string[] {
   return sourceFiles(SRC).filter((path) => {
@@ -106,8 +131,8 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
   it('no production line of src cites a law or an authority outside the legacy prescription layout', () => {
     const files = productionFiles();
     expect(files.length).toBeGreaterThan(300);
-    const scanned = files.filter((path) => !LAW_EXCEPTIONS.includes(rel(path)));
-    expect(offending(scanned, citesLawInCode)).toEqual([]);
+    expect(files.map(rel)).toContain(PRESCRIPTION_LEGACY_LAYOUT);
+    expect(offending(files, lawHit)).toEqual([]);
   });
 
   it('the generated API contract cites no law, comments included', () => {
@@ -121,12 +146,21 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
   });
 
   it('every named exception still exists and still needs its exception', () => {
-    for (const file of LAW_EXCEPTIONS) {
-      const path = join(SRC, ...file.split('/'));
-      expect([file, existsSync(path)]).toEqual([file, true]);
-      const lines = readFileSync(path, 'utf8').split('\n');
-      expect([file, lines.some(citesLawInCode)]).toEqual([file, true]);
+    for (const e of LAW_LINE_EXCEPTIONS) {
+      const path = join(SRC, ...e.file.split('/'));
+      expect([e.file, existsSync(path)]).toEqual([e.file, true]);
+      const lines = readFileSync(path, 'utf8').split('\n').map((l) => l.trim());
+      expect([e.file, e.line, lines.includes(e.line)]).toEqual([e.file, e.line, true]);
+      expect([e.line, citesLawInCode(e.line)]).toEqual([e.line, true]);
     }
+  });
+
+  it('the exception covers only its pinned lines: a new citation in the legacy layout is caught', () => {
+    const [pinned] = LAW_LINE_EXCEPTIONS;
+    expect(lawHit(`    ${pinned.line}`, PRESCRIPTION_LEGACY_LAYOUT)).toBe(false);
+    expect(lawHit("  footer: 'Decr" + "eto 780 de 2016',", PRESCRIPTION_LEGACY_LAYOUT)).toBe(true);
+    expect(lawHit(pinned.line.replace('2016', '2017'), PRESCRIPTION_LEGACY_LAYOUT)).toBe(true);
+    expect(lawHit(pinned.line, 'lib/prescriptions/prescription-layout.ts')).toBe(true);
   });
 
   it('the law patterns catch each citation and skip neutral text', () => {
@@ -155,6 +189,9 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
       'permiso ' + 'SA' + 'CS',
       'AN' + 'PD',
       'CN' + 'IL',
+      "/* nota */ const basis = '" + 'Le' + "y 1581';",
+      "/* a */ /* b */ subtitle: '" + 'Le' + "y 1581',",
+      "const url = 'https://example.org // " + 'Le' + "y 1581';",
     ]) {
       expect({ text, caught: citesLawInCode(text) }).toEqual({ text, caught: true });
     }
@@ -171,6 +208,8 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
       'artículos de limpieza',
       '// ' + 'Le' + 'y 1581',
       ' * ' + 'Le' + 'y 1581',
+      '/* nota */ // ' + 'Le' + 'y 1581',
+      '/* ' + 'Le' + 'y 1581 */',
     ]) {
       expect({ text, caught: citesLawInCode(text) }).toEqual({ text, caught: false });
     }
