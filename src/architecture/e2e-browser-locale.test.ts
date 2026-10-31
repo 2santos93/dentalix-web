@@ -57,6 +57,14 @@ function browserLocaleHits(rel: string, text: string): string[] {
   );
 }
 
+/** Los `locale` de navegador de un fichero, sin la exención de `location-country.spec.ts`. */
+function regionalLocales(rel: string, text: string): string[] {
+  const source = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  return browserOptionObjects(source).flatMap((object) =>
+    object.properties.filter((p) => p.name?.getText(source) === 'locale').map((p) => p.getText(source)),
+  );
+}
+
 const rel = (path: string) => relative(ROOT, path).split(sep).join('/');
 
 describe('arquitectura: el navegador de la suite e2e no tiene región (DX-312)', () => {
@@ -72,7 +80,9 @@ describe('arquitectura: el navegador de la suite e2e no tiene región (DX-312)',
       expect.arrayContaining(['playwright.config.ts', 'e2e/support/regional.ts', 'e2e/staff-invitation.spec.ts', REGIONAL_LOCALE_SPEC]),
     );
     const spec = readFileSync(join(ROOT, REGIONAL_LOCALE_SPEC), 'utf8');
-    expect(spec).toContain("test.use({ locale: 'es-VE' });");
+    // El spec sigue abriendo un navegador en es-VE (con o sin más opciones,
+    // p. ej. `timezoneId`): se busca la opción en el AST, no la línea literal.
+    expect(regionalLocales(REGIONAL_LOCALE_SPEC, spec)).toContain("locale: 'es-VE'");
     // Fuera de su fichero, la misma línea es una infracción.
     expect(browserLocaleHits('e2e/other.spec.ts', spec)).toEqual([
       expect.stringMatching(/^e2e\/other\.spec\.ts:\d+: locale: 'es-VE'$/),
