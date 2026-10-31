@@ -156,10 +156,10 @@ for (const viewport of VIEWPORTS) {
       await expect(page.getByText('Tasa de COP registrada.')).toBeVisible();
 
       // 4. El registro adelanta el reintento y el barrido lo resuelve: el aviso desaparece.
-      // Se espera a la primera lectura del aviso antes de recargar: recargar con
-      // el `/auth/refresh` de la carga aún en vuelo lo aborta después de que la
-      // API rotara la cookie, y el siguiente refresh (cookie vieja) da 401 y
-      // manda a /login, donde el sondeo esperaría para siempre.
+      // Se espera a la primera lectura del aviso antes de sondear: cada vuelta
+      // del sondeo espera la respuesta de SU carga. (Recargar con el
+      // `/auth/refresh` en vuelo ya no cierra la sesión: la API reemite el
+      // token vigente al anterior durante la gracia; ver session-cookie.spec.)
       const isBacklog = (r: { url(): string }) => new URL(r.url()).pathname.endsWith('/payments/rate-backlog');
       await Promise.all([page.waitForResponse(isBacklog), page.goto(`${session.origin}/dashboard`)]);
       await expect

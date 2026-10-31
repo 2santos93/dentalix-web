@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, MailCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { REGISTER_LOCATION_FIELDS, registerClinic } from '@/lib/auth/register-api';
+import { REGISTER_LOCATION_FIELDS, registerClinic, SUBDOMAIN_PATTERN } from '@/lib/auth/register-api';
+import { useSubdomainAvailability, type SubdomainStatus } from '@/lib/auth/use-subdomain-availability';
 import { listPublicCurrencies } from '@/lib/reference/currencies-api';
 import {
   canonicalLocale,
@@ -24,10 +25,10 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { AUTH_FORM_CLASS, AUTH_SUBMIT_CLASS } from './auth-layout';
 import { PasswordInput } from './password-input';
+import { cn } from '@/lib/utils';
 
 /** Dominio bajo el que vive cada clínica (`sonrisa.dentalix.app`). */
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dentalix.app';
-const SUBDOMAIN_PATTERN = /^[a-z0-9-]+$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NAME_MIN = 2;
 const PASSWORD_MIN = 8;
@@ -43,7 +44,14 @@ const copy = {
   subdomainHint: (sub: string) =>
     `Así entrarás: ${sub || 'tu-clinica'}.${ROOT_DOMAIN}. Solo minúsculas sin tildes, números y guiones.`,
   subdomainMissing: 'Escribe la dirección web de tu clínica.',
-  subdomainInvalid: 'Usa solo minúsculas sin tildes, números y guiones (por ejemplo, sonrisa-norte).',
+  subdomainInvalid:
+    'Usa solo minúsculas sin tildes, números y guiones, sin guion al principio ni al final (por ejemplo, sonrisa-norte).',
+  // Línea de estado mientras se escribe (GET /public/subdomains/:slug/availability).
+  subdomainChecking: 'Comprobando…',
+  subdomainAvailable: 'Disponible',
+  subdomainTaken: 'En uso, prueba otra.',
+  subdomainReserved: 'Reservada para la plataforma, prueba otra.',
+  subdomainFormat: 'Solo minúsculas sin tildes, números y guiones; sin guion al principio ni al final.',
   fullNameLabel: 'Nombre completo',
   fullNameInvalid: `Escribe tu nombre (al menos ${NAME_MIN} caracteres).`,
   emailLabel: 'Correo electrónico',
@@ -61,6 +69,8 @@ const copy = {
   // 409 de POST /auth/register: solo la DIRECCIÓN (DX-029: el correo nunca
   // se revela; si ya tenía cuenta, su titular recibe un aviso por correo).
   taken: 'Esa dirección web ya está en uso. Elige otra.',
+  // 409 SUBDOMAIN_RESERVED: www, api… son de la plataforma.
+  reserved: 'Esa dirección está reservada para la plataforma. Elige otra.',
   sentTitle: 'Revisa tu correo',
   sentBody: (email: string) =>
     `Si ${email} puede registrar una clínica, te llegará un correo con un enlace para confirmarla. Ábrelo en las próximas 24 horas para activar tu clínica.`,
@@ -80,6 +90,27 @@ const LOCATION_ID = 'register-location';
 const CLINIC_NAME_ID = 'register-clinic-name';
 const SUBDOMAIN_ID = 'register-subdomain';
 const SUBDOMAIN_HINT_ID = 'register-subdomain-hint';
+const SUBDOMAIN_STATUS_ID = 'register-subdomain-status';
+
+/** Texto y tono de la línea de estado; `null` = no se dice nada. */
+function subdomainStatusLine(status: SubdomainStatus): { text: string; className: string; live: boolean } | null {
+  switch (status) {
+    case 'checking':
+      // Visual: no se anuncia «Comprobando…» y luego la respuesta (dos veces).
+      return { text: copy.subdomainChecking, className: 'text-muted', live: false };
+    case 'available':
+      return { text: copy.subdomainAvailable, className: 'text-success-text', live: true };
+    case 'taken':
+      return { text: copy.subdomainTaken, className: 'text-danger-text', live: true };
+    case 'reserved':
+      return { text: copy.subdomainReserved, className: 'text-danger-text', live: true };
+    case 'invalid':
+      return { text: copy.subdomainFormat, className: 'text-danger-text', live: true };
+    default:
+      // idle (vacía o escribiendo) y unknown (no se pudo comprobar: lo dirá el envío).
+      return null;
+  }
+}
 const FULL_NAME_ID = 'register-full-name';
 const EMAIL_ID = 'register-email';
 const PASSWORD_ID = 'register-password';
@@ -93,9 +124,11 @@ type AccountField = 'fullName' | 'email' | 'password';
  * avanzar; un 409 (dirección ocupada) o un 400 de la sede devuelven al paso 1,
  * junto al campo.
  *
- * Disponibilidad de la dirección: la API no tiene un endpoint para comprobarla
- * antes de enviar, así que se enseña el formato y la dirección resultante, y
- * la ocupada se avisa con el 409 del envío.
+ * Disponibilidad de la dirección: mientras se escribe, una línea de estado
+ * (`aria-live`, al dejar de escribir) dice si está libre, en uso, reservada o
+ * mal formada, con las mismas reglas que el registro. «Continuar» no avanza
+ * con una dirección en uso o reservada. Libre no es reservada: si otra clínica
+ * la toma antes de enviar, el 409 del envío vuelve al campo.
  */
 export function RegisterForm({ tenant }: { tenant: string | null }) {
   const [step, setStep] = useState(0);
@@ -108,6 +141,7 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
   const [showPassword, setShowPassword] = useState(false);
   const [clinicNameError, setClinicNameError] = useState<string | null>(null);
   const [subdomainError, setSubdomainError] = useState<string | null>(null);
+  const subdomainStatus = useSubdomainAvailability(subdomain);
   const [accountErrors, setAccountErrors] = useState<Partial<Record<AccountField, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -136,7 +170,15 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
   function validateClinicStep(): string | null {
     const nameError = clinicName.trim().length < NAME_MIN ? copy.clinicNameInvalid : null;
     const sub = subdomain.trim();
-    const subError = !sub ? copy.subdomainMissing : SUBDOMAIN_PATTERN.test(sub) ? null : copy.subdomainInvalid;
+    const subError = !sub
+      ? copy.subdomainMissing
+      : !SUBDOMAIN_PATTERN.test(sub)
+        ? copy.subdomainInvalid
+        : subdomainStatus === 'taken'
+          ? copy.taken
+          : subdomainStatus === 'reserved'
+            ? copy.reserved
+            : null;
     const found = validateRegionalSettings(regional);
     setClinicNameError(nameError);
     setSubdomainError(subError);
@@ -222,7 +264,11 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
       }
       // 409: la dirección está ocupada → junto a su campo, en el paso 1.
       if (err instanceof ApiError && err.status === 409) {
-        setSubdomainError(apiErrorMessage(err, { fallback: copy.taken, byStatus: { 409: copy.taken } }));
+        setSubdomainError(
+          err.code === 'SUBDOMAIN_RESERVED'
+            ? copy.reserved
+            : apiErrorMessage(err, { fallback: copy.taken, byStatus: { 409: copy.taken } }),
+        );
         pendingFocus.current = SUBDOMAIN_ID;
         setStep(0);
         return;
@@ -253,6 +299,8 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
   /** `aria-describedby` de un campo del paso 2: el resumen del envío, su error o su pista. */
   const describe = (id: string, fieldError: string | undefined, hintId?: string) =>
     error ? ERROR_ID : fieldError ? fieldErrorId(id) : hintId;
+
+  const statusLine = subdomainStatusLine(subdomainStatus);
 
   return (
     <Wizard steps={STEPS} current={step} onStepChange={goToStep}>
@@ -294,7 +342,13 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
                 required
                 value={subdomain}
                 aria-invalid={subdomainError ? true : undefined}
-                aria-describedby={subdomainError ? fieldErrorId(SUBDOMAIN_ID) : SUBDOMAIN_HINT_ID}
+                aria-describedby={
+                  subdomainError
+                    ? fieldErrorId(SUBDOMAIN_ID)
+                    : statusLine
+                      ? `${SUBDOMAIN_STATUS_ID} ${SUBDOMAIN_HINT_ID}`
+                      : SUBDOMAIN_HINT_ID
+                }
                 onChange={(e) => {
                   setSubdomain(e.target.value.toLowerCase());
                   setSubdomainError(null);
@@ -309,6 +363,18 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
                 .{ROOT_DOMAIN}
               </span>
             </div>
+            {/* Línea de estado (Preview Rule): se dice al dejar de escribir y calla
+                mientras el campo muestra su error, para no leerlo dos veces. */}
+            <p
+              id={SUBDOMAIN_STATUS_ID}
+              aria-live="polite"
+              // Su alto se reserva siempre: la línea aparece sin mover el formulario.
+              className={cn('min-h-4 text-xs', subdomainError ? 'sr-only' : statusLine?.className)}
+            >
+              {statusLine && !subdomainError ? (
+                <span aria-hidden={statusLine.live ? undefined : true}>{statusLine.text}</span>
+              ) : null}
+            </p>
           </FormField>
 
           <fieldset className="flex flex-col gap-4 border-t border-border-subtle pt-4">

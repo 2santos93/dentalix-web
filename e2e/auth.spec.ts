@@ -1,6 +1,7 @@
 import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin, sessionCookie } from './support/auth';
+import { registerClinicViaApi } from './support/api';
 
 /**
  * Smoke e2e: register -> login against the REAL backend (no mocks).
@@ -46,4 +47,32 @@ test('register creates an account, then login succeeds against the real API', as
   // the real API (the cookie yields an access token).
   expect(await sessionCookie(page, origin)).toBeTruthy();
   expect(await accessTokenOf(page)).toBeTruthy();
+});
+
+test('el registro dice, al escribir, si la dirección web está libre, en uso o reservada', async ({ page }) => {
+  const taken = `ocupada-${suffix}`.slice(0, 63);
+  await registerClinicViaApi(page.request, {
+    subdomain: taken,
+    clinicName: `Ocupada ${suffix}`,
+    fullName: 'Dueña Ocupada',
+    email: `ocupada.${suffix}@example.com`,
+    password,
+  });
+  await page.goto('/register');
+  const address = page.getByLabel('Dirección web');
+  const status = page.locator('#register-subdomain-status');
+  // El sufijo de la plataforma sigue a la vista junto al campo.
+  await expect(page.getByText(/^\.dentalix\./)).toBeVisible();
+
+  await address.fill(taken);
+  await expect(status).toHaveText('En uso, prueba otra.');
+
+  await address.fill(`libre-${suffix}`.slice(0, 63));
+  await expect(status).toHaveText('Disponible');
+
+  await address.fill('admin');
+  await expect(status).toHaveText('Reservada para la plataforma, prueba otra.');
+
+  await address.fill('sonrisa-');
+  await expect(status).toContainText('sin guion al principio ni al final');
 });

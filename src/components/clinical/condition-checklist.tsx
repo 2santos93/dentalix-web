@@ -4,10 +4,11 @@ import { useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { ConditionSummaryText } from '@/components/clinical/condition-summary';
-import { AnswerGroup, AnswerSection, UNANSWERED, type AnswerChoice } from '@/components/clinical/answer-group';
 import {
-  type Condition, type ConditionStatus,
-  CONDITION_STATUS_LABELS, CONDITION_UNANSWERED_LABEL, STANDARD_CONDITIONS,
+  AnswerGroup, AnswerSection, TRI_STATE_CHOICES, UNANSWERED, type AnswerChoice,
+} from '@/components/clinical/answer-group';
+import {
+  type Condition, type ConditionStatus, STANDARD_CONDITIONS,
 } from '@/lib/clinical/clinical-types';
 
 const copy = {
@@ -17,12 +18,7 @@ const copy = {
 };
 
 type Choice = ConditionStatus | typeof UNANSWERED;
-const CHOICES: AnswerChoice<ConditionStatus>[] = [
-  { value: UNANSWERED, label: CONDITION_UNANSWERED_LABEL },
-  { value: 'SI', label: CONDITION_STATUS_LABELS.SI },
-  { value: 'NO', label: CONDITION_STATUS_LABELS.NO },
-  { value: 'DESCONOCE', label: CONDITION_STATUS_LABELS.DESCONOCE },
-];
+const CHOICES: AnswerChoice<ConditionStatus>[] = TRI_STATE_CHOICES;
 
 /**
  * Checklist de condiciones de la anamnesis del personal. Cada condición

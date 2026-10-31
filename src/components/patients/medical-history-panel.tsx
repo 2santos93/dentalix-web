@@ -18,6 +18,8 @@ import {
 } from '@/lib/patients/clinical-api';
 import {
   ALLERGY_SEVERITY_LABELS,
+  CONDITION_STATUS_LABELS,
+  type AnswerStatus,
   type ClinicalHistoryValue,
   type Habits,
 } from '@/lib/clinical/clinical-types';
@@ -55,6 +57,7 @@ const copy = {
   // Sin respuestas no es «sin hábitos»: se dice que no se preguntó.
   habitsUnanswered: 'Sin responder',
   habitsNone: 'Ninguno marcado «Sí»',
+  habitsUnknown: (labels: string) => `No sabe: ${labels}`,
   familyHistoryLabel: 'Antecedentes familiares',
   notesLabel: 'Notas',
   // Con versión previa la acción es «Actualizar» (crea una versión nueva: no
@@ -98,10 +101,9 @@ interface MedicalHistoryPanelProps {
  * `version`/`createdById`/`createdAt` — those are server-derived or identity
  * fields, not editable input. `safetyFlags` itself is also excluded (it's
  * derived server-side from `conditions`/`medications`, not editable), EXCEPT
- * `embarazo`/`semanasEmbarazo` — `ClinicalHistoryFields` reads/writes those
- * as top-level `value` fields (not nested under `safetyFlags`), so they're
- * pulled out of `history.safetyFlags` here to carry the pregnancy flag
- * forward between versions like every other field.
+ * `semanasEmbarazo` — `ClinicalHistoryFields` reads/writes it as a top-level
+ * `value` field next to `pregnancy` (the tri-state answer), so it's pulled
+ * out of `history.safetyFlags` here to carry it forward between versions.
  */
 function valueFromHistory(history: MedicalHistory | null): ClinicalHistoryValue {
   if (!history) return {};
@@ -113,10 +115,10 @@ function valueFromHistory(history: MedicalHistory | null): ClinicalHistoryValue 
     dentalHistory: history.dentalHistory ?? undefined,
     surgeries: history.surgeries,
     vitalSigns: history.vitalSigns ?? undefined,
-    // La bandera no distingue «No» de «sin preguntar»: solo un `true` es dato.
-    // Un `false` se trae como «Sin responder», nunca como un «No» afirmado.
-    embarazo: history.safetyFlags.embarazo ? true : undefined,
-    semanasEmbarazo: history.safetyFlags.embarazo ? history.safetyFlags.semanasEmbarazo : undefined,
+    // Tri-estado: lo respondido vuelve tal cual (un «No» elegido es «No»).
+    // `null` = sin responder (también una versión anterior sin «Sí»).
+    pregnancy: history.pregnancy ?? undefined,
+    semanasEmbarazo: history.pregnancy === 'SI' ? history.safetyFlags.semanasEmbarazo : undefined,
     familyHistory: history.familyHistory ?? undefined,
     notes: history.notes ?? undefined,
   };
@@ -163,15 +165,38 @@ function valueEqualsHistory(value: ClinicalHistoryValue, history: MedicalHistory
   return deepEqual(value, valueFromHistory(history));
 }
 
-/** «Fuma · Bruxismo»: solo lo contestado «Sí»; nada se infiere de lo ausente. */
-function habitsYes(habits: Habits | null | undefined): string[] {
-  if (!habits) return [];
-  const out: string[] = [];
-  if (habits.tabaquismo?.activo) out.push('Fuma');
-  if (habits.alcohol?.activo) out.push('Consume alcohol');
-  if (habits.sustancias) out.push('Sustancias psicoactivas');
-  if (habits.bruxismo) out.push('Bruxismo');
+const HABIT_LABELS = {
+  tabaquismo: 'Fuma',
+  alcohol: 'Consume alcohol',
+  sustancias: 'Sustancias psicoactivas',
+  bruxismo: 'Bruxismo',
+} as const;
+
+/**
+ * Los hábitos contestados «Sí» («Fuma · Bruxismo») y los «No sabe»; nada se
+ * infiere de lo ausente (sin responder) ni se pinta un «No».
+ */
+function habitsByAnswer(habits: Habits | null | undefined): { yes: string[]; unknown: string[] } {
+  const out = { yes: [] as string[], unknown: [] as string[] };
+  if (!habits) return out;
+  const answers: [keyof typeof HABIT_LABELS, AnswerStatus | undefined][] = [
+    ['tabaquismo', habits.tabaquismo?.estado],
+    ['alcohol', habits.alcohol?.estado],
+    ['sustancias', habits.sustancias],
+    ['bruxismo', habits.bruxismo],
+  ];
+  for (const [key, answer] of answers) {
+    if (answer === 'SI') out.yes.push(HABIT_LABELS[key]);
+    else if (answer === 'DESCONOCE') out.unknown.push(HABIT_LABELS[key]);
+  }
   return out;
+}
+
+/** «Sí · 20 semanas» / «No» / «No sabe»; `null` (sin responder) no se pinta. */
+function pregnancyText(history: MedicalHistory): string | null {
+  if (history.pregnancy === 'SI') return copy.pregnancyYes(history.safetyFlags.semanasEmbarazo);
+  if (history.pregnancy) return CONDITION_STATUS_LABELS[history.pregnancy];
+  return null;
 }
 
 export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: MedicalHistoryPanelProps) {
@@ -294,7 +319,8 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
     else setConfirmDiscard(true);
   }
 
-  const habitsMarked = latest ? habitsYes(latest.habits) : [];
+  const habitsMarked = habitsByAnswer(latest?.habits);
+  const pregnancy = latest ? pregnancyText(latest) : null;
   const positives = latest ? latest.conditions.filter((c) => c.estado === 'SI').map((c) => c.etiqueta) : [];
 
   return (
@@ -359,19 +385,22 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
                   ? latest.medications.map((m) => [m.nombre, m.dosis].filter(Boolean).join(' ')).join(' · ')
                   : <span className="text-muted">{copy.noMedications}</span>}
               </DescriptionItem>
-              {latest.safetyFlags.embarazo ? (
-                <DescriptionItem label={copy.pregnancyLabel}>
-                  {copy.pregnancyYes(latest.safetyFlags.semanasEmbarazo)}
-                </DescriptionItem>
+              {pregnancy ? (
+                <DescriptionItem label={copy.pregnancyLabel}>{pregnancy}</DescriptionItem>
               ) : null}
               <DescriptionItem label={copy.habitsLabel}>
-                {habitsMarked.length > 0 ? (
-                  habitsMarked.join(' · ')
+                {habitsMarked.yes.length > 0 ? (
+                  habitsMarked.yes.join(' · ')
                 ) : (
                   <span className="text-muted">
                     {latest.habits && Object.keys(latest.habits).length > 0 ? copy.habitsNone : copy.habitsUnanswered}
                   </span>
                 )}
+                {habitsMarked.unknown.length > 0 ? (
+                  <span className="mt-0.5 block text-muted">
+                    {copy.habitsUnknown(habitsMarked.unknown.join(' · '))}
+                  </span>
+                ) : null}
               </DescriptionItem>
               <DescriptionItem label={copy.familyHistoryLabel}>{latest.familyHistory ?? copy.fieldFallback}</DescriptionItem>
               <DescriptionItem label={copy.notesLabel} wide>{latest.notes ?? copy.fieldFallback}</DescriptionItem>

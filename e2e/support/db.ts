@@ -53,3 +53,19 @@ export function postponeRateRetry(paymentId: string, hours: number): void {
     },
   );
 }
+
+/**
+ * Lleva la última rotación de la familia del refresh `refreshToken` (claim
+ * `sid`) fuera de la gracia de la API (JWT_REFRESH_REUSE_GRACE_SECONDS, ≤ 60
+ * s): desde ahí, reusar el token anterior es reuso (401 y sesión revocada).
+ */
+export function ageRefreshRotation(refreshToken: string): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  const claims = JSON.parse(Buffer.from(refreshToken.split('.')[1] ?? '', 'base64url').toString('utf8')) as {
+    sid?: string;
+  };
+  if (!claims.sid) throw new Error('el refresh no tiene familia (sid)');
+  execFileSync('psql', [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `sid=${claims.sid}`], {
+    input: `UPDATE refresh_sessions SET "rotatedAt" = "rotatedAt" - interval '5 minutes' WHERE id = :'sid'::uuid;`,
+  });
+}
