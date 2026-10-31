@@ -5,7 +5,7 @@ import {
   setActiveLocationId,
 } from '@/lib/locations/location-store';
 import { apiBaseUrl } from './api-base';
-import { ApiError, NetworkError } from './api-error';
+import { ApiError, NetworkError, type ExistingPatientRef } from './api-error';
 import { parseRetryAfter } from './error-message';
 
 export { ApiError, NetworkError };
@@ -281,6 +281,8 @@ export function apiErrorFromBody(
   let holidayId: string | null = null;
   let line: number | null = null;
   let canOverride: boolean | null = null;
+  let existingPatientId: string | null = null;
+  let existingPatient: ExistingPatientRef | null = null;
   if (body && typeof body === 'object') {
     const data = body as {
       message?: unknown;
@@ -290,6 +292,8 @@ export function apiErrorFromBody(
       holidayId?: unknown;
       line?: unknown;
       canOverride?: unknown;
+      existingPatientId?: unknown;
+      existingPatient?: unknown;
     };
     const raw = data.message;
     if (typeof raw === 'string' && raw) messages = [raw];
@@ -300,6 +304,10 @@ export function apiErrorFromBody(
     if (typeof data.holidayId === 'string' && data.holidayId) holidayId = data.holidayId;
     if (typeof data.line === 'number' && Number.isInteger(data.line) && data.line >= 0) line = data.line;
     if (typeof data.canOverride === 'boolean') canOverride = data.canOverride;
+    if (typeof data.existingPatientId === 'string' && data.existingPatientId) {
+      existingPatientId = data.existingPatientId;
+    }
+    existingPatient = parseExistingPatient(data.existingPatient);
   }
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
@@ -311,7 +319,17 @@ export function apiErrorFromBody(
     holidayId,
     line,
     canOverride,
+    existingPatientId,
+    existingPatient,
   });
+}
+
+function parseExistingPatient(value: unknown): ExistingPatientRef | null {
+  if (!value || typeof value !== 'object') return null;
+  const { id, firstName, lastName } = value as Record<string, unknown>;
+  return typeof id === 'string' && id && typeof firstName === 'string' && typeof lastName === 'string'
+    ? { id, firstName, lastName }
+    : null;
 }
 
 /**

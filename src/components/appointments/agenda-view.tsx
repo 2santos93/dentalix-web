@@ -80,8 +80,10 @@ import {
   STATUS_LABELS,
   patientLabel,
 } from '@/components/appointments/appointment-display';
-import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair, FileDown } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair, FileDown, Siren } from 'lucide-react';
 import { ContingencyAgendaDialog, contingencyCopy } from '@/components/appointments/contingency-agenda-dialog';
+import { WalkInDialog, walkInCopy } from '@/components/appointments/walk-in-dialog';
+import { canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
 import { canDownloadContingencyAgenda } from '@/lib/appointments/contingency-agenda-api';
 import { InClinicPanel, focusLocationSwitcher, inClinicCopy } from '@/components/appointments/in-clinic-panel';
 import {
@@ -191,6 +193,7 @@ const copy = {
   // DX-122: bloqueos de agenda y pendientes por agendar.
   blockSchedule: 'Bloquear horario',
   blockCreated: 'Horario bloqueado.',
+  walkInCreated: (patient: string) => `${patient || 'El paciente'} ya está en «En clínica».`,
   blocksError: 'No pudimos cargar los bloqueos de la agenda.',
   removeBlockTitle: 'Quitar el bloqueo',
   removeBlockDescription: (label: string) =>
@@ -412,6 +415,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [activeLocationId] = useState(getActiveLocationId);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
+  // DX-470: «Atender sin cita».
+  const [showWalkIn, setShowWalkIn] = useState(false);
   // DX-339: agenda de contingencia en PDF (ADMIN y RECEPTION).
   const [showContingency, setShowContingency] = useState(false);
   const [removingBlock, setRemovingBlock] = useState<ScheduleBlockLike | null>(null);
@@ -670,6 +675,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       : activeLocationId === null || b.locationId === null || b.locationId === activeLocationId,
   );
   const staffName = (id: string) => staff.find((s) => s.userId === id)?.fullName;
+
+  function handleWalkInCreated(result: WalkInResult) {
+    const name = [result.patientFirstName, result.patientLastName].filter(Boolean).join(' ');
+    toast.success(copy.walkInCreated(name));
+    void refreshAppointmentsInPlace();
+  }
 
   function handleBlockCreated() {
     setShowBlockDialog(false);
@@ -1135,6 +1146,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 <CalendarOff aria-hidden /> {copy.blockSchedule}
               </Button>
             ) : null}
+            {canWalkIn(role) && !phone ? (
+              <Button type="button" variant="secondary" onClick={() => setShowWalkIn(true)}>
+                <Siren aria-hidden /> {walkInCopy.button}
+              </Button>
+            ) : null}
             <Button type="button" onClick={openNewAppointment}>
               <Plus /> {copy.newAppointment}
             </Button>
@@ -1218,6 +1234,19 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 <ListTodo aria-hidden /> {copy.waitlistButton}
                 {waitlistCount ? <span className={counterClass}>{waitlistCount}</span> : null}
               </Button>
+              {canWalkIn(role) && phone ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="flex-none!"
+                  title={walkInCopy.button}
+                  onClick={() => setShowWalkIn(true)}
+                >
+                  <Siren aria-hidden />
+                  <span className="sr-only">{walkInCopy.button}</span>
+                </Button>
+              ) : null}
               {canWriteBlocks && phone ? (
                 <Button
                   type="button"
@@ -1808,6 +1837,17 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           onOpenChange={setShowContingency}
           token={token}
           defaultLocationId={activeLocationId}
+        />
+      ) : null}
+
+      {showWalkIn ? (
+        <WalkInDialog
+          open
+          onOpenChange={setShowWalkIn}
+          token={token}
+          locationId={activeLocationId}
+          defaultProviderId={providerId || null}
+          onCreated={handleWalkInCreated}
         />
       ) : null}
 
