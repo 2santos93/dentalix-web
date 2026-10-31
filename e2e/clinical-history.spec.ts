@@ -100,18 +100,21 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   await openPatientTab(page, 'Historia clínica');
 
   // Scope form interactions to each section so lookups stay unambiguous.
-  const anamnesisSection = page.locator('section', { hasText: 'Anamnesis' });
+  // La sección «Anamnesis» es una región con nombre (título h2).
+  const anamnesisSection = page.getByRole('region', { name: 'Anamnesis', exact: true });
   const evolutionsSection = page.locator('section', { hasText: 'Evoluciones' });
 
   // Brand-new patient -> no anamnesis/evolutions recorded yet.
-  await expect(
-    anamnesisSection.getByText('Aún no hay anamnesis registrada para este paciente.'),
-  ).toBeVisible({ timeout: 10_000 });
+  // «Sin anamnesis» lo dice una vez el aviso de la ficha (K3); la sección solo
+  // ofrece registrarla (el formulario va detrás de esa acción).
+  await expect(page.getByText('Sin anamnesis registrada')).toBeVisible({ timeout: 10_000 });
+  await expect(anamnesisSection.getByRole('button', { name: 'Registrar anamnesis' })).toBeVisible();
   await expect(
     evolutionsSection.getByText('No hay evoluciones registradas todavía.'),
   ).toBeVisible({ timeout: 10_000 });
 
   // --- Save a new anamnesis version ---
+  await anamnesisSection.getByRole('button', { name: 'Registrar anamnesis' }).click();
   // Las alergias son una LISTA estructurada (`AllergyListEditor`): hay que
   // agregar una fila y llenar su "Alérgeno", no un textarea.
   await anamnesisSection.getByRole('button', { name: 'Agregar alergia' }).click();
@@ -119,13 +122,10 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   await anamnesisSection.getByLabel('Notas').fill(anamnesisNotesValue);
 
   const anamnesisSaveError = anamnesisSection.locator('p[role="alert"]');
-  // "Registrar anamnesis" / "Guardar nueva versión" es el TÍTULO (<h3>) del
-  // formulario según haya o no versión previa; el botón de envío es "Guardar".
-  await anamnesisSection.getByRole('button', { name: 'Guardar', exact: true }).click();
+  // Primera versión: «Guardar anamnesis» (con versión previa, «Guardar nueva versión»).
+  await anamnesisSection.getByRole('button', { name: 'Guardar anamnesis', exact: true }).click();
 
-  // Scoped to `dd` — `formFromHistory` re-syncs the form's `<textarea>` with
-  // the just-saved values too, so an unscoped text search matches BOTH the
-  // rendered "Versión N" card AND the form field (strict-mode violation).
+  // Al guardar, el formulario se cierra y queda el resumen de la versión.
   await expect(anamnesisSection.locator('dd', { hasText: anamnesisNotesValue }))
     .toBeVisible({ timeout: 10_000 })
     .catch(async () => {
@@ -134,7 +134,7 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
         : 'unknown (no visible alert)';
       throw new Error(`Saving anamnesis failed. API error: ${message}`);
     });
-  await expect(anamnesisSection.getByLabel('Alérgeno')).toHaveValue(allergenValue);
+  await expect(anamnesisSection.locator('dd', { hasText: allergenValue })).toBeVisible();
   await expect(anamnesisSection.getByText('Versión 1')).toBeVisible();
 
   // --- Add a clinical evolution ---
@@ -171,14 +171,16 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   // confirms it (re-clicking the selected tab is a no-op).
   await openPatientTab(page, 'Historia clínica');
 
-  const anamnesisSectionAfterReload = page.locator('section', { hasText: 'Anamnesis' });
+  const anamnesisSectionAfterReload = page.getByRole('region', { name: 'Anamnesis', exact: true });
   const evolutionsSectionAfterReload = page.locator('section', { hasText: 'Evoluciones' });
 
   await expect(
     anamnesisSectionAfterReload.locator('dd', { hasText: anamnesisNotesValue }),
   ).toBeVisible({ timeout: 10_000 });
-  await expect(anamnesisSectionAfterReload.getByLabel('Alérgeno')).toHaveValue(allergenValue);
   await expect(anamnesisSectionAfterReload.getByText('Versión 1')).toBeVisible();
+  // «Actualizar anamnesis» parte de la versión vigente: lo guardado vuelve al formulario.
+  await anamnesisSectionAfterReload.getByRole('button', { name: 'Actualizar anamnesis' }).click();
+  await expect(anamnesisSectionAfterReload.getByLabel('Alérgeno')).toHaveValue(allergenValue);
   await expect(
     evolutionsSectionAfterReload.locator('table').getByText(evolutionNotes),
   ).toBeVisible({ timeout: 10_000 });

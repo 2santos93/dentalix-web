@@ -131,7 +131,7 @@ export function Icd10Combobox({ id, token, value, onChange, describedBy }: Icd10
 
   if (value) {
     return (
-      <div className="flex min-h-10 items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-1.5">
+      <div className="flex min-h-10 items-center justify-between gap-2 rounded-lg border border-border bg-surface-sunken px-3 py-1.5">
         <span className="min-w-0 text-sm">
           <span className="font-medium tabular-nums text-ink">{value.code}</span>
           <span className="text-muted"> · </span>
@@ -230,7 +230,7 @@ export function Icd10Combobox({ id, token, value, onChange, describedBy }: Icd10
               onClick={() => pick(code)}
               className={cn(
                 'flex min-h-11 cursor-pointer items-baseline gap-2 px-3 py-2 text-sm',
-                index === active ? 'bg-primary/10' : 'hover:bg-surface-2',
+                index === active ? 'bg-primary/10' : 'hover:bg-surface-sunken',
               )}
             >
               <span className="w-12 shrink-0 font-medium tabular-nums text-ink">{code.code}</span>{' '}

@@ -361,10 +361,11 @@ for (const viewport of VIEWPORTS) {
     // --- 5. Editar la plantilla (v2) y la HC conserva la v1 --------------------
     await page.goto(`${origin}/settings/indicaciones`);
     await page
-      .getByRole('button', { name: `Editar «${TITLE}»` })
+      .getByRole('button', { name: `Acciones de «${TITLE}»` })
       .locator('visible=true')
       .first()
       .click();
+    await page.getByRole('menuitem', { name: 'Editar' }).click();
     const edit = page.getByRole('dialog', { name: 'Editar indicaciones' });
     await edit.getByLabel('Indicaciones', { exact: true }).fill(BODY_V2);
     await edit.getByRole('button', { name: 'Guardar cambios' }).click();
@@ -377,7 +378,7 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByRole('heading', { name: 'Indicaciones entregadas' })).toBeVisible({
       timeout: 15_000,
     });
-    const deliveries = page.getByRole(vw >= 768 ? 'table' : 'list', { name: 'Indicaciones entregadas' });
+    const deliveries = page.getByRole(vw >= 640 ? 'table' : 'list', { name: 'Indicaciones entregadas' });
     await expect(deliveries.getByText('POI-EXO · v1')).toHaveCount(3, { timeout: 15_000 });
     await expect(deliveries.getByText('POI-EXO · v2')).toHaveCount(0);
     for (const channel of ['Impresa', 'Email', 'WhatsApp']) {

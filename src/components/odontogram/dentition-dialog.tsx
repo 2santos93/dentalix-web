@@ -17,8 +17,9 @@ import { toothChartSide } from '@/lib/odontogram/tooth-anatomy';
 import { FormModal } from '@/components/shared/form-modal';
 import { InlineError } from '@/components/errors/inline-error';
 import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 
 const copy = {
   title: 'Cambiar dentición',
@@ -162,7 +163,7 @@ export function DentitionDialog({
             const ordered =
               toothChartSide(quadrant.positions[0]) === 'left' ? [...quadrant.positions].reverse() : quadrant.positions;
             return (
-              <fieldset key={n} className="min-w-0 rounded-lg border border-hairline p-2">
+              <fieldset key={n} className="min-w-0 rounded-lg border border-border-subtle p-2">
                 <legend className="px-1 text-xs text-muted">{copy.quadrant(n)}</legend>
                 <div className="grid grid-cols-4 gap-1">
                   {ordered.map((position) => {
@@ -172,11 +173,10 @@ export function DentitionDialog({
                       <label
                         key={position}
                         htmlFor={id}
-                        className="flex min-h-11 items-start gap-1.5 rounded-md px-1.5 py-1 text-sm hover:bg-surface-2"
+                        className="flex min-h-11 items-start gap-1.5 rounded-md px-1.5 py-1 text-sm hover:bg-surface-sunken"
                       >
-                        <input
+                        <Checkbox
                           id={id}
-                          type="checkbox"
                           className="mt-0.5"
                           checked={selected.has(position)}
                           aria-label={copy.positionName(position, copy.currentShort(position, current))}
@@ -184,7 +184,7 @@ export function DentitionDialog({
                         />
                         <span className="flex min-w-0 flex-col leading-tight">
                           <span className="font-medium tabular-nums text-ink">{position}</span>
-                          <span aria-hidden="true" className="whitespace-nowrap text-[11px] text-muted">
+                          <span aria-hidden="true" className="t-caption whitespace-nowrap text-muted">
                             {copy.currentTiny(position, current)}
                           </span>
                         </span>
@@ -199,40 +199,38 @@ export function DentitionDialog({
       </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <fieldset className="flex min-w-0 flex-col gap-2">
-          <legend className="t-label mb-1 text-muted">{copy.dentitionLegend}</legend>
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
-            {DENTITION_ORDER.map((option) => (
-              <label key={option} htmlFor={`dent-new-${option}`} className="flex items-center gap-1.5 text-sm text-ink">
-                <input
-                  id={`dent-new-${option}`}
-                  type="radio"
-                  name="dentition"
-                  value={option}
-                  checked={dentition === option}
-                  disabled={reason === 'EXFOLIATION' && option !== 'PERMANENT'}
-                  onChange={() => setDentition(option)}
-                />
-                {DENTITION_LABELS[option]}
-              </label>
-            ))}
-          </div>
-          {reason === 'EXFOLIATION' ? <p className="text-xs text-muted">{copy.exfoliationHint}</p> : null}
-        </fieldset>
+        <RadioGroup
+          id="dent-new"
+          name="dentition"
+          legend={copy.dentitionLegend}
+          value={dentition}
+          onValueChange={(v) => setDentition(v as DentitionType)}
+          hint={reason === 'EXFOLIATION' ? copy.exfoliationHint : undefined}
+          optionsClassName="flex-row flex-wrap gap-x-4"
+        >
+          {DENTITION_ORDER.map((option) => (
+            <RadioOption
+              key={option}
+              id={`dent-new-${option}`}
+              value={option}
+              label={DENTITION_LABELS[option]}
+              disabled={reason === 'EXFOLIATION' && option !== 'PERMANENT'}
+            />
+          ))}
+        </RadioGroup>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="dent-reason">{copy.reasonLabel}</Label>
-          <select
+          <NativeSelect
             id="dent-reason"
             value={reason}
             onChange={(e) => handleReason(e.target.value as DentitionReason)}
-            className={cn(fieldClass, 'h-10')}
           >
             {(Object.keys(DENTITION_REASON_LABELS) as DentitionReason[]).map((r) => (
               <option key={r} value={r}>
                 {DENTITION_REASON_LABELS[r]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       </div>
 

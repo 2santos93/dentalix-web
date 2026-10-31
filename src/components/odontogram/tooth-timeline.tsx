@@ -169,7 +169,7 @@ export function ToothTimeline({
     <>
       <ol
         aria-label={copy.heading(toothNumber)}
-        className="divide-y divide-hairline border-t border-hairline"
+        className="divide-y divide-border-subtle border-t border-border-subtle"
       >
         {visible.map((record) => {
           const catalogEntry = record.catalogItemId ? catalogById?.get(record.catalogItemId) : undefined;
@@ -228,9 +228,9 @@ export function ToothTimeline({
                   <div>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="destructive-ghost"
                       size="sm"
-                      className="-ml-2 h-8 text-muted hover:text-danger-text"
+                      className="-ml-2"
                       aria-label={copy.voidActionFor(label, date)}
                       onClick={() => setVoiding({ id: record.id, label: copy.recordLabel(label, date) })}
                     >

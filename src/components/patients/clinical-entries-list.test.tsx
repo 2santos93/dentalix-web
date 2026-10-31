@@ -148,12 +148,14 @@ describe('ClinicalEntriesList', () => {
     await screen.findByText(/no hay evoluciones/i);
     const dialog = await openNewEntry(user);
 
-    const date = within(dialog).getByLabelText(/fecha de atención/i);
-    // El `max` del input lo bloquea en el navegador; el guard cubre teclado y
-    // pegado, así que se comprueba que el atributo existe.
-    expect(date).toHaveAttribute('max');
-
+    // DateField de segmentos (formato de la sede): se teclea una fecha futura
+    // y el guardado la rechaza con su mensaje, sin llamar a la API.
+    const date = within(dialog).getByRole('group', { name: /fecha de atención/i });
+    await user.click(within(date).getAllByRole('spinbutton')[0]);
+    await user.keyboard('01012999');
     await user.type(within(dialog).getByLabelText(/texto de la evolución/i), 'algo');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar evolución' }));
+    expect(await within(dialog).findByText('La fecha de atención no puede ser futura.')).toBeInTheDocument();
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
@@ -200,7 +202,7 @@ describe('ClinicalEntriesList', () => {
     await screen.findByText(/no hay evoluciones/i);
     const dialog = await openNewEntry(user);
 
-    expect(within(dialog).getByLabelText(/fecha de atención/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole('group', { name: /fecha de atención/i })).toBeInTheDocument();
     expect(within(dialog).getByLabelText(/motivo/i)).toBeInTheDocument();
     expect(within(dialog).getByLabelText(/texto de la evolución/i)).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: /guardar evolución/i })).toBeInTheDocument();

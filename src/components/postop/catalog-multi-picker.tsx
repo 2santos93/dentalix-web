@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
 import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
 
 const copy = {
   filterLabel: 'Buscar procedimiento',
@@ -66,7 +66,7 @@ export function CatalogMultiPicker({
 
   return (
     <fieldset className="flex min-w-0 flex-col gap-2.5">
-      <legend className="mb-0.5 text-sm font-medium text-ink">{legend}</legend>
+      <legend className="t-label mb-0.5 text-ink">{legend}</legend>
       {items.length === 0 ? (
         <p className="text-sm text-muted">{copy.noItems}</p>
       ) : (
@@ -88,7 +88,7 @@ export function CatalogMultiPicker({
               placeholder={filterPlaceholder}
               className="min-w-0 flex-1"
             />
-            <span className="shrink-0 text-xs tabular-nums text-muted" aria-live="polite">
+            <span className="t-caption t-data shrink-0 text-muted" aria-live="polite">
               {copy.selected(value.length)}
             </span>
           </div>
@@ -102,37 +102,32 @@ export function CatalogMultiPicker({
                 const id = `${idPrefix}-${item.id}`;
                 const checked = selected.has(item.id);
                 return (
-                  <label
+                  <Checkbox
                     key={item.id}
-                    htmlFor={id}
-                    className={cn(
-                      'flex min-h-11 cursor-pointer items-center gap-3 border-b border-hairline px-3 py-2 text-sm text-ink transition-colors last:border-0 hover:bg-surface-2',
-                      checked && 'bg-surface-2',
-                    )}
-                  >
-                    <input
-                      id={id}
-                      type="checkbox"
-                      checked={checked}
-                      disabled={item.retired}
-                      onChange={() => toggle(item.id)}
-                      className="size-5 shrink-0 accent-[var(--color-primary)]"
-                    />
-                    {item.color ? (
-                      <span
-                        aria-hidden="true"
-                        className="size-2.5 shrink-0 rounded-[3px] border border-border"
-                        style={{ backgroundColor: item.color }}
-                      />
-                    ) : null}
-                    {/* `w-0`: el nombre crece con flex-1 pero no aporta ancho intrínseco;
-                        con solo `truncate` el más largo ensanchaba el diálogo a 390 px. */}
-                    <span className="w-0 min-w-0 flex-1 truncate">{item.labelEs}</span>
-                    {item.retired ? (
-                      <span className="shrink-0 text-xs text-muted">{copy.retired}</span>
-                    ) : null}
-                    <span className="shrink-0 font-mono text-xs text-muted">{item.code}</span>
-                  </label>
+                    id={id}
+                    checked={checked}
+                    disabled={item.retired}
+                    onChange={() => toggle(item.id)}
+                    className="items-center border-b border-border-subtle px-3 py-2.5 transition-colors last:border-0 hover:bg-surface-sunken has-checked:bg-surface-sunken"
+                    label={
+                      <span className="flex min-w-0 items-center gap-2">
+                        {item.color ? (
+                          <span
+                            aria-hidden="true"
+                            className="size-2.5 shrink-0 rounded-[3px] border border-border"
+                            style={{ backgroundColor: item.color }}
+                          />
+                        ) : null}
+                        {/* Se parte en vez de recortarse: a 390 px el nombre más largo no
+                            debe ensanchar el diálogo ni quedar ilegible. */}
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{item.labelEs}</span>
+                        {item.retired ? (
+                          <span className="t-caption shrink-0 text-muted">{copy.retired}</span>
+                        ) : null}
+                        <span className="t-id t-caption shrink-0 text-muted">{item.code}</span>
+                      </span>
+                    }
+                  />
                 );
               })}
             </div>

@@ -5,8 +5,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { VOID_REASON_MAX, voidToothRecord } from '@/lib/odontogram/odontogram-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   title: 'Anular registro',
@@ -84,7 +83,7 @@ export function VoidRecordDialog({
       destructive
     >
       <FormField htmlFor="void-reason" label={copy.reasonLabel} hint={copy.reasonHint} error={reasonError}>
-        <textarea
+        <Textarea
           id="void-reason"
           name="reason"
           rows={3}
@@ -94,7 +93,6 @@ export function VoidRecordDialog({
           aria-invalid={reasonError ? true : undefined}
           aria-describedby={reasonError ? fieldErrorId('void-reason') : undefined}
           onChange={(e) => setReason(e.target.value)}
-          className={cn(fieldClass, 'h-auto')}
         />
       </FormField>
     </FormModal>

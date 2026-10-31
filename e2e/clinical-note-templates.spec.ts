@@ -163,7 +163,9 @@ for (const viewport of VIEWPORTS) {
 
     // --- 4. Cargar plantillas de ejemplo --------------------------------------
     await page.goto(`${origin}/settings/plantillas-de-evolucion`);
-    await page.getByRole('button', { name: 'Cargar plantillas de ejemplo' }).click();
+    // Con plantillas ya creadas, «Cargar plantillas de ejemplo» vive en el «⋯» de la barra.
+    await page.getByRole('button', { name: 'Más acciones de plantillas' }).click();
+    await page.getByRole('menuitem', { name: 'Cargar plantillas de ejemplo' }).click();
     // «Resina» ya existía: se cargan las otras 5 de ejemplo.
     await expect(page.getByText('6 plantillas')).toBeVisible({ timeout: 10_000 });
     await expectNoHorizontalScroll(page);

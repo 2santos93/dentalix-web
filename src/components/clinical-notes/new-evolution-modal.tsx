@@ -21,8 +21,8 @@ import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
+import { DateField } from '@/components/ui/date-field';
 import { TemplatePicker } from './template-picker';
 import { TemplatePrompts } from './template-prompts';
 import { DiagnosesFields } from './diagnoses-fields';
@@ -79,7 +79,7 @@ function localDay(d: Date): string {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
-/** Hoy en formato `yyyy-mm-dd`, para topar el `<input type="date">`. */
+/** Hoy en formato `yyyy-mm-dd`, para topar la fecha de atención. */
 function todayISO(): string {
   return localDay(new Date());
 }
@@ -214,7 +214,7 @@ export function NewEvolutionModal({
       size="lg"
     >
       {appointment ? (
-        <p className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink">
+        <p className="flex items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink">
           <CalendarCheck aria-hidden className="size-4 shrink-0 text-muted" />
           <span className="tabular-nums">
             {appointmentLine(appointment.start, appointment.providerName, clock)}
@@ -230,12 +230,14 @@ export function NewEvolutionModal({
             hint={copy.entryDateHint}
             error={dateError}
           >
-            <Input
+            {/* Fecha que la persona ya sabe: DateField (sin calendario), en el
+                formato de la sede, nunca el type=date del navegador. */}
+            <DateField
               id="evo-entry-date"
-              type="date"
               max={todayISO()}
-              value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
+              value={entryDate === '' ? null : entryDate}
+              isInvalid={!!dateError}
+              onChange={(next) => setEntryDate(next ?? '')}
             />
           </FormField>
         )}
@@ -277,13 +279,13 @@ export function NewEvolutionModal({
         hint={template ? copy.notesHintTemplate : copy.notesHintFree}
         error={notesError}
       >
-        <textarea
+        <Textarea
           id="evo-notes"
           rows={template ? 6 : 4}
           value={notes}
           aria-invalid={notesError ? true : undefined}
           onChange={(e) => setManualNotes(e.target.value)}
-          className={cn(fieldClass, 'h-auto min-h-24 whitespace-pre-wrap break-words')}
+          className="whitespace-pre-wrap break-words"
         />
       </FormField>
       <DiagnosesFields
@@ -302,7 +304,7 @@ export function NewEvolutionModal({
           <button
             type="button"
             onClick={() => setManualNotes(null)}
-            className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="font-medium text-primary-text underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             {copy.recompose}
           </button>

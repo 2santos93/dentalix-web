@@ -127,7 +127,7 @@ describe('PatientImplantsTab (DX-191)', () => {
     await screen.findByRole('list', { name: 'Implantes del diente 36' });
     expect(screen.getByRole('link', { name: /tarjeta de implante/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /registrar implante/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^anular/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Acciones de/ })).not.toBeInTheDocument();
   });
 
   it('acceso directo del odontograma: abre el formulario con el diente puesto y registra', async () => {
@@ -230,7 +230,8 @@ describe('PatientImplantsTab (DX-191)', () => {
       makeImplant({ voidedAt: '2026-10-17T10:00:00.000Z', voidedByName: 'Dra. Laura Ruiz', voidReason: 'Diente equivocado' }),
     );
     render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
-    await user.click(await screen.findByRole('button', { name: /^anular/i }));
+    await user.click(await screen.findByRole('button', { name: /^Acciones de implante del diente/ }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Anular' }));
     const dialog = await screen.findByRole('dialog', { name: 'Anular implante' });
     const submit = within(dialog).getByRole('button', { name: 'Anular implante' });
     expect(submit).toBeDisabled();

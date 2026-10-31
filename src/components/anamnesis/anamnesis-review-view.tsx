@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   SUBMISSION_STATUS_LABELS,
@@ -15,7 +15,6 @@ import {
 import { SAFETY_FLAG_LABELS } from '@/lib/clinical/medical-alerts';
 import type { ClinicalHistoryValue, SafetyFlags } from '@/lib/clinical/clinical-types';
 import { formatDateTime } from '@/lib/format/date';
-import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
 import { FormModal } from '@/components/shared/form-modal';
@@ -27,6 +26,9 @@ import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Callout } from '@/components/ui/callout';
+import { Textarea } from '@/components/ui/textarea';
+import { SectionHeader } from '@/components/ui/section-header';
 import { CONDITION_UNANSWERED_LABEL } from '@/lib/clinical/clinical-types';
 
 const copy = {
@@ -227,7 +229,7 @@ export function AnamnesisReviewView({
   const backLink = (
     <Link
       href="/anamnesis-por-revisar"
-      className="mb-4 inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-medium text-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="mb-4 inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-medium text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
     >
       <ArrowLeft aria-hidden className="size-4" /> {copy.back}
     </Link>
@@ -240,8 +242,8 @@ export function AnamnesisReviewView({
         <div role="status" aria-label="Cargando" className="flex flex-col gap-4">
           <Skeleton className="h-8 w-72" />
           <Skeleton className="h-4 w-96 max-w-full" />
-          <Skeleton className="h-24 w-full rounded-xl" />
-          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-lg" />
+          <Skeleton className="h-64 w-full rounded-lg" />
         </div>
       </div>
     );
@@ -282,21 +284,20 @@ export function AnamnesisReviewView({
       />
 
       {result ? (
-        <div
+        <Callout
+          tone="success"
           role="status"
-          className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface p-6"
+          title={result.status === 'ACCEPTED' ? copy.acceptedTitle : copy.rejectedTitle}
+          action={
+            <Button asChild variant="secondary" className="min-h-11 sm:min-h-10">
+              <Link href={`/patients/${submission.patient.id}?tab=clinical-history`}>{copy.goToPatient}</Link>
+            </Button>
+          }
         >
-          <p className="flex items-center gap-2 text-base font-semibold text-ink">
-            <CheckCircle2 aria-hidden className="size-5 text-success-text" />
-            {result.status === 'ACCEPTED' ? copy.acceptedTitle : copy.rejectedTitle}
-          </p>
-          {result.status === 'ACCEPTED' && <p className="text-sm text-muted">{copy.acceptedText}</p>}
-          <Button asChild variant="secondary" className="mt-2 min-h-11 sm:min-h-10">
-            <Link href={`/patients/${submission.patient.id}?tab=clinical-history`}>{copy.goToPatient}</Link>
-          </Button>
-        </div>
+          {result.status === 'ACCEPTED' ? copy.acceptedText : null}
+        </Callout>
       ) : !pending ? (
-        <div className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface p-6">
+        <div className="flex flex-col items-start gap-2 rounded-lg border border-border bg-surface p-4 sm:p-6">
           <StatusBadge kind="anamnesisSubmission" status={submission.status} />
           <p className="text-sm text-muted">
             {copy.reviewed(
@@ -309,19 +310,15 @@ export function AnamnesisReviewView({
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          <section
-            aria-labelledby={`${ids}-alerts`}
-            className={cn(
-              'flex flex-col gap-2 rounded-xl border p-4 sm:p-6',
-              alerts.length > 0 ? 'border-danger/40 bg-danger-subtle' : 'border-border bg-surface',
-            )}
+          {/* Lo que la ficha va a avisar si se acepta: el aviso de la pantalla. */}
+          <Callout
+            tone={alerts.length > 0 ? 'danger' : 'neutral'}
+            role="status"
+            title={alerts.length > 0 ? copy.alertsTitle : copy.noAlerts}
+            titleAs="h2"
           >
-            <h2 id={`${ids}-alerts`} className="flex items-center gap-2 text-base font-semibold text-ink">
-              {alerts.length > 0 && <AlertTriangle aria-hidden className="size-5 text-danger-text" />}
-              {alerts.length > 0 ? copy.alertsTitle : copy.noAlerts}
-            </h2>
             {alerts.length > 0 && (
-              <ul className="flex flex-wrap gap-2" data-testid="anamnesis-proposed-alerts">
+              <ul className="mt-1 flex flex-wrap gap-2" data-testid="anamnesis-proposed-alerts">
                 {alerts.map((line) => (
                   <li key={line}>
                     <Badge variant="danger">{line}</Badge>
@@ -329,22 +326,25 @@ export function AnamnesisReviewView({
                 ))}
               </ul>
             )}
-          </section>
+          </Callout>
 
           <section
             aria-labelledby={`${ids}-diff`}
-            className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 sm:p-6"
+            className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 sm:p-6"
           >
-            <h2 id={`${ids}-diff`} className="text-base font-semibold text-ink">
-              {copy.diffTitle}
-            </h2>
-            <p className="text-sm text-muted tabular-nums">
-              {data.currentVersion
-                ? copy.diffAgainst(data.currentVersion.version, formatDateTime(data.currentVersion.createdAt))
-                : copy.diffNoPrevious}
-            </p>
+            <SectionHeader
+              titleId={`${ids}-diff`}
+              title={copy.diffTitle}
+              description={
+                <span className="tabular-nums">
+                  {data.currentVersion
+                    ? copy.diffAgainst(data.currentVersion.version, formatDateTime(data.currentVersion.createdAt))
+                    : copy.diffNoPrevious}
+                </span>
+              }
+            />
             {data.diff && data.diff.entries.length > 0 ? (
-              <ul className="divide-y divide-hairline">
+              <ul className="divide-y divide-border-subtle">
                 {data.diff.entries.map((entry, i) => (
                   <DiffRow key={`${entry.section}-${entry.label}-${i}`} entry={entry} />
                 ))}
@@ -431,9 +431,8 @@ export function AnamnesisReviewView({
         destructive
       >
         <FormField htmlFor={`${ids}-reason`} label={copy.rejectReason} error={reasonError}>
-          <textarea
+          <Textarea
             id={`${ids}-reason`}
-            className={cn(fieldClass, 'min-h-24')}
             value={reason}
             maxLength={500}
             aria-invalid={reasonError ? true : undefined}
