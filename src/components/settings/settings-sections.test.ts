@@ -23,10 +23,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 25 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
+  it('ADMIN ve las 26 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(25);
-    expect(new Set(hrefs).size).toBe(25);
+    expect(hrefs).toHaveLength(26);
+    expect(new Set(hrefs).size).toBe(26);
   });
 
   it('las herramientas y los registros van aparte de las políticas', () => {

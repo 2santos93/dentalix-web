@@ -594,3 +594,59 @@ describe('DayColumns con el reloj de la sede (DX-378)', () => {
     rectSpy.mockRestore();
   });
 });
+
+describe('DayColumns por sillón (DX-211)', () => {
+  const chairColumns = {
+    columns: [
+      { id: 'ch-1', label: 'Sillón 1' },
+      { id: 'ch-2', label: 'Sillón 2' },
+      { id: 'sin-sillon', label: 'Sin sillón' },
+    ],
+    columnOf: (a: Appointment) => a.chairId ?? 'sin-sillon',
+  };
+  const inChair = appointment({ id: 'apt-c', chairId: 'ch-2' });
+  const noChair = appointment({
+    id: 'apt-n',
+    providerId: 'prov-2',
+    patientFirstName: 'Juan',
+    start: new Date(`${DATE}T11:00:00`).toISOString(),
+    end: new Date(`${DATE}T11:30:00`).toISOString(),
+  });
+
+  it('una columna por sillón en su orden y «Sin sillón» al final; cada cita en la de su sillón', () => {
+    renderColumns({ chairColumns, appointments: [inChair, noChair] });
+    expect(screen.getByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument();
+    const headers = screen.getAllByTestId('day-column-header').map((h) => h.textContent);
+    expect(headers).toEqual([
+      expect.stringContaining('Sillón 1'),
+      expect.stringContaining('Sillón 2'),
+      expect.stringContaining('Sin sillón'),
+    ]);
+    const columns = screen.getAllByTestId('day-column');
+    expect(within(columns[0]).queryAllByTestId('day-column-appointment')).toHaveLength(0);
+    expect(within(columns[1]).getByText('María López')).toBeInTheDocument();
+    expect(within(columns[2]).getByText('Juan López')).toBeInTheDocument();
+    // El detalle sigue nombrando al profesional de la cita.
+    expect(
+      screen.getByRole('button', { name: /detalle de la cita de .* · maría lópez · dra\. ana ríos/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('el arrastre está desactivado (mantiene el sillón) y «Mover a…» sigue', () => {
+    const { onDrop } = renderColumns({ chairColumns, appointments: [inChair, noChair] });
+    const card = screen.getAllByTestId('day-column-appointment')[0];
+    fireEvent.pointerDown(card, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 400, clientY: 200 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 400, clientY: 200 });
+    expect(onDrop).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('button', { name: /mover a…/i })).toHaveLength(2);
+  });
+
+  it('«Nueva cita» de un sillón vacío pasa el id de esa columna', async () => {
+    const user = userEvent.setup();
+    const { onNewAppointment } = renderColumns({ chairColumns, appointments: [inChair, noChair] });
+    await user.click(screen.getByRole('button', { name: 'Nueva cita en Sillón 1' }));
+    expect(onNewAppointment).toHaveBeenCalledWith('ch-1');
+  });
+});
+

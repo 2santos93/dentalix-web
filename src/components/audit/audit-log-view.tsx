@@ -29,6 +29,7 @@ import {
   type LocationNames,
   cashSessionDetail,
   sedationDetail,
+  chairDetail,
   scheduleChangeDetail,
   cancellationDetail,
   healthRegistrationDetail,
@@ -469,6 +470,7 @@ function eventDetail(event: AuditEvent, locationNames: LocationNames | null): st
     staffDetail(event.metadata, locationNames) ??
     cashSessionDetail(event.metadata) ??
     sedationDetail(event.metadata) ??
+    chairDetail(event.metadata) ??
     scheduleChangeDetail(event.metadata) ??
     cancellationDetail(event.metadata) ??
     patientFlowDetail(event.metadata) ??

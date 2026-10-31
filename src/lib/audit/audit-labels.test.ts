@@ -14,6 +14,7 @@ import {
   staffLoginDetail,
   cashSessionDetail,
   sedationDetail,
+  chairDetail,
   scheduleChangeDetail,
   patientFlowDetail,
   planItemAttributionDetail,
@@ -108,6 +109,15 @@ describe('implantSearchDetail (DX-191)', () => {
     );
     expect(staffLoginDetail({ reason: 'REMINDER_OPT_OUT' })).toBeNull();
     expect(staffLoginDetail({})).toBeNull();
+  });
+});
+
+describe('chairDetail (DX-211)', () => {
+  it('nombra el orden, la desactivación y la reactivación de un sillón', () => {
+    expect(chairDetail({ reason: 'CHAIR_ORDER' })).toBe('Orden de los sillones');
+    expect(chairDetail({ reason: 'CHAIR_DEACTIVATED' })).toBe('Sillón desactivado');
+    expect(chairDetail({ reason: 'CHAIR_REACTIVATED' })).toBe('Sillón reactivado');
+    expect(chairDetail({ reason: 'SEDATION_VITALS' })).toBeNull();
   });
 });
 
