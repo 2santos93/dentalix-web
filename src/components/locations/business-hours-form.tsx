@@ -161,7 +161,8 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey]);
+    // `setWeek` es el setter estable de `useState` (dentro de `useSettingsDraft`).
+  }, [token, reloadKey, setWeek]);
 
   function updateDay(weekday: number, ranges: DraftRange[]) {
     setSaved(false);
