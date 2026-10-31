@@ -195,7 +195,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
         >
           <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
+            <tr className="border-b border-border bg-surface-sunken text-left">
               <th scope="col" className="px-4 py-3 font-medium text-muted">
                 {copy.colName}
               </th>
@@ -215,7 +215,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           </thead>
           <tbody>
             {methods.map((m) => (
-              <tr key={m.id} className="border-b border-hairline last:border-0">
+              <tr key={m.id} className="border-b border-border-subtle last:border-0">
                 <td className="px-4 py-3 font-medium">{m.name}</td>
                 <td className="px-4 py-3">{PAYMENT_METHOD_KIND_LABELS[m.kind]}</td>
                 <td className="px-4 py-3">{reference(m)}</td>

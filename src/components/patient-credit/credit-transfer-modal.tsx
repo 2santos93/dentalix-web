@@ -136,7 +136,7 @@ export function CreditTransferModal({
       submitDisabled={!target}
       error={error}
     >
-      <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink tabular-nums">
+      <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink tabular-nums">
         {creditPreviewCopy.source(planName(source.planId), formatCurrency(source.credit, source.currency))}
       </p>
       {targets.length === 0 ? (

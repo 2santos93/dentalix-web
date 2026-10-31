@@ -59,7 +59,7 @@ export function CreditBalanceSection({
         </h3>
         <p className="mt-1 max-w-prose text-sm text-muted">{copy.hint}</p>
       </div>
-      <Card className="divide-y divide-hairline p-0 shadow-none">
+      <Card className="divide-y divide-border-subtle p-0 shadow-none">
         {sources.map((source) => {
           const name = planName(source.planId);
           return (

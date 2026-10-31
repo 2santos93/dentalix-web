@@ -182,7 +182,7 @@ export function CreditRefundModal({
       error={error}
       destructive
     >
-      <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink tabular-nums">
+      <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink tabular-nums">
         {creditPreviewCopy.source(planName(source.planId), formatCurrency(source.credit, source.currency))}
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
