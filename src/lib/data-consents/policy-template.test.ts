@@ -7,6 +7,8 @@ import {
   unfilledPlaceholders,
 } from './policy-template';
 
+const LEGAL = '[Normativa de protección de datos aplicable y autoridad ante la que reclamar, o borre este párrafo]';
+
 const FILLED: PublishPrivacyPolicyInput = {
   policyText: 'Responsable del tratamiento: Clínica Sonrisa, con domicilio en Av. Principal 10.',
   generalText: 'Autorizo el tratamiento de mis datos personales.',
@@ -33,6 +35,24 @@ describe('POLICY_TEMPLATE', () => {
     expect(policyText).toContain('\n\nFinalidades:');
     expect(policyText).toContain('\n\nDerechos del paciente:');
     expect(policyText).toContain('\n\nContacto:');
+    // El marco legal es de la clínica: un marcador que escribe o borra, nunca una ley dada.
+    expect(policyText.endsWith(`\n\nMarco legal: ${LEGAL}.`)).toBe(true);
+  });
+
+  it('el marco legal es opcional: se publica escrito por la clínica o con el párrafo borrado', () => {
+    const filled = POLICY_TEMPLATE.policyText
+      .replace('[Nombre de la clínica]', 'Clínica Sonrisa')
+      .replace('[Dirección]', 'Av. Principal 10')
+      .replace('[Correo o teléfono de contacto]', 'hola@sonrisa.test');
+    const draft = { ...POLICY_TEMPLATE, policyText: filled };
+    expect(unfilledPlaceholders(draft)).toEqual([LEGAL]);
+    const withoutLegal = filled
+      .split('\n\n')
+      .filter((p) => !p.startsWith('Marco legal:'))
+      .join('\n\n');
+    expect(unfilledPlaceholders({ ...draft, policyText: withoutLegal })).toEqual([]);
+    const ownLegal = filled.replace(LEGAL, 'la normativa local de protección de datos');
+    expect(unfilledPlaceholders({ ...draft, policyText: ownLegal })).toEqual([]);
   });
 
   it('cada marcador de la lista aparece en la política', () => {
@@ -66,6 +86,7 @@ describe('unfilledPlaceholders', () => {
       '[Nombre de la clínica]',
       '[Dirección]',
       '[Correo o teléfono de contacto]',
+      LEGAL,
     ]);
     expect(unfilledPlaceholders(FILLED)).toEqual([]);
     expect(unfilledPlaceholders({ ...FILLED, marketingText: 'Escriba a [Dirección].' })).toEqual(['[Dirección]']);

@@ -106,7 +106,9 @@ test('autorización de datos: publicar política → alta con casillas → ficha
     template
       .replace('[Nombre de la clínica]', `Clínica Datos ${suffix}`)
       .replace('[Dirección]', 'Dirección de prueba 1')
-      .replace('[Correo o teléfono de contacto]', 'contacto@example.com'),
+      .replace('[Correo o teléfono de contacto]', 'contacto@example.com')
+      // El marco legal es opcional: la clínica escribe el suyo o borra el párrafo.
+      .replace('[Normativa de protección de datos aplicable y autoridad ante la que reclamar, o borre este párrafo]', 'la normativa local de protección de datos'),
   );
   await publishDialog.getByRole('button', { name: 'Publicar', exact: true }).click();
   await expect(publishDialog).toBeHidden();

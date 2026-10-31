@@ -5,11 +5,16 @@ export const POLICY_TEMPLATE_PLACEHOLDERS = [
   '[Nombre de la clínica]',
   '[Dirección]',
   '[Correo o teléfono de contacto]',
+  '[Normativa de protección de datos aplicable y autoridad ante la que reclamar, o borre este párrafo]',
 ] as const;
 
 /**
  * Borrador neutro de la primera publicación: la clínica sustituye los textos
- * entre corchetes y lo adapta a su marco legal. Dentalix no valida su contenido.
+ * entre corchetes y lo adapta a su marco legal. Dentalix no nombra ninguna ley
+ * ni autoridad: el párrafo «Marco legal» es donde la clínica escribe la suya
+ * si quiere (o lo borra). No se publica con un marcador sin tocar, así que el
+ * texto entre corchetes nunca llega al paciente. Dentalix no valida su
+ * contenido.
  */
 export const POLICY_TEMPLATE: PublishPrivacyPolicyInput = {
   policyText: [
@@ -17,6 +22,7 @@ export const POLICY_TEMPLATE: PublishPrivacyPolicyInput = {
     'Finalidades: prestar la atención odontológica, llevar la historia clínica, agendar y recordar citas, cobrar y facturar los servicios, y cumplir las obligaciones legales de la clínica.',
     'Derechos del paciente: conocer, actualizar, rectificar y suprimir sus datos, y revocar esta autorización en cualquier momento, salvo lo que la clínica deba conservar por obligación legal.',
     'Contacto: para ejercer sus derechos o hacer consultas, escriba a [Correo o teléfono de contacto].',
+    'Marco legal: [Normativa de protección de datos aplicable y autoridad ante la que reclamar, o borre este párrafo].',
   ].join('\n\n'),
   generalText:
     'Autorizo el tratamiento de mis datos personales de identificación y contacto para las finalidades descritas en la política.',

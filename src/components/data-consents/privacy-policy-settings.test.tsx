@@ -94,7 +94,7 @@ it('no publica con marcadores de la plantilla', async () => {
   await user.click(within(dialog).getByRole('button', { name: /^publicar$/i }));
 
   expect(within(dialog).getByRole('alert')).toHaveTextContent(
-    'Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: [Nombre de la clínica], [Dirección], [Correo o teléfono de contacto].',
+    'Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: [Nombre de la clínica], [Dirección], [Correo o teléfono de contacto], [Normativa de protección de datos aplicable y autoridad ante la que reclamar, o borre este párrafo].',
   );
   expect(mockedPublish).not.toHaveBeenCalled();
 });
