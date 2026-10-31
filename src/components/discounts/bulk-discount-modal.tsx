@@ -109,11 +109,20 @@ export function BulkDiscountModal({
   const percent = parsePercent(percentText);
   const preview = items.map((item) => ({
     item,
-    // Sin dígitos del contrato, el aviso del motivo se calcula a céntimos y el
-    // importe exacto lo da la API al aplicar.
-    discount: percent === null ? 0 : discountForPercent(item.price, percent, roundingDigits ?? 2, cap),
+    // Sin dígitos del contrato no se pinta el importe (lo da la API al aplicar).
+    discount: percent === null ? 0 : discountForPercent(item.price, percent, roundingDigits ?? 0, cap),
   }));
-  const reasonRequired = preview.some((p) => needsReason(rules, p.item.price, p.discount));
+  // Sin dígitos del contrato, el motivo se pide si CUALQUIER redondeo posible
+  // (0, 1 o 2 decimales) lo exigiría: nunca se deja enviar algo que la API
+  // rechazaría por falta de motivo.
+  const candidateDigits: readonly RoundingDigits[] = roundingDigits === null ? [0, 1, 2] : [roundingDigits];
+  const reasonRequired =
+    percent !== null &&
+    items.some((item) =>
+      candidateDigits.some((digits) =>
+        needsReason(rules, item.price, discountForPercent(item.price, percent, digits, cap)),
+      ),
+    );
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

@@ -73,12 +73,13 @@ export function linesTotal(lines: readonly MoneyLine[]): number {
 
 /**
  * Los dígitos de redondeo que manda la API (`currencyDigits` del plan, una
- * moneda de `GET /currencies`); `null` si no llegan (API anterior a DX-340):
- * la web no los adivina con una lista propia.
+ * moneda de `GET /currencies`); `null` si no llegan (API anterior a DX-340) o
+ * no son válidos: la web no los adivina con una lista propia y nunca lanza
+ * durante el render (la pantalla dice «se calcula al aplicar»).
  */
 export function contractRoundingDigits(
   digits: { roundingDigits: number } | null | undefined,
 ): RoundingDigits | null {
-  if (!digits) return null;
-  return roundingDigits(digits.roundingDigits);
+  const value = digits?.roundingDigits;
+  return value === 0 || value === 1 || value === 2 ? value : null;
 }

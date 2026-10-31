@@ -135,7 +135,7 @@ describe('decimales por moneda sin lista en la web (GLOBAL-G1 R7, DX-340)', () =
     expect('currencyDecimals' in discountRules).toBe(false);
   });
 
-  it('el redondeo vigente se conserva: los 29 códigos de antes redondean a 0', () => {
+  it('el redondeo vigente se conserva en las monedas de la paridad: RSD, COP y JPY a 0; EUR a 2', () => {
     // La lista fija anterior (CLDR 47 ∪ COP, CLP, JPY, KRW, PYG) es ahora
     // `currencies.rounding_digits = 0` en la API; los vectores lo fijan para
     // las monedas de la paridad.

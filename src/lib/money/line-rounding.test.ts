@@ -64,5 +64,9 @@ describe('redondeo por línea: vectores compartidos con la API (DX-340)', () => 
     expect(contractRoundingDigits({ roundingDigits: 2 })).toBe(2);
     expect(contractRoundingDigits(undefined)).toBeNull();
     expect(contractRoundingDigits(null)).toBeNull();
+    // Un valor fuera de rango no rompe la pantalla en el render: se trata
+    // como desconocido («se calcula al aplicar»).
+    expect(contractRoundingDigits({ roundingDigits: 3 })).toBeNull();
+    expect(contractRoundingDigits({ roundingDigits: -1 })).toBeNull();
   });
 });

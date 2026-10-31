@@ -104,6 +104,21 @@ describe('BulkDiscountModal (DX-204)', () => {
     await waitFor(() => expect(mockedApply).toHaveBeenCalled());
   });
 
+  it('DX-340: sin dígitos en el contrato el motivo se pide si CUALQUIER redondeo lo exigiría', async () => {
+    // 10 % de 999: a céntimos es 99,90 (justo el 10 %, sin motivo), pero
+    // redondeado a la unidad es 100 (10,01 %, con motivo). Sin saber la
+    // moneda, se pide el motivo.
+    renderModal('ADMIN', 'COP', [item('i1', '11', 999)], null);
+    await userEvent.type(percentInput(), '10');
+    expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+  });
+
+  it('DX-340: con dígitos a céntimos, ese mismo 10 % de 999 no pide motivo', async () => {
+    renderModal('ADMIN', 'EUR', [item('i1', '11', 999)], 2);
+    await userEvent.type(percentInput(), '10');
+    expect(screen.queryByText('Por encima del 10 % el motivo es obligatorio.')).not.toBeInTheDocument();
+  });
+
   it('DX-241: el porcentaje sigue la regla decimal de los importes («7.5» = «7,5»; lo ambiguo no se envía)', async () => {
     renderModal('ADMIN', 'EUR', [item('i1', '11', 85.55)]);
     await userEvent.type(percentInput(), '7.5');
