@@ -133,12 +133,16 @@ describe('ZERO_DECIMAL_CURRENCIES (GLOBAL-G1, R7)', () => {
       expect(ZERO_DECIMAL_CURRENCIES.has(code)).toBe(true);
     }
     expect(ZERO_DECIMAL_CURRENCIES.size).toBe(29);
-    // La copia coincide con CLDR (la fuente de `minorUnits` en la API).
-    for (const code of iso4217ZeroDecimal.minorUnitsZero) {
-      const digits = new Intl.NumberFormat('en', { style: 'currency', currency: code }).resolvedOptions()
-        .maximumFractionDigits;
-      expect([code, digits]).toEqual([code, 0]);
-    }
+    // La copia coincide con la referencia versionada de la API
+    // (`prisma/reference/iso4217-zero-decimal.json`, CLDR 47), fijada aquí en
+    // literal: no se compara con el Intl del Node del host, que cambia con su
+    // versión de ICU (TST-046: RSD da 0 decimales con ICU 77 y 2 con ICU 78).
+    expect(iso4217ZeroDecimal.minorUnitsZero).toEqual([
+      'AFN', 'ALL', 'BIF', 'CLP', 'DJF', 'GNF', 'IRR', 'ISK', 'JPY', 'KMF',
+      'KPW', 'KRW', 'LAK', 'LBP', 'MGA', 'MMK', 'PYG', 'RSD', 'RWF', 'SOS',
+      'SYP', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF', 'YER',
+    ]);
+    expect(currencyDecimals('RSD')).toBe(0);
     expect(currencyDecimals('vnd')).toBe(0);
     expect(currencyDecimals('EUR')).toBe(2);
   });
