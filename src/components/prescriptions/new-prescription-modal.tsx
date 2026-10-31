@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -37,6 +37,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { PrescriptionItemFields } from './prescription-item-fields';
 import { PrescriptionSafetyPanel, type SafetyState } from './prescription-safety-panel';
+
+/** Memorizado: solo se repinta cuando cambia su fecha (ver `handleDateChange`). */
+const MemoDatePicker = React.memo(DatePicker);
 
 const copy = {
   title: 'Nueva receta',
@@ -150,6 +153,14 @@ function NewPrescriptionForm({
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Estable, para el DatePicker memorizado: react-aria es caro de pintar y el
+  // modal se repinta con cada tecla de los medicamentos. Sin esto la escritura
+  // se frena tanto que la comprobación de seguridad (debounce de 400 ms) salta
+  // a mitad de una palabra.
+  const handleDateChange = useCallback((value: string | null) => {
+    setDispensationDate(value ?? '');
+    setError(null);
+  }, []);
   const [itemErrors, setItemErrors] = useState<ItemDraftErrors[]>([]);
   const [licenseError, setLicenseError] = useState<string | null>(null);
 
@@ -465,14 +476,7 @@ function NewPrescriptionForm({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField htmlFor="rx-date" label={copy.dateLabel} hint={copy.dateHint}>
-              <DatePicker
-                id="rx-date"
-                value={dispensationDate || null}
-                onChange={(value) => {
-                  setDispensationDate(value ?? '');
-                  setError(null);
-                }}
-              />
+              <MemoDatePicker id="rx-date" value={dispensationDate || null} onChange={handleDateChange} />
             </FormField>
             {needsLicense ? (
               <FormField
