@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
+import { ConditionSummaryText } from '@/components/clinical/condition-summary';
 import {
   getMedicalHistory,
   saveMedicalHistory,
@@ -35,7 +36,7 @@ const copy = {
   unknownAuthor: 'autor no registrado',
   fieldFallback: '—',
   allergiesCountLabel: 'Alergias registradas',
-  conditionsCountLabel: 'Condiciones registradas',
+  conditionsLabel: 'Condiciones',
   medicationsCountLabel: 'Medicamentos registrados',
   familyHistoryLabel: 'Antecedentes familiares',
   notesLabel: 'Notas',
@@ -255,8 +256,10 @@ export function MedicalHistoryPanel({ token, patientId, onSaved }: MedicalHistor
                 <dd className="text-ink">{latest.allergies.length}</dd>
               </div>
               <div className="min-w-0">
-                <dt className="text-sm font-medium text-muted">{copy.conditionsCountLabel}</dt>
-                <dd className="text-ink">{latest.conditions.length}</dd>
+                <dt className="text-sm font-medium text-muted">{copy.conditionsLabel}</dt>
+                <dd>
+                  <ConditionSummaryText conditions={latest.conditions} />
+                </dd>
               </div>
               <div className="min-w-0">
                 <dt className="text-sm font-medium text-muted">{copy.medicationsCountLabel}</dt>
