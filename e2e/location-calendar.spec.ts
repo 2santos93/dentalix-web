@@ -165,8 +165,9 @@ test('new location shows Monday–Friday and the empty state', async ({ page }) 
 
 test('admin sets Sunday–Thursday on B and it persists after reload', async ({ page }) => {
   await loginAs(page, origin, adminEmail, password);
-  // Por la lista de Sedes: «Calendario Sede B» abre su calendario (M8).
+  // Por la lista de Sedes → la ficha de B: «Calendario Sede B» abre su calendario (M8, B6).
   await page.goto(`${origin}/settings/sedes`);
+  await page.getByRole('link', { name: 'Abrir Sede B', exact: true }).click();
   await page.getByRole('link', { name: 'Calendario Sede B', exact: true }).click();
   await expect(page).toHaveURL(`${origin}/settings/calendario?sede=${ids.B}`);
   await expect(page.getByRole('main').getByLabel('Sede', { exact: true })).toHaveValue(ids.B);
