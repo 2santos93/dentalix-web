@@ -16,7 +16,8 @@ import {
 } from '@/lib/appointments/closing-queue-api';
 import { getPlan, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
-import { getActiveLocationId } from '@/lib/locations/location-store';
+import { ApiError } from '@/lib/api/api-error';
+import { notifyClosingQueueChanged } from '@/components/appointments/closing-queue-count';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { notifyError } from '@/components/errors/notify';
@@ -67,6 +68,9 @@ export const closingQueueCopy = {
   itemError: 'No pudimos abrir el procedimiento del plan.',
   itemDone: (patient: string) => `Procedimiento de ${patient} marcado como realizado.`,
   dismissed: 'Pendiente descartado.',
+  alreadyClosed: 'Ese pendiente ya estaba cerrado o descartado: la lista se actualizó.',
+  withoutZone: (names: string) =>
+    `Sin zona horaria configurada: ${names}. Sus citas no aparecen aquí hasta configurarla en Ajustes → Sedes.`,
 };
 
 const copy = closingQueueCopy;
@@ -110,6 +114,8 @@ export function ClosingQueueView({ token }: { token: string }) {
   const [queue, setQueue] = useState<ClosingQueue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 403 (rol sin acceso por URL): no hay nada que reintentar.
+  const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [dismissing, setDismissing] = useState<Dismissing | null>(null);
@@ -129,6 +135,7 @@ export function ClosingQueueView({ token }: { token: string }) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        setForbidden(err instanceof ApiError && err.status === 403);
         setError(apiErrorMessage(err, copy.loadError));
       })
       .finally(() => {
@@ -151,23 +158,41 @@ export function ClosingQueueView({ token }: { token: string }) {
     };
   }, [token, locationsKey]);
 
-  /** Relee la lista tras una acción: el contenido sigue en pantalla si falla. */
-  const refresh = useCallback(() => {
-    getClosingQueue(token)
-      .then(setQueue)
-      .catch((err: unknown) =>
-        notifyError(apiErrorMessage(err, copy.refreshError), {
-          onRetry: () => setReloadKey((k) => k + 1),
-        }),
-      );
-  }, [token]);
+  /**
+   * Tras cerrar o descartar: relee la lista (el contenido sigue en pantalla si
+   * falla), avisa al contador del menú y deja el foco en el encabezado de la
+   * sección (o de la página si ya no queda nada), no en <body>.
+   */
+  const refresh = useCallback(
+    (section?: ClosingQueueSection) => {
+      notifyClosingQueueChanged();
+      getClosingQueue(token)
+        .then((data) => {
+          setQueue(data);
+          if (!section) return;
+          requestAnimationFrame(() => {
+            const heading =
+              document.getElementById(`${SECTION_IDS[section]}-titulo`) ??
+              document.querySelector<HTMLElement>('main h1');
+            if (heading && !heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+            heading?.focus();
+          });
+        })
+        .catch((err: unknown) =>
+          notifyError(apiErrorMessage(err, copy.refreshError), {
+            onRetry: () => setReloadKey((k) => k + 1),
+          }),
+        );
+    },
+    [token],
+  );
 
   async function changeStatus(row: ClosingAppointment, status: AppointmentStatus, label: string) {
     setBusy(row.appointmentId);
     try {
       await updateAppointment(token, row.appointmentId, { status });
       toast.success(copy.statusSaved(row.patientName, label));
-      refresh();
+      refresh('OUTCOME');
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.statusError), {
         onRetry: () => void changeStatus(row, status, label),
@@ -182,7 +207,12 @@ export function ClosingQueueView({ token }: { token: string }) {
     try {
       const plan = await getPlan(token, row.planId);
       const item = (plan.items ?? []).find((i) => i.id === row.planItemId);
-      if (!item) throw new Error('item');
+      if (!item) {
+        // Se retiró del plan mientras tanto: ya no es un pendiente.
+        toast.info(copy.alreadyClosed);
+        refresh('TREATMENT');
+        return;
+      }
       setMarkingDone({ planId: plan.id, item, row });
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.itemError), { onRetry: () => void openMarkDone(row) });
@@ -193,7 +223,7 @@ export function ClosingQueueView({ token }: { token: string }) {
 
   const sections = queue?.sections ?? [];
   const isEmpty = queue !== null && queue.total === 0;
-  const activeLocationId = getActiveLocationId();
+  const withoutZone = queue?.locationsWithoutZone ?? [];
 
   return (
     <div className="flex flex-col">
@@ -213,13 +243,22 @@ export function ClosingQueueView({ token }: { token: string }) {
           </Link>
         </p>
       ) : null}
+      {withoutZone.length > 0 ? (
+        <p role="note" className="mb-4 text-sm text-warning">
+          {copy.withoutZone(withoutZone.map((l) => l.name).join(', '))}
+        </p>
+      ) : null}
       <AsyncSection
         loading={loading}
         error={error}
-        onRetry={() => {
-          setLoading(true);
-          setReloadKey((k) => k + 1);
-        }}
+        onRetry={
+          forbidden
+            ? undefined
+            : () => {
+                setLoading(true);
+                setReloadKey((k) => k + 1);
+              }
+        }
         isEmpty={isEmpty}
         emptyTitle={copy.empty}
         emptyDescription={copy.emptyHint}
@@ -234,6 +273,14 @@ export function ClosingQueueView({ token }: { token: string }) {
                   <li key={s}>
                     <a
                       href={`#${SECTION_IDS[s]}`}
+                      onClick={(e) => {
+                        // El foco va a la sección, no solo el scroll.
+                        const heading = document.getElementById(`${SECTION_IDS[s]}-titulo`);
+                        if (!heading) return;
+                        e.preventDefault();
+                        heading.scrollIntoView({ block: 'start' });
+                        heading.focus();
+                      }}
                       className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-ink hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-9"
                     >
                       {CLOSING_SECTION_TITLES[s]}
@@ -291,6 +338,7 @@ export function ClosingQueueView({ token }: { token: string }) {
                         {copy.cancelled}
                       </Button>
                       <DismissButton
+                        disabled={busy === row.appointmentId}
                         onClick={() =>
                           setDismissing({ section: 'OUTCOME', appointmentId: row.appointmentId, subject: subjectOf(row) })
                         }
@@ -348,6 +396,7 @@ export function ClosingQueueView({ token }: { token: string }) {
                         {copy.markDone}
                       </Button>
                       <DismissButton
+                        disabled={busy === row.planItemId}
                         onClick={() =>
                           setDismissing({
                             section: 'TREATMENT',
@@ -379,9 +428,16 @@ export function ClosingQueueView({ token }: { token: string }) {
           planItemId={dismissing.planItemId}
           subject={dismissing.subject}
           onDone={() => {
+            const section = dismissing.section;
             setDismissing(null);
             toast.success(copy.dismissed);
-            refresh();
+            refresh(section);
+          }}
+          onStale={() => {
+            const section = dismissing.section;
+            setDismissing(null);
+            toast.info(copy.alreadyClosed);
+            refresh(section);
           }}
         />
       ) : null}
@@ -400,7 +456,7 @@ export function ClosingQueueView({ token }: { token: string }) {
           onDone={() => {
             setCancelling(null);
             toast.success(copy.statusSaved(cancelling.patientName, copy.cancelled));
-            refresh();
+            refresh('OUTCOME');
           }}
         />
       ) : null}
@@ -422,7 +478,7 @@ export function ClosingQueueView({ token }: { token: string }) {
           onCreated={() => {
             toast.success(copy.evolutionSaved(evolutionFor.patientName));
             setEvolutionFor(null);
-            refresh();
+            refresh('EVOLUTION');
           }}
         />
       ) : null}
@@ -439,14 +495,18 @@ export function ClosingQueueView({ token }: { token: string }) {
           item={markingDone.item}
           subject={`${markingDone.row.procedureLabel} · ${copy.tooth(markingDone.row.toothNumber)}`}
           mode="done"
-          activeLocationId={activeLocationId}
-          locationName={locations.find((l) => l.id === activeLocationId)?.name ?? null}
+          // La sede, la fecha y quién: los de la cita atendida (la API toma
+          // sede y fecha de `appointmentId`), no la sede activa ni hoy.
+          activeLocationId={markingDone.row.locationId}
+          locationName={markingDone.row.locationName}
           locations={locations}
           onRetryLocations={() => setLocationsKey((k) => k + 1)}
+          appointmentId={markingDone.row.appointmentId}
+          preferredPerformerId={markingDone.row.professionalId}
           onSaved={() => {
             toast.success(copy.itemDone(markingDone.row.patientName));
             setMarkingDone(null);
-            refresh();
+            refresh('TREATMENT');
           }}
         />
       ) : null}
@@ -454,9 +514,9 @@ export function ClosingQueueView({ token }: { token: string }) {
   );
 }
 
-function DismissButton({ onClick }: { onClick: () => void }) {
+function DismissButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
-    <Button size="sm" variant="ghost" className="min-h-11 sm:min-h-9" onClick={onClick}>
+    <Button size="sm" variant="ghost" className="min-h-11 sm:min-h-9" disabled={disabled} onClick={onClick}>
       {copy.dismiss}
     </Button>
   );
@@ -477,7 +537,11 @@ function QueueSection({
   return (
     <section id={SECTION_IDS[section]} aria-labelledby={headingId} className="flex scroll-mt-4 flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 id={headingId} className="flex items-center gap-2 text-lg font-semibold text-ink">
+        <h2
+          id={headingId}
+          tabIndex={-1}
+          className="flex items-center gap-2 text-lg font-semibold text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
           {CLOSING_SECTION_TITLES[section]}
           <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink">
             {total}
@@ -532,7 +596,7 @@ function AppointmentTable<T extends ClosingAppointment>({
             <TableCell data-label={copy.colPatient} className="font-medium text-ink">
               <Link
                 href={`/patients/${row.patientId}`}
-                className="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="inline-flex min-h-6 items-center underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {row.patientName}
               </Link>

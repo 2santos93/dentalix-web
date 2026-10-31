@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ListChecks } from 'lucide-react';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { CLOSING_QUEUE_HREF, canSeeClosingQueue } from '@/lib/appointments/closing-queue-api';
-import { useClosingQueueCount } from '@/components/appointments/use-closing-queue-count';
+import { useClosingQueueCount } from '@/components/appointments/closing-queue-count';
 
 const copy = {
   label: 'Pendiente de cerrar',
@@ -12,14 +12,15 @@ const copy = {
 
 /**
  * DX-439: acceso a «Pendiente de cerrar» desde la cabecera de la Agenda, con
- * el contador del usuario. Solo para los roles que la ven; se monta cuando la
+ * el contador del usuario (el del menú: una sola lectura). Solo para los roles que la ven; se monta cuando la
  * sesión ya está resuelta (el token existe), así que leer el rol aquí no
  * descuadra la hidratación.
  */
 export function ClosingQueueLink({ token }: { token: string }) {
   const role = getTokenRole(token);
   const visible = canSeeClosingQueue(role);
-  const count = useClosingQueueCount(token, visible, '/agenda');
+  // El mismo contador que el menú (ClosingQueueCountProvider del AppShell).
+  const count = useClosingQueueCount();
   if (!visible) return null;
   return (
     <Link

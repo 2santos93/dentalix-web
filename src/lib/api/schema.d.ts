@@ -10662,6 +10662,11 @@ export interface components {
              * @description DX-305: SOLO para que un ADMIN corrija la sede donde se realizó un ítem ya DONE (403 a otro rol; 403 si no es de sus sedes permitidas, DX-089; 400 si no es de esta clínica). Obligatoria, junto con `performedById` y `completedAt`, al atribuir un ítem «Sin atribuir» (400 si falta alguno). Al pasar a DONE la pone la sede del request (400 si llega). Auditado con el antes y el después
              */
             performedLocationId?: string;
+            /**
+             * Format: uuid
+             * @description DX-439: SOLO al pasar a DONE, la cita ATENDIDA (COMPLETED, viva) que lleva el ítem (vínculo vivo): la sede donde se realizó y la fecha de realización son las de la cita (su sede y su inicio), no la sede activa ni la hora actual. 400 sin pasar a DONE; 409 si la cita no está atendida o no lleva el ítem; 403 si su sede no es de las permitidas al usuario (DX-089)
+             */
+            appointmentId?: string;
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
         };
@@ -13181,6 +13186,8 @@ export interface components {
             total: number;
             /** @description Sedes que puede filtrar el usuario */
             locations: components["schemas"]["ClosingLocationOptionDto"][];
+            /** @description Sedes del alcance sin zona horaria válida: sin «hoy» sus citas no se pueden listar; se configura la zona en Ajustes → Sedes */
+            locationsWithoutZone: components["schemas"]["ClosingLocationOptionDto"][];
         };
         ClosingQueueCountDto: {
             total: number;
@@ -13204,7 +13211,7 @@ export interface components {
             planItemId?: string;
             /** @description PATIENT_DECLINED_TODAY «Paciente no quiso el tratamiento hoy», PAPER_NOTE «Nota en papel / se registra después», DUPLICATE_APPOINTMENT «Cita duplicada», OTHER «Otro» (con texto) */
             reasonCode: components["schemas"]["ClosingDismissalReason"];
-            /** @description Obligatorio con OTHER (3–200 caracteres); con otro motivo no se guarda */
+            /** @description Obligatorio con OTHER (3–200 caracteres, contados como caracteres y no como unidades UTF-16; sin espacios de los bordes); con otro motivo no se guarda */
             reasonText?: string;
         };
         ClosingDismissalDto: {
@@ -25946,9 +25953,9 @@ export interface operations {
             query?: {
                 /** @description Solo las citas de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta). Sin él, la sede activa (X-Location-Id) o, sin ella, todas las que ve. */
                 locationId?: string;
-                /** @description Primer día (AAAA-MM-DD, en la zona de la sede de cada cita). Por defecto, hoy − 14 días. */
+                /** @description Primer día (AAAA-MM-DD, en la zona de la sede de cada cita). Por defecto, los 14 días que acaban en «hasta». El período, con «hasta» o sin él (entonces hasta ayer), es como mucho de 92 días: 400 si no. */
                 from?: string;
-                /** @description Último día (inclusive). Por defecto y como mucho, AYER en la zona de cada sede: las citas de hoy nunca salen. Con las dos fechas, como mucho 92 días (400 si no). */
+                /** @description Último día (inclusive). Por defecto y como mucho, AYER en la zona de cada sede: las citas de hoy nunca salen. Como mucho 92 días desde «desde» (400 si no). */
                 to?: string;
                 /** @description Solo las citas de este profesional (usuario). Un DENTIST solo ve las suyas: pedir otro es 403. */
                 professionalId?: string;
@@ -25988,9 +25995,9 @@ export interface operations {
             query?: {
                 /** @description Solo las citas de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta). Sin él, la sede activa (X-Location-Id) o, sin ella, todas las que ve. */
                 locationId?: string;
-                /** @description Primer día (AAAA-MM-DD, en la zona de la sede de cada cita). Por defecto, hoy − 14 días. */
+                /** @description Primer día (AAAA-MM-DD, en la zona de la sede de cada cita). Por defecto, los 14 días que acaban en «hasta». El período, con «hasta» o sin él (entonces hasta ayer), es como mucho de 92 días: 400 si no. */
                 from?: string;
-                /** @description Último día (inclusive). Por defecto y como mucho, AYER en la zona de cada sede: las citas de hoy nunca salen. Con las dos fechas, como mucho 92 días (400 si no). */
+                /** @description Último día (inclusive). Por defecto y como mucho, AYER en la zona de cada sede: las citas de hoy nunca salen. Como mucho 92 días desde «desde» (400 si no). */
                 to?: string;
                 /** @description Solo las citas de este profesional (usuario). Un DENTIST solo ve las suyas: pedir otro es 403. */
                 professionalId?: string;
