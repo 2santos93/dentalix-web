@@ -78,37 +78,37 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
       </ChoiceControl>
     );
 
+    // La estructura no cambia con `error` ni con `description`: el `<input>`
+    // es siempre el mismo nodo y no pierde el foco al ganar o perder el error.
+    // Sin error, el envoltorio es `display: contents` (no cuenta para el
+    // layout del padre); con error, apila la fila y el mensaje.
+    const errorLine = error ? (
+      <InlineError id={errorId} className="text-xs">
+        {error}
+      </InlineError>
+    ) : null;
+
     if (!label) {
-      return error ? (
-        <span className="inline-flex flex-col gap-1">
+      return (
+        <span className={error ? 'inline-flex flex-col gap-1' : 'contents'}>
           {control}
-          <InlineError id={errorId} className="text-xs">
-            {error}
-          </InlineError>
+          {errorLine}
         </span>
-      ) : (
-        control
       );
     }
 
-    const row = (
-      <ChoiceRow
-        control={control}
-        label={label}
-        labelId={labelId}
-        description={description}
-        descriptionId={descriptionId}
-        disabled={disabled}
-        className={error ? undefined : className}
-      />
-    );
-    if (!error) return row;
     return (
-      <div className={cn('flex flex-col gap-1', className)}>
-        {row}
-        <InlineError id={errorId} className="text-xs">
-          {error}
-        </InlineError>
+      <div className={error ? cn('flex flex-col gap-1', className) : 'contents'}>
+        <ChoiceRow
+          control={control}
+          label={label}
+          labelId={labelId}
+          description={description}
+          descriptionId={descriptionId}
+          disabled={disabled}
+          className={error ? undefined : className}
+        />
+        {errorLine}
       </div>
     );
   },

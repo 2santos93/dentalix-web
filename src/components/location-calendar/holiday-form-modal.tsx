@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { createHoliday, updateHoliday, type LocationHoliday } from '@/lib/locations/location-calendar-api';
@@ -77,18 +77,10 @@ export function HolidayFormModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // El foco va al campo con error DESPUÉS de pintar el error: la casilla se
-  // vuelve a montar al ganar su mensaje y perdería un foco puesto antes.
-  const [focusRequest, setFocusRequest] = useState<{ field: Field } | null>(null);
-  useEffect(() => {
-    if (!focusRequest) return;
-    const el = document.getElementById(inputId(focusRequest.field));
+  function focusField(field: Field) {
+    const el = document.getElementById(inputId(field));
     // La fecha es un grupo de segmentos: el foco va al primero (el día).
     (el?.getAttribute('role') === 'group' ? el.querySelector<HTMLElement>('[role="spinbutton"]') : el)?.focus();
-  }, [focusRequest]);
-
-  function focusField(field: Field) {
-    setFocusRequest({ field });
   }
 
   function clearError(field: Field) {

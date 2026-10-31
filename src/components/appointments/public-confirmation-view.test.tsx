@@ -190,12 +190,12 @@ describe('PublicConfirmationView', () => {
       get.mockResolvedValueOnce(view({ cancellationPolicy: POLICY, isLate: true }));
       render(<PublicConfirmationView confirmationToken="tok-1" />);
       expect(await screen.findByText('Cancelación con menos de 24 h de aviso')).toBeInTheDocument();
-      expect(screen.getByRole('checkbox', { name: /acepto la política de cancelación/i })).toBeInTheDocument();
+      // La casilla es el mismo nodo antes y después de ganar su error (no se vuelve a montar).
+      const box = screen.getByRole('checkbox', { name: /acepto la política de cancelación/i });
       fireEvent.click(screen.getByRole('button', { name: 'Cancelar cita' }));
       expect(respond).not.toHaveBeenCalled();
       expect(await screen.findByRole('alert')).toHaveTextContent(/marca que aceptas la política/i);
-      // La casilla de `Checkbox` se monta de nuevo al ganar su error: se vuelve a buscar.
-      const box = screen.getByRole('checkbox', { name: /acepto la política de cancelación/i });
+      expect(screen.getByRole('checkbox', { name: /acepto la política de cancelación/i })).toBe(box);
       await waitFor(() => expect(box).toHaveFocus());
       expect(box).toHaveAttribute('aria-invalid', 'true');
     });

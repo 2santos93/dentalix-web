@@ -186,12 +186,6 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   const [acknowledged, setAcknowledged] = useState(false);
   const [ackError, setAckError] = useState(false);
   const ackRef = useRef<HTMLInputElement>(null);
-  // El foco va a la casilla DESPUÉS de pintar su error (la casilla se vuelve a
-  // montar al ganar el mensaje y perdería un foco puesto antes).
-  const [ackFocus, setAckFocus] = useState(0);
-  useEffect(() => {
-    if (ackFocus > 0) ackRef.current?.focus();
-  }, [ackFocus]);
   const ackId = useId();
 
   useEffect(() => {
@@ -215,7 +209,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
     const mustAcknowledge = action === 'cancel' && state.data.isLate && policy !== null;
     if (mustAcknowledge && !acknowledged) {
       setAckError(true);
-      setAckFocus((n) => n + 1);
+      ackRef.current?.focus();
       return;
     }
     setPending(action);
