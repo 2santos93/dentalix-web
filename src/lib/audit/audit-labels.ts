@@ -180,17 +180,27 @@ const PATIENT_SIGNATURE_REASONS = new Set([
   'SIGNATURE_PATIENT_SIGNED',
 ]);
 
+/** DX-361: respuestas del paciente desde el enlace de confirmación de la cita. */
+const PATIENT_CONFIRMATION_REASONS = new Set([
+  'CONFIRMATION_LINK_CONFIRMED',
+  'CONFIRMATION_LINK_CANCELLED',
+  'CONFIRMATION_LINK_CALL_REQUESTED',
+]);
+
 /**
  * DX-128: la baja la hizo el propio paciente (el evento no tiene usuario).
  * DX-099: también el envío de la anamnesis por enlace y su autorización.
  * DX-243: y los pasos del enlace de firma a distancia.
+ * DX-361: y su respuesta al enlace de confirmación de la cita.
  */
 export function isPatientOptOut(metadata: AuditMetadata): boolean {
   return (
     metadata.reason === 'REMINDER_OPT_OUT' ||
     metadata.reason === 'ANAMNESIS_SUBMITTED' ||
     metadata.reason === 'ANAMNESIS_LINK' ||
-    (metadata.reason !== undefined && PATIENT_SIGNATURE_REASONS.has(metadata.reason))
+    (metadata.reason !== undefined &&
+      (PATIENT_SIGNATURE_REASONS.has(metadata.reason) ||
+        PATIENT_CONFIRMATION_REASONS.has(metadata.reason)))
   );
 }
 
@@ -510,6 +520,44 @@ export function planItemAttributionDetail(metadata: AuditMetadata): string | nul
   }
   if (before.completedAt && after.completedAt && before.completedAt !== after.completedAt) {
     parts.push(`Fecha ${formatDate(before.completedAt)} → ${formatDate(after.completedAt)}`);
+  }
+  return parts.join(' · ');
+}
+
+const CONFIRMATION_LINK_REASONS: Record<string, string> = {
+  CONFIRMATION_LINK_CREATED: 'Enlace de confirmación generado',
+  CONFIRMATION_LINK_RESENT: 'Enlace de confirmación reenviado',
+  CONFIRMATION_LINK_CONFIRMED: 'Cita confirmada',
+  CONFIRMATION_LINK_CANCELLED: 'Cita cancelada',
+  CONFIRMATION_LINK_CALL_REQUESTED: 'Pidió que lo llamen',
+};
+
+/** De dónde salió: recepción con el botón de la agenda o el paciente con el enlace. */
+const CONFIRMATION_LINK_ORIGINS: Partial<Record<AuditOrigin, string>> = {
+  STAFF: 'por el personal',
+  LINK: 'desde el enlace del paciente',
+};
+
+/**
+ * DX-361: el enlace de confirmación de una cita («Enlace de confirmación
+ * reenviado · por el personal», «Cita cancelada · desde el enlace del
+ * paciente · Agendada → Cancelada · aviso de 90 min · tardía»). La metadata
+ * nunca trae el token ni la URL. null si el evento no es del enlace.
+ */
+export function confirmationLinkDetail(metadata: AuditMetadata): string | null {
+  const what = metadata.reason ? CONFIRMATION_LINK_REASONS[metadata.reason] : undefined;
+  if (!what) return null;
+  const parts = [what];
+  const origin = metadata.origin ? CONFIRMATION_LINK_ORIGINS[metadata.origin] : undefined;
+  if (origin) parts.push(origin);
+  if (metadata.status) {
+    const label = (code: string) => APPOINTMENT_STATUS_LABELS[code] ?? code;
+    parts.push(`${label(metadata.status.from)} → ${label(metadata.status.to)}`);
+  }
+  const c = metadata.cancellation;
+  if (c) {
+    parts.push(`aviso de ${c.noticeMinutes} min`);
+    if (c.lateCancellation) parts.push('tardía');
   }
   return parts.join(' · ');
 }

@@ -23,6 +23,7 @@ import {
   staffDetail,
   locationNameMap,
   signatureRequestDetail,
+  confirmationLinkDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -598,6 +599,46 @@ describe('exchangeRateBackupDetail (DX-402)', () => {
   it('null para otra reason', () => {
     expect(exchangeRateBackupDetail({ reason: 'RECEIPT_ISSUED' })).toBeNull();
     expect(exchangeRateBackupDetail({})).toBeNull();
+  });
+
+  it('DX-361: el enlace de confirmación de la cita, generado o reenviado por el personal', () => {
+    expect(confirmationLinkDetail({ reason: 'CONFIRMATION_LINK_CREATED', origin: 'STAFF' })).toBe(
+      'Enlace de confirmación generado · por el personal',
+    );
+    expect(confirmationLinkDetail({ reason: 'CONFIRMATION_LINK_RESENT', origin: 'STAFF' })).toBe(
+      'Enlace de confirmación reenviado · por el personal',
+    );
+    expect(isPatientOptOut({ reason: 'CONFIRMATION_LINK_CREATED', origin: 'STAFF' })).toBe(false);
+  });
+
+  it('DX-361: la respuesta del paciente desde el enlace sale sin usuario, con el estado y el aviso al cancelar', () => {
+    expect(
+      confirmationLinkDetail({
+        reason: 'CONFIRMATION_LINK_CONFIRMED',
+        origin: 'LINK',
+        status: { from: 'SCHEDULED', to: 'CONFIRMED' },
+      }),
+    ).toBe('Cita confirmada · desde el enlace del paciente · Agendada → Confirmada');
+    expect(
+      confirmationLinkDetail({
+        reason: 'CONFIRMATION_LINK_CANCELLED',
+        origin: 'LINK',
+        status: { from: 'CONFIRMED', to: 'CANCELLED' },
+        cancellation: { byKind: 'PATIENT_LINK', reasonCode: null, noticeMinutes: 90, lateCancellation: true },
+      }),
+    ).toBe('Cita cancelada · desde el enlace del paciente · Confirmada → Cancelada · aviso de 90 min · tardía');
+    expect(confirmationLinkDetail({ reason: 'CONFIRMATION_LINK_CALL_REQUESTED', origin: 'LINK' })).toBe(
+      'Pidió que lo llamen · desde el enlace del paciente',
+    );
+    for (const reason of [
+      'CONFIRMATION_LINK_CONFIRMED',
+      'CONFIRMATION_LINK_CANCELLED',
+      'CONFIRMATION_LINK_CALL_REQUESTED',
+    ]) {
+      expect(isPatientOptOut({ reason, origin: 'LINK' })).toBe(true);
+    }
+    expect(confirmationLinkDetail({ reason: 'APPOINTMENT_CANCELLED' })).toBeNull();
+    expect(confirmationLinkDetail({})).toBeNull();
   });
 
   it('DX-243: los pasos de la firma a distancia, y los del paciente salen sin usuario', () => {
