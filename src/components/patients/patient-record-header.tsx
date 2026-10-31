@@ -1,12 +1,23 @@
 'use client';
 import Link from 'next/link';
-import { Building2, ChevronLeft, Pencil } from 'lucide-react';
+import * as React from 'react';
+import { Building2, ChevronLeft, MoreHorizontal, Pencil, ShieldCheck } from 'lucide-react';
 import type { Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { ageFrom } from '@/lib/patients/age';
 import { displayPhone } from '@/lib/phone/display-phone';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/shared/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import type { RowAction } from '@/components/shared/row-actions';
+import { cn } from '@/lib/utils';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
 import { AgreementChip } from '@/components/patients/agreement-chip';
@@ -20,7 +31,9 @@ import {
   type PatientAttendanceSummary,
 } from '@/lib/cancellations/cancellation';
 import {
+  ANAMNESIS_EXPIRED_LABEL,
   medicalAlertHeadline,
+  medicalAlertLines,
   medicalAlertSeverity,
   type MedicalAlertFlags,
 } from '@/lib/clinical/medical-alerts';
@@ -48,6 +61,8 @@ const copy = {
    */
   recordScope: 'Ficha centralizada · todas las sedes',
   edit: 'Editar datos',
+  moreActions: 'Más acciones',
+  chipsLabel: 'Avisos del paciente',
   alertsLoading: 'Comprobando alertas…',
   alertsFailed: 'Alertas sin comprobar',
   attendanceLoading: 'Comprobando inasistencias…',
@@ -58,22 +73,35 @@ function fullName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
 }
 
+interface IdentityItem {
+  key: string;
+  text: string;
+  /** Documento: `.t-id` (cero con barra, tabular). */
+  id?: boolean;
+}
+
 /**
  * Los tres datos que cambian una decisión clínica antes de abrir ninguna
  * pestaña. Un dato que falta se OMITE entero (no deja un «—» en la cabecera):
  * un hueco silencioso se escanea mejor que un marcador vacío, y el panel de
  * datos sigue siendo el sitio donde se ve qué falta.
  */
-function identityItems(patient: Patient): { key: string; text: string }[] {
-  const items: { key: string; text: string }[] = [];
+function identityItems(patient: Patient): IdentityItem[] {
+  const items: IdentityItem[] = [];
   const age = ageFrom(patient.birthDate);
   if (age !== null) items.push({ key: 'age', text: copy.age(age) });
   const doc = documentText(dtoDocTypeName(patient), patient.docNumber);
-  if (doc) items.push({ key: 'doc', text: doc });
+  if (doc) items.push({ key: 'doc', text: doc, id: true });
   // DX-387: el formato internacional de la API, o el guardado tal cual.
   const phone = displayPhone(patient);
   if (phone) items.push({ key: 'phone', text: copy.phone(phone) });
   return items;
+}
+
+/** Chip neutro de retención legal (con la frase completa al pasar o enfocar). */
+export interface RetentionChip {
+  text: string;
+  hint: string | null;
 }
 
 interface PatientRecordHeaderProps {
@@ -81,6 +109,14 @@ interface PatientRecordHeaderProps {
   patient: Patient | null;
   loading: boolean;
   onEdit: () => void;
+  /**
+   * Acciones raras o administrativas del menú «⋯» (enviar anamnesis, cambiar
+   * retención, supresión parcial, archivar…). Quien llama decide cuáles según
+   * el rol; sin ninguna, no hay menú.
+   */
+  menuActions?: RowAction[];
+  /** DX-039: retención legal como chip neutro; `null` = sin retención que contar. */
+  retention?: RetentionChip | null;
   /**
    * DX-247: banderas médicas del paciente. La cabecera encabeza todas las
    * pestañas (también el plan de tratamiento y el odontograma), así que la
@@ -100,23 +136,30 @@ interface PatientRecordHeaderProps {
 }
 
 /**
- * Cabecera de la ficha del paciente: enlace de vuelta, nombre, tira de
- * identidad (edad · documento · teléfono), marca de alcance y la única acción
- * primaria de la vista.
+ * Cabecera compacta de la ficha del paciente (SPEC → Plantillas → Ficha):
+ * vuelta a la lista, nombre (`t-display`), una línea de identidad (edad ·
+ * documento · teléfono) con la marca de alcance, UNA fila de chips y, a la
+ * derecha, la única acción primaria («Editar datos») y el menú «⋯».
  *
- * Usa el `PageHeader` del sistema — esta página era la única de la app que
- * se pintaba su propio `<h1>` a mano y se quedaba fuera de `t-display`. La
- * tira y la marca van en el hueco `meta` que `PageHeader` expone.
+ * Fila de chips, en orden de riesgo: alertas clínicas primero (la misma alerta
+ * que la agenda, con su panel, y cada alerta como chip de peligro para leerla
+ * sin abrir nada), el estado de la anamnesis («Sin anamnesis» una sola vez),
+ * inasistencias, saldo vencido, cobertura, convenio y, al final y en neutro,
+ * la retención legal. Todo lo demás que antes vivía encima de las pestañas
+ * (tarjeta de anamnesis, dos frases repetidas, el panel de retención con tres
+ * botones) se fue a las pestañas o al menú: las pestañas quedan en el primer
+ * viewport también en el móvil.
  *
  * Es un componente (y no JSX suelto en `patients/[id]/page.tsx`) porque bajo
- * `src/app/` no hay tests por convención del repo: así el contrato de la
- * cabecera —qué se muestra, qué se omite y qué dice sobre el alcance— queda
- * cubierto en `patient-record-header.test.tsx`.
+ * `src/app/` no hay tests por convención del repo: el contrato de la cabecera
+ * queda cubierto en `patient-record-header.test.tsx`.
  */
 export function PatientRecordHeader({
   patient,
   loading,
   onEdit,
+  menuActions = [],
+  retention = null,
   medicalAlerts,
   medicalAlertsFailed = false,
   onRetryMedicalAlerts,
@@ -127,6 +170,12 @@ export function PatientRecordHeader({
   const items = patient ? identityItems(patient) : [];
   const alertSeverity = patient ? medicalAlertSeverity(medicalAlerts) : null;
   const alertHeadline = medicalAlerts ? medicalAlertHeadline(medicalAlerts) : null;
+  // Con alertas, cada una a la vista; el titular ya dice «Requiere
+  // premedicación» o «Alertas médicas».
+  const alertLines = alertSeverity === 'critical' && medicalAlerts ? medicalAlertLines(medicalAlerts) : [];
+  // Con alertas, el titular no habla de la anamnesis: si además caducó, se dice aparte.
+  const expiredWithAlerts =
+    alertSeverity === 'critical' && medicalAlerts?.anamnesisStatus === 'EXPIRED';
   // `null` = se están pidiendo; `undefined` = quien la usa no las pide.
   const alertsPending = !!patient && !medicalAlertsFailed && medicalAlerts === null;
   const attendancePending = !!patient && !attendanceFailed && attendance === null;
@@ -136,118 +185,184 @@ export function PatientRecordHeader({
     : patient
       ? fullName(patient)
       : copy.unknownPatientTitle;
+  const hasChips =
+    !!patient &&
+    (!!patient.balance?.hasOverdue ||
+      !!coverageChipText(patient.coverage) ||
+      !!agreementChipText(patient.agreement) ||
+      !!alertSeverity ||
+      alertsPending ||
+      medicalAlertsFailed ||
+      hasAttendanceBadge ||
+      attendanceFailed ||
+      !!retention);
 
   return (
-    <div>
+    <header data-testid="patient-record-header" className="flex flex-col gap-3 pb-4">
       <Link
         href="/patients"
-        className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        className="-my-1 inline-flex items-center gap-1 self-start rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg max-md:min-h-11"
       >
         <ChevronLeft aria-hidden className="size-4" />
         {copy.backLink}
       </Link>
 
-      <PageHeader
-        title={title}
-        meta={
-          // `mt-2` aquí y no en `PageHeader`: el hueco `meta` no pone margen
-          // propio, para que una marca que decide en el cliente si existe
-          // (`ClinicWideNote`) no deje un vacío cuando no se pinta. Va apretado
-          // al título porque es su misma frase —quién es y qué alcance tiene—,
-          // no un párrafo aparte.
-          <div className="mt-2 flex flex-col gap-1.5">
-            {items.length > 0 ? (
-              <ul aria-label={copy.identityLabel} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                {items.map((item, index) => (
-                  <li key={item.key} className="flex min-w-0 items-center gap-2 text-sm text-muted">
-                    {/* Separador decorativo: el punto medio no aporta nada
-                        leído en voz alta, y cada valor ya se explica solo
-                        («34 años», «Documento nacional DOC-1002», «Tel. …») sin depender de él. */}
-                    {index > 0 ? <span aria-hidden className="text-border">·</span> : null}
-                    <span className="tnum min-w-0 [overflow-wrap:anywhere]">{item.text}</span>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-start justify-between gap-3">
+          {/* `min-w-0` + `break-words`: un nombre largo se parte dentro de su
+              columna en vez de empujar las acciones fuera de la pantalla. */}
+          <h1 className="t-display min-w-0 break-words text-ink">{title}</h1>
+          {patient ? (
+            <div className="flex shrink-0 items-center gap-2">
+              {/* En el móvil, solo el icono (el nombre accesible no cambia): el
+                  nombre del paciente necesita el ancho. */}
+              <Button type="button" onClick={onEdit} className="max-sm:size-11 max-sm:px-0">
+                <Pencil aria-hidden className="size-4" />
+                <span className="max-sm:sr-only">{copy.edit}</span>
+              </Button>
+              {menuActions.length > 0 ? <HeaderMenu actions={menuActions} /> : null}
+            </div>
+          ) : null}
+        </div>
+        {/* Identidad y alcance a todo el ancho (no en la columna del nombre,
+            que en el móvil comparten con los botones). */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {items.length > 0 ? (
+            // El punto separador va DELANTE de cada ítem y la lista se corre a
+            // la izquierda su ancho con el sobrante recortado: el punto que
+            // abriría una línea nueva queda fuera, así nunca empieza una línea
+            // por «·» al partirse en el móvil (critique-core §7).
+            <div className="min-w-0 overflow-hidden">
+              <ul aria-label={copy.identityLabel} className="-ml-4 flex flex-wrap items-center gap-y-1">
+                {items.map((item) => (
+                  <li
+                    key={item.key}
+                    className="flex min-w-0 items-center text-sm text-muted before:w-4 before:shrink-0 before:text-center before:text-faint before:content-['·']"
+                  >
+                    {/* El punto es decorativo (pseudo-elemento): cada valor ya
+                        se explica solo («34 años», «Documento nacional
+                        DOC-1002», «Tel. …»). `min-w-0` + `overflow-wrap`:
+                        un teléfono largo se parte dentro de la franja en vez
+                        de ensanchar la cabecera a 390 px (DX-387). */}
+                    <span className={cn(item.id ? 't-id' : 'tnum', 'min-w-0 [overflow-wrap:anywhere]')}>
+                      {item.text}
+                    </span>
                   </li>
                 ))}
               </ul>
-            ) : null}
-            {/* Siempre visible, también mientras carga: es una propiedad de la
-                ficha, no del paciente que se esté cargando, y así la cabecera
-                no cambia de alto al terminar la carga. */}
-            <p className="t-label flex items-center gap-1.5 text-muted">
-              <Building2 aria-hidden className="size-3.5 shrink-0" />
-              {copy.recordScope}
+            </div>
+          ) : null}
+          {/* Siempre visible, también mientras carga: es una propiedad de la
+              ficha, no del paciente que se esté cargando. Mismo término que el
+              selector de sede. Ninguna lectura de esta página filtra por sede
+              (historia, odontograma, saldo). */}
+          <p className="t-caption flex items-center gap-1.5 text-muted">
+            <Building2 aria-hidden className="size-3.5 shrink-0" />
+            {copy.recordScope}
+          </p>
+        </div>
+      </div>
+
+      {/* Sin hueco visible mientras se pide: la insignia aparece si la hay. */}
+      {attendancePending ? (
+        <p role="status" className="sr-only">
+          {copy.attendanceLoading}
+        </p>
+      ) : null}
+
+      {hasChips && patient ? (
+        <div role="group" aria-label={copy.chipsLabel} className="flex flex-wrap items-center gap-1.5">
+          {alertsPending ? (
+            <p role="status" className="text-xs text-muted">
+              {copy.alertsLoading}
             </p>
-            {/* Sin hueco visible mientras se pide: la insignia aparece si la hay. */}
-            {attendancePending ? (
-              <p role="status" className="sr-only">
-                {copy.attendanceLoading}
-              </p>
-            ) : null}
-            {/* DX-150: «Saldo vencido · N días» (con importe solo para ADMIN y
-                RECEPTION: la API ya lo omite para los demás roles). */}
-            {/* DX-153: «Cobertura vencida», junto a la del saldo. DX-105: «Convenio: X». */}
-            {/* DX-247: la misma alerta médica que la agenda, con su titular. */}
-            {patient?.balance?.hasOverdue ||
-            coverageChipText(patient?.coverage) ||
-            agreementChipText(patient?.agreement) ||
-            alertSeverity ||
-            alertsPending ||
-            (patient && medicalAlertsFailed) ||
-            hasAttendanceBadge ||
-            (patient && attendanceFailed) ? (
-              <div className="flex flex-wrap items-center gap-2">
-                {alertsPending ? (
-                  <p role="status" className="text-sm text-muted">
-                    {copy.alertsLoading}
-                  </p>
-                ) : null}
-                {patient && medicalAlertsFailed ? (
-                  <FieldError
-                    label={copy.alertsFailed}
-                    onRetry={onRetryMedicalAlerts}
-                    className="h-9"
-                  />
-                ) : null}
-                {patient && alertSeverity ? (
-                  <span
-                    data-testid="record-medical-alert"
-                    className={
-                      alertSeverity === 'critical'
-                        ? 'inline-flex items-center gap-1.5 text-sm font-semibold text-danger'
-                        : 'inline-flex items-center gap-1.5 text-sm font-medium text-warning'
-                    }
-                  >
-                    <MedicalAlertIndicator
-                      flags={medicalAlerts}
-                      patientName={fullName(patient)}
-                      size="default"
-                    />
-                    <span aria-hidden>{alertHeadline}</span>
-                  </span>
-                ) : null}
-                {patient?.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
-                {/* DX-279: «2 inasistencias · 1 cancelación tardía (12 meses)». */}
-                {patient && attendanceFailed ? (
-                  <FieldError
-                    label={copy.attendanceFailed}
-                    onRetry={onRetryAttendance}
-                    className="h-9"
-                  />
-                ) : null}
-                {patient ? <AttendanceBadge counts={attendance?.totals} /> : null}
-                <CoverageChip coverage={patient?.coverage} />
-                <AgreementChip agreement={patient?.agreement} />
-              </div>
-            ) : null}
-          </div>
-        }
-        actions={
-          patient ? (
-            <Button type="button" onClick={onEdit}>
-              <Pencil aria-hidden className="size-4" /> {copy.edit}
-            </Button>
-          ) : undefined
-        }
-      />
-    </div>
+          ) : null}
+          {medicalAlertsFailed ? (
+            <FieldError label={copy.alertsFailed} onRetry={onRetryMedicalAlerts} className="h-9" />
+          ) : null}
+          {/* DX-247: la misma alerta que la agenda, con su titular y su panel. */}
+          {alertSeverity ? (
+            <span
+              data-testid="record-medical-alert"
+              className={cn(
+                'inline-flex max-w-full items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2.5 text-xs leading-4',
+                alertSeverity === 'critical'
+                  ? 'bg-danger-subtle font-semibold text-danger-text'
+                  : 'bg-warning-subtle font-medium text-warning-text',
+              )}
+            >
+              <MedicalAlertIndicator flags={medicalAlerts} patientName={fullName(patient)} size="compact" />
+              <span aria-hidden>{alertHeadline}</span>
+            </span>
+          ) : null}
+          {alertLines.map((line) => (
+            <Badge key={line} variant="danger" data-testid="record-alert-line" className="whitespace-normal">
+              {line}
+            </Badge>
+          ))}
+          {expiredWithAlerts ? <Badge variant="warning">{ANAMNESIS_EXPIRED_LABEL}</Badge> : null}
+          {/* DX-279: «2 inasistencias · 1 cancelación tardía (12 meses)». */}
+          {attendanceFailed ? (
+            <FieldError label={copy.attendanceFailed} onRetry={onRetryAttendance} className="h-9" />
+          ) : null}
+          <AttendanceBadge counts={attendance?.totals} />
+          {/* DX-150: «Saldo vencido · N días» (importe solo ADMIN y RECEPTION). */}
+          {patient.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
+          {/* DX-153: «Cobertura vencida». DX-105: «Convenio: X». */}
+          <CoverageChip coverage={patient.coverage} />
+          <AgreementChip agreement={patient.agreement} />
+          {retention ? <RetentionBadge chip={retention} /> : null}
+        </div>
+      ) : null}
+    </header>
+  );
+}
+
+/**
+ * Retención legal (DX-039): un estado normal y esperado, así que va al final y
+ * en neutro. La frase con el plazo sale al pasar el ratón o al enfocarlo (el
+ * chip es enfocable para que el teclado también la vea); la versión completa
+ * está en la pestaña «Datos».
+ */
+function RetentionBadge({ chip }: { chip: RetentionChip }) {
+  const badge = (
+    <Badge
+      variant="neutral"
+      data-testid="record-retention"
+      tabIndex={chip.hint ? 0 : undefined}
+      className={cn('tabular-nums', chip.hint && 'focus-ring cursor-default')}
+    >
+      <ShieldCheck aria-hidden className="size-3.5 shrink-0" />
+      {chip.text}
+    </Badge>
+  );
+  return chip.hint ? <Tooltip content={chip.hint}>{badge}</Tooltip> : badge;
+}
+
+/** Menú «⋯» de la cabecera: las acciones raras o legales, fuera de la vista. */
+function HeaderMenu({ actions }: { actions: RowAction[] }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="secondary" size="icon" aria-label={copy.moreActions}>
+          <MoreHorizontal aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        {actions.map((action, i) => (
+          <React.Fragment key={action.label}>
+            {action.separatorBefore && i > 0 ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuItem
+              disabled={action.disabled}
+              destructive={action.destructive}
+              onSelect={action.onSelect}
+            >
+              {action.icon}
+              {action.label}
+            </DropdownMenuItem>
+          </React.Fragment>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

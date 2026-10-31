@@ -12,6 +12,9 @@ import {
 import { Wizard, WizardNav, type WizardStep } from '@/components/ui/wizard';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
 import { Input } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
+import { useDateLocale } from '@/components/ui/date-locale';
+import { todayDate } from '@/lib/dates/iso';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
@@ -21,6 +24,7 @@ import { isEmailAddress } from '@/lib/format/email';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
+import { ConditionSummaryText } from '@/components/clinical/condition-summary';
 import {
   EMPTY_SELECTION,
   decisionsFromSelection,
@@ -49,7 +53,7 @@ const copy = {
   requiredError: 'Nombre, apellido y tipo de documento son obligatorios para continuar.',
   summaryTitle: 'Resumen de la historia clínica',
   summaryAllergies: (n: number) => `Alergias registradas: ${n}`,
-  summaryConditions: (n: number) => `Condiciones marcadas: ${n}`,
+  summaryConditions: 'Condiciones: ',
   summaryMedications: (n: number) => `Medicamentos registrados: ${n}`,
   noClinicalHistoryNote:
     'La historia clínica (antecedentes, alergias, medicamentos y hábitos) la completará el equipo clínico desde la ficha del paciente.',
@@ -149,6 +153,9 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   }, [focusRequest]);
   const [docNumber, setDocNumber] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  // Nadie nace mañana: un día futuro marca el campo inválido (hoy, en la zona de la sede).
+  const { timeZone } = useDateLocale();
+  const todayIso = React.useMemo(() => todayDate(timeZone).toString(), [timeZone]);
   const [sex, setSex] = useState<Sex>('UNSPECIFIED');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -349,12 +356,13 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
 
             <div className="grid gap-5 sm:grid-cols-2">
               <FormField htmlFor="pcw-birth-date" label={copy.birthDateLabel}>
-                <Input
+                <DateField
                   id="pcw-birth-date"
                   name="birthDate"
-                  type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
+                  value={birthDate || null}
+                  onChange={(value) => setBirthDate(value ?? '')}
+                  max={todayIso}
+                  showAge
                 />
               </FormField>
               <FormField htmlFor="pcw-sex" label={copy.sexLabel}>
@@ -457,7 +465,10 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
               <div className="flex flex-col gap-1 rounded-lg border border-border p-3 text-sm text-ink">
                 <p className="t-label text-ink">{copy.summaryTitle}</p>
                 <p>{copy.summaryAllergies(history.allergies?.length ?? 0)}</p>
-                <p>{copy.summaryConditions(history.conditions?.length ?? 0)}</p>
+                <p>
+                  {copy.summaryConditions}
+                  <ConditionSummaryText conditions={history.conditions} />
+                </p>
                 <p>{copy.summaryMedications(history.medications?.length ?? 0)}</p>
               </div>
             ) : (

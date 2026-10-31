@@ -543,6 +543,16 @@ const COUNTRY_LIST_COPY = 'lib/locations/iso3166-countries.json';
 // DX-329 (§3.2): igual, la lista de regiones de numeración; también la vigila el script de sincronía.
 const PHONE_REGION_LIST_COPY = 'lib/locations/phone-regions-list.json';
 const GENERATED_LIST_COPIES = [COUNTRY_LIST_COPY, PHONE_REGION_LIST_COPY];
+/**
+ * R1 (decisión del dueño, 2026-10-31): la moneda, las zonas y el formato que
+ * un país PROPONE al dar de alta una sede. Solo sugieren valores visibles y
+ * editables en el formulario (`useRegionalDraft`); nunca rellenan ni
+ * sustituyen lo guardado. Sus datos (generados) usan códigos de país como
+ * claves («CC» es Islas Cocos, no un documento) y su módulo es el único que
+ * busca por país.
+ */
+const COUNTRY_REGIONAL_DATA = 'lib/locations/country-regional.json';
+const COUNTRY_REGIONAL_LIB = 'lib/locations/country-regional.ts';
 const COUNTRY_DOCUMENT = /[Cc][ée]dula|[Tt]arjeta de identidad|[Ee]xtranjer[ií]a|\b(?:CC|TI|CE)\b|INVIMA/;
 /** Siglas de documentos de otros países: en cualquier caja, como palabra. */
 const COUNTRY_DOCUMENT_ACRONYM = /\b(?:NIT|NIF|RIF|DNI|NIE|RUT|CURP|CPF|RUC|CUIL|CUIT|NUIP)\b/i;
@@ -575,7 +585,9 @@ function documentScanFiles(dir: string = SRC): string[] {
     if (!/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name)) return [];
     const rel = relative(SRC, path).split(sep).join('/');
     if (/\.(test|spec)\./.test(rel) || rel.startsWith('lib/test/')) return [];
-    return LEGACY_FILES.includes(rel) || GENERATED_LIST_COPIES.includes(rel) ? [] : [path];
+    return LEGACY_FILES.includes(rel) || GENERATED_LIST_COPIES.includes(rel) || rel === COUNTRY_REGIONAL_DATA
+      ? []
+      : [path];
   });
 }
 
@@ -964,7 +976,7 @@ describe('arquitectura: país de la sede libre (DX-312)', () => {
  * (`const c = location.country; c === 'VE'`) no se ve.
  */
 const COUNTRY = 'coun' + 'try';
-const COUNTRY_RULE_EXCEPTIONS = [PRESCRIPTION_LEGACY_LAYOUT];
+const COUNTRY_RULE_EXCEPTIONS = [PRESCRIPTION_LEGACY_LAYOUT, COUNTRY_REGIONAL_LIB];
 
 /** Una expresión con «country»: `country`, `location.countryCode`, `x?.country`. */
 const C = `[\\w$.?!()\\[\\]]*${COUNTRY}[\\w$]*(?:\\??\\.[\\w$]+|\\(\\))*`;
@@ -1103,7 +1115,8 @@ describe('arquitectura: la web no decide por el país (DX-312, R3)', () => {
     );
     for (const rel of COUNTRY_RULE_EXCEPTIONS) {
       expect([rel, existsSync(join(SRC, rel)), rels.includes(rel)]).toEqual([rel, true, false]);
-      // La excepción sigue haciendo falta: la receta legada busca su maqueta por país.
+      // La excepción sigue haciendo falta: la receta legada busca su maqueta
+      // por país, y las propuestas de R1, la moneda y las zonas del país.
       expect(countryOffenders([join(SRC, rel)], lookupHits)).not.toEqual([]);
     }
     // El helper de prueba sí compara con un literal: queda fuera por ser `lib/test/**`.

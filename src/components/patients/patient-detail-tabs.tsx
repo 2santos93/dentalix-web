@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { TabBar } from '@/components/ui/tabs';
 
 export type PatientDetailTabKey =
   | 'data'
@@ -82,15 +82,9 @@ export function isPatientDetailTabKey(value: string | null | undefined): value i
  * "Odontograma" / "Plan de tratamiento", plus "Estado de cuenta" for the roles
  * that can read payments).
  *
- * Implements the real tab pattern, because the markup claims it: `role="tab"`
- * makes a screen reader announce "Datos, pestaña, 1 de 4", which is a promise
- * that the arrow keys move between the visible tabs. So:
- *
- * - Roving tabindex: exactly ONE tab is in the Tab order (the focused one, or
- *   the selected one before any interaction), so Tab enters the tablist and
- *   the next Tab leaves it for the panel instead of walking all of them.
- * - Left/Right wrap around, Home/End jump to the ends, and DOM focus follows.
- * - MANUAL activation: the arrows only move focus; Enter/Space (native to
+ * Built on `TabBar` (`ui/tabs`, Radix): the real tab pattern, because the
+ * markup claims it — roving tabindex (one tab stop), Left/Right wrap,
+ * Home/End jump to the ends, and MANUAL activation: the arrows only move focus; Enter/Space (native to
  *   `<button>`) and click select. Automatic activation is the APG default, but
  *   most panels fetch on mount (see `patients/[id]/page.tsx`), so
  *   arrowing across the tablist would fire requests the user never asked
@@ -133,81 +127,20 @@ export function PatientDetailTabs({
   // Las pestañas que de verdad se pintan, en orden: las flechas recorren estas.
   const tabs = TAB_ORDER.filter((tab) => labels[tab] !== undefined);
 
-  // `null` until the user interacts: the tabbable tab then falls back to the
-  // selected one. Kept as a derived value instead of an effect syncing state
-  // to `activeTab` (same shape as `OdontogramChart`'s roving tabindex).
-  const [focusedTab, setFocusedTab] = useState<PatientDetailTabKey | null>(null);
-  const focused = focusedTab ?? activeTab;
-  const buttons = useRef(new Map<PatientDetailTabKey, HTMLButtonElement>());
-
-  // En móvil el tablist se desplaza de lado: la pestaña activa (p. ej. al
-  // abrir `?tab=account-statement`) tiene que quedar a la vista, no escondida
-  // a la derecha. `?.` porque jsdom no implementa scrollIntoView.
-  useEffect(() => {
-    buttons.current.get(activeTab)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  }, [activeTab]);
-
-  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const current = tabs.indexOf(focused);
-    let nextIndex: number;
-    switch (event.key) {
-      case 'ArrowRight':
-        nextIndex = (current + 1) % tabs.length;
-        break;
-      case 'ArrowLeft':
-        nextIndex = (current - 1 + tabs.length) % tabs.length;
-        break;
-      case 'Home':
-        nextIndex = 0;
-        break;
-      case 'End':
-        nextIndex = tabs.length - 1;
-        break;
-      default:
-        return;
-    }
-    event.preventDefault();
-    const next = tabs[nextIndex];
-    setFocusedTab(next);
-    buttons.current.get(next)?.focus();
-  }
-
+  // Doce pestañas no caben en 390px: `TabBar` desplaza la franja de lado,
+  // desvanece los bordes cuando hay más y mantiene la activa a la vista (p. ej.
+  // al abrir `?tab=account-statement`); la página nunca crece en horizontal.
   return (
-    <div
-      role="tablist"
+    <TabBar
       aria-label={tablistLabel}
-      onKeyDown={handleKeyDown}
-      // Con cinco pestañas no caben en 390px: el tablist se desplaza de lado
-      // dentro de su franja y la página nunca crece en horizontal.
-      className="flex gap-2 overflow-x-auto border-b border-border"
-    >
-      {tabs.map((tab) => {
-        const selected = activeTab === tab;
-        return (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            id={`tab-${tab}`}
-            ref={(el) => {
-              if (el) buttons.current.set(tab, el);
-              else buttons.current.delete(tab);
-            }}
-            tabIndex={focused === tab ? 0 : -1}
-            aria-selected={selected}
-            aria-controls={`tabpanel-${tab}`}
-            // Keeps the roving stop on whatever the user actually reached,
-            // including a mouse click or a Shift+Tab back from the panel.
-            onFocus={() => setFocusedTab(tab)}
-            onClick={() => onTabChange(tab)}
-            className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium ${
-              selected ? 'border-b-2 border-primary text-ink' : 'text-muted hover:text-ink'
-            }`}
-          >
-            {labels[tab]}
-          </button>
-        );
-      })}
-    </div>
+      value={activeTab}
+      onValueChange={onTabChange}
+      items={tabs.map((tab) => ({
+        value: tab,
+        label: labels[tab],
+        id: `tab-${tab}`,
+        controls: `tabpanel-${tab}`,
+      }))}
+    />
   );
 }

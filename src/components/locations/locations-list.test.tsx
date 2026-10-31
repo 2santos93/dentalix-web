@@ -13,6 +13,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { clinicLocation } from '@/lib/test/locations';
 import { tokenFor } from '@/lib/test/prescriptions';
 import { setupUser } from '@/lib/test/user';
+import { chooseRegionalOption } from '@/lib/test/country';
 import { browserCountry, browserHourCycle } from '@/lib/locations/regional-settings';
 import { chooseCountry } from '@/lib/test/country';
 
@@ -159,9 +160,8 @@ describe('LocationsList (G1, spec §6.3)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Editar sede' });
     await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
-    await user.type(within(dialog).getByLabelText('Zona horaria'), 'Asia/Tokyo');
-    await user.clear(within(dialog).getByLabelText('Formato regional'));
-    await user.type(within(dialog).getByLabelText('Formato regional'), 'ja-JP');
+    await chooseRegionalOption(user, within(dialog).getByLabelText('Zona horaria'), 'Asia/Tokyo');
+    await chooseRegionalOption(user, within(dialog).getByLabelText('Formato regional'), 'ja-JP');
     await user.click(within(dialog).getByRole('radio', { name: '24 h' }));
     await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
 

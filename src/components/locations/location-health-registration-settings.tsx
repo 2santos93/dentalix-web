@@ -250,7 +250,7 @@ function LocationHealthRegistrationRow({
           </InlineError>
         ) : null}
         {/* Siempre montada: un lector de pantalla anuncia el cambio de texto. */}
-        <p role="status" className="flex items-center gap-1 text-xs text-success">
+        <p role="status" className="flex items-center gap-1 text-xs text-success-text">
           {saved ? (
             <>
               <CheckCircle2 aria-hidden className="size-3.5" />

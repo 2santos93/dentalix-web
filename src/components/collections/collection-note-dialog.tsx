@@ -15,6 +15,7 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { cn } from '@/lib/utils';
+import { Callout } from '@/components/ui/callout';
 
 export const noteDialogCopy = {
   title: 'Registrar gestión',
@@ -140,22 +141,21 @@ export function CollectionNoteDialog({ open, onOpenChange, token, patient, onSav
         </FormField>
       </div>
       <FormField htmlFor="cn-text" label={noteDialogCopy.text} error={errors.text}>
-        <p id="cn-text-warning" className="flex items-start gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
-          <ShieldAlert aria-hidden className="mt-px size-4 shrink-0" />
+        <Callout id="cn-text-warning-text" tone="warning" role="note" icon={ShieldAlert}>
           {noteDialogCopy.clinicalWarning}
-        </p>
+        </Callout>
         <textarea
           id="cn-text"
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={3}
           aria-invalid={errors.text ? true : undefined}
-          aria-describedby={cn('cn-text-warning cn-text-counter', errors.text && fieldErrorId('cn-text'))}
+          aria-describedby={cn('cn-text-warning-text cn-text-counter', errors.text && fieldErrorId('cn-text'))}
           className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
         <p
           id="cn-text-counter"
-          className={cn('text-right text-xs tabular-nums', length > NOTE_TEXT_MAX ? 'text-danger' : 'text-muted')}
+          className={cn('text-right text-xs tabular-nums', length > NOTE_TEXT_MAX ? 'text-danger-text' : 'text-muted')}
         >
           {noteDialogCopy.textCounter(length)}
         </p>

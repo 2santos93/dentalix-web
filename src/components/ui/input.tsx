@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { controlHeight, fieldClass } from '@/lib/ui/field-class';
 
 export const Input = React.forwardRef<
   HTMLInputElement,
@@ -8,10 +9,7 @@ export const Input = React.forwardRef<
   <input
     type={type}
     ref={ref}
-    className={cn(
-      'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger aria-[invalid=true]:focus-visible:ring-danger',
-      className,
-    )}
+    className={cn(fieldClass, controlHeight, 'file:border-0 file:bg-transparent file:text-sm file:font-medium', className)}
     {...props}
   />
 ));

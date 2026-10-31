@@ -29,6 +29,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet,
@@ -560,13 +561,12 @@ function CandidateRow({
       <div className="flex flex-wrap items-start justify-between gap-2">
         {selectable ? (
           <label htmlFor={selectId} className="flex min-h-6 min-w-0 cursor-pointer items-start gap-2">
-            <input
+            <Checkbox
               id={selectId}
-              type="checkbox"
               checked={selected}
               onChange={onToggleSelected}
               aria-label={fillOpeningCopy.select(name)}
-              className="mt-0.5 size-4 shrink-0 accent-primary"
+              className="mt-0.5"
             />
             <span className="min-w-0 break-words text-sm font-semibold text-ink">{name}</span>
           </label>
@@ -602,7 +602,7 @@ function CandidateRow({
           <p className="text-muted">{fillOpeningCopy.linkNoChannel}</p>
         ) : null}
         {c.whatsappBlocked ? (
-          <p className="text-warning">
+          <p className="text-warning-text">
             {c.whatsappBlockedReason === 'NO_OPT_IN'
               ? fillOpeningCopy.whatsappNoOptIn
               : fillOpeningCopy.whatsappBlocked}

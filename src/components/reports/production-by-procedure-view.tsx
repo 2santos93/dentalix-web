@@ -29,11 +29,12 @@ import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Callout } from '@/components/ui/callout';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
-import { toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { HowCalculated } from './how-calculated';
 import { ProductionItemsDialog } from './production-items-dialog';
 import { cn } from '@/lib/utils';
@@ -159,7 +160,7 @@ function AmountCells({
 function DifferenceValue({ value, fmt }: { value: number | null; fmt: RegionalFormat }) {
   if (value === null) return <span className="text-muted">{productionCopy.noValue}</span>;
   const text = `${value > 0 ? '+' : ''}${fmt.percent(value, 1)}`;
-  return <span className={cn('font-medium', value < 0 ? 'text-danger' : 'text-ink')}>{text}</span>;
+  return <span className={cn('font-medium', value < 0 ? 'text-danger-text' : 'text-ink')}>{text}</span>;
 }
 
 function LineRow({
@@ -203,7 +204,7 @@ function LineRow({
               className="flex min-h-8 flex-col items-start rounded text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               <span className="text-xs tabular-nums text-muted">{row.code}</span>
-              <span className="font-medium text-primary underline-offset-2 hover:underline">{row.label}</span>
+              <span className="font-medium text-primary-text underline-offset-2 hover:underline">{row.label}</span>
             </button>
           </th>
           <td className="px-3 py-2">{row.currency}</td>
@@ -250,7 +251,7 @@ function LineRow({
         <tr data-testid="production-unattributed" className="h-11 bg-surface text-ink">
           <th scope="row" className={cn(firstCol, 'bg-surface font-medium')}>
             {productionCopy.unattributed}
-            <span aria-hidden className="font-semibold text-warning">
+            <span aria-hidden className="font-semibold text-warning-text">
               *
             </span>
           </th>
@@ -471,59 +472,62 @@ export function ProductionByProcedureView({ token }: { token: string }) {
         <div className="grid min-w-0 grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
           <label className="col-span-2 flex min-w-0 flex-col gap-1 text-sm text-muted sm:col-span-1">
             {productionCopy.period}
-            <select
+            <NativeSelect
               aria-label={productionCopy.period}
               value={preset}
               onChange={(e) => choosePreset(e.target.value as PeriodPresetKey)}
-              className={cn(toolbarFieldClass, 'sm:w-44')}
+              className="sm:w-44"
             >
               {PERIOD_PRESETS.map((p) => (
                 <option key={p.key} value={p.key}>
                   {p.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           {preset === 'custom' && period ? (
             <>
-              <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-                {productionCopy.from}
-                <Input
-                  type="date"
+              {/* Dos días sueltos (no un periodo en un campo): cada extremo tiene su
+                  propio límite y su nombre («Desde», «Hasta»), como antes. Un
+                  extremo a medio escribir no cambia el periodo. */}
+              <div className="flex min-w-0 flex-col gap-1 text-sm text-muted">
+                <span id={`${periodErrorId}-from`}>{productionCopy.from}</span>
+                <DatePicker
+                  aria-labelledby={`${periodErrorId}-from`}
                   value={period.from}
                   max={period.to}
-                  onChange={(e) => {
-                    if (e.target.value) setCustom({ from: e.target.value, to: period.to });
+                  onChange={(value) => {
+                    if (value) setCustom({ from: value, to: period.to });
                   }}
-                  className="tabular-nums sm:w-44"
-                  aria-invalid={invalidPeriod || undefined}
+                  className="sm:w-48"
+                  isInvalid={invalidPeriod}
                   aria-describedby={invalidPeriod ? periodErrorId : undefined}
                 />
-              </label>
-              <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-                {productionCopy.to}
-                <Input
-                  type="date"
+              </div>
+              <div className="flex min-w-0 flex-col gap-1 text-sm text-muted">
+                <span id={`${periodErrorId}-to`}>{productionCopy.to}</span>
+                <DatePicker
+                  aria-labelledby={`${periodErrorId}-to`}
                   value={period.to}
                   min={period.from}
-                  onChange={(e) => {
-                    if (e.target.value) setCustom({ from: period.from, to: e.target.value });
+                  onChange={(value) => {
+                    if (value) setCustom({ from: period.from, to: value });
                   }}
-                  className="tabular-nums sm:w-44"
-                  aria-invalid={invalidPeriod || undefined}
+                  className="sm:w-48"
+                  isInvalid={invalidPeriod}
                   aria-describedby={invalidPeriod ? periodErrorId : undefined}
                 />
-              </label>
+              </div>
             </>
           ) : null}
           <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
             {productionCopy.location}
-            <select
+            <NativeSelect
               aria-label={productionCopy.location}
               value={locationId}
               onChange={(e) => setLocationId(e.target.value)}
               disabled={!options}
-              className={cn(toolbarFieldClass, 'sm:w-48')}
+              className="sm:w-48"
             >
               <option value="">{productionCopy.locationAll}</option>
               {options?.locations.map((l) => (
@@ -531,17 +535,17 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                   {l.isActive ? l.name : `${l.name} ${productionCopy.inactive}`}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           {own ? null : (
             <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
               {productionCopy.professional}
-              <select
+              <NativeSelect
                 aria-label={productionCopy.professional}
                 value={professionalId}
                 onChange={(e) => setProfessionalId(e.target.value)}
                 disabled={!options}
-                className={cn(toolbarFieldClass, 'sm:w-48')}
+                className="sm:w-48"
               >
                 <option value="">{productionCopy.professionalAll}</option>
                 {options?.professionals.map((p) => (
@@ -549,17 +553,17 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                     {p.fullName}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           )}
           <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
             {productionCopy.category}
-            <select
+            <NativeSelect
               aria-label={productionCopy.category}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               disabled={!options}
-              className={cn(toolbarFieldClass, 'sm:w-44')}
+              className="sm:w-44"
             >
               <option value="">{productionCopy.categoryAll}</option>
               {options?.categories.map((name) => (
@@ -567,7 +571,7 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                   {name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
         </div>
         <Button
@@ -581,7 +585,7 @@ export function ProductionByProcedureView({ token }: { token: string }) {
         </Button>
       </div>
 
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
 
@@ -615,15 +619,20 @@ export function ProductionByProcedureView({ token }: { token: string }) {
           {data && fmt ? (
             <>
               {data.unattributed.length > 0 ? (
-                <p
+                // El asterisco enlaza la nota con la fila «Sin atribuir» de la tabla.
+                <Callout
+                  tone="warning"
                   role="note"
-                  className="flex max-w-[80ch] items-start gap-1.5 self-start rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
+                  icon={null}
+                  className="max-w-[80ch] self-start py-2"
                 >
-                  <span aria-hidden className="font-semibold text-warning">
-                    *
-                  </span>
-                  <span>{productionCopy.unattributedNote}</span>
-                </p>
+                  <p className="flex items-start gap-1.5">
+                    <span aria-hidden className="font-semibold text-warning-text">
+                      *
+                    </span>
+                    <span>{productionCopy.unattributedNote}</span>
+                  </p>
+                </Callout>
               ) : null}
               <ProductionTable lines={lines} fmt={fmt} onOpen={setOpenRow} />
               {filters ? (
@@ -641,21 +650,25 @@ export function ProductionByProcedureView({ token }: { token: string }) {
       )}
 
       {data && fmt && !invalidPeriod && !showLoading && !loadError && data.undated.length > 0 ? (
-        <p
+        <Callout
+          tone="warning"
           role="note"
+          icon={null}
           data-testid="production-undated"
-          className="flex max-w-[80ch] items-start gap-1.5 self-start rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
+          className="max-w-[80ch] self-start py-2"
         >
-          <span aria-hidden className="font-semibold text-warning">
-            *
-          </span>
-          <span>
-            {productionCopy.undatedNote(
-              data.undated.reduce((n, u) => n + u.count, 0),
-              data.undated.map((u) => moneyWithCode(u.net, u.currency, fmt)).join(' · '),
-            )}
-          </span>
-        </p>
+          <p className="flex items-start gap-1.5">
+            <span aria-hidden className="font-semibold text-warning-text">
+              *
+            </span>
+            <span>
+              {productionCopy.undatedNote(
+                data.undated.reduce((n, u) => n + u.count, 0),
+                data.undated.map((u) => moneyWithCode(u.net, u.currency, fmt)).join(' · '),
+              )}
+            </span>
+          </p>
+        </Callout>
       ) : null}
     </div>
   );

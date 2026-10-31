@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -86,7 +87,7 @@ async function openDayList(page: Page) {
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(DAY);
+  await fillDate(page, 'Fecha', DAY);
 }
 
 /**
@@ -168,7 +169,7 @@ test('1440 px: en la fila, ↑/↓ no envían nada y Enter aplica el estado', as
   await page.reload();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(DAY);
+  await fillDate(page, 'Fecha', DAY);
   await expect(status).toHaveText('Agendada', { timeout: 15_000 });
   expect(patches.count).toBe(0);
 
@@ -190,7 +191,7 @@ test('1440 px: en la fila, ↑/↓ no envían nada y Enter aplica el estado', as
   await page.reload();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(DAY);
+  await fillDate(page, 'Fecha', DAY);
   await expect(status).toHaveText('Confirmada', { timeout: 15_000 });
 });
 

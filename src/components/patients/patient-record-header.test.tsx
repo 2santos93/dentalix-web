@@ -428,3 +428,58 @@ describe('PatientRecordHeader: insignia de asistencia (DX-279)', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 });
+
+describe('PatientRecordHeader: cabecera compacta (UX v2 · K3)', () => {
+  const critical = {
+    hasCriticalAlert: true,
+    requiresPremedication: false,
+    anamnesisStatus: 'EXPIRED' as const,
+    alerts: ['anticoagulantes' as const, 'alergiaLatex' as const],
+    anamnesisReviewedAt: '2025-01-01T00:00:00.000Z',
+  };
+
+  it('cada alerta clínica es un chip a la vista, y la anamnesis caducada se dice aparte', () => {
+    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={critical} />);
+    const lines = screen.getAllByTestId('record-alert-line');
+    expect(lines).toHaveLength(2);
+    expect(screen.getByRole('group', { name: 'Avisos del paciente' })).toHaveTextContent('Anamnesis caducada');
+  });
+
+  it('las acciones raras van en el menú «⋯», con su nombre accesible', async () => {
+    const user = userEvent.setup();
+    const onArchive = jest.fn();
+    render(
+      <PatientRecordHeader
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        menuActions={[
+          { label: 'Enviar anamnesis', onSelect: () => {} },
+          { label: 'Archivar paciente', onSelect: onArchive, destructive: true, separatorBefore: true },
+        ]}
+      />,
+    );
+    expect(screen.queryByRole('menuitem', { name: 'Archivar paciente' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Más acciones' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Archivar paciente' }));
+    expect(onArchive).toHaveBeenCalled();
+  });
+
+  it('sin acciones de menú no hay «⋯»; «Editar datos» sigue siendo la acción primaria', () => {
+    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Más acciones' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar datos' })).toBeInTheDocument();
+  });
+
+  it('la retención legal es un chip neutro al final de la fila', () => {
+    render(
+      <PatientRecordHeader
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        retention={{ text: 'Retención hasta 28/02/2039', hint: 'Se conserva 15 años.' }}
+      />,
+    );
+    expect(screen.getByTestId('record-retention')).toHaveTextContent('Retención hasta 28/02/2039');
+  });
+});

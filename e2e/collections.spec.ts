@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { fillDate } from './support/dates';
 import { test, expect, type Page } from './support/test';
 import type { APIRequestContext } from '@playwright/test';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
@@ -261,7 +262,9 @@ test('agenda: el odontólogo ve «Saldo vencido» sin importe en la tarjeta de l
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${origin}/agenda`);
     await page.getByRole('button', { name: 'Día', exact: true }).click();
-    await page.getByLabel('Fecha', { exact: true }).fill(day);
+    // En el teléfono el Día abre en «Lista»; aquí se prueban las columnas.
+    await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+    await fillDate(page, 'Fecha', day);
     if (width === 390) {
       // En móvil se ve una columna (la del primer profesional): se elige la suya.
       await page.getByRole('group', { name: 'Profesional visible' }).getByRole('button', { name: dentist.fullName }).click();
@@ -282,7 +285,7 @@ test('agenda: recepción ve el importe vencido en el chip', async ({ page }) => 
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  await fillDate(page, 'Fecha', day);
   const chip = page.getByTestId('overdue-chip').first();
   await expect(chip).toBeVisible({ timeout: 15_000 });
   await expect(chip).toContainText(/Saldo vencido · \d+ días · .*\d/);

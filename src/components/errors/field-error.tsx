@@ -50,11 +50,11 @@ export function FieldError({
       role="status"
       aria-live="polite"
       className={cn(
-        'inline-flex h-10 items-center gap-2 rounded-lg border border-danger/40 bg-danger/5 px-3',
+        'inline-flex h-10 items-center gap-2 rounded-lg border border-danger/40 bg-danger-subtle px-3',
         className,
       )}
     >
-      <AlertCircle aria-hidden="true" className="size-4 shrink-0 text-danger" />
+      <AlertCircle aria-hidden="true" className="size-4 shrink-0 text-danger-text" />
       <span className="flex-1 truncate text-sm text-ink">{label}</span>
       {onRetry ? (
         <button

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Browser, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { accessTokenOf, loginAs, registerAndLogin } from './support/auth';
@@ -126,7 +127,7 @@ async function openDayList(page: Page, origin: string, day: string): Promise<voi
   await expect(page.getByRole('heading', { name: 'Agenda', exact: true })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  await fillDate(page, 'Fecha', day);
 }
 
 async function receptionPage(browser: Browser, width: number, height: number): Promise<Page> {

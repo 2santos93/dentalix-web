@@ -180,7 +180,7 @@ function EditableStaffLocations({ token, userId }: { token: string; userId: stri
             </p>
           </div>
 
-          {noActiveAssigned && <p className="text-sm text-warning">{copy.noActiveAssigned}</p>}
+          {noActiveAssigned && <p className="text-sm text-warning-text">{copy.noActiveAssigned}</p>}
 
           <fieldset disabled={all} className="flex min-w-0 flex-col gap-1.5">
             <legend className="t-label mb-1 text-muted">{copy.legend}</legend>

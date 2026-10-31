@@ -153,7 +153,7 @@ export function ProductionItemsDialog({
                               {item.patientId && item.patientName ? (
                                 <Link
                                   href={`/patients/${item.patientId}`}
-                                  className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                                  className="font-medium text-primary-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
                                 >
                                   {item.patientName}
                                 </Link>

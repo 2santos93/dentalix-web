@@ -28,8 +28,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Callout } from '@/components/ui/callout';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const copy = {
   title: 'Enviar a firmar',
@@ -202,7 +202,7 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
                   {copy.noTemplates}
                 </p>
               ) : (
-                <select
+                <NativeSelect
                   ref={templateRef}
                   id="sign-template"
                   value={templateId}
@@ -212,7 +212,6 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
                   }}
                   aria-invalid={fieldErrors.template ? true : undefined}
                   aria-describedby={fieldErrors.template ? fieldErrorId('sign-template') : undefined}
-                  className={cn(fieldClass, 'h-10')}
                   required
                 >
                   <option value="" disabled>
@@ -223,17 +222,17 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
                       {t.title}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               )}
             </FormField>
             {template?.lastCompletedAt ? (
-              <p role="status" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+              <Callout tone="warning" role="status" className="py-2">
                 {copy.alreadyComplete(
                   clock
                     ? clock.fmt.longDate(new Date(template.lastCompletedAt), clock.timeZone, { weekday: false })
                     : NO_SEDE_FORMAT,
                 )}
-              </p>
+              </Callout>
             ) : null}
 
             <FormField
@@ -242,7 +241,7 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
               hint={copy.professionalHint}
               error={fieldErrors.professional}
             >
-              <select
+              <NativeSelect
                 ref={professionalRef}
                 id="sign-professional"
                 value={professionalId}
@@ -252,7 +251,6 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
                 }}
                 aria-invalid={fieldErrors.professional ? true : undefined}
                 aria-describedby={fieldErrors.professional ? fieldErrorId('sign-professional') : undefined}
-                className={cn(fieldClass, 'h-10')}
                 required
               >
                 <option value="" disabled>
@@ -263,7 +261,7 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
                     {copy.professionalOption(p)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FormField>
 
             <FormField
@@ -271,11 +269,10 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
               label={copy.planLabel}
               hint={options.plans.length === 0 ? copy.noPlans : copy.planHint}
             >
-              <select
+              <NativeSelect
                 id="sign-plan"
                 value={planId}
                 onChange={(e) => setPlanId(e.target.value)}
-                className={cn(fieldClass, 'h-10')}
               >
                 <option value="">{copy.planNone}</option>
                 {options.plans.map((p) => (
@@ -283,12 +280,12 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
                     {copy.planOption(p)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FormField>
             {template?.usesTreatment && !planId ? (
-              <p role="status" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+              <Callout tone="warning" role="status" className="py-2">
                 {copy.noPlanWarning}
-              </p>
+              </Callout>
             ) : null}
 
             <section
@@ -309,7 +306,7 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
                   <p className="text-xs text-muted">{copy.expiry}</p>
                 </>
               ) : (
-                <p role="alert" className="text-warning">
+                <p role="alert" className="text-warning-text">
                   {recipient?.reason}
                 </p>
               )}

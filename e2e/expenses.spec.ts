@@ -48,7 +48,7 @@ const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
  * hacen fallar el test. Cualquier otra violación seria o crítica sí.
  */
 const PREEXISTING_CONTRAST: { matches: (node: { html: string; target: unknown[] }) => boolean; why: string }[] = [
-  // Badge tintado (`bg-success/15 text-success`, etc.): 4.08–4.09:1 en claro,
+  // Badge tintado (`bg-success-subtle text-success-text`, etc.): 4.08–4.09:1 en claro,
   // como «Abierta» en la lista de turnos de la Caja.
   { matches: (n) => /class="[^"]*\bbg-(success|warning|danger)\/15\b/.test(n.html), why: 'Badge tintado del sistema' },
   // (El Button `destructive` en oscuro, 2.69:1 con texto blanco, se corrigió

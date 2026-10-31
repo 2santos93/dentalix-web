@@ -18,8 +18,7 @@ import {
 import {
   differenceText,
   moneyList,
-  sessionStatusLabel,
-  sessionStatusVariant,
+  sessionStatusKey,
 } from '@/lib/cash-sessions/presentation';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { onLocationChange } from '@/lib/locations/location-store';
@@ -36,7 +35,7 @@ import { Pagination } from '@/components/shared/pagination';
 import { ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -241,7 +240,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
         className="flex flex-col gap-8"
         {...(tabs ? { role: 'tabpanel', id: tabs.panelId, 'aria-labelledby': tabs.tabId } : {})}
       >
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
 
@@ -342,7 +341,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
                         <TableCell data-label={copy.colLocation}>{item.location.name}</TableCell>
                         <TableCell data-label={copy.colOpenedBy}>{item.openedBy.fullName ?? '—'}</TableCell>
                         <TableCell data-label={copy.colStatus}>
-                          <Badge variant={sessionStatusVariant(item)}>{sessionStatusLabel(item)}</Badge>
+                          <StatusBadge kind="cashSession" status={sessionStatusKey(item)} />
                         </TableCell>
                         <TableCell className="text-right tabular-nums" data-label={copy.colFloat}>
                           {moneyList(item.floats)}
@@ -350,7 +349,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
                         <TableCell
                           className={cn(
                             'text-right font-medium tabular-nums',
-                            item.differences.some((d) => d.amount !== 0) ? 'text-danger' : 'text-ink',
+                            item.differences.some((d) => d.amount !== 0) ? 'text-danger-text' : 'text-ink',
                           )}
                           data-label={copy.colDifference}
                         >
@@ -497,7 +496,7 @@ function CurrentSessionCard({
             <p className="text-sm text-muted tabular-nums">{copy.outflowsCount(session.outflows.length)}</p>
           ) : null}
           {current.settings.requireOpenSession ? (
-            <p className="mt-1 text-sm text-warning">{copy.requireOpen}</p>
+            <p className="mt-1 text-sm text-warning-text">{copy.requireOpen}</p>
           ) : null}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -545,7 +544,7 @@ function CurrentSessionCard({
                     {PAYMENT_METHOD_LABELS[line.method]}{' '}
                     <span className="text-xs text-muted">{line.currency}</span>
                   </span>
-                  <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger' : 'text-ink')}>
+                  <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger-text' : 'text-ink')}>
                     {formatCurrency(line.expected, line.currency)}
                   </span>
                 </li>

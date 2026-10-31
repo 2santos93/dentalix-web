@@ -4,11 +4,11 @@ import { useMemo, useRef, useState } from 'react';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatCurrency } from '@/lib/format/currency';
 import { parseMoneyInput } from '@/lib/format/money';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
 import { transferCredit } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatementPlan } from '@/lib/account-statement/account-statement-api';
 import { creditPreviewCopy, type CreditSource } from './credit-balance';
@@ -146,19 +146,18 @@ export function CreditTransferModal({
       ) : (
         <>
           <FormField htmlFor="ct-target" label={copy.target}>
-            <select
+            <NativeSelect
               id="ct-target"
               value={targetId}
               disabled={submitting}
               onChange={(e) => setTargetId(e.target.value)}
-              className={cn(fieldClass, 'h-10')}
             >
               {targets.map((t) => (
                 <option key={t.id} value={t.id}>
                   {`${planName(t.id)} · ${creditPreviewCopy.balance(formatCurrency(t.balance, t.currency))}`}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
           <FormField htmlFor="ct-amount" label={copy.amount} error={amountError}>
             <MoneyInput
@@ -176,7 +175,7 @@ export function CreditTransferModal({
             />
           </FormField>
           <FormField htmlFor="ct-reason" label={copy.reason} error={reasonError}>
-            <textarea
+            <Textarea
               id="ct-reason"
               rows={2}
               maxLength={500}
@@ -188,7 +187,6 @@ export function CreditTransferModal({
               }}
               aria-invalid={reasonError ? true : undefined}
               aria-describedby={reasonError ? fieldErrorId('ct-reason') : undefined}
-              className={cn(fieldClass, reasonError && 'border-danger')}
             />
           </FormField>
           <CreditPreview rows={preview} />

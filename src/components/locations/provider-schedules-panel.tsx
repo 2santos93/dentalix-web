@@ -265,7 +265,7 @@ function ProviderScheduleDetail({
         />
         {saveError ? <InlineError>{saveError}</InlineError> : null}
         {saved && !saveError ? (
-          <p role="status" className="text-sm font-medium text-success">
+          <p role="status" className="text-sm font-medium text-success-text">
             {copy.saved}
           </p>
         ) : null}

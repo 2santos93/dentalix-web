@@ -177,7 +177,7 @@ function SignedPdfStatusLine({
   }
   if (status === 'FAILED') {
     return (
-      <p role="alert" className="text-sm text-danger">
+      <p role="alert" className="text-sm text-danger-text">
         {copy.pdfFailed}
       </p>
     );

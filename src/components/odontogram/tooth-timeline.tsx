@@ -11,6 +11,7 @@ import { formatDate } from '@/lib/format/date';
 import { ORIGIN_LABELS, recordOrigin } from '@/lib/odontogram/origin';
 import { SectionError } from '@/components/errors/section-error';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { VoidRecordDialog } from './void-record-dialog';
@@ -20,8 +21,6 @@ const copy = {
   loading: 'Cargando historial del diente…',
   empty: 'No hay registros para este diente todavía.',
   genericLoadError: 'No pudimos cargar el historial del diente.',
-  statusPlanned: 'Planificado',
-  statusCompleted: 'Completado',
   wholeTooth: 'Diente completo',
   heading: (fdi: string) => `Historial del diente ${fdi}`,
   emptyAsOf: (date: string) => `Este diente no tenía registros al ${date}.`,
@@ -40,11 +39,6 @@ const SURFACE_LABELS: Record<ToothSurface, string> = {
   MESIAL: 'mesial',
   DISTAL: 'distal',
   OCCLUSAL: 'oclusal',
-};
-
-const STATUS_LABELS: Record<ToothRecord['status'], string> = {
-  PLANNED: copy.statusPlanned,
-  COMPLETED: copy.statusCompleted,
 };
 
 /** The subset of `DentalCatalogItem` this component needs to render a record. */
@@ -212,13 +206,7 @@ export function ToothTimeline({
                   </span>
                   {origin !== 'THIS_CLINIC' ? <Badge variant="outline">{ORIGIN_LABELS[origin]}</Badge> : null}
                   <span className="ml-auto flex shrink-0 items-center gap-2">
-                    {isVoided ? (
-                      <Badge variant="danger">{copy.voided}</Badge>
-                    ) : (
-                      <Badge variant={record.status === 'COMPLETED' ? 'success' : 'warning'}>
-                        {STATUS_LABELS[record.status]}
-                      </Badge>
-                    )}
+                    <StatusBadge kind="toothRecord" status={isVoided ? 'VOIDED' : record.status} />
                   </span>
                 </div>
                 <p className="text-xs text-muted">
@@ -242,7 +230,7 @@ export function ToothTimeline({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="-ml-2 h-8 text-muted hover:text-danger"
+                      className="-ml-2 h-8 text-muted hover:text-danger-text"
                       aria-label={copy.voidActionFor(label, date)}
                       onClick={() => setVoiding({ id: record.id, label: copy.recordLabel(label, date) })}
                     >

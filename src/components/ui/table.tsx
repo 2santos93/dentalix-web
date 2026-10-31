@@ -6,6 +6,11 @@ import { useHorizontalOverflow } from '@/lib/ui/use-horizontal-overflow';
 /**
  * Tabla que se apila en móvil.
  *
+ * Para una LISTA nueva usa `DataList` (`./data-list`): tarjeta compacta de dos
+ * líneas en el teléfono en vez de este apilado «etiqueta: valor», que daba
+ * tarjetas de 165–500px (DESIGN.md → Tables). Esto queda para las tablas que
+ * ya lo usan y como pieza de `DataList`.
+ *
  * DESIGN.md lo pide —"Tables collapse to stacked labeled cards below `sm`"— y
  * ninguna tabla lo hacía: en un teléfono había que arrastrar de lado para leer
  * una fila, que es justo lo que el sistema dice evitar.
@@ -28,7 +33,21 @@ import { useHorizontalOverflow } from '@/lib/ui/use-horizontal-overflow';
  * región enfocable y con nombre, y se le pintan sombras en los bordes con
  * contenido por ver (`.scroll-x-shadows`).
  */
-function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
+/**
+ * ¿Se apila bajo `sm`? Por defecto sí (el contrato de siempre). Las tablas de
+ * COMPARACIÓN —leer una columna de arriba abajo: caja del día, reportes,
+ * perio— no se apilan: se desplazan de lado con la primera columna fija
+ * (`DataList phone="scroll"`, DESIGN.md → Tables). Contexto y no prop en cada
+ * pieza para no obligar a repetirlo en cabecera, cuerpo, filas y celdas.
+ */
+const TableStackContext = React.createContext(true);
+
+interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
+  /** `false`: no se apila en el teléfono (tabla de comparación). Por defecto `true`. */
+  stack?: boolean;
+}
+
+function Table({ className, stack = true, ...props }: TableProps) {
   const [viewport, scrollable] = useHorizontalOverflow<HTMLDivElement>();
 
   return (
@@ -52,16 +71,18 @@ function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) 
           }
         : {})}
     >
-      <table
-        className={cn(
-          'w-full caption-bottom text-sm',
-          // Bajo `sm` la tabla deja de comportarse como tabla: filas en bloque,
-          // cabecera oculta (su texto lo reponen los `data-label`).
-          'max-sm:block',
-          className,
-        )}
-        {...props}
-      />
+      <TableStackContext.Provider value={stack}>
+        <table
+          className={cn(
+            'w-full caption-bottom text-sm',
+            // Bajo `sm` la tabla deja de comportarse como tabla: filas en bloque,
+            // cabecera oculta (su texto lo reponen los `data-label`).
+            stack && 'max-sm:block',
+            className,
+          )}
+          {...props}
+        />
+      </TableStackContext.Provider>
     </div>
   );
 }
@@ -70,6 +91,7 @@ function TableHeader({
   className,
   ...props
 }: React.HTMLAttributes<HTMLTableSectionElement>) {
+  const stack = React.useContext(TableStackContext);
   return (
     <thead
       className={cn(
@@ -77,7 +99,7 @@ function TableHeader({
         // No se usa `hidden`: eso lo sacaría del árbol de accesibilidad y la
         // tabla perdería sus cabeceras de columna. `sr-only` lo saca de la
         // vista conservándolas.
-        'max-sm:sr-only',
+        stack && 'max-sm:sr-only',
         className,
       )}
       {...props}
@@ -89,22 +111,24 @@ function TableBody({
   className,
   ...props
 }: React.HTMLAttributes<HTMLTableSectionElement>) {
+  const stack = React.useContext(TableStackContext);
   return (
     <tbody
-      className={cn('[&_tr:last-child]:border-0', 'max-sm:block', className)}
+      className={cn('[&_tr:last-child]:border-0', stack && 'max-sm:block', className)}
       {...props}
     />
   );
 }
 
 function TableRow({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
+  const stack = React.useContext(TableStackContext);
   return (
     <tr
       className={cn(
         'border-b border-border transition-colors hover:bg-bg/60 data-[state=selected]:bg-bg',
         // Cada fila es una tarjeta en móvil: bloque, con aire y separada de la
         // siguiente por la misma hairline que ya usa en escritorio.
-        'max-sm:block max-sm:px-4 max-sm:py-3',
+        stack && 'max-sm:block max-sm:px-4 max-sm:py-3',
         className,
       )}
       {...props}
@@ -131,6 +155,7 @@ function TableCell({
   className,
   ...props
 }: React.TdHTMLAttributes<HTMLTableCellElement>) {
+  const stack = React.useContext(TableStackContext);
   return (
     <td
       className={cn(
@@ -138,8 +163,10 @@ function TableCell({
         // En móvil: etiqueta a la izquierda (desde `data-label`) y valor a la
         // derecha, en una línea por celda. `empty:hidden` evita que una celda
         // sin contenido deje una fila huérfana con solo su etiqueta.
-        'max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-4 max-sm:px-0 max-sm:py-1.5',
-        'max-sm:before:content-[attr(data-label)] max-sm:before:text-xs max-sm:before:font-medium max-sm:before:uppercase max-sm:before:tracking-wide max-sm:before:text-muted',
+        stack &&
+          'max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-4 max-sm:px-0 max-sm:py-1.5',
+        stack &&
+          'max-sm:before:content-[attr(data-label)] max-sm:before:text-xs max-sm:before:font-medium max-sm:before:uppercase max-sm:before:tracking-wide max-sm:before:text-muted',
         className,
       )}
       {...props}

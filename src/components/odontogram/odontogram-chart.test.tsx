@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { OdontogramChart } from './odontogram-chart';
+import { OdontogramChart, chartFit, chartWidths } from './odontogram-chart';
+import { chartLayoutForArch } from '@/lib/odontogram/dentition';
 
 // The surfaces are `aria-hidden` painted regions (the tooth announces them in
 // its own label), so they're located by `data-surface` inside their tooth.
@@ -280,5 +281,24 @@ describe('OdontogramChart — dentición temporal y mixta (DX-120)', () => {
     );
     await user.click(screen.getByRole('button', { name: '16' }));
     expect(onSelectTooth).toHaveBeenCalledWith('16');
+  });
+});
+
+describe('chartFit (carta en el móvil, UX v2 · K3)', () => {
+  const allPermanent = () => 'PERMANENT' as const;
+  const widths = chartWidths(chartLayoutForArch('upper', allPermanent), chartLayoutForArch('lower', allPermanent));
+
+  it('la carta entera no cabe en 358px, un lado sí', () => {
+    expect(widths.full).toBeGreaterThan(358);
+    expect(widths.side).toBeLessThanOrEqual(358);
+  });
+
+  it('entera si cabe (o sin medir); partida por la línea media si no; escala solo si ni así cabe', () => {
+    expect(chartFit(null, widths)).toEqual({ mode: 'full', scale: 1 });
+    expect(chartFit(1200, widths)).toEqual({ mode: 'full', scale: 1 });
+    expect(chartFit(358, widths)).toEqual({ mode: 'split', scale: 1 });
+    const narrow = chartFit(widths.side - 40, widths);
+    expect(narrow.mode).toBe('split');
+    expect(narrow.scale).toBeLessThan(1);
   });
 });

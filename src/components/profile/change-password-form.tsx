@@ -96,7 +96,7 @@ export function ChangePasswordForm({ token }: { token: string }) {
       </FormField>
       {error && <InlineError>{error}</InlineError>}
       {success && (
-        <p role="status" className="text-sm text-success">
+        <p role="status" className="text-sm text-success-text">
           {copy.success}
         </p>
       )}

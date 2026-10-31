@@ -188,7 +188,7 @@ export function ImplantLotSearch({ token, allowed }: { token: string; allowed: b
         </div>
       </form>
 
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
 

@@ -158,7 +158,7 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
           {copy.change}
         </Button>
       </div>
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
       <Dialog open={open} onOpenChange={setOpen}>

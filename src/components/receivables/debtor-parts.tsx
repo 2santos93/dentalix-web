@@ -3,6 +3,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { FileText, HandCoins, MessageCircle, NotebookPen, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDate } from '@/lib/format/date';
@@ -17,9 +18,7 @@ import type { AgingCurrency, AgingRow } from '@/lib/receivables/receivables-api'
 import { cn } from '@/lib/utils';
 import {
   CHANNEL_LABELS,
-  OUTCOME_LABELS,
-  PROMISE_STATUS_BADGE,
-  PROMISE_STATUS_LABELS,
+  OUTCOME_LABELS
 } from '@/lib/collections/presentation';
 
 export const debtorCopy = {
@@ -98,7 +97,7 @@ export function DebtCell({ currencies }: { currencies: AgingCurrency[] }) {
         <li key={c.currency} className="tabular-nums">
           <span className="font-medium text-ink">{formatCurrency(c.debt, c.currency)}</span>
           {c.credit > 0 ? (
-            <span className="block text-xs text-success">
+            <span className="block text-xs text-success-text">
               {debtorCopy.credit(formatCurrency(c.credit, c.currency))}
             </span>
           ) : null}
@@ -125,7 +124,7 @@ export function BucketList({ currencies, className }: { currencies: AgingCurrenc
     <dl className={cn('grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm', className)}>
       {lines.map((line) => (
         <React.Fragment key={line.key}>
-          <dt className={cn('whitespace-nowrap text-muted', line.bucket === 'over90' && 'text-danger')}>{BUCKET_LABELS[line.bucket]}</dt>
+          <dt className={cn('whitespace-nowrap text-muted', line.bucket === 'over90' && 'text-danger-text')}>{BUCKET_LABELS[line.bucket]}</dt>
           <dd className="whitespace-nowrap text-right font-medium tabular-nums text-ink">{line.amount}</dd>
         </React.Fragment>
       ))}
@@ -238,15 +237,13 @@ export function CollectionCell({ row }: { row: AgingRow }) {
       ) : null}
       {promise ? (
         <span className="flex min-w-0 flex-wrap items-center gap-1.5" data-testid="promise-status">
-          <Badge variant={PROMISE_STATUS_BADGE[promise.status]} className="whitespace-nowrap">
-            {PROMISE_STATUS_LABELS[promise.status]}
-          </Badge>
+          <StatusBadge kind="paymentPromise" status={promise.status} className="whitespace-nowrap" />
           <span className="text-xs text-muted tabular-nums">
             {debtorCopy.promiseLine(formatCurrency(promise.amount, promise.currency), formatCivilDate(promise.dueDate))}
           </span>
           {/* Si se volvió a cumplir con otro abono, ya no aplica. */}
           {promise.reopenedAt && promise.status !== 'KEPT' ? (
-            <span className="basis-full text-xs text-warning">{debtorCopy.promiseReopened}</span>
+            <span className="basis-full text-xs text-warning-text">{debtorCopy.promiseReopened}</span>
           ) : null}
         </span>
       ) : null}

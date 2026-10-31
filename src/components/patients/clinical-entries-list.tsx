@@ -16,6 +16,7 @@ import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { AnesthesiaModal } from '@/components/anesthesia/anesthesia-modal';
 import {
   TECHNIQUE_LABELS,
@@ -242,7 +243,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         <span className="text-xs font-medium text-muted">{copy.sedation} </span>
         {copy.sedationLine(sheet)}
         {liveOverdue(sheet.watch, sedationNow).overdue ? (
-          <span className="block text-xs font-medium text-danger">{copy.sedationOverdue}</span>
+          <span className="block text-xs font-medium text-danger-text">{copy.sedationOverdue}</span>
         ) : null}
       </p>
     );
@@ -481,40 +482,46 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         emptyDescription={copy.emptyHint}
       >
         {anesthesiaFailed ? (
-          <div
+          <Callout
+            tone="warning"
             role="status"
-            className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-ink"
+            icon={AlertTriangle}
+            className="mb-3"
+            action={
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="min-h-11 sm:min-h-0"
+                onClick={() => setAnesthesiaReload((k) => k + 1)}
+              >
+                {copy.retry}
+              </Button>
+            }
           >
-            <AlertTriangle aria-hidden className="size-4 shrink-0 text-warning" />
-            <span className="min-w-0 flex-1">{copy.anesthesiaLoadError}</span>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="min-h-11 sm:min-h-0"
-              onClick={() => setAnesthesiaReload((k) => k + 1)}
-            >
-              {copy.retry}
-            </Button>
-          </div>
+            {copy.anesthesiaLoadError}
+          </Callout>
         ) : null}
         {sedationFailed ? (
-          <div
+          <Callout
+            tone="warning"
             role="status"
-            className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-ink"
+            icon={AlertTriangle}
+            className="mb-3"
+            action={
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="min-h-11 sm:min-h-0"
+                onClick={() => setSedationReload((k) => k + 1)}
+              >
+                {copy.retry}
+              </Button>
+            }
           >
-            <AlertTriangle aria-hidden className="size-4 shrink-0 text-warning" />
-            <span className="min-w-0 flex-1">{copy.sedationLoadError}</span>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="min-h-11 sm:min-h-0"
-              onClick={() => setSedationReload((k) => k + 1)}
-            >
-              {copy.retry}
-            </Button>
-          </div>
+            {copy.sedationLoadError}
+          </Callout>
         ) : null}
         {/* Desktop table. `md:table` y no `md:block`: `display:block` sobre una
             `<table>` descarta la maquetación de tabla en el motor de layout

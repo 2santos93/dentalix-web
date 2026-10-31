@@ -185,7 +185,10 @@ for (const viewport of VIEWPORTS) {
     // El formulario de la toma va en una columna en móvil: los campos no se
     // salen por la derecha.
     for (const label of ['Hora', 'FC (lpm)', 'TA diastólica', 'CO₂ espirado (mmHg, opcional)']) {
-      const box = await dialog.getByLabel(label, { exact: true }).boundingBox();
+      // La hora es un `TimeField` (grupo de segmentos): se mide el grupo entero.
+      const field =
+        label === 'Hora' ? dialog.getByRole('group', { name: label, exact: true }) : dialog.getByLabel(label, { exact: true });
+      const box = await field.boundingBox();
       expect(box, label).not.toBeNull();
       expect(box!.x + box!.width, `${label}: borde derecho`).toBeLessThanOrEqual(viewport.width);
     }

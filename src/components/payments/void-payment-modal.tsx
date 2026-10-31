@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useId, useState } from 'react';
 import { FormModal } from '@/components/shared/form-modal';
 import { Label } from '@/components/ui/label';
+import { Callout } from '@/components/ui/callout';
 import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
@@ -95,9 +96,9 @@ export function VoidPaymentModal({
         </p>
       ) : null}
       {splitLines && splitLines > 1 ? (
-        <p role="note" className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink">
+        <Callout tone="warning" role="note">
           {copy.splitNotice(splitLines)}
-        </p>
+        </Callout>
       ) : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={fieldId}>{copy.reasonLabel}</Label>

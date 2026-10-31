@@ -22,7 +22,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/shared/empty-state';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
@@ -154,7 +153,7 @@ export function WaitlistPanel({
           {waitlistCopy.title}
         </h2>
         {!loading && !error ? (
-          <span className="text-xs tabular-nums text-muted">{waitlistCopy.count(total)}</span>
+          <span className="t-caption tabular-nums text-muted">{waitlistCopy.count(total)}</span>
         ) : null}
       </header>
 
@@ -173,7 +172,12 @@ export function WaitlistPanel({
           className="py-10"
         />
       ) : entries.length === 0 ? (
-        <EmptyState role="status" title={waitlistCopy.empty} description={waitlistCopy.emptyHint} />
+        // Una línea, no una caja vacía: comparte columna con «En clínica».
+        <p role="status" className="text-sm text-muted">
+          <span className="font-medium text-ink">{waitlistCopy.empty}</span>
+          {'. '}
+          <span>{waitlistCopy.emptyHint}</span>
+        </p>
       ) : (
         <>
           <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">

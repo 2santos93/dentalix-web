@@ -29,6 +29,7 @@ import { notifyError } from '@/components/errors/notify';
 import { InlineError } from '@/components/errors/inline-error';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -494,7 +495,7 @@ export function PatientDocumentsTab({
           <p className="text-sm text-muted">{item.status === 'converting' ? copy.converting : copy.waiting}</p>
         ) : null}
 
-        {item.teethInvalid && editable ? <p className="text-sm text-danger">{copy.fixTeeth}</p> : null}
+        {item.teethInvalid && editable ? <p className="text-sm text-danger-text">{copy.fixTeeth}</p> : null}
 
         {item.status === 'uploading' || item.status === 'done' ? (
           <div
@@ -586,7 +587,7 @@ export function PatientDocumentsTab({
               <span className={cn('font-medium [overflow-wrap:anywhere]', voided ? 'text-muted line-through' : 'text-ink')}>
                 {doc.originalName}
               </span>
-              {voided ? <Badge variant="danger">{copy.voided}</Badge> : null}
+              {voided ? <StatusBadge kind="clinicalRecord" status="VOIDED" /> : null}
             </div>
             <span className="text-xs tabular-nums text-muted">{formatFileSize(doc.sizeBytes, fmt)}</span>
             {doc.notes ? <span className="text-xs text-muted [overflow-wrap:anywhere]">{doc.notes}</span> : null}

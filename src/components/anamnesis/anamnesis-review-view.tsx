@@ -24,8 +24,10 @@ import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fi
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CONDITION_UNANSWERED_LABEL } from '@/lib/clinical/clinical-types';
 
 const copy = {
   back: 'Anamnesis por revisar',
@@ -97,9 +99,9 @@ function DiffRow({ entry }: { entry: HistoryDiffEntry }) {
         <p className="break-words font-medium text-ink">
           {entry.label}
           {entry.affirmative && (
-            <span className="ml-2 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
+            <Badge variant="danger" className="ml-2 align-middle">
               {copy.yes}
-            </span>
+            </Badge>
           )}
         </p>
         <p className="break-words text-sm text-muted">
@@ -111,7 +113,9 @@ function DiffRow({ entry }: { entry: HistoryDiffEntry }) {
           )}
           {entry.before !== null && entry.after !== null && <span aria-hidden> → </span>}
           {entry.after !== null && (
-            <span className="text-ink">
+            // «Sin responder» (condición que la versión no recoge) va atenuado:
+            // no es un hallazgo, es la falta de uno.
+            <span className={entry.after === CONDITION_UNANSWERED_LABEL ? 'text-muted' : 'text-ink'}>
               <span className="sr-only">{copy.after}: </span>
               {entry.after}
             </span>
@@ -283,7 +287,7 @@ export function AnamnesisReviewView({
           className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface p-6"
         >
           <p className="flex items-center gap-2 text-base font-semibold text-ink">
-            <CheckCircle2 aria-hidden className="size-5 text-success" />
+            <CheckCircle2 aria-hidden className="size-5 text-success-text" />
             {result.status === 'ACCEPTED' ? copy.acceptedTitle : copy.rejectedTitle}
           </p>
           {result.status === 'ACCEPTED' && <p className="text-sm text-muted">{copy.acceptedText}</p>}
@@ -293,7 +297,7 @@ export function AnamnesisReviewView({
         </div>
       ) : !pending ? (
         <div className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface p-6">
-          <Badge variant="muted">{SUBMISSION_STATUS_LABELS[submission.status]}</Badge>
+          <StatusBadge kind="anamnesisSubmission" status={submission.status} />
           <p className="text-sm text-muted">
             {copy.reviewed(
               SUBMISSION_STATUS_LABELS[submission.status],
@@ -309,11 +313,11 @@ export function AnamnesisReviewView({
             aria-labelledby={`${ids}-alerts`}
             className={cn(
               'flex flex-col gap-2 rounded-xl border p-4 sm:p-6',
-              alerts.length > 0 ? 'border-danger/40 bg-danger/5' : 'border-border bg-surface',
+              alerts.length > 0 ? 'border-danger/40 bg-danger-subtle' : 'border-border bg-surface',
             )}
           >
             <h2 id={`${ids}-alerts`} className="flex items-center gap-2 text-base font-semibold text-ink">
-              {alerts.length > 0 && <AlertTriangle aria-hidden className="size-5 text-danger" />}
+              {alerts.length > 0 && <AlertTriangle aria-hidden className="size-5 text-danger-text" />}
               {alerts.length > 0 ? copy.alertsTitle : copy.noAlerts}
             </h2>
             {alerts.length > 0 && (

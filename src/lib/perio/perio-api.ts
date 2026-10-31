@@ -1,3 +1,4 @@
+import { statusLabels } from '@/lib/status/tones';
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { components } from '@/lib/api/schema';
@@ -105,10 +106,7 @@ export async function deletePerioExam(
   });
 }
 
-export const PERIO_STATUS_LABELS: Record<PerioExamStatus, string> = {
-  DRAFT: 'Borrador',
-  FINAL: 'Finalizado',
-};
+export const PERIO_STATUS_LABELS: Record<PerioExamStatus, string> = statusLabels('perioExam');
 
 /**
  * Mensaje a mostrar ante un fallo de la API de periodontograma: el helper común

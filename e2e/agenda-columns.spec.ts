@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -89,7 +90,9 @@ function endoCard(page: Page): Locator {
 async function openDay(page: Page) {
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  // En el teléfono el Día abre en «Lista»; estas pruebas son de las columnas.
+  await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+  await fillDate(page, 'Fecha', day);
   await expect(page.getByTestId('day-column')).toHaveCount(2, { timeout: 15_000 });
 }
 
@@ -213,7 +216,9 @@ test('móvil (390 px): una sola columna con selector deslizable, «Mover a…» 
   await loginAs(page, origin, admin.email, password);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  // En el teléfono el Día abre en «Lista»; estas pruebas son de las columnas.
+  await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+  await fillDate(page, 'Fecha', day);
 
   const picker = page.getByRole('group', { name: 'Profesional visible' });
   await expect(picker).toBeVisible({ timeout: 15_000 });

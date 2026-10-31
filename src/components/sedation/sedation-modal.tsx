@@ -46,8 +46,12 @@ import { SectionError } from '@/components/errors/section-error';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollFrame } from '@/components/ui/scroll-frame';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
+import { TimeField } from '@/components/ui/date-field';
+import { Callout } from '@/components/ui/callout';
 
 export const sedationCopy = {
   title: 'Hoja de sedación',
@@ -555,13 +559,9 @@ export function SedationModal({
     const live = liveOverdue(s.watch, now);
     if (live.overdue) {
       return (
-        <div
-          role="alert"
-          className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-ink"
-        >
-          <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-danger" />
-          <span>{sedationCopy.overdue(live.overdueMinutes, s.watch.intervalMinutes)}</span>
-        </div>
+        <Callout tone="danger" role="alert" icon={AlertTriangle}>
+          {sedationCopy.overdue(live.overdueMinutes, s.watch.intervalMinutes)}
+        </Callout>
       );
     }
     if (!s.watch.active || !s.watch.nextDueAt) {
@@ -629,7 +629,7 @@ export function SedationModal({
                 {s.checklist.items.map((item) => (
                   <li key={item.code} className="flex items-start gap-2 text-sm text-ink">
                     {item.checked ? (
-                      <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
+                      <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-success-text" />
                     ) : (
                       <span aria-hidden className="mt-0.5 inline-block size-4 shrink-0 text-center text-muted">
                         —
@@ -750,7 +750,6 @@ export function SedationModal({
   // Formularios
   // ---------------------------------------------------------------------------
 
-  const selectClass = `${fieldClass} h-11 sm:h-10`;
   const inputClass = 'h-11 tabular-nums sm:h-10';
 
   function numberInput(key: string, label: string, hint?: string) {
@@ -787,15 +786,7 @@ export function SedationModal({
 
   function checkbox(key: string, label: React.ReactNode) {
     return (
-      <label key={key} className="flex min-h-11 items-start gap-3 text-sm text-ink">
-        <input
-          type="checkbox"
-          className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-          checked={f(key)}
-          onChange={setF(key)}
-        />
-        <span>{label}</span>
-      </label>
+      <Checkbox key={key} id={`${id}-${key}`} label={label} checked={f(key)} onChange={setF(key)} />
     );
   }
 
@@ -804,12 +795,10 @@ export function SedationModal({
     const fieldId = `${id}-${key}`;
     return (
       <FormField htmlFor={fieldId} label={label}>
-        <Input
+        <TimeField
           id={fieldId}
-          type="time"
-          className={inputClass}
-          value={t(key, nowHHmm(clock))}
-          onChange={setT(key)}
+          value={t(key, nowHHmm(clock)) || null}
+          onChange={(value) => setText((prev) => ({ ...prev, [key]: value ?? '' }))}
         />
       </FormField>
     );
@@ -826,11 +815,10 @@ export function SedationModal({
         {numberInput(`${prefix}etco2`, sedationCopy.etco2)}
         <div className="sm:col-span-3">
           <FormField htmlFor={`${id}-${prefix}level`} label={sedationCopy.level}>
-            <select
+            <NativeSelect
               id={`${id}-${prefix}level`}
               value={t(`${prefix}level`)}
               onChange={setT(`${prefix}level`)}
-              className={selectClass}
             >
               <option value="">{sedationCopy.chooseLevel}</option>
               {LEVELS.map((l) => (
@@ -838,7 +826,7 @@ export function SedationModal({
                   {LEVEL_LABELS[l]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
         </div>
       </div>
@@ -856,47 +844,47 @@ export function SedationModal({
         {timeInput('time', sedationCopy.assessedAt)}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField htmlFor={`${id}-grade`} label={sedationCopy.grade}>
-            <select id={`${id}-grade`} value={t('grade', 'MINIMAL')} onChange={setT('grade')} className={selectClass}>
+            <NativeSelect id={`${id}-grade`} value={t('grade', 'MINIMAL')} onChange={setT('grade')}>
               {(Object.keys(GRADE_LABELS) as SedationGrade[]).map((g) => (
                 <option key={g} value={g}>
                   {GRADE_LABELS[g]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
           <FormField htmlFor={`${id}-asa`} label={sedationCopy.asa}>
-            <select id={`${id}-asa`} value={asa} onChange={setT('asa')} className={selectClass}>
+            <NativeSelect id={`${id}-asa`} value={asa} onChange={setT('asa')}>
               <option value="">{sedationCopy.chooseAsa}</option>
               {ASA_CLASSES.map((c) => (
                 <option key={c} value={c}>
                   ASA {c}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
         </div>
         {checkbox('asaEmergency', sedationCopy.asaEmergency)}
         {asa && HIGH_ASA.includes(asa) ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/5 p-3">
+          <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning-subtle p-3">
             <p className="text-sm text-ink">{sedationCopy.highAsaHint}</p>
             <FormField htmlFor={`${id}-interconsultation`} label={sedationCopy.interconsultation}>
-              <textarea
+              <Textarea
                 id={`${id}-interconsultation`}
                 rows={2}
                 maxLength={1000}
                 value={t('interconsultation')}
                 onChange={setT('interconsultation')}
-                className={cn(fieldClass, 'h-auto')}
+                className="min-h-0"
               />
             </FormField>
             <FormField htmlFor={`${id}-justification`} label={sedationCopy.justification}>
-              <textarea
+              <Textarea
                 id={`${id}-justification`}
                 rows={2}
                 maxLength={1000}
                 value={t('justification')}
                 onChange={setT('justification')}
-                className={cn(fieldClass, 'h-auto')}
+                className="min-h-0"
               />
             </FormField>
           </div>
@@ -905,14 +893,14 @@ export function SedationModal({
           {numberInput('fastingLiquids', sedationCopy.fastingLiquids)}
           {numberInput('fastingSolids', sedationCopy.fastingSolids)}
           <FormField htmlFor={`${id}-mallampati`} label={sedationCopy.mallampati}>
-            <select id={`${id}-mallampati`} value={t('mallampati')} onChange={setT('mallampati')} className={selectClass}>
+            <NativeSelect id={`${id}-mallampati`} value={t('mallampati')} onChange={setT('mallampati')}>
               <option value="">{sedationCopy.chooseMallampati}</option>
               {['1', '2', '3', '4'].map((m) => (
                 <option key={m} value={m}>
                   {['I', 'II', 'III', 'IV'][Number(m) - 1]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
           {numberInput('weight', sedationCopy.weight)}
           {numberInput('height', sedationCopy.height)}
@@ -969,16 +957,15 @@ export function SedationModal({
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField htmlFor={`${id}-phase`} label={sedationCopy.phase}>
-            <select
+            <NativeSelect
               id={`${id}-phase`}
               value={s.checklist ? t('phase', 'INTRA') : 'BASELINE'}
               onChange={setT('phase')}
               disabled={!s.checklist}
-              className={selectClass}
             >
               <option value="BASELINE">{PHASE_LABELS.BASELINE}</option>
               {s.checklist ? <option value="INTRA">{PHASE_LABELS.INTRA}</option> : null}
-            </select>
+            </NativeSelect>
           </FormField>
           {timeInput()}
         </div>
@@ -992,13 +979,13 @@ export function SedationModal({
     return (
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField htmlFor={`${id}-kind`} label={sedationCopy.agentKind}>
-          <select id={`${id}-kind`} value={kind} onChange={setT('kind')} className={selectClass}>
+          <NativeSelect id={`${id}-kind`} value={kind} onChange={setT('kind')}>
             {AGENT_KINDS.map((k) => (
               <option key={k} value={k}>
                 {AGENT_KIND_LABELS[k]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         {timeInput()}
         {kind === 'NITROUS_OXIDE' ? (
@@ -1011,20 +998,19 @@ export function SedationModal({
             {textInput('drugName', sedationCopy.drugName, 80)}
             {numberInput('dose', sedationCopy.dose)}
             <FormField htmlFor={`${id}-unit`} label={sedationCopy.unit}>
-              <select id={`${id}-unit`} value={t('unit', 'MG')} onChange={setT('unit')} className={selectClass}>
+              <NativeSelect id={`${id}-unit`} value={t('unit', 'MG')} onChange={setT('unit')}>
                 {UNITS.map((u) => (
                   <option key={u} value={u}>
                     {DOSE_UNIT_LABELS[u]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FormField>
             <FormField htmlFor={`${id}-route`} label={sedationCopy.route}>
-              <select
+              <NativeSelect
                 id={`${id}-route`}
                 value={t('route', kind === 'ORAL' ? 'ORAL' : '')}
                 onChange={setT('route')}
-                className={selectClass}
               >
                 {kind === 'OTHER' ? <option value="">{sedationCopy.route}</option> : null}
                 {(kind === 'ORAL' ? (['ORAL', 'SUBLINGUAL'] as SedationRoute[]) : OTHER_ROUTES).map((r) => (
@@ -1032,7 +1018,7 @@ export function SedationModal({
                     {ROUTE_LABELS[r]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FormField>
           </>
         )}
@@ -1066,11 +1052,10 @@ export function SedationModal({
         </div>
         {checkbox('instructions', sedationCopy.instructions)}
         <FormField htmlFor={`${id}-monitor`} label={sedationCopy.monitor} error={errors.monitor}>
-          <select
+          <NativeSelect
             id={`${id}-monitor`}
             value={monitorId}
             onChange={setT('monitor')}
-            className={selectClass}
             {...fieldProps('monitor')}
           >
             <option value="">{sedationCopy.chooseMonitor}</option>
@@ -1079,17 +1064,17 @@ export function SedationModal({
                 {m.fullName}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         {sameMonitor ? (
           <FormField htmlFor={`${id}-sameMonitor`} label={sedationCopy.sameMonitorLabel} hint={sedationCopy.sameMonitor}>
-            <textarea
+            <Textarea
               id={`${id}-sameMonitor`}
               rows={2}
               maxLength={500}
               value={t('sameMonitor')}
               onChange={setT('sameMonitor')}
-              className={cn(fieldClass, 'h-auto')}
+              className="min-h-0"
             />
           </FormField>
         ) : null}
@@ -1102,30 +1087,22 @@ export function SedationModal({
     return (
       <div className="flex flex-col gap-3 border-t border-hairline pt-3">
         {actions.length > 1 ? (
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-medium text-ink">{sedationCopy.actionLegend}</legend>
-            <div className="flex flex-wrap gap-2">
-              {actions.map((a) => (
-                <label
-                  key={a}
-                  className={cn(
-                    'flex min-h-11 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm sm:min-h-9',
-                    a === action ? 'border-primary bg-primary/5 text-ink' : 'border-border text-ink',
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name={`${id}-action`}
-                    value={a}
-                    checked={a === action}
-                    onChange={() => reset(a)}
-                    className="size-4 accent-[var(--color-primary)]"
-                  />
-                  {sedationCopy.actions[a]}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <RadioGroup
+            id={`${id}-action`}
+            legend={sedationCopy.actionLegend}
+            value={action}
+            onValueChange={(a) => reset(a as Action)}
+            optionsClassName="flex-row flex-wrap gap-x-4"
+          >
+            {actions.map((a, index) => (
+              <RadioOption
+                key={a}
+                id={index === 0 ? `${id}-action` : undefined}
+                value={a}
+                label={sedationCopy.actions[a]}
+              />
+            ))}
+          </RadioGroup>
         ) : (
           <h3 className="text-sm font-medium text-ink">{sedationCopy.actions[action]}</h3>
         )}
@@ -1163,9 +1140,9 @@ export function SedationModal({
     return (
       <>
         {savedMessage ? (
-          <p role="status" className="rounded-md border border-success/40 bg-success/5 p-3 text-sm text-ink">
+          <Callout tone="success" role="status">
             {savedMessage}
-          </p>
+          </Callout>
         ) : null}
         {load.sheet ? (
           renderSheet(load.sheet)

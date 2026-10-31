@@ -25,7 +25,6 @@ import {
   type CashRange,
 } from '@/lib/payments/cash-period';
 import {
-  PAYMENT_METHOD_BADGE_VARIANT,
   PAYMENT_METHOD_LABELS,
 } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
@@ -33,7 +32,7 @@ import { formatCivilDate, formatDate, zoneCityLabel } from '@/lib/format/date';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Input } from '@/components/ui/input';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -50,6 +49,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { useVoidPayment, voidPaymentSubject } from '@/components/payments/use-void-payment';
@@ -347,28 +347,14 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           : {})}
       >
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <div
-            role="group"
+          <SegmentedControl
+            semantics="toggle"
+            fullWidthOnMobile
             aria-label={copy.periodLabel}
-            className="flex h-10 shrink-0 overflow-x-auto rounded-lg border border-border bg-surface p-0.5"
-          >
-            {PERIOD_CHOICES.map((choice) => (
-              <button
-                key={choice}
-                type="button"
-                aria-pressed={period === choice}
-                onClick={() => choosePeriod(choice)}
-                className={cn(
-                  'flex-1 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                  period === choice
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted hover:bg-surface-2 hover:text-ink',
-                )}
-              >
-                {copy.presets[choice]}
-              </button>
-            ))}
-          </div>
+            value={period}
+            onValueChange={choosePeriod}
+            options={PERIOD_CHOICES.map((choice) => ({ value: choice, label: copy.presets[choice] }))}
+          />
 
           {period === 'custom' ? (
             <div className="flex min-w-0 gap-3">
@@ -448,13 +434,13 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           </p>
         ) : null}
 
-        <p role="status" className={exportNotice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={exportNotice ? 'text-sm text-success-text' : 'sr-only'}>
           {exportNotice}
         </p>
 
         {/* Aviso de la última anulación: fuera de AsyncSection para que la
             recarga no lo borre. */}
-        <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={voiding.notice ? 'text-sm text-success-text' : 'sr-only'}>
           {voiding.notice}
         </p>
 
@@ -530,9 +516,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         </TableCell>
                         <TableCell data-label={copy.colMethod}>
                           {payment.method ? (
-                            <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
+                            <StatusBadge kind="paymentMethod" status={payment.method}>
                               {payment.paymentMethod?.name ?? PAYMENT_METHOD_LABELS[payment.method]}
-                            </Badge>
+                            </StatusBadge>
                           ) : (
                             <span className="text-muted">{copy.methodNone}</span>
                           )}

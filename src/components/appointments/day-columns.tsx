@@ -34,6 +34,7 @@ import {
   blockBandForDay,
   blockLabel,
   blockShownInColumn,
+  reservedBlockColor,
   type ScheduleBlockLike,
 } from '@/lib/appointments/schedule-blocks';
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
@@ -44,9 +45,11 @@ import {
   patientLabel,
 } from '@/components/appointments/appointment-display';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { cn } from '@/lib/utils';
+import { statusTone, TONE_CLASSES } from '@/lib/status/tones';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -341,28 +344,14 @@ export function DayColumns({
   return (
     <div className="flex flex-col gap-3">
       {/* Móvil: una columna; el selector se desliza en horizontal. */}
-      <div
-        role="group"
+      <SegmentedControl
+        semantics="toggle"
+        className="sm:hidden"
         aria-label={copy.providerPicker}
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:hidden"
-      >
-        {providers.map((p) => (
-          <button
-            key={p.userId}
-            type="button"
-            aria-pressed={p.userId === active}
-            onClick={() => setActiveProviderId(p.userId)}
-            className={cn(
-              'h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-              p.userId === active
-                ? 'border-primary bg-primary/10 text-ink'
-                : 'border-border bg-surface text-muted hover:text-ink',
-            )}
-          >
-            {p.fullName}
-          </button>
-        ))}
-      </div>
+        value={active ?? ''}
+        onValueChange={setActiveProviderId}
+        options={providers.map((p) => ({ value: p.userId, label: p.fullName }))}
+      />
 
       <div
         role="region"
@@ -505,22 +494,36 @@ export function DayColumns({
                 {columnBlocks.map((block) => {
                     const band = blockBandForDay(block, date, span, timeZone);
                     if (!band) return null;
-                    const label = blockLabel(block);
+                    const label = blockLabel(block, undefined, (m) => sedeMinute(m, fmt));
+                    // DX-446: un hueco reservado lleva el color de su tipo; liberado, apenas un tinte.
+                    const reservedColor = reservedBlockColor(block);
                     const aria = copy.blockAria(label, sedeMinuteRanges([{ startMinute: band.start, endMinute: band.end }], fmt));
                     return (
                       <div
                         key={block.id}
                         data-testid="schedule-block"
                         data-block-id={block.id}
+                        data-block-kind={block.kind}
                         role="note"
                         aria-label={aria}
                         className={cn(
-                          'pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]',
-                          block.allowsBooking ? 'bg-warning/5' : 'bg-warning/10',
+                          'pointer-events-none absolute inset-x-0 border-y border-dashed',
+                          // DX-446: el hueco reservado lleva el color de su tipo (inline,
+                          // abajo); el bloqueo normal, el rayado de aviso sobre warning-subtle.
+                          reservedColor
+                            ? 'border-l-4 [border-left-style:solid]'
+                            : 'border-warning/50 bg-warning-subtle [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]',
                         )}
                         style={{
                           top: offsetFromMinute(band.start, span),
                           height: (band.end - band.start) * PX_PER_MINUTE,
+                          ...(reservedColor
+                            ? {
+                                borderColor: `color-mix(in oklab, ${reservedColor} 55%, transparent)`,
+                                borderLeftColor: reservedColor,
+                                backgroundColor: `color-mix(in oklab, ${reservedColor} ${block.released ? 4 : 12}%, transparent)`,
+                              }
+                            : {}),
                         }}
                       >
                         {onSelectBlock && canSelectBlock(block) ? (
@@ -654,8 +657,20 @@ export function DayColumns({
                           >
                             {patient}
                           </span>
-                          <span className="w-full truncate text-xs">
-                            {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
+                          {/* El fondo es el color del tipo; el estado, su punto de
+                              tono (nunca el acento) + la etiqueta. */}
+                          <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
+                            <span
+                              aria-hidden
+                              data-testid="day-column-status-dot"
+                              className={cn(
+                                'size-2 shrink-0 rounded-full ring-1 ring-surface',
+                                TONE_CLASSES[statusTone('appointment', a.status)].dot,
+                              )}
+                            />
+                            <span className="min-w-0 truncate">
+                              {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
+                            </span>
                           </span>
                           <OverdueChip balance={a.balance} compact />
                           {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
@@ -730,7 +745,7 @@ export function DayColumns({
         <p className="flex items-center gap-2 text-xs text-muted">
           <span
             aria-hidden
-            className="inline-block size-3 rounded-sm border border-dashed border-warning/50 bg-warning/10"
+            className="inline-block size-3 rounded-sm border border-dashed border-warning/50 bg-warning-subtle"
           />
           {copy.blockLegend}
         </p>

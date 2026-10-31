@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { Logo } from '@/components/ui/logo';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app until
 // next-intl wiring lands.
@@ -89,15 +90,7 @@ export function LandingPage() {
       {/* Nav */}
       <header className="sticky top-0 z-10 border-b border-border/60 bg-bg/80 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-          <span className="flex items-center gap-2 text-base font-semibold">
-            <span
-              aria-hidden
-              className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-base"
-            >
-              🦷
-            </span>
-            {copy.brand}
-          </span>
+          <Logo size={28} withWordmark className="text-base" />
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <Button asChild variant="secondary" size="sm">
@@ -218,9 +211,7 @@ export function LandingPage() {
       <footer className="border-t border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
           <div className="flex items-center gap-2 text-sm text-muted">
-            <span aria-hidden className="text-base">
-              🦷
-            </span>
+            <Logo size={20} decorative />
             <span className="font-semibold text-ink">{copy.brand}</span>
             <span>· {copy.footerTagline}</span>
           </div>

@@ -1,578 +1,444 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DashboardView } from './dashboard-view';
-import { ApiError } from '@/lib/api/client';
-import { getDashboard } from '@/lib/dashboard/dashboard-api';
-import type { Dashboard } from '@/lib/dashboard/dashboard-api';
+import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
-import { listPatients } from '@/lib/patients/patients-api';
 import { listStaff } from '@/lib/appointments/staff-api';
+import { listAppointments, type ListAppointment } from '@/lib/appointments/appointments-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { getAnamnesisInboxSummary } from '@/lib/anamnesis/anamnesis-api';
+import { listWaitlist } from '@/lib/appointments/waitlist-api';
+import { getCurrentCashSession } from '@/lib/cash-sessions/cash-sessions-api';
+import { listInventoryItems } from '@/lib/inventory/inventory-api';
+import {
+  getLocationsComparison,
+  getProductionByProcedure,
+  type LocationsComparison,
+} from '@/lib/reports/reports-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { tokenForRole } from '@/lib/test/data-consents';
+import { cashSessionFixture } from '@/lib/test/cash-session';
+import {
+  getClosingQueueCount,
+  getFollowUpCount,
+  getReceivablesSummary,
+  getUnscheduledCount,
+  type ReceivablesSummary,
+} from './inicio-api';
 
-// NOTE: jest.mock's string literal is not alias-rewritten by the SWC
-// transform (only real `import`/`require` specifiers are) — use a relative
-// path here, matching agenda-view.test.tsx's / treatment-plans-tab.test.tsx's
-// convention.
-jest.mock('../../lib/dashboard/dashboard-api', () => ({
-  getDashboard: jest.fn(),
+// jest.mock no reescribe alias: rutas relativas (convención del repo).
+jest.mock('../../lib/dashboard/dashboard-api', () => ({ getDashboard: jest.fn() }));
+jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
+jest.mock('../../lib/appointments/staff-api', () => ({ listStaff: jest.fn() }));
+jest.mock('../../lib/appointments/appointments-api', () => ({ listAppointments: jest.fn() }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+jest.mock('../../lib/anamnesis/anamnesis-api', () => ({ getAnamnesisInboxSummary: jest.fn() }));
+jest.mock('../../lib/appointments/waitlist-api', () => ({ listWaitlist: jest.fn() }));
+jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({ getCurrentCashSession: jest.fn() }));
+jest.mock('../../lib/inventory/inventory-api', () => ({ listInventoryItems: jest.fn() }));
+jest.mock('../../lib/reports/reports-api', () => ({
+  getLocationsComparison: jest.fn(),
+  getProductionByProcedure: jest.fn(),
 }));
-// CurrencySelect (Task 10, wired here per Task 11) fetches its own options
-// via `listCurrencies` — mock it so the currency filter select renders
-// deterministically.
-jest.mock('../../lib/reference/currencies-api', () => ({
-  listCurrencies: jest.fn(),
+jest.mock('./inicio-api', () => ({
+  ...jest.requireActual('./inicio-api'),
+  getClosingQueueCount: jest.fn(),
+  getFollowUpCount: jest.fn(),
+  getUnscheduledCount: jest.fn(),
+  getReceivablesSummary: jest.fn(),
 }));
-jest.mock('../../lib/patients/patients-api', () => ({
-  listPatients: jest.fn(),
-}));
-jest.mock('../../lib/appointments/staff-api', () => ({
-  listStaff: jest.fn(),
-}));
-// DX-097: el período por defecto sale del día de la SEDE (GET /locations).
-jest.mock('../../lib/locations/locations-api', () => ({
-  listLocations: jest.fn(),
-}));
+// Los avisos de ADMIN tienen sus propias pruebas y sus propias llamadas.
+jest.mock('../locations/regional-review-notice', () => ({ RegionalReviewNotice: () => null }));
+jest.mock('../payments/rate-backlog-notice', () => ({ RateBacklogNotice: () => null }));
 
-const mockedGetDashboard = getDashboard as jest.MockedFunction<typeof getDashboard>;
-const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
-const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
-const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
-const mockedListLocations = listLocations as jest.MockedFunction<typeof listLocations>;
-
-const sede = (timeZone: string): ClinicLocation => clinicLocation({
-  id: 'loc-1',
-  name: 'Sede principal',
-  address: null,
-  country: timeZone === 'Europe/Madrid' ? 'ES' : 'CO',
-  isActive: true,
-  timeZone,
-  createdAt: '2026-01-01T00:00:00.000Z',
-});
-
-const PATIENT_ID = 'aaaaaaaa-1111-2222-3333-444444444444';
-
-const patientsPage = {
-  items: [
-    {
-      id: PATIENT_ID,
-      tenantId: 't1',
-      firstName: 'María',
-      lastName: 'López',
-      docType: 'NATIONAL_ID' as const,
-      docNumber: '123',
-      birthDate: null,
-      sex: 'F' as const,
-      phone: null,
-      email: null,
-      address: null,
-      notes: null,
-      createdById: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    },
-  ],
-  total: 1,
-  page: 1,
-  pageSize: 100,
+const m = {
+  getDashboard: jest.mocked(getDashboard),
+  listCurrencies: jest.mocked(listCurrencies),
+  listStaff: jest.mocked(listStaff),
+  listAppointments: jest.mocked(listAppointments),
+  listLocations: jest.mocked(listLocations),
+  anamnesis: jest.mocked(getAnamnesisInboxSummary),
+  waitlist: jest.mocked(listWaitlist),
+  cash: jest.mocked(getCurrentCashSession),
+  inventory: jest.mocked(listInventoryItems),
+  comparison: jest.mocked(getLocationsComparison),
+  production: jest.mocked(getProductionByProcedure),
+  closing: jest.mocked(getClosingQueueCount),
+  followUp: jest.mocked(getFollowUpCount),
+  unscheduled: jest.mocked(getUnscheduledCount),
+  receivables: jest.mocked(getReceivablesSummary),
 };
 
-const staff = [{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null }];
-
-
-// El componente arranca con Desde = inicio del MES ACTUAL y Hasta = HOY
-// (monthStartLocalDateString / todayLocalDateString), leyendo el reloj real. Con
-// fechas derivadas de `new Date()` eso volvía los tests dependientes del día en
-// que corrieran: el 10 de cualquier mes, "cambiar Hasta al día 10" reescribía el
-// input con el valor que YA tenía por defecto (hoy), no había cambio de estado,
-// el efecto no refetcheaba y la aserción de "una llamada" no se cumplía nunca.
-// Derivar del reloj solo movía el problema (antes era del mes, luego del día),
-// así que se congela: el reloj es fijo y las fechas son literales, igual que
-// `jest.config.ts` fija TZ=UTC por la misma razón.
-//
-// Un día a mitad de mes: deja días válidos por delante Y por detrás de "hoy".
+// Sábado 15/08/2026 07:00 en Bogotá (GMT−5): citas antes y después de «ahora».
 const FROZEN_NOW = new Date('2026-08-15T12:00:00.000Z');
-/** Día 10: >= el "Desde" por defecto (día 1) y DISTINTO de hoy -> cambio real. */
-const TENTH_OF_MONTH = '2026-08-10';
-/** Su cota exclusiva (+1 día), que es lo que el componente debe enviar como `to`. */
-const ELEVENTH_OF_MONTH = '2026-08-11';
-/** Mañana: estrictamente DESPUÉS del "Hasta" por defecto (hoy) -> dispara la guarda. */
-const TOMORROW = '2026-08-16';
 
-function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
+const sedes: ClinicLocation[] = [
+  clinicLocation({ id: 'loc-1', name: 'Sede principal' }),
+  clinicLocation({ id: 'loc-2', name: 'Sede Norte', createdAt: '2026-02-01T00:00:00.000Z' }),
+];
+
+function appointment(overrides: Partial<ListAppointment>): ListAppointment {
   return {
-    period: { from: '2026-07-01T00:00:00.000Z', to: '2026-07-24T00:00:00.000Z' },
-    incomes: {
-      from: '2026-07-01T00:00:00.000Z',
-      to: '2026-07-24T00:00:00.000Z',
-      currency: 'USD',
-      totalConverted: 1250.5,
-      count: 12,
-      byCurrency: { COP: 500000, USD: 30 },
-    },
-    lowStockItems: {
-      count: 2,
-      items: [
-        { id: 'item-1', name: 'Guantes de nitrilo', unit: 'caja', stock: 1, minStock: 5 },
-        { id: 'item-2', name: 'Anestesia', unit: 'ampolla', stock: 3, minStock: 10 },
-      ],
-    },
-    upcomingAppointments: [
-      {
-        id: 'apt-1',
-        patientId: PATIENT_ID,
-        patientFirstName: 'María',
-        patientLastName: 'López',
-        providerId: 'staff-1',
-        start: '2026-07-24T14:00:00.000Z',
-        end: '2026-07-24T14:30:00.000Z',
-        status: 'CONFIRMED',
-      },
-    ],
-    patientCount: 42,
+    id: 'a',
+    tenantId: 't1',
+    locationId: 'loc-1',
+    patientId: 'p-1',
+    patientFirstName: 'María',
+    patientLastName: 'López',
+    providerId: 'staff-1',
+    start: '2026-08-15T14:00:00.000Z',
+    end: '2026-08-15T14:30:00.000Z',
+    status: 'SCHEDULED',
+    reason: null,
+    planItemIds: [],
+    medicalAlerts: { hasCriticalAlert: false, requiresPremedication: false, anamnesisStatus: 'CURRENT', alerts: [], anamnesisReviewedAt: null },
+    balance: { hasOverdue: false, overdueDays: null },
     ...overrides,
-  };
+  } as ListAppointment;
 }
 
-function emptyDashboard(): Dashboard {
-  return dashboard({
+const todayAppointments: ListAppointment[] = [
+  appointment({ id: 'a1', start: '2026-08-15T13:00:00.000Z', status: 'COMPLETED' }),
+  appointment({
+    id: 'a2',
+    patientId: 'p-2',
+    patientFirstName: 'Luis',
+    patientLastName: 'Pérez',
+    start: '2026-08-15T15:00:00.000Z',
+    status: 'SCHEDULED',
+    medicalAlerts: {
+      hasCriticalAlert: true,
+      requiresPremedication: true,
+      anamnesisStatus: 'EXPIRED',
+      alerts: ['alergiaPenicilina'],
+      anamnesisReviewedAt: null,
+    },
+    balance: { hasOverdue: true, overdueDays: 40 },
+  }),
+  appointment({ id: 'a3', start: '2026-08-15T16:00:00.000Z', status: 'CONFIRMED' }),
+  appointment({ id: 'a4', start: '2026-08-15T17:00:00.000Z', status: 'ARRIVED' }),
+  appointment({ id: 'a5', start: '2026-08-15T18:00:00.000Z', status: 'CANCELLED' }),
+];
+
+function dashboard(): Dashboard {
+  return {
+    period: { from: '2026-08-01T00:00:00.000Z', to: '2026-08-16T00:00:00.000Z' },
     incomes: {
-      from: '2026-07-01T00:00:00.000Z',
-      to: '2026-07-24T00:00:00.000Z',
-      currency: 'USD',
-      totalConverted: 0,
-      count: 0,
-      byCurrency: {},
+      from: '2026-08-01T00:00:00.000Z',
+      to: '2026-08-16T00:00:00.000Z',
+      currency: 'COP',
+      totalConverted: 1250000,
+      count: 12,
+      byCurrency: { COP: 1000000, USD: 60 },
     },
     lowStockItems: { count: 0, items: [] },
     upcomingAppointments: [],
-    patientCount: 0,
-  });
+    patientCount: 42,
+  };
 }
 
-/** A promise this test controls the settlement of, to assert on the interim (pending) state — same helper as agenda-view.test.tsx. */
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (err: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
+const metric = (value: number, previous: number, change: number, trend: 'BETTER' | 'WORSE' | 'EQUAL') => ({
+  value,
+  previous,
+  change,
+  trend,
+});
+function comparison(locations = 1): LocationsComparison {
+  const metrics = {
+    production: [{ currency: 'COP', ...metric(3000000, 2500000, 20, 'BETTER') }],
+    collected: [{ currency: 'COP', ...metric(1000000, 900000, 11.1, 'BETTER') }],
+    collectionRate: [{ currency: 'COP', ...metric(33.3, 36, -2.7, 'WORSE') }],
+    completedAppointments: metric(40, 38, 5.3, 'BETTER'),
+    noShowRate: metric(5, 7, -2, 'BETTER'),
+    newPatients: metric(6, 6, 0, 'EQUAL'),
+    averageTicket: [{ currency: 'COP', ...metric(75000, 65789, 14, 'BETTER') }],
+    occupancy: metric(64, 60, 4, 'BETTER'),
+  };
+  const kpi = (key: string, label: string, unit: string, changeUnit: string) => ({
+    key,
+    label,
+    unit,
+    perCurrency: unit === 'MONEY',
+    direction: key === 'noShowRate' ? 'LOWER_IS_BETTER' : 'HIGHER_IS_BETTER',
+    changeUnit,
+    howItIsCalculated: '',
   });
-  return { promise, resolve, reject };
+  const row = (id: string | null, name: string) => ({
+    locationId: id,
+    name,
+    isActive: true,
+    timeZone: 'America/Bogota',
+    hasActivity: true,
+    previousPeriodUnattributed: false,
+    metrics,
+  });
+  return {
+    from: '2026-08-01',
+    to: '2026-08-15',
+    compare: 'previous',
+    previousFrom: '2026-07-17',
+    previousTo: '2026-07-31',
+    currency: null,
+    kpis: [
+      kpi('production', 'Producción', 'MONEY', 'PERCENT'),
+      kpi('collected', 'Cobrado', 'MONEY', 'PERCENT'),
+      kpi('collectionRate', 'Tasa de cobro', 'PERCENT', 'POINTS'),
+      kpi('completedAppointments', 'Citas atendidas', 'COUNT', 'PERCENT'),
+      kpi('noShowRate', 'Inasistencia', 'PERCENT', 'POINTS'),
+      kpi('newPatients', 'Pacientes nuevos', 'COUNT', 'PERCENT'),
+      kpi('averageTicket', 'Ticket medio', 'MONEY', 'PERCENT'),
+      kpi('occupancy', 'Ocupación', 'PERCENT', 'POINTS'),
+    ],
+    locations: locations === 1 ? [row('loc-1', 'Sede principal')] : [row('loc-1', 'Sede principal'), row('loc-2', 'Sede Norte')],
+    total: row(null, 'Total'),
+    hasActivity: true,
+    previousPeriodUnattributed: false,
+  } as unknown as LocationsComparison;
 }
 
-describe('DashboardView', () => {
-  // `advanceTimers: true` deja que los temporizadores falsos avancen con el
-  // tiempo real: solo nos interesa fijar `Date`, y sin esto `waitFor` y
-  // `userEvent` se quedarían esperando un reloj que nadie adelanta.
-  beforeAll(() => {
-    jest.useFakeTimers({ now: FROZEN_NOW, advanceTimers: true });
-  });
-  afterAll(() => {
-    jest.useRealTimers();
-  });
+const receivables: ReceivablesSummary = {
+  asOf: '2026-08-15',
+  scope: { location: null },
+  totals: [
+    {
+      currency: 'COP',
+      patients: 2,
+      balance: 880000,
+      debt: 880000,
+      credit: 0,
+      buckets: { current: 100000, days0to30: 100000, days31to60: 80000, days61to90: 100000, over90: 500000 },
+    },
+  ],
+};
 
-  beforeEach(() => {
-    mockedGetDashboard.mockReset();
-    mockedListCurrencies.mockReset();
-    mockedListCurrencies.mockResolvedValue([
-      { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
-      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
-    ]);
-    mockedListPatients.mockReset();
-    mockedListStaff.mockReset();
-    mockedListPatients.mockResolvedValue(patientsPage);
-    mockedListStaff.mockResolvedValue(staff);
-    mockedListLocations.mockReset();
-    mockedListLocations.mockResolvedValue([sede('America/Bogota')]);
-  });
+function setActiveSede(id: string | null) {
+  if (id) window.localStorage.setItem('dentalix.activeLocationId', id);
+  else window.localStorage.removeItem('dentalix.activeLocationId');
+}
 
-  it('renders the 4 cards (incomes, low stock, upcoming appointments, patient count) with fetched data', async () => {
-    mockedGetDashboard.mockResolvedValue(dashboard());
-
-    render(<DashboardView token="tok" />);
-
-    await screen.findByText('Ingresos del período');
-    // Incomes: totalConverted formatted as currency (Intl.NumberFormat('es', {style:'currency'})) + count + byCurrency breakdown.
-    // `getByText`'s default normalizer collapses the formatter's non-breaking
-    // space (U+00A0, between the amount and the "US$" symbol) into a plain
-    // ASCII space when reading DOM text — but it does NOT run that same
-    // normalization over the string passed in as the matcher, so the literal
-    // Intl output (which still has the NBSP) must be normalized by hand here
-    // too, or the comparison never matches.
-    const totalFormatted = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' })
-      .format(1250.5)
-      .replace(/ /g, ' ');
-    expect(screen.getByText(totalFormatted)).toBeInTheDocument();
-    expect(screen.getByText('12 abonos')).toBeInTheDocument();
-    // Scoped to the "Desglose por moneda" breakdown — the currency <select>
-    // (IMP-10) also renders "COP"/"USD" as option text, so an unscoped
-    // `getByText` would match more than one element.
-    const byCurrencySection = screen.getByText('Desglose por moneda').closest('div') as HTMLElement;
-    expect(within(byCurrencySection).getByText('COP')).toBeInTheDocument();
-    expect(within(byCurrencySection).getByText('USD')).toBeInTheDocument();
-
-    // Low stock: count + item rows. `getByText('Bajo stock')` would match
-    // twice (the card heading AND the table's sr-only caption) — scope to
-    // the heading role.
-    expect(screen.getByRole('heading', { name: 'Bajo stock' })).toBeInTheDocument();
-    expect(screen.getByText('2 ítems')).toBeInTheDocument();
-    expect(screen.getByText('Guantes de nitrilo')).toBeInTheDocument();
-    expect(screen.getByText('Anestesia')).toBeInTheDocument();
-
-    // Upcoming appointments: at least one row with a status badge, and the
-    // patient/provider names resolved (see the dedicated name-resolution
-    // test below for the fallback-to-id case).
-    expect(screen.getByText('Próximas citas')).toBeInTheDocument();
-    expect(screen.getByText('Confirmada')).toBeInTheDocument();
-    await screen.findByText(/María López/);
-
-    // Patient count.
-    expect(screen.getByText('# Pacientes')).toBeInTheDocument();
-    expect(screen.getByText('42')).toBeInTheDocument();
-  });
-
-  it('names the patient from the appointment itself (no /patients lookup) and the provider from staff', async () => {
-    mockedGetDashboard.mockResolvedValue(dashboard());
-    // Sin mapa de pacientes: el nombre sale de `patientFirstName`/`patientLastName`
-    // que ya trae la cita. Antes esto dependía de `GET /patients?pageSize=100`,
-    // que topa en 100 y dejaba un UUID en pantalla a partir de ahí.
-    mockedListPatients.mockResolvedValue({ ...patientsPage, items: [] });
-
-    render(<DashboardView token="tok" />);
-
-    await screen.findByText(/María López/);
-    expect(mockedListPatients).not.toHaveBeenCalled();
-    expect(screen.getByText(/Dra\. Ana Ríos/)).toBeInTheDocument();
-    // The raw uuid/truncated-id rendering this replaces must be gone.
-    expect(screen.queryByText(new RegExp(PATIENT_ID))).not.toBeInTheDocument();
-  });
-
-  it('DX-378: la hora de las próximas citas, con la zona y el reloj de 12 h de la sede (como la agenda)', async () => {
-    mockedGetDashboard.mockResolvedValue(dashboard());
-    render(<DashboardView token="tok" />);
-    // 14:00 UTC son las 9:00 a. m. en Bogotá; el navegador de Jest (UTC) diría 14:00.
-    expect(await screen.findByText('9:00 a. m.')).toBeInTheDocument();
-  });
-
-  it('falls back to the raw patientId/providerId when the API returned no name and staff has no match', async () => {
-    mockedListStaff.mockResolvedValue([]);
-    mockedGetDashboard.mockResolvedValue(
-      dashboard({
-        upcomingAppointments: [
-          {
-            id: 'apt-1',
-            patientId: PATIENT_ID,
-            patientFirstName: null,
-            patientLastName: null,
-            providerId: 'staff-1',
-            start: '2026-07-24T14:00:00.000Z',
-            end: '2026-07-24T14:30:00.000Z',
-            status: 'CONFIRMED',
-          },
-        ],
-      }),
-    );
-
-    render(<DashboardView token="tok" />);
-
-    await screen.findByText('Próximas citas');
-    expect(screen.getByText(new RegExp(PATIENT_ID))).toBeInTheDocument();
-    expect(screen.getByText(/staff-1/)).toBeInTheDocument();
-  });
-
-  it('fetches with the default from/to/currency on mount, then refetches with the new params when the range changes', async () => {
-    mockedGetDashboard.mockResolvedValue(dashboard());
-
-    render(<DashboardView token="tok" />);
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    const [, firstParams] = mockedGetDashboard.mock.calls[0];
-    // Default currency is COP (IMP-10) — the free-text currency input (which
-    // could crash `Intl.NumberFormat` on an invalid code) is gone.
-    expect(firstParams.currency).toBe('COP');
-    expect(firstParams.from).toMatch(/^\d{4}-\d{2}-01$/);
-    // Default "Hasta" is today, but the backend's incomes/payments-totals
-    // query is half-open `[from, to)` — the component must send an exclusive
-    // upper bound (today + 1 day) so today's payments aren't silently excluded.
-    // Reloj fijo: 15/08 a las 07:00 en Bogotá -> hoy es el 15 en la sede.
-    expect(firstParams.from).toBe('2026-08-01');
-    expect(firstParams.to).toBe('2026-08-16');
-
-    mockedGetDashboard.mockClear();
-    const fromInput = screen.getByLabelText('Desde');
-    // A single `fireEvent.change` (rather than `userEvent.type`, which fires
-    // one change event per keystroke — each of which is itself a distinct
-    // `from` value and therefore its own refetch, per this component's
-    // effect) so the assertion below can pin down exactly one resulting call.
-    fireEvent.change(fromInput, { target: { value: '2026-06-01' } });
-
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    const [, params] = mockedGetDashboard.mock.calls[0];
-    expect(params.from).toBe('2026-06-01');
-  });
-
-  it('sends an exclusive (+1 day) "to" bound when the user changes "Hasta", while the input keeps showing the selected inclusive date', async () => {
-    mockedGetDashboard.mockResolvedValue(dashboard());
-
-    render(<DashboardView token="tok" />);
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-
-    mockedGetDashboard.mockClear();
-    const toInput = screen.getByLabelText('Hasta') as HTMLInputElement;
-    fireEvent.change(toInput, { target: { value: TENTH_OF_MONTH } });
-
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    const [, params] = mockedGetDashboard.mock.calls[0];
-    expect(params.to).toBe(ELEVENTH_OF_MONTH);
-    // The input itself still reflects the user's selected (inclusive) date.
-    expect(toInput.value).toBe(TENTH_OF_MONTH);
-  });
-
-  it('refetches with the new currency when the currency select changes', async () => {
-    mockedGetDashboard.mockResolvedValue(dashboard());
-    const user = userEvent.setup();
-
-    render(<DashboardView token="tok" />);
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-
-    // The "Moneda" control is a native <select> rendered by CurrencySelect.
-    const currencySelect = (await screen.findByLabelText('Moneda')) as HTMLSelectElement;
-    expect(currencySelect.tagName).toBe('SELECT');
-    // Defaults to COP.
-    await waitFor(() => expect(currencySelect.value).toBe('COP'));
-
-    mockedGetDashboard.mockClear();
-    // CurrencySelect (Task 11) replaces the old free-text currency input —
-    // pick an option instead of typing, once its options (from the mocked
-    // `listCurrencies`) have loaded in. The default is COP, so pick USD to
-    // force a genuinely new value (and therefore a refetch).
-    await waitFor(() => expect(currencySelect.querySelector('option[value="USD"]')).not.toBeNull());
-    await user.selectOptions(currencySelect, 'USD');
-
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    const [, params] = mockedGetDashboard.mock.calls[0];
-    expect(params.currency).toBe('USD');
-  });
-
-  it('shows a loading skeleton while the request is in flight', async () => {
-    const pending = deferred<Dashboard>();
-    mockedGetDashboard.mockReturnValue(pending.promise);
-
-    render(<DashboardView token="tok" />);
-
-    expect(screen.getByRole('status', { name: /cargando panel/i })).toBeInTheDocument();
-    expect(screen.queryByText('# Pacientes')).not.toBeInTheDocument();
-
-    pending.resolve(dashboard());
-    await screen.findByText('# Pacientes');
-    expect(screen.queryByRole('status', { name: /cargando panel/i })).not.toBeInTheDocument();
-  });
-
-  it('renders empty-states for low stock (0) and upcoming appointments (0), and 0 for incomes/patients', async () => {
-    mockedGetDashboard.mockResolvedValue(emptyDashboard());
-
-    render(<DashboardView token="tok" />);
-
-    await screen.findByText('# Pacientes');
-    expect(screen.getByText('0 abonos')).toBeInTheDocument();
-    expect(screen.getByText('No hay ítems en bajo stock.')).toBeInTheDocument();
-    expect(screen.getByText('No hay citas próximas.')).toBeInTheDocument();
-    expect(screen.getByText('0')).toBeInTheDocument();
-  });
-
-  it('shows a graceful access-denied message (not a crash) on a 403, with a retry that re-fetches', async () => {
-    mockedGetDashboard.mockRejectedValueOnce(new ApiError(403, 'Forbidden'));
-    const user = userEvent.setup();
-
-    render(<DashboardView token="tok" />);
-
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('No tienes acceso a este panel.');
-    expect(screen.queryByText('# Pacientes')).not.toBeInTheDocument();
-
-    mockedGetDashboard.mockResolvedValueOnce(dashboard());
-    await user.click(screen.getByRole('button', { name: /reintentar/i }));
-
-    await screen.findByText('# Pacientes');
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  });
-
-  it('shows a friendly guard message (and does NOT fetch) when "Desde" is after "Hasta"', async () => {
-    mockedGetDashboard.mockResolvedValue(dashboard());
-
-    render(<DashboardView token="tok" />);
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-
-    mockedGetDashboard.mockClear();
-    const fromInput = screen.getByLabelText('Desde');
-    fireEvent.change(fromInput, { target: { value: TOMORROW } });
-
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/desde.*hasta|hasta.*desde/i);
-    expect(screen.queryByText('# Pacientes')).not.toBeInTheDocument();
-    expect(mockedGetDashboard).not.toHaveBeenCalled();
-  });
-
-  it('links "Próximas citas" to /agenda and "# Pacientes" to /patients', async () => {
-    mockedGetDashboard.mockResolvedValue(dashboard());
-
-    render(<DashboardView token="tok" />);
-    await screen.findByText('# Pacientes');
-
-    const agendaLink = screen.getByRole('link', { name: 'Próximas citas' });
-    expect(agendaLink).toHaveAttribute('href', '/agenda');
-
-    const patientsLink = screen.getByRole('link', { name: '# Pacientes' });
-    expect(patientsLink).toHaveAttribute('href', '/patients');
-
-    // "Bajo stock" has no inventory route in this app yet — it must NOT be
-    // rendered as a link.
-    expect(screen.queryByRole('link', { name: 'Bajo stock' })).not.toBeInTheDocument();
-  });
+beforeAll(() => {
+  jest.useFakeTimers({ now: FROZEN_NOW, advanceTimers: true });
+});
+afterAll(() => {
+  jest.useRealTimers();
 });
 
-describe('DashboardView · días de la sede (DX-097)', () => {
-  beforeEach(() => {
-    mockedGetDashboard.mockReset();
-    mockedGetDashboard.mockResolvedValue(dashboard());
-    mockedListCurrencies.mockResolvedValue([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }]);
-    mockedListPatients.mockResolvedValue(patientsPage);
-    mockedListStaff.mockResolvedValue(staff);
-    mockedListLocations.mockReset();
+beforeEach(() => {
+  window.localStorage.clear();
+  for (const fn of Object.values(m)) fn.mockReset();
+  m.listLocations.mockResolvedValue(sedes);
+  m.listCurrencies.mockResolvedValue([
+    { code: 'COP', name: 'Peso', symbol: '$' },
+    { code: 'USD', name: 'Dólar', symbol: '$' },
+  ]);
+  m.listStaff.mockResolvedValue([{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST', locationIds: null }] as never);
+  m.listAppointments.mockResolvedValue(todayAppointments);
+  m.getDashboard.mockResolvedValue(dashboard());
+  m.comparison.mockResolvedValue(comparison());
+  m.closing.mockResolvedValue({ total: 3, outcome: 1, evolution: 1, treatment: 1 });
+  m.followUp.mockResolvedValue({ total: 2 });
+  m.unscheduled.mockResolvedValue({ total: 0 });
+  m.waitlist.mockResolvedValue({ items: [], total: 1, page: 1, pageSize: 1 } as never);
+  m.receivables.mockResolvedValue(receivables);
+  m.inventory.mockResolvedValue({
+    items: [{ id: 'i1', name: 'Guantes de nitrilo', unit: 'caja', stock: 1, minStock: 5, lowStock: true }],
+    total: 4,
+    page: 1,
+    pageSize: 8,
+  } as never);
+  m.anamnesis.mockResolvedValue({ submitted: 5 });
+  m.cash.mockResolvedValue({
+    locationId: 'loc-1',
+    settings: { requireOpenSession: false, blindClose: false },
+    session: cashSessionFixture({ openedAt: '2026-08-15T13:02:00.000Z' }),
+  } as never);
+  m.production.mockResolvedValue({
+    totals: [{ currency: 'COP', count: 7, gross: 900000, discounts: 50000, net: 850000, averageNet: 121428 }],
+  } as never);
+});
+
+function pendingValue(id: string) {
+  return screen.findByTestId(`pending-${id}-value`);
+}
+
+describe('Inicio · ADMIN', () => {
+  it('cabecera con alcance y la hora de la sede (GMT), enlazada a Ajustes → Sedes', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Inicio' })).toBeInTheDocument();
+    const scope = await screen.findByTestId('dashboard-scope');
+    expect(scope).toHaveTextContent('Todas las sedes');
+    const zone = await within(scope).findByRole('link', { name: 'Hora de Sede principal (GMT−5)' });
+    expect(zone).toHaveAttribute('href', '/settings/sedes');
   });
-  afterEach(() => {
-    jest.useRealTimers();
+
+  it('Hoy: cuenta por estado (sin canceladas) y lista con alertas, anamnesis y saldo vencido', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    await within(today).findByRole('list', { name: 'Citas de hoy' });
+    expect(within(today).getByTestId('today-total')).toHaveTextContent('4');
+    expect(within(today).getByTestId('today-toConfirm')).toHaveTextContent('1');
+    expect(within(today).getByTestId('today-confirmed')).toHaveTextContent('1');
+    expect(within(today).getByTestId('today-inClinic')).toHaveTextContent('1');
+    expect(within(today).getByTestId('today-completed')).toHaveTextContent('1');
+    expect(within(today).getByText('1 cita cancelada hoy, fuera de la cuenta.')).toBeInTheDocument();
+
+    const luis = within(today).getByRole('link', { name: 'Luis Pérez' });
+    expect(luis).toHaveAttribute('href', '/patients/p-2');
+    const row = luis.closest('li') as HTMLElement;
+    expect(within(row).getByText('Alerta médica')).toBeInTheDocument();
+    expect(within(row).getByText(/Alergia a penicilina/)).toHaveClass('sr-only');
+    expect(within(row).getByText('Premedicación')).toBeInTheDocument();
+    expect(within(row).getByText('Anamnesis caducada')).toBeInTheDocument();
+    expect(within(row).getByText('Saldo vencido')).toBeInTheDocument();
+    expect(within(row).getByText('Agendada')).toBeInTheDocument();
+    await within(row).findByText('Dra. Ana Ríos');
+    // La hora es la de la sede: 15:00Z = 10:00 a. m. en Bogotá.
+    expect(within(row).getByText(/10:00/)).toBeInTheDocument();
+    // Pide el día civil de la sede, sin acotar a un profesional.
+    expect(m.listAppointments.mock.calls[0][1]).toEqual({
+      from: '2026-08-15T05:00:00.000Z',
+      to: '2026-08-16T04:59:59.999Z',
+      providerId: undefined,
+    });
   });
 
-  it('el último día del mes a las 22:00 de Bogotá (01/11 03:00Z) el período por defecto es octubre hasta el 31, no noviembre', async () => {
-    jest.useFakeTimers({ now: new Date('2026-11-01T03:00:00.000Z'), advanceTimers: true });
-    mockedListLocations.mockResolvedValue([sede('America/Bogota')]);
-    render(<DashboardView token="tok" />);
-
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-10-01', to: '2026-11-01' });
-    expect((screen.getByLabelText('Hasta') as HTMLInputElement).value).toBe('2026-10-31');
-    expect(screen.getByTestId('dashboard-zone-note')).toHaveTextContent('Días en hora de Bogotá.');
+  it('Pendientes: cada fila con su número y a dónde lleva; «Al día» si no hay nada', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    expect(await pendingValue('closing')).toHaveTextContent('3');
+    expect(await pendingValue('follow-up')).toHaveTextContent('2');
+    expect(await pendingValue('unscheduled')).toHaveTextContent('Al día');
+    expect(await pendingValue('waitlist')).toHaveTextContent('1');
+    expect(await pendingValue('anamnesis')).toHaveTextContent('5');
+    expect(await pendingValue('low-stock')).toHaveTextContent('4');
+    expect(await pendingValue('receivables')).toHaveTextContent('2 pacientes');
+    expect(screen.getByTestId('pending-receivables')).toHaveTextContent(/Vencido: .*780\.000,00/);
+    // Sin sede activa no hay «mi caja»: se pide elegir una, sin llamar.
+    expect(await pendingValue('cash')).toHaveTextContent('Elige una sede');
+    expect(m.cash).not.toHaveBeenCalled();
+    const pending = screen.getByRole('region', { name: 'Pendientes' });
+    expect(within(pending).getByRole('link', { name: 'Presupuestos por seguir' })).toHaveAttribute('href', '/presupuestos');
+    expect(within(pending).getByRole('link', { name: 'Cartera con saldo' })).toHaveAttribute('href', '/caja/cartera');
+    expect(within(pending).getByRole('link', { name: 'Pendiente de cerrar' })).toHaveAttribute(
+      'href',
+      '/agenda/pendiente-de-cerrar',
+    );
   });
 
-  it('con la sede en Madrid, el mismo instante ya es el 1 de noviembre', async () => {
-    jest.useFakeTimers({ now: new Date('2026-11-01T03:00:00.000Z'), advanceTimers: true });
-    mockedListLocations.mockResolvedValue([sede('Europe/Madrid')]);
-    render(<DashboardView token="tok" />);
-
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-11-01', to: '2026-11-02' });
+  it('una fila que falla no tumba las demás y se reintenta sola', async () => {
+    m.followUp.mockRejectedValueOnce(new Error('network'));
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const row = await screen.findByTestId('pending-follow-up');
+    await within(row).findByText('No se pudo cargar');
+    expect(await pendingValue('closing')).toHaveTextContent('3');
+    await userEvent.click(within(row).getByRole('button', { name: 'Volver a cargar «Presupuestos por seguir»' }));
+    expect(await pendingValue('follow-up')).toHaveTextContent('2');
+    expect(m.followUp).toHaveBeenCalledTimes(2);
   });
 
-  it('no pide el panel hasta saber la zona de la sede, y muestra la carga', async () => {
-    let resolve: (value: ClinicLocation[]) => void = () => {};
-    mockedListLocations.mockReturnValue(new Promise((r) => (resolve = r)));
-    render(<DashboardView token="tok" />);
-
-    expect(screen.getByRole('status', { name: /cargando panel/i })).toBeInTheDocument();
-    expect(mockedGetDashboard).not.toHaveBeenCalled();
-    resolve([sede('America/Bogota')]);
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+  it('Resultados del período: cobrado convertido (hasta + 1 día) y los indicadores frente al período anterior', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    await waitFor(() => expect(m.getDashboard).toHaveBeenCalledTimes(1));
+    expect(m.getDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-08-01', to: '2026-08-16', currency: 'COP' });
+    expect(m.comparison.mock.calls[0][1]).toEqual({ from: '2026-08-01', to: '2026-08-15', compare: 'previous' });
+    const period = screen.getByRole('region', { name: 'Resultados del período' });
+    const incomes = await within(period).findByTestId('dashboard-incomes');
+    expect(incomes).toHaveTextContent('Cobrado, en COP');
+    expect(incomes).toHaveTextContent('12 abonos');
+    expect(incomes).toHaveTextContent('Cada abono en otra moneda, a COP con la tasa de su día.');
+    const production = await within(period).findByTestId('dashboard-kpi-production');
+    expect(production).toHaveTextContent('Producción');
+    expect(production).toHaveTextContent(/Mejora: \+20\s?% frente a/);
+    expect(within(period).getByTestId('dashboard-kpi-noShowRate')).toHaveTextContent('Inasistencia');
+    expect(within(period).getByText(/frente al 17\/07\/2026 – 31\/07\/2026/)).toBeInTheDocument();
+    // Con una sola sede no hay tabla «Por sede».
+    expect(within(period).queryByRole('heading', { name: 'Por sede' })).not.toBeInTheDocument();
   });
 
-  it('consumers render SedeConfigError without a zone', async () => {
-    mockedListLocations.mockResolvedValue([clinicLocation({ timeZone: null })]);
-    render(<DashboardView token="tok" />);
+  it('«Por sede» aparece con dos sedes o más', async () => {
+    m.comparison.mockResolvedValue(comparison(2));
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const table = await screen.findByRole('table', { name: 'Indicadores por sede' });
+    expect(within(table).getByText('Sede Norte')).toBeInTheDocument();
+  });
 
+  it('Cartera por antigüedad: los cinco tramos por moneda y lo vencido', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const aging = await screen.findByTestId('aging-COP');
+    expect(aging).toHaveTextContent('2 pacientes');
+    expect(aging).toHaveTextContent('Por vencer');
+    expect(aging).toHaveTextContent('Más de 90 días');
+    expect(within(aging).getByRole('img', { name: 'Reparto por antigüedad de lo que se debe en COP' })).toBeInTheDocument();
+  });
+
+  it('un error de Hoy es del bloque (escalón 1) y su reintento vuelve a pedir', async () => {
+    m.listAppointments.mockRejectedValueOnce(new Error('network'));
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    await within(today).findByText('No pudimos cargar las citas de hoy.');
+    await userEvent.click(within(today).getByRole('button', { name: 'Reintentar' }));
+    await within(today).findByRole('list', { name: 'Citas de hoy' });
+  });
+
+  it('sin zona de la sede: SedeConfigError y ninguna consulta del día', async () => {
+    m.listLocations.mockResolvedValue([clinicLocation({ timeZone: null })]);
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
     expect(
       await screen.findByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.'),
     ).toBeInTheDocument();
-    // Sin zona no hay período por defecto: ni Bogotá ni la del navegador.
-    expect(mockedGetDashboard).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('dashboard-zone-note')).not.toBeInTheDocument();
-
-    mockedListLocations.mockResolvedValue([sede('Europe/Madrid')]);
-    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+    expect(m.listAppointments).not.toHaveBeenCalled();
+    expect(m.getDashboard).not.toHaveBeenCalled();
   });
 });
 
-
-describe('DashboardView · moneda de la sede (GLOBAL-G1)', () => {
-  beforeAll(() => {
-    jest.useFakeTimers({ now: new Date('2026-10-15T15:00:00.000Z'), advanceTimers: true });
+describe('Inicio · RECEPTION', () => {
+  it('ve hoy y sus pendientes, nunca pide el panel financiero, los reportes ni lo clínico', async () => {
+    setActiveSede('loc-2');
+    render(<DashboardView token={tokenForRole('RECEPTION')} />);
+    expect(await pendingValue('cash')).toHaveTextContent('Abierta desde');
+    expect(await pendingValue('follow-up')).toHaveTextContent('2');
+    expect(await pendingValue('receivables')).toHaveTextContent('2 pacientes');
+    expect(screen.getByTestId('dashboard-scope')).toHaveTextContent('Sede Norte');
+    // La zona es texto: recepción no cambia los ajustes de la sede.
+    expect(await screen.findByTestId('dashboard-zone-note')).not.toHaveAttribute('href');
+    expect(screen.queryByTestId('pending-anamnesis')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('pending-low-stock')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Resultados del período' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Cartera por antigüedad' })).not.toBeInTheDocument();
+    expect(m.getDashboard).not.toHaveBeenCalled();
+    expect(m.comparison).not.toHaveBeenCalled();
+    expect(m.anamnesis).not.toHaveBeenCalled();
+    expect(m.inventory).not.toHaveBeenCalled();
   });
-  afterAll(() => {
-    jest.useRealTimers();
+});
+
+describe('Inicio · DENTIST', () => {
+  it('sus pacientes de hoy (acotado a él), su producción y lo suyo por cerrar', async () => {
+    render(<DashboardView token={tokenForRole('DENTIST')} />);
+    await screen.findByRole('region', { name: 'Tus pacientes de hoy' });
+    await waitFor(() => expect(m.listAppointments).toHaveBeenCalled());
+    expect(m.listAppointments.mock.calls[0][1]).toMatchObject({ providerId: 'u1' });
+    expect(await pendingValue('closing')).toHaveTextContent('3');
+    expect(await pendingValue('anamnesis')).toHaveTextContent('5');
+    const production = await screen.findByTestId('production-COP');
+    expect(production).toHaveTextContent('7 procedimientos');
+    expect(m.production.mock.calls[0][1]).toEqual({ from: '2026-08-01', to: '2026-08-15' });
+    for (const fn of [m.getDashboard, m.comparison, m.followUp, m.receivables, m.cash, m.inventory, m.listStaff]) {
+      expect(fn).not.toHaveBeenCalled();
+    }
   });
+});
 
-  beforeEach(() => {
-    window.localStorage.clear();
-    mockedGetDashboard.mockReset();
-    mockedGetDashboard.mockResolvedValue(emptyDashboard());
-    mockedListCurrencies.mockReset();
-    mockedListCurrencies.mockResolvedValue([
-      { code: 'JPY', name: 'Yen japonés', symbol: '¥' },
-      { code: 'EUR', name: 'Euro', symbol: '€' },
-    ]);
-    mockedListStaff.mockReset();
-    mockedListStaff.mockResolvedValue(staff);
-    mockedListLocations.mockReset();
-  });
-
-  it('JPY location shows JPY without decimals', async () => {
-    window.localStorage.setItem('dentalix.activeLocationId', 'loc-jp');
-    mockedListLocations.mockResolvedValue([
-      clinicLocation({ id: 'loc-jp', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP' }),
-      clinicLocation({ id: 'loc-es', currency: 'EUR', timeZone: 'Europe/Madrid' }),
-    ]);
-    mockedGetDashboard.mockResolvedValue(
-      dashboard({
-        incomes: { ...emptyDashboard().incomes, currency: 'JPY', totalConverted: 1500, count: 1, byCurrency: { JPY: 1500 } },
-        upcomingAppointments: [],
-      }),
-    );
-    render(<DashboardView token="tok" />);
-
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ currency: 'JPY' });
-    // «1500 JPY», sin «,00»: el yen no tiene decimales.
-    expect((await screen.findAllByText(/^1500\sJPY$/)).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/1500,00/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/COP/)).not.toBeInTheDocument();
-  });
-
-  it('location without currency shows SedeConfigError and never COP', async () => {
-    window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
-    mockedListLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', currency: null })]);
-    render(<DashboardView token="tok" />);
-
-    expect(
-      await screen.findByText(
-        'No se pudo saber la moneda de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
-      ),
-    ).toBeInTheDocument();
-    expect(mockedGetDashboard).not.toHaveBeenCalled();
-    expect((screen.getByLabelText('Moneda') as HTMLSelectElement).value).toBe('');
-    expect(screen.queryByText(/COP|USD/)).not.toBeInTheDocument();
-
-    // Reintentar relee las sedes; ya configurada, el panel carga en su moneda.
-    mockedListLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', currency: 'JPY' })]);
-    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ currency: 'JPY' });
-  });
-
-  it('dashboard with mixed currencies on «Todas» has no currency selected', async () => {
-    mockedListLocations.mockResolvedValue([
-      clinicLocation({ id: 'loc-jp', currency: 'JPY', timeZone: 'Asia/Tokyo' }),
-      clinicLocation({ id: 'loc-es', currency: 'EUR', timeZone: 'Asia/Tokyo' }),
-    ]);
-    render(<DashboardView token="tok" />);
-
-    expect(await screen.findByText(/Tus sedes usan monedas distintas/)).toBeInTheDocument();
-    const select = screen.getByLabelText('Moneda') as HTMLSelectElement;
-    expect(select.value).toBe('');
-    expect(mockedGetDashboard).not.toHaveBeenCalled();
-
-    await waitFor(() => expect(select.querySelector('option[value="EUR"]')).not.toBeNull());
-    await userEvent.selectOptions(select, 'EUR');
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ currency: 'EUR' });
+describe('Inicio · ASSISTANT', () => {
+  it('hoy de la sede, anamnesis y bajo stock, con la lista «Por reponer»', async () => {
+    render(<DashboardView token={tokenForRole('ASSISTANT')} />);
+    expect(await pendingValue('anamnesis')).toHaveTextContent('5');
+    expect(await pendingValue('low-stock')).toHaveTextContent('4');
+    const lowStock = await screen.findByRole('region', { name: 'Por reponer' });
+    const gloves = (await within(lowStock).findByText('Guantes de nitrilo')).closest('li') as HTMLElement;
+    expect(gloves).toHaveTextContent('Faltan 4');
+    expect(within(lowStock).getByText('Se muestran 1 de 4.')).toBeInTheDocument();
+    expect(screen.queryByTestId('pending-closing')).not.toBeInTheDocument();
+    expect(m.closing).not.toHaveBeenCalled();
+    expect(m.getDashboard).not.toHaveBeenCalled();
   });
 });

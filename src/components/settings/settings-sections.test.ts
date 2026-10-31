@@ -21,10 +21,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 23 pantallas de ajustes, cada una una sola vez', () => {
+  it('ADMIN ve las 24 pantallas de ajustes, cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(23);
-    expect(new Set(hrefs).size).toBe(23);
+    expect(hrefs).toHaveLength(24);
+    expect(new Set(hrefs).size).toBe(24);
   });
 
   it('ADMIN sees «Nombres de documentos» right after «Mayoría de edad»; other roles do not', () => {
@@ -69,13 +69,13 @@ describe('Índice de Ajustes (DX-282)', () => {
     }
   });
 
-  it('no deja ninguna pantalla de /settings sin entrada (salvo el perfil y la auditoría)', () => {
-    // Mi perfil vive en el menú de cuenta y Auditoría en la navegación lateral.
+  it('no deja ninguna pantalla de /settings sin entrada (salvo el perfil)', () => {
+    // Mi perfil vive en el menú de cuenta; la Auditoría, en «Datos y seguridad».
     // Cualquier otra carpeta nueva en /settings tiene que salir en el índice:
     // si no, la pantalla existe pero no se llega a ella.
     const dir = path.join(process.cwd(), 'src/app/(app)/settings');
     const pages = readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && !['profile', 'auditoria'].includes(entry.name))
+      .filter((entry) => entry.isDirectory() && !['profile'].includes(entry.name))
       .map((entry) => `/settings/${entry.name}`)
       .sort();
     const all = SETTINGS_SECTIONS.flatMap((section) => section.entries.map((entry) => entry.href));

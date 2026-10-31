@@ -15,6 +15,7 @@ import {
 import type { SedeClock } from '@/lib/locations/sede-clock';
 import { FormModal } from '@/components/shared/form-modal';
 import { buttonVariants } from '@/components/ui/button';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 
 // Copy as constants (i18n-ready, es-first).
 export const linkOfferCopy = {
@@ -158,9 +159,9 @@ export function LinkOfferDialog({
               <li key={r.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                 <span className="flex min-w-0 items-start gap-2 text-sm text-ink">
                   {r.ok ? (
-                    <CheckCircle2 aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
+                    <CheckCircle2 aria-hidden className="mt-0.5 size-4 shrink-0 text-success-text" />
                   ) : (
-                    <XCircle aria-hidden className="mt-0.5 size-4 shrink-0 text-danger" />
+                    <XCircle aria-hidden className="mt-0.5 size-4 shrink-0 text-danger-text" />
                   )}
                   <span className="min-w-0 break-words">
                     <span className="font-medium">{r.name}</span>
@@ -191,34 +192,37 @@ export function LinkOfferDialog({
           ) : null}
         </div>
       ) : (
-        <fieldset className="flex flex-col gap-1">
-          <legend className="mb-1 text-sm font-medium text-ink">{linkOfferCopy.channelLegend}</legend>
-          {(Object.keys(linkOfferCopy.channels) as LinkOfferChannel[]).map((ch) => {
-            const ok = candidates.filter((c) => linkOfferChannels(c)[ch]).length;
-            return (
-              <label
-                key={ch}
-                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 hover:bg-surface-2"
-              >
-                <input
-                  type="radio"
-                  name={`${ids}-channel`}
+        <div className="flex flex-col gap-1">
+          <RadioGroup
+            id={`${ids}-channel`}
+            legend={linkOfferCopy.channelLegend}
+            value={channel}
+            onValueChange={(next) => setChannel(next as LinkOfferChannel)}
+          >
+            {(Object.keys(linkOfferCopy.channels) as LinkOfferChannel[]).map((ch, index) => {
+              const ok = candidates.filter((c) => linkOfferChannels(c)[ch]).length;
+              return (
+                <RadioOption
+                  key={ch}
+                  id={index === 0 ? `${ids}-channel` : undefined}
                   value={ch}
-                  checked={channel === ch}
-                  onChange={() => setChannel(ch)}
-                  className="size-4 accent-primary"
+                  // El recuento forma parte del nombre, como antes: «WhatsApp 2 de 3».
+                  label={
+                    <>
+                      {linkOfferCopy.channels[ch]}{' '}
+                      <span className="text-xs tabular-nums text-muted">
+                        {linkOfferCopy.channelCount(ok, candidates.length)}
+                      </span>
+                    </>
+                  }
                 />
-                <span className="text-sm text-ink">{linkOfferCopy.channels[ch]}</span>
-                <span className="text-xs tabular-nums text-muted">
-                  {linkOfferCopy.channelCount(ok, candidates.length)}
-                </span>
-              </label>
-            );
-          })}
+              );
+            })}
+          </RadioGroup>
           {skipped.length > 0 && eligible.length > 0 ? (
             <p className="mt-1 text-xs text-muted">{linkOfferCopy.skipped(skipped.map(fullName).join(', '))}</p>
           ) : null}
-        </fieldset>
+        </div>
       )}
     </FormModal>
   );

@@ -115,7 +115,7 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
     return (
       <div className="mt-1 space-y-1">
         <p className="flex items-start gap-2">
-          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
           <span>{copy.unavailable(sedeCivilDate(date, fmt))}</span>
         </p>
         <Button type="button" variant="outline" size="sm" onClick={state.retry} className="max-sm:min-h-11">
@@ -131,7 +131,7 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
     const missing = ratePerBase(state.rates, paymentCurrency) === null ? paymentCurrency : planCurrency;
     return (
       <p className="mt-1 flex items-start gap-2">
-        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
         <span>{copy.missing(missing, sedeCivilDate(date, fmt))}</span>
       </p>
     );
@@ -174,7 +174,7 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
       {planBalance === 'error' ? <p className="text-muted">{copy.pendingUnavailable}</p> : null}
       {typeof planBalance === 'object' && planBalance.paymentsWithoutRate > 0 ? (
         <p className="mt-1 flex items-start gap-2">
-          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
           <span>{copy.pendingWithoutRate(planBalance.paymentsWithoutRate)}</span>
         </p>
       ) : null}

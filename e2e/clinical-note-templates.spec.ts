@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
@@ -118,7 +119,7 @@ for (const viewport of VIEWPORTS) {
     await page.goto(`${origin}/agenda`);
     await page.getByRole('button', { name: /^Día$/ }).click();
     await page.getByRole('button', { name: 'Lista', exact: true }).click();
-    await page.getByLabel('Fecha', { exact: true }).fill(slot.day);
+    await fillDate(page, 'Fecha', slot.day);
     await page
       .getByRole('button', { name: new RegExp(`Detalle de la cita de ${slot.label}`) })
       .locator('visible=true')

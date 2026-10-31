@@ -173,14 +173,14 @@ describe('LocationsComparisonView (DX-014)', () => {
     const principal = screen.getAllByTestId('comparison-row')[0];
     const better = within(principal).getAllByText('+20 %')[0].parentElement!;
     expect(better).toHaveAttribute('data-trend', 'BETTER');
-    expect(better).toHaveClass('text-success');
+    expect(better).toHaveClass('text-success-text');
     expect(better.querySelector('svg')).not.toBeNull();
     expect(within(principal).getAllByText(/^Mejora: \+20 % frente a/)[0]).toHaveClass('sr-only');
     // Los porcentajes varían en puntos (8 % → 10 % = +2 p.p.), no en % relativo.
     expect(within(principal).queryByText('+25 %')).not.toBeInTheDocument();
     const worse = within(principal).getByText('+2 p.p.').parentElement!;
     expect(worse).toHaveAttribute('data-trend', 'WORSE');
-    expect(worse).toHaveClass('text-danger');
+    expect(worse).toHaveClass('text-danger-text');
     expect(worse.querySelector('svg')).not.toBeNull();
     expect(within(principal).getByText('Empeora: +2 p.p. frente a 8 %')).toBeInTheDocument();
     expect(within(screen.getByTestId('comparison-total')).getByText('+1 p.p.')).toBeInTheDocument();

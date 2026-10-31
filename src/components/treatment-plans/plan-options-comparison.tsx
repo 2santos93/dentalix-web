@@ -2,9 +2,8 @@
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
 import { getPlan, type TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
-import { PLAN_STATUS_BADGE_VARIANT, PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import { formatCurrency } from '@/lib/format/currency';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
@@ -107,9 +106,7 @@ export function PlanOptionsComparison({
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="min-w-0 font-medium text-ink">{label}</span>
-                    <Badge variant={PLAN_STATUS_BADGE_VARIANT[option.status]}>
-                      {PLAN_STATUS_LABELS[option.status]}
-                    </Badge>
+                    <StatusBadge kind="treatmentPlan" status={option.status} />
                   </div>
                   <dl className="flex flex-col gap-1 text-sm">
                     <div className="flex items-baseline justify-between gap-3">

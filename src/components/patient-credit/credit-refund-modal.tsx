@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate } from '@/lib/format/date';
 import { parseMoneyInput } from '@/lib/format/money';
-import { fieldClass } from '@/lib/ui/field-class';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import {
   refundCredit,
@@ -16,7 +18,6 @@ import {
   type RefundMethod,
 } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatementMovement } from '@/lib/account-statement/account-statement-api';
-import { cn } from '@/lib/utils';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
@@ -201,24 +202,23 @@ export function CreditRefundModal({
           />
         </FormField>
         <FormField htmlFor="cr-method" label={copy.method}>
-          <select
+          <NativeSelect
             id="cr-method"
             value={method}
             disabled={submitting}
             onChange={(e) => setMethod(e.target.value as RefundMethod)}
-            className={cn(fieldClass, 'h-10')}
           >
             {METHODS.map((m) => (
               <option key={m} value={m}>
                 {PAYMENT_METHOD_LABELS[m]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
       </div>
       {method === 'CASH' ? (
         cashBlocked ? (
-          <p role="alert" data-testid="refund-cash-location" className="text-sm text-danger">
+          <p role="alert" data-testid="refund-cash-location" className="text-sm text-danger-text">
             {copy.cashNeedsLocation}
           </p>
         ) : activeLocation ? (
@@ -234,7 +234,7 @@ export function CreditRefundModal({
         hint={copy.reasonHint}
         hintId="cr-reason-hint"
       >
-        <textarea
+        <Textarea
           id="cr-reason"
           rows={3}
           maxLength={REFUND_REASON_MAX}
@@ -246,7 +246,6 @@ export function CreditRefundModal({
           }}
           aria-invalid={reasonError ? true : undefined}
           aria-describedby={reasonError ? fieldErrorId('cr-reason') : 'cr-reason-hint'}
-          className={cn(fieldClass, 'h-auto', reasonError && 'border-danger')}
         />
       </FormField>
       <fieldset className="flex flex-col gap-2" aria-describedby="cr-payments-hint">
@@ -255,22 +254,21 @@ export function CreditRefundModal({
           <p className="text-sm text-muted">{copy.noPayments}</p>
         ) : (
           payments.map((p) => (
-            <label key={p.id} className="flex min-h-11 items-center gap-2 text-sm text-ink sm:min-h-0">
-              <input
-                type="checkbox"
-                className="size-4 accent-primary"
-                checked={selected.includes(p.id)}
-                disabled={submitting}
-                onChange={(e) => toggle(p.id, e.target.checked)}
-              />
-              <span className="tabular-nums">
-                {copy.payment(formatCurrency(p.amount, p.currency), formatCivilDate(p.paidOn))}
-              </span>
-            </label>
+            <Checkbox
+              key={p.id}
+              checked={selected.includes(p.id)}
+              disabled={submitting}
+              onChange={(e) => toggle(p.id, e.target.checked)}
+              label={
+                <span className="tabular-nums">
+                  {copy.payment(formatCurrency(p.amount, p.currency), formatCivilDate(p.paidOn))}
+                </span>
+              }
+            />
           ))
         )}
         {paymentsError ? (
-          <p role="alert" className="text-xs text-danger">
+          <p role="alert" className="text-xs text-danger-text">
             {paymentsError}
           </p>
         ) : (

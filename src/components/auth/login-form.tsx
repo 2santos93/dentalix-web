@@ -178,7 +178,7 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
         />
         <div aria-live="polite" aria-atomic="true">
           {locked ? (
-            <p className="text-sm font-medium text-warning">{loginLockedMessage(remaining)}</p>
+            <p className="text-sm font-medium text-warning-text">{loginLockedMessage(remaining)}</p>
           ) : null}
         </div>
       </div>
@@ -192,7 +192,7 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
       {passwordReset ? (
         <p
           role="status"
-          className="flex items-start gap-1.5 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm font-medium text-success"
+          className="flex items-start gap-1.5 rounded-lg border border-success/30 bg-success-subtle px-3 py-2 text-sm font-medium text-success-text"
         >
           <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>{copy.passwordResetDone}</span>
@@ -258,7 +258,7 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
           m:ss es solo visual). */}
       <div id={LOCK_ID} aria-live="polite" aria-atomic="true">
         {locked ? (
-          <p className="flex flex-wrap items-start gap-x-1.5 gap-y-1 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm font-medium text-warning">
+          <p className="flex flex-wrap items-start gap-x-1.5 gap-y-1 rounded-lg border border-warning/30 bg-warning-subtle px-3 py-2 text-sm font-medium text-warning-text">
             <Clock className="mt-0.5 size-4 shrink-0" aria-hidden />
             <span className="min-w-0 flex-1">{loginLockedMessage(remaining)}</span>
             <span

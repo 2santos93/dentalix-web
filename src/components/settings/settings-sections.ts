@@ -13,6 +13,7 @@ import {
   FileUp,
   Globe,
   Handshake,
+  History,
   IdCard,
   Landmark,
   LifeBuoy,
@@ -45,6 +46,7 @@ import { canImportPatients } from '@/lib/patient-imports/patient-imports-api';
 import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
+import { canReadAuditLog } from '@/lib/audit/audit-api';
 
 export interface SettingsEntry {
   href: string;
@@ -75,8 +77,8 @@ export const SETTINGS_BACK = { href: '/settings', label: 'Ajustes' } as const;
  * en una pantalla de recepción (FE-062).
  *
  * Añadir un ajuste es añadir una línea a la sección que toca. Un test comprueba
- * que toda carpeta de `src/app/(app)/settings` (salvo el perfil y la auditoría)
- * tiene su entrada aquí.
+ * que toda carpeta de `src/app/(app)/settings` (salvo el perfil) tiene su
+ * entrada aquí.
  */
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
@@ -286,6 +288,15 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Cuándo y por qué entró el soporte de Dentalix a la clínica.',
         icon: LifeBuoy,
         visible: canReadSupportAccesses,
+      },
+      // DX-009: AUDIT_READ_ROLES (lleva IP y user agent). Antes en la barra
+      // lateral; desde M2 aquí, junto a los accesos de soporte.
+      {
+        href: '/settings/auditoria',
+        label: 'Auditoría',
+        description: 'Quién vio o cambió qué y cuándo: altas, consultas y cambios de la clínica.',
+        icon: History,
+        visible: canReadAuditLog,
       },
     ],
   },

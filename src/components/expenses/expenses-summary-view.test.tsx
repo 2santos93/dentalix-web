@@ -47,6 +47,16 @@ const copRow: ExpenseSummary['rows'][number] = {
 };
 
 describe('ExpensesSummaryView (DX-274)', () => {
+  // Reloj fijo: los rangos esperados (mayo–octubre de 2026) son los «últimos
+  // seis meses» del 15-10-2026 en la sede (Auckland). Con el reloj real el test
+  // caducaba en cuanto empezaba noviembre en Auckland (31-10 a las 11:00 UTC).
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-15T00:00:00Z'), advanceTimers: true });
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     mockedSummary.mockReset().mockResolvedValue(summary([copRow]));
     mockedCsv.mockReset().mockResolvedValue('csv');
@@ -146,7 +156,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
     expect(rows).toHaveLength(2);
     expect(within(rows[0]).getByText('COP')).toBeInTheDocument();
     expect(within(rows[1]).getByText('USD')).toBeInTheDocument();
-    expect(within(rows[1]).getByText(/150,00/)).toHaveClass('text-danger');
+    expect(within(rows[1]).getByText(/150,00/)).toHaveClass('text-danger-text');
     // Ningún importe es la suma de las dos monedas (5.000.100 / 1.349.850 / …).
     expect(screen.queryByText(/5\.000\.100|1\.349\.850|3\.500\.250/)).not.toBeInTheDocument();
     expect(screen.getByText(/nunca se suman ni se convierten/)).toBeInTheDocument();

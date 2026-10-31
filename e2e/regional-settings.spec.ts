@@ -6,7 +6,8 @@ import { fillRegistrationLocation, loginAs, waitForHydratedForm } from './suppor
 import { E2E_DATABASE_URL, markLocationUnreviewed } from './support/db';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { registrationTokenFor } from './support/mail';
-import { chooseCountry, E2E_BROWSER_LOCALE, E2E_REGION, type RegionalSettings } from './support/regional';
+import { chooseCountry, E2E_BROWSER_LOCALE, E2E_REGION, pickRegional, type RegionalSettings } from './support/regional';
+import { countryName } from '../src/lib/locations/countries';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -130,8 +131,8 @@ for (const viewport of VIEWPORTS) {
       await dialog.getByLabel('Nombre', { exact: true }).fill('Sede Tokio');
       await chooseCountry(dialog, TOKYO.country);
       await dialog.getByLabel('Moneda', { exact: true }).selectOption(TOKYO.currency);
-      await dialog.getByLabel('Zona horaria', { exact: true }).fill(TOKYO.timeZone);
-      await dialog.getByLabel('Formato regional', { exact: true }).fill(TOKYO.locale);
+      await pickRegional(dialog.getByLabel('Zona horaria', { exact: true }), TOKYO.timeZone);
+      await pickRegional(dialog.getByLabel('Formato regional', { exact: true }), TOKYO.locale);
       await dialog.getByRole('radio', { name: '24 h', exact: true }).check();
       if (viewport.width === 390) await expectDialogInsideViewport(page, dialog);
       await shoot(page, 'e2e-sede-tokio-modal', viewport.width);
@@ -188,26 +189,23 @@ for (const viewport of VIEWPORTS) {
 
       await page.goto(`${origin}/register`);
       await waitForHydratedForm(page);
-      // Lo que importa a P1 (DX-312): el navegador de la suite no declara región,
-      // así que el país empieza vacío y sin marca; la moneda, vacía.
+      // R1: el navegador de la suite no declara región (DX-312 P1), pero su zona
+      // (`timezoneId`) es de un solo país: se propone ese país, su moneda, su
+      // zona y su formato, cada uno marcado y con nombre legible (nunca el id
+      // IANA ni la etiqueta BCP 47 crudos).
       expect(await page.evaluate(() => [...navigator.languages])).toEqual([E2E_BROWSER_LOCALE]);
       const country = page.getByRole('combobox', { name: 'País', exact: true });
       const format = page.getByLabel('Formato regional', { exact: true });
-      await expect(country).toHaveValue('');
-      await expect(country).not.toHaveAccessibleDescription(/Sugerido por tu navegador/);
-      await expect(page.getByLabel('Moneda', { exact: true })).toHaveValue('');
-      // Zona y formato, sugeridos y marcados. El formato es el locale con el que
-      // formatea este navegador (Chromium con `es` → `es-ES`), en la forma
-      // idioma-región, nunca el de la sede.
-      const browserFormat = await page.evaluate(() => new Intl.DateTimeFormat().resolvedOptions().locale);
-      await expect(page.getByLabel('Zona horaria', { exact: true })).toHaveValue(E2E_REGION.timeZone);
-      await expect(page.getByLabel('Zona horaria', { exact: true })).toHaveAccessibleDescription(
-        /^Sugerido por tu navegador\./,
-      );
-      await expect(format).toHaveValue(browserFormat);
-      await expect(format).toHaveValue(/^es(-[A-Z]{2})?$/);
+      const zone = page.getByLabel('Zona horaria', { exact: true });
+      await expect(country).toHaveValue(countryName(E2E_REGION.country)!);
+      await expect(country).toHaveAccessibleDescription(/^Sugerido por tu navegador\./);
+      await expect(page.getByLabel('Moneda', { exact: true })).toHaveValue(E2E_REGION.currency, { timeout: 10_000 });
+      await expect(page.getByLabel('Moneda', { exact: true })).toHaveAccessibleDescription(/^Sugerido por el país\./);
+      await expect(zone).toHaveValue(/\(UTC[−+]\d+(:\d\d)?\) /);
+      await expect(zone).not.toHaveValue(E2E_REGION.timeZone);
+      await expect(zone).toHaveAccessibleDescription(/^Sugerido por tu navegador\./);
+      await expect(format).toHaveValue(/ — /);
       await expect(format).not.toHaveValue(E2E_REGION.locale);
-      await expect(format).toHaveAccessibleDescription(/^Sugerido por tu navegador\./);
       // Sin sesión, la lista de monedas viene de GET /public/currencies (ISO completa).
       await expect(page.getByLabel('Moneda', { exact: true }).locator('option[value="JPY"]')).toHaveCount(1, {
         timeout: 10_000,
@@ -297,7 +295,7 @@ for (const viewport of VIEWPORTS) {
       const [reviewed] = await listLocations(request, session);
       expect(reviewed.regionalSettingsReviewedAt).not.toBeNull();
       await page.goto(`${session.origin}/dashboard`);
-      await expect(page.getByRole('heading', { name: 'Ingresos del período' })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('heading', { name: 'Resultados del período' })).toBeVisible({ timeout: 15_000 });
       await expect(notice).toHaveCount(0);
     });
   });

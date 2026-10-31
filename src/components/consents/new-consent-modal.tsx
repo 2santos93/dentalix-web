@@ -30,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Callout } from '@/components/ui/callout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -446,9 +447,9 @@ export function NewConsentModal({
                 </div>
               </fieldset>
               {minor && signerType === 'PATIENT' && responsibles ? (
-                <p role="status" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+                <Callout tone="warning" role="status">
                   {copy.minorWarning(responsibles.majorityAge)}
-                </p>
+                </Callout>
               ) : null}
               {signerType === 'GUARDIAN' && prefill && guardianName === prefill.name ? (
                 <p className="text-xs text-muted">{copy.prefilled(prefill.name)}</p>

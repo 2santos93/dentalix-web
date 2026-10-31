@@ -26,6 +26,9 @@ import { SectionError } from '@/components/errors/section-error';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { fieldClass } from '@/lib/ui/field-class';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
+import { SectionHeader } from '@/components/ui/section-header';
+import { DATA_SECTION_CLASS, DATA_SECTION_HEADER_CLASS } from './data-section';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 const copy = {
@@ -133,12 +136,7 @@ function changesOf(data: PatientCommunication, draft: Draft): UpdatePatientCommu
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <dt className="text-sm text-muted">{label}</dt>
-      <dd className="min-w-0 break-words text-ink">{children}</dd>
-    </div>
-  );
+  return <DescriptionItem label={label}>{children}</DescriptionItem>;
 }
 
 interface PatientCommunicationSectionProps {
@@ -262,7 +260,7 @@ export function PatientCommunicationSection({
     const optOut = data.reminderOptOut;
     return (
       <>
-        <dl className="grid gap-4 sm:grid-cols-2">
+        <DescriptionList columns={3}>
           <Row label={copy.channel}>
             <span className="font-medium">{CHANNEL_LABELS[data.contactChannel]}</span>
             {data.contactChannel === data.clinicDefaultChannel ? (
@@ -325,7 +323,7 @@ export function PatientCommunicationSection({
               <span>{copy.remindersActive}</span>
             )}
           </Row>
-        </dl>
+        </DescriptionList>
         {canEdit ? <PatientOptOutWarnings token={token} patientId={patientId} /> : null}
         {data.contactChannel === 'WHATSAPP' && !optOut ? (
           <p className="flex items-start gap-2 text-sm text-muted">
@@ -343,18 +341,21 @@ export function PatientCommunicationSection({
   return (
     <section
       aria-labelledby={`${ids}-heading`}
-      className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:p-6"
+      className={DATA_SECTION_CLASS}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id={`${ids}-heading`} className="text-base font-semibold text-ink">
-          {copy.heading}
-        </h3>
-        {canEdit && data ? (
-          <Button type="button" variant="secondary" size="sm" onClick={openEditor}>
-            {copy.edit}
-          </Button>
-        ) : null}
-      </div>
+      <SectionHeader
+        as="h2"
+        titleId={`${ids}-heading`}
+        title={copy.heading}
+        className={DATA_SECTION_HEADER_CLASS}
+        actions={
+          canEdit && data ? (
+            <Button type="button" variant="secondary" size="sm" onClick={openEditor}>
+              {copy.edit}
+            </Button>
+          ) : undefined
+        }
+      />
       {content()}
 
       {draft ? (

@@ -9,6 +9,7 @@ import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zo
 import { wallDay } from '@/lib/time/wall-clock';
 import { notifyError } from '@/components/errors/notify';
 import { buttonVariants } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { cn } from '@/lib/utils';
 import { EXCHANGE_RATE_SETTINGS_HREF } from './without-rate-notice';
 
@@ -67,28 +68,25 @@ export function RateBacklogNotice({ token, className }: { token: string; classNa
     backlog.oldestSince && fmt && timeZone ? fmt.civilDate(wallDay(backlog.oldestSince, timeZone)) : null;
 
   return (
-    <section
+    // `region` con nombre (no `status`): advertencia permanente, no algo que
+    // acaba de pasar. Tinte de aviso del sistema (Callout), texto en tinta.
+    <Callout
+      tone="warning"
+      role="region"
       aria-label={copy.label}
-      className={cn(
-        'flex flex-col gap-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-ink sm:flex-row sm:items-start sm:justify-between sm:gap-6',
-        className,
-      )}
+      icon={TriangleAlert}
+      title={<span className="tabular-nums">{copy.title(backlog.count, since)}</span>}
+      className={className}
+      action={
+        <Link
+          href={EXCHANGE_RATE_SETTINGS_HREF}
+          className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-h-11 shrink-0 self-start sm:min-h-9')}
+        >
+          {copy.link}
+        </Link>
+      }
     >
-      <div className="flex min-w-0 items-start gap-2.5">
-        {/* `mt-0.5` alinea el icono con la primera línea, no con la caja. */}
-        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-        <div className="flex min-w-0 flex-col gap-1 text-sm">
-          <p className="font-medium tabular-nums">{copy.title(backlog.count, since)}</p>
-          {/* `ink`, no `muted`: sobre el tinte de advertencia `muted` no llega a 4,5:1. */}
-          <p className="max-w-[68ch]">{copy.body}</p>
-        </div>
-      </div>
-      <Link
-        href={EXCHANGE_RATE_SETTINGS_HREF}
-        className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-h-11 shrink-0 self-start sm:min-h-9')}
-      >
-        {copy.link}
-      </Link>
-    </section>
+      <p className="max-w-[68ch]">{copy.body}</p>
+    </Callout>
   );
 }

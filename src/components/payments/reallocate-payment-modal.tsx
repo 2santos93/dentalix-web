@@ -7,7 +7,7 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { InlineError } from '@/components/errors/inline-error';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,7 +16,6 @@ import { formatCivilDate } from '@/lib/format/date';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { allocationCopy } from '@/lib/payments/allocation-copy';
 import type { PaymentAllocations, ReplacePaymentAllocationsInput } from '@/lib/payments/payment-allocations-api';
-import { ITEM_STATUS_BADGE_VARIANT, ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { PLAN_STATUS_LABELS, isPlanBillable } from '@/lib/treatment-plans/plan-status';
 import { cn } from '@/lib/utils';
 import { usePaymentAllocations } from './use-payment-allocations';
@@ -340,9 +339,7 @@ export function ReallocatePaymentModal({
                                   {item.toothNumber || <span className="text-muted">{allocationCopy.noTooth}</span>}
                                 </TableCell>
                                 <TableCell data-label={allocationCopy.colStatus}>
-                                  <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
-                                    {ITEM_STATUS_LABELS[item.status]}
-                                  </Badge>
+                                  <StatusBadge kind="treatmentPlanItem" status={item.status} />
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums" data-label={copy.colFree}>
                                   {formatCurrency(item.free, data.planCurrency)}
@@ -367,7 +364,7 @@ export function ReallocatePaymentModal({
                                       {fieldError}
                                     </InlineError>
                                   ) : overItem ? (
-                                    <p id={overItemId} className="text-xs text-danger tabular-nums">
+                                    <p id={overItemId} className="text-xs text-danger-text tabular-nums">
                                       {copy.overItem(formatCurrency(item.free, data.planCurrency))}
                                     </p>
                                   ) : null}
@@ -381,7 +378,7 @@ export function ReallocatePaymentModal({
 
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div
-                        className={cn('flex flex-col gap-0.5 text-sm tabular-nums', over ? 'text-danger' : 'text-ink')}
+                        className={cn('flex flex-col gap-0.5 text-sm tabular-nums', over ? 'text-danger-text' : 'text-ink')}
                       >
                         <p className="font-medium">
                           {copy.footer(

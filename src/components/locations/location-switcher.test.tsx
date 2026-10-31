@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { LocationSwitcher } from './location-switcher';
+import { LocationSwitcher, shortSedeLabel } from './location-switcher';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import {
@@ -205,5 +205,41 @@ describe('LocationSwitcher', () => {
       await waitFor(() => expect(getActiveLocationId()).toBe('l1'));
       expect(select.value).toBe('l1');
     });
+  });
+
+  describe('variante del teléfono (K2)', () => {
+    it('rótulo corto visible y nombre accesible «Sede: …» con el nombre entero', async () => {
+      mockedList.mockResolvedValue([sede('l1', 'Sede principal'), sede('l2', 'Sede norte')]);
+      setActiveLocationId('l2');
+
+      render(<LocationSwitcher variant="phone" />);
+
+      const select = await screen.findByRole('combobox', { name: 'Sede: Sede norte' });
+      expect(select).toBeInTheDocument();
+      // El mismo desplegable: todas las opciones siguen ahí.
+      expect(screen.getByRole('option', { name: 'Sede principal' })).toBeInTheDocument();
+      expect(screen.getByText('norte')).toBeInTheDocument();
+    });
+
+    it('en la vista conjunta dice «Todas»', async () => {
+      mockedList.mockResolvedValue([sede('l1', 'Sede principal'), sede('l2', 'Sede norte')]);
+
+      render(<LocationSwitcher variant="phone" />);
+
+      expect(await screen.findByRole('combobox', { name: 'Sede: Todas las sedes' })).toBeInTheDocument();
+      expect(screen.getByText('Todas')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('shortSedeLabel', () => {
+  it.each([
+    ['Sede Norte', 'Norte'],
+    ['Sede principal', 'principal'],
+    ['Clínica Centro Médico', 'Centro'],
+    ['Altamira', 'Altamira'],
+    ['Sede', 'Sede'],
+  ])('%s → %s', (name, short) => {
+    expect(shortSedeLabel(name)).toBe(short);
   });
 });

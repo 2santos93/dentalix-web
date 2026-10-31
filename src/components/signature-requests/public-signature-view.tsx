@@ -24,6 +24,7 @@ import { SignaturePad } from '@/components/shared/signature-pad';
 import { FormField } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
@@ -531,23 +532,18 @@ function DocumentStep({
         </p>
       </article>
 
-      <div className="flex flex-col gap-1">
-        <label className="flex min-h-11 items-start gap-3 text-sm text-ink">
-          <input
-            type="checkbox"
-            className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-            checked={read}
-            aria-invalid={errors.read ? true : undefined}
-            aria-describedby={errors.read ? `${ids}-read` : undefined}
-            onChange={(e) => {
-              setRead(e.target.checked);
-              if (e.target.checked) setErrors((x) => ({ ...x, read: undefined }));
-            }}
-          />
-          <span>{doc.budget ? copy.budgetReadCheck : copy.readCheck}</span>
-        </label>
-        {errors.read ? <InlineError id={`${ids}-read`}>{errors.read}</InlineError> : null}
-      </div>
+      {/* Checkbox v2: fila entera clicable (44 px en táctil); el error va debajo
+          con `aria-invalid` + `aria-describedby`, como un FormField. */}
+      <Checkbox
+        id={`${ids}-read`}
+        label={doc.budget ? copy.budgetReadCheck : copy.readCheck}
+        checked={read}
+        error={errors.read}
+        onChange={(e) => {
+          setRead(e.target.checked);
+          if (e.target.checked) setErrors((x) => ({ ...x, read: undefined }));
+        }}
+      />
 
       {doc.signerDocumentRequired ? (
         <FormField
@@ -608,7 +604,7 @@ function DoneStep({
       >
         <span
           aria-hidden
-          className="mb-1 flex size-10 items-center justify-center rounded-full bg-success/10 text-success"
+          className="mb-1 flex size-10 items-center justify-center rounded-full bg-success-subtle text-success-text"
         >
           <CheckCircle2 className="size-5" />
         </span>

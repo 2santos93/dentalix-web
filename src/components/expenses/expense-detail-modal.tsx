@@ -38,6 +38,7 @@ import { ExpenseVoidModal } from './expense-void-modal';
 import type { ExpenseCategoriesState } from './use-expense-categories';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { DescriptionItem } from '@/components/ui/description-list';
 
 export const expenseDetailCopy = {
   title: 'Gasto',
@@ -111,10 +112,9 @@ interface ExpenseDetailModalProps {
 
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn('flex min-w-0 flex-col gap-0.5', className)}>
-      <dt className="t-label text-muted">{label}</dt>
-      <dd className="text-sm text-ink [overflow-wrap:anywhere]">{children}</dd>
-    </div>
+    <DescriptionItem label={label} className={className} valueClassName="[overflow-wrap:anywhere]">
+      {children}
+    </DescriptionItem>
   );
 }
 
@@ -418,7 +418,7 @@ export function ExpenseDetailModal({
           </DialogDescription>
         </DialogHeader>
         {actionError ? <InlineError variant="summary">{actionError}</InlineError> : null}
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
         {body}

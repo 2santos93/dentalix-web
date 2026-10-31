@@ -116,7 +116,7 @@ export function CashSettingsForm({ token, allowed }: CashSettingsFormProps) {
         />
       </div>
       {saveError ? <InlineError>{saveError}</InlineError> : null}
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
       <Button type="submit" loading={saving} className="self-start max-sm:h-11 max-sm:w-full">

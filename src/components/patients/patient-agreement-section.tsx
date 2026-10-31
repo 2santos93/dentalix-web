@@ -22,6 +22,8 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AgreementDialog } from './agreement-dialog';
+import { SectionHeader } from '@/components/ui/section-header';
+import { DATA_SECTION_CLASS, DATA_SECTION_HEADER_CLASS } from './data-section';
 import type { ClinicRole } from '@/lib/me/me-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
@@ -158,7 +160,7 @@ export function PatientAgreementSection({
     return (
       <div
         data-testid="agreement-current"
-        className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
+        className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
       >
         <div className="flex min-w-0 flex-col gap-1">
           <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -230,26 +232,14 @@ export function PatientAgreementSection({
         {current ? (
           assigned(current)
         ) : (
+          // La acción «Asignar convenio» va en la cabecera del bloque, como
+          // «Añadir cobertura» y «Añadir responsable»: un solo patrón por pantalla.
           <EmptyState
             role="status"
+            size="inline"
             icon={<Handshake aria-hidden />}
             title={copy.emptyTitle}
             description={copy.emptyHint}
-            action={
-              <Button
-                ref={assignButtonRef}
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  clearNotice();
-                  setDialogOpen(true);
-                }}
-                className="max-sm:h-11"
-              >
-                {copy.assign}
-              </Button>
-            }
           />
         )}
         {history.length > 0 ? (
@@ -257,9 +247,9 @@ export function PatientAgreementSection({
             <summary className="cursor-pointer py-2 font-medium text-ink max-sm:min-h-11">
               {copy.history(history.length)}
             </summary>
-            <ul className="mt-2 flex flex-col divide-y divide-hairline rounded-xl border border-border">
+            <ul className="mt-2 flex flex-col divide-y divide-border-subtle">
               {history.map((h) => (
-                <li key={h.id} className="flex min-w-0 flex-col gap-0.5 px-4 py-3">
+                <li key={h.id} className="flex min-w-0 flex-col gap-0.5 py-3">
                   <span className="break-words font-medium text-ink">
                     {h.agreement.name} · {h.agreement.payer.name}
                   </span>
@@ -286,12 +276,31 @@ export function PatientAgreementSection({
     <section
       aria-labelledby={`${ids}-heading`}
       data-testid="patient-agreement"
-      className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:p-6"
+      className={DATA_SECTION_CLASS}
     >
-      <h3 id={`${ids}-heading`} className="text-base font-semibold text-ink">
-        {copy.heading}
-      </h3>
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <SectionHeader
+        as="h2"
+        titleId={`${ids}-heading`}
+        title={copy.heading}
+        className={DATA_SECTION_HEADER_CLASS}
+        actions={
+          data && !loadError && !current ? (
+            <Button
+              ref={assignButtonRef}
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                clearNotice();
+                setDialogOpen(true);
+              }}
+            >
+              {copy.assign}
+            </Button>
+          ) : undefined
+        }
+      />
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
       {content()}

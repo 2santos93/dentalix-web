@@ -13,6 +13,8 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export const paymentMethodFormCopy = {
   createTitle: 'Nuevo medio de pago',
@@ -33,9 +35,6 @@ export const paymentMethodFormCopy = {
   genericError: 'No pudimos guardar el medio de pago. Intenta de nuevo.',
 };
 const copy = paymentMethodFormCopy;
-
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-60';
 
 interface PaymentMethodFormModalProps {
   open: boolean;
@@ -130,40 +129,27 @@ export function PaymentMethodFormModal({
         hint={kindLocked ? copy.kindLockedHint : undefined}
         hintId={kindLocked ? 'pm-kind-hint' : undefined}
       >
-        <select
+        <NativeSelect
           id="pm-kind"
           value={kind}
           disabled={kindLocked}
           aria-describedby={kindLocked ? 'pm-kind-hint' : undefined}
           onChange={(e) => setKind(e.target.value as PaymentMethodKind)}
-          className={fieldClass}
         >
           {PAYMENT_METHOD_KIND_OPTIONS.map((k) => (
             <option key={k} value={k}>
               {PAYMENT_METHOD_KIND_LABELS[k]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
-      <div className="flex flex-col gap-1">
-        <label
-          htmlFor="pm-requires-reference"
-          className="flex min-h-11 items-center gap-2 text-sm text-ink md:min-h-0"
-        >
-          <input
-            id="pm-requires-reference"
-            type="checkbox"
-            checked={requiresReference}
-            onChange={(e) => setRequiresReference(e.target.checked)}
-            aria-describedby="pm-requires-reference-hint"
-            className="size-4 accent-primary"
-          />
-          {copy.requiresReference}
-        </label>
-        <p id="pm-requires-reference-hint" className="text-xs text-muted">
-          {copy.requiresReferenceHint}
-        </p>
-      </div>
+      <Checkbox
+        id="pm-requires-reference"
+        checked={requiresReference}
+        onChange={(e) => setRequiresReference(e.target.checked)}
+        label={copy.requiresReference}
+        description={copy.requiresReferenceHint}
+      />
     </FormModal>
   );
 }

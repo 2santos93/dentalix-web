@@ -155,7 +155,7 @@ export function ExpenseCategoriesModal({ open, onOpenChange, token, categories }
           <DialogDescription>{expenseCategoriesCopy.description}</DialogDescription>
         </DialogHeader>
         {error ? <InlineError variant="summary">{error}</InlineError> : null}
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
         {list}

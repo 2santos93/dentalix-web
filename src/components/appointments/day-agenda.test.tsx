@@ -118,7 +118,7 @@ describe('DayAgenda', () => {
     expect(screen.queryAllByText('pat-1')).toHaveLength(0);
   });
 
-  it('gives each of the five statuses a distinct semantic-token color class (no raw color utilities)', () => {
+  it('gives each status its tone from the shared map (no accent, no raw color utilities), with a distinct icon/label', () => {
     const statuses: Array<Appointment['status']> = [
       'SCHEDULED',
       'CONFIRMED',
@@ -141,9 +141,11 @@ describe('DayAgenda', () => {
     const badges = within(table).getAllByTestId('appointment-status-badge');
     expect(badges).toHaveLength(5);
     const classSets = badges.map((b) => b.className);
-    // Every badge class string must be unique across the 5 statuses.
-    expect(new Set(classSets).size).toBe(5);
+    // Agendada y cancelada comparten el tono neutro; las distinguen la etiqueta y el icono.
+    expect(new Set(badges.map((b) => b.textContent)).size).toBe(5);
+    expect(new Set(classSets).size).toBe(4);
     for (const cls of classSets) {
+      expect(cls).not.toMatch(/primary/);
       expect(cls).not.toMatch(/-(red|blue|green|amber|yellow|violet|emerald|orange)-\d/);
       expect(cls).not.toMatch(/#[0-9a-fA-F]{3,8}/);
     }
@@ -154,14 +156,14 @@ describe('DayAgenda', () => {
     // The component declares itself a query container...
     expect(container.querySelector('.\\@container')).toBeInTheDocument();
 
-    // ...and both variants key off that container (`@2xl` = 42rem), not the
+    // ...and both variants key off that container (`@[40rem]`), not the
     // viewport: keyed on `md:` the wide table also rendered inside the ~384px
     // day drawer, where it got clipped.
     const table = container.querySelector('table');
     expect(table).toBeInTheDocument();
-    expect(table?.closest('.hidden.\\@2xl\\:block')).toBeInTheDocument();
+    expect(table?.closest('.hidden.\\@\\[40rem\\]\\:block')).toBeInTheDocument();
 
-    const narrowWrapper = container.querySelector('.\\@2xl\\:hidden');
+    const narrowWrapper = container.querySelector('.\\@\\[40rem\\]\\:hidden');
     expect(narrowWrapper).toBeInTheDocument();
   });
 

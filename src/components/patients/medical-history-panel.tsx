@@ -8,12 +8,14 @@ import { Button } from '@/components/ui/button';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
+import { ConditionSummaryText } from '@/components/clinical/condition-summary';
 import {
   getMedicalHistory,
   saveMedicalHistory,
   type MedicalHistory,
 } from '@/lib/patients/clinical-api';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
+import { DescriptionItem } from '@/components/ui/description-list';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -35,7 +37,7 @@ const copy = {
   unknownAuthor: 'autor no registrado',
   fieldFallback: '—',
   allergiesCountLabel: 'Alergias registradas',
-  conditionsCountLabel: 'Condiciones registradas',
+  conditionsLabel: 'Condiciones',
   medicationsCountLabel: 'Medicamentos registrados',
   familyHistoryLabel: 'Antecedentes familiares',
   notesLabel: 'Notas',
@@ -250,26 +252,13 @@ export function MedicalHistoryPanel({ token, patientId, onSaved }: MedicalHistor
               <p className="t-label text-muted">{copy.appendOnlyNote}</p>
             </div>
             <dl className="grid gap-3 sm:grid-cols-2">
-              <div className="min-w-0">
-                <dt className="text-sm font-medium text-muted">{copy.allergiesCountLabel}</dt>
-                <dd className="text-ink">{latest.allergies.length}</dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-sm font-medium text-muted">{copy.conditionsCountLabel}</dt>
-                <dd className="text-ink">{latest.conditions.length}</dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-sm font-medium text-muted">{copy.medicationsCountLabel}</dt>
-                <dd className="text-ink">{latest.medications.length}</dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-sm font-medium text-muted">{copy.familyHistoryLabel}</dt>
-                <dd className="break-words text-ink">{latest.familyHistory ?? copy.fieldFallback}</dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-sm font-medium text-muted">{copy.notesLabel}</dt>
-                <dd className="break-words text-ink">{latest.notes ?? copy.fieldFallback}</dd>
-              </div>
+              <DescriptionItem label={copy.allergiesCountLabel} numeric>{latest.allergies.length}</DescriptionItem>
+              <DescriptionItem label={copy.conditionsLabel}>
+                <ConditionSummaryText conditions={latest.conditions} />
+              </DescriptionItem>
+              <DescriptionItem label={copy.medicationsCountLabel} numeric>{latest.medications.length}</DescriptionItem>
+              <DescriptionItem label={copy.familyHistoryLabel}>{latest.familyHistory ?? copy.fieldFallback}</DescriptionItem>
+              <DescriptionItem label={copy.notesLabel}>{latest.notes ?? copy.fieldFallback}</DescriptionItem>
             </dl>
           </div>
         ) : (

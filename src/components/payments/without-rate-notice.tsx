@@ -6,6 +6,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageExchangeRates, type ExchangeRateSettings } from '@/lib/exchange/exchange-settings-api';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { Callout } from '@/components/ui/callout';
 import { useExchangeRateSettings, type ExchangeRateSettingsState } from './use-exchange-rate-settings';
 
 export type PaymentWithoutRate = components['schemas']['PaymentWithoutRateDto'];
@@ -72,28 +73,21 @@ export function WithoutRateNotice({ token, payments }: { token: string; payments
   const settings = useExchangeRateSettings(token, canRegister && payments.length > 0);
   if (payments.length === 0) return null;
   return (
-    <div
-      role="status"
-      className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-ink"
-    >
-      <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{withoutRateCopy.title(payments.length)}</p>
-        <p>{withoutRateCopy.body}</p>
-        <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
-          {payments.map((p) => (
-            <li key={p.paymentId}>
-              {withoutRateCopy.item(sedeMoney(p.amount, p.currency, fmt), sedeCivilDate(p.paidOn, fmt))}
-            </li>
-          ))}
-        </ul>
-        {canRegister ? (
-          <AdminAction settings={settings} payments={payments} />
-        ) : (
-          <p className="mt-1">{withoutRateCopy.otherRoles}</p>
-        )}
-      </div>
-    </div>
+    <Callout tone="warning" role="status" icon={TriangleAlert} title={withoutRateCopy.title(payments.length)}>
+      <p>{withoutRateCopy.body}</p>
+      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
+        {payments.map((p) => (
+          <li key={p.paymentId}>
+            {withoutRateCopy.item(sedeMoney(p.amount, p.currency, fmt), sedeCivilDate(p.paidOn, fmt))}
+          </li>
+        ))}
+      </ul>
+      {canRegister ? (
+        <AdminAction settings={settings} payments={payments} />
+      ) : (
+        <p className="mt-1">{withoutRateCopy.otherRoles}</p>
+      )}
+    </Callout>
   );
 }
 

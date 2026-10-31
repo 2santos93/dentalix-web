@@ -17,12 +17,11 @@ import {
   type TreatmentPlanStatus,
 } from '@/lib/treatment-plans/treatment-plans-api';
 import {
-  PLAN_STATUS_BADGE_VARIANT,
   PLAN_STATUS_LABELS,
   isPlanBillable,
   isPlanClosed,
 } from '@/lib/treatment-plans/plan-status';
-import { ITEM_STATUS_BADGE_VARIANT, ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
+import { ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import {
   getPlanBalance,
   listPayments,
@@ -46,6 +45,7 @@ import { formatCurrency } from '@/lib/format/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -60,10 +60,6 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { Disclosure } from '@/components/shared/disclosure';
 import { CatalogPicker } from '@/components/odontogram/catalog-picker';
 import { ToothPicker } from '@/components/odontogram/tooth-picker';
-import {
-  PAYMENT_METHOD_BADGE_VARIANT,
-  PAYMENT_METHOD_LABELS,
-} from '@/lib/payments/payment-method';
 import {
   PaymentMethodSelect,
   PaymentReferenceFields,
@@ -884,9 +880,7 @@ function ItemsTable({
                   {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} fmt={fmt} /> : null}
                   <TableCell>
                     <div className="flex flex-col items-start gap-1.5">
-                      <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
-                        {ITEM_STATUS_LABELS[item.status]}
-                      </Badge>
+                      <StatusBadge kind="treatmentPlanItem" status={item.status} />
                       <span className="inline-flex items-center gap-2">
                         <select
                           aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
@@ -966,9 +960,7 @@ function ItemsTable({
                   {selection && !isFee(item) ? <ItemSelectBox item={item} selection={selection} /> : null}
                   {item.toothNumber ? `${copy.colTooth} ${item.toothNumber}` : copy.noTooth}
                 </span>
-                <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
-                  {ITEM_STATUS_LABELS[item.status]}
-                </Badge>
+                <StatusBadge kind="treatmentPlanItem" status={item.status} />
               </div>
               <p className="mt-2 text-ink">{procedureName(item, catalogById)}</p>
               <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
@@ -1112,9 +1104,7 @@ function PaymentsList({
                   </TableCell>
                   <TableCell>
                     {payment.method ? (
-                      <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
-                        {PAYMENT_METHOD_LABELS[payment.method]}
-                      </Badge>
+                      <StatusBadge kind="paymentMethod" status={payment.method} />
                     ) : (
                       <span className="text-muted">{copy.paymentMethodFallback}</span>
                     )}
@@ -1169,9 +1159,7 @@ function PaymentsList({
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-ink tabular-nums">{sedeCivilDate(payment.paidOn, fmt)}</span>
                 {payment.method ? (
-                  <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
-                    {PAYMENT_METHOD_LABELS[payment.method]}
-                  </Badge>
+                  <StatusBadge kind="paymentMethod" status={payment.method} />
                 ) : (
                   <span className="text-sm text-muted">{copy.paymentMethodFallback}</span>
                 )}
@@ -2346,9 +2334,7 @@ export function TreatmentPlansTab({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <CardTitle>{copy.detailHeading}</CardTitle>
               {selectedPlan && (
-                <Badge variant={PLAN_STATUS_BADGE_VARIANT[selectedPlan.status]}>
-                  {PLAN_STATUS_LABELS[selectedPlan.status]}
-                </Badge>
+                <StatusBadge kind="treatmentPlan" status={selectedPlan.status} />
               )}
               {selectedPlan?.optionLabel ? (
                 <span className="text-sm font-medium text-muted">{selectedPlan.optionLabel}</span>
@@ -2509,7 +2495,7 @@ export function TreatmentPlansTab({
                     {copy.acceptedDiscountNotice}
                   </p>
                 ) : null}
-                <p role="status" className={bulkNotice ? 'text-sm text-success' : 'sr-only'}>
+                <p role="status" className={bulkNotice ? 'text-sm text-success-text' : 'sr-only'}>
                   {bulkNotice}
                 </p>
 
@@ -2871,7 +2857,7 @@ export function TreatmentPlansTab({
                         ) : null}
                         {/* SEC-041: aviso, no bloqueo; la API decide con el
                             tope del rol. */}
-                        <p id="tp-price-below-catalog" role="status" className="text-xs text-warning">
+                        <p id="tp-price-below-catalog" role="status" className="text-xs text-warning-text">
                           {addBelowCatalog && addEffective && addCatalogPrice !== null && selectedPlan ? (
                             <>
                               <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>

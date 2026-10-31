@@ -1,3 +1,4 @@
+import { statusLabels } from '@/lib/status/tones';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { formatCurrency } from '@/lib/format/currency';
 import type {
@@ -25,17 +26,8 @@ export const OUTCOME_LABELS: Record<CollectionOutcome, string> = {
   WRONG_NUMBER: 'Número erróneo',
 };
 
-export const PROMISE_STATUS_LABELS: Record<PaymentPromiseStatus, string> = {
-  OPEN: 'Abierto',
-  KEPT: 'Cumplido',
-  BROKEN: 'Incumplido',
-};
-
-export const PROMISE_STATUS_BADGE: Record<PaymentPromiseStatus, 'muted' | 'success' | 'danger'> = {
-  OPEN: 'muted',
-  KEPT: 'success',
-  BROKEN: 'danger',
-};
+/** Etiquetas; tono y etiqueta en `@/lib/status/tones` (`StatusBadge kind="paymentPromise"`). */
+export const PROMISE_STATUS_LABELS: Record<PaymentPromiseStatus, string> = statusLabels('paymentPromise');
 
 export const CHANNEL_ORDER: readonly CollectionChannel[] = ['CALL', 'WHATSAPP_LINK', 'EMAIL', 'IN_PERSON'];
 export const OUTCOME_ORDER: readonly CollectionOutcome[] = [

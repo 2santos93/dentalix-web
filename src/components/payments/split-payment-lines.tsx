@@ -3,6 +3,8 @@ import * as React from 'react';
 import { useState } from 'react';
 import { Loader2, Trash2, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Checkbox } from '@/components/ui/checkbox';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { CurrencySelect } from '@/components/shared/currency-select';
@@ -307,33 +309,32 @@ export function SplitPaymentSummary({
       </dl>
       {total.status === 'unavailable' ? (
         <p className="flex items-start gap-2">
-          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
           <span>{copy.ratesUnavailable}</span>
         </p>
       ) : null}
       {pending === 'error' ? <p className="text-muted">{copy.balanceUnavailable}</p> : null}
       {exceeds || confirmError ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
-          {exceeds ? <p>{copy.exceeds(money(excess))}</p> : null}
-          <label htmlFor="rp-confirm-credit" className="flex min-h-11 items-center gap-2 sm:min-h-0">
-            <input
+        // `group`, no `status`: lleva una casilla y su error ya se anuncia solo.
+        <Callout tone="warning" role="group">
+          <div className="flex flex-col gap-2">
+            {exceeds ? <p>{copy.exceeds(money(excess))}</p> : null}
+            <Checkbox
               id="rp-confirm-credit"
-              type="checkbox"
               checked={confirmCredit}
               disabled={disabled}
               onChange={(e) => onConfirmCredit(e.target.checked)}
               aria-invalid={confirmError ? true : undefined}
               aria-describedby={confirmError ? 'rp-confirm-credit-error' : undefined}
-              className="size-4 accent-primary"
+              label={copy.confirmCredit}
             />
-            {copy.confirmCredit}
-          </label>
-          {confirmError ? (
-            <InlineError id="rp-confirm-credit-error" className="text-xs">
-              {confirmError}
-            </InlineError>
-          ) : null}
-        </div>
+            {confirmError ? (
+              <InlineError id="rp-confirm-credit-error" className="text-xs">
+                {confirmError}
+              </InlineError>
+            ) : null}
+          </div>
+        </Callout>
       ) : null}
     </section>
   );

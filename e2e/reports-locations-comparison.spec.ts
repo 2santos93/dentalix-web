@@ -5,6 +5,7 @@ import { test, expect, type Page } from './support/test';
 import { loginAs } from './support/auth';
 import { tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { openSection } from './support/nav';
 
 /**
  * e2e (DX-014): «Reportes» → «Comparar sedes» contra la clínica DEMO sembrada
@@ -46,7 +47,7 @@ const origin = tenantOrigin(DEMO_SUBDOMAIN);
 
 async function openReports(page: Page): Promise<void> {
   await loginAs(page, origin, ADMIN_EMAIL, DEMO_PASSWORD);
-  await page.getByRole('link', { name: 'Reportes' }).filter({ visible: true }).first().click();
+  await openSection(page, 'Reportes');
   await expect(page).toHaveURL(`${origin}/reportes`);
   await expect(page.getByRole('heading', { level: 1, name: 'Reportes' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Comparar sedes', selected: true })).toBeVisible();

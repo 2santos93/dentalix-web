@@ -139,7 +139,7 @@ function EpinephrineMeter({ epinephrine }: { epinephrine: EpinephrineSummary }) 
       {message ? (
         <p
           role={level === 'EXCEEDED' ? 'alert' : 'status'}
-          className={cn('flex items-start gap-2 text-sm', level === 'EXCEEDED' ? 'text-danger' : 'text-warning')}
+          className={cn('flex items-start gap-2 text-sm', level === 'EXCEEDED' ? 'text-danger-text' : 'text-warning-text')}
         >
           {level === 'EXCEEDED' ? (
             <ShieldAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
@@ -288,7 +288,7 @@ export function AnesthesiaDoseBar({ summary, window, clock = null, id }: Anesthe
           role={level === 'EXCEEDED' ? 'alert' : 'status'}
           className={cn(
             'flex items-start gap-2 text-sm',
-            tone === 'danger' ? 'text-danger' : tone === 'warning' ? 'text-warning' : 'text-ink',
+            tone === 'danger' ? 'text-danger-text' : tone === 'warning' ? 'text-warning-text' : 'text-ink',
           )}
         >
           <Icon aria-hidden className="mt-0.5 size-4 shrink-0" />
@@ -329,7 +329,7 @@ export function AnesthesiaDoseBarError({
   return (
     <BarFrame id={id}>
       <BarTitle id={id} />
-      <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger">
+      <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger-text">
         <ShieldAlert aria-hidden className="size-4 shrink-0" />
         <span className="min-w-0 flex-1 break-words">{message}</span>
         <Button type="button" variant="secondary" size="sm" onClick={onRetry}>

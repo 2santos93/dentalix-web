@@ -1,0 +1,391 @@
+{
+  "src/components/agreements/agreement-form-modal.tsx": {
+    "checkbox": 1,
+    "select": 6
+  },
+  "src/components/anamnesis/anamnesis-review-view.tsx": {
+    "textarea": 1
+  },
+  "src/components/anamnesis/public-anamnesis-view.tsx": {
+    "checkbox": 2,
+    "radio": 1,
+    "select": 1
+  },
+  "src/components/appointments/agenda-view.tsx": {
+    "checkbox": 2
+  },
+  "src/components/appointments/appointment-form.tsx": {
+    "checkbox": 1,
+    "select": 2
+  },
+  "src/components/appointments/appointment-status-select.tsx": {
+    "select": 1
+  },
+  "src/components/appointments/cancel-appointment-dialog.tsx": {
+    "radio": 1,
+    "select": 1,
+    "textarea": 2
+  },
+  "src/components/appointments/completed-exit-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/appointments/day-agenda.tsx": {
+    "select": 1
+  },
+  "src/components/appointments/fee-reason-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/appointments/move-appointment-dialog.tsx": {
+    "select": 1
+  },
+  "src/components/appointments/openings-dialog.tsx": {
+    "select": 1
+  },
+  "src/components/appointments/public-confirmation-view.tsx": {
+    "checkbox": 1
+  },
+  "src/components/appointments/schedule-block-dialog.tsx": {
+    "checkbox": 2,
+    "radio": 1,
+    "select": 4
+  },
+  "src/components/appointments/waitlist-panel.tsx": {
+    "textarea": 1
+  },
+  "src/components/appointments/week-agenda.tsx": {
+    "select": 1
+  },
+  "src/components/audit/audit-log-view.tsx": {
+    "select": 3
+  },
+  "src/components/auth/break-glass-step.tsx": {
+    "textarea": 2
+  },
+  "src/components/cash-sessions/cash-adjustment-modal.tsx": {
+    "select": 2,
+    "textarea": 1
+  },
+  "src/components/cash-sessions/cash-shifts-view.tsx": {
+    "select": 1
+  },
+  "src/components/cash-sessions/close-cash-session-modal.tsx": {
+    "textarea": 2
+  },
+  "src/components/cash-sessions/open-cash-session-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/cash-sessions/reopen-cash-session-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/catalog/catalog-view.tsx": {
+    "checkbox": 1,
+    "select": 3
+  },
+  "src/components/clinical-notes/new-evolution-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/clinical-notes/note-template-form-modal.tsx": {
+    "select": 2,
+    "textarea": 2
+  },
+  "src/components/clinical-notes/template-picker.tsx": {
+    "radio": 2
+  },
+  "src/components/clinical/allergy-list-editor.tsx": {
+    "checkbox": 1,
+    "select": 2
+  },
+  "src/components/clinical/anamnesis-settings.tsx": {
+    "select": 1
+  },
+  "src/components/clinical/clinical-history-fields.tsx": {
+    "checkbox": 1,
+    "textarea": 1
+  },
+  "src/components/clinical/habits-editor.tsx": {
+    "checkbox": 7
+  },
+  "src/components/clinical/medication-list-editor.tsx": {
+    "checkbox": 1
+  },
+  "src/components/collections/collection-note-dialog.tsx": {
+    "select": 2,
+    "textarea": 1
+  },
+  "src/components/collections/payment-promise-dialog.tsx": {
+    "select": 1
+  },
+  "src/components/consents/consent-template-form-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/consents/new-consent-modal.tsx": {
+    "radio": 1,
+    "select": 2
+  },
+  "src/components/data-consents/consent-scope-fields.tsx": {
+    "checkbox": 1
+  },
+  "src/components/data-consents/privacy-policy-settings.tsx": {
+    "textarea": 1
+  },
+  "src/components/discounts/discount-reason-fields.tsx": {
+    "select": 1,
+    "textarea": 1
+  },
+  "src/components/discounts/discount-report-view.tsx": {
+    "select": 1
+  },
+  "src/components/exchange/exchange-rate-settings.tsx": {
+    "radio": 1
+  },
+  "src/components/expenses/expense-fields.tsx": {
+    "select": 1,
+    "textarea": 1
+  },
+  "src/components/expenses/expense-form-modal.tsx": {
+    "checkbox": 1,
+    "select": 1
+  },
+  "src/components/expenses/expense-payment-fields.tsx": {
+    "checkbox": 1,
+    "select": 1
+  },
+  "src/components/expenses/expense-void-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/expenses/expenses-summary-view.tsx": {
+    "select": 1
+  },
+  "src/components/expenses/expenses-view.tsx": {
+    "checkbox": 1,
+    "select": 3
+  },
+  "src/components/implants/register-implant-modal.tsx": {
+    "select": 1,
+    "textarea": 1
+  },
+  "src/components/implants/void-implant-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/inventory/inventory-item-detail.tsx": {
+    "select": 1
+  },
+  "src/components/inventory/inventory-view.tsx": {
+    "checkbox": 1,
+    "select": 2,
+    "textarea": 1
+  },
+  "src/components/location-calendar/holiday-form-modal.tsx": {
+    "checkbox": 1
+  },
+  "src/components/location-calendar/location-calendar-view.tsx": {
+    "select": 1
+  },
+  "src/components/location-calendar/working-weekdays-form.tsx": {
+    "checkbox": 1
+  },
+  "src/components/locations/business-hours-form.tsx": {
+    "checkbox": 1
+  },
+  "src/components/locations/cancellation-policy-settings.tsx": {
+    "checkbox": 1,
+    "textarea": 1
+  },
+  "src/components/locations/location-health-registration-settings.tsx": {
+    "checkbox": 1
+  },
+  "src/components/locations/location-switcher.tsx": {
+    "select": 2
+  },
+  "src/components/locations/provider-overrides.tsx": {
+    "checkbox": 1,
+    "select": 1
+  },
+  "src/components/locations/provider-schedules-panel.tsx": {
+    "select": 1
+  },
+  "src/components/locations/provider-week-editor.tsx": {
+    "checkbox": 1
+  },
+  "src/components/locations/regional-settings-fields.tsx": {
+    "radio": 1
+  },
+  "src/components/locations/strict-schedule-setting.tsx": {
+    "checkbox": 1
+  },
+  "src/components/odontogram/catalog-picker.tsx": {
+    "radio": 1,
+    "select": 1
+  },
+  "src/components/odontogram/dentition-dialog.tsx": {
+    "checkbox": 1,
+    "radio": 1,
+    "select": 1
+  },
+  "src/components/odontogram/tooth-record-panel.tsx": {
+    "checkbox": 2,
+    "select": 2,
+    "textarea": 1
+  },
+  "src/components/odontogram/void-record-dialog.tsx": {
+    "textarea": 1
+  },
+  "src/components/patient-documents/patient-documents-tab.tsx": {
+    "select": 3
+  },
+  "src/components/patient-documents/void-document-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/patient-imports/balances-step.tsx": {
+    "checkbox": 1
+  },
+  "src/components/patient-imports/column-mapping-fields.tsx": {
+    "select": 3
+  },
+  "src/components/patient-imports/patient-import-wizard.tsx": {
+    "radio": 1
+  },
+  "src/components/patients/agreement-dialog.tsx": {
+    "select": 3,
+    "textarea": 1
+  },
+  "src/components/patients/clinical-entry-addendum-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/patients/coverage-dialog.tsx": {
+    "checkbox": 1,
+    "select": 1,
+    "textarea": 1
+  },
+  "src/components/patients/majority-age-settings.tsx": {
+    "select": 1
+  },
+  "src/components/patients/patient-communication-section.tsx": {
+    "checkbox": 2,
+    "select": 2
+  },
+  "src/components/patients/patient-create-wizard.tsx": {
+    "select": 2,
+    "textarea": 1
+  },
+  "src/components/patients/patient-edit-modal.tsx": {
+    "select": 3
+  },
+  "src/components/patients/patient-form.tsx": {
+    "select": 3,
+    "textarea": 1
+  },
+  "src/components/patients/responsible-party-dialog.tsx": {
+    "checkbox": 1,
+    "radio": 1,
+    "select": 2
+  },
+  "src/components/payers/payer-form-modal.tsx": {
+    "select": 2
+  },
+  "src/components/payment-plans/create-payment-plan-modal.tsx": {
+    "select": 2
+  },
+  "src/components/payments/billable-plan-field.tsx": {
+    "select": 3
+  },
+  "src/components/payments/cash-register-view.tsx": {
+    "select": 1
+  },
+  "src/components/payments/reallocate-payment-modal.tsx": {
+    "radio": 1
+  },
+  "src/components/payments/record-payment-modal.tsx": {
+    "select": 2
+  },
+  "src/components/payments/void-payment-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/perio/new-perio-exam-modal.tsx": {
+    "checkbox": 1,
+    "textarea": 1
+  },
+  "src/components/perio/perio-chart.tsx": {
+    "select": 2
+  },
+  "src/components/perio/perio-exam-editor.tsx": {
+    "checkbox": 1
+  },
+  "src/components/postop/appointment-postop-panel.tsx": {
+    "radio": 1,
+    "select": 1
+  },
+  "src/components/postop/catalog-multi-picker.tsx": {
+    "checkbox": 1
+  },
+  "src/components/postop/postop-template-form-modal.tsx": {
+    "checkbox": 1,
+    "textarea": 1
+  },
+  "src/components/prescriptions/new-prescription-modal.tsx": {
+    "select": 1,
+    "textarea": 1
+  },
+  "src/components/prescriptions/prescription-safety-panel.tsx": {
+    "checkbox": 1,
+    "textarea": 1
+  },
+  "src/components/prescriptions/prescription-template-form-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/prescriptions/void-prescription-modal.tsx": {
+    "textarea": 1
+  },
+  "src/components/price-lists/price-list-form-modal.tsx": {
+    "select": 2
+  },
+  "src/components/receivables/receivables-view.tsx": {
+    "select": 4
+  },
+  "src/components/reminders/reminder-settings-modal.tsx": {
+    "checkbox": 1
+  },
+  "src/components/reports/locations-comparison-view.tsx": {
+    "select": 3
+  },
+  "src/components/shared/currency-select.tsx": {
+    "select": 1
+  },
+  "src/components/shared/list-toolbar.tsx": {
+    "select": 1
+  },
+  "src/components/staff/staff-locations-card.tsx": {
+    "checkbox": 2
+  },
+  "src/components/staff/staff-member-profile.tsx": {
+    "select": 2
+  },
+  "src/components/staff/staff-view.tsx": {
+    "select": 3
+  },
+  "src/components/treatment-plans/mark-done-modal.tsx": {
+    "select": 2
+  },
+  "src/components/treatment-plans/pending-follow-up-view.tsx": {
+    "select": 1
+  },
+  "src/components/treatment-plans/plan-visits-board.tsx": {
+    "select": 1
+  },
+  "src/components/treatment-plans/reject-plan-modal.tsx": {
+    "radio": 1,
+    "textarea": 1
+  },
+  "src/components/treatment-plans/schedule-visit-dialog.tsx": {
+    "checkbox": 1,
+    "select": 1
+  },
+  "src/components/treatment-plans/treatment-plans-tab.tsx": {
+    "checkbox": 2,
+    "select": 6,
+    "textarea": 2
+  },
+  "src/components/treatment-plans/unscheduled-plans-view.tsx": {
+    "select": 2
+  }
+}

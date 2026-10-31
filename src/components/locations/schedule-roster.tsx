@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 const copy = {
   prevWeek: 'Semana anterior',
@@ -163,15 +164,15 @@ export function ScheduleRoster({ token, today }: ScheduleRosterProps) {
                             <span
                               className={cn(
                                 'text-xs tabular-nums',
-                                e.kind === 'override-off' ? 'text-warning' : 'text-ink',
+                                e.kind === 'override-off' ? 'text-warning-text' : 'text-ink',
                               )}
                             >
                               {e.text}
                             </span>
                             {e.override ? (
-                              <span className="mt-0.5 rounded-full bg-warning/10 px-1.5 text-[0.6875rem] font-medium text-warning">
+                              <Badge variant="warning" className="mt-0.5">
                                 {copy.override}
-                              </span>
+                              </Badge>
                             ) : null}
                           </span>
                         ),

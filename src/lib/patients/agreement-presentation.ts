@@ -1,3 +1,4 @@
+import { statusPresentation, type StatusTone } from '@/lib/status/tones';
 import { formatCivilDate } from '@/lib/format/date';
 import type { PatientAgreement } from '@/lib/patients/patient-agreement-api';
 import type { AgreementSummary } from '@/lib/patients/patients-api';
@@ -16,21 +17,13 @@ export function agreementValidityLabel(a: AgreementValidity): string {
 
 export interface AgreementBadge {
   label: string;
-  variant: 'success' | 'warning' | 'secondary' | 'muted';
+  variant: StatusTone;
 }
 
-/** Insignia de estado del convenio asignado. */
+/** Insignia de estado del convenio asignado: tono y etiqueta del mapa único (`@/lib/status/tones`). */
 export function agreementStatusBadge(a: Pick<PatientAgreement, 'status'>): AgreementBadge {
-  switch (a.status) {
-    case 'EXPIRED':
-      return { label: 'Vencido', variant: 'warning' };
-    case 'NOT_STARTED':
-      return { label: 'Pendiente de inicio', variant: 'secondary' };
-    case 'INACTIVE':
-      return { label: 'Convenio inactivo', variant: 'muted' };
-    default:
-      return { label: 'Vigente', variant: 'success' };
-  }
+  const { tone, label } = statusPresentation('agreement', a.status);
+  return { label, variant: tone };
 }
 
 /** Texto del chip de la cabecera: «Convenio: X» solo con un convenio vigente; vacío si no. */

@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
-import {
-  AlertTriangle,
+import { 
   CalendarCheck,
   CalendarX,
   Clock,
@@ -9,7 +8,7 @@ import {
   LinkIcon,
   MapPin,
   Phone,
-  UserRound,
+  UserRound
 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -25,9 +24,11 @@ import { formatCurrency } from '@/lib/format/currency';
 import { formatDateLabel, formatTime } from '@/lib/format/date';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { ClinicBrand } from '@/components/brand/clinic-brand';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -156,17 +157,14 @@ function CancellationPolicyNotice({
         {fee ? <p className="tabular-nums">{copy.policyFee(fee)}</p> : null}
       </div>
       {isLate ? (
-        <div
+        <Callout
+          tone="warning"
           role="note"
           data-testid="public-late-cancellation"
-          className="flex items-start gap-2 rounded-lg bg-warning/15 px-3 py-2 text-sm text-ink"
+          title={copy.lateTitle(policy.noticeHours)}
         >
-          <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <p className="font-semibold">{copy.lateTitle(policy.noticeHours)}</p>
-            <p>{copy.lateMessage}</p>
-          </div>
-        </div>
+          {copy.lateMessage}
+        </Callout>
       ) : null}
     </section>
   );
@@ -274,20 +272,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
 
         {state.kind === 'ready' && (
           <>
-            <header className="flex items-center gap-3">
-              {clinic?.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element -- logo de la clínica en un host arbitrario; next/image exigiría whitelistear cada dominio
-                <img
-                  src={clinic.logoUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="size-10 shrink-0 rounded-lg object-contain"
-                />
-              )}
-              <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight text-ink">
-                {clinic?.name ?? copy.fallbackClinic}
-              </h1>
-            </header>
+            <ClinicBrand variant="public" name={clinic?.name ?? copy.fallbackClinic} logoUrl={clinic?.logoUrl} />
 
             {state.data.status === 'EXPIRED' && (
               <Notice icon={CalendarX} title={copy.expiredTitle} message={copy.expiredMessage} />

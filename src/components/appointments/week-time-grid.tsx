@@ -95,7 +95,11 @@ export function WeekTimeGrid({
   selectedProviderId = null,
 }: WeekTimeGridProps) {
   const labelOf = (block: ScheduleBlockLike) =>
-    blockLabel(block, block.providerId ? providerName?.(block.providerId) : undefined);
+    blockLabel(
+      block,
+      block.providerId ? providerName?.(block.providerId) : undefined,
+      (m) => sedeMinute(m, clock.fmt),
+    );
   const dates = weekDates(weekStart);
   const timeZone = clock.timeZone;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -140,7 +144,7 @@ export function WeekTimeGrid({
                 <span
                   key={block.id}
                   data-testid="week-block-chip"
-                  className="mt-1 block truncate rounded border border-dashed border-warning/50 bg-warning/10 px-1 text-[0.6875rem] font-medium text-ink"
+                  className="mt-1 block truncate rounded border border-dashed border-warning/50 bg-warning-subtle px-1 text-[0.6875rem] font-medium text-ink"
                 >
                   {labelOf(block)}
                 </span>
@@ -194,7 +198,7 @@ export function WeekTimeGrid({
                     data-testid="week-schedule-block"
                     role="note"
                     aria-label={copy.blockAria(labelOf(block))}
-                    className="pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 bg-warning/10 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]"
+                    className="pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 bg-warning-subtle [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]"
                     style={{
                       top: (band.start / SLOT_MINUTES) * ROW_HEIGHT_PX,
                       height: ((band.end - band.start) / SLOT_MINUTES) * ROW_HEIGHT_PX,
@@ -237,13 +241,15 @@ export function WeekTimeGrid({
                     onClick={() => onSelectAppointment(a)}
                     className={`h-full w-full overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${hasMedicalAlert ? 'pr-6' : ''} ${STATUS_BADGE_CLASSES[a.status]}`}
                   >
-                    <span className="flex items-center gap-1 font-medium">
+                    {/* El paciente primero (lo que se busca en una columna de
+                        ~100 px); debajo, estado (icono + etiqueta del tono) y hora. */}
+                    <span className="block truncate font-semibold">{patient}</span>
+                    <span className="flex min-w-0 items-center gap-1">
                       <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />
-                      <span className="truncate">{range}</span>
+                      <span className="truncate tabular-nums">{range}</span>
                       <ConfirmationBadge appointment={a} compact />
                       <CoverageMarker coverage={a.coverage} srText />
                     </span>
-                    <span className="block truncate">{patient}</span>
                     {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
                     <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
                     {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}

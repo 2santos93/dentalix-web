@@ -216,7 +216,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
         ref={noticeRef}
         role="status"
         tabIndex={-1}
-        className={cn(notice ? 'text-sm text-success' : 'sr-only', 'focus:outline-none')}
+        className={cn(notice ? 'text-sm text-success-text' : 'sr-only', 'focus:outline-none')}
       >
         {notice}
       </p>

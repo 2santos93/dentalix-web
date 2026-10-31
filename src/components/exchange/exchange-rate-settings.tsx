@@ -17,7 +17,6 @@ import {
 } from '@/lib/exchange/exchange-settings-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { getRateBacklogDay, type RateBacklogDay } from '@/lib/payments/rate-backlog-api';
-import { cn } from '@/lib/utils';
 import { sedeCivilDate } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
@@ -28,6 +27,7 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { SectionError } from '@/components/errors/section-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -277,7 +277,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
             {copy.change}
           </Button>
         </div>
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
       </section>
@@ -860,23 +860,14 @@ function BackupRateNotice({
   }
 
   return (
-    <div
+    <Callout
+      tone={unused ? 'warning' : 'neutral'}
       role="status"
       data-testid="manual-rate-backup-notice"
-      className={cn(
-        'flex items-start gap-2 rounded-lg border px-3 py-2 text-sm text-ink',
-        unused ? 'border-warning/30 bg-warning/10' : 'border-border bg-surface-2',
-      )}
+      icon={unused ? TriangleAlert : Info}
+      title={copy.heading(sinceLabel)}
     >
-      {unused ? (
-        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-      ) : (
-        <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
-      )}
-      <div className="min-w-0">
-        <p className="font-medium">{copy.heading(sinceLabel)}</p>
-        <p>{text}</p>
-      </div>
-    </div>
+      <p>{text}</p>
+    </Callout>
   );
 }

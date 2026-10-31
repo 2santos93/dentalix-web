@@ -15,7 +15,6 @@ import { InlineError } from '@/components/errors/inline-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 export const locationPhoneCopy = {
   heading: 'Teléfono de la sede',
@@ -180,7 +179,8 @@ function LocationPhoneRow({
             }}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${hintId} ${errorId}` : hintId}
-            className={cn('tabular-nums', error && 'border-danger')}
+            // El borde de error lo pinta `Input` con `aria-invalid`.
+            className="tabular-nums"
           />
           <Button
             type="submit"
@@ -200,7 +200,7 @@ function LocationPhoneRow({
             {error}
           </InlineError>
         ) : saved ? (
-          <p role="status" className="flex items-center gap-1 text-xs text-success">
+          <p role="status" className="flex items-center gap-1 text-xs text-success-text">
             <CheckCircle2 aria-hidden className="size-3.5" />
             {copy.saved}
           </p>

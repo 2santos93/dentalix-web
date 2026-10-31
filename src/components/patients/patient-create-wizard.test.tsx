@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientCreateWizard } from './patient-create-wizard';
 import { createPatient, type Patient } from '@/lib/patients/patients-api';
@@ -203,6 +203,24 @@ describe('PatientCreateWizard', () => {
         ['TAX_ID', 'Identificación fiscal'],
         ['OTHER', 'Otro documento'],
       ]);
+    });
+
+    it('la fecha de nacimiento se escribe dd/mm/aaaa (locale de la sede), muestra la edad y se envía como día civil', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue(CREATED);
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+      await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
+      await user.type(screen.getByLabelText(/apellido/i), 'García');
+      await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
+      const birth = screen.getByRole('group', { name: 'Fecha de nacimiento' });
+      const segments = within(birth).getAllByRole('spinbutton');
+      expect(segments.map((segment) => segment.getAttribute('data-type'))).toEqual(['day', 'month', 'year']);
+      await user.click(segments[0]);
+      await user.keyboard('05041990');
+      expect(screen.getByTestId('date-field-age')).toHaveTextContent(/^\d+ años$/);
+      await goToStep(user, 1);
+      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ birthDate: '1990-04-05T00:00:00.000Z' });
     });
 
     it('creates with the chosen generic type', async () => {

@@ -20,6 +20,7 @@
 
 import { UI_LANGUAGE } from '@/lib/format/regional-format';
 import { civilNoonUtc } from '@/lib/time/civil-day';
+import { zoneCityName } from '@/lib/format/zone';
 
 const FALLBACK = '—';
 
@@ -174,18 +175,13 @@ export function zonedDayStart(day: string, timeZone: string): string | null {
   return new Date(instant).toISOString();
 }
 
-const ZONE_CITY_LABELS: Record<string, string> = {
-  'America/Bogota': 'Bogotá',
-  'Europe/Madrid': 'Madrid',
-};
-
 /**
  * Nombre legible de una zona IANA para rótulos (DX-097): «Bogotá» para
- * `America/Bogota`; en otras, la ciudad del id (`America/Mexico_City` →
- * «Mexico City»).
+ * `America/Bogota`, «Caracas» para `America/Caracas`; en las demás, la ciudad
+ * del id (`zoneCityName`).
  */
 export function zoneCityLabel(timeZone: string): string {
-  return ZONE_CITY_LABELS[timeZone] ?? (timeZone.split('/').pop() ?? timeZone).replace(/_/g, ' ');
+  return zoneCityName(timeZone);
 }
 
 /**

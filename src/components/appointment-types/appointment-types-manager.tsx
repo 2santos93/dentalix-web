@@ -35,6 +35,7 @@ const copy = {
   minutes: (n: number) => `${n} min`,
   active: 'Activo',
   inactive: 'Inactivo',
+  urgent: 'Urgencia',
   edit: 'Editar',
   deactivate: 'Desactivar',
   activate: 'Activar',
@@ -206,9 +207,12 @@ export function AppointmentTypesManager({ token, allowed }: AppointmentTypesMana
 
   function status(type: AppointmentType) {
     return (
-      <Badge variant={type.active ? 'success' : 'muted'}>
-        {type.active ? copy.active : copy.inactive}
-      </Badge>
+      <span className="inline-flex flex-wrap gap-1">
+        <Badge variant={type.active ? 'success' : 'muted'}>
+          {type.active ? copy.active : copy.inactive}
+        </Badge>
+        {type.isUrgent ? <Badge variant="danger">{copy.urgent}</Badge> : null}
+      </span>
     );
   }
 

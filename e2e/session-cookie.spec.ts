@@ -88,7 +88,7 @@ test('recargar mantiene la sesión; cerrar sesión borra la cookie y el refresh 
   const second = await page.context().newPage();
   await second.goto(`${origin}/agenda`);
   await expect(second).toHaveURL(`${origin}/agenda`);
-  await expect(second.getByRole('heading', { name: 'Agenda' })).toBeVisible({ timeout: 15_000 });
+  await expect(second.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible({ timeout: 15_000 });
   await second.close();
 
   const before = (await sessionCookie(page, origin))?.value;

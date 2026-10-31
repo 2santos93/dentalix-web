@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Callout } from '@/components/ui/callout';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InlineError } from '@/components/errors/inline-error';
@@ -153,16 +154,16 @@ export function SendBudgetModal({
                   <p className="text-xs text-muted">{copy.expiry}</p>
                 </>
               ) : (
-                <p role="alert" className="text-warning">
+                <p role="alert" className="text-warning-text">
                   {copy.sendBlocked(recipient?.reason ?? '')}
                 </p>
               )}
             </section>
             <p className="text-sm text-muted">{copy.changes}</p>
             {replacesPending ? (
-              <p role="status" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+              <Callout tone="warning" role="status" className="py-2">
                 {copy.resend}
-              </p>
+              </Callout>
             ) : null}
             <DialogFooter>
               <DialogClose asChild>

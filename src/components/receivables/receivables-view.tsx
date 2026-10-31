@@ -360,7 +360,7 @@ export function ReceivablesView({ token }: { token: string }) {
           </div>
         ) : null}
 
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
 

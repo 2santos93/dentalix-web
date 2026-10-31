@@ -288,7 +288,7 @@ export function HolidayImportModal({
         <div ref={noteRef} tabIndex={-1} className="flex flex-col gap-1 rounded-lg focus:outline-none">
           {state.changed ? <p className="text-sm font-medium text-ink">{copy.changed}</p> : null}
           {state.followUp ? (
-            <p className="flex items-start gap-1.5 text-sm text-danger">
+            <p className="flex items-start gap-1.5 text-sm text-danger-text">
               <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
               <span>{copy.followUpError}</span>
             </p>

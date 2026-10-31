@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { openSection } from './support/nav';
 
 /**
  * e2e (DX-009): registro de auditoría para ADMIN.
@@ -9,7 +10,7 @@ import { API_URL, tenantOrigin } from './support/urls';
  * Registra una clínica (su dueño es ADMIN) y, por la API real, crea un
  * paciente, guarda su historia clínica (con una alergia), registra una
  * evolución y lee la historia: cada paso deja un evento. Después, en la web:
- *   - «Auditoría» en el menú principal abre /settings/auditoria con la tabla
+ *   - «Auditoría» en Ajustes («Datos y seguridad») abre /settings/auditoria con la tabla
  *     (fecha y hora, usuario, rol, acción, recurso, paciente, origen) y sin
  *     contenido clínico;
  *   - filtrar por acción deja solo esa acción; un período sin eventos muestra
@@ -95,9 +96,16 @@ for (const viewport of VIEWPORTS) {
     });
     const patientId = await seed(page.request, origin, await accessTokenOf(page), lastName, tag);
 
-    // Entrada del menú principal (sidebar o topbar en móvil), solo para ADMIN.
+    // Desde M2 vive en Ajustes → «Datos y seguridad» (la barra lateral ya no
+    // cabía a 900 px con «Pendiente de cerrar»), solo para ADMIN.
     await page.goto(`${origin}/patients`);
-    await page.getByRole('link', { name: 'Auditoría' }).locator('visible=true').first().click();
+    await openSection(page, 'Ajustes');
+    await expect(page).toHaveURL(/\/settings$/);
+    await page
+      .getByRole('main')
+      .getByRole('list', { name: 'Datos y seguridad' })
+      .getByRole('link', { name: /^Auditoría/ })
+      .click();
     await expect(page).toHaveURL(/\/settings\/auditoria$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Auditoría' })).toBeVisible();
 

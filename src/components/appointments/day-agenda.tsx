@@ -29,6 +29,7 @@ const copy = {
   colTime: 'Hora',
   colPatient: 'Paciente',
   colReason: 'Motivo',
+  colProvider: 'Profesional',
   colStatus: 'Estado',
   reasonFallback: '—',
   heading: 'Agenda del día',
@@ -82,6 +83,12 @@ interface DayAgendaProps {
   renderActions?: (appointment: Appointment) => ReactNode;
   /** DX-273: rol del usuario; de «Completada» solo salen ADMIN y DENTIST. */
   role?: ClinicRole | null;
+  /**
+   * Nombre del profesional de la cita. Con él, la lista dice quién atiende
+   * (columna en la tabla, línea en la tarjeta): en el teléfono la lista es la
+   * agenda de toda la clínica.
+   */
+  providerName?: (providerId: string) => string | undefined;
 }
 
 function DetailButton({
@@ -167,6 +174,7 @@ export function DayAgenda({
   onSelectAppointment,
   renderActions,
   role,
+  providerName,
 }: DayAgendaProps) {
   if (loading) {
     return (
@@ -211,12 +219,14 @@ export function DayAgenda({
     // CONTAINER query, not a viewport one: this list renders both full-width on
     // the page (Día view) and inside the agenda's ~384px day drawer. Keyed on
     // the viewport (`md:`), the wide 4-column table used to render — and get
-    // clipped — inside the narrow drawer. `@container` + `@2xl` (42rem) switches
-    // on the space this component actually has.
+    // clipped — inside the narrow drawer. `@container` + `@[40rem]` switches
+    // on the space this component actually has. 40rem, not 42: at 1280 px the
+    // agenda's side column (En clínica · Pendientes) leaves the Día ~664 px,
+    // and a desktop must keep the table (the drawer is ~384 px either way).
     <div className="@container">
-      {/* Wide table — `hidden @2xl:block` on the WRAPPER (not the <table>, which
+      {/* Wide table — `hidden @[40rem]:block` on the WRAPPER (not the <table>, which
           would drop table-layout and collapse the columns to content width). */}
-      <div className="hidden overflow-hidden rounded-xl border border-border bg-surface @2xl:block">
+      <div className="hidden overflow-hidden rounded-xl border border-border bg-surface @[40rem]:block">
         <table aria-label={copy.heading} className="w-full border-collapse text-sm text-ink">
           <caption className="sr-only">{copy.heading}</caption>
           <thead>
@@ -227,6 +237,11 @@ export function DayAgenda({
               <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
                 {copy.colPatient}
               </th>
+              {providerName && (
+                <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+                  {copy.colProvider}
+                </th>
+              )}
               <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
                 {copy.colReason}
               </th>
@@ -266,6 +281,11 @@ export function DayAgenda({
                     </span>
                     {renderActions?.(appointment)}
                   </td>
+                  {providerName && (
+                    <td className="px-4 py-3 text-ink">
+                      {providerName(appointment.providerId) ?? copy.reasonFallback}
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-muted">
                     {appointment.reason ?? copy.reasonFallback}
                   </td>
@@ -299,7 +319,7 @@ export function DayAgenda({
       </div>
 
       {/* Narrow-container cards (mobile, and the day drawer on any screen) */}
-      <ul aria-label={copy.heading} className="flex flex-col gap-3 @2xl:hidden">
+      <ul aria-label={copy.heading} className="flex flex-col gap-3 @[40rem]:hidden">
         {sorted.map((appointment) => {
           const timeRange = sedeTimeRange(appointment.start, appointment.end, clock.of(appointment.locationId));
           const updating = updatingId === appointment.id;
@@ -324,7 +344,11 @@ export function DayAgenda({
                   size="default"
                 />
               </p>
-              <p className="mt-0.5 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
+              <p className="mt-0.5 text-muted">
+                {[providerName?.(appointment.providerId), appointment.reason ?? copy.reasonFallback]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
               <ConfirmationBadge appointment={appointment} className="mt-2" />
               <OverdueChip balance={appointment.balance} className="mt-2" />
               <CoverageChip coverage={appointment.coverage} compact className="mt-2" />

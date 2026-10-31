@@ -1,20 +1,9 @@
-import type { BadgeProps } from '@/components/ui/badge';
+import { statusLabels } from '@/lib/status/tones';
 import type { InstallmentStatus } from './payment-plan-api';
 
 /**
- * Presentación de los estados de cuota, en UN sitio: el calendario del plan de
- * pagos y el estado de cuenta los pintan igual.
+ * Etiquetas de los estados de cuota. Tono y etiqueta viven en UN sitio,
+ * `@/lib/status/tones` (`StatusBadge kind="installment"`): el calendario del
+ * plan de pagos y el estado de cuenta los pintan igual.
  */
-export const INSTALLMENT_STATUS_LABELS: Record<InstallmentStatus, string> = {
-  PAID: 'Pagada',
-  PARTIAL: 'Parcial',
-  PENDING: 'Pendiente',
-  OVERDUE: 'Vencida',
-};
-
-export const INSTALLMENT_STATUS_BADGE_VARIANT: Record<InstallmentStatus, BadgeProps['variant']> = {
-  PAID: 'success',
-  PARTIAL: 'warning',
-  PENDING: 'muted',
-  OVERDUE: 'danger',
-};
+export const INSTALLMENT_STATUS_LABELS: Record<InstallmentStatus, string> = statusLabels('installment');

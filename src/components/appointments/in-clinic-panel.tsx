@@ -1,10 +1,9 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { MapPin, Armchair, CalendarClock } from 'lucide-react';
+import { MapPin, Armchair, CalendarClock, Maximize2 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
-  PUNCTUALITY_CLASSES,
   inClinicCount,
   inClinicFormat,
   punctualityLabel,
@@ -34,6 +33,8 @@ import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { cn } from '@/lib/utils';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { SectionHeader } from '@/components/ui/section-header';
 
 export const inClinicCopy = {
   title: 'En clínica',
@@ -41,8 +42,9 @@ export const inClinicCopy = {
   loading: 'Cargando quién está en la clínica…',
   emptyTitle: 'Nadie en espera',
   emptyHint: 'Cuando recepción marque «Llegó» en la agenda, el paciente aparece aquí.',
-  noLocationTitle: 'Elige una sede',
-  noLocationHint: 'El panel es por sede: elige una arriba para ver quién está en la clínica.',
+  noLocation: 'Elige una sede para ver quién está en la clínica.',
+  chooseLocation: 'Elegir sede',
+  openFullscreen: 'Abrir a pantalla completa',
   retry: 'Reintentar',
   refreshHint: 'Se actualiza solo cada 45 segundos.',
   count: (n: number) => (n === 1 ? '1 paciente' : `${n} pacientes`),
@@ -80,6 +82,29 @@ interface InClinicPanelProps {
   className?: string;
   /** false en su propia ruta, donde el título lo pone la cabecera de la página. */
   showTitle?: boolean;
+  /**
+   * «Elegir sede» del estado sin sede. Por defecto enfoca (y abre) el selector
+   * de sede visible de la app; quien pinta el panel en una hoja la cierra antes.
+   */
+  onChooseLocation?: () => void;
+}
+
+/**
+ * Enfoca el selector de sede global visible (barra lateral en escritorio,
+ * barra superior en el teléfono) y abre su lista si el navegador lo permite.
+ * El panel no duplica el selector: hay UNA sede activa en la app.
+ */
+export function focusLocationSwitcher(): void {
+  const select = Array.from(document.querySelectorAll<HTMLSelectElement>('select[aria-label="Sede"]')).find(
+    (el) => el.getClientRects().length > 0,
+  );
+  if (!select) return;
+  select.focus();
+  try {
+    select.showPicker?.();
+  } catch {
+    // Sin gesto del usuario o sin soporte: queda enfocado, que basta.
+  }
 }
 
 /**
@@ -95,6 +120,7 @@ export function InClinicPanel({
   runner,
   className,
   showTitle = true,
+  onChooseLocation = focusLocationSwitcher,
 }: InClinicPanelProps) {
   const titleId = useId();
   const { view, loading, error, localeMissing, noLocation, reload } = state;
@@ -163,34 +189,49 @@ export function InClinicPanel({
   }, [view, runner.pendingId, focusCompletion]);
 
 
+  // Región viva siempre montada: el sondeo anuncia el total cuando cambia.
+  const countNode = (
+    <span data-testid="in-clinic-count" aria-live="polite" aria-atomic="true" className="t-caption tabular-nums">
+      {total !== null ? inClinicCopy.count(total) : ''}
+    </span>
+  );
+  const heading = mine ? inClinicCopy.titleMine : inClinicCopy.title;
+  const header = showTitle ? (
+    <SectionHeader
+      titleId={titleId}
+      title={heading}
+      description={countNode}
+      className="flex-row items-start justify-between gap-2 sm:flex-row"
+      actions={
+        <Button asChild variant="ghost" size="icon-sm" className="-mr-1 text-muted hover:text-ink">
+          <Link href="/agenda/en-clinica" aria-label={inClinicCopy.openFullscreen} title={inClinicCopy.openFullscreen}>
+            <Maximize2 aria-hidden />
+          </Link>
+        </Button>
+      }
+    />
+  ) : (
+    <header className="flex items-baseline justify-between gap-2">
+      <h2 id={titleId} className="sr-only">
+        {heading}
+      </h2>
+      {countNode}
+    </header>
+  );
+
   return (
     <section ref={panelRef} aria-labelledby={titleId} className={cn('flex min-w-0 flex-col gap-3', className)}>
-      <header className="flex items-baseline justify-between gap-2">
-        <h2
-          id={titleId}
-          className={cn('text-lg font-semibold tracking-tight text-ink', !showTitle && 'sr-only')}
-        >
-          {mine ? inClinicCopy.titleMine : inClinicCopy.title}
-        </h2>
-        {/* Región viva siempre montada: el sondeo anuncia el total cuando cambia. */}
-        <span
-          data-testid="in-clinic-count"
-          aria-live="polite"
-          aria-atomic="true"
-          className="text-xs font-medium tabular-nums text-muted"
-        >
-          {total !== null ? inClinicCopy.count(total) : ''}
-        </span>
-      </header>
-
-      {showTitle && <Link href="/agenda/en-clinica" className="w-fit text-sm font-medium text-primary underline underline-offset-4">Abrir a pantalla completa</Link>}
+      {header}
 
       {noLocation ? (
-        <EmptyState
-          icon={<MapPin aria-hidden />}
-          title={inClinicCopy.noLocationTitle}
-          description={inClinicCopy.noLocationHint}
-        />
+        // Una línea y la acción, no una caja vacía: el panel es por sede.
+        <p className="text-sm text-muted" data-testid="in-clinic-no-location">
+          <MapPin aria-hidden className="mr-1.5 inline size-4 -translate-y-px align-middle" />
+          {inClinicCopy.noLocation}{' '}
+          <Button type="button" variant="link" size="sm" className="h-auto p-0 align-baseline" onClick={onChooseLocation}>
+            {inClinicCopy.chooseLocation}
+          </Button>
+        </p>
       ) : view === null && error && localeMissing ? (
         // 409 LOCATION_LOCALE_REQUIRED: falta un dato de la sede, no es un fallo de carga (G1-B §10).
         <SedeConfigError kind="locale" description={error} onRetry={reload} locationId={localeMissing.locationId} />
@@ -213,7 +254,18 @@ export function InClinicPanel({
         <SedeConfigError kind="locale" onRetry={reload} locationId={view.locationId} />
       ) : (
         <div className="flex flex-col gap-4">
-          {inClinicCount(view) === 0 && <EmptyState role="status" icon={<Armchair aria-hidden />} title={inClinicCopy.emptyTitle} description={inClinicCopy.emptyHint} />}
+          {inClinicCount(view) === 0 ? (
+            showTitle ? (
+              // En la columna de la agenda, una línea; a pantalla completa, el estado vacío entero.
+              <p role="status" className="text-sm text-muted">
+                <span className="font-medium text-ink">{inClinicCopy.emptyTitle}</span>
+                {'. '}
+                <span>{inClinicCopy.emptyHint}</span>
+              </p>
+            ) : (
+              <EmptyState role="status" icon={<Armchair aria-hidden />} title={inClinicCopy.emptyTitle} description={inClinicCopy.emptyHint} />
+            )
+          ) : null}
           {GROUPS.map((group) => (
             <InClinicGroup
               key={group}
@@ -304,14 +356,9 @@ function InClinicGroup({
                       </p>
                     ) : null}
                   </div>
-                  <span
-                    className={cn(
-                      'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums',
-                      PUNCTUALITY_CLASSES[item.punctuality],
-                    )}
-                  >
+                  <StatusBadge kind="punctuality" status={item.punctuality} className="tabular-nums">
                     {inClinicCopy.minutes[group](item.minutesInStatus)}
-                  </span>
+                  </StatusBadge>
                 </div>
                 <ReservedElsewhereNotice item={item} runner={runner} onRetry={onRetry} />
                 <PatientFlowActions
@@ -356,7 +403,7 @@ function ReservedElsewhereNotice({
       role="group"
       aria-label={reservationCopy.noticeTitle}
       data-testid="reserved-elsewhere"
-      className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-ink"
+      className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning-subtle px-3 py-2 text-ink"
     >
       {reserved.map((r) => {
         const label = reservedItemLabel(r);
@@ -366,7 +413,7 @@ function ReservedElsewhereNotice({
         return (
           <div key={r.planItemId} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2">
-              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
               <div className="min-w-0">
                 <p className="text-sm font-medium break-words">{label}</p>
                 <p className="text-xs break-words">{reservedElsewhereMessage(r)}</p>

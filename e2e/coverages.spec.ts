@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
@@ -226,7 +227,9 @@ test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cab
   await shot(page, 'coverage-section', section);
 
   // Edita «Vigente hasta» a mañana: la cobertura vuelve a estar vigente.
-  await row.getByRole('button', { name: `Editar la cobertura de ${payerName}` }).click();
+  // «Editar» y «Quitar» viven en el menú «⋯» de la fila (UX v2 · K3).
+  await row.getByRole('button', { name: `Acciones de la cobertura de ${payerName}` }).click();
+  await page.getByRole('menuitem', { name: 'Editar' }).click();
   const edit = page.getByRole('dialog', { name: 'Editar cobertura' });
   await edit.getByLabel('Vigente hasta').fill(tomorrow);
   await edit.getByRole('button', { name: 'Guardar' }).click();
@@ -342,7 +345,7 @@ test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda 
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(slot.day);
+  await fillDate(page, 'Fecha', slot.day);
 
   const card = page.getByTestId('day-column-appointment').filter({ hasText: `Camila ${lastName}` });
   await expect(card).toBeVisible({ timeout: 15_000 });
@@ -366,7 +369,7 @@ test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda 
   // 390 px: la agenda no se desplaza y el aviso sigue a la vista.
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalScroll(page);
-  await expect(page.getByText('Cobertura vencida').or(page.locator('[title="Cobertura vencida"]')).first()).toBeVisible();
+  await expect(page.getByText('Cobertura vencida').or(page.locator('[title="Cobertura vencida"]')).locator('visible=true').first()).toBeVisible();
 });
 
 test('el listado de pacientes filtrado por «Sura EPS» muestra solo a ese paciente', async ({ page }) => {
@@ -378,7 +381,7 @@ test('el listado de pacientes filtrado por «Sura EPS» muestra solo a ese pacie
   await expect(page.getByText(otherLastName).first()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(lastName).first()).toBeVisible();
 
-  const select = page.getByRole('combobox', { name: 'Filtrar por pagador' });
+  const select = page.getByRole('combobox', { name: 'Cobertura' });
   await expect(select.locator('option', { hasText: payerName })).toHaveCount(1);
   // Espera la respuesta filtrada: durante la carga la tabla son esqueletos y
   // un «no está» pasaría aunque el filtro no se enviara.

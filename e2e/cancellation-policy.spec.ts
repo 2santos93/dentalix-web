@@ -1,4 +1,5 @@
 import { test, expect } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { AxeResults } from 'axe-core';
@@ -115,7 +116,7 @@ async function cancelLateAndSeeBadge(
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   const listToggle = page.getByRole('button', { name: 'Lista', exact: true });
   if (await listToggle.isVisible()) await listToggle.click();
-  await page.getByLabel('Fecha', { exact: true }).fill(sedeDate(start));
+  await fillDate(page, 'Fecha', sedeDate(start));
   const end = new Date(start.getTime() + 30 * 60_000);
   const select = page
     .getByRole('combobox', { name: new RegExp(`^Estado de la cita de ${sedeTime(start)}–${sedeTime(end)}`) })
@@ -215,7 +216,7 @@ test('axe: diálogo de cancelar, insignia y modal de la política, a 390 y 1440 
       await page.getByRole('button', { name: 'Día', exact: true }).click();
       const listToggle = page.getByRole('button', { name: 'Lista', exact: true });
       if (await listToggle.isVisible()) await listToggle.click();
-      await page.getByLabel('Fecha', { exact: true }).fill(sedeDate(start));
+      await fillDate(page, 'Fecha', sedeDate(start));
       const status = page
         .getByRole('combobox', { name: new RegExp(`^Estado de la cita de ${sedeTime(start)}–${sedeTime(end)}`) })
         .first();

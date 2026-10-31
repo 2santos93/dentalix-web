@@ -34,7 +34,7 @@ export function AppointmentMedicalAlerts({ flags }: { flags: MedicalAlertFlags |
         <div
           role="alert"
           data-testid="premedication-notice"
-          className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-danger"
+          className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-subtle px-3 py-2 text-danger-text"
         >
           <Pill aria-hidden className="mt-0.5 size-4 shrink-0" />
           <div className="flex flex-col">
@@ -45,7 +45,7 @@ export function AppointmentMedicalAlerts({ flags }: { flags: MedicalAlertFlags |
       ) : null}
       {lines.length > 0 ? (
         <div className="rounded-lg border border-danger/30 bg-surface px-3 py-2 text-sm">
-          <p className="flex items-center gap-1.5 font-semibold text-danger">
+          <p className="flex items-center gap-1.5 font-semibold text-danger-text">
             <TriangleAlert aria-hidden className="size-4 shrink-0" />
             {MEDICAL_ALERTS_TITLE}
           </p>
@@ -57,7 +57,7 @@ export function AppointmentMedicalAlerts({ flags }: { flags: MedicalAlertFlags |
         </div>
       ) : null}
       {note ? (
-        <p className="flex items-center gap-1.5 text-sm text-warning">
+        <p className="flex items-center gap-1.5 text-sm text-warning-text">
           {flags.anamnesisStatus === 'MISSING' ? (
             <ClipboardX aria-hidden className="size-4 shrink-0" />
           ) : (

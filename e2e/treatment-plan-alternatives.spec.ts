@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { openSection } from './support/nav';
 
 /**
  * e2e (DX-040): alternativas de plan (A/B), presentar, rechazar y
@@ -219,8 +220,10 @@ for (const viewport of [
     ]);
 
     await webLogin(page, origin, RECEPTION_EMAIL);
-    // Desde el menú (en móvil, la barra superior también lo lleva).
-    await page.getByRole('link', { name: 'Presupuestos' }).first().click();
+    // Desde el menú: barra lateral en escritorio; en el teléfono la barra
+    // inferior de recepción es Inicio, Agenda, Pacientes y Caja (I1), así que
+    // Presupuestos está en la hoja «Más».
+    await openSection(page, 'Presupuestos');
     await expect(page).toHaveURL(/\/presupuestos$/);
     await expect(page.getByRole('heading', { name: 'Presupuestos por seguir' })).toBeVisible();
 

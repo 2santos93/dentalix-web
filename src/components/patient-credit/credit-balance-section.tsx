@@ -70,7 +70,7 @@ export function CreditBalanceSection({
             >
               <div className="min-w-0">
                 <p className="break-words font-medium text-ink">{name}</p>
-                <p className="text-sm tabular-nums text-success">
+                <p className="text-sm tabular-nums text-success-text">
                   {formatCurrency(source.credit, source.currency)} {copy.inFavor}
                 </p>
               </div>

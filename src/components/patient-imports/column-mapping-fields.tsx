@@ -92,7 +92,7 @@ export function ColumnMappingFields({
                 <label htmlFor={selectId} className="text-sm font-medium text-ink">
                   {field.label}
                   {field.required ? (
-                    <span className="text-danger" aria-hidden>
+                    <span className="text-danger-text" aria-hidden>
                       {' '}
                       {copy.required}
                     </span>

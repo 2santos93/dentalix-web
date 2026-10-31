@@ -8,7 +8,7 @@ function tokenForRole(role: string): string {
 }
 
 describe('SettingsIndex (DX-282)', () => {
-  it('ADMIN: cinco secciones y las 23 pantallas como enlaces', () => {
+  it('ADMIN: cinco secciones y las 24 pantallas como enlaces', () => {
     render(<SettingsIndex token={tokenForRole('ADMIN')} />);
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
@@ -19,7 +19,7 @@ describe('SettingsIndex (DX-282)', () => {
       'Historia clínica',
       'Datos y seguridad',
     ]);
-    expect(screen.getAllByRole('link')).toHaveLength(23);
+    expect(screen.getAllByRole('link')).toHaveLength(24);
 
     // Cada sección es una lista con nombre: el lector de pantalla dice dónde está.
     const agenda = screen.getByRole('list', { name: 'Agenda' });

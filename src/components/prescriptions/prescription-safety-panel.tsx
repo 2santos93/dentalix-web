@@ -53,13 +53,13 @@ function AlertList({ alerts, tone }: { alerts: SafetyAlert[]; tone: 'blocking' |
           className={cn(
             'flex items-start gap-2 rounded-md border p-3 text-sm text-ink',
             tone === 'blocking'
-              ? 'border-danger/40 bg-danger/5'
-              : 'border-warning/40 bg-warning/5',
+              ? 'border-danger/40 bg-danger-subtle'
+              : 'border-warning/40 bg-warning-subtle',
           )}
         >
           <Icon
             aria-hidden
-            className={cn('mt-0.5 size-4 shrink-0', tone === 'blocking' ? 'text-danger' : 'text-warning')}
+            className={cn('mt-0.5 size-4 shrink-0', tone === 'blocking' ? 'text-danger-text' : 'text-warning-text')}
           />
           <div className="min-w-0 flex-1">
             <p className="break-words">{alert.message}</p>
@@ -146,7 +146,7 @@ export function PrescriptionSafetyPanel({
 
       {blocking.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <h4 className="text-sm font-semibold text-danger">{safetyCopy.blocking(blocking.length)}</h4>
+          <h4 className="text-sm font-semibold text-danger-text">{safetyCopy.blocking(blocking.length)}</h4>
           <AlertList alerts={blocking} tone="blocking" />
           <label className="flex items-start gap-2 text-sm text-ink">
             <input

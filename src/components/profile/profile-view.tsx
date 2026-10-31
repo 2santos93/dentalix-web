@@ -16,6 +16,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { Avatar } from '@/components/ui/avatar';
+import { initials } from '@/lib/format/initials';
 
 // Copy as constants (i18n-ready) — same convention as staff-view.tsx.
 const copy = {
@@ -42,15 +44,6 @@ const ROLE_LABEL: Record<string, string> = {
   ASSISTANT: 'Asistente',
   RECEPTION: 'Recepción',
 };
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join('');
-}
 
 interface ProfileViewProps {
   token: string;
@@ -160,21 +153,12 @@ export function ProfileView({ token }: ProfileViewProps) {
     <Card>
       <CardContent className="flex flex-col gap-6 py-6">
         <div className="flex items-center gap-4">
-          {profile.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={profile.avatarUrl}
-              alt={copy.avatarAlt}
-              className="size-16 rounded-full object-cover"
-            />
-          ) : (
-            <span
-              aria-hidden
-              className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary"
-            >
-              {initials(profile.fullName)}
-            </span>
-          )}
+          <Avatar
+            size="xl"
+            initials={initials(profile.fullName)}
+            src={profile.avatarUrl}
+            alt={profile.avatarUrl ? copy.avatarAlt : undefined}
+          />
           <div className="flex flex-col gap-2">
             <div className="flex gap-2">
               <Button

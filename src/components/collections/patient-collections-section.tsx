@@ -11,12 +11,10 @@ import {
 } from '@/lib/collections/collections-api';
 import {
   CHANNEL_LABELS,
-  OUTCOME_LABELS,
-  PROMISE_STATUS_BADGE,
-  PROMISE_STATUS_LABELS,
+  OUTCOME_LABELS
 } from '@/lib/collections/presentation';
 import { AsyncSection } from '@/components/shared/async-section';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CollectionNoteDialog } from './collection-note-dialog';
@@ -119,7 +117,7 @@ export function PatientCollectionsSection({
         </div>
       </div>
 
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
 
@@ -142,7 +140,7 @@ export function PatientCollectionsSection({
                 {promises.map((p) => (
                   <li key={p.id} className="flex min-w-0 flex-col gap-1 px-4 py-3 text-sm" data-testid="promise-row">
                     <span className="flex flex-wrap items-center gap-2">
-                      <Badge variant={PROMISE_STATUS_BADGE[p.status]}>{PROMISE_STATUS_LABELS[p.status]}</Badge>
+                      <StatusBadge kind="paymentPromise" status={p.status} />
                       <span className="font-medium tabular-nums text-ink">
                         {collectionsCopy.promiseLine(formatCurrency(p.amount, p.currency), formatCivilDate(p.dueDate))}
                       </span>
@@ -153,7 +151,7 @@ export function PatientCollectionsSection({
                     </span>
                     {/* Si se volvió a cumplir con otro abono, ya no aplica. */}
                     {p.reopenedAt && p.status !== 'KEPT' ? (
-                      <span className="text-xs text-warning tabular-nums">
+                      <span className="text-xs text-warning-text tabular-nums">
                         {collectionsCopy.reopened(formatDateTime(p.reopenedAt))}
                       </span>
                     ) : null}

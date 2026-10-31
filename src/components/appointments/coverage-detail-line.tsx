@@ -14,7 +14,7 @@ export function CoverageDetailLine({
     <p
       data-testid="coverage-detail-line"
       className={
-        coverage?.status === 'EXPIRED' ? 'text-sm text-warning' : 'text-sm text-muted'
+        coverage?.status === 'EXPIRED' ? 'text-sm text-warning-text' : 'text-sm text-muted'
       }
     >
       {text}

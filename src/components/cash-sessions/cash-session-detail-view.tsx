@@ -165,7 +165,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
           </div>
         }
       />
-      <p role="status" className={notice ? 'mb-4 text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'mb-4 text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
       {currency === null && session.can.adjust ? (

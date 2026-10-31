@@ -1,11 +1,11 @@
 import { Handshake } from 'lucide-react';
 import type { AgreementSummary } from '@/lib/patients/patients-api';
 import { agreementChipText } from '@/lib/patients/agreement-presentation';
-import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 /**
  * Chip «Convenio: X» (DX-105) de la cabecera de la ficha, hermano de
- * `CoverageChip`. Informativo (`muted`): solo se pinta con un convenio vigente.
+ * `CoverageChip`. Informativo (neutro): solo se pinta con un convenio vigente.
  */
 export function AgreementChip({
   agreement,
@@ -17,16 +17,9 @@ export function AgreementChip({
   const text = agreementChipText(agreement);
   if (!text) return null;
   return (
-    <span
-      data-testid="agreement-chip"
-      title={text}
-      className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-muted',
-        className,
-      )}
-    >
+    <Badge variant="neutral" data-testid="agreement-chip" title={text} className={className}>
       <Handshake aria-hidden className="size-3.5 shrink-0" />
       <span className="min-w-0 truncate">{text}</span>
-    </span>
+    </Badge>
   );
 }

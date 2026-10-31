@@ -23,8 +23,11 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
+import { RowActions } from '@/components/shared/row-actions';
+import { SectionHeader } from '@/components/ui/section-header';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { CoverageDialog } from './coverage-dialog';
+import { DATA_SECTION_CLASS, DATA_SECTION_HEADER_CLASS } from './data-section';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 export const coverageCopy = {
@@ -42,6 +45,7 @@ export const coverageCopy = {
   remove: 'Quitar',
   editLabel: (payer: string) => `Editar la cobertura de ${payer}`,
   removeLabel: (payer: string) => `Quitar la cobertura de ${payer}`,
+  actionsLabel: (payer: string) => `Acciones de la cobertura de ${payer}`,
   removeTitle: 'Quitar cobertura',
   removeDescription: (payer: string) =>
     `Se quita la cobertura de ${payer} de este paciente. El pagador sigue en el catálogo de la clínica.`,
@@ -207,6 +211,7 @@ export function PatientCoverageSection({
       return (
         <EmptyState
           role="status"
+          size="inline"
           icon={<ShieldCheck aria-hidden />}
           title={copy.emptyTitle}
           description={copy.emptyHint}
@@ -214,7 +219,7 @@ export function PatientCoverageSection({
       );
     }
     return (
-      <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+      <ul className="flex flex-col divide-y divide-border-subtle">
         {coverages.map((c) => {
           const statusBadge = coverageStatusBadge(c);
           const verification = coverageVerificationBadge(c);
@@ -224,7 +229,7 @@ export function PatientCoverageSection({
             <li
               key={c.id}
               data-testid="coverage-row"
-              className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
+              className="flex min-w-0 items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
             >
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -260,7 +265,11 @@ export function PatientCoverageSection({
                   <span className="break-words text-xs text-muted">{verification.detail}</span>
                 ) : null}
               </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
+              {/* Una acción a la vista (la que pide una decisión: verificar) y
+                  el resto en el menú «⋯» de la fila — editar y quitar no son
+                  lo que se viene a leer, y «Quitar» no va suelto en una fila
+                  (DESIGN.md → Buttons: lo destructivo, en menú o confirmación). */}
+              <div className="flex shrink-0 items-center gap-1">
                 {canVerify ? (
                   <Button
                     type="button"
@@ -272,38 +281,32 @@ export function PatientCoverageSection({
                       setVerifyError(null);
                       setVerifying(c);
                     }}
-                    className="max-sm:h-11 max-sm:flex-1"
                   >
                     {copy.verify}
                   </Button>
                 ) : null}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  aria-label={copy.editLabel(c.payer.name)}
-                  onClick={() => {
-                    clearNotice();
-                    setDialog({ coverage: c });
-                  }}
-                  className="max-sm:h-11 max-sm:flex-1"
-                >
-                  {copy.edit}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={copy.removeLabel(c.payer.name)}
-                  onClick={() => {
-                    clearNotice();
-                    setRemoveError(null);
-                    setRemoving(c);
-                  }}
-                  className="max-sm:h-11 max-sm:flex-1"
-                >
-                  {copy.remove}
-                </Button>
+                <RowActions
+                  label={copy.actionsLabel(c.payer.name)}
+                  actions={[
+                    {
+                      label: copy.edit,
+                      onSelect: () => {
+                        clearNotice();
+                        setDialog({ coverage: c });
+                      },
+                    },
+                    {
+                      label: copy.remove,
+                      destructive: true,
+                      separatorBefore: true,
+                      onSelect: () => {
+                        clearNotice();
+                        setRemoveError(null);
+                        setRemoving(c);
+                      },
+                    },
+                  ]}
+                />
               </div>
             </li>
           );
@@ -316,30 +319,32 @@ export function PatientCoverageSection({
     <section
       aria-labelledby={`${ids}-heading`}
       data-testid="patient-coverage"
-      className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:p-6"
+      className={DATA_SECTION_CLASS}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id={`${ids}-heading`} className="text-base font-semibold text-ink">
-          {copy.heading}
-        </h3>
-        {coverages ? (
-          <Button
-            ref={addButtonRef}
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              clearNotice();
-              setDialog({ coverage: null });
-            }}
-            className="max-sm:h-11 max-sm:w-full"
-          >
-            <Plus aria-hidden />
-            {copy.add}
-          </Button>
-        ) : null}
-      </div>
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <SectionHeader
+        as="h2"
+        titleId={`${ids}-heading`}
+        title={copy.heading}
+        className={DATA_SECTION_HEADER_CLASS}
+        actions={
+          coverages ? (
+            <Button
+              ref={addButtonRef}
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                clearNotice();
+                setDialog({ coverage: null });
+              }}
+            >
+              <Plus aria-hidden />
+              {copy.add}
+            </Button>
+          ) : undefined
+        }
+      />
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
       {content()}

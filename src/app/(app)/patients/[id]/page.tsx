@@ -20,7 +20,16 @@ import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
-import { PatientRetentionSection } from '@/components/patients/patient-retention-section';
+import {
+  PatientRetentionDialogs,
+  PatientRetentionSection,
+  retentionActionLabels,
+  retentionChip,
+  type RetentionDialog,
+} from '@/components/patients/patient-retention-section';
+import { AnamnesisSendDialog } from '@/components/anamnesis/anamnesis-send-dialog';
+import type { RowAction } from '@/components/shared/row-actions';
+import { Archive, ClipboardList, Eraser, ShieldCheck } from 'lucide-react';
 import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
 import { PatientResponsiblePartiesSection } from '@/components/patients/patient-responsible-parties-section';
 import { PatientAgreementSection } from '@/components/patients/patient-agreement-section';
@@ -69,7 +78,10 @@ const copy = {
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
   postOpHeading: 'Indicaciones entregadas',
+  sendAnamnesis: 'Enviar anamnesis',
 };
+
+const ANAMNESIS_HEADING_ID = 'patient-anamnesis-form-heading';
 
 function fullName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
@@ -102,6 +114,14 @@ function PatientDetailView() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [editing, setEditing] = useState(false);
+  // Menú «⋯» de la cabecera: modales de retención (ADMIN) y «Enviar anamnesis».
+  const [retentionDialog, setRetentionDialog] = useState<RetentionDialog | null>(null);
+  const [sendingAnamnesis, setSendingAnamnesis] = useState(false);
+  // Sube al generar un enlace: el bloque de anamnesis de la pestaña se relee.
+  const [anamnesisVersion, setAnamnesisVersion] = useState(0);
+  // «Registrar en Historia clínica» desde «Datos»: al abrir la pestaña, el foco
+  // va a la anamnesis y no al principio del panel.
+  const focusAnamnesisForm = useRef(false);
   // DX-327 (pre-flight M15): nombres locales de la clínica para «Tipo de
   // documento»; si fallan, el panel pinta los genéricos.
   const docTypeNames = useDocumentTypeNames(accessToken);
@@ -186,6 +206,11 @@ function PatientDetailView() {
     [pathname, router, searchParams],
   );
 
+  /** La sección «Anamnesis» de «Historia clínica»: destino de «Registrar en Historia clínica». */
+  function focusAnamnesisHeading() {
+    document.getElementById(ANAMNESIS_HEADING_ID)?.focus();
+  }
+
   function registerPanel(tab: PatientDetailTabKey, el: HTMLDivElement | null) {
     if (el) panels.current.set(tab, el);
     else panels.current.delete(tab);
@@ -202,6 +227,11 @@ function PatientDetailView() {
     // paint would move it away from wherever the browser put it.
     if (firstRender.current) {
       firstRender.current = false;
+      return;
+    }
+    if (activeTab === 'clinical-history' && focusAnamnesisForm.current) {
+      focusAnamnesisForm.current = false;
+      focusAnamnesisHeading();
       return;
     }
     panels.current.get(activeTab)?.focus();
@@ -242,6 +272,85 @@ function PatientDetailView() {
     };
   }, [accessToken, router, hasHydrated, patientId, retryCount]);
 
+  const role = getTokenRole(accessToken);
+  const isAdmin = role === 'ADMIN';
+
+  function registerAnamnesis() {
+    if (activeTab === 'clinical-history') {
+      focusAnamnesisHeading();
+      return;
+    }
+    focusAnamnesisForm.current = true;
+    setParams({ tab: 'clinical-history' });
+  }
+
+  // Lo que antes eran botones sueltos encima de las pestañas: el menú «⋯» de
+  // la cabecera, con los mismos permisos (enviar: los cuatro roles; retención,
+  // supresión y archivo: solo ADMIN, y la API lo vuelve a exigir).
+  const menuActions: RowAction[] = [
+    {
+      label: copy.sendAnamnesis,
+      icon: <ClipboardList aria-hidden />,
+      onSelect: () => setSendingAnamnesis(true),
+    },
+  ];
+  if (isAdmin && patient) {
+    menuActions.push({
+      label: retentionActionLabels.retention,
+      icon: <ShieldCheck aria-hidden />,
+      separatorBefore: true,
+      onSelect: () => setRetentionDialog('retention'),
+    });
+    if (patient.underRetention) {
+      menuActions.push({
+        label: retentionActionLabels.suppress,
+        icon: <Eraser aria-hidden />,
+        destructive: true,
+        onSelect: () => setRetentionDialog('suppress'),
+      });
+    }
+    menuActions.push({
+      label: retentionActionLabels.archive,
+      icon: <Archive aria-hidden />,
+      destructive: true,
+      onSelect: () => setRetentionDialog('archive'),
+    });
+  }
+
+  const anamnesisStatus = medicalAlerts.data?.anamnesisStatus ?? null;
+  function anamnesisBlock(context: 'data' | 'clinical-history') {
+    if (!accessToken) return null;
+    // La línea de revisión (al día / caducada, «Sin cambios hoy»): en
+    // «Historia clínica» siempre; en «Datos», solo si caducó (es un aviso).
+    const showReview =
+      !!medicalAlerts.data &&
+      anamnesisStatus !== 'MISSING' &&
+      (context === 'clinical-history' || anamnesisStatus === 'EXPIRED');
+    return (
+      <PatientAnamnesisSection
+        token={accessToken}
+        patientId={patientId}
+        canReview={canSeeAnamnesisInbox(role)}
+        status={anamnesisStatus}
+        onSend={() => setSendingAnamnesis(true)}
+        onRegister={access['clinical-history'] ? registerAnamnesis : undefined}
+        refreshKey={anamnesisVersion}
+        reviewLine={
+          showReview ? (
+            <AnamnesisReviewLine
+              token={accessToken}
+              patientId={patientId}
+              alerts={medicalAlerts.data}
+              failed={false}
+              onReload={medicalAlerts.reload}
+              canConfirm={canConfirmAnamnesis(role)}
+            />
+          ) : null
+        }
+      />
+    );
+  }
+
   if (!hasHydrated) {
     return (
       <div className="flex min-h-full flex-1 items-center justify-center bg-bg px-4 py-8">
@@ -257,13 +366,13 @@ function PatientDetailView() {
   }
 
   return (
-    // Sin `gap`: el espacio bajo la cabecera lo pone el `mb-8` de `PageHeader`,
-    // igual que en las otras ocho páginas que lo usan.
     <div className="flex flex-1 flex-col">
       <PatientRecordHeader
         patient={loading ? null : patient}
         loading={loading}
         onEdit={() => setEditing(true)}
+        menuActions={menuActions}
+        retention={patient && !loading ? retentionChip(patient) : null}
         medicalAlerts={medicalAlerts.data}
         medicalAlertsFailed={medicalAlerts.failed}
         onRetryMedicalAlerts={medicalAlerts.reload}
@@ -288,72 +397,65 @@ function PatientDetailView() {
           }}
         />
       ) : patient ? (
-        <div className="flex flex-col gap-4">
-          {/* Las alertas salen de la anamnesis (dato clínico): sin acceso, la
-              API responde 403 y el banner solo diría que no pudo comprobarlas. */}
-          {access['clinical-history'] ? (
-            <div className="flex flex-col gap-2">
-              {/* Se relee con las banderas (p. ej. tras guardar la anamnesis). */}
-              <ClinicalAlertBanner
-                key={medicalAlerts.version}
-                token={accessToken}
-                patientId={patientId}
-              />
-              {/* DX-247: anamnesis al día / caducada / ausente y «Sin cambios hoy». */}
-              <AnamnesisReviewLine
-                token={accessToken}
-                patientId={patientId}
-                alerts={medicalAlerts.data}
-                failed={medicalAlerts.failed}
-                onReload={medicalAlerts.reload}
-                canConfirm={canConfirmAnamnesis(getTokenRole(accessToken))}
-              />
-            </div>
-          ) : null}
+        <div className="flex flex-col gap-6">
+          {/* Las pestañas van justo después de la cabecera, en el primer
+              viewport también en el móvil, y se quedan pegadas arriba al
+              desplazarse (el `main` del shell es el contenedor de scroll). El
+              fondo y el margen negativo tapan lo que pasa por debajo. `top`
+              negativo = el padding superior del `main`: `sticky` cuenta desde
+              su caja de contenido y, con `top-0`, dejaba una franja de 24/32px
+              por la que asomaba el contenido. */}
+          <div className="sticky -top-6 z-20 -mx-4 bg-canvas px-4 md:-top-8 md:-mx-8 md:px-8">
+            <PatientDetailTabs
+              activeTab={activeTab}
+              onTabChange={(tab) => setParams({ tab })}
+              tablistLabel={fullName(patient)}
+              dataLabel={copy.tabData}
+              clinicalHistoryLabel={access['clinical-history'] ? copy.tabClinicalHistory : undefined}
+              odontogramLabel={access.odontogram ? copy.tabOdontogram : undefined}
+              treatmentPlansLabel={access['treatment-plans'] ? copy.tabTreatmentPlans : undefined}
+              accountStatementLabel={
+                access['account-statement'] ? copy.tabAccountStatement : undefined
+              }
+              dataConsentsLabel={access['data-consents'] ? copy.tabDataConsents : undefined}
+              consentsLabel={access.consents ? copy.tabConsents : undefined}
+              perioLabel={access.perio ? copy.tabPerio : undefined}
+              prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
+              implantsLabel={access.implants ? copy.tabImplants : undefined}
+              documentsLabel={access.documents ? copy.tabDocuments : undefined}
+              accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
+            />
+          </div>
 
-          {/* DX-099: anamnesis por enlace — estado («pendiente de revisión») y
-              «Enviar anamnesis», para los cuatro roles (recepción la manda). */}
-          <PatientAnamnesisSection
+          {/* DX-099/DX-039: los diálogos del menú «⋯» viven fuera de las
+              pestañas: se abren igual desde cualquiera. */}
+          <AnamnesisSendDialog
+            open={sendingAnamnesis}
+            onOpenChange={setSendingAnamnesis}
             token={accessToken}
             patientId={patientId}
-            canReview={canSeeAnamnesisInbox(getTokenRole(accessToken))}
+            onCreated={() => setAnamnesisVersion((v) => v + 1)}
           />
-
-          {/* DX-039: aviso de retención legal para todos; controles, solo ADMIN. */}
-          <PatientRetentionSection
-            patient={patient}
-            token={accessToken}
-            isAdmin={getTokenRole(accessToken) === 'ADMIN'}
-            onUpdated={(next) => setPatient((prev) => replacePatientKeepingDerived(prev, next))}
-            onArchived={() => router.push('/patients')}
-          />
-
-          <PatientDetailTabs
-            activeTab={activeTab}
-            onTabChange={(tab) => setParams({ tab })}
-            tablistLabel={fullName(patient)}
-            dataLabel={copy.tabData}
-            clinicalHistoryLabel={access['clinical-history'] ? copy.tabClinicalHistory : undefined}
-            odontogramLabel={access.odontogram ? copy.tabOdontogram : undefined}
-            treatmentPlansLabel={access['treatment-plans'] ? copy.tabTreatmentPlans : undefined}
-            accountStatementLabel={
-              access['account-statement'] ? copy.tabAccountStatement : undefined
-            }
-            dataConsentsLabel={access['data-consents'] ? copy.tabDataConsents : undefined}
-            consentsLabel={access.consents ? copy.tabConsents : undefined}
-            perioLabel={access.perio ? copy.tabPerio : undefined}
-            prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
-            implantsLabel={access.implants ? copy.tabImplants : undefined}
-            documentsLabel={access.documents ? copy.tabDocuments : undefined}
-            accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
-          />
+          {isAdmin ? (
+            <PatientRetentionDialogs
+              patient={patient}
+              token={accessToken}
+              dialog={retentionDialog}
+              onDialogChange={setRetentionDialog}
+              onUpdated={(next) => setPatient((prev) => replacePatientKeepingDerived(prev, next))}
+              onArchived={() => router.push('/patients')}
+            />
+          ) : null}
 
           <TabPanel
             tab="data"
             activeTab={activeTab}
             register={registerPanel}
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-6"
           >
+            {/* DX-099/DX-247: «Sin anamnesis» como UN aviso con sus dos
+                salidas, y el estado de los enlaces enviados. */}
+            {anamnesisBlock('data')}
             <PatientDataPanel patient={patient} docTypeNames={docTypeNames} />
             {/* DX-128: canal de los recordatorios, móvil, opt-in y baja. Lo ven
                 todos; lo cambian recepción y ADMIN. */}
@@ -392,6 +494,9 @@ function PatientDetailView() {
               onChanged={onAgreementChanged}
               role={getTokenRole(accessToken)}
             />
+            {/* DX-039: retención legal (lo ven todos); los controles de ADMIN
+                están en el menú «⋯» de la cabecera. */}
+            <PatientRetentionSection patient={patient} />
           </TabPanel>
 
           <PatientEditModal
@@ -412,8 +517,26 @@ function PatientDetailView() {
               register={registerPanel}
               className="flex flex-col gap-8"
             >
+              <div className="flex flex-col gap-3">
+                {anamnesisBlock('clinical-history')}
+                {/* Las alertas con su detalle (alérgeno, semanas de embarazo):
+                    la cabecera ya las lleva como chips en todas las pestañas.
+                    «Sin anamnesis» ya lo dice el aviso de arriba. */}
+                <ClinicalAlertBanner
+                  key={medicalAlerts.version}
+                  token={accessToken}
+                  patientId={patientId}
+                  hideNoHistory
+                />
+              </div>
               <section className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold text-ink">{copy.anamnesisHeading}</h2>
+                <h2
+                  id={ANAMNESIS_HEADING_ID}
+                  tabIndex={-1}
+                  className="t-title scroll-mt-16 text-ink focus-visible:outline-none"
+                >
+                  {copy.anamnesisHeading}
+                </h2>
                 <MedicalHistoryPanel
                   token={accessToken}
                   patientId={patientId}
@@ -421,11 +544,11 @@ function PatientDetailView() {
                 />
               </section>
               <section className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold text-ink">{copy.entriesHeading}</h2>
+                <h2 className="t-title text-ink">{copy.entriesHeading}</h2>
                 <ClinicalEntriesList token={accessToken} patientId={patientId} />
               </section>
               <section className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold text-ink">{copy.postOpHeading}</h2>
+                <h2 className="t-title text-ink">{copy.postOpHeading}</h2>
                 <PatientPostOpDeliveries token={accessToken} patientId={patientId} />
               </section>
             </TabPanel>

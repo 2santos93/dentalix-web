@@ -377,7 +377,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
           </ListToolbar>
         ) : null}
 
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
 
