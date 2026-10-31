@@ -181,7 +181,11 @@ for (const viewport of VIEWPORTS) {
     // --- 1. Ajustes › Sedes › la sede: su teléfono (B6: en «Editar sede») ------
     await page.goto(`${origin}/settings/sedes`);
     await page.getByRole('link', { name: /^Abrir / }).first().click();
-    const editSede = page.getByRole('button', { name: /^(?:Editar|Revisar) / });
+    // La lista también tiene «Editar …»: se espera a la ficha antes de buscarlo.
+    await expect(page).toHaveURL(/\/settings\/sedes\/[^/?]+$/, { timeout: 15_000 });
+    const editSede = page
+      .getByRole('region', { name: 'Datos de la sede' })
+      .getByRole('button', { name: /^(?:Editar|Revisar) / });
     await expect(editSede).toBeVisible({ timeout: 15_000 });
     await editSede.click();
     const sedeDialog = page.getByRole('dialog', { name: /^(?:Editar|Revisar) sede/ });

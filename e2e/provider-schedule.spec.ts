@@ -293,9 +293,11 @@ test('390 px: el editor va en acordeón por días y ni el editor ni el cuadrante
   const toggle = jueves.getByRole('button', { name: /^Jueves/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false', { timeout: 10_000 });
   await expect(toggle).toContainText(`${sedeB} 14:00–19:00`);
-  await expect(jueves.getByLabel(`Desde, Jueves, ${sedeB}, tramo 1`)).toBeHidden();
+  // Los tramos son `TimeField` (B6): el grupo lleva el nombre; sus segmentos, «hora, …».
+  const desde = jueves.getByRole('group', { name: `Desde, Jueves, ${sedeB}, tramo 1`, exact: true });
+  await expect(desde).toBeHidden();
   await toggle.click();
-  await expect(jueves.getByLabel(`Desde, Jueves, ${sedeB}, tramo 1`)).toBeVisible();
+  await expect(desde).toBeVisible();
   await expectNoHorizontalScroll(page);
 
   await page.getByRole('tab', { name: 'Cuadrante' }).click();

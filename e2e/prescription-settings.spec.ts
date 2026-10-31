@@ -430,7 +430,12 @@ test('390 px has no horizontal scroll in settings, modal and print view (capture
     await shoot(page, 'staff-specialty', viewport.width);
 
     await page.goto(`${origin}/settings/auditoria`);
-    const row = page.getByRole('table', { name: 'Registro de auditoría' }).getByRole('row').filter({ hasText: AUDIT_DETAIL });
+    // B6: el registro es una tabla desde 640 px y una lista de tarjetas en el teléfono (DataList).
+    const row = (
+      narrow
+        ? page.getByRole('list', { name: 'Registro de auditoría' }).getByRole('listitem')
+        : page.getByRole('table', { name: 'Registro de auditoría' }).getByRole('row')
+    ).filter({ hasText: AUDIT_DETAIL });
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.scrollIntoViewIfNeeded();
     if (narrow) await expectNoHorizontalScroll(page);
