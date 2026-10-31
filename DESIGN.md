@@ -533,7 +533,8 @@ that shares its fetch — those two look interchangeable and are not.
   - `primary` — line 1, left, ink 15px/600 (one per list; defaults to the first column);
   - `trailing` — line 1, right: the key value (amount, time, age; tabular) or the status badge;
   - `meta` (default) — line 2, muted 13px, values joined with « · », blanks skipped (return
-    `null` from `mobileCell`, never «—»);
+    `null` from `mobileCell`, never «—»); it wraps, never truncates (documents and phones must
+    stay readable);
   - `hidden` — off the card (it lives on the record). **Never hide money.**
   With `getRowHref`/`onRowClick` the whole card is the tap target (≥56px) with a trailing
   chevron, and on desktop the primary cell's link is stretched over the row (one link per row

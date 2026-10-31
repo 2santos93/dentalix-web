@@ -346,7 +346,9 @@ function PhoneList<T>({
                 ) : null}
               </span>
               {metaValues.length > 0 ? (
-                <span className="truncate text-[13px] leading-snug text-muted tabular-nums">
+                // La línea 2 se parte en vez de recortarse: lleva identificadores
+                // (documento, teléfono) que con elipsis dejarían de leerse.
+                <span className="break-words text-[13px] leading-snug text-muted tabular-nums">
                   {metaValues.map((m, i) => (
                     <React.Fragment key={m.id}>
                       {i > 0 ? <span aria-hidden> · </span> : null}
