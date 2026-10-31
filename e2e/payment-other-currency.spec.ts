@@ -7,6 +7,7 @@ import { E2E_DATABASE_URL } from './support/db';
 import { expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
+import { fillDate } from './support/dates';
 
 /**
  * e2e (DX-376): cobro en otra moneda que la del plan. Plan en USD y dos abonos
@@ -127,7 +128,8 @@ async function payInVes(page: Page, amount: string, day: string, rateText: strin
   const currency = dialog.getByLabel('Moneda');
   await expect(currency.locator(`option[value="${CURRENCY}"]`)).toHaveCount(1, { timeout: 15_000 });
   await currency.selectOption(CURRENCY);
-  await dialog.getByLabel('Fecha de pago').fill(day);
+  // UX v2: `DatePicker` por segmentos.
+  await fillDate(dialog, 'Fecha de pago', day);
   await dialog.getByLabel('Importe').fill(amount);
 
   const preview = dialog.getByTestId('rp-rate-preview');
