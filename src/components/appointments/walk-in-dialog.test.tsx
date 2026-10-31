@@ -1,8 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ApiError } from '@/lib/api/api-error';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
-import { listPatients } from '@/lib/patients/patients-api';
+import { getPatient, listPatients } from '@/lib/patients/patients-api';
 import { createWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
 import { notifyInClinicChanged } from '@/lib/appointments/patient-flow';
 import { WalkInDialog, walkInCopy as copy } from './walk-in-dialog';
@@ -14,6 +14,7 @@ jest.mock('../../lib/appointments/staff-api', () => ({
 jest.mock('../../lib/patients/patients-api', () => ({
   ...jest.requireActual('../../lib/patients/patients-api'),
   listPatients: jest.fn(),
+  getPatient: jest.fn(),
 }));
 jest.mock('../../lib/appointments/walk-in', () => ({
   ...jest.requireActual('../../lib/appointments/walk-in'),
@@ -26,6 +27,7 @@ jest.mock('../../lib/appointments/patient-flow', () => ({
 
 const staffMock = listStaff as jest.MockedFunction<typeof listStaff>;
 const patientsMock = listPatients as jest.MockedFunction<typeof listPatients>;
+const getPatientMock = getPatient as jest.MockedFunction<typeof getPatient>;
 const createMock = createWalkIn as jest.MockedFunction<typeof createWalkIn>;
 
 const STAFF: StaffMember[] = [
@@ -149,6 +151,7 @@ describe('WalkInDialog (DX-470)', () => {
         new ApiError(409, 'Ya existe un paciente con ese número de documento.', {
           code: 'PATIENT_DUPLICATE',
           existingPatientId: 'p-dup',
+          existingPatient: { id: 'p-dup', firstName: 'Berta', lastName: 'Urgencia' },
         }),
       )
       .mockResolvedValueOnce(RESULT);
@@ -159,13 +162,85 @@ describe('WalkInDialog (DX-470)', () => {
     await user.click(screen.getByRole('button', { name: copy.submit }));
     expect(await screen.findByText(copy.duplicateTitle)).toBeInTheDocument();
     expect(createMock.mock.calls[0][1]).toMatchObject({ newPatient: { docNumber: '470001' } });
+    // Antes de usarlo ya se ve a quién pertenece el documento.
+    expect(screen.getByText(/Berta Urgencia/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: copy.useExisting }));
-    expect(screen.getByTestId('walk-in-patient')).toHaveTextContent('Lucía Sin Cita');
+    // QA DX-470: el paciente real, no el nombre tecleado.
+    expect(screen.getByTestId('walk-in-patient')).toHaveTextContent('Berta Urgencia');
+    expect(screen.getByTestId('walk-in-patient')).not.toHaveTextContent('Lucía');
+    expect(getPatientMock).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: copy.submit }));
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
     expect(createMock.mock.calls[1][1]).toMatchObject({ patientId: 'p-dup' });
     expect(createMock.mock.calls[1][1]).not.toHaveProperty('newPatient');
+  });
+
+  it('documento repetido sin nombre en el 409: busca al paciente por id y muestra el suyo', async () => {
+    const user = userEvent.setup();
+    createMock.mockRejectedValueOnce(
+      new ApiError(409, 'Ya existe un paciente con ese número de documento.', {
+        code: 'PATIENT_DUPLICATE',
+        existingPatientId: 'p-dup',
+      }),
+    );
+    getPatientMock.mockResolvedValue({ id: 'p-dup', firstName: 'Sebastián', lastName: 'Niño Cabrera', docNumber: 'DEMO-0024' } as never);
+    renderDialog();
+    await fillNewPatient(user);
+    await user.type(screen.getByLabelText(copy.docNumber), 'DEMO-0024');
+    await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    await user.click(await screen.findByRole('button', { name: copy.useExisting }));
+    await waitFor(() => expect(screen.getByTestId('walk-in-patient')).toHaveTextContent('Sebastián Niño Cabrera'));
+    expect(getPatientMock).toHaveBeenCalledWith('T', 'p-dup');
+    expect(screen.getByText('DEMO-0024')).toBeInTheDocument();
+  });
+
+  it('error de red al enviar: «Reintentar» reenvía con los datos conservados', async () => {
+    const user = userEvent.setup();
+    createMock.mockRejectedValueOnce(new NetworkError(new TypeError('Failed to fetch'))).mockResolvedValueOnce(RESULT);
+    const { onOpenChange } = renderDialog();
+    await fillNewPatient(user);
+    await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+    await user.click(screen.getByRole('checkbox', { name: 'Dolor' }));
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    expect(await screen.findByText(/No hay conexión con el servidor/)).toBeInTheDocument();
+    expect(screen.getByLabelText(copy.firstName)).toHaveValue('Lucía');
+
+    await user.click(screen.getByRole('button', { name: copy.retry }));
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
+    expect(createMock.mock.calls[1]).toEqual(createMock.mock.calls[0]);
+    expect(createMock.mock.calls[1][1]).toMatchObject({ triageFlags: ['PAIN'], newPatient: { firstName: 'Lucía' } });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  it('un error que no es de red (403) no ofrece «Reintentar»', async () => {
+    const user = userEvent.setup();
+    createMock.mockRejectedValueOnce(new ApiError(403, 'No tienes acceso a esta sede.', { code: 'LOCATION_NOT_ALLOWED' }));
+    renderDialog();
+    await fillNewPatient(user);
+    await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    expect(await screen.findByText('No tienes acceso a esta sede.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: copy.retry })).not.toBeInTheDocument();
+  });
+
+  it('teléfono demasiado corto: el campo dice cuántos dígitos pide (la API pide 5 caracteres)', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await screen.findByLabelText(copy.provider);
+    await user.click(screen.getByRole('radio', { name: copy.newPatient }));
+    await user.type(screen.getByLabelText(copy.firstName), 'Lucía');
+    await user.type(screen.getByLabelText(copy.lastName), 'Sin Cita');
+    await user.type(screen.getByLabelText(copy.phone), '12');
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    const phone = screen.getByLabelText(copy.phone);
+    expect(phone).toHaveAttribute('aria-invalid', 'true');
+    expect(copy.phoneTooShort).toBe('El teléfono debe tener al menos 5 dígitos.');
+    expect(phone).toHaveAccessibleDescription(expect.stringContaining(copy.phoneTooShort));
+    expect(phone).not.toHaveAccessibleDescription(expect.stringContaining(copy.missingPatient));
+    expect(screen.getByLabelText(copy.firstName)).not.toHaveAttribute('aria-invalid');
+    expect(createMock).not.toHaveBeenCalled();
   });
 
   it('valida antes de enviar: paciente, profesional y nota ≤ 200', async () => {

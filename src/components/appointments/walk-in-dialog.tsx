@@ -3,9 +3,9 @@ import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
 import { Search } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { ApiError } from '@/lib/api/api-error';
+import { ApiError, NetworkError, type ExistingPatientRef } from '@/lib/api/api-error';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
-import { listPatients, type Patient, type DocType } from '@/lib/patients/patients-api';
+import { getPatient, listPatients, type Patient, type DocType } from '@/lib/patients/patients-api';
 import { DOC_TYPES, docTypeOptionLabel } from '@/lib/patients/doc-type';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
@@ -13,6 +13,7 @@ import {
   NO_RESERVED_SLOT,
   OVERBOOK_REASON_MAX,
   PATIENT_DUPLICATE,
+  PHONE_MIN_DIGITS,
   TRIAGE_FLAGS,
   TRIAGE_LABELS,
   TRIAGE_NOTE_MAX,
@@ -54,6 +55,7 @@ export const walkInCopy = {
   lastName: 'Apellido',
   phone: 'Teléfono',
   phoneHint: 'Para avisarle. Mejor con el prefijo del país (+…).',
+  phoneTooShort: `El teléfono debe tener al menos ${PHONE_MIN_DIGITS} dígitos.`,
   docType: 'Tipo de documento (opcional)',
   docNumber: 'Documento (opcional)',
   docNone: 'Sin documento',
@@ -74,6 +76,8 @@ export const walkInCopy = {
   overbookInvalid: 'Escribe un motivo de entre 5 y 300 caracteres, en una línea.',
   duplicateTitle: 'Ya existe un paciente con ese documento',
   useExisting: 'Usar ese paciente',
+  duplicateWho: (name: string) => `Es ${name}.`,
+  duplicateLoadError: 'No pudimos cargar ese paciente. Búscalo en «Ya es paciente».',
   submit: 'Atender',
   submitOverbook: 'Atender en sobrecupo',
   missingPatient: 'Elige un paciente o escribe nombre, apellido y teléfono.',
@@ -97,6 +101,10 @@ interface WalkInDialogProps {
 
 function patientLabel(p: Pick<Patient, 'firstName' | 'lastName'>): string {
   return `${p.firstName} ${p.lastName}`.trim();
+}
+
+function phoneDigits(value: string): number {
+  return value.replace(/\D/g, '').length;
 }
 
 /** Quien atiende en la sede: odontólogos y administración (como la agenda). */
@@ -139,8 +147,14 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
   const [overbook, setOverbook] = useState(false);
   const [overbookMessage, setOverbookMessage] = useState<string | null>(null);
   const [reason, setReason] = useState('');
-  const [duplicate, setDuplicate] = useState<{ id: string; message: string } | null>(null);
+  const [duplicate, setDuplicate] = useState<{
+    id: string;
+    message: string;
+    patient: ExistingPatientRef | null;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Sin red o servidor caído: el banner ofrece reenviar lo ya escrito.
+  const [retryable, setRetryable] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   // DX-327: el nombre local de cada tipo de documento de la clínica.
@@ -193,7 +207,9 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
     if (mode === 'new') {
       if (!firstName.trim()) errors.firstName = walkInCopy.missingPatient;
       if (!lastName.trim()) errors.lastName = walkInCopy.missingPatient;
-      if (phone.trim().length < 5) errors.phone = walkInCopy.missingPatient;
+      // Más estricto que la API (5 caracteres): con 5 dígitos siempre pasa.
+      if (!phone.trim()) errors.phone = walkInCopy.missingPatient;
+      else if (phoneDigits(phone) < PHONE_MIN_DIGITS) errors.phone = walkInCopy.phoneTooShort;
     }
     if (!providerId) errors.provider = walkInCopy.missingProvider;
     if (note.trim().length > TRIAGE_NOTE_MAX) errors.note = walkInCopy.noteTooLong;
@@ -201,11 +217,17 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
     return errors;
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    void submit();
+  }
+
+  /** Valida y envía lo que hay en el formulario (también desde «Reintentar»). */
+  async function submit() {
     const errors = validate();
     setFieldErrors(errors);
     setError(null);
+    setRetryable(false);
     if (Object.keys(errors).length > 0) return;
     const input: CreateWalkInInput = {
       providerId,
@@ -236,18 +258,37 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
         setOverbook(true);
         setOverbookMessage(apiErrorMessage(err, walkInCopy.overbookTitle));
       } else if (err instanceof ApiError && err.code === PATIENT_DUPLICATE && err.existingPatientId) {
-        setDuplicate({ id: err.existingPatientId, message: apiErrorMessage(err, walkInCopy.duplicateTitle) });
+        setDuplicate({
+          id: err.existingPatientId,
+          message: apiErrorMessage(err, walkInCopy.duplicateTitle),
+          patient: err.existingPatient,
+        });
       } else {
         setError(apiErrorMessage(err, walkInCopy.error));
+        setRetryable(err instanceof NetworkError || (err instanceof ApiError && err.status >= 500));
       }
     } finally {
       setSubmitting(false);
     }
   }
 
-  function useDuplicate() {
+  /** El paciente que YA tiene ese documento, con su nombre (no el tecleado). */
+  async function adoptDuplicate() {
     if (!duplicate) return;
-    setPatient({ id: duplicate.id, firstName, lastName, docNumber: docNumber.trim() || null });
+    let existing: Pick<Patient, 'id' | 'firstName' | 'lastName' | 'docNumber'>;
+    if (duplicate.patient) {
+      existing = { ...duplicate.patient, docNumber: docNumber.trim() || null };
+    } else {
+      // Un 409 sin nombre (p. ej. una API anterior): se lee por su id.
+      try {
+        const p = await getPatient(token, duplicate.id);
+        existing = { id: p.id, firstName: p.firstName, lastName: p.lastName, docNumber: p.docNumber };
+      } catch (err) {
+        setError(apiErrorMessage(err, walkInCopy.duplicateLoadError));
+        return;
+      }
+    }
+    setPatient(existing);
     setMode('existing');
     setDuplicate(null);
   }
@@ -258,10 +299,11 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
       onOpenChange={onOpenChange}
       title={walkInCopy.title}
       description={walkInCopy.description}
-      onSubmit={(e) => void handleSubmit(e)}
+      onSubmit={handleSubmit}
       submitLabel={overbook ? walkInCopy.submitOverbook : walkInCopy.submit}
       submitting={submitting}
       error={error}
+      errorRetry={retryable ? { label: walkInCopy.retry, onRetry: () => void submit() } : null}
       touchTargets
     >
       <div className="flex min-w-0 flex-col gap-4" data-testid="walk-in-dialog">
@@ -363,12 +405,17 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
                 title={walkInCopy.duplicateTitle}
                 className="sm:col-span-2"
                 action={
-                  <Button type="button" variant="secondary" size="sm" onClick={useDuplicate}>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => void adoptDuplicate()}>
                     {walkInCopy.useExisting}
                   </Button>
                 }
               >
                 {duplicate.message}
+                {duplicate.patient ? (
+                  <span className="mt-1 block font-medium text-ink">
+                    {walkInCopy.duplicateWho(patientLabel(duplicate.patient))}
+                  </span>
+                ) : null}
               </Callout>
             ) : null}
           </div>

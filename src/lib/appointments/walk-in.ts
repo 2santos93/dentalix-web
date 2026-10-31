@@ -26,6 +26,12 @@ export const TRIAGE_LABELS: Record<TriageFlag, string> = {
 export const TRIAGE_NOTE_MAX = 200;
 export const OVERBOOK_REASON_MIN = 5;
 export const OVERBOOK_REASON_MAX = 300;
+/**
+ * Dígitos mínimos del teléfono del alta mínima. La API pide 5 caracteres
+ * tras recortar; contar dígitos es más estricto, así que nunca rechaza uno
+ * que la web dejó pasar.
+ */
+export const PHONE_MIN_DIGITS = 5;
 
 /** Códigos del 409 que el diálogo convierte en el paso siguiente. */
 export const NO_RESERVED_SLOT = 'NO_RESERVED_SLOT';

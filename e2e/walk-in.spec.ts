@@ -18,6 +18,9 @@ import { tenantOrigin } from './support/urls';
  *    insignia «Urgencia», «Sobrecupo», sus señales y la nota;
  * 2. 390 px, desde «En clínica», solo con teclado: la paciente existente, una
  *    señal, sobrecupo; el diálogo cabe sin scroll horizontal.
+ * 3. QA DX-470: alta mínima con el documento de otro paciente → el duplicado
+ *    se avisa ANTES que el sobrecupo y «Usar ese paciente» muestra su nombre
+ *    real (no el tecleado); en «En clínica» no sale la puntualidad.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const subdomain = `sincita-${suffix}`.slice(0, 40);
@@ -28,6 +31,7 @@ const dentist = { fullName: 'Óscar Urgencias', email: `oscar.wi.${suffix}@examp
 const reception = { fullName: 'Rosa Mostrador', email: `rosa.wi.${suffix}@example.com` };
 const lastName = `SinCita${suffix}`.slice(0, 40);
 const existingDoc = `WI${suffix}`.slice(0, 20);
+const duplicateDoc = `WD${suffix}`.slice(0, 20);
 
 let session: ApiSession;
 
@@ -55,6 +59,13 @@ test.beforeAll(async ({ request }) => {
     docType: 'NATIONAL_ID',
     docNumber: existingDoc,
     sex: 'F',
+  });
+  await apiPost(request, session, '/patients', {
+    firstName: 'Sebastián',
+    lastName,
+    docType: 'NATIONAL_ID',
+    docNumber: duplicateDoc,
+    sex: 'M',
   });
 });
 
@@ -139,4 +150,39 @@ test('390: paciente existente desde «En clínica», solo con teclado y sin scro
 
   await expectInClinic(page, `Berta ${lastName}`, ['Sangrado']);
   await expectNoHorizontalScroll(page);
+});
+
+test('1440: documento duplicado → aviso antes del sobrecupo y «Usar ese paciente» con su nombre real', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await loginAs(page, origin, reception.email, password);
+  await page.goto(`${origin}/agenda`);
+
+  await page.getByRole('button', { name: 'Atender sin cita' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Atender sin cita' });
+  await dialog.getByRole('radio', { name: 'Paciente nuevo' }).click();
+  await dialog.getByLabel('Nombre', { exact: true }).fill('Sebastián');
+  await dialog.getByLabel('Apellido', { exact: true }).fill('Tecleado');
+  await dialog.getByLabel('Teléfono', { exact: true }).fill('+57 300 555 0102');
+  await dialog.getByLabel('Documento (opcional)', { exact: true }).fill(duplicateDoc);
+  await dialog.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
+  await dialog.getByRole('checkbox', { name: 'Dolor' }).check();
+  await dialog.getByRole('button', { name: 'Atender', exact: true }).click();
+
+  // Sin hueco reservado, pero el duplicado manda: todavía no se pide motivo.
+  await expect(dialog.getByText('Ya existe un paciente con ese documento')).toBeVisible();
+  await expect(dialog.getByText(`Es Sebastián ${lastName}.`)).toBeVisible();
+  await expect(dialog.getByTestId('walk-in-overbook')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Usar ese paciente' }).click();
+  await expect(dialog.getByTestId('walk-in-patient')).toHaveText(`Sebastián ${lastName}`);
+
+  await dialog.getByRole('button', { name: 'Atender', exact: true }).click();
+  await expect(dialog.getByLabel('Motivo del sobrecupo')).toBeFocused();
+  await dialog.getByLabel('Motivo del sobrecupo').fill('Dolor agudo, no puede esperar');
+  await dialog.getByRole('button', { name: 'Atender en sobrecupo' }).click();
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
+
+  const row = await expectInClinic(page, `Sebastián ${lastName}`, ['Dolor']);
+  await expect(row).toContainText(/Llegó \d{1,2}:\d{2}/);
+  await expect(row).not.toContainText('tarde');
+  await expect(page.getByTestId('in-clinic-item').filter({ hasText: 'Tecleado' })).toHaveCount(0);
 });
