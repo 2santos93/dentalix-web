@@ -13,6 +13,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { SettingRows } from '@/components/settings/settings-page';
 
 const copy = {
   requireTitle: 'Exigir caja abierta',
@@ -79,7 +80,7 @@ export function CashSettingsForm({ token, allowed }: CashSettingsFormProps) {
   }
   if (!settings) {
     return (
-      <div role="status" aria-label="Cargando" className="max-w-[720px] rounded-xl border border-border bg-surface p-6">
+      <div role="status" aria-label="Cargando" className="rounded-xl border border-border bg-surface p-6">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="mt-4 h-4 w-56" />
       </div>
@@ -111,8 +112,8 @@ export function CashSettingsForm({ token, allowed }: CashSettingsFormProps) {
   ];
 
   return (
-    <div className="flex max-w-[720px] flex-col gap-3">
-      <div className="divide-y divide-border-subtle rounded-xl border border-border bg-surface">
+    <div className="flex flex-col gap-3">
+      <SettingRows>
         {rows.map((row) => (
           <Switch
             key={row.key}
@@ -125,7 +126,7 @@ export function CashSettingsForm({ token, allowed }: CashSettingsFormProps) {
             className="flex-row-reverse justify-between gap-4 px-4 py-4 sm:px-6 pointer-coarse:py-4"
           />
         ))}
-      </div>
+      </SettingRows>
       {saveError ? <InlineError>{saveError}</InlineError> : null}
       <p role="status" className={notice || saving ? 'text-sm text-muted' : 'sr-only'}>
         {saving ? copy.saving : notice}

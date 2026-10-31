@@ -88,8 +88,8 @@ export function DiscountPolicyManager({ token, allowed }: DiscountPolicyManagerP
   }
 
   return (
-    // Columna de ajustes: 720px, alineada a la izquierda (crítica de ajustes).
-    <div className="flex max-w-[720px] flex-col gap-4">
+    // La columna de 720 px la pone SettingsPage.
+    <div className="flex flex-col gap-4">
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>

@@ -17,11 +17,11 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { Pagination } from '@/components/shared/pagination';
-import { PageHeader } from '@/components/shared/page-header';
 import type { RowAction } from '@/components/shared/row-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { PriceListItemPriceModal } from './price-list-item-price-modal';
 
 const copy = {
@@ -201,7 +201,7 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
   const backLink = (
     <Link
       href="/settings/listas-de-precios"
-      className="mb-4 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:min-h-11"
+      className="mb-4 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:min-h-11"
     >
       <ChevronLeft aria-hidden className="size-4" />
       {copy.back}
@@ -292,19 +292,15 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
   ];
 
   return (
-    <>
-      <PageHeader
-        back={{ href: '/settings/listas-de-precios', label: copy.back }}
-        title={list.name}
-        description={copy.description(currency)}
-        meta={
-          list.active ? undefined : (
-            <Badge variant="neutral" className="mt-3">
-              {copy.inactiveBadge}
-            </Badge>
-          )
-        }
-      />
+    // Directorio de 5 columnas con buscador: ancho completo. La línea de
+    // alcance dice si la lista está inactiva.
+    <SettingsPage
+      width="wide"
+      back={{ href: '/settings/listas-de-precios', label: copy.back }}
+      title={list.name}
+      description={copy.description(currency)}
+      scope={list.active ? undefined : <Badge variant="neutral">{copy.inactiveBadge}</Badge>}
+    >
 
       <div className="flex flex-col gap-3">
         <ListToolbar
@@ -391,6 +387,6 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
         destructive
         error={removeError}
       />
-    </>
+    </SettingsPage>
   );
 }

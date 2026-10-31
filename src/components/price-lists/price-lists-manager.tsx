@@ -220,7 +220,7 @@ export function PriceListsManager({ token, allowed }: PriceListsManagerProps) {
   );
 
   return (
-    <div className="flex max-w-[720px] flex-col gap-3">
+    <div className="flex flex-col gap-3">
       {/* Lista vacía: sin «0 listas» y la acción dentro del estado vacío. */}
       {isEmpty ? null : (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

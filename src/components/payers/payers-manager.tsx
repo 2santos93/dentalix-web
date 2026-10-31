@@ -193,7 +193,7 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
   );
 
   return (
-    <div className="flex max-w-[720px] flex-col gap-3">
+    <div className="flex flex-col gap-3">
       {/* Lista vacía: sin «0 pagadores» y la acción dentro del estado vacío. */}
       {isEmpty ? null : (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { DiscountPolicyManager } from '@/components/discounts/discount-policy-manager';
 
 const copy = {
@@ -36,9 +35,8 @@ export default function DiscountSettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
       <DiscountPolicyManager token={accessToken} allowed={canManageDiscounts(getTokenRole(accessToken))} />
-    </>
+    </SettingsPage>
   );
 }

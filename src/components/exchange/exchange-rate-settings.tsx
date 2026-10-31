@@ -33,6 +33,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
 import { SectionHeader } from '@/components/ui/section-header';
+import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TodayRates } from './today-rates';
 
@@ -229,7 +230,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
   }
   if (!state) {
     return (
-      <div role="status" aria-label={copy.loading} className="flex max-w-[720px] flex-col gap-4">
+      <div role="status" aria-label={copy.loading} className="flex flex-col gap-4">
         <div className="rounded-xl border border-border bg-surface p-6">
           <Skeleton className="h-4 w-48" />
           <Skeleton className="mt-4 h-4 w-72" />
@@ -306,7 +307,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
   ];
 
   return (
-    <div className="flex max-w-[720px] flex-col gap-10">
+    <div className="flex flex-col gap-10">
       <TodayRates
         token={token}
         baseCurrency={state.baseCurrency}
@@ -318,31 +319,33 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
 
       <section aria-labelledby={sourceHeadingId} className="flex flex-col gap-3">
         <SectionHeader titleId={sourceHeadingId} title={copy.sourceHeading} />
-        <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-          <div className="flex min-w-0 items-start gap-3">
-            <ArrowLeftRight aria-hidden className="mt-0.5 size-5 shrink-0 text-muted" />
-            <div className="min-w-0">
-              <p data-testid="exchange-rate-source" className="font-medium text-ink">
+        {/* La fuente es un valor de política: fila con el valor y «Cambiar» (diálogo). */}
+        <SettingRows>
+          <SettingRow
+            label={
+              <span data-testid="exchange-rate-source">
                 {state.source === 'MANUAL'
                   ? copy.manualSince(state.manualSince && fmt ? fmt.civilDate(state.manualSince) : null)
                   : copy.sourceLabels[state.source]}
-              </p>
-              <p className="mt-1 text-sm text-muted">{copy.sourceHints[state.source]}</p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            className="shrink-0 max-sm:w-full"
-            onClick={() => {
-              setNotice('');
-              setSourceKey((k) => (k ?? 0) + 1);
-              setSourceOpen(true);
-            }}
-          >
-            {copy.change}
-          </Button>
-        </div>
+              </span>
+            }
+            description={copy.sourceHints[state.source]}
+            action={
+              <Button
+                type="button"
+                variant="secondary"
+                className="shrink-0 max-sm:w-full"
+                onClick={() => {
+                  setNotice('');
+                  setSourceKey((k) => (k ?? 0) + 1);
+                  setSourceOpen(true);
+                }}
+              >
+                {copy.change}
+              </Button>
+            }
+          />
+        </SettingRows>
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>

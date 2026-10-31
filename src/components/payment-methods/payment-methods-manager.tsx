@@ -15,7 +15,7 @@ import { notifyError } from '@/components/errors/notify';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
-import { SectionHeader } from '@/components/ui/section-header';
+import { SettingsSection } from '@/components/settings/settings-page';
 import type { RowAction } from '@/components/shared/row-actions';
 import { PaymentMethodFormModal } from './payment-method-form-modal';
 
@@ -172,13 +172,12 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
   ];
 
   return (
-    <section aria-labelledby="payment-methods-title" className="flex flex-col gap-3">
-      <SectionHeader titleId="payment-methods-title" title={copy.title} description={copy.description} />
+    <SettingsSection id="payment-methods-title" title={copy.title} description={copy.description}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted" aria-live="polite">
           {loading || error ? '' : copy.count(methods.length)}
         </p>
-        {/* Secundaria: la primaria de Ajustes › Caja es «Guardar» de sus ajustes. */}
+        {/* Secundaria: los medios son un catálogo de apoyo dentro de Ajustes › Caja. */}
         <Button type="button" variant="secondary" onClick={() => openModal(null)} className="w-full max-sm:h-11 sm:w-auto">
           <Plus aria-hidden />
           {copy.newMethod}
@@ -213,6 +212,6 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
         method={editing}
         onSaved={upsert}
       />
-    </section>
+    </SettingsSection>
   );
 }
