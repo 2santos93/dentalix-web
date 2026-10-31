@@ -69,7 +69,7 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900, tag: '1' },
   { name: 'movil', width: 390, height: 844, tag: '2' },
 ]) {
-  test(`legacy «Tipo Doc» CC: hoja de saldos: dry-run, importar, estado de cuenta y deshacer (${viewport.name})`, async ({ page }) => {
+  test(`legacy «Tipo Doc» Cédula: hoja de saldos: dry-run, importar, estado de cuenta y deshacer (${viewport.name})`, async ({ page }) => {
     test.setTimeout(150_000);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const origin = tenantOrigin(DEMO_SUBDOMAIN);
@@ -82,7 +82,7 @@ for (const viewport of [
     await page.getByLabel('Archivo de pacientes (CSV o .xlsx)').setInputFiles({
       name: `pacientes-saldos-${viewport.name}.csv`,
       mimeType: 'text/csv',
-      buffer: Buffer.from(`Tipo Doc;Cédula;Nombre;Apellidos\nCC;${doc};Sara;${lastName}\n`, 'utf8'),
+      buffer: Buffer.from(`Tipo Doc;Cédula;Nombre;Apellidos\nCédula;${doc};Sara;${lastName}\n`, 'utf8'),
     });
     await page.getByRole('button', { name: 'Validar archivo' }).click();
     await page

@@ -88,7 +88,7 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900, tag: '1' },
   { name: 'movil', width: 390, height: 844, tag: '2' },
 ]) {
-  test(`legacy «Tipo Doc» CC y columna «Cédula»: importar, revisar, confirmar y deshacer un lote (${viewport.name})`, async ({ page, request }) => {
+  test(`legacy «Tipo Doc» Cédula y columna «Cédula»: importar, revisar, confirmar y deshacer un lote (${viewport.name})`, async ({ page, request }) => {
     test.setTimeout(150_000);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const origin = tenantOrigin(DEMO_SUBDOMAIN);
@@ -99,10 +99,10 @@ for (const viewport of [
     // a 390 px llegó a sacar 3 px de <main> (QA D1).
     const csv = [
       'Tipo Doc;Cédula;Nombre;Apellidos;Fecha de nacimiento;Sexo;Celular;Correo;Dirección;Observaciones',
-      `CC;${docA};Ana;Importada${viewport.tag};03/05/1990;F;310 123 4567;ana${suffix}@example.com;Calle 10 # 1-20;Importado de la hoja anterior`,
-      `CC;${docB};Luis;Importado${viewport.tag};;;;;;`,
-      `CC;${docA};Ana;Repetida;;;;;;`,
-      `CC;99${suffix};;SinNombre;31/02/1990;;;;;`,
+      `Cédula;${docA};Ana;Importada${viewport.tag};03/05/1990;F;310 123 4567;ana${suffix}@example.com;Calle 10 # 1-20;Importado de la hoja anterior`,
+      `Cédula;${docB};Luis;Importado${viewport.tag};;;;;;`,
+      `Cédula;${docA};Ana;Repetida;;;;;;`,
+      `Cédula;99${suffix};;SinNombre;31/02/1990;;;;;`,
     ].join('\n');
 
     await webLogin(page, origin);
@@ -160,9 +160,10 @@ for (const viewport of [
     expect(created).toBeTruthy();
     await page.goto(`${origin}/patients/${created.id}`);
     await expect(page.getByText('Importado desde archivo')).toBeVisible();
-    // DX-327: el sinónimo antiguo «CC» se guarda como el tipo genérico, que
-    // se ve con el nombre local que le dio la clínica (V1: la demo lo tiene);
-    // ni el «CC» ni la cabecera «Cédula» de la hoja salen por su cuenta.
+    // DX-327: el alias de uso en muchos países «Cédula» se guarda como el tipo
+    // genérico, que se ve con el nombre local que le dio la clínica (V1: la
+    // demo lo tiene); ni el valor ni la cabecera «Cédula» de la hoja salen por
+    // su cuenta (las siglas de un solo país ya no son alias: Z1).
     const nationalIdName = await demoNationalIdName(request);
     await expect(page.getByText(`${nationalIdName} ${docA}`).first()).toBeVisible();
     const mainText = (await page.locator('main').innerText()).split(nationalIdName).join('');
@@ -202,14 +203,14 @@ function legacyBigCsv(rows: number, docPrefix: string): Buffer {
   for (let i = 0; i < rows; i += 1) {
     const n = String(i).padStart(5, '0');
     lines.push(
-      `CC;${docPrefix}${n};Paciente${n};Importado Masivo;03/05/1990;F;310 123 4567;paciente${docPrefix}${n}@example.com;` +
+      `Cédula;${docPrefix}${n};Paciente${n};Importado Masivo;03/05/1990;F;310 123 4567;paciente${docPrefix}${n}@example.com;` +
         `Calle 10 # 1-20 Barrio Centro;Paciente de la lista del programa anterior importado en lote`,
     );
   }
   return Buffer.from(lines.join('\n'), 'utf8');
 }
 
-test('legacy «Tipo Doc» CC, DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 MB) sube con progreso, se valida y se importa', async ({
+test('legacy «Tipo Doc» Cédula, DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 MB) sube con progreso, se valida y se importa', async ({
   page,
 }) => {
   test.setTimeout(300_000);

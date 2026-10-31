@@ -88,13 +88,13 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900, tag: '1' },
   { name: 'movil', width: 390, height: 844, tag: '2' },
 ]) {
-  test(`legacy «Tipo Doc» CC: abono contra el saldo migrado y solo saldos sin pacientes nuevos (${viewport.name})`, async ({ page }) => {
+  test(`legacy «Tipo Doc» Cédula: abono contra el saldo migrado y solo saldos sin pacientes nuevos (${viewport.name})`, async ({ page }) => {
     test.setTimeout(180_000);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const origin = tenantOrigin(DEMO_SUBDOMAIN);
     const doc = `63${viewport.tag}${suffix}1`;
     const lastName = `Abono${viewport.tag}${suffix}`;
-    const patientsCsv = `Tipo Doc;Cédula;Nombre;Apellidos\nCC;${doc};Tomás;${lastName}\n`;
+    const patientsCsv = `Tipo Doc;Cédula;Nombre;Apellidos\nCédula;${doc};Tomás;${lastName}\n`;
     const firstFile = `pacientes-abono-${viewport.name}-${suffix}.csv`;
     const onlyBalancesFile = `pacientes-solo-saldos-${viewport.name}-${suffix}.csv`;
 
@@ -120,7 +120,7 @@ for (const viewport of [
     //    existe»); en móvil, un archivo sin ninguna fila importable
     //    (preparedRows = 0), que antes no dejaba pasar de la validación.
     const secondCsv =
-      viewport.width >= 1024 ? patientsCsv : `Tipo Doc;Cédula;Nombre;Apellidos\nCC;${doc}9;;\n`;
+      viewport.width >= 1024 ? patientsCsv : `Tipo Doc;Cédula;Nombre;Apellidos\nCédula;${doc}9;;\n`;
     await validatePatients(page, origin, onlyBalancesFile, secondCsv);
     const result = page.getByRole('region', { name: 'Resultado de la validación' });
     await expect(result.getByRole('button', { name: 'Continuar' })).toBeVisible({ timeout: 30_000 });
