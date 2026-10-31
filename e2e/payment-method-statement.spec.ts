@@ -3,6 +3,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '.
 import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { waitForAnimationsSettled } from './support/touch-targets';
 
 /**
  * e2e (DX-395): medio y referencia en el estado de cuenta, filtro de Caja por
@@ -95,6 +96,8 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
 
 /** Cada control visible de `scope` (botones, entradas y selectores) mide ≥ 44 px de alto. */
 async function expectTouchTargets(scope: Locator): Promise<void> {
+  // En reposo: la entrada de un diálogo (o de la tarjeta) escala los controles.
+  await waitForAnimationsSettled(scope);
   const controls = scope.locator('button, select, input:not([type=checkbox]):not([type=radio])');
   const count = await controls.count();
   expect(count).toBeGreaterThan(0);

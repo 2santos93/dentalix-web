@@ -115,7 +115,7 @@ for (const browserClock of ['23:30', '06:00']) {
 
     // --- Go to the agenda ---
     await page.goto(`${origin}/agenda`);
-    await expect(page.getByRole('heading', { name: 'Agenda' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible();
 
     // La agenda arranca en vista MES (agenda-view.tsx: useState<ViewMode>('month')),
     // así que hay que pasar a "Día" para que se renderice `DayAgenda` — es la vista
@@ -194,7 +194,7 @@ for (const browserClock of ['23:30', '06:00']) {
     // under); jumping back to the anchor day shows the appointment again.
     await page.reload();
 
-    await expect(page.getByRole('heading', { name: 'Agenda' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible();
 
     // `viewMode` no se persiste: el reload vuelve a la vista MES por defecto, y
     // el día vuelve a ser el "hoy" del navegador.

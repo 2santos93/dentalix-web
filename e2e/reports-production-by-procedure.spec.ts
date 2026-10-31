@@ -6,6 +6,7 @@ import { loginAs } from './support/auth';
 import { tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll } from './support/layout';
 import { fillDate } from './support/dates';
+import { openSection } from './support/nav';
 
 /**
  * e2e (DX-423): «Reportes» → «Producción por procedimiento» contra la clínica
@@ -33,7 +34,7 @@ const origin = tenantOrigin(DEMO_SUBDOMAIN);
 
 async function openProduction(page: Page, email = ADMIN_EMAIL): Promise<void> {
   await loginAs(page, origin, email, DEMO_PASSWORD);
-  await page.getByRole('link', { name: 'Reportes' }).filter({ visible: true }).first().click();
+  await openSection(page, 'Reportes');
   await expect(page).toHaveURL(new RegExp(`${origin}/reportes`));
   const tab = page.getByRole('tab', { name: 'Producción por procedimiento' });
   if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();

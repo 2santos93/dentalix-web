@@ -369,7 +369,7 @@ test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda 
   // 390 px: la agenda no se desplaza y el aviso sigue a la vista.
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalScroll(page);
-  await expect(page.getByText('Cobertura vencida').or(page.locator('[title="Cobertura vencida"]')).first()).toBeVisible();
+  await expect(page.getByText('Cobertura vencida').or(page.locator('[title="Cobertura vencida"]')).locator('visible=true').first()).toBeVisible();
 });
 
 test('el listado de pacientes filtrado por «Sura EPS» muestra solo a ese paciente', async ({ page }) => {
