@@ -1,7 +1,7 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import { apiLogin, type ApiSession } from './api';
 import { API_URL, tenantOrigin } from './urls';
-import { E2E_REGION } from './regional';
+import { E2E_REGION, type RegionalSettings } from './regional';
 
 /**
  * La clínica DEMO (`npm run seed:demo` en la API) es estado compartido: la
@@ -13,6 +13,35 @@ import { E2E_REGION } from './regional';
 export const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 export const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
 export const DEMO_ADMIN_EMAIL = process.env.E2E_DEMO_ADMIN_EMAIL ?? 'admin@demo.dentalix.app';
+
+/**
+ * Región de las dos sedes que siembra `seed:demo` (V1): una clínica
+ * venezolana que trabaja en USD, en hora de Caracas (UTC−4 fijo) y con el
+ * formato es-VE. Parte de sus abonos y de la caja abierta van en bolívares.
+ */
+export const DEMO_TIME_ZONE = 'America/Caracas';
+export const DEMO_CURRENCY = 'USD';
+export const DEMO_REGION: RegionalSettings = {
+  country: 'VE',
+  currency: DEMO_CURRENCY,
+  timeZone: DEMO_TIME_ZONE,
+  locale: 'es-VE',
+  hourCycle: 'h23',
+};
+/**
+ * Nombre local que la demo da al documento nacional (DX-327, dato de la
+ * clínica puesto en Ajustes; V1 le pone el venezolano): fichas, recibos e
+ * importación lo muestran en lugar del genérico «Documento nacional». Se lee
+ * de la API, como la pantalla: el spec no escribe nombres de país.
+ */
+export async function demoNationalIdName(request: APIRequestContext): Promise<string> {
+  const session = await demoAdminSession(request);
+  const res = await request.get(`${API_URL}/patients/document-type-names`, { headers: session.headers });
+  expect(res.ok(), `GET /patients/document-type-names falló: ${await res.text()}`).toBeTruthy();
+  const { names } = (await res.json()) as { names: Record<string, string | null> };
+  expect(names.NATIONAL_ID, 'la demo siembra el nombre local del documento nacional').toBeTruthy();
+  return names.NATIONAL_ID as string;
+}
 
 /** Sedes que siembra `seed:demo` (prisma/demo/data.ts de la API). */
 export const DEMO_SEEDED_LOCATIONS = ['Sede principal', 'Sede Norte'];

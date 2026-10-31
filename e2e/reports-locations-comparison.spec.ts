@@ -72,8 +72,10 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   }
   const total = page.getByTestId('comparison-total');
   await expect(total.getByRole('rowheader', { name: 'Total clínica' })).toBeVisible();
-  // La demo cobra en COP: un importe por moneda, con su código.
-  await expect(total.getByRole('cell').first()).toContainText('COP');
+  // La demo cobra en USD: un importe por moneda, con su código (otros specs
+  // dejan en ella planes en COP, que salen con el suyo).
+  await expect(total.getByRole('cell').first()).toContainText(/\b[A-Z]{3}\b/);
+  await expect(total.getByRole('cell').filter({ hasText: 'USD' }).first()).toBeVisible();
   for (const column of [
     'Producción',
     'Cobrado',

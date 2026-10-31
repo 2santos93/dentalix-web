@@ -65,14 +65,14 @@ describe('RegionalSettingsFields', () => {
   it('shows each suggestion with where it comes from', async () => {
     render(
       <Harness
-        initial={{ country: 'VE', currency: 'VES', timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' }}
+        initial={{ country: 'VE', currency: 'USD', timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' }}
         sources={{ country: 'browser', currency: 'country', timeZone: 'browser', locale: 'country', hourCycle: 'browser' }}
       />,
     );
     await ready();
     expect(screen.getByLabelText('País')).toHaveValue('Venezuela');
     expect(screen.getByLabelText('País')).toHaveAccessibleDescription(`Sugerido por tu navegador. ${copy.countryHint}`);
-    expect(screen.getByLabelText('Moneda')).toHaveValue('VES');
+    expect(screen.getByLabelText('Moneda')).toHaveValue('USD');
     expect(screen.getByLabelText('Moneda')).toHaveAccessibleDescription(`Sugerido por el país. ${copy.currencyHint}`);
     expect(screen.getByLabelText('Zona horaria')).toHaveAccessibleDescription(
       `Sugerido por tu navegador. ${copy.timeZoneHint}`,
@@ -82,6 +82,38 @@ describe('RegionalSettingsFields', () => {
     );
     const clock = screen.getByRole('radiogroup', { name: 'Reloj' });
     expect(clock).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
+  });
+
+  it('offers the other currency in use in the country one click away, only while the currency is the suggested one (V1)', async () => {
+    const user = setupUser();
+    render(
+      <Harness
+        initial={{ country: 'VE', currency: 'USD', timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' }}
+        sources={{ currency: 'country' }}
+      />,
+    );
+    await ready();
+    expect(screen.getByText('En Venezuela también se usa VES.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Usar VES' }));
+    expect(screen.getByLabelText('Moneda')).toHaveValue('VES');
+    expect(screen.queryByText('En Venezuela también se usa VES.')).not.toBeInTheDocument();
+  });
+
+  it('does not offer another currency for a saved or chosen one, nor in countries without an alternative (V1)', async () => {
+    const { unmount } = render(
+      <Harness initial={{ country: 'VE', currency: 'USD', timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' }} />,
+    );
+    await ready();
+    expect(screen.queryByRole('button', { name: 'Usar VES' })).not.toBeInTheDocument();
+    unmount();
+    render(
+      <Harness
+        initial={{ country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES', hourCycle: 'h23' }}
+        sources={{ currency: 'country' }}
+      />,
+    );
+    await ready();
+    expect(screen.queryByText(/también se usa/)).not.toBeInTheDocument();
   });
 
   it('zone and format show human labels, never the raw IANA id or BCP 47 tag', async () => {
@@ -141,14 +173,16 @@ describe('RegionalSettingsFields', () => {
     render(
       <Harness
         initial={{ country: 'VE', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES', hourCycle: 'h23' }}
-        proposals={{ currency: 'VES', timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' }}
+        proposals={{ currency: 'USD', timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' }}
         onAccept={onAccept}
       />,
     );
     await ready();
-    expect(screen.getByText('En Venezuela se usa VES.')).toBeInTheDocument();
+    expect(screen.getByText('En Venezuela se usa USD.')).toBeInTheDocument();
     expect(screen.getByLabelText('Moneda')).toHaveValue('EUR');
-    await user.click(screen.getByRole('button', { name: 'Usar VES' }));
+    // V1: la otra moneda de uso del país, también a un clic.
+    expect(screen.getByText('En Venezuela también se usa VES.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Usar USD' }));
     expect(onAccept).toHaveBeenCalledWith('currency');
     expect(screen.getByText(/^Zona de Venezuela: \(UTC−4\) Caracas — Venezuela\.$/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Usar esta zona' }));

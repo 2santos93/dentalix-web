@@ -22,7 +22,11 @@ const iana=new Set(JSON.parse(fs.readFileSync(process.cwd()+'/prisma/reference/i
 const src=fs.readFileSync(process.cwd()+'/prisma/reference/iso4217.ts','utf8');
 const whitelist=new Set([...src.matchAll(/code: '([A-Z]{3})'/g)].map(m=>m[1]));
 // Correcciones a mano sobre country-state-city 3.2.1 (códigos retirados o cambios recientes).
-const FIX_CURRENCY={VE:'VES',HR:'EUR',BG:'EUR',CW:'XCG',SX:'XCG',MR:'MRU',SL:'SLE',ST:'STN',ZW:'ZWG',PA:'USD'};
+// VE: el dueño (V1, 2026-10-31) — las clínicas venezolanas trabajan sobre todo en USD;
+// VES se ofrece con un clic (`CURRENCY_ALTERNATIVES`).
+const FIX_CURRENCY={VE:'USD',HR:'EUR',BG:'EUR',CW:'XCG',SX:'XCG',MR:'MRU',SL:'SLE',ST:'STN',ZW:'ZWG',PA:'USD'};
+// Otras monedas de uso en el país, que el alta ofrece con «Usar …» junto a la propuesta.
+const CURRENCY_ALTERNATIVES={VE:['VES']};
 const FIX_ZONES={BQ:['America/Kralendijk'],SX:['America/Lower_Princes'],BV:[],HM:[]};
 const currencies={}, zones={};
 const seen=new Map();
@@ -44,5 +48,6 @@ for (const {code} of iso){
 const shared=[...seen].filter(([,cs])=>cs.length>1);
 console.error('shared',JSON.stringify(shared)); console.error('icuOnly',Object.keys(icuOnly).length, 'cur',Object.keys(currencies).length);
 const missing=Object.keys(zones).filter(k=>!zones[k].length); console.error('noZone',missing.join(','));
-const out={currencies,zones,icuZoneCountries:icuOnly};
+const currencyAlternatives=Object.fromEntries(Object.entries(CURRENCY_ALTERNATIVES).map(([k,v])=>[k,v.filter(c=>whitelist.has(c)&&c!==currencies[k])]));
+const out={currencies,currencyAlternatives,zones,icuZoneCountries:icuOnly};
 fs.writeFileSync(process.argv[2], JSON.stringify(out,null,2)+'\n');
