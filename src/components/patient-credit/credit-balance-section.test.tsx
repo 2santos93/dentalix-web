@@ -4,12 +4,22 @@ import { CreditBalanceSection } from './credit-balance-section';
 import { accountStatementFixture } from '@/lib/test/account-statement';
 import { refundCredit, transferCredit } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatement } from '@/lib/account-statement/account-statement-api';
+import { listLocations } from '@/lib/locations/locations-api';
 
 jest.mock('../../lib/patient-credit/patient-credit-api', () => ({
   ...jest.requireActual('../../lib/patient-credit/patient-credit-api'),
   transferCredit: jest.fn(),
   refundCredit: jest.fn(),
 }));
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn(),
+}));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+const SEDES = [
+  { id: 'loc-1', name: 'Sede Principal', isActive: true },
+  { id: 'loc-2', name: 'Sede Norte', isActive: true },
+] as never;
 
 const mockedTransfer = transferCredit as jest.MockedFunction<typeof transferCredit>;
 const mockedRefund = refundCredit as jest.MockedFunction<typeof refundCredit>;
@@ -58,6 +68,9 @@ function renderSection(statement: AccountStatement, canAct = true) {
 beforeEach(() => {
   mockedTransfer.mockReset();
   mockedRefund.mockReset();
+  mockedLocations.mockResolvedValue(SEDES);
+  window.localStorage.clear();
+  window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
   Object.defineProperty(globalThis, 'crypto', {
     value: { randomUUID: () => '00000000-0000-4000-8000-000000000001' },
     configurable: true,
@@ -202,4 +215,32 @@ it('devolver con más de 20 abonos vivos: ninguno marcado de entrada y tope de 2
   await user.click(within(dialog).getByRole('button', { name: 'Devolver' }));
   expect(await within(dialog).findByRole('alert')).toHaveTextContent(/como máximo 20/);
   expect(mockedRefund).not.toHaveBeenCalled();
+});
+
+it('D1: con varias sedes y «Todas las sedes», no deja devolver en efectivo y explica por qué', async () => {
+  window.localStorage.clear();
+  const user = userEvent.setup();
+  renderSection(copCredit());
+  await user.click(screen.getByRole('button', { name: /Devolver/ }));
+  const dialog = screen.getByRole('dialog');
+  expect(await within(dialog).findByTestId('refund-cash-location')).toHaveTextContent(
+    /Elige la sede de la caja/,
+  );
+  expect(within(dialog).getByRole('button', { name: 'Devolver' })).toBeDisabled();
+  // Por transferencia no sale de ninguna caja: sí se puede.
+  fireEvent.change(within(dialog).getByLabelText('Cómo se devuelve'), {
+    target: { value: 'TRANSFER' },
+  });
+  expect(within(dialog).queryByTestId('refund-cash-location')).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: 'Devolver' })).toBeEnabled();
+});
+
+it('D1: con una sede activa, el efectivo nombra la caja de esa sede', async () => {
+  window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
+  const user = userEvent.setup();
+  renderSection(copCredit());
+  await user.click(screen.getByRole('button', { name: /Devolver/ }));
+  expect(await screen.findByTestId('refund-cash-location')).toHaveTextContent(
+    'El efectivo sale de tu caja en Sede Norte.',
+  );
 });

@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
@@ -17,6 +17,9 @@ import {
 } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatementMovement } from '@/lib/account-statement/account-statement-api';
 import { cn } from '@/lib/utils';
+import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { getActiveLocationId } from '@/lib/locations/location-store';
+import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { creditPreviewCopy, type CreditSource } from './credit-balance';
 import { CreditPreview } from './credit-preview';
 
@@ -44,6 +47,10 @@ const copy = {
   invalidAmount: 'Escribe un importe mayor que 0.',
   overCredit: (max: string) => `No puede superar el saldo a favor (${max}).`,
   submit: 'Devolver',
+  // D1 (QA): el efectivo sale del cajón de UNA sede.
+  cashFrom: (name: string) => `El efectivo sale de tu caja en ${name}.`,
+  cashNeedsLocation:
+    'Elige la sede de la caja de la que sale el efectivo: cámbiala en el selector de sede de arriba.',
   failed: 'No pudimos registrar la devolución.',
 };
 
@@ -87,6 +94,29 @@ export function CreditRefundModal({
   const key = useRef<{ body: string; key: string } | null>(null);
   const parsed = parseMoneyInput(amount, source.currency);
   const value = parsed.ok ? parsed.value : 0;
+  // D1: la sede activa (la de `X-Location-Id`) y las sedes posibles. Con
+  // varias y ninguna elegida, el efectivo no se puede devolver.
+  const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    listLocations(token)
+      .then((data) => {
+        if (cancelled) return;
+        setLocations(data ?? []);
+        setActiveLocationId(getActiveLocationId());
+      })
+      .catch(() => {
+        /* sin la lista no se nombra la sede; la API decide con su 400 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+  const allowed = getTokenAllowedLocationIds(token);
+  const usable = locations.filter((l) => l.isActive && (allowed === null || allowed.includes(l.id)));
+  const activeLocation = usable.find((l) => l.id === activeLocationId) ?? (usable.length === 1 ? usable[0] : null);
+  const cashBlocked = method === 'CASH' && activeLocation === null && usable.length > 1;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -110,7 +140,7 @@ export function CreditRefundModal({
       setPaymentsError(copy.paymentsTooMany);
       invalid = true;
     }
-    if (invalid || !parsed.ok) return;
+    if (invalid || !parsed.ok || cashBlocked) return;
     setError(null);
     const body = {
       amount: parsed.value,
@@ -147,6 +177,7 @@ export function CreditRefundModal({
       onSubmit={(e) => void handleSubmit(e)}
       submitLabel={copy.submit}
       submitting={submitting}
+      submitDisabled={cashBlocked}
       error={error}
       destructive
     >
@@ -185,6 +216,17 @@ export function CreditRefundModal({
           </select>
         </FormField>
       </div>
+      {method === 'CASH' ? (
+        cashBlocked ? (
+          <p role="alert" data-testid="refund-cash-location" className="text-sm text-danger">
+            {copy.cashNeedsLocation}
+          </p>
+        ) : activeLocation ? (
+          <p data-testid="refund-cash-location" className="t-label text-muted">
+            {copy.cashFrom(activeLocation.name)}
+          </p>
+        ) : null
+      ) : null}
       <FormField
         htmlFor="cr-reason"
         label={copy.reason}
