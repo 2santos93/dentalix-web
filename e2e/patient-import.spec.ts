@@ -7,6 +7,7 @@ import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { request as httpRequest } from 'node:http';
 import { API_URL, WEB_PORT, tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { demoNationalIdName } from './support/demo';
 
 /**
  * e2e (DX-107): Ajustes → Importar pacientes en la clínica demo, a 1440 y 390.
@@ -159,9 +160,14 @@ for (const viewport of [
     expect(created).toBeTruthy();
     await page.goto(`${origin}/patients/${created.id}`);
     await expect(page.getByText('Importado desde archivo')).toBeVisible();
-    // DX-327: el sinónimo antiguo «CC» se guarda como el tipo genérico, sin nombre propio.
-    await expect(page.getByText(`Documento nacional ${docA}`).first()).toBeVisible();
-    await expect(page.locator('main')).not.toContainText('Cédula');
+    // DX-327: el sinónimo antiguo «CC» se guarda como el tipo genérico, que
+    // se ve con el nombre local que le dio la clínica (V1: la demo lo tiene);
+    // ni el «CC» ni la cabecera «Cédula» de la hoja salen por su cuenta.
+    const nationalIdName = await demoNationalIdName(request);
+    await expect(page.getByText(`${nationalIdName} ${docA}`).first()).toBeVisible();
+    const mainText = (await page.locator('main').innerText()).split(nationalIdName).join('');
+    expect(mainText).not.toContain('Cédula');
+    expect(mainText).not.toMatch(/\bCC\b/);
     await expect(page.getByText(/Pendiente · importado sin autorización/)).toBeVisible();
 
     // Historial: deshacer el lote.

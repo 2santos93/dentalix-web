@@ -3,6 +3,7 @@ import data from './country-regional.json';
 import { COUNTRIES } from './countries';
 import {
   countryCurrency,
+  countryCurrencyAlternatives,
   countryLocale,
   countryProposal,
   countryTimeZones,
@@ -31,7 +32,10 @@ describe('country-regional data', () => {
   });
 
   it('knows current currencies (no retired codes)', () => {
-    expect(countryCurrency('VE')).toBe('VES');
+    // V1: en Venezuela se propone USD (en lo que trabajan sobre todo las
+    // clínicas); el bolívar es la alternativa a un clic.
+    expect(countryCurrency('VE')).toBe('USD');
+    expect(countryCurrency('PA')).toBe('USD');
     expect(countryCurrency('HR')).toBe('EUR');
     expect(countryCurrency('BG')).toBe('EUR');
     expect(countryCurrency('EC')).toBe('USD');
@@ -40,6 +44,20 @@ describe('country-regional data', () => {
     // Monedas de tres decimales: la API no las admite, no se propone ninguna.
     expect(countryCurrency('KW')).toBeNull();
     expect(Object.values(data.currencies)).not.toEqual(expect.arrayContaining(['VEF', 'HRK', 'BGN', 'MRO', 'STD', 'SLL', 'ZWL']));
+  });
+
+  it('offers other currencies in use only where the data says so (V1: VES in Venezuela)', () => {
+    expect(countryCurrencyAlternatives('VE')).toEqual(['VES']);
+    // El resto de países, como los dejó R1: sin alternativa.
+    for (const country of ['PA', 'EC', 'CO', 'MX', 'ES', 'US']) expect(countryCurrencyAlternatives(country)).toEqual([]);
+    expect(countryCurrencyAlternatives('ZZ')).toEqual([]);
+    for (const [country, alternatives] of Object.entries(data.currencyAlternatives)) {
+      expect(Object.keys(data.currencies)).toContain(country);
+      for (const code of alternatives) {
+        expect(code).toMatch(/^[A-Z]{3}$/);
+        expect(code).not.toBe((data.currencies as Record<string, string>)[country]);
+      }
+    }
   });
 });
 
@@ -74,9 +92,9 @@ describe('guessCountry', () => {
 });
 
 describe('countryProposal', () => {
-  it('Venezuela: VES, Caracas, es-VE and its 12 h clock, without any hard-coded rule', () => {
+  it('Venezuela: USD, Caracas, es-VE and its 12 h clock, without any hard-coded rule', () => {
     expect(countryProposal('VE', browser({ languages: ['en-US'] }))).toEqual({
-      currency: 'VES',
+      currency: 'USD',
       timeZone: 'America/Caracas',
       locale: 'es-VE',
       hourCycle: localeHourCycle('es-VE'),

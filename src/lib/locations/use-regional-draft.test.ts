@@ -15,7 +15,7 @@ describe('useRegionalDraft (R1)', () => {
     const { result } = renderHook(() => useRegionalDraft(null, () => caracasEnUs));
     expect(result.current.values).toEqual({
       country: 'VE',
-      currency: 'VES',
+      currency: 'USD',
       timeZone: 'America/Caracas',
       locale: 'es-VE',
       hourCycle: 'h12',
@@ -45,9 +45,9 @@ describe('useRegionalDraft (R1)', () => {
 
   it('create: changing the country re-suggests the untouched fields and keeps the touched ones', () => {
     const { result } = renderHook(() => useRegionalDraft(null, () => caracasEnUs));
-    act(() => result.current.change('currency', 'USD'));
+    act(() => result.current.change('currency', 'VES'));
     act(() => result.current.change('country', 'MX'));
-    expect(result.current.values.currency).toBe('USD');
+    expect(result.current.values.currency).toBe('VES');
     expect(result.current.values.locale).toBe('es-MX');
     expect(result.current.sources.locale).toBe('country');
     expect(result.current.sources.currency).toBeUndefined();
@@ -68,7 +68,7 @@ describe('useRegionalDraft (R1)', () => {
     act(() => result.current.change('country', 'VE'));
     expect(result.current.values).toEqual({
       country: 'VE',
-      currency: 'VES',
+      currency: 'USD',
       timeZone: 'America/Caracas',
       locale: 'es-VE',
       hourCycle: 'h12',
@@ -89,7 +89,7 @@ describe('useRegionalDraft (R1)', () => {
     act(() => result.current.change('country', 'VE'));
     expect(result.current.values.currency).toBe('COP');
     expect(result.current.values.timeZone).toBe('America/Bogota');
-    expect(result.current.proposals).toEqual({ currency: 'VES', timeZone: 'America/Caracas', locale: 'es-VE' });
+    expect(result.current.proposals).toEqual({ currency: 'USD', timeZone: 'America/Caracas', locale: 'es-VE' });
   });
 
   it('edit of an unconfigured location fills only the empty fields, from its country', () => {
@@ -99,7 +99,7 @@ describe('useRegionalDraft (R1)', () => {
     );
     expect(result.current.values).toEqual({
       country: 'VE',
-      currency: 'VES',
+      currency: 'USD',
       timeZone: 'America/Caracas',
       locale: 'es-VE',
       hourCycle: 'h23',

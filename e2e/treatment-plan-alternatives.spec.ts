@@ -76,8 +76,9 @@ async function seed(
     docType: 'NATIONAL_ID',
     docNumber: `DX40${tag}`.slice(0, 20),
     sex: 'F',
-    phone: '3205550199',
-    countryCode: 'CO',
+    // Número nacional: se lee con la región de la sede demo (VE).
+    phone: '04125550199',
+    countryCode: 'VE',
   });
   const implant = await post<{ id: string }>('/catalog/items', {
     code: `dx40i-${tag}`,
@@ -241,14 +242,14 @@ for (const viewport of [
       demoRows.filter({ hasText: 'Opción B: puente fijo' }).getByRole('link', {
         name: `WhatsApp a ${DEMO_OPTIONS_PATIENT}`,
       }),
-    ).toHaveAttribute('href', /^https:\/\/wa\.me\/573195550110\?text=Hola%20Carolina/);
+    ).toHaveAttribute('href', /^https:\/\/wa\.me\/584125550110\?text=Hola%20Carolina/);
 
     const row = table.getByRole(rowRole).filter({ hasText: data.fullName });
     await expect(row).toContainText(figure(IMPLANT));
     await expect(row).toContainText('hace 12 días');
     await expect(row.getByRole('link', { name: `WhatsApp a ${data.fullName}` })).toHaveAttribute(
       'href',
-      /^https:\/\/wa\.me\/573205550199\?text=/,
+      /^https:\/\/wa\.me\/584125550199\?text=/,
     );
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
 

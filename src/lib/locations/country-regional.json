@@ -229,7 +229,7 @@
     "UZ": "UZS",
     "VA": "EUR",
     "VC": "XCD",
-    "VE": "VES",
+    "VE": "USD",
     "VG": "USD",
     "VI": "USD",
     "VN": "VND",
@@ -242,6 +242,11 @@
     "ZA": "ZAR",
     "ZM": "ZMW",
     "ZW": "ZWG"
+  },
+  "currencyAlternatives": {
+    "VE": [
+      "VES"
+    ]
   },
   "zones": {
     "AD": [

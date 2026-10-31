@@ -38,9 +38,9 @@ const suffix = rawSuffix
   .toLowerCase()
   .slice(0, 8);
 
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP' });
+const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
 function figure(amount: number): string {
-  return cop.format(amount).split(/\s/)[0];
+  return usd.format(amount).split(/\s/)[0];
 }
 
 interface Expected {
@@ -163,11 +163,11 @@ for (const viewport of [
       sex: 'F',
     });
     const plan = await post<{ id: string }>(page.request, admin, `/patients/${patient.id}/treatment-plans`, {
-      currency: 'COP',
+      currency: 'USD',
     });
     await post(page.request, reception, `/treatment-plans/${plan.id}/payments`, {
       amount: CHARGE,
-      currency: 'COP',
+      currency: 'USD',
       paidAt: new Date().toISOString(),
       method: 'CASH',
     });
@@ -180,7 +180,7 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Cerrar caja' }).click();
     const closeDialog = page.getByRole('dialog', { name: 'Cerrar caja' });
     if (viewport.width === 390) await expectDialogInsideViewport(page, closeDialog);
-    await closeDialog.getByLabel('Contado en efectivo (COP)').fill(String(expectedTotal - 1_000));
+    await closeDialog.getByLabel('Contado en efectivo (USD)').fill(String(expectedTotal - 1_000));
     await closeDialog.getByRole('button', { name: 'Cerrar caja' }).click();
     await expect(closeDialog.getByText(/explica el motivo/)).toBeVisible();
     await closeDialog.getByLabel('Motivo de la diferencia').fill('Faltó cambio en monedas');
@@ -261,10 +261,10 @@ for (const viewport of [
     try {
       // Un turno de recepción, cerrado con un arqueo que cuadra.
       const shift = await post<{ id: string }>(page.request, reception, '/cash-sessions/open', {
-        floats: [{ currency: 'COP', amount: 20_000 }],
+        floats: [{ currency: 'USD', amount: 20_000 }],
       });
       await post(page.request, reception, `/cash-sessions/${shift.id}/close`, {
-        counts: [{ currency: 'COP', method: 'CASH', counted: 20_000 }],
+        counts: [{ currency: 'USD', method: 'CASH', counted: 20_000 }],
       });
       // La caja de la administradora: el ajuste cuenta en ella.
       await post(page.request, admin, '/cash-sessions/open', { floats: [] });

@@ -4,6 +4,7 @@ import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { dataList, dataListRows, rowAction } from './support/data-list';
+import { demoNationalIdName } from './support/demo';
 
 /**
  * e2e (DX-136): recibo de caja numerado por sede.
@@ -160,7 +161,7 @@ for (const viewport of [
     await expect(doc).toContainText('Clínica Demo');
     await expect(doc).toContainText('Datos fiscales pendientes');
     await expect(doc).toContainText(data.fullName);
-    await expect(doc).toContainText(`Documento nacional ******${data.docNumber.slice(-4)}`);
+    await expect(doc).toContainText(`${await demoNationalIdName(page.request)} ******${data.docNumber.slice(-4)}`);
     await expect(doc).not.toContainText(data.docNumber);
     await expect(doc).toContainText(figure(first.amount));
     await expect(doc).toContainText('Recibió');

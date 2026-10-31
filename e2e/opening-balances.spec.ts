@@ -6,6 +6,7 @@ import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 import { openPatientTab } from './support/patient-tabs';
+import { DEMO_TIME_ZONE } from './support/demo';
 
 /**
  * e2e (DX-262): paso «Saldos» del asistente de importación en la demo, a 1440
@@ -54,9 +55,9 @@ async function webLogin(page: Page, origin: string): Promise<void> {
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 10_000 });
 }
 
-/** Día civil en Bogotá desplazado `days` (la demo está en Colombia). */
-function bogotaDay(days: number): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(
+/** Día civil de la sede demo (Caracas) desplazado `days`. */
+function demoSedeDay(days: number): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: DEMO_TIME_ZONE }).format(
     new Date(Date.now() + days * 86_400_000),
   );
 }
@@ -74,7 +75,7 @@ for (const viewport of [
     const origin = tenantOrigin(DEMO_SUBDOMAIN);
     const doc = `62${viewport.tag}${suffix}1`;
     const lastName = `Migrado${viewport.tag}${suffix}`;
-    const oldDay = bogotaDay(-75);
+    const oldDay = demoSedeDay(-75);
 
     await webLogin(page, origin);
     await page.goto(`${origin}/settings/importar-pacientes`);
@@ -143,7 +144,7 @@ for (const viewport of [
     await expect(openings).toBeVisible({ timeout: 15_000 });
     await expect(openings).toContainText('Ortodoncia (programa anterior)');
     await expect(openings).toContainText(ddmmyyyy(oldDay));
-    await expect(openings).toContainText(`${ddmmyyyy(bogotaDay(0))} (aprox.)`);
+    await expect(openings).toContainText(`${ddmmyyyy(demoSedeDay(0))} (aprox.)`);
     await expect(panel.getByRole('region', { name: 'Resumen en COP' }).getByTestId('balance')).toContainText(
       '200.000,50',
     );

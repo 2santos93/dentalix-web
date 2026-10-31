@@ -178,7 +178,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
 
-  it('a browser in Caracas proposes Venezuela, VES, Caracas, es-VE and +58 (R1)', async () => {
+  it('a browser in Caracas proposes Venezuela, USD (VES one click away), Caracas, es-VE and +58 (R1, V1)', async () => {
     jest.mocked(browserTimeZone).mockReturnValue('America/Caracas');
     jest.mocked(browserLocale).mockReturnValue('en-US');
     jest.mocked(browserHourCycle).mockReturnValue('h12');
@@ -187,22 +187,40 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     const { dialog, user } = setup();
     await currenciesLoaded(dialog);
     expect(within(dialog).getByLabelText('País')).toHaveValue('Venezuela');
-    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('VES');
+    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('USD');
+    expect(within(dialog).getByLabelText('Moneda')).toHaveAccessibleDescription(expect.stringContaining('Sugerido por el país.'));
     expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue(timeZoneLabel('America/Caracas'));
     expect(within(dialog).getByLabelText('Formato regional')).toHaveValue(localeLabel('es-VE'));
     expect(within(dialog).getByLabelText(PREFIX)).toHaveValue(phoneRegionLabel('VE'));
-    // USD también se puede elegir.
-    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'USD');
+    // VES a un clic, y elegirlo lo guarda.
+    expect(within(dialog).getByText('En Venezuela también se usa VES.')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Usar VES' }));
+    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('VES');
+    expect(within(dialog).queryByRole('button', { name: 'Usar VES' })).not.toBeInTheDocument();
     await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Caracas');
     await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
     expect(mockedCreate.mock.calls[0][1]).toMatchObject({
       country: 'VE',
-      currency: 'USD',
+      currency: 'VES',
       timeZone: 'America/Caracas',
       locale: 'es-VE',
       defaultPhoneRegion: 'VE',
     });
+  });
+
+  it('a browser in Caracas creates a USD sede when nothing is touched (V1)', async () => {
+    jest.mocked(browserTimeZone).mockReturnValue('America/Caracas');
+    jest.mocked(browserLocale).mockReturnValue('es-VE');
+    jest.mocked(browserHourCycle).mockReturnValue('h12');
+    jest.mocked(listCurrencies).mockResolvedValue([...CURRENCIES, { code: 'VES', name: 'Bolívar venezolano', symbol: 'Bs.' }, { code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]);
+    mockedCreate.mockResolvedValue(clinicLocation({ id: 'caracas' }));
+    const { dialog, user } = setup();
+    await currenciesLoaded(dialog);
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Caracas');
+    await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][1]).toMatchObject({ country: 'VE', currency: 'USD' });
   });
 
   it('no browser hour cycle leaves the clock empty and required', async () => {

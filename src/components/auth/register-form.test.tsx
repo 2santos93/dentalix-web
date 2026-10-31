@@ -318,10 +318,14 @@ describe('RegisterForm', () => {
     await waitFor(() => expect(country).toHaveValue('Venezuela'));
     expect(country).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
     // R1: la moneda del país se propone, marcada; elegir otro país la vuelve a proponer.
+    // V1: en Venezuela, USD, con VES a un clic; en España ya no hay alternativa.
+    await waitFor(() => expect(within(group).getByLabelText('Moneda')).toHaveValue('USD'));
     expect(within(group).getByLabelText('Moneda')).toHaveAccessibleDescription(
       expect.stringContaining('Sugerido por el país.'),
     );
+    expect(within(group).getByRole('button', { name: 'Usar VES' })).toBeInTheDocument();
     await chooseCountry(user, country, 'ES');
+    expect(within(group).queryByRole('button', { name: 'Usar VES' })).not.toBeInTheDocument();
     expect(country).toHaveValue('España');
     expect(country).not.toHaveAccessibleDescription(expect.stringContaining('Sugerido'));
     await waitFor(() => expect(within(group).getByLabelText('Moneda')).toHaveValue('EUR'));

@@ -39,8 +39,9 @@ test.beforeAll(async ({ playwright }) => {
       docType: 'NATIONAL_ID',
       docNumber: `CA${suffix}`,
       sex: 'M',
-      phone: '300 555 0199',
-      countryCode: 'CO',
+      // Número nacional: se lee con la región de la sede demo (VE).
+      phone: '0412 555 0199',
+      countryCode: 'VE',
     }));
     const catalog = await apiPost<{ id: string }>(api, admin, '/catalog/items', {
       code: `cartera-${suffix}`,
@@ -85,7 +86,7 @@ async function openCarteraAsReception(page: Page): Promise<void> {
 }
 
 function expectSafeWhatsApp(href: string | null): void {
-  expect(href).toMatch(/^https:\/\/wa\.me\/573005550199\?text=/);
+  expect(href).toMatch(/^https:\/\/wa\.me\/584125550199\?text=/);
   const text = decodeURIComponent(href!.split('?text=')[1]);
   expect(text).toContain('Hola Deudor');
   expect(text).not.toMatch(/\d/);
@@ -99,9 +100,9 @@ test('recepción abre Cartera desde el menú y filtra más de 90 días (1440 px)
   const row = page.getByRole('row', { name: new RegExp(fullName) });
   await expect(row).toBeVisible({ timeout: 15_000 });
   await expect(row.getByText('Más de 90 días').first()).toBeVisible();
-  await expect(row.getByRole('link', { name: `Llamar a ${fullName}: 300 555 0199` })).toHaveAttribute(
+  await expect(row.getByRole('link', { name: `Llamar a ${fullName}: 0412 555 0199` })).toHaveAttribute(
     'href',
-    'tel:3005550199',
+    'tel:04125550199',
   );
   expectSafeWhatsApp(await row.getByRole('link', { name: `WhatsApp a ${fullName}` }).getAttribute('href'));
   // Toda la fila abre el estado de cuenta: su enlace es el del nombre.
@@ -145,7 +146,7 @@ test('a 390 px cada deudor es una tarjeta que abre su estado de cuenta; Llamar y
     }) as typeof window.open;
   });
   await menu.click();
-  await expect(page.getByRole('menuitem', { name: 'Llamar al 300 555 0199' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Llamar al 0412 555 0199' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'WhatsApp' }).click();
   const opened = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
   expect(opened).toHaveLength(1);
