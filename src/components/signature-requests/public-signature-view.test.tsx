@@ -211,6 +211,16 @@ describe('PublicSignatureView (DX-243)', () => {
     expect(await screen.findByRole('button', { name: 'Enviarme el código' })).toBeInTheDocument();
   });
 
+  it('si falla el envío del código, el error habla del código (no de la firma)', async () => {
+    const user = setupUser();
+    mockedGet.mockResolvedValue(view());
+    mockedCode.mockRejectedValue(new ApiError(500, 'Se cayó'));
+    render(<PublicSignatureView linkToken="tok" />);
+    await user.click(await screen.findByRole('button', { name: 'Enviarme el código' }));
+    expect(await screen.findByText('No pudimos enviarte el código. Intenta de nuevo.')).toBeInTheDocument();
+    expect(screen.queryByText(/tu firma/i)).not.toBeInTheDocument();
+  });
+
   it('si la verificación caducó, vuelve a pedir el código', async () => {
     const user = setupUser();
     mockedDocument.mockRejectedValue(

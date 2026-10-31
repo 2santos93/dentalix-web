@@ -65,7 +65,10 @@ export const publicSignatureCopy = {
   signatureHint: 'Firma con el dedo dentro del recuadro.',
   signatureRequired: 'Firma en el recuadro.',
   sign: 'Firmar',
-  signError: 'No pudimos guardar tu firma.',
+  // Fallbacks de `InlineError` (sin botón propio): llevan «Intenta de nuevo.».
+  signError: 'No pudimos guardar tu firma. Intenta de nuevo.',
+  codeError: 'No pudimos enviarte el código. Intenta de nuevo.',
+  verifyError: 'No pudimos comprobar el código. Intenta de nuevo.',
   doneTitle: 'Documento firmado',
   doneMessage: (clinic: string) =>
     `${clinic} ya tiene tu firma. El documento queda completo cuando lo firme el profesional.`,
@@ -247,7 +250,7 @@ function IntroStep({
       onSent(await requestSignatureCode(linkToken));
     } catch (err) {
       if (isGone(err)) onGone();
-      else setError(apiErrorMessage(err, copy.signError));
+      else setError(apiErrorMessage(err, copy.codeError));
     } finally {
       setSending(false);
     }
@@ -317,7 +320,7 @@ function CodeStep({
         onGone(err instanceof ApiError && err.code === SIGNATURE_LINK_LOCKED);
         return;
       }
-      setError(apiErrorMessage(err, copy.signError));
+      setError(apiErrorMessage(err, copy.verifyError));
       setCode('');
     } finally {
       setVerifying(false);
@@ -332,7 +335,7 @@ function CodeStep({
       setInfo(copy.codeSent);
     } catch (err) {
       if (isGone(err)) onGone();
-      else setError(apiErrorMessage(err, copy.signError));
+      else setError(apiErrorMessage(err, copy.codeError));
     } finally {
       setResending(false);
     }
