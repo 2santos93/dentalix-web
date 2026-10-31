@@ -10,7 +10,7 @@ import { openSection } from './support/nav';
  * Registra una clínica (su dueño es ADMIN) y, por la API real, crea un
  * paciente, guarda su historia clínica (con una alergia), registra una
  * evolución y lee la historia: cada paso deja un evento. Después, en la web:
- *   - «Auditoría» en Ajustes («Datos y seguridad») abre /settings/auditoria con la tabla
+ *   - «Auditoría» en Ajustes («Herramientas y registros») abre /settings/auditoria con la tabla
  *     (fecha y hora, usuario, rol, acción, recurso, paciente, origen) y sin
  *     contenido clínico;
  *   - filtrar por acción deja solo esa acción; un período sin eventos muestra
@@ -96,14 +96,14 @@ for (const viewport of VIEWPORTS) {
     });
     const patientId = await seed(page.request, origin, await accessTokenOf(page), lastName, tag);
 
-    // Desde M2 vive en Ajustes → «Datos y seguridad» (la barra lateral ya no
+    // Desde M2 vive en Ajustes (B6: «Herramientas y registros») (la barra lateral ya no
     // cabía a 900 px con «Pendiente de cerrar»), solo para ADMIN.
     await page.goto(`${origin}/patients`);
     await openSection(page, 'Ajustes');
     await expect(page).toHaveURL(/\/settings$/);
     await page
       .getByRole('main')
-      .getByRole('list', { name: 'Datos y seguridad' })
+      .getByRole('list', { name: 'Herramientas y registros' })
       .getByRole('link', { name: /^Auditoría/ })
       .click();
     await expect(page).toHaveURL(/\/settings\/auditoria$/);

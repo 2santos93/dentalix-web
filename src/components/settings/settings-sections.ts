@@ -23,6 +23,7 @@ import {
   ScanBarcode,
   ShieldCheck,
   UserCheck,
+  UserRound,
   Wallet,
 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -76,11 +77,28 @@ export const SETTINGS_BACK = { href: '/settings', label: 'Ajustes' } as const;
  * clínica. Antes vivían en el menú de cuenta, que con 21 entradas ya no cabía
  * en una pantalla de recepción (FE-062).
  *
+ * Es el mapa completo (B6): «Tu cuenta» (Mi perfil) arriba y las herramientas
+ * y registros (importar, implantes, accesos de soporte, auditoría) aparte de
+ * las políticas. La misma lista alimenta el índice (móvil y escritorio) y la
+ * sub-navegación persistente de escritorio (`SettingsNav`). La etiqueta de
+ * cada entrada es EXACTAMENTE el título de su pantalla.
+ *
  * Añadir un ajuste es añadir una línea a la sección que toca. Un test comprueba
- * que toda carpeta de `src/app/(app)/settings` (salvo el perfil) tiene su
- * entrada aquí.
+ * que toda carpeta de `src/app/(app)/settings` tiene su entrada aquí.
  */
 export const SETTINGS_SECTIONS: SettingsSection[] = [
+  {
+    id: 'cuenta',
+    title: 'Tu cuenta',
+    entries: [
+      {
+        href: '/settings/profile',
+        label: 'Mi perfil',
+        description: 'Tu nombre, tu foto y tu contraseña.',
+        icon: UserRound,
+      },
+    ],
+  },
   {
     id: 'clinica',
     title: 'Clínica y sedes',
@@ -99,14 +117,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Días hábiles y festivos de cada sede, para los plazos en días hábiles.',
         icon: CalendarDays,
         visible: canManageLocationCalendar,
-      },
-      // SEC-009.
-      {
-        href: '/settings/dominios',
-        label: 'Dominios propios',
-        description: 'Un dominio de la clínica desde el que el equipo entra a Dentalix.',
-        icon: Globe,
-        visible: canManageDomains,
       },
       // DX-328.
       {
@@ -149,7 +159,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/recordatorios',
         label: 'Recordatorios',
-        description: 'Recordatorios por email antes de cada cita, por sede.',
+        description: 'Recordatorios por correo antes de cada cita, por sede.',
         icon: BellRing,
         visible: canManageReminders,
       },
@@ -216,7 +226,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/historia-clinica',
         label: 'Historia clínica',
-        description: 'Cuánto vale la anamnesis antes de pedir que se revise.',
+        description: 'Cuánto tiempo es válida la anamnesis antes de pedir que se revise.',
         icon: ClipboardClock,
         visible: canManageAnamnesisSettings,
       },
@@ -231,7 +241,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       // DX-006.
       {
         href: '/settings/consentimientos',
-        label: 'Consentimientos',
+        label: 'Consentimientos informados',
         description: 'Plantillas de consentimiento informado que firma el paciente.',
         icon: FileSignature,
         visible: canManageConsentTemplates,
@@ -252,14 +262,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         icon: ClipboardList,
         visible: canManagePostOpTemplates,
       },
-      // DX-191.
-      {
-        href: '/settings/implantes',
-        label: 'Implantes',
-        description: 'Buscar implantes colocados por lote y exportarlos.',
-        icon: ScanBarcode,
-        visible: canSearchImplantLots,
-      },
     ],
   },
   {
@@ -273,6 +275,20 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Política de tratamiento de datos que acepta el paciente.',
         icon: ShieldCheck,
       },
+      // SEC-009.
+      {
+        href: '/settings/dominios',
+        label: 'Dominios propios',
+        description: 'Un dominio de la clínica desde el que el equipo entra a Dentalix.',
+        icon: Globe,
+        visible: canManageDomains,
+      },
+    ],
+  },
+  {
+    id: 'herramientas',
+    title: 'Herramientas y registros',
+    entries: [
       // DX-107.
       {
         href: '/settings/importar-pacientes',
@@ -280,6 +296,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Traer pacientes y saldos desde una hoja CSV o Excel.',
         icon: FileUp,
         visible: canImportPatients,
+      },
+      // DX-191.
+      {
+        href: '/settings/implantes',
+        label: 'Implantes',
+        description: 'Buscar implantes colocados por lote y exportarlos.',
+        icon: ScanBarcode,
+        visible: canSearchImplantLots,
       },
       // SEC-008.
       {
@@ -290,7 +314,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         visible: canReadSupportAccesses,
       },
       // DX-009: AUDIT_READ_ROLES (lleva IP y user agent). Antes en la barra
-      // lateral; desde M2 aquí, junto a los accesos de soporte.
+      // lateral; desde M2 en Ajustes, junto a los accesos de soporte.
       {
         href: '/settings/auditoria',
         label: 'Auditoría',

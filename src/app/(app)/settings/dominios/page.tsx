@@ -4,14 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageDomains } from '@/lib/domains/domains-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { DomainsManager } from '@/components/domains/domains-manager';
 
 const copy = {
   title: 'Dominios propios',
   description:
-    'Un dominio de tu clínica desde el que el equipo entra a Dentalix. Solo abre la plataforma mientras su registro TXT siga publicado.',
+    // La condición del registro TXT (DNS) se explica al añadir el dominio, no aquí.
+    'Un dominio propio de tu clínica, además de su dirección en Dentalix, desde el que el equipo entra a la plataforma.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -36,9 +36,8 @@ export default function DomainsSettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
       <DomainsManager token={accessToken} allowed={canManageDomains(getTokenRole(accessToken))} />
-    </>
+    </SettingsPage>
   );
 }
