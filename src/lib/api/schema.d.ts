@@ -889,7 +889,7 @@ export interface paths {
         put?: never;
         /**
          * Crea una sede
-         * @description Queda en la auditoría (LOCATION_CREATED) con su nombre, país, moneda, zona, formato, reloj y teléfono; nunca la dirección.
+         * @description Queda en la auditoría (LOCATION_CREATED) con su nombre, país, moneda, zona, formato, reloj, teléfono y región telefónica por defecto (defaultPhoneRegion); nunca la dirección.
          */
         post: operations["LocationsController_create"];
         delete?: never;
