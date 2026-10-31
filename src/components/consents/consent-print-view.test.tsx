@@ -175,4 +175,27 @@ describe('ConsentDocument firmado a distancia (DX-243)', () => {
     expect(screen.getByRole('img', { name: 'Firma de Dra. Laura Gómez' })).toBeInTheDocument();
     expect(screen.queryByText(/Falta la firma del profesional/)).not.toBeInTheDocument();
   });
+
+  it('firmado por el responsable: las evidencias lo dicen con su nombre, no «por el paciente»', () => {
+    render(
+      <ConsentDocument
+        consent={consentFixture({
+          remote,
+          signerType: 'GUARDIAN',
+          signerName: 'Claudia Navarro',
+          professionalSignature: null,
+          professionalSignedAt: null,
+          complete: false,
+          remoteIpAddress: '203.0.113.7',
+        })}
+      />,
+    );
+    const evidence = screen.getByRole('region', { name: 'Firma a distancia (evidencias)' });
+    expect(within(evidence).getByText(/^Firmado por el responsable \(Claudia Navarro\)/)).toBeInTheDocument();
+    expect(within(evidence).getByText(/^IP de quien firmó/)).toBeInTheDocument();
+    expect(screen.queryByText(/por el paciente/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/^Firmado a distancia por el responsable \(Claudia Navarro\)\. Falta la firma del profesional/),
+    ).toBeInTheDocument();
+  });
 });

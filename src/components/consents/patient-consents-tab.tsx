@@ -93,7 +93,7 @@ export function PatientConsentsTab({ token, patientId, role, userId }: PatientCo
           <h2 className="text-lg font-semibold text-ink">{copy.heading}</h2>
           <p className="max-w-[68ch] text-sm text-muted">{copy.receptionSupport}</p>
         </div>
-        <PatientSignatureRequestsSection token={token} patientId={patientId} clinical={false} />
+        <PatientSignatureRequestsSection token={token} patientId={patientId} userId={userId} />
       </div>
     );
   }
@@ -219,7 +219,7 @@ function ClinicalConsents({
       <PatientSignatureRequestsSection
         token={token}
         patientId={patientId}
-        clinical
+        userId={userId}
         refreshKey={signaturesKey}
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

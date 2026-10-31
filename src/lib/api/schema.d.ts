@@ -14277,11 +14277,28 @@ export interface components {
             id: string;
             title: string;
             version: number;
+            /** @description El texto usa {{tratamiento}}: sin plan, el documento dirá «No especificado» */
+            usesTreatment: boolean;
+            /**
+             * Format: date-time
+             * @description Última vez que el paciente lo firmó y quedó completo (con la firma del profesional)
+             */
+            lastCompletedAt: string | null;
         };
         SignatureProfessionalOptionDto: {
             /** Format: uuid */
             id: string;
             fullName: string;
+            role: components["schemas"]["ClinicRole"];
+        };
+        SignaturePlanOptionDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["TreatmentPlanStatus"];
+            /** @description Nombre de la alternativa (DX-040) */
+            optionLabel: string | null;
+            /** Format: date-time */
+            createdAt: string;
         };
         /** @enum {string} */
         ConsentSignerType: "PATIENT" | "GUARDIAN";
@@ -14297,9 +14314,15 @@ export interface components {
         };
         SignatureRequestOptionsDto: {
             templates: components["schemas"]["SignatureTemplateOptionDto"][];
+            /** @description Quienes pueden firmar un consentimiento como profesional (la regla de la firma en la clínica: odontólogo, asistente, administrador) */
             professionals: components["schemas"]["SignatureProfessionalOptionDto"][];
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Quien envía, solo si está en `professionals`
+             */
             defaultProfessionalId: string | null;
+            /** @description Planes del paciente sin cancelar (para {{tratamiento}}), más recientes primero */
+            plans: components["schemas"]["SignaturePlanOptionDto"][];
             recipient: components["schemas"]["SignatureRecipientOptionDto"];
         };
         /**

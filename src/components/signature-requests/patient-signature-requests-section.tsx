@@ -1,14 +1,14 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useId, useState } from 'react';
-import { Send } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { FileSignature, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { useSedeClock, type SedeClock } from '@/lib/locations/sede-clock';
 import {
-  SIGNATURE_STATUS_LABELS,
   canRevokeSignatureRequest,
+  signatureStatusLabel,
   listSignatureRequests,
   revokeSignatureRequest,
   type SignatureRequest,
@@ -18,7 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
-import { notifyError } from '@/components/errors/notify';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { EmptyState } from '@/components/shared/empty-state';
 import { SendToSignModal } from './send-to-sign-modal';
 
 const copy = {
@@ -27,6 +28,8 @@ const copy = {
     'Consentimientos enviados al paciente por email. Solo cuentan como completos cuando además firma el profesional.',
   send: 'Enviar a firmar',
   empty: 'Aún no se ha enviado ningún consentimiento a firmar a distancia.',
+  emptyHint:
+    'Usa «Enviar a firmar» para que el paciente o su responsable lo firme desde el móvil antes de la cita.',
   loadError: 'No pudimos cargar los envíos a firmar.',
   loading: 'Cargando envíos a firmar',
   listLabel: 'Consentimientos enviados a firmar',
@@ -41,29 +44,38 @@ const copy = {
   attempts: (n: number) => (n === 1 ? '1 código incorrecto' : `${n} códigos incorrectos`),
   locked: (when: string) =>
     `Bloqueado el ${when} tras 5 códigos incorrectos: anúlalo y envía otro.`,
-  signed: (when: string, ip: string | null) =>
-    ip ? `Firmado por el paciente el ${when} desde la IP ${ip}` : `Firmado por el paciente el ${when}`,
-  pendingProfessional: 'Falta la firma del profesional en la pestaña de consentimientos.',
+  signedBy: (guardian: boolean, name: string) =>
+    guardian ? `Firmado por el responsable (${name})` : 'Firmado por el paciente',
+  signed: (by: string, when: string, ip: string | null) => (ip ? `${by} el ${when} desde la IP ${ip}` : `${by} el ${when}`),
+  pendingProfessional: (name: string) => `Falta la firma de ${name} como profesional: la hará en la app.`,
+  pendingSelf:
+    'Falta tu firma como profesional: pulsa «Firmar como profesional» en la lista de consentimientos de abajo.',
   completed: (when: string) => `Completo: el profesional firmó el ${when}`,
   revoked: (when: string) => `Anulado el ${when}`,
   revoke: 'Anular enlace',
   revokeHint: (title: string) => ` de ${title}`,
-  revokeError: 'No pudimos anular el enlace.',
+  revokeTitle: '¿Anular el enlace?',
+  revokeDescription: (title: string, to: string) =>
+    `El enlace de «${title}» enviado a ${to} dejará de servir. Si hace falta, puedes enviar otro.`,
+  revokeError: 'No pudimos anular el enlace. Intenta de nuevo.',
   revokedToast: 'Enlace anulado: ya no sirve.',
   sentToast: (to: string) => `Enlace enviado a ${to}.`,
   notQueued:
     'La solicitud quedó registrada, pero el email no salió. Anúlala y envíala de nuevo.',
 };
 
+// Variantes de Badge (DESIGN.md · Chips): en curso con borde, esperando al
+// profesional en warning, completo en success, anulado y bloqueado en danger
+// (como un plan cancelado) y caducado neutro.
 const BADGE: Record<
   SignatureRequest['status'],
-  'secondary' | 'warning' | 'danger' | 'muted' | 'success'
+  'outline' | 'warning' | 'danger' | 'muted' | 'success'
 > = {
-  SENT: 'secondary',
-  OPENED: 'secondary',
+  SENT: 'outline',
+  OPENED: 'outline',
   LOCKED: 'danger',
   EXPIRED: 'muted',
-  REVOKED: 'muted',
+  REVOKED: 'danger',
   SIGNED_BY_PATIENT: 'warning',
   COMPLETE: 'success',
 };
@@ -74,7 +86,7 @@ function at(iso: string | null | undefined, clock: SedeClock | null): string {
 }
 
 /** Las líneas de evidencia de una solicitud, en orden de lo que pasó. */
-function evidence(r: SignatureRequest, clock: SedeClock | null): string[] {
+function evidence(r: SignatureRequest, clock: SedeClock | null, userId: string | null): string[] {
   const lines = [
     copy.sent(at(r.sentAt, clock), r.destinationMasked, r.sentByName),
     copy.signer(r.signerName, r.signerType === 'GUARDIAN'),
@@ -84,8 +96,13 @@ function evidence(r: SignatureRequest, clock: SedeClock | null): string[] {
   if (r.verifiedAt) lines.push(copy.verified(at(r.verifiedAt, clock)));
   if (r.failedAttempts > 0 && r.status !== 'LOCKED') lines.push(copy.attempts(r.failedAttempts));
   if (r.status === 'LOCKED') lines.push(copy.locked(at(r.lockedAt, clock)));
-  if (r.signedAt) lines.push(copy.signed(at(r.signedAt, clock), r.signedIpAddress));
-  if (r.status === 'SIGNED_BY_PATIENT') lines.push(copy.pendingProfessional);
+  if (r.signedAt) {
+    const by = copy.signedBy(r.signerType === 'GUARDIAN', r.signerName);
+    lines.push(copy.signed(by, at(r.signedAt, clock), r.signedIpAddress));
+  }
+  if (r.status === 'SIGNED_BY_PATIENT') {
+    lines.push(r.professionalUserId === userId ? copy.pendingSelf : copy.pendingProfessional(r.professionalName));
+  }
   if (r.countersignedAt) lines.push(copy.completed(at(r.countersignedAt, clock)));
   if (r.status === 'REVOKED') lines.push(copy.revoked(at(r.revokedAt, clock)));
   if (r.status === 'SENT' || r.status === 'OPENED' || r.status === 'EXPIRED') {
@@ -97,8 +114,8 @@ function evidence(r: SignatureRequest, clock: SedeClock | null): string[] {
 interface PatientSignatureRequestsSectionProps {
   token: string;
   patientId: string;
-  /** Roles clínicos: pueden asociar un plan al enviar. */
-  clinical: boolean;
+  /** Quien mira: si es el profesional elegido, se le pide su firma a él. */
+  userId: string | null;
   /** Cambia cuando la ficha sabe que algo cambió (p. ej. firmó el profesional). */
   refreshKey?: number;
 }
@@ -109,12 +126,12 @@ interface PatientSignatureRequestsSectionProps {
  * Bloqueado · Firmado por paciente · Completo, o Caducado / Anulado) y sus
  * evidencias (destino enmascarado, horas en la zona y el formato de la sede,
  * intentos, IP de la firma). Lo ven los cuatro roles: recepción también envía
- * y ve si quedó bloqueado. Anular deja el enlace sin efecto.
+ * y ve si quedó bloqueado. Anular (con confirmación) deja el enlace sin efecto.
  */
 export function PatientSignatureRequestsSection({
   token,
   patientId,
-  clinical,
+  userId,
   refreshKey = 0,
 }: PatientSignatureRequestsSectionProps) {
   const ids = useId();
@@ -124,7 +141,11 @@ export function PatientSignatureRequestsSection({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [revoking, setRevoking] = useState<string | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState<SignatureRequest | null>(null);
+  const [revoking, setRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+  const revokedRef = useRef(false);
+  const sendRef = useRef<HTMLButtonElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
 
@@ -148,15 +169,19 @@ export function PatientSignatureRequestsSection({
   }, [token, patientId, reloadKey, refreshKey]);
 
   async function handleRevoke(id: string) {
-    setRevoking(id);
+    setRevoking(true);
+    setRevokeError(null);
     try {
       const updated = await revokeSignatureRequest(token, patientId, id);
       setRows((current) => current.map((r) => (r.id === updated.id ? updated : r)));
+      // Su botón desaparece: al cerrar, el foco va a «Enviar a firmar».
+      revokedRef.current = true;
+      setConfirmRevoke(null);
       toast.success(copy.revokedToast);
     } catch (err) {
-      notifyError(apiErrorMessage(err, copy.revokeError), { onRetry: () => void handleRevoke(id) });
+      setRevokeError(apiErrorMessage(err, copy.revokeError));
     } finally {
-      setRevoking(null);
+      setRevoking(false);
     }
   }
 
@@ -183,6 +208,7 @@ export function PatientSignatureRequestsSection({
           <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
         </div>
         <Button
+          ref={sendRef}
           type="button"
           className="w-full sm:w-auto"
           onClick={() => {
@@ -210,9 +236,14 @@ export function PatientSignatureRequestsSection({
           }}
         />
       ) : rows.length === 0 ? (
-        <p role="status" className="text-sm text-muted">
-          {copy.empty}
-        </p>
+        <div data-testid="signature-requests-empty">
+          <EmptyState
+            role="status"
+            icon={<FileSignature aria-hidden />}
+            title={copy.empty}
+            description={copy.emptyHint}
+          />
+        </div>
       ) : (
         <ul aria-label={copy.listLabel} className="flex flex-col divide-y divide-hairline">
           {rows.map((r) => (
@@ -223,10 +254,10 @@ export function PatientSignatureRequestsSection({
               <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-ink">{r.title}</span>
-                  <Badge variant={BADGE[r.status]}>{SIGNATURE_STATUS_LABELS[r.status]}</Badge>
+                  <Badge variant={BADGE[r.status]}>{signatureStatusLabel(r.status, r.signerType)}</Badge>
                 </div>
                 <ul className="flex flex-col gap-0.5 text-sm text-muted tabular-nums">
-                  {evidence(r, clockOf(r.locationId)).map((line) => (
+                  {evidence(r, clockOf(r.locationId), userId).map((line) => (
                     <li key={line} className="break-words">
                       {line}
                     </li>
@@ -239,9 +270,10 @@ export function PatientSignatureRequestsSection({
                   variant="secondary"
                   size="sm"
                   className="min-h-11 shrink-0 sm:min-h-9"
-                  loading={revoking === r.id}
-                  disabled={revoking !== null && revoking !== r.id}
-                  onClick={() => void handleRevoke(r.id)}
+                  onClick={() => {
+                    setRevokeError(null);
+                    setConfirmRevoke(r);
+                  }}
                 >
                   {copy.revoke}
                   <span className="sr-only">{copy.revokeHint(r.title)}</span>
@@ -252,13 +284,35 @@ export function PatientSignatureRequestsSection({
         </ul>
       )}
 
+      <ConfirmDialog
+        open={confirmRevoke !== null}
+        onOpenChange={(open) => {
+          if (!open && !revoking) setConfirmRevoke(null);
+        }}
+        title={copy.revokeTitle}
+        description={confirmRevoke ? copy.revokeDescription(confirmRevoke.title, confirmRevoke.destinationMasked) : undefined}
+        confirmLabel={copy.revoke}
+        onConfirm={() => {
+          if (confirmRevoke) void handleRevoke(confirmRevoke.id);
+        }}
+        confirming={revoking}
+        error={revokeError}
+        onCloseAutoFocus={(event) => {
+          if (!revokedRef.current) return;
+          revokedRef.current = false;
+          event.preventDefault();
+          sendRef.current?.focus();
+        }}
+      />
+
       <SendToSignModal
         key={modalKey}
         open={modalOpen}
         onOpenChange={setModalOpen}
         token={token}
         patientId={patientId}
-        canPickPlan={clinical}
+        userId={userId}
+        clock={screenClock}
         onSent={handleSent}
       />
     </section>

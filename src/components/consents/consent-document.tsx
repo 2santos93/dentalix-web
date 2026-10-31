@@ -20,15 +20,17 @@ const copy = {
     'La huella no coincide con el contenido guardado: este documento pudo alterarse fuera de Dentalix.',
   // DX-243: firmado por el paciente a distancia.
   professionalPending: 'Pendiente de la firma del profesional',
-  incomplete:
-    'Firmado por el paciente a distancia. Falta la firma del profesional: hasta entonces no está completo.',
+  incomplete: (by: string) =>
+    `Firmado a distancia ${by}. Falta la firma del profesional: hasta entonces no está completo.`,
   remoteHeading: 'Firma a distancia (evidencias)',
   remoteChannel: (to: string) => `Enviado por email a ${to}`,
   remoteSent: 'Enviado',
   remoteOpened: 'Abierto',
   remoteVerified: 'Código verificado',
-  remoteSigned: 'Firmado por el paciente',
-  remoteIp: 'IP del paciente',
+  // Quien firmó: el paciente o, si es menor, su responsable (con su nombre).
+  signedBy: (guardian: boolean, name: string) => (guardian ? `por el responsable (${name})` : 'por el paciente'),
+  remoteSigned: (by: string) => `Firmado ${by}`,
+  remoteIp: (guardian: boolean) => (guardian ? 'IP de quien firmó' : 'IP del paciente'),
   professionalSignedAt: 'Firma del profesional',
 };
 
@@ -48,6 +50,8 @@ interface ConsentDocumentProps {
 export function ConsentDocument({ consent }: ConsentDocumentProps) {
   const { clinic, patient } = consent;
   const patientName = `${patient.firstName} ${patient.lastName}`;
+  const guardian = consent.signerType === 'GUARDIAN';
+  const signedBy = copy.signedBy(guardian, consent.signerName);
 
   return (
     <article className="consent-print-root mx-auto w-full max-w-[210mm] bg-white px-4 py-6 text-[#111827] sm:px-10 sm:py-10 print:max-w-none print:p-0">
@@ -141,8 +145,8 @@ export function ConsentDocument({ consent }: ConsentDocumentProps) {
                 [copy.remoteSent, formatDateTime(consent.remote.sentAt)],
                 [copy.remoteOpened, formatDateTime(consent.remote.openedAt)],
                 [copy.remoteVerified, formatDateTime(consent.remote.verifiedAt)],
-                [copy.remoteSigned, formatDateTime(consent.signedAt)],
-                [copy.remoteIp, consent.remoteIpAddress ?? copy.noDocument],
+                [copy.remoteSigned(signedBy), formatDateTime(consent.signedAt)],
+                [copy.remoteIp(guardian), consent.remoteIpAddress ?? copy.noDocument],
                 [
                   copy.professionalSignedAt,
                   consent.professionalSignedAt
@@ -164,7 +168,7 @@ export function ConsentDocument({ consent }: ConsentDocumentProps) {
         {!consent.integrityOk ? (
           <p className="font-medium text-[#be123c]">{copy.tampered}</p>
         ) : null}
-        {!consent.complete ? <p className="font-medium text-[#b45309]">{copy.incomplete}</p> : null}
+        {!consent.complete ? <p className="font-medium text-[#b45309]">{copy.incomplete(signedBy)}</p> : null}
         <p>
           {copy.footerSignedAt}:{' '}
           <span className="tabular-nums text-[#111827]">{formatDateTime(consent.signedAt)}</span> ·{' '}

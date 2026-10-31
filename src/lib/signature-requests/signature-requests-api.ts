@@ -26,6 +26,19 @@ export const SIGNATURE_STATUS_LABELS: Record<SignatureRequestStatus, string> = {
   COMPLETE: 'Completo',
 };
 
+/**
+ * La etiqueta del estado con quien firmó: si fue el responsable de un menor,
+ * «Firmado por responsable» en vez de «por paciente».
+ */
+export function signatureStatusLabel(
+  status: SignatureRequestStatus,
+  signerType: SignatureRequest['signerType'],
+): string {
+  return status === 'SIGNED_BY_PATIENT' && signerType === 'GUARDIAN'
+    ? 'Firmado por responsable'
+    : SIGNATURE_STATUS_LABELS[status];
+}
+
 /** Se puede anular mientras no esté firmado ni anulado. */
 export function canRevokeSignatureRequest(status: SignatureRequestStatus): boolean {
   return status === 'SENT' || status === 'OPENED' || status === 'LOCKED' || status === 'EXPIRED';

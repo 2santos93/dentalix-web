@@ -92,8 +92,18 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       'la***@example.com · firma Laura Castro Jiménez (paciente)',
     );
     await expectDialogInsideViewport(page, dialog);
+    // Sin elegir nada, el modal dice qué falta (no solo deshabilita).
+    await expect(dialog.getByText('Para enviar, elige el consentimiento y el profesional que firmará.')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Enviar enlace' }).click();
+    await expect(dialog.getByText('Elige el consentimiento que quieres enviar.')).toBeVisible();
     await dialog.getByLabel('Consentimiento').selectOption({ label: TEMPLATE_TITLE });
-    await dialog.getByLabel('Profesional que firmará').selectOption({ label: DENTIST_NAME });
+    // Recepción no queda como profesional ni ve a recepción en la lista: cada uno con su rol.
+    const professional = dialog.getByLabel('Profesional que firmará');
+    await expect(professional).toHaveValue('');
+    await expect(professional.locator('option', { hasText: 'Recepción' })).toHaveCount(0);
+    await professional.selectOption({ label: `${DENTIST_NAME} · Odontólogo/a` });
+    // Recepción también puede elegir el plan; sin él, el modal avisa de «No especificado».
+    await expect(dialog.getByLabel(/plan de tratamiento/i)).toBeVisible();
     await dialog.getByRole('button', { name: 'Enviar enlace' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText('Enlace enviado a la***@example.com.')).toBeVisible();
@@ -137,6 +147,8 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       await codeInput.fill(code === '000000' ? '111111' : '000000');
       await page.getByRole('button', { name: 'Ver el documento' }).click();
       await expect(page.getByText('Código incorrecto. Te quedan 4 intentos.')).toBeVisible();
+      // El foco vuelve al código para escribir otro.
+      await expect(codeInput).toBeFocused();
 
       await codeInput.fill(code);
       await page.getByRole('button', { name: 'Ver el documento' }).click();
@@ -151,6 +163,8 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       await drawSignature(page, page.getByRole('img', { name: 'Tu firma' }));
       await page.getByRole('button', { name: 'Firmar' }).click();
       await expect(page.getByRole('heading', { name: 'Documento firmado' })).toBeVisible();
+      // La copia que puede imprimir lleva su firma.
+      await expect(page.getByRole('img', { name: 'Firma de Laura Castro Jiménez' })).toBeVisible();
       await expect(page.getByRole('button', { name: /imprimir o guardar en pdf/i })).toBeVisible();
       await expectNoHorizontalScroll(page);
 
@@ -172,6 +186,8 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
     await expect(row).toContainText(/Código verificado el/);
     await expect(row).toContainText(/Firmado por el paciente el .* desde la IP /);
     await expect(row).toContainText('1 código incorrecto');
+    // No la manda a una tabla que no ve: firmará el profesional elegido.
+    await expect(row).toContainText(`Falta la firma de ${DENTIST_NAME} como profesional: la hará en la app.`);
   });
 
   test('el profesional firma en la app y el consentimiento queda «Completo»', async ({ page }) => {
