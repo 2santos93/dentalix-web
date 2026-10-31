@@ -10,6 +10,7 @@ import {
 } from './patient-retention-section';
 import {
   archivePatient,
+  getPatientLivePublicLinks,
   partiallySuppressPatient,
   setRetentionExtension,
   type Patient,
@@ -19,6 +20,7 @@ import { ApiError } from '@/lib/api/api-error';
 jest.mock('../../lib/patients/patients-api', () => ({
   ...jest.requireActual('../../lib/patients/patients-api'),
   archivePatient: jest.fn(),
+  getPatientLivePublicLinks: jest.fn(),
   setRetentionExtension: jest.fn(),
   partiallySuppressPatient: jest.fn(),
 }));
@@ -99,7 +101,22 @@ function renderDialogs(p: Patient) {
   return { onUpdated, onArchived };
 }
 
-beforeEach(() => jest.resetAllMocks());
+const mockedCount = getPatientLivePublicLinks as jest.MockedFunction<
+  typeof getPatientLivePublicLinks
+>;
+const NO_LINKS = {
+  slotOffers: 0,
+  consentSignatures: 0,
+  budgetSignatures: 0,
+  signedPdfCopies: 0,
+  anamnesis: 0,
+  total: 0,
+};
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  mockedCount.mockResolvedValue(NO_LINKS);
+});
 
 test('formatCivilDate no pasa por la zona del navegador', () => {
   expect(formatCivilDate('2039-02-28')).toBe('28/02/2039');
@@ -194,6 +211,23 @@ test('archivar sin retención cierra el modal y avisa al padre', async () => {
   );
   await user.click(screen.getByRole('button', { name: /archivar paciente/i }));
   await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Archivar' }));
+  await waitFor(() => expect(onArchived).toHaveBeenCalled());
+});
+
+test('DX-461: el diálogo de archivar avisa de los enlaces enviados que se anularán', async () => {
+  const user = userEvent.setup();
+  mockedCount.mockResolvedValue({ ...NO_LINKS, slotOffers: 1, consentSignatures: 2, total: 3 });
+  mockedArchive.mockResolvedValue(undefined);
+  const { onArchived } = renderDialogs(
+    patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false }),
+  );
+  // Solo se cuentan al abrir el diálogo.
+  expect(mockedCount).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: /archivar paciente/i }));
+  const dialog = await screen.findByRole('dialog');
+  expect(await within(dialog).findByText('Se anularán 3 enlaces enviados')).toBeInTheDocument();
+  expect(mockedCount).toHaveBeenCalledWith('tok', 'p1');
+  await user.click(within(dialog).getByRole('button', { name: 'Archivar' }));
   await waitFor(() => expect(onArchived).toHaveBeenCalled());
 });
 

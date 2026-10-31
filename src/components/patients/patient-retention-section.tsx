@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { ArchiveLinksNotice } from './archive-links-notice';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -356,7 +357,10 @@ export function PatientRetentionDialogs({
             onArchived();
           }, copy.archiveError)
         }
-      />
+      >
+        {/* DX-461: solo se cuentan con el diálogo abierto (y cada vez que se abre). */}
+        {dialog === 'archive' ? <ArchiveLinksNotice token={token} patientId={patient.id} /> : null}
+      </ConfirmDialog>
     </>
   );
 }
