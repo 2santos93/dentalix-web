@@ -22570,7 +22570,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente. DX-435: por enlace con menos de 20 minutos para el hueco, o por email sin email o con baja. */
+            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente. DX-435: por enlace con menos de 20 minutos para el hueco o sobre un hueco ya ocupado, o por email sin email o con baja. */
             409: {
                 headers: {
                     [name: string]: unknown;
