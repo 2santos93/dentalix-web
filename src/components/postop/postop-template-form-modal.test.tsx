@@ -55,6 +55,7 @@ function appointmentType(id: string, name: string): AppointmentType {
     durationMinutes: 60,
     color: '#7C3AED',
     active: true,
+    isUrgent: false,
     createdAt: '2026-10-01T00:00:00.000Z',
     updatedAt: '2026-10-01T00:00:00.000Z',
   };

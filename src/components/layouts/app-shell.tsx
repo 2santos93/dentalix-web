@@ -16,12 +16,15 @@ import { SedeDateLocaleProvider } from '@/components/locations/sede-date-locale-
 import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
 import { useAnamnesisInboxCount } from '@/components/anamnesis/use-anamnesis-inbox-count';
+import { ClosingQueueCountProvider, useClosingQueueCount } from '@/components/appointments/closing-queue-count';
+import { canSeeClosingQueue } from '@/lib/appointments/closing-queue-api';
 import { useClinicBranding } from '@/components/brand/branding-context';
 import { ClinicBrand, ClinicLogo } from '@/components/brand/clinic-brand';
 import { Logo } from '@/components/ui/logo';
 import {
   ALL_NAV_ITEMS,
   ANAMNESIS_HREF,
+  CLOSING_QUEUE_HREF,
   bottomTabsFor,
   longestMatch,
   visibleNavGroups,
@@ -59,7 +62,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return <SessionLocationsProvider token={token}>
     <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
       <SedeDateLocaleProvider token={token}>
-        <AppShellContent>{children}</AppShellContent>
+        {/* DX-439: una sola lectura del contador para el menú y la Agenda. */}
+        <ClosingQueueCountProvider token={token} enabled={canSeeClosingQueue(getTokenRole(token))} pathname={pathname}>
+          <AppShellContent>{children}</AppShellContent>
+        </ClosingQueueCountProvider>
       </SedeDateLocaleProvider>
     </InClinicProvider>
   </SessionLocationsProvider>;
@@ -104,6 +110,12 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     role === 'ADMIN' || role === 'DENTIST' || role === 'ASSISTANT',
     pathname,
   );
+  // DX-439: pendientes de cierre de las secciones de su rol, en sus sedes.
+  const closingQueueCount = useClosingQueueCount();
+  const closingCount = canSeeClosingQueue(role) ? closingQueueCount : 0;
+  /** Contador de bandeja de una entrada (anamnesis, pendiente de cerrar). */
+  const inboxCount = (href: string) =>
+    href === ANAMNESIS_HREF ? anamnesisCount : href === CLOSING_QUEUE_HREF ? closingCount : 0;
   const fullLabel = (href: string) => {
     const item = ALL_NAV_ITEMS.find((i) => i.href === href);
     return item?.fullLabel ?? item?.label ?? href;
@@ -112,11 +124,10 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const navLabel = (href: string) => {
     const label = fullLabel(href);
     if (href === '/agenda' && waitingForYou > 0) return `${label} · ${waitingForYouLabel(waitingForYou)}`;
-    if (href === ANAMNESIS_HREF && anamnesisCount > 0) return `${label} · ${anamnesisCount}`;
+    if (inboxCount(href) > 0) return `${label} · ${inboxCount(href)}`;
     return label;
   };
-  const hasCount = (href: string) =>
-    (href === '/agenda' && waitingForYou > 0) || (href === ANAMNESIS_HREF && anamnesisCount > 0);
+  const hasCount = (href: string) => (href === '/agenda' && waitingForYou > 0) || inboxCount(href) > 0;
   // Activa la entrada MÁS específica que case: en /caja/cartera es «Cartera»,
   // no también «Caja».
   const activeHref = longestMatch(nav, pathname)?.href;
@@ -169,7 +180,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
 
   const countBadge = (href: string, variant: 'full' | 'rail' | 'inline') => (
     <>
-      {href === ANAMNESIS_HREF && anamnesisCount > 0 && <InboxCount count={anamnesisCount} variant={variant} />}
+      {inboxCount(href) > 0 && <InboxCount href={href} count={inboxCount(href)} variant={variant} />}
       {href === '/agenda' && waitingForYou > 0 && variant !== 'full' && (
         <WaitingForYouCount count={waitingForYou} variant={variant} />
       )}
@@ -298,8 +309,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                     >
                       <Icon className="size-4 shrink-0" />
                       {!collapsed && <span className="min-w-0 truncate">{label}</span>}
-                      {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
-                        <InboxCount count={anamnesisCount} variant={collapsed ? 'rail' : 'full'} />
+                      {inboxCount(href) > 0 && (
+                        <InboxCount href={href} count={inboxCount(href)} variant={collapsed ? 'rail' : 'full'} />
                       )}
                     </Link>
                     {href === '/agenda' && waitingForYou > 0 && (
@@ -510,15 +521,15 @@ function WaitingForYouCount({
 }
 
 /**
- * DX-099: contador de «Anamnesis por revisar». Tinte de aviso (no de peligro):
- * hay trabajo pendiente, no una alerta. El número entero va en el nombre
- * accesible del enlace.
+ * Contador de bandeja: «Anamnesis por revisar» (DX-099) y «Pendiente de
+ * cerrar» (DX-439). Tinte de aviso (no de peligro): hay trabajo pendiente, no
+ * una alerta. El número entero va en el nombre accesible del enlace.
  */
-function InboxCount({ count, variant }: { count: number; variant: 'full' | 'rail' | 'inline' }) {
+function InboxCount({ href, count, variant }: { href: string; count: number; variant: 'full' | 'rail' | 'inline' }) {
   return (
     <span
       aria-hidden
-      data-testid="anamnesis-inbox-count"
+      data-testid={href === CLOSING_QUEUE_HREF ? 'closing-queue-count' : 'anamnesis-inbox-count'}
       className={cn(
         'inline-flex min-w-5 items-center justify-center rounded-full bg-warning-subtle px-1.5 text-xs font-semibold tabular-nums text-warning-text',
         variant === 'full' && 'ml-auto',

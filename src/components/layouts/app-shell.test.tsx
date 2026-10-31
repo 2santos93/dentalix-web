@@ -13,6 +13,12 @@ jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
   getInClinic: jest.fn(),
 }));
+// DX-439: el contador de «Pendiente de cerrar» (un fallo deja 0).
+jest.mock('../../lib/appointments/closing-queue-api', () => ({
+  ...jest.requireActual('../../lib/appointments/closing-queue-api'),
+  getClosingQueueCount: jest.fn().mockResolvedValue({ total: 0 }),
+}));
+import { getClosingQueueCount } from '../../lib/appointments/closing-queue-api';
 jest.mock('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light', setTheme: jest.fn() }),
 }));
@@ -78,7 +84,7 @@ describe('AppShell', () => {
 
   // Cada entrada copia el `@Roles(...)` del endpoint de su pantalla (DX-070):
   // DASHBOARD_ROLES, CATALOG_READ_ROLES, INVENTORY_ROLES, STAFF_WRITE_ROLES,
-  // AUDIT_READ_ROLES (DX-009), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
+  // CLOSING_QUEUE_ROLES (DX-439), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
   // RECEIVABLES_ROLES (Cartera, DX-145) y REPORT_ROLES + PRODUCTION_REPORT_ROLES
   // (Reportes, DX-014 y DX-423).
   const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
@@ -94,21 +100,22 @@ describe('AppShell', () => {
         'Catálogo',
         'Inventario',
         'Personal',
-        'Auditoría',
         'Reportes',
+        'Pendiente de cerrar',
       ],
-      hidden: [],
+      // M2: la Auditoría vive en Ajustes → «Datos y seguridad», no en el shell.
+      hidden: ['Auditoría'],
     },
     DENTIST: {
-      visible: ['Inicio', 'Pacientes', 'Agenda', 'Catálogo', 'Reportes'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Catálogo', 'Reportes', 'Pendiente de cerrar'],
       hidden: ['Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
     },
     ASSISTANT: {
       visible: ['Inicio', 'Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
-      hidden: ['Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes'],
+      hidden: ['Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes', 'Pendiente de cerrar'],
     },
     RECEPTION: {
-      visible: ['Inicio', 'Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos', 'Pendiente de cerrar'],
       hidden: ['Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
     },
   };
@@ -264,10 +271,10 @@ describe('AppShell', () => {
       await nav.findByRole('link', { name: 'Inicio' });
       expect(groupsOf(nav)).toEqual([
         [null, ['/dashboard', '/agenda', '/patients']],
-        ['Atención', ['/presupuestos', '/anamnesis-por-revisar']],
+        ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos', '/anamnesis-por-revisar']],
         ['Finanzas', ['/caja', '/caja/cartera', '/caja/gastos', '/caja/descuentos', '/reportes']],
         ['Clínica', ['/catalog', '/inventory']],
-        ['Administración', ['/staff', '/settings/auditoria', '/settings']],
+        ['Administración', ['/staff', '/settings']],
       ]);
       // Títulos de grupo con el estilo overline; el primero no lleva.
       expect(nav.getByText('Finanzas')).toHaveClass('t-overline');
@@ -278,7 +285,7 @@ describe('AppShell', () => {
       await nav.findByRole('link', { name: 'Caja' });
       expect(groupsOf(nav)).toEqual([
         [null, ['/dashboard', '/agenda', '/patients']],
-        ['Atención', ['/presupuestos']],
+        ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos']],
         ['Finanzas', ['/caja', '/caja/cartera']],
         ['Administración', ['/settings']],
       ]);
@@ -360,7 +367,7 @@ describe('AppShell', () => {
       const bar = await tabsFor('ADMIN');
       await user.click(bar.getByRole('button', { name: 'Más' }));
       const sheet = within(await screen.findByTestId('more-sheet'));
-      for (const name of ['Presupuestos', 'Anamnesis por revisar', 'Cartera', 'Reportes', 'Inventario', 'Personal', 'Ajustes', 'Mi perfil']) {
+      for (const name of ['Pendiente de cerrar', 'Presupuestos', 'Anamnesis por revisar', 'Cartera', 'Reportes', 'Inventario', 'Personal', 'Ajustes', 'Mi perfil']) {
         expect(sheet.getByRole('link', { name })).toBeInTheDocument();
       }
       // Lo que ya está en la barra no se repite.
@@ -404,8 +411,8 @@ describe('AppShell', () => {
   // A4: paleta de comandos.
   describe('A4: paleta de comandos', () => {
     it.each([
-      ['ADMIN', ['Inicio', 'Caja', 'Personal', 'Ajustes'], [] as string[]],
-      ['RECEPTION', ['Inicio', 'Agenda', 'Caja', 'Presupuestos', 'Ajustes'], ['Personal', 'Inventario', 'Auditoría']],
+      ['ADMIN', ['Inicio', 'Caja', 'Personal', 'Pendiente de cerrar', 'Ajustes'], [] as string[]],
+      ['RECEPTION', ['Inicio', 'Agenda', 'Caja', 'Presupuestos', 'Pendiente de cerrar', 'Ajustes'], ['Personal', 'Inventario', 'Auditoría']],
     ])('%s: ⌘K la abre y «Ir a» solo lista lo que su rol puede abrir', async (role, visible, hidden) => {
       const user = userEvent.setup();
       mockAccessToken = tokenForRole(role);
@@ -464,6 +471,35 @@ describe('AppShell', () => {
       await user.keyboard('{Escape}');
       await waitFor(() => expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument());
     });
+  });
+
+  it('DX-439: «Pendiente de cerrar» lleva su contador en la barra lateral, la hoja «Más» y la paleta', async () => {
+    const user = userEvent.setup();
+    mockAccessToken = tokenForRole('RECEPTION');
+    (getClosingQueueCount as jest.Mock).mockResolvedValueOnce({ total: 3 });
+    try {
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      const aside = within(document.querySelector('aside') as HTMLElement);
+      const link = await aside.findByRole('link', { name: 'Pendiente de cerrar · 3' });
+      expect(link).toHaveAttribute('href', '/agenda/pendiente-de-cerrar');
+      expect(within(link).getByTestId('closing-queue-count')).toHaveTextContent('3');
+      // En el teléfono no es pestaña: va a «Más», con el mismo contador.
+      await user.click(within(screen.getByTestId('bottom-tab-bar')).getByRole('button', { name: 'Más' }));
+      const sheet = within(await screen.findByTestId('more-sheet'));
+      expect(sheet.getByRole('link', { name: 'Pendiente de cerrar · 3' })).toBeInTheDocument();
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await waitFor(() => expect(screen.queryByTestId('more-sheet')).not.toBeInTheDocument());
+      await user.keyboard('{Control>}k{/Control}');
+      const palette = within(await screen.findByTestId('command-palette'));
+      await user.type(palette.getByRole('combobox'), 'cerrar');
+      expect(palette.getByRole('option', { name: 'Pendiente de cerrar' })).toBeInTheDocument();
+    } finally {
+      (getClosingQueueCount as jest.Mock).mockResolvedValue({ total: 0 });
+    }
   });
 
   it('DX-200: al odontólogo la Agenda le dice cuántos pacientes suyos esperan', async () => {

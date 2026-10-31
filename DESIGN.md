@@ -561,11 +561,19 @@ picks) and `app-shell.tsx`. Every entry's `roles` copies the API's `@Roles(...)`
 screen it opens; a group with no visible entries disappears.
 
 - **Information architecture.** Grouped by moment of work, not flat:
-  (no heading) Dashboard · Agenda · Pacientes — *Atención*: Presupuestos, Anamnesis (the
-  visible label is short; the accessible name and `title` stay «Anamnesis por revisar», with
-  its count) — *Finanzas*: Caja, Cartera, Gastos, Descuentos, Reportes — *Clínica*: Catálogo,
-  Inventario — *Administración*: Personal, Auditoría, Ajustes. New sections join a group;
-  they never become a sixth flat item.
+  (no heading) Dashboard · Agenda · Pacientes — *Atención*: Pendiente de cerrar, Presupuestos,
+  Anamnesis (the visible label is short; the accessible name and `title` stay «Anamnesis por
+  revisar»; both queues carry their count) — *Finanzas*: Caja, Cartera, Gastos, Descuentos,
+  Reportes — *Clínica*: Catálogo, Inventario — *Administración*: Personal, Ajustes. New
+  sections join a group; they never become a sixth flat item.
+- **The 900px budget.** ADMIN's sidebar holds **15 entries** and fits a 1440×900 window with
+  no scroll (expanded ~5px to spare, rail ~3px; `e2e/sidebar-scrollbars.spec.ts` guards it).
+  A new entry must *replace* one, never just be appended; the rail's 44px targets cannot
+  shrink. Precedent (M2, DX-439): «Pendiente de cerrar» joined *Atención* and **Auditoría
+  moved into Ajustes → «Datos y seguridad»** (next to «Accesos de soporte»): it already lived
+  at `/settings/auditoria`, it is a monthly ADMIN-only check, not daily work, and the ⌘K
+  palette still finds it by typing. Its page carries «← Ajustes» like every settings screen.
+  The next candidate to fold is a low-frequency admin screen, never a daily queue.
 - **Brand.** The shell shows the **clinic's** brand (white-label): its logo, or an initials
   tile (`primary-subtle` + `primary-subtle-text`) + name. «Dentalix» appears only when the
   tenant has no name (the `Logo` SVG monogram, never an emoji). Public pages and paper use

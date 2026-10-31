@@ -68,6 +68,14 @@ export interface MarkDoneModalProps {
   locations?: readonly ClinicLocation[];
   /** Vuelve a leer las sedes (la elegida no tenía zona horaria). */
   onRetryLocations: () => void;
+  /**
+   * DX-439: marcar desde la cita atendida («Pendiente de cerrar»): la API toma
+   * la sede y la fecha de esa cita. Quien llama pasa la sede de la cita como
+   * `activeLocationId` (los profesionales que se ofrecen son los de ella).
+   */
+  appointmentId?: string;
+  /** DX-439: quién viene elegido (el profesional de la cita), si atiende allí. */
+  preferredPerformerId?: string;
   onSaved: (item: TreatmentPlanItem) => void;
 }
 
@@ -92,6 +100,8 @@ export function MarkDoneModal({
   locationName,
   locations = [],
   onRetryLocations,
+  appointmentId,
+  preferredPerformerId,
   onSaved,
 }: MarkDoneModalProps) {
   const selectId = useId();
@@ -135,7 +145,9 @@ export function MarkDoneModal({
         const preferred =
           mode === 'correct'
             ? item.performedById
-            : candidates.some((m) => m.userId === me)
+            : preferredPerformerId && candidates.some((m) => m.userId === preferredPerformerId)
+              ? preferredPerformerId
+              : candidates.some((m) => m.userId === me)
               ? me
               : candidates.length === 1
                 ? candidates[0].userId
@@ -148,7 +160,7 @@ export function MarkDoneModal({
     return () => {
       cancelled = true;
     };
-  }, [open, token, mode, item.performedById, activeLocationId, reloadKey]);
+  }, [open, token, mode, item.performedById, activeLocationId, preferredPerformerId, reloadKey]);
 
   // La sede elegida al atribuir filtra la lista ya cargada, sin volver a pedirla.
   const staff = members === null ? null : members.filter((m) => attendsAt(m.locationIds, scopeLocationId));
@@ -178,7 +190,7 @@ export function MarkDoneModal({
     try {
       const patch =
         mode === 'done'
-          ? { status: 'DONE' as const, performedById: performerId }
+          ? { status: 'DONE' as const, performedById: performerId, ...(appointmentId ? { appointmentId } : {}) }
           : attribute && chosenLocation && chosenZone
             ? {
                 performedById: performerId,

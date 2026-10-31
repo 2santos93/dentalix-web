@@ -34,6 +34,7 @@ import {
   blockBandForDay,
   blockLabel,
   blockShownInColumn,
+  reservedBlockColor,
   type ScheduleBlockLike,
 } from '@/lib/appointments/schedule-blocks';
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
@@ -493,22 +494,36 @@ export function DayColumns({
                 {columnBlocks.map((block) => {
                     const band = blockBandForDay(block, date, span, timeZone);
                     if (!band) return null;
-                    const label = blockLabel(block);
+                    const label = blockLabel(block, undefined, (m) => sedeMinute(m, fmt));
+                    // DX-446: un hueco reservado lleva el color de su tipo; liberado, apenas un tinte.
+                    const reservedColor = reservedBlockColor(block);
                     const aria = copy.blockAria(label, sedeMinuteRanges([{ startMinute: band.start, endMinute: band.end }], fmt));
                     return (
                       <div
                         key={block.id}
                         data-testid="schedule-block"
                         data-block-id={block.id}
+                        data-block-kind={block.kind}
                         role="note"
                         aria-label={aria}
                         className={cn(
-                          'pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]',
-                          block.allowsBooking ? 'bg-warning-subtle' : 'bg-warning-subtle',
+                          'pointer-events-none absolute inset-x-0 border-y border-dashed',
+                          // DX-446: el hueco reservado lleva el color de su tipo (inline,
+                          // abajo); el bloqueo normal, el rayado de aviso sobre warning-subtle.
+                          reservedColor
+                            ? 'border-l-4 [border-left-style:solid]'
+                            : 'border-warning/50 bg-warning-subtle [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]',
                         )}
                         style={{
                           top: offsetFromMinute(band.start, span),
                           height: (band.end - band.start) * PX_PER_MINUTE,
+                          ...(reservedColor
+                            ? {
+                                borderColor: `color-mix(in oklab, ${reservedColor} 55%, transparent)`,
+                                borderLeftColor: reservedColor,
+                                backgroundColor: `color-mix(in oklab, ${reservedColor} ${block.released ? 4 : 12}%, transparent)`,
+                              }
+                            : {}),
                         }}
                       >
                         {onSelectBlock && canSelectBlock(block) ? (

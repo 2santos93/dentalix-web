@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PatientMedicalAlertsNotice } from '@/components/clinical/appointment-medical-alerts';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -32,6 +32,8 @@ import { wallInstant } from '@/lib/time/wall-clock';
 import { UserPlus, Loader2, Search, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -42,6 +44,7 @@ import {
 import { PatientForm } from '@/components/patients/patient-form';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { ApiError } from '@/lib/api/api-error';
 import { useProviderDay } from '@/components/appointments/use-provider-day';
 import { fitsRanges } from '@/lib/locations/provider-schedule';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -50,6 +53,11 @@ import { endSentence } from '@/lib/format/text';
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
 const copy = {
+  // DX-446: hueco reservado (409 RESERVED_SLOT) y «Agendar igualmente».
+  overrideReasonLabel: 'Motivo para agendar igualmente',
+  overrideReasonHint: 'Queda registrado con tu nombre. No escribas datos clínicos.',
+  overrideSubmit: 'Agendar igualmente',
+  overrideReasonLength: 'Escribe un motivo de entre 5 y 300 caracteres.',
   wantsEarlierLabel: 'Adelantar si hay hueco',
   wantsEarlierHint:
     'El paciente quiere venir antes: saldrá como candidato cuando se libere un hueco en un día anterior.',
@@ -223,6 +231,23 @@ export function AppointmentForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const providerDay = useProviderDay(token, providerId, date, locationId);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // DX-446: la cita que chocó con un hueco reservado, si quien agenda puede
+  // saltárselo con motivo.
+  const [overridable, setOverridable] = useState<CreateAppointmentInput | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideError, setOverrideError] = useState<string | null>(null);
+  const overrideInputRef = useRef<HTMLInputElement>(null);
+  // Si cambia la cita (paciente, profesional, tipo, día u horas), «Agendar
+  // igualmente» ya no vale: reintentaría la cita ANTERIOR. El panel solo se
+  // ofrece para la cita que chocó; si no, hay que volver a enviar.
+  const slotKey = [patientId, providerId, appointmentTypeId, date, startTime, endTime, locationId ?? ''].join('|');
+  const [overridableKey, setOverridableKey] = useState<string | null>(null);
+  const overrideFor = overridable !== null && overridableKey === slotKey ? overridable : null;
+  // Al aparecer el motivo, el foco va a él (teclado y lector de pantalla).
+  const showOverride = overrideFor !== null;
+  useEffect(() => {
+    if (showOverride) overrideInputRef.current?.focus();
+  }, [showOverride]);
   const [submitting, setSubmitting] = useState(false);
   const [showPatientDialog, setShowPatientDialog] = useState(false);
   // DX-378: la fecha y las horas son las del reloj de la sede de la cita (la
@@ -379,6 +404,8 @@ export function AppointmentForm({
     e.preventDefault();
     setValidationError(null);
     setSaveError(null);
+    setOverridable(null);
+    setOverrideError(null);
 
     if (!patientId || !providerId || !date || !startTime || !endTime) {
       setValidationError(copy.validationMissingFields);
@@ -428,11 +455,39 @@ export function AppointmentForm({
         ...(reason.trim() ? { reason: reason.trim() } : {}),
         ...(wantsEarlier ? { wantsEarlier: true } : {}),
       };
+      await save(input);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function save(input: CreateAppointmentInput) {
+    try {
       const created = await (locationId ? createAppointment(token,input,locationId) : createAppointment(token,input));
       resetForm();
+      setOverridable(null);
+      setOverrideReason('');
       onCreated(created);
     } catch (err) {
       setSaveError(apiErrorMessage(err, copy.genericSaveError));
+      const canRetry = err instanceof ApiError && err.code === 'RESERVED_SLOT' && err.canOverride === true;
+      setOverridable(canRetry ? { ...input, overrideReason: undefined } : null);
+      setOverridableKey(canRetry ? slotKey : null);
+    }
+  }
+
+  /** DX-446: reintenta la misma cita con el motivo (5–300 caracteres). */
+  async function handleOverride() {
+    if (!overrideFor) return;
+    const reasonText = overrideReason.trim();
+    if (reasonText.length < 5 || reasonText.length > 300) {
+      setOverrideError(copy.overrideReasonLength);
+      return;
+    }
+    setOverrideError(null);
+    setSubmitting(true);
+    try {
+      await save({ ...overrideFor, overrideReason: reasonText });
     } finally {
       setSubmitting(false);
     }
@@ -772,6 +827,28 @@ export function AppointmentForm({
       })()}
       {validationError && <InlineError>{validationError}</InlineError>}
       {saveError && <InlineError>{saveError}</InlineError>}
+      {overrideFor && (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken p-3">
+          <Label htmlFor="appointment-override-reason">{copy.overrideReasonLabel}</Label>
+          <Input
+            ref={overrideInputRef}
+            id="appointment-override-reason"
+            type="text"
+            maxLength={300}
+            value={overrideReason}
+            aria-invalid={overrideError ? true : undefined}
+            aria-describedby={overrideError ? 'appointment-override-error' : 'appointment-override-hint'}
+            onChange={(e) => setOverrideReason(e.target.value)}
+          />
+          <p id="appointment-override-hint" className="text-xs text-muted">
+            {copy.overrideReasonHint}
+          </p>
+          {overrideError && <InlineError id="appointment-override-error">{overrideError}</InlineError>}
+          <Button type="button" variant="secondary" className="self-start" loading={submitting} onClick={() => void handleOverride()}>
+            {copy.overrideSubmit}
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="submit" loading={submitting}>

@@ -11,6 +11,7 @@ import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/co
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 
 const copy = {
   createTitle: 'Nuevo tipo de cita',
@@ -25,6 +26,9 @@ const copy = {
   colorHex: 'Código del color',
   colorHint: 'Formato #RRGGBB. El texto de la cita se vuelve claro u oscuro solo.',
   preview: 'Vista previa',
+  urgent: 'Urgencia',
+  urgentHint:
+    'Para huecos reservados: al reservar un hueco en la agenda, los tipos de urgencia salen primero y ya marcados.',
   create: 'Crear tipo',
   save: 'Guardar cambios',
   invalidName: 'Escribe un nombre (hasta 60 caracteres).',
@@ -60,6 +64,7 @@ export function AppointmentTypeFormModal({
   const [name, setName] = useState(type?.name ?? '');
   const [duration, setDuration] = useState(String(type?.durationMinutes ?? 30));
   const [color, setColor] = useState(type?.color ?? DEFAULT_COLOR);
+  const [isUrgent, setIsUrgent] = useState(type?.isUrgent ?? false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,7 +82,7 @@ export function AppointmentTypeFormModal({
     if (!validColor) return setError(copy.invalidColor);
     setSubmitting(true);
     try {
-      const input = { name: trimmed, durationMinutes: minutes, color: color.toUpperCase() };
+      const input = { name: trimmed, durationMinutes: minutes, color: color.toUpperCase(), isUrgent };
       const saved = editing
         ? await updateAppointmentType(token, type.id, input)
         : await createAppointmentType(token, input);
@@ -145,6 +150,12 @@ export function AppointmentTypeFormModal({
           />
         </div>
       </FormField>
+      <Switch
+        label={copy.urgent}
+        description={copy.urgentHint}
+        checked={isUrgent}
+        onChange={(e) => setIsUrgent(e.target.checked)}
+      />
       <div className="flex items-center gap-3">
         <span className="text-xs text-muted">{copy.preview}</span>
         <span

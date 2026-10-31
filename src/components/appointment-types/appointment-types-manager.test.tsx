@@ -30,6 +30,7 @@ const endo = {
   durationMinutes: 90,
   color: '#7C3AED',
   active: true,
+  isUrgent: false,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
@@ -67,7 +68,7 @@ describe('AppointmentTypesManager (DX-121)', () => {
 
   it('crea un tipo: valida #RRGGBB y la duración antes de enviar', async () => {
     const user = setupUser();
-    mockedCreate.mockResolvedValue({ ...endo, id: 'type-2', name: 'Urgencia', durationMinutes: 30, color: '#DC2626' });
+    mockedCreate.mockResolvedValue({ ...endo, id: 'type-2', name: 'Urgencia', durationMinutes: 30, color: '#DC2626', isUrgent: true });
     render(<AppointmentTypesManager token="tok" allowed />);
     await screen.findByRole('table', { name: 'Tipos de cita' });
 
@@ -86,6 +87,10 @@ describe('AppointmentTypesManager (DX-121)', () => {
     const duration = within(dialog).getByLabelText('Duración (minutos)');
     await user.clear(duration);
     await user.type(duration, '30');
+    // DX-446: el interruptor «Urgencia».
+    const urgent = within(dialog).getByRole('switch', { name: 'Urgencia' });
+    expect(urgent).not.toBeChecked();
+    await user.click(urgent);
     await user.click(within(dialog).getByRole('button', { name: 'Crear tipo' }));
 
     await waitFor(() =>
@@ -93,6 +98,7 @@ describe('AppointmentTypesManager (DX-121)', () => {
         name: 'Urgencia',
         durationMinutes: 30,
         color: '#DC2626',
+        isUrgent: true,
       }),
     );
     expect((await screen.findAllByText('Urgencia')).length).toBeGreaterThan(0);

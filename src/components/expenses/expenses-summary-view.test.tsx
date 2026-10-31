@@ -47,31 +47,13 @@ const copRow: ExpenseSummary['rows'][number] = {
 };
 
 describe('ExpensesSummaryView (DX-274)', () => {
-  // «Hoy» fijo: las expectativas dicen 2026-10-31 en Pacific/Auckland y con el
-  // reloj real el test caducaba en cuanto allí pasaba la medianoche. Solo se
-  // falsea `Date`; los temporizadores siguen siendo reales para `findBy*`.
-  beforeEach(() => {
-    jest.useFakeTimers({
-      now: new Date('2026-10-31T00:00:00Z'),
-      doNotFake: [
-        'setTimeout',
-        'clearTimeout',
-        'setInterval',
-        'clearInterval',
-        'setImmediate',
-        'clearImmediate',
-        'nextTick',
-        'queueMicrotask',
-        'requestAnimationFrame',
-        'cancelAnimationFrame',
-        'requestIdleCallback',
-        'cancelIdleCallback',
-        'performance',
-        'hrtime',
-      ],
-    });
+  // Reloj fijo: los rangos esperados (mayo–octubre de 2026) son los «últimos
+  // seis meses» del 15-10-2026 en la sede (Auckland). Con el reloj real el test
+  // caducaba en cuanto empezaba noviembre en Auckland (31-10 a las 11:00 UTC).
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-15T00:00:00Z'), advanceTimers: true });
   });
-  afterEach(() => {
+  afterAll(() => {
     jest.useRealTimers();
   });
 

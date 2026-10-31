@@ -4,7 +4,10 @@ import type { ClinicRole } from '@/lib/me/me-api';
 
 // DX-122: la API documenta los bloqueos con @ApiProperty, así que los tipos
 // salen tal cual del contrato generado.
-export type ScheduleBlock = components['schemas']['ScheduleBlockDto'];
+// DX-446: el listado de la agenda trae además los tipos reservados, su
+// liberación y si ya se liberó.
+export type ScheduleBlock = components['schemas']['ScheduleBlockListItemDto'];
+export type SavedScheduleBlock = components['schemas']['ScheduleBlockDto'];
 export type CreateScheduleBlockInput = components['schemas']['CreateScheduleBlockDto'];
 export type AffectedAppointment = components['schemas']['AffectedAppointmentDto'];
 /** Las primeras 50 citas afectadas por hora y cuántas hay en total. */
@@ -53,8 +56,8 @@ export async function listAffectedAppointments(
 export async function createScheduleBlock(
   token: string,
   input: CreateScheduleBlockInput,
-): Promise<ScheduleBlock> {
-  return apiFetch<ScheduleBlock>('/schedule-blocks', { method: 'POST', body: input, token });
+): Promise<SavedScheduleBlock> {
+  return apiFetch<SavedScheduleBlock>('/schedule-blocks', { method: 'POST', body: input, token });
 }
 
 /** Borrado lógico; la API responde 204 sin cuerpo. */

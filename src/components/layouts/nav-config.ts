@@ -10,15 +10,17 @@ import {
   HandCoins,
   BadgePercent,
   ReceiptText,
-  History,
   ChartColumn,
   FileClock,
   ClipboardCheck,
+  ListChecks,
   Settings,
 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { CLOSING_QUEUE_HREF } from '@/lib/appointments/closing-queue-api';
 
 export const ANAMNESIS_HREF = '/anamnesis-por-revisar';
+export { CLOSING_QUEUE_HREF };
 
 export interface NavItem {
   href: string;
@@ -62,6 +64,15 @@ const DASHBOARD: NavItem = {
 };
 const AGENDA: NavItem = { href: '/agenda', label: 'Agenda', icon: Calendar };
 const PATIENTS: NavItem = { href: '/patients', label: 'Pacientes', icon: Users };
+// DX-439: «Pendiente de cerrar» (CLOSING_QUEUE_ROLES en la API, como
+// `canSeeClosingQueue`), con su contador: lo que el usuario tiene sin cerrar de
+// días anteriores. Vive bajo /agenda y abre «Atención»: es el cierre del día.
+const CLOSING_QUEUE: NavItem = {
+  href: CLOSING_QUEUE_HREF,
+  label: 'Pendiente de cerrar',
+  icon: ListChecks,
+  roles: ['ADMIN', 'DENTIST', 'RECEPTION'],
+};
 // Presupuestos por seguir (DX-040): TREATMENT_PLAN_FOLLOW_UP_ROLES en la API.
 const QUOTES: NavItem = {
   href: '/presupuestos',
@@ -109,9 +120,9 @@ const CATALOG: NavItem = {
 const INVENTORY: NavItem = { href: '/inventory', label: 'Inventario', icon: Package, roles: ['ADMIN', 'ASSISTANT'] };
 // La pantalla lee `GET /staff/directory`: STAFF_WRITE_ROLES.
 const STAFF: NavItem = { href: '/staff', label: 'Personal', icon: UserCog, roles: ['ADMIN'] };
-// Registro de auditoría (DX-009): AUDIT_READ_ROLES, lleva IP y user agent.
-const AUDIT: NavItem = { href: '/settings/auditoria', label: 'Auditoría', icon: History, roles: ['ADMIN'] };
 // Índice de ajustes: lo abren todos (cada pantalla filtra sus entradas por rol).
+// La Auditoría (DX-009) vive ahí, en «Datos y seguridad» (M2: dejó la barra
+// para que «Pendiente de cerrar» quepa a 900 px; DESIGN.md → Navigation).
 const SETTINGS: NavItem = { href: '/settings', label: 'Ajustes', icon: Settings };
 
 /**
@@ -120,10 +131,10 @@ const SETTINGS: NavItem = { href: '/settings', label: 'Ajustes', icon: Settings 
  */
 export const NAV_GROUPS: readonly NavGroup[] = [
   { id: 'main', label: null, items: [DASHBOARD, AGENDA, PATIENTS] },
-  { id: 'care', label: 'Atención', items: [QUOTES, ANAMNESIS] },
+  { id: 'care', label: 'Atención', items: [CLOSING_QUEUE, QUOTES, ANAMNESIS] },
   { id: 'finance', label: 'Finanzas', items: [CASH, RECEIVABLES, EXPENSES, DISCOUNTS, REPORTS] },
   { id: 'clinic', label: 'Clínica', items: [CATALOG, INVENTORY] },
-  { id: 'admin', label: 'Administración', items: [STAFF, AUDIT, SETTINGS] },
+  { id: 'admin', label: 'Administración', items: [STAFF, SETTINGS] },
 ];
 
 export const ALL_NAV_ITEMS: readonly NavItem[] = NAV_GROUPS.flatMap((g) => g.items);

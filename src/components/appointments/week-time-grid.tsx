@@ -95,7 +95,11 @@ export function WeekTimeGrid({
   selectedProviderId = null,
 }: WeekTimeGridProps) {
   const labelOf = (block: ScheduleBlockLike) =>
-    blockLabel(block, block.providerId ? providerName?.(block.providerId) : undefined);
+    blockLabel(
+      block,
+      block.providerId ? providerName?.(block.providerId) : undefined,
+      (m) => sedeMinute(m, clock.fmt),
+    );
   const dates = weekDates(weekStart);
   const timeZone = clock.timeZone;
   const scrollRef = useRef<HTMLDivElement>(null);
