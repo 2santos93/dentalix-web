@@ -56,6 +56,24 @@ describe('etiquetas de auditoría', () => {
     expect(AUDIT_RESOURCE_LABELS.CLINIC_SETTINGS).toBe('Ajustes de la clínica');
   });
 
+  it('DX-360: los recursos de configuración de la clínica tienen su etiqueta y salen en el filtro', () => {
+    const expected = {
+      LOCATION_SCHEDULE: 'Horario de la sede',
+      REMINDER_SETTINGS: 'Recordatorios de la sede',
+      PRIVACY_POLICY: 'Política de datos',
+      APPOINTMENT_TYPE: 'Tipo de cita',
+      PAYER: 'Pagador',
+      CONSENT_TEMPLATE: 'Plantilla de consentimiento',
+      PRESCRIPTION_TEMPLATE: 'Plantilla de receta',
+      INVENTORY_ITEM: 'Artículo de inventario',
+      INVENTORY_MOVEMENT: 'Movimiento de inventario',
+    } as const;
+    for (const [resource, label] of Object.entries(expected)) {
+      expect(AUDIT_RESOURCE_LABELS[resource as keyof typeof expected]).toBe(label);
+      expect(AUDIT_RESOURCE_OPTIONS).toContain(resource);
+    }
+  });
+
   it('las opciones no repiten valores', () => {
     expect(new Set(AUDIT_ACTION_OPTIONS).size).toBe(AUDIT_ACTION_OPTIONS.length);
     expect(new Set(AUDIT_RESOURCE_OPTIONS).size).toBe(AUDIT_RESOURCE_OPTIONS.length);
