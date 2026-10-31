@@ -37,7 +37,7 @@ const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
 const password = 'Password123!';
 
 // Mismo formateador que la app (`formatCurrency`, locale `es`, dos decimales).
-const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code', minimumFractionDigits: 2 });
 const money = (amount: number) => usd.format(amount);
 /** DX-386: «Cobrado»/«Pendiente» por ítem con el formato de la sede y el código ISO («USD 100,00»). */
 const sedeUsd = (amount: number) => moneyWithCode(amount, 'USD', regionalFormat(E2E_REGION));
