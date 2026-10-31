@@ -106,11 +106,33 @@ function httpUrl(value: string | undefined): URL | null {
 export function assertRuntimeConfig(env: Partial<Record<string, string>> = process.env): void {
   if (env.NODE_ENV !== 'production') return;
   if (!httpUrl(env.API_URL)) {
+    const legacy = env.NEXT_PUBLIC_API_URL?.trim()
+      ? ' NEXT_PUBLIC_API_URL ya no se lee (DX-083): renómbrala a API_URL.'
+      : '';
     throw new Error(
-      'Falta API_URL o no es una URL http(s) válida (p. ej. https://api.dentalix.app/api/v1). La web no arranca en producción sin ella.',
+      `Falta API_URL o no es una URL http(s) válida (p. ej. https://api.dentalix.app/api/v1). La web no arranca en producción sin ella.${legacy}`,
     );
   }
   if (env.FILES_ORIGIN?.trim() && !httpUrl(env.FILES_ORIGIN)) {
     throw new Error('FILES_ORIGIN no es una URL http(s) válida (p. ej. https://archivos.dentalix.app).');
   }
+}
+
+/**
+ * DX-083: las variables anteriores (`NEXT_PUBLIC_API_URL`,
+ * `NEXT_PUBLIC_FILES_ORIGIN`) ya no se leen. Quien las tenga aún en su
+ * `.env.local` (y no las nuevas) recibe un aviso al arrancar, en vez de ver la
+ * web hablando en silencio con `localhost:3000`.
+ */
+export function legacyEnvWarnings(env: Partial<Record<string, string>> = process.env): string[] {
+  const renamed = [
+    ['NEXT_PUBLIC_API_URL', 'API_URL'],
+    ['NEXT_PUBLIC_FILES_ORIGIN', 'FILES_ORIGIN'],
+  ] as const;
+  return renamed
+    .filter(([old, current]) => env[old]?.trim() && !env[current]?.trim())
+    .map(
+      ([old, current]) =>
+        `${old} ya no se lee (DX-083): renómbrala a ${current} en tu .env.local (variable de servidor, se lee en runtime).`,
+    );
 }

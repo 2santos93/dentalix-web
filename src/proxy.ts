@@ -24,6 +24,10 @@ export const API_BODY_TOO_LARGE = {
  * RUNTIME y la misma imagen sirve contra cualquier API. Next reenvía la
  * reescritura externa igual que un rewrite (mismo proxy, `X-Forwarded-Host`
  * con el host de la clínica, tope de cuerpo `proxyClientMaxBodySize`).
+ * Ojo: en una reescritura externa Next devuelve al navegador la cabecera
+ * `x-middleware-rewrite` con el destino, o sea, con `API_URL`. Si la API
+ * interna no debe ser conocida, el ingress tiene que quitar esa cabecera de
+ * las respuestas (runbook de despliegue).
  *
  * DX-259 (OPS-038): una petición con más cuerpo del que Next copia
  * (`API_PROXY_MAX_BODY_BYTES`, 1 MB) se rechaza antes con 413, por su

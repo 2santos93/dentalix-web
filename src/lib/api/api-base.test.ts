@@ -9,6 +9,7 @@ import {
   apiUrl,
   assertRuntimeConfig,
   filesOrigin,
+  legacyEnvWarnings,
 } from './api-base';
 
 describe('api-base', () => {
@@ -55,6 +56,19 @@ describe('api-base', () => {
     ).not.toThrow();
     // Fuera de producción, los defaults de desarrollo.
     expect(() => assertRuntimeConfig({ NODE_ENV: 'development' })).not.toThrow();
+  });
+
+  it('DX-083: las antiguas NEXT_PUBLIC_API_URL/NEXT_PUBLIC_FILES_ORIGIN ya no se leen y se avisa de renombrarlas', () => {
+    expect(legacyEnvWarnings({})).toEqual([]);
+    expect(legacyEnvWarnings({ API_URL: 'http://localhost:3000/api/v1' })).toEqual([]);
+    const [api] = legacyEnvWarnings({ NEXT_PUBLIC_API_URL: 'http://localhost:3100/api/v1' });
+    expect(api).toMatch(/NEXT_PUBLIC_API_URL ya no se lee.*API_URL/);
+    const [files] = legacyEnvWarnings({ NEXT_PUBLIC_FILES_ORIGIN: 'http://localhost:9000' });
+    expect(files).toMatch(/NEXT_PUBLIC_FILES_ORIGIN ya no se lee.*FILES_ORIGIN/);
+    // En producción el error de arranque también lo dice.
+    expect(() =>
+      assertRuntimeConfig({ NODE_ENV: 'production', NEXT_PUBLIC_API_URL: 'https://api.dentalix.app/api/v1' }),
+    ).toThrow(/NEXT_PUBLIC_API_URL.*API_URL/);
   });
 
   it('apiOrigin da solo el origen (para img-src de logos y avatares)', () => {
