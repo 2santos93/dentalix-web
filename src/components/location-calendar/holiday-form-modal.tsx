@@ -1,6 +1,5 @@
 'use client';
 import * as React from 'react';
-import { submitOnEnter } from '@/components/appointments/submit-on-enter';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -165,7 +164,6 @@ export function HolidayFormModal({
       error={formError}
       onCloseAutoFocus={onCloseAutoFocus}
     >
-      <div className="contents" onKeyDownCapture={submitOnEnter}>
       <FormField htmlFor={inputId('date')} label={copy.date} error={errors.date}>
         <DatePicker
           id={inputId('date')}
@@ -181,7 +179,6 @@ export function HolidayFormModal({
           aria-describedby={errors.date ? fieldErrorId(inputId('date')) : undefined}
         />
       </FormField>
-      </div>
       <FormField htmlFor={inputId('name')} label={copy.name} error={errors.name}>
         <Input
           id={inputId('name')}

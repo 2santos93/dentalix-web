@@ -72,6 +72,59 @@ describe('DateField', () => {
     expect(within(group).getAllByRole('spinbutton').map((s) => s.textContent)).toEqual(['05', '01', '2000']);
   });
 
+  it('no emite años a medio teclear (0002, 0020, 0202): solo la fecha completa o null', async () => {
+    const user = userEvent.setup();
+    const onValue = jest.fn();
+    render(<ControlledDate initial="2026-10-05" onValue={onValue} />);
+    const group = screen.getByRole('group', { name: 'Fecha de nacimiento' });
+    const year = within(group).getAllByRole('spinbutton')[2];
+    await user.click(year);
+    await user.keyboard('{Backspace}{Backspace}{Backspace}{Backspace}2025');
+    const emitted = onValue.mock.calls.map(([v]) => v);
+    expect(emitted.every((v) => v === null || /^[1-9]\d{3}-/.test(v))).toBe(true);
+    expect(onValue).toHaveBeenLastCalledWith('2025-10-05');
+    // Lo tecleado sigue en el campo mientras el año está a medias.
+    expect(year.textContent).toBe('2025');
+  });
+
+  it('mientras el año está a medias muestra lo tecleado y el valor de fuera es null', async () => {
+    const user = userEvent.setup();
+    const onValue = jest.fn();
+    render(<ControlledDate onValue={onValue} />);
+    const [day, , year] = within(screen.getByRole('group', { name: 'Fecha de nacimiento' })).getAllByRole('spinbutton');
+    await user.click(day);
+    await user.keyboard('051020');
+    expect(year.textContent).toBe('20');
+    expect(onValue.mock.calls.every(([v]) => v === null)).toBe(true);
+    expect(new FormData(screen.getByRole('form') as HTMLFormElement).get('birthDate')).toBe('');
+  });
+
+  it('Enter en un segmento envía el formulario (envío implícito)', async () => {
+    const user = userEvent.setup();
+    const onSubmit = jest.fn((e: React.FormEvent) => e.preventDefault());
+    render(
+      <form aria-label="f" onSubmit={onSubmit}>
+        <DateField aria-label="Fecha" value="2026-10-05" onChange={() => {}} />
+        <TimeField aria-label="Hora" value="09:30" onChange={() => {}} />
+      </form>,
+    );
+    await user.click(within(screen.getByRole('group', { name: 'Fecha' })).getAllByRole('spinbutton')[0]);
+    await user.keyboard('{Enter}');
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    await user.click(within(screen.getByRole('group', { name: 'Hora' })).getAllByRole('spinbutton')[0]);
+    await user.keyboard('{Enter}');
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  it('el valor de fuera manda: si cambia por otra vía, el campo lo pinta', () => {
+    const { rerender } = render(<DateField aria-label="Fecha" value="2026-10-05" onChange={() => {}} />);
+    rerender(<DateField aria-label="Fecha" value="1999-01-02" onChange={() => {}} />);
+    const segments = within(screen.getByRole('group', { name: 'Fecha' })).getAllByRole('spinbutton');
+    expect(segments.map((s) => s.textContent)).toEqual(['02', '01', '1999']);
+    rerender(<DateField aria-label="Fecha" value={null} onChange={() => {}} />);
+    expect(within(screen.getByRole('group', { name: 'Fecha' })).getAllByRole('spinbutton')[2]).toHaveAttribute('data-placeholder');
+  });
+
   it('marca el estado inválido con aria-invalid', () => {
     render(<DateField id="x" aria-label="Fecha" value={null} onChange={() => {}} aria-invalid />);
     expect(screen.getByRole('group', { name: 'Fecha' })).toHaveAttribute('data-invalid');

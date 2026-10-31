@@ -31,6 +31,10 @@ import { fieldLabelId } from '@/components/shared/form-field';
 import { DateI18n, useDateLocale } from '@/components/ui/date-locale';
 import {
   HiddenIso,
+  SegmentKeys,
+  completeIso,
+  useDayDraft,
+  useIsoDraft,
   dateInvalid,
   dateLabelClass,
   dateLabelling,
@@ -40,7 +44,6 @@ import {
 } from '@/components/ui/date-field';
 import {
   DEFAULT_RANGE_PRESETS,
-  calendarDateToIso,
   isoToCalendarDate,
   todayDate,
   type DateRangePreset,
@@ -184,44 +187,47 @@ export interface DatePickerProps extends DateBaseProps {
 export function DatePicker(props: DatePickerProps) {
   const { id, value, onChange, min, max, label, required, disabled, autoFocus, className } = props;
   const date = React.useMemo(() => isoToCalendarDate(value), [value]);
+  const [draft, setDraft] = useDayDraft(value, onChange);
   const minValue = React.useMemo(() => isoToCalendarDate(min) ?? undefined, [min]);
   const maxValue = React.useMemo(() => isoToCalendarDate(max) ?? undefined, [max]);
   return (
     <DateI18n>
-      <AriaDatePicker
-        id={id}
-        value={date}
-        onChange={(next: CalendarDate | null) => onChange(calendarDateToIso(next))}
-        minValue={minValue}
-        maxValue={maxValue}
-        isRequired={required}
-        isDisabled={disabled}
-        isInvalid={dateInvalid(props)}
-        validationBehavior="aria"
-        // dd/mm/aaaa: siempre dos cifras, como la máscara que la persona espera ver.
-        shouldForceLeadingZeros
-        granularity="day"
-        autoFocus={autoFocus}
-        aria-describedby={props['aria-describedby']}
-        {...dateLabelling(props)}
-        className={cn('flex flex-col gap-1.5', className)}
-      >
-        {label ? <AriaLabel className={dateLabelClass}>{label}</AriaLabel> : null}
-        <Group className={segmentGroupClass}>
-          <DateInput className="flex items-center">
-            {(segment) => <DateSegment segment={segment} className={segmentClass} />}
-          </DateInput>
-          <AriaButton className={triggerButtonClass}>
-            <CalendarDays aria-hidden />
-          </AriaButton>
-        </Group>
-        <CalendarOverlay title={<OverlayTitle field={props} fallback="Elegir fecha" />}>
-          <AriaCalendar>
-            <CalendarHeader />
-            <CalendarBody range={false} />
-          </AriaCalendar>
-        </CalendarOverlay>
-      </AriaDatePicker>
+      <SegmentKeys>
+        <AriaDatePicker
+          id={id}
+          value={draft}
+          onChange={(next: CalendarDate | null) => setDraft(next)}
+          minValue={minValue}
+          maxValue={maxValue}
+          isRequired={required}
+          isDisabled={disabled}
+          isInvalid={dateInvalid(props)}
+          validationBehavior="aria"
+          // dd/mm/aaaa: siempre dos cifras, como la máscara que la persona espera ver.
+          shouldForceLeadingZeros
+          granularity="day"
+          autoFocus={autoFocus}
+          aria-describedby={props['aria-describedby']}
+          {...dateLabelling(props)}
+          className={cn('flex flex-col gap-1.5', className)}
+        >
+          {label ? <AriaLabel className={dateLabelClass}>{label}</AriaLabel> : null}
+          <Group className={segmentGroupClass}>
+            <DateInput className="flex items-center">
+              {(segment) => <DateSegment segment={segment} className={segmentClass} />}
+            </DateInput>
+            <AriaButton className={triggerButtonClass}>
+              <CalendarDays aria-hidden />
+            </AriaButton>
+          </Group>
+          <CalendarOverlay title={<OverlayTitle field={props} fallback="Elegir fecha" />}>
+            <AriaCalendar>
+              <CalendarHeader />
+              <CalendarBody range={false} />
+            </AriaCalendar>
+          </CalendarOverlay>
+        </AriaDatePicker>
+      </SegmentKeys>
       <HiddenIso name={props.name} value={date ? value : null} />
     </DateI18n>
   );
@@ -265,6 +271,25 @@ function RangePresets({ presets, onPick }: { presets: readonly DateRangePreset[]
   );
 }
 
+type RangeDraft = { start: CalendarDate; end: CalendarDate } | null;
+
+function toRangeDraft(value: IsoRange | null): RangeDraft {
+  const start = isoToCalendarDate(value?.from);
+  const end = isoToCalendarDate(value?.to);
+  return start && end ? { start, end } : null;
+}
+
+/** El rango sale solo con los dos años completos; si no, `null`. */
+const rangeDraft = {
+  toDraft: toRangeDraft,
+  toIso: (next: RangeDraft): IsoRange | null => {
+    const from = completeIso(next?.start);
+    const to = completeIso(next?.end);
+    return from && to ? { from, to } : null;
+  },
+  key: (iso: IsoRange | null) => (iso ? `${iso.from}/${iso.to}` : ''),
+};
+
 export interface DateRangePickerProps extends DateBaseProps {
   /** Periodo con ambos días incluidos, 'YYYY-MM-DD', o `null`. */
   value: IsoRange | null;
@@ -300,57 +325,52 @@ export function DateRangePicker(props: DateRangePickerProps) {
     startLabel = 'Desde',
     endLabel = 'Hasta',
   } = props;
-  const range = React.useMemo(() => {
-    const start = isoToCalendarDate(value?.from);
-    const end = isoToCalendarDate(value?.to);
-    return start && end ? { start, end } : null;
-  }, [value?.from, value?.to]);
+  const range = React.useMemo(() => toRangeDraft(value), [value]);
+  const [draft, setDraft] = useIsoDraft(value, onChange, rangeDraft);
   const minValue = React.useMemo(() => isoToCalendarDate(min) ?? undefined, [min]);
   const maxValue = React.useMemo(() => isoToCalendarDate(max) ?? undefined, [max]);
   const presets = props.presets === true ? DEFAULT_RANGE_PRESETS : props.presets || null;
   return (
     <DateI18n>
-      <AriaDateRangePicker
-        id={id}
-        value={range}
-        onChange={(next) => {
-          const from = calendarDateToIso(next?.start);
-          const to = calendarDateToIso(next?.end);
-          onChange(from && to ? { from, to } : null);
-        }}
-        minValue={minValue}
-        maxValue={maxValue}
-        isRequired={required}
-        isDisabled={disabled}
-        isInvalid={dateInvalid(props)}
-        validationBehavior="aria"
-        // dd/mm/aaaa: siempre dos cifras, como la máscara que la persona espera ver.
-        shouldForceLeadingZeros
-        granularity="day"
-        autoFocus={autoFocus}
-        aria-describedby={props['aria-describedby']}
-        {...dateLabelling(props)}
-        className={cn('flex flex-col gap-1.5', className)}
-      >
-        {label ? <AriaLabel className={dateLabelClass}>{label}</AriaLabel> : null}
-        <Group className={cn(segmentGroupClass, 'gap-1')}>
-          <RangeInput slot="start" label={startLabel} />
-          <span aria-hidden className="px-1 text-faint">
-            –
-          </span>
-          <RangeInput slot="end" label={endLabel} />
-          <AriaButton className={triggerButtonClass}>
-            <CalendarDays aria-hidden />
-          </AriaButton>
-        </Group>
-        <CalendarOverlay title={<OverlayTitle field={props} fallback="Elegir periodo" />}>
-          {presets ? <RangePresets presets={presets} onPick={onChange} /> : null}
-          <AriaRangeCalendar>
-            <CalendarHeader />
-            <CalendarBody range />
-          </AriaRangeCalendar>
-        </CalendarOverlay>
-      </AriaDateRangePicker>
+      <SegmentKeys>
+        <AriaDateRangePicker
+          id={id}
+          value={draft}
+          onChange={setDraft}
+          minValue={minValue}
+          maxValue={maxValue}
+          isRequired={required}
+          isDisabled={disabled}
+          isInvalid={dateInvalid(props)}
+          validationBehavior="aria"
+          // dd/mm/aaaa: siempre dos cifras, como la máscara que la persona espera ver.
+          shouldForceLeadingZeros
+          granularity="day"
+          autoFocus={autoFocus}
+          aria-describedby={props['aria-describedby']}
+          {...dateLabelling(props)}
+          className={cn('flex flex-col gap-1.5', className)}
+        >
+          {label ? <AriaLabel className={dateLabelClass}>{label}</AriaLabel> : null}
+          <Group className={cn(segmentGroupClass, 'gap-1')}>
+            <RangeInput slot="start" label={startLabel} />
+            <span aria-hidden className="px-1 text-faint">
+              –
+            </span>
+            <RangeInput slot="end" label={endLabel} />
+            <AriaButton className={triggerButtonClass}>
+              <CalendarDays aria-hidden />
+            </AriaButton>
+          </Group>
+          <CalendarOverlay title={<OverlayTitle field={props} fallback="Elegir periodo" />}>
+            {presets ? <RangePresets presets={presets} onPick={onChange} /> : null}
+            <AriaRangeCalendar>
+              <CalendarHeader />
+              <CalendarBody range />
+            </AriaRangeCalendar>
+          </CalendarOverlay>
+        </AriaDateRangePicker>
+      </SegmentKeys>
       <HiddenIso name={props.startName} value={range ? value!.from : null} />
       <HiddenIso name={props.endName} value={range ? value!.to : null} />
     </DateI18n>
