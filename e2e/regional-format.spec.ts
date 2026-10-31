@@ -112,7 +112,13 @@ function fromNow(days: number, extraMinutes = 0): Date {
   return new Date(Math.ceil(t / (5 * MIN)) * 5 * MIN);
 }
 
-async function scenario(request: APIRequestContext, sede: 'A' | 'B', settings: Sede, slot: number): Promise<Scenario> {
+async function scenario(
+  request: APIRequestContext,
+  sede: 'A' | 'B',
+  settings: Sede,
+  slot: number,
+  taken: readonly Date[] = [],
+): Promise<Scenario> {
   const s = at(sede);
   const patient = await apiPost<{ id: string }>(request, s, '/patients', {
     firstName: `Paciente${sede}`,
@@ -144,10 +150,19 @@ async function scenario(request: APIRequestContext, sede: 'A' | 'B', settings: S
     planItemIds: [item.id],
   });
   const now = new Date();
-  const arrivedStart = new Date(
-    Math.max(zonedMidnight(now, settings.timeZone) + slot * 6 * MIN, now.getTime() - (10 + slot * 6) * MIN),
-  );
+  const midnight = zonedMidnight(now, settings.timeZone);
+  const arrivedStart = new Date(Math.max(midnight + slot * 6 * MIN, now.getTime() - (10 + slot * 6) * MIN));
   arrivedStart.setUTCSeconds(0, 0);
+  // Las dos sedes comparten profesional y la BD prohíbe solaparle citas: si el
+  // día de esta sede acaba de empezar (el tope de medianoche la empuja), su
+  // ventana de 5 min puede caer encima de la de la otra sede. Se mueve justo
+  // detrás de la ocupada, o justo delante si así ya no cabe antes de ahora.
+  for (const other of taken) {
+    if (Math.abs(arrivedStart.getTime() - other.getTime()) >= 6 * MIN) continue;
+    const after = other.getTime() + 6 * MIN;
+    const before = other.getTime() - 6 * MIN;
+    arrivedStart.setTime(after < now.getTime() - MIN ? after : Math.max(before, midnight));
+  }
   expect(arrivedStart.getTime(), `ya no queda margen hoy en ${settings.timeZone}: vuelve a lanzar el spec`).toBeLessThan(
     now.getTime() - MIN,
   );
@@ -275,7 +290,7 @@ test('panel «En clínica»: 12 h en A, 24 h en B, y la reserva en otra cita con
   test.skip(!process.env.E2E_DATABASE_URL, DB_SKIP);
   test.setTimeout(150_000);
   scenarios.A = await scenario(request, 'A', SEDE_A, 0);
-  scenarios.B = await scenario(request, 'B', SEDE_B, 1);
+  scenarios.B = await scenario(request, 'B', SEDE_B, 1, [scenarios.A.arrivedStart]);
   const cases = [
     { sede: 'A', settings: SEDE_A, s: scenarios.A, order: (w: ReturnType<typeof wall>) => `${w.month}/${w.day}/${w.year}` },
     { sede: 'B', settings: SEDE_B, s: scenarios.B, order: (w: ReturnType<typeof wall>) => `${w.year}/${w.month}/${w.day}` },
