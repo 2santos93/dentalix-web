@@ -90,7 +90,7 @@ export function PostOpPrintView({
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=clinical-history`;
 
   return (
-    <div className="postop-print-page flex min-h-full flex-1 flex-col bg-surface-2 print:min-h-0 print:bg-white">
+    <div className="postop-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
       {data ? <title>{copy.documentTitle(data.templateTitle, data.patientName)}</title> : null}
       <div
         role="toolbar"

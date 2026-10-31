@@ -18,8 +18,7 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 import { PrescriptionItemFields } from './prescription-item-fields';
 
 const MAX_ITEMS = 10;
@@ -140,13 +139,12 @@ export function PrescriptionTemplateFormModal({
         {copy.addItem}
       </Button>
       <FormField htmlFor="rx-template-notes" label={copy.notesLabel}>
-        <textarea
+        <Textarea
           id="rx-template-notes"
           rows={2}
           value={notes}
           maxLength={1000}
           onChange={(e) => setNotes(e.target.value)}
-          className={cn(fieldClass, 'h-auto font-[inherit]')}
         />
       </FormField>
     </FormModal>

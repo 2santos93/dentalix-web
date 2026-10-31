@@ -16,9 +16,10 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { FieldError } from '@/components/errors/field-error';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fieldClass } from '@/lib/ui/field-class';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { CatalogMultiPicker, type CatalogMultiPickerItem } from './catalog-multi-picker';
 
@@ -251,7 +252,7 @@ export function PostOpTemplateFormModal({
             aria-describedby={
               codeError ? fieldErrorId('postop-template-code') : 'postop-template-code-hint'
             }
-            className={cn('font-mono uppercase', editing && 'bg-surface-2 text-muted')}
+            className={cn('t-id uppercase', editing && 'bg-surface-sunken text-muted')}
           />
         </FormField>
         <FormField htmlFor="postop-template-title" label={copy.titleLabel}>
@@ -265,7 +266,7 @@ export function PostOpTemplateFormModal({
         </FormField>
       </div>
       <div className="flex flex-col gap-1.5">
-        <span id="postop-variables-label" className="text-sm font-medium text-ink">
+        <span id="postop-variables-label" className="t-label text-ink">
           {copy.variablesLabel}
         </span>
         <div
@@ -280,7 +281,7 @@ export function PostOpTemplateFormModal({
               type="button"
               title={v.label}
               onClick={() => insertVariable(v.key)}
-              className="min-h-9 max-md:min-h-11 rounded-md border border-border bg-surface px-2.5 font-mono text-xs text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="t-id min-h-9 rounded-md border border-border bg-surface px-2.5 text-xs text-ink hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:min-h-11 pointer-coarse:min-h-11"
             >
               {`{{${v.key}}}`}
               <span className="sr-only"> · {v.label}</span>
@@ -292,7 +293,7 @@ export function PostOpTemplateFormModal({
         </p>
       </div>
       <FormField htmlFor="postop-template-body" label={copy.bodyLabel}>
-        <textarea
+        <Textarea
           id="postop-template-body"
           ref={bodyRef}
           rows={10}
@@ -302,14 +303,14 @@ export function PostOpTemplateFormModal({
           required
           aria-invalid={unknown.length > 0 || undefined}
           aria-describedby={unknown.length > 0 ? 'postop-template-unknown' : undefined}
-          className={cn(fieldClass, 'h-auto font-[inherit] leading-relaxed')}
+          className="leading-relaxed"
         />
       </FormField>
       {unknown.length > 0 ? (
         <InlineError id="postop-template-unknown">{copy.unknown(unknown)}</InlineError>
       ) : null}
 
-      <section className="flex flex-col gap-4 border-t border-hairline pt-4">
+      <section className="flex flex-col gap-4 border-t border-border-subtle pt-4">
         <p className="text-xs text-muted">{copy.linksHint}</p>
         {optionsFailed ? (
           <FieldError
@@ -329,7 +330,7 @@ export function PostOpTemplateFormModal({
               legend={copy.proceduresLegend}
             />
             <fieldset className="flex flex-col gap-2">
-              <legend className="mb-0.5 text-sm font-medium text-ink">{copy.typesLegend}</legend>
+              <legend className="t-label mb-0.5 text-ink">{copy.typesLegend}</legend>
               {options.types.length === 0 ? (
                 <p className="text-sm text-muted">{copy.noTypes}</p>
               ) : (
@@ -339,23 +340,17 @@ export function PostOpTemplateFormModal({
                     const checked = appointmentTypeIds.includes(t.id);
                     return (
                       <li key={t.id}>
-                        <label
-                          htmlFor={id}
-                          className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-ink"
-                        >
-                          <input
-                            id={id}
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() =>
-                              setAppointmentTypeIds((prev) =>
-                                checked ? prev.filter((v) => v !== t.id) : [...prev, t.id],
-                              )
-                            }
-                            className="size-5 shrink-0 accent-[var(--color-primary)]"
-                          />
-                          {t.name}
-                        </label>
+                        <Checkbox
+                          id={id}
+                          label={t.name}
+                          checked={checked}
+                          onChange={() =>
+                            setAppointmentTypeIds((prev) =>
+                              checked ? prev.filter((v) => v !== t.id) : [...prev, t.id],
+                            )
+                          }
+                          className="min-h-11 items-center"
+                        />
                       </li>
                     );
                   })}

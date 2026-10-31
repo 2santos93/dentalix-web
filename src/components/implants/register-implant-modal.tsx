@@ -13,8 +13,10 @@ import {
 } from '@/lib/implants/implants-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { DateField } from '@/components/ui/date-field';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   title: 'Registrar implante',
@@ -184,7 +186,7 @@ export function RegisterImplantModal({
     >
       <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <FormField htmlFor={id('tooth')} label={copy.tooth} hint={copy.toothHint}>
-          <input
+          <Input
             id={id('tooth')}
             inputMode="numeric"
             autoComplete="off"
@@ -192,25 +194,24 @@ export function RegisterImplantModal({
             required
             value={tooth}
             onChange={(e) => setTooth(e.target.value)}
-            className={cn(fieldClass, 'tabular-nums')}
+            className="t-data"
           />
         </FormField>
         <FormField htmlFor={id('kind')} label={copy.kind}>
-          <select
+          <NativeSelect
             id={id('kind')}
             value={kind}
             onChange={(e) => setKind(e.target.value as ImplantKind)}
-            className={fieldClass}
           >
             {IMPLANT_KINDS.map((value) => (
               <option key={value} value={value}>
                 {IMPLANT_KIND_LABELS[value]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         <FormField htmlFor={id('manufacturer')} label={copy.manufacturer}>
-          <input
+          <Input
             id={id('manufacturer')}
             list={id('manufacturers')}
             autoComplete="off"
@@ -218,7 +219,6 @@ export function RegisterImplantModal({
             required
             value={manufacturer}
             onChange={(e) => setManufacturer(e.target.value)}
-            className={fieldClass}
           />
           <datalist id={id('manufacturers')}>
             {catalog.map((c) => (
@@ -227,14 +227,13 @@ export function RegisterImplantModal({
           </datalist>
         </FormField>
         <FormField htmlFor={id('system')} label={copy.system}>
-          <input
+          <Input
             id={id('system')}
             list={id('systems')}
             autoComplete="off"
             maxLength={120}
             value={system}
             onChange={(e) => setSystem(e.target.value)}
-            className={fieldClass}
           />
           <datalist id={id('systems')}>
             {systems.map((s) => (
@@ -243,90 +242,87 @@ export function RegisterImplantModal({
           </datalist>
         </FormField>
         <FormField htmlFor={id('reference')} label={copy.reference}>
-          <input
+          <Input
             id={id('reference')}
             autoComplete="off"
             maxLength={80}
             required
             value={reference}
             onChange={(e) => setReference(e.target.value)}
-            className={cn(fieldClass, 'tabular-nums')}
+            className="t-data"
           />
         </FormField>
         <FormField htmlFor={id('lot')} label={copy.lot}>
-          <input
+          <Input
             id={id('lot')}
             autoComplete="off"
             maxLength={80}
             required
             value={lot}
             onChange={(e) => setLot(e.target.value)}
-            className={cn(fieldClass, 'tabular-nums')}
+            className="t-data"
           />
         </FormField>
         <FormField htmlFor={id('diameter')} label={copy.diameter}>
-          <input
+          <Input
             id={id('diameter')}
             inputMode="decimal"
             autoComplete="off"
             value={diameter}
             onChange={(e) => setDiameter(e.target.value)}
-            className={cn(fieldClass, 'tabular-nums')}
+            className="t-data"
           />
         </FormField>
         <FormField htmlFor={id('length')} label={copy.length}>
-          <input
+          <Input
             id={id('length')}
             inputMode="decimal"
             autoComplete="off"
             value={length}
             onChange={(e) => setLength(e.target.value)}
-            className={cn(fieldClass, 'tabular-nums')}
+            className="t-data"
           />
         </FormField>
         <FormField htmlFor={id('sanitary')} label={copy.sanitaryRegistration}>
-          <input
+          <Input
             id={id('sanitary')}
             autoComplete="off"
             maxLength={80}
             value={sanitaryRegistration}
             onChange={(e) => setSanitaryRegistration(e.target.value)}
-            className={fieldClass}
           />
         </FormField>
         <FormField htmlFor={id('placed-on')} label={copy.placedOn}>
-          <input
+          <DateField
             id={id('placed-on')}
-            type="date"
             max={todayLocal()}
             required
-            value={placedOn}
-            onChange={(e) => setPlacedOn(e.target.value)}
-            className={cn(fieldClass, 'tabular-nums')}
+            value={placedOn || null}
+            onChange={(value) => setPlacedOn(value ?? '')}
           />
         </FormField>
         <FormField htmlFor={id('udi')} label={copy.udi} className="sm:col-span-2">
-          <input
+          <Input
             id={id('udi')}
             autoComplete="off"
             maxLength={255}
             value={udi}
             onChange={(e) => setUdi(e.target.value)}
-            className={cn(fieldClass, 'tabular-nums')}
+            className="t-data"
           />
         </FormField>
         <FormField htmlFor={id('notes')} label={copy.notes} className="sm:col-span-2">
-          <textarea
+          <Textarea
             id={id('notes')}
             rows={2}
+            autoGrow
             maxLength={1000}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className={cn(fieldClass, 'h-auto font-[inherit]')}
           />
         </FormField>
       </div>
-      {treatmentPlanItemId ? <p className="text-xs text-muted">{copy.planItemNote}</p> : null}
+      {treatmentPlanItemId ? <p className="t-caption text-muted">{copy.planItemNote}</p> : null}
     </FormModal>
   );
 }

@@ -104,7 +104,7 @@ describe('NewPrescriptionModal', () => {
     mockedIssue.mockResolvedValue(makePrescription());
     const { onIssued, onOpenChange } = renderModal();
     expect(await screen.findByText('Se emite desde Sede Principal · válida 30 días.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Válida desde')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Válida desde' })).toBeInTheDocument();
     await fillAmoxicilina(user);
     await submit(user);
     await waitFor(() =>

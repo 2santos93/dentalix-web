@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { notifyError } from '@/components/errors/notify';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { PostOpTemplateFormModal } from './postop-template-form-modal';
 
 const copy = {
@@ -35,7 +36,6 @@ const copy = {
   colStatus: 'Estado',
   colVersion: 'Versión',
   colUpdated: 'Actualizada',
-  colActions: 'Acciones',
   procedures: (n: number) => (n === 1 ? '1 procedimiento' : `${n} procedimientos`),
   types: (n: number) => (n === 1 ? '1 tipo de cita' : `${n} tipos de cita`),
   noLinks: 'Sin vínculos',
@@ -44,7 +44,7 @@ const copy = {
   edit: 'Editar',
   deactivate: 'Desactivar',
   activate: 'Activar',
-  actionFor: (action: string, title: string) => `${action} «${title}»`,
+  rowLabel: (title: string) => `«${title}»`,
   toggleError: (title: string) => `No pudimos cambiar el estado de «${title}».`,
   created: 'Plantilla creada.',
   saved: (version: number) => `Guardada. Ahora va por la versión ${version}.`,
@@ -173,48 +173,58 @@ export function PostOpTemplatesManager({ token, allowed }: PostOpTemplatesManage
     }
   }
 
-  function actions(t: PostOpTemplate) {
-    const toggleLabel = t.active ? copy.deactivate : copy.activate;
+  function status(t: PostOpTemplate) {
+    // Activa/Inactiva aún no están en `lib/status/tones.ts`: mismos tonos que
+    // «Activo»/«Inactivo» del personal (success / neutral), con punto.
     return (
-      <div className="flex flex-wrap gap-2 md:justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => openModal(t)}
-          aria-label={copy.actionFor(copy.edit, t.title)}
-          className="max-md:h-11 max-md:flex-1"
-        >
-          {copy.edit}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          loading={pendingId === t.id}
-          onClick={() => void toggleActive(t)}
-          aria-label={copy.actionFor(toggleLabel, t.title)}
-          className="max-md:h-11 max-md:flex-1"
-        >
-          {toggleLabel}
-        </Button>
-      </div>
+      <Badge variant={t.active ? 'success' : 'neutral'} dot>
+        {t.active ? copy.active : copy.inactive}
+      </Badge>
     );
   }
 
-  function status(t: PostOpTemplate) {
-    return (
-      <Badge variant={t.active ? 'success' : 'muted'}>{t.active ? copy.active : copy.inactive}</Badge>
-    );
-  }
+  const columns: DataListColumn<PostOpTemplate>[] = [
+    {
+      id: 'code',
+      header: copy.colCode,
+      cell: (t) => <span className="t-id text-xs">{t.code}</span>,
+      mobileCell: (t) => <span className="t-id">{t.code}</span>,
+    },
+    { id: 'title', header: copy.colTitle, mobile: 'primary', cell: (t) => t.title },
+    {
+      id: 'links',
+      header: copy.colLinks,
+      cell: (t) => (
+        <span className="text-muted" title={linksDetail(t)}>
+          {linksLabel(t)}
+        </span>
+      ),
+      mobileCell: (t) => linksLabel(t),
+    },
+    { id: 'status', header: copy.colStatus, mobile: 'trailing', cell: status },
+    {
+      id: 'version',
+      header: copy.colVersion,
+      numeric: true,
+      cell: (t) => t.version,
+      mobileCell: (t) => `${copy.colVersion} ${t.version}`,
+    },
+    {
+      id: 'updated',
+      header: copy.colUpdated,
+      showFrom: 'lg',
+      cell: (t) => <span className="t-data whitespace-nowrap text-muted">{formatDateTime(t.updatedAt)}</span>,
+      mobileCell: (t) => formatDateTime(t.updatedAt),
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted" aria-live="polite">
+        <p className="t-data text-sm text-muted" aria-live="polite">
           {loading || error ? '' : copy.count(templates.length)}
         </p>
-        <Button type="button" onClick={() => openModal(null)} className="w-full max-sm:h-11 sm:w-auto">
+        <Button type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
           <Plus aria-hidden />
           {copy.newTemplate}
         </Button>
@@ -240,79 +250,25 @@ export function PostOpTemplatesManager({ token, allowed }: PostOpTemplatesManage
           </Button>
         }
       >
-        {/* Siete columnas no caben en una tablet con el raíl abierto: la tabla
-            se desplaza dentro de su marco, nunca la página. */}
-        <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
-          <table
-            aria-label={copy.tableLabel}
-            className="w-full border-collapse bg-surface text-sm text-ink"
-          >
-            <thead>
-              <tr className="border-b border-border bg-surface-2 text-left">
-                <th scope="col" className="px-4 py-3 font-medium text-muted">
-                  {copy.colCode}
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium text-muted">
-                  {copy.colTitle}
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium text-muted">
-                  {copy.colLinks}
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium text-muted">
-                  {copy.colStatus}
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                  {copy.colVersion}
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium text-muted">
-                  {copy.colUpdated}
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                  <span className="sr-only">{copy.colActions}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates.map((t) => (
-                <tr key={t.id} className="border-b border-hairline last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs">{t.code}</td>
-                  <td className="px-4 py-3 font-medium">{t.title}</td>
-                  <td className="px-4 py-3 text-muted" title={linksDetail(t)}>
-                    {linksLabel(t)}
-                  </td>
-                  <td className="px-4 py-3">{status(t)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{t.version}</td>
-                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-muted">
-                    {formatDateTime(t.updatedAt)}
-                  </td>
-                  <td className="px-4 py-3">{actions(t)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {templates.map((t) => (
-            <li
-              key={t.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="break-words font-medium">{t.title}</p>
-                  <p className="font-mono text-xs text-muted">{t.code}</p>
-                </div>
-                {status(t)}
-              </div>
-              <p className="text-xs text-muted">{linksLabel(t)}</p>
-              <p className="text-xs tabular-nums text-muted">
-                {copy.colVersion} {t.version} · {formatDateTime(t.updatedAt)}
-              </p>
-              {actions(t)}
-            </li>
-          ))}
-        </ul>
+        {/* Sin «Borrar»: las entregas guardan la versión con la que salieron,
+            así que una plantilla se desactiva. */}
+        <DataList
+          label={copy.tableLabel}
+          rows={templates}
+          columns={columns}
+          getRowKey={(t) => t.id}
+          onRowClick={(t) => openModal(t)}
+          getRowLabel={(t) => copy.rowLabel(t.title)}
+          rowActions={(t) => [
+            { label: copy.edit, onSelect: () => openModal(t) },
+            {
+              label: t.active ? copy.deactivate : copy.activate,
+              onSelect: () => void toggleActive(t),
+              disabled: pendingId === t.id,
+              separatorBefore: true,
+            },
+          ]}
+        />
       </AsyncSection>
 
       <PostOpTemplateFormModal

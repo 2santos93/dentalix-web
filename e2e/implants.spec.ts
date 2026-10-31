@@ -142,7 +142,9 @@ test('registrar desde el odontograma, imprimir la tarjeta y buscar por lote (144
   await page.goto(`${origin}/settings/implantes`);
   await page.getByRole('textbox', { name: 'Lote', exact: true }).fill(LOT);
   await page.getByRole('main').getByRole('button', { name: 'Buscar', exact: true }).click();
-  await expect(page.getByTestId('implant-lot-row')).toHaveCount(2, { timeout: 15_000 });
+  const lotTable = page.getByRole('table', { name: 'Pacientes que recibieron el lote o la referencia' });
+  // Cabecera + los dos pacientes.
+  await expect(lotTable.getByRole('row')).toHaveCount(3, { timeout: 15_000 });
   await expect(page.getByText('2 implantes encontrados')).toBeVisible();
   const [download] = await Promise.all([
     page.waitForEvent('download'),

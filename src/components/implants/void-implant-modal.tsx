@@ -5,8 +5,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { voidImplant, type PatientImplant } from '@/lib/implants/implants-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   title: 'Anular implante',
@@ -69,13 +68,12 @@ export function VoidImplantModal({
       destructive
     >
       <FormField htmlFor="implant-void-reason" label={copy.reasonLabel} hint={copy.reasonHint}>
-        <textarea
+        <Textarea
           id="implant-void-reason"
           rows={3}
           value={reason}
           maxLength={500}
           onChange={(e) => setReason(e.target.value)}
-          className={cn(fieldClass, 'h-auto font-[inherit]')}
         />
       </FormField>
     </FormModal>

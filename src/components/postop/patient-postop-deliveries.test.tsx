@@ -94,12 +94,39 @@ describe('PatientPostOpDeliveries', () => {
     expect(link).toHaveAttribute('rel', 'noopener');
     expect(link).toHaveTextContent('se abre en otra pestaña');
 
-    // Tarjetas para móvil con los mismos enlaces.
-    const cards = screen.getByRole('list', { name: 'Indicaciones entregadas' });
-    expect(within(cards).getAllByRole('listitem')).toHaveLength(3);
-    expect(within(cards).getAllByRole('link', { name: /ver e imprimir/i })[1]).toHaveAttribute(
-      'href',
-      '/print/patients/pat-1/indicaciones/del-0',
-    );
+  });
+
+  it('en el teléfono, tarjetas con los mismos enlaces', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      mockedList.mockResolvedValue([
+        delivery(),
+        delivery({ id: 'del-0', templateCode: 'POI-BLA', templateVersion: 1, channel: 'PRINT', firstOpenedAt: null }),
+        delivery({ id: 'del-e', channel: 'EMAIL', firstOpenedAt: null, templateCode: 'POI-END' }),
+      ]);
+      render(<PatientPostOpDeliveries token="tok" patientId="pat-1" />);
+      const cards = await screen.findByRole('list', { name: 'Indicaciones entregadas' });
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      const items = within(cards).getAllByRole('listitem');
+      expect(items).toHaveLength(3);
+      expect(items[0]).toHaveTextContent('POI-EXO · v2');
+      expect(within(items[0]).getByText('Abierto')).toBeInTheDocument();
+      expect(within(cards).getAllByRole('link', { name: /ver e imprimir/i })[1]).toHaveAttribute(
+        'href',
+        '/print/patients/pat-1/indicaciones/del-0',
+      );
+    } finally {
+      window.matchMedia = original;
+    }
   });
 });

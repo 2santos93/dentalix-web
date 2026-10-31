@@ -15,6 +15,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
@@ -118,7 +119,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   }
   if (!settings) {
     return (
-      <div role="status" aria-label="Cargando" className="max-w-2xl rounded-xl border border-border bg-surface p-6">
+      <div role="status" aria-label="Cargando" className="max-w-[720px] rounded-xl border border-border bg-surface p-6">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="mt-4 h-4 w-56" />
         <Skeleton className="mt-4 h-4 w-32" />
@@ -161,28 +162,33 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex max-w-2xl flex-col gap-4">
-      <div className="divide-y divide-hairline rounded-xl border border-border bg-surface">
-        <SettingSwitch
-          title={copy.wordsTitle}
-          hint={copy.wordsHint}
-          checked={words}
-          disabled={saving}
-          onChange={(value) => {
-            setWords(value);
-            setNotice('');
-          }}
-        />
-        <SettingSwitch
-          title={copy.recordTitle}
-          hint={copy.recordHint}
-          checked={record}
-          disabled={saving}
-          onChange={(value) => {
-            setRecord(value);
-            setNotice('');
-          }}
-        />
+    <form onSubmit={handleSubmit} noValidate className="flex max-w-[720px] flex-col gap-4">
+      <div className="divide-y divide-border-subtle rounded-xl border border-border bg-surface">
+        {/* Esperan a «Guardar»: casillas, no interruptores (DESIGN.md → Form Controls). */}
+        <div className="px-4 py-3 sm:px-6">
+          <Checkbox
+            label={copy.wordsTitle}
+            description={copy.wordsHint}
+            checked={words}
+            disabled={saving}
+            onChange={(e) => {
+              setWords(e.target.checked);
+              setNotice('');
+            }}
+          />
+        </div>
+        <div className="px-4 py-3 sm:px-6">
+          <Checkbox
+            label={copy.recordTitle}
+            description={copy.recordHint}
+            checked={record}
+            disabled={saving}
+            onChange={(e) => {
+              setRecord(e.target.checked);
+              setNotice('');
+            }}
+          />
+        </div>
         <div className="px-4 py-4 sm:px-6">
           <FormField
             htmlFor={validityId}
@@ -206,7 +212,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
                 setValidityError(null);
                 setNotice('');
               }}
-              className="w-28 tabular-nums max-sm:min-h-11"
+              className="t-data w-28"
             />
           </FormField>
         </div>
@@ -232,56 +238,3 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   );
 }
 
-function SettingSwitch({
-  title,
-  hint,
-  checked,
-  disabled,
-  onChange,
-}: {
-  title: string;
-  hint: string;
-  checked: boolean;
-  disabled: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  const id = useId();
-  return (
-    <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-6">
-      <div className="min-w-0">
-        <p id={`${id}-title`} className="font-medium text-ink">
-          {title}
-        </p>
-        <p id={`${id}-hint`} className="text-sm text-muted">
-          {hint}
-        </p>
-      </div>
-      {/* El botón es el objetivo táctil (44 px bajo `sm`, DESIGN.md); el carril va dentro. */}
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-labelledby={`${id}-title`}
-        aria-describedby={`${id}-hint`}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className="inline-flex shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 max-sm:min-h-11 max-sm:min-w-11 sm:mt-1"
-      >
-        <span
-          aria-hidden
-          className={cn(
-            'relative inline-flex h-6 w-11 items-center rounded-full border border-border transition-colors',
-            checked ? 'bg-primary' : 'bg-bg',
-          )}
-        >
-          <span
-            className={cn(
-              'inline-block h-5 w-5 rounded-full bg-surface shadow transition-transform',
-              checked ? 'translate-x-5' : 'translate-x-0.5',
-            )}
-          />
-        </span>
-      </button>
-    </div>
-  );
-}

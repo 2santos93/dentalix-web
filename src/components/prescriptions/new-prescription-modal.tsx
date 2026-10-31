@@ -31,9 +31,10 @@ import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 import { PrescriptionItemFields } from './prescription-item-fields';
 import { PrescriptionSafetyPanel, type SafetyState } from './prescription-safety-panel';
 
@@ -419,12 +420,11 @@ function NewPrescriptionForm({
                 }}
               />
             ) : (
-              <select
+              <NativeSelect
                 id="rx-template"
                 value={templateId}
                 disabled={templates === null}
                 onChange={(e) => applyTemplate(e.target.value)}
-                className={cn(fieldClass, 'h-10')}
               >
                 <option value="">{copy.templateBlank}</option>
                 {(templates ?? []).map((t) => (
@@ -432,7 +432,7 @@ function NewPrescriptionForm({
                     {t.name} · {copy.templateCount(t.items.length)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             )}
           </FormField>
 
@@ -465,15 +465,13 @@ function NewPrescriptionForm({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField htmlFor="rx-date" label={copy.dateLabel} hint={copy.dateHint}>
-              <Input
+              <DatePicker
                 id="rx-date"
-                type="date"
-                value={dispensationDate}
-                onChange={(e) => {
-                  setDispensationDate(e.target.value);
+                value={dispensationDate || null}
+                onChange={(value) => {
+                  setDispensationDate(value ?? '');
                   setError(null);
                 }}
-                className="tabular-nums"
               />
             </FormField>
             {needsLicense ? (
@@ -499,16 +497,16 @@ function NewPrescriptionForm({
             ) : null}
           </div>
           <FormField htmlFor="rx-notes" label={copy.notesLabel}>
-            <textarea
+            <Textarea
               id="rx-notes"
               rows={2}
+              autoGrow
               value={notes}
               maxLength={1000}
               onChange={(e) => {
                 setNotes(e.target.value);
                 setError(null);
               }}
-              className={cn(fieldClass, 'h-auto font-[inherit]')}
             />
           </FormField>
 

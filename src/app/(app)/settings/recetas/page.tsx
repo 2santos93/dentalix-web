@@ -7,6 +7,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/empty-state';
+import { SectionHeader } from '@/components/ui/section-header';
 import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { PrescriptionSettingsForm } from '@/components/prescriptions/prescription-settings-form';
 import { PrescriptionTemplatesManager } from '@/components/prescriptions/prescription-templates-manager';
@@ -53,13 +54,13 @@ export default function PrescriptionSettingsPage() {
       <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       {allowed ? (
         <div className="flex flex-col gap-10">
-          <section aria-labelledby={settingsHeadingId} className="flex flex-col gap-4">
-            <div className="flex max-w-2xl flex-col gap-1">
-              <h2 id={settingsHeadingId} className="text-lg font-semibold text-ink">
-                {copy.settingsTitle}
-              </h2>
-              <p className="text-sm text-muted">{copy.settingsDescription}</p>
-            </div>
+          {/* Las dos mitades comparten la columna de 720px de Ajustes. */}
+          <section aria-labelledby={settingsHeadingId} className="flex max-w-[720px] flex-col gap-4">
+            <SectionHeader
+              titleId={settingsHeadingId}
+              title={copy.settingsTitle}
+              description={copy.settingsDescription}
+            />
             <PrescriptionSettingsForm token={accessToken} />
           </section>
           <PrescriptionTemplatesManager token={accessToken} allowed />
