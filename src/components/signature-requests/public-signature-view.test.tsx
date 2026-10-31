@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PublicSignatureView } from './public-signature-view';
 import { ApiError } from '@/lib/api/api-error';
 import {
@@ -82,6 +82,7 @@ function documentFixture(overrides: Partial<PublicSignatureDocument> = {}): Publ
     expiresAt: '2026-11-02T14:00:00.000Z',
     clinic: CLINIC,
     location: LOCATION,
+    budget: null,
     ...overrides,
   };
 }
@@ -247,5 +248,80 @@ describe('PublicSignatureView (DX-243)', () => {
       await screen.findByText('Tu verificación caducó. Pide un código nuevo para continuar.'),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Código de 6 dígitos')).toBeInTheDocument();
+  });
+
+  it('presupuesto (DX-415): tras el código ve ítems, totales en la moneda y el formato de la sede y condiciones; acepta y queda la copia', async () => {
+    const user = setupUser();
+    const budget = {
+      currency: 'COP',
+      clinicName: 'Clínica Sonrisas',
+      location: { name: 'Sede Centro', address: 'Calle 1' },
+      patient: { name: 'Laura Castro', document: 'CI 123' },
+      professionalName: 'Dra. Gómez',
+      agreement: null,
+      issuedOn: '2026-10-30',
+      validUntil: '2026-11-29',
+      validityDays: 30,
+      items: [
+        {
+          toothNumber: '36',
+          surfaces: [],
+          procedure: 'Corona en zirconio',
+          quantity: 1,
+          unitPrice: 300000,
+          discount: 30000,
+          subtotal: 270000,
+          listPrice: null,
+          agreementName: null,
+        },
+      ],
+      totals: [{ currency: 'COP', gross: 300000, discount: 30000, net: 270000, agreementSaving: 0 }],
+    };
+    const doc = documentFixture({
+      type: 'BUDGET',
+      title: 'Presupuesto de tratamiento',
+      body: 'Al firmar aceptas este presupuesto.',
+      templateVersion: null,
+      budget,
+    });
+    mockedGet.mockResolvedValue(view({ type: 'BUDGET' }));
+    mockedCode.mockResolvedValue(view({ type: 'BUDGET', codeSent: true, codeSendsLeft: 4 }));
+    mockedVerify.mockResolvedValue({ sessionToken: 'S'.repeat(43), sessionExpiresAt: '2026-10-30T15:00:00.000Z' });
+    mockedDocument.mockResolvedValue(doc);
+    mockedSign.mockResolvedValue({
+      ...doc,
+      signerDocument: null,
+      signedAt: '2026-10-30T14:30:00.000Z',
+      contentHash: 'b'.repeat(64),
+    });
+    render(<PublicSignatureView linkToken="tok" />);
+    expect(
+      await screen.findByText('Para ver el presupuesto, te enviaremos un código de 6 dígitos a la***@example.com.'),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Enviarme el código' }));
+    await user.type(await screen.findByLabelText('Código de 6 dígitos'), '012345');
+    await user.click(screen.getByRole('button', { name: 'Ver el presupuesto' }));
+
+    const article = await screen.findByRole('article', { name: 'Presupuesto y condiciones' });
+    expect(article).toHaveTextContent('Corona en zirconio');
+    expect(article).toHaveTextContent('Al firmar aceptas este presupuesto.');
+    const items = within(article).getByRole('list', { name: 'Procedimientos del presupuesto' });
+    expect(within(items).getAllByRole('listitem')).toHaveLength(1);
+    // Formato de la sede (es-VE) y el código ISO de la moneda del plan (DX-378).
+    expect(article).toHaveTextContent(/Total \(COP\)\s*COP\s270\.000,00/);
+
+    await user.click(screen.getByRole('checkbox', { name: /he revisado el presupuesto/i }));
+    draw(screen.getByRole('img', { name: 'Tu firma' }));
+    await user.click(screen.getByRole('button', { name: 'Aceptar y firmar' }));
+    expect(await screen.findByRole('heading', { name: 'Presupuesto aceptado' })).toBeInTheDocument();
+    expect(screen.getByText(/^Aceptado el .*30 de octubre de 2026/)).toBeInTheDocument();
+    expect(screen.getByText('b'.repeat(64))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /imprimir o guardar en pdf/i })).toBeInTheDocument();
+  });
+
+  it('presupuesto que cambió tras el envío: «Enlace no válido»', async () => {
+    mockedGet.mockRejectedValue(new ApiError(404, 'Enlace no válido'));
+    render(<PublicSignatureView linkToken="tok" />);
+    expect(await screen.findByText('Enlace no válido')).toBeInTheDocument();
   });
 });

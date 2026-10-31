@@ -19,6 +19,7 @@ import {
   type PublicSignedCopy,
 } from '@/lib/signature-requests/signature-requests-api';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
+import { PublicBudgetSummary } from './public-budget';
 import { SignaturePad } from '@/components/shared/signature-pad';
 import { FormField } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
@@ -77,7 +78,26 @@ export const publicSignatureCopy = {
   signatureAlt: (name: string) => `Firma de ${name}`,
   hash: 'Huella del documento (SHA-256)',
   print: 'Imprimir o guardar en PDF',
+  // DX-415: presupuesto para aceptar.
+  budgetTitle: 'Presupuesto para aceptar',
+  budgetIntro: (to: string) => `Para ver el presupuesto, te enviaremos un código de 6 dígitos a ${to}.`,
+  budgetVerify: 'Ver el presupuesto',
+  budgetRegion: 'Presupuesto y condiciones',
+  budgetConditions: 'Condiciones',
+  budgetReadCheck: 'He revisado el presupuesto y acepto sus procedimientos, importes y condiciones.',
+  budgetReadRequired: 'Confirma que revisaste el presupuesto y lo aceptas.',
+  budgetSign: 'Aceptar y firmar',
+  budgetDoneTitle: 'Presupuesto aceptado',
+  budgetDoneMessage: (clinic: string) =>
+    `${clinic} ya tiene tu aceptación. Te enviamos un correo de confirmación; guarda o imprime esta copia.`,
+  budgetAcceptedAt: (when: string) => `Aceptado el ${when}.`,
+  budgetHash: 'Huella de la aceptación (SHA-256)',
 };
+
+/** El enlace es de un presupuesto (DX-415): cambian los textos y el documento. */
+function isBudget(type: PublicSignature['type']): boolean {
+  return type === 'BUDGET';
+}
 
 const copy = publicSignatureCopy;
 
@@ -214,6 +234,7 @@ export function PublicSignatureView({ linkToken }: { linkToken: string }) {
             )}
             {step.kind === 'document' && (
               <DocumentStep
+                clock={clock}
                 linkToken={linkToken}
                 session={step.session}
                 onSessionExpired={sessionExpired}
@@ -260,8 +281,10 @@ function IntroStep({
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="t-display text-ink">{copy.title}</h1>
-      <p className="text-base text-ink">{copy.intro(data.destinationMasked)}</p>
+      <h1 className="t-display text-ink">{isBudget(data.type) ? copy.budgetTitle : copy.title}</h1>
+      <p className="text-base text-ink">
+        {isBudget(data.type) ? copy.budgetIntro(data.destinationMasked) : copy.intro(data.destinationMasked)}
+      </p>
       <p className="text-sm text-muted tabular-nums">{copy.expires(when(data.expiresAt, clock))}</p>
       {error ? <InlineError variant="summary">{error}</InlineError> : null}
       <Button type="button" size="lg" className="w-full sm:w-auto sm:self-start" loading={sending} onClick={() => void send()}>
@@ -349,7 +372,7 @@ function CodeStep({
 
   return (
     <form onSubmit={(e) => void verify(e)} noValidate className="flex flex-col gap-4">
-      <h1 className="t-display text-ink">{copy.title}</h1>
+      <h1 className="t-display text-ink">{isBudget(data.type) ? copy.budgetTitle : copy.title}</h1>
       {info ? (
         <p role="status" className="text-sm text-muted">
           {info}
@@ -372,7 +395,7 @@ function CodeStep({
       </FormField>
       {error ? <InlineError id={`${ids}-error`}>{error}</InlineError> : null}
       <Button type="submit" size="lg" className="w-full sm:w-auto sm:self-start" loading={verifying}>
-        {copy.verify}
+        {isBudget(data.type) ? copy.budgetVerify : copy.verify}
       </Button>
       {data.codeSendsLeft > 0 ? (
         <Button
@@ -391,12 +414,14 @@ function CodeStep({
 }
 
 function DocumentStep({
+  clock,
   linkToken,
   session,
   onSessionExpired,
   onSigned,
   onGone,
 }: {
+  clock: SedeClock | null;
   linkToken: string;
   session: string;
   onSessionExpired: () => void;
@@ -457,7 +482,7 @@ function DocumentStep({
     e.preventDefault();
     if (!doc) return;
     const next: typeof errors = {};
-    if (!read) next.read = copy.readRequired;
+    if (!read) next.read = doc.budget ? copy.budgetReadRequired : copy.readRequired;
     if (doc.signerDocumentRequired && signerDocument.trim() === '') next.document = copy.signerDocumentRequired;
     if (!signature) next.signature = copy.signatureRequired;
     setErrors(next);
@@ -483,13 +508,25 @@ function DocumentStep({
   return (
     <form onSubmit={(e) => void sign(e)} noValidate className="flex flex-col gap-5">
       <article
-        aria-label={copy.documentRegion}
+        aria-label={doc.budget ? copy.budgetRegion : copy.documentRegion}
         className="rounded-xl border border-border bg-white px-4 py-5 text-[#111827]"
       >
         <h1 className="text-lg font-semibold">{doc.title}</h1>
-        <p className="mt-3 whitespace-pre-line text-[0.9375rem] leading-relaxed">{doc.body}</p>
-        <p className="mt-4 text-sm text-[#4b5563]">{copy.professional(doc.professionalName)}</p>
-        <p className="text-sm text-[#4b5563]">
+        {doc.budget ? (
+          <>
+            <div className="mt-3">
+              <PublicBudgetSummary budget={doc.budget} clock={clock} />
+            </div>
+            <h2 className="mt-4 text-sm font-semibold">{copy.budgetConditions}</h2>
+            <p className="mt-1 whitespace-pre-line text-sm leading-relaxed">{doc.body}</p>
+          </>
+        ) : (
+          <>
+            <p className="mt-3 whitespace-pre-line text-[0.9375rem] leading-relaxed">{doc.body}</p>
+            <p className="mt-4 text-sm text-[#4b5563]">{copy.professional(doc.professionalName)}</p>
+          </>
+        )}
+        <p className={doc.budget ? 'mt-3 text-sm text-[#4b5563]' : 'text-sm text-[#4b5563]'}>
           {doc.signerType === 'GUARDIAN' ? copy.signerGuardian(doc.signerName) : copy.signerPatient(doc.signerName)}
         </p>
       </article>
@@ -507,7 +544,7 @@ function DocumentStep({
               if (e.target.checked) setErrors((x) => ({ ...x, read: undefined }));
             }}
           />
-          <span>{copy.readCheck}</span>
+          <span>{doc.budget ? copy.budgetReadCheck : copy.readCheck}</span>
         </label>
         {errors.read ? <InlineError id={`${ids}-read`}>{errors.read}</InlineError> : null}
       </div>
@@ -545,7 +582,7 @@ function DocumentStep({
 
       {submitError ? <InlineError variant="summary">{submitError}</InlineError> : null}
       <Button type="submit" size="lg" className="w-full sm:w-auto sm:self-start" loading={submitting}>
-        {copy.sign}
+        {doc.budget ? copy.budgetSign : copy.sign}
       </Button>
     </form>
   );
@@ -562,6 +599,7 @@ function DoneStep({
   clock: SedeClock | null;
 }) {
   const signedAt = when(signed.signedAt, clock);
+  const budget = signed.budget;
   return (
     <section className="flex flex-col gap-5">
       <div
@@ -574,13 +612,29 @@ function DoneStep({
         >
           <CheckCircle2 className="size-5" />
         </span>
-        <h1 className="text-lg font-semibold text-ink">{copy.doneTitle}</h1>
-        <p className="max-w-sm text-sm text-muted">{copy.doneMessage(signed.clinic.name)}</p>
+        <h1 className="text-lg font-semibold text-ink">{budget ? copy.budgetDoneTitle : copy.doneTitle}</h1>
+        <p className="max-w-sm text-sm text-muted">
+          {budget ? copy.budgetDoneMessage(signed.clinic.name) : copy.doneMessage(signed.clinic.name)}
+        </p>
       </div>
       <article className="rounded-xl border border-border bg-white px-4 py-5 text-[#111827] print:border-0 print:p-0">
         <p className="text-sm font-semibold">{signed.clinic.name}</p>
         <h2 className="text-lg font-semibold">{signed.title}</h2>
-        <p className="mt-3 whitespace-pre-line text-[0.9375rem] leading-relaxed">{signed.body}</p>
+        {budget ? (
+          <div className="mt-3">
+            <PublicBudgetSummary budget={budget} clock={clock} />
+            <h3 className="mt-4 text-sm font-semibold">{copy.budgetConditions}</h3>
+          </div>
+        ) : null}
+        <p
+          className={
+            budget
+              ? 'mt-1 whitespace-pre-line text-sm leading-relaxed'
+              : 'mt-3 whitespace-pre-line text-[0.9375rem] leading-relaxed'
+          }
+        >
+          {signed.body}
+        </p>
         {/* eslint-disable-next-line @next/next/no-img-element -- data URL de la firma recién dibujada; next/image no aporta nada */}
         <img
           src={signature}
@@ -592,12 +646,14 @@ function DoneStep({
           {signed.signerDocument ? ` · ${signed.signerDocument}` : ''}
         </p>
         <p className="text-sm tabular-nums">
-          {signed.signerType === 'GUARDIAN'
-            ? copy.signedByGuardian(signed.signerName, signedAt)
-            : copy.signedAt(signedAt)}
+          {budget
+            ? copy.budgetAcceptedAt(signedAt)
+            : signed.signerType === 'GUARDIAN'
+              ? copy.signedByGuardian(signed.signerName, signedAt)
+              : copy.signedAt(signedAt)}
         </p>
         <p className="mt-3 text-xs text-[#4b5563]">
-          {copy.hash}: <span className="break-all font-mono">{signed.contentHash}</span>
+          {budget ? copy.budgetHash : copy.hash}: <span className="break-all font-mono">{signed.contentHash}</span>
         </p>
       </article>
       <Button

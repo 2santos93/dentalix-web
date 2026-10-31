@@ -36,6 +36,7 @@ function request(overrides: Partial<SignatureRequest> = {}): SignatureRequest {
     channel: 'EMAIL',
     templateId: 'tpl-1',
     templateVersion: 2,
+    treatmentPlanId: null,
     title: 'Consentimiento informado — Exodoncia',
     destinationMasked: 'la***@example.com',
     signerType: 'PATIENT',
@@ -54,6 +55,7 @@ function request(overrides: Partial<SignatureRequest> = {}): SignatureRequest {
     revokedAt: null,
     consentId: null,
     signedIpAddress: null,
+    budgetAcceptanceId: null,
     countersignedAt: null,
     ...overrides,
   };

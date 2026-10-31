@@ -1780,7 +1780,7 @@ describe('TreatmentPlansTab', () => {
       ...plan1Detail,
       status: 'ACCEPTED' as const,
       items: [{ ...item1, status: 'ACCEPTED' as const }, item2],
-      acceptance: { signerName: 'Ana García', acceptedAt: '2026-10-16T15:30:00.000Z' },
+      acceptance: { signerName: 'Ana García', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null },
     };
 
     it('ofrece «Imprimir presupuesto» y «Aceptar con firma» en un plan sin firmar', async () => {

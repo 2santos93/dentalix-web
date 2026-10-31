@@ -16,12 +16,14 @@ import {
 import { formatDateTime } from '@/lib/format/date';
 import { Button } from '@/components/ui/button';
 import { AcceptPlanModal } from './accept-plan-modal';
+import { RemoteAcceptanceEvidence, RemoteBudgetPanel } from './remote-budget-panel';
 
 const copy = {
   print: 'Imprimir presupuesto',
   newTab: '(se abre en otra pestaña)',
   accept: 'Aceptar con firma',
   acceptedBy: (name: string, when: string) => `Aceptado y firmado por ${name} el ${when}`,
+  acceptedRemotely: (name: string, when: string) => `Aceptado a distancia por ${name} el ${when}`,
   locked: 'Sus procedimientos y precios ya no se pueden cambiar.',
   needsItems: 'Agrega procedimientos para poder aceptarlo con firma.',
 };
@@ -40,6 +42,8 @@ interface PlanQuoteActionsProps {
  * El presupuesto del plan (DX-012): «Imprimir presupuesto» abre la vista A4 en
  * otra pestaña; «Aceptar con firma» abre el modal con el lienzo. Un plan ya
  * firmado lo dice («Aceptado y firmado por … el …») y no se vuelve a firmar.
+ * DX-415: un presupuesto presentado se puede «Enviar a aceptar» a distancia;
+ * aceptado así, dice «Aceptado a distancia» con sus evidencias.
  */
 export function PlanQuoteActions({ token, patientId, plan, role, onAccepted }: PlanQuoteActionsProps) {
   const [accepting, setAccepting] = useState(false);
@@ -59,12 +63,16 @@ export function PlanQuoteActions({ token, patientId, plan, role, onAccepted }: P
           <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
           <p>
             <span className="font-medium text-ink tabular-nums">
-              {copy.acceptedBy(acceptance.signerName, formatDateTime(acceptance.acceptedAt))}
+              {(acceptance.remote ? copy.acceptedRemotely : copy.acceptedBy)(
+                acceptance.signerName,
+                formatDateTime(acceptance.acceptedAt),
+              )}
             </span>
             <span className="block text-muted">{copy.locked}</span>
           </p>
         </div>
       ) : null}
+      {acceptance?.remote ? <RemoteAcceptanceEvidence token={token} remote={acceptance.remote} /> : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         {canPrintPlanQuote(role) ? (
@@ -84,6 +92,8 @@ export function PlanQuoteActions({ token, patientId, plan, role, onAccepted }: P
         ) : null}
         {needsItems ? <p className="text-sm text-muted">{copy.needsItems}</p> : null}
       </div>
+
+      <RemoteBudgetPanel token={token} patientId={patientId} plan={plan} role={role} />
 
       {acceptable ? (
         <AcceptPlanModal

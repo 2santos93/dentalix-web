@@ -10122,10 +10122,24 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        TreatmentPlanRemoteAcceptanceDto: {
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            openedAt: string;
+            /** Format: date-time */
+            verifiedAt: string;
+            /** @description IP desde la que firmó */
+            ipAddress: string | null;
+        };
         TreatmentPlanAcceptanceSummaryDto: {
             signerName: string;
             /** Format: date-time */
             acceptedAt: string;
+            /** @description «Aceptado a distancia» (DX-415): el paciente firmó por el enlace con código; null si se firmó en la clínica. */
+            remote: components["schemas"]["TreatmentPlanRemoteAcceptanceDto"] | null;
         };
         TreatmentPlanDto: {
             visitIntervals?: {
@@ -10342,6 +10356,21 @@ export interface components {
             /** @description Ahorro por convenio (v2): Σ max(0, precio de lista − precio de referencia) de los ítems con convenio, en la moneda del plan. 0 en v1. */
             agreementSaving: number;
         };
+        /** @enum {string} */
+        SignatureRequestChannel: "EMAIL";
+        PlanQuoteRemoteAcceptanceDto: {
+            /** Format: uuid */
+            signatureRequestId: string;
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            openedAt: string;
+            /** Format: date-time */
+            verifiedAt: string;
+        };
         PlanQuoteAcceptanceDto: {
             signerName: string;
             /** @description data:image/png;base64,… */
@@ -10357,6 +10386,11 @@ export interface components {
             acceptanceHash: string;
             /** @description false si la foto o la firma guardadas no coinciden con sus hashes */
             integrityOk: boolean;
+            /** @description IP desde la que se firmó (evidencia) */
+            ipAddress: string | null;
+            userAgent: string | null;
+            /** @description DX-415: «Aceptado a distancia» por el paciente con enlace y código; null si se firmó en la clínica. */
+            remote: components["schemas"]["PlanQuoteRemoteAcceptanceDto"] | null;
         };
         PlanQuoteDocumentDto: {
             /** @description Organización clínica actual; separada del contenido firmado. */
@@ -13980,8 +14014,6 @@ export interface components {
             /** @description false = desactivar la plantilla */
             active?: boolean;
         };
-        /** @enum {string} */
-        SignatureRequestChannel: "EMAIL";
         RemoteConsentEvidenceDto: {
             /** Format: uuid */
             signatureRequestId: string;
@@ -14760,7 +14792,7 @@ export interface components {
             recipient: components["schemas"]["SignatureRecipientOptionDto"];
         };
         /**
-         * @description CONSENT = consentimiento informado. BUDGET (presupuesto) está reservado: hoy responde 400.
+         * @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415).
          * @enum {string}
          */
         SignatureRequestType: "CONSENT" | "BUDGET";
@@ -14779,12 +14811,17 @@ export interface components {
              * @description Sede desde la que se envió (sus horas, con su reloj)
              */
             locationId: string;
-            /** @description CONSENT = consentimiento informado. BUDGET (presupuesto) está reservado: hoy responde 400. */
+            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
             type: components["schemas"]["SignatureRequestType"];
             channel: components["schemas"]["SignatureRequestChannel"];
             /** Format: uuid */
             templateId: string | null;
             templateVersion: number | null;
+            /**
+             * Format: uuid
+             * @description BUDGET: el plan cuyo presupuesto se envió. CONSENT: el plan de {{tratamiento}}, si lo hubo.
+             */
+            treatmentPlanId: string | null;
             title: string;
             /** @description Destino enmascarado (an***@dominio) */
             destinationMasked: string;
@@ -14817,13 +14854,18 @@ export interface components {
             /** @description IP desde la que firmó el paciente (evidencia) */
             signedIpAddress: string | null;
             /**
+             * Format: uuid
+             * @description BUDGET (DX-415): la aceptación del plan que produjo la firma del paciente
+             */
+            budgetAcceptanceId: string | null;
+            /**
              * Format: date-time
              * @description Firma del profesional en la app (Completo)
              */
             countersignedAt: string | null;
         };
         CreateSignatureRequestDto: {
-            /** @description CONSENT = consentimiento informado. BUDGET (presupuesto) está reservado: hoy responde 400. */
+            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
             type: components["schemas"]["SignatureRequestType"];
             channel: components["schemas"]["SignatureRequestChannel"];
             /**
@@ -14833,7 +14875,7 @@ export interface components {
             templateId?: string;
             /**
              * Format: uuid
-             * @description Plan del paciente: rellena {{tratamiento}}.
+             * @description Plan del paciente. CONSENT: rellena {{tratamiento}} (opcional). BUDGET: el plan «Presentado» cuyo presupuesto se envía (obligatorio).
              */
             treatmentPlanId?: string;
             /**
@@ -14852,12 +14894,17 @@ export interface components {
              * @description Sede desde la que se envió (sus horas, con su reloj)
              */
             locationId: string;
-            /** @description CONSENT = consentimiento informado. BUDGET (presupuesto) está reservado: hoy responde 400. */
+            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
             type: components["schemas"]["SignatureRequestType"];
             channel: components["schemas"]["SignatureRequestChannel"];
             /** Format: uuid */
             templateId: string | null;
             templateVersion: number | null;
+            /**
+             * Format: uuid
+             * @description BUDGET: el plan cuyo presupuesto se envió. CONSENT: el plan de {{tratamiento}}, si lo hubo.
+             */
+            treatmentPlanId: string | null;
             title: string;
             /** @description Destino enmascarado (an***@dominio) */
             destinationMasked: string;
@@ -14889,6 +14936,11 @@ export interface components {
             consentId: string | null;
             /** @description IP desde la que firmó el paciente (evidencia) */
             signedIpAddress: string | null;
+            /**
+             * Format: uuid
+             * @description BUDGET (DX-415): la aceptación del plan que produjo la firma del paciente
+             */
+            budgetAcceptanceId: string | null;
             /**
              * Format: date-time
              * @description Firma del profesional en la app (Completo)
@@ -14939,6 +14991,57 @@ export interface components {
             /** Format: date-time */
             sessionExpiresAt: string;
         };
+        PublicBudgetLocationDto: {
+            name: string;
+            address: string | null;
+        };
+        PublicBudgetPatientDto: {
+            name: string;
+            document: string | null;
+        };
+        PublicBudgetAgreementDto: {
+            name: string;
+            payerName: string;
+        };
+        /** @enum {string} */
+        ToothSurface: "MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL";
+        PublicBudgetItemDto: {
+            toothNumber: string;
+            surfaces: components["schemas"]["ToothSurface"][];
+            procedure: string;
+            quantity: number;
+            unitPrice: number;
+            discount: number;
+            subtotal: number;
+            listPrice: number | null;
+            agreementName: string | null;
+        };
+        PublicBudgetTotalDto: {
+            currency: string;
+            gross: number;
+            discount: number;
+            net: number;
+            agreementSaving: number;
+        };
+        PublicBudgetDto: {
+            /** @description Moneda ISO 4217 del plan */
+            currency: string;
+            clinicName: string;
+            location: components["schemas"]["PublicBudgetLocationDto"];
+            patient: components["schemas"]["PublicBudgetPatientDto"];
+            professionalName: string | null;
+            agreement: components["schemas"]["PublicBudgetAgreementDto"] | null;
+            /**
+             * @description YYYY-MM-DD (sede)
+             * @example 2026-10-31
+             */
+            issuedOn: string;
+            /** @example 2026-11-30 */
+            validUntil: string;
+            validityDays: number;
+            items: components["schemas"]["PublicBudgetItemDto"][];
+            totals: components["schemas"]["PublicBudgetTotalDto"][];
+        };
         PublicSignatureDocumentDto: {
             type: components["schemas"]["SignatureRequestType"];
             title: string;
@@ -14956,6 +15059,8 @@ export interface components {
             expiresAt: string;
             clinic: components["schemas"]["PublicSignatureClinicDto"];
             location: components["schemas"]["PublicSignatureLocationDto"];
+            /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
+            budget: components["schemas"]["PublicBudgetDto"] | null;
         };
         SignPublicSignatureDto: {
             /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
@@ -14982,6 +15087,8 @@ export interface components {
             expiresAt: string;
             clinic: components["schemas"]["PublicSignatureClinicDto"];
             location: components["schemas"]["PublicSignatureLocationDto"];
+            /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
+            budget: components["schemas"]["PublicBudgetDto"] | null;
             signerDocument: string | null;
             /**
              * Format: date-time

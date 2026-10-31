@@ -14,6 +14,15 @@ export type PublicSignature = Schemas['PublicSignatureDto'];
 export type PublicSignatureDocument = Schemas['PublicSignatureDocumentDto'];
 export type PublicSignedCopy = Schemas['PublicSignedCopyDto'];
 export type SignatureSession = Schemas['SignatureSessionDto'];
+export type PublicBudget = Schemas['PublicBudgetDto'];
+
+/**
+ * DX-415: la última solicitud de aceptación a distancia del presupuesto
+ * `planId` (la lista viene de la más reciente a la más antigua), o null.
+ */
+export function latestBudgetRequest(requests: readonly SignatureRequest[], planId: string): SignatureRequest | null {
+  return requests.find((r) => r.type === 'BUDGET' && r.treatmentPlanId === planId) ?? null;
+}
 
 /** Estados de la ficha (DX-243): Enviado · Abierto · Bloqueado · Firmado por paciente · Completo. */
 export const SIGNATURE_STATUS_LABELS: Record<SignatureRequestStatus, string> = {

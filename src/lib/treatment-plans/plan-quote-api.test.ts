@@ -45,7 +45,7 @@ describe('plan-quote-api (DX-012)', () => {
     expect(
       isPlanAcceptable({
         status: 'ACCEPTED',
-        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z' },
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null },
         items: [{}],
       }),
     ).toBe(false);
