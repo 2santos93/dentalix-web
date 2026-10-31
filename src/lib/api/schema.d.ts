@@ -2075,6 +2075,66 @@ export interface paths {
         patch: operations["OpeningCandidatesController_outcome"];
         trace?: never;
     };
+    "/api/v1/public/slot-offers/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente abre la oferta de hueco
+         * @description Fecha, hora, sede y profesional; sin apellidos ni nada clínico. `UNAVAILABLE` si la clínica ya ocupó el hueco por otra vía; `EXPIRED` pasado `expiresAt`.
+         */
+        get: operations["PublicSlotOffersController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/slot-offers/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * El paciente acepta: el primero que acepta se queda el hueco
+         * @description Crea la cita (SCHEDULED) del pendiente o adelanta la cita marcada «Adelantar si hay hueco» (le quita la marca y su hora queda libre), con el horario y el anti-solape de la agenda, en una transacción: una sola aceptación gana y las demás ofertas pendientes del hueco pasan a TAKEN_BY_OTHER. Quien llega tarde recibe 200 con `state` `TAKEN` («Este hueco ya se ocupó»), `UNAVAILABLE` o `EXPIRED`, nunca un 500. Auditado como UPDATE de WAITLIST_OFFER, origen PUBLIC_LINK.
+         */
+        post: operations["PublicSlotOffersController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/slot-offers/{token}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * El paciente rechaza la oferta
+         * @description La oferta queda DECLINED (auditada, origen PUBLIC_LINK). Si ya no estaba abierta, devuelve su estado sin cambiar nada.
+         */
+        post: operations["PublicSlotOffersController_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}/confirmation-link": {
         parameters: {
             query?: never;
@@ -5507,7 +5567,7 @@ export interface components {
          * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). DX-361: en la confirmación de cita por enlace, STAFF = recepción generó o reenvió el enlace; LINK = el paciente respondió desde él.
          * @enum {string}
          */
-        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB";
+        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB" | "PUBLIC_LINK";
         AuditSearchDto: {
             /** @example LOT-AB12 */
             lot?: string;
@@ -9753,11 +9813,34 @@ export interface components {
             reason?: string;
             notes?: string;
         };
+        LinkOfferAcceptedByDto: {
+            /** Format: uuid */
+            patientId: string;
+            firstName: string;
+            lastName: string;
+            /** Format: date-time */
+            at: string | null;
+        };
+        SlotLinkOffersDto: {
+            /** @description Enviadas, sin respuesta y aún vigentes («Oferta enviada (n)»). */
+            pending: number;
+            /** @description Enviadas en total para este hueco. */
+            total: number;
+            /** @description «Aceptado por …»: quién se quedó el hueco desde el enlace. */
+            acceptedBy: components["schemas"]["LinkOfferAcceptedByDto"] | null;
+            /** @description «Caducado»: todas caducaron o se rechazaron sin que nadie aceptara. */
+            expired: boolean;
+        };
         /**
          * @description Por qué no se le escribe por WhatsApp: baja de los avisos, canal «Ninguno» o sin el permiso de WhatsApp (fecha y origen) de DX-128. null si se le puede escribir.
          * @enum {string}
          */
         WhatsappOfferBlock: "OPTED_OUT" | "CHANNEL_NONE" | "NO_OPT_IN";
+        /**
+         * @description DX-435: por qué no se le envía el enlace por email (baja o canal «Ninguno» de DX-128, o sin email). null si se puede.
+         * @enum {string}
+         */
+        EmailOfferBlock: "OPTED_OUT" | "CHANNEL_NONE" | "NO_EMAIL";
         /** @enum {string} */
         AppointmentStatus: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
         CandidateAppointmentDto: {
@@ -9771,6 +9854,11 @@ export interface components {
             providerId: string;
             status: components["schemas"]["AppointmentStatus"];
         };
+        /**
+         * @description DX-435: su última oferta con enlace de este hueco: `OPEN` enviada y vigente, `ACCEPTED`, `DECLINED`, `EXPIRED` (caducó) o `TAKEN` (otro aceptó antes). null si no se le envió enlace.
+         * @enum {string}
+         */
+        CandidateLinkOfferState: "OPEN" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "TAKEN";
         OpeningCandidateDto: {
             /**
              * @description `WAITLIST`: pendiente por agendar (DX-122). `APPOINTMENT`: cita futura marcada «Adelantar si hay hueco».
@@ -9789,6 +9877,8 @@ export interface components {
             whatsappBlocked: boolean;
             /** @description Por qué no se le escribe por WhatsApp: baja de los avisos, canal «Ninguno» o sin el permiso de WhatsApp (fecha y origen) de DX-128. null si se le puede escribir. */
             whatsappBlockedReason: components["schemas"]["WhatsappOfferBlock"] | null;
+            /** @description DX-435: por qué no se le envía el enlace por email (baja o canal «Ninguno» de DX-128, o sin email). null si se puede. */
+            emailBlockedReason: components["schemas"]["EmailOfferBlock"] | null;
             /** Format: uuid */
             waitlistEntryId: string | null;
             /** Format: uuid */
@@ -9814,6 +9904,8 @@ export interface components {
              * @description La última oferta de ESTE hueco aún sin respuesta (p. ej. el WhatsApp enviado): su id para anotar la respuesta con `PATCH /appointments/openings/offers/:id`.
              */
             pendingOfferId: string | null;
+            /** @description DX-435: su última oferta con enlace de este hueco: `OPEN` enviada y vigente, `ACCEPTED`, `DECLINED`, `EXPIRED` (caducó) o `TAKEN` (otro aceptó antes). null si no se le envió enlace. */
+            linkOfferState: components["schemas"]["CandidateLinkOfferState"] | null;
         };
         OpeningCandidatesDto: {
             /** Format: uuid */
@@ -9830,20 +9922,23 @@ export interface components {
             providerOffSchedule: boolean;
             /** @description Tope de ofertas por paciente y día. */
             offerCap: number;
+            linkOffers: components["schemas"]["SlotLinkOffersDto"];
+            /** @description DX-435: quedan al menos 20 minutos para el hueco (se puede enviar oferta con enlace). */
+            linkOfferOpen: boolean;
             items: components["schemas"]["OpeningCandidateDto"][];
             /** @description Había más de 50 candidatos. */
             truncated: boolean;
         };
         /**
-         * @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé».
+         * @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé». DX-435 `LINK_EMAIL` / `LINK_WA_ME`: oferta con enlace público que el paciente acepta solo (el primero que acepta se queda el hueco); por email la envía el outbox y por WhatsApp el enlace vuelve en `url` para el texto de wa.me.
          * @enum {string}
          */
-        WaitlistOfferChannel: "WA_ME" | "PHONE";
+        WaitlistOfferChannel: "WA_ME" | "PHONE" | "LINK_WA_ME" | "LINK_EMAIL";
         /**
          * @description Solo con `PHONE`: lo que respondió. Por WhatsApp nace PENDING.
          * @enum {string}
          */
-        WaitlistOfferOutcome: "PENDING" | "ACCEPTED" | "DECLINED" | "NO_ANSWER";
+        WaitlistOfferOutcome: "PENDING" | "ACCEPTED" | "DECLINED" | "NO_ANSWER" | "EXPIRED" | "TAKEN_BY_OTHER";
         CreateWaitlistOfferDto: {
             /** Format: date-time */
             slotStart: string;
@@ -9857,7 +9952,7 @@ export interface components {
             waitlistEntryId?: string;
             /** Format: uuid */
             appointmentId?: string;
-            /** @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé». */
+            /** @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé». DX-435 `LINK_EMAIL` / `LINK_WA_ME`: oferta con enlace público que el paciente acepta solo (el primero que acepta se queda el hueco); por email la envía el outbox y por WhatsApp el enlace vuelve en `url` para el texto de wa.me. */
             channel: components["schemas"]["WaitlistOfferChannel"];
             /** @description Solo con `PHONE`: lo que respondió. Por WhatsApp nace PENDING. */
             outcome?: components["schemas"]["WaitlistOfferOutcome"];
@@ -9892,11 +9987,20 @@ export interface components {
             outcomeById: string | null;
             /** Format: date-time */
             outcomeAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-435: cuándo deja de valer el enlace (solo canales con enlace).
+             */
+            expiresAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** @description Ofertas de hoy al paciente, con esta. */
             offersToday: number;
             offerCap: number;
+            /** @description DX-435, solo `LINK_WA_ME`: el enlace público para el texto prellenado de wa.me. Por email no vuelve (sale por el outbox). */
+            url: string | null;
+            /** @description DX-435, solo `LINK_WA_ME`: E.164 sin `+` para wa.me. */
+            whatsappPhone: string | null;
         };
         RecordWaitlistOfferOutcomeDto: {
             /** @enum {string} */
@@ -9932,8 +10036,59 @@ export interface components {
             outcomeById: string | null;
             /** Format: date-time */
             outcomeAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-435: cuándo deja de valer el enlace (solo canales con enlace).
+             */
+            expiresAt: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        /**
+         * @description `OPEN` se puede aceptar; `ACCEPTED` el hueco es suyo; `DECLINED` la rechazó; `EXPIRED` caducó; `TAKEN` otro paciente aceptó antes («Este hueco ya se ocupó»); `UNAVAILABLE` la clínica lo ocupó o bloqueó por otra vía.
+         * @enum {string}
+         */
+        PublicSlotOfferState: "OPEN" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "TAKEN" | "UNAVAILABLE";
+        PublicSlotOfferClinicDto: {
+            name: string;
+            primaryColor: string | null;
+            logoUrl: string | null;
+        };
+        PublicSlotOfferDetailsDto: {
+            /** @description Solo el nombre de pila (sin apellidos). */
+            patientFirstName: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @example America/Bogota */
+            timeZone: string;
+            /**
+             * @description Locale de la sede: la página pinta el día y la hora como la sede.
+             * @example es-CO
+             */
+            locale: string | null;
+            /** @example h12 */
+            hourCycle: string | null;
+            providerName: string | null;
+            locationName: string;
+            locationAddress: string | null;
+            /**
+             * Format: date-time
+             * @description Si acepta, su cita de esta fecha se adelanta al hueco y esa hora queda libre.
+             */
+            currentAppointmentStart: string | null;
+            /** Format: date-time */
+            expiresAt: string | null;
+        };
+        PublicSlotOfferDto: {
+            /** @description `OPEN` se puede aceptar; `ACCEPTED` el hueco es suyo; `DECLINED` la rechazó; `EXPIRED` caducó; `TAKEN` otro paciente aceptó antes («Este hueco ya se ocupó»); `UNAVAILABLE` la clínica lo ocupó o bloqueó por otra vía. */
+            state: components["schemas"]["PublicSlotOfferState"];
+            /** @description El mensaje para el paciente, en español. */
+            message: string;
+            clinic: components["schemas"]["PublicSlotOfferClinicDto"] | null;
+            /** @description Solo con `OPEN` o `ACCEPTED`. */
+            offer: components["schemas"]["PublicSlotOfferDetailsDto"] | null;
         };
         PublicConfirmationAppointmentDto: {
             /** @description Solo el nombre de pila. */
@@ -22415,8 +22570,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente */
+            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente. DX-435: por enlace con menos de 20 minutos para el hueco, o por email sin email o con baja. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-435 `LINK_EMAIL`: topes del outbox por destinatario o clínica (DX-088). */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22464,6 +22626,111 @@ export interface operations {
             };
             /** @description La oferta ya tenía resultado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSlotOffersController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSlotOfferDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSlotOffersController_accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSlotOfferDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSlotOffersController_decline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSlotOfferDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

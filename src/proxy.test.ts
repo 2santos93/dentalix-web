@@ -45,6 +45,15 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
     expect(other.headers.get('x-robots-tag')).toBeNull();
   });
 
+  it('DX-435: la oferta de hueco por enlace sale sin Referer, sin caché y sin indexar', () => {
+    const res = run('http://demo.localhost:3001/hueco/abc', { host: 'demo.localhost:3001' });
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    const other = run('http://demo.localhost:3001/huecos', { host: 'demo.localhost:3001' });
+    expect(other.headers.get('x-robots-tag')).toBeNull();
+  });
+
   it('genera un nonce distinto en cada petición', () => {
     const a = run('http://demo.localhost:3001/').headers.get('content-security-policy');
     const b = run('http://demo.localhost:3001/').headers.get('content-security-policy');

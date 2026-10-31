@@ -9,6 +9,7 @@ import type { AppointmentWrite } from './waitlist-api';
 import { sedeTime, type SedeClock } from '@/lib/locations/sede-clock';
 import { civilWeekday } from '@/lib/time/civil-day';
 import { wallInstant, wallMinuteOfDay } from '@/lib/time/wall-clock';
+import { endSentence } from '@/lib/format/text';
 
 // DX-210: «Ocupar este hueco», del contrato generado.
 export type OpeningCandidates = components['schemas']['OpeningCandidatesDto'];
@@ -60,6 +61,74 @@ export async function createWaitlistOffer(
       ...offer,
     },
   });
+}
+
+/** DX-435: canales de la oferta con enlace. */
+export type LinkOfferChannel = 'LINK_EMAIL' | 'LINK_WA_ME';
+export type SlotLinkOffers = OpeningCandidates['linkOffers'];
+
+/**
+ * «Enviar oferta con enlace» (DX-435): la API crea la oferta con su token (el
+ * paciente la acepta solo; el primero que acepta se queda el hueco). Por
+ * email la envía el outbox; por WhatsApp vuelve `url` para el texto de wa.me.
+ */
+export async function createLinkOffer(
+  token: string,
+  slot: OpeningSlot,
+  candidate: Pick<OpeningCandidate, 'patientId' | 'waitlistEntryId' | 'appointmentId'>,
+  channel: LinkOfferChannel,
+): Promise<WaitlistOffer> {
+  return apiFetch<WaitlistOffer>(`/appointments/openings/${slot.locationId}/offers`, {
+    method: 'POST',
+    token,
+    body: {
+      slotStart: slot.start,
+      slotEnd: slot.end,
+      providerId: slot.providerId,
+      patientId: candidate.patientId,
+      ...(candidate.waitlistEntryId ? { waitlistEntryId: candidate.waitlistEntryId } : {}),
+      ...(candidate.appointmentId ? { appointmentId: candidate.appointmentId } : {}),
+      channel,
+    },
+  });
+}
+
+/** ¿A quién se le puede mandar el enlace por cada canal? (DX-128, lo vuelve a mirar la API). */
+export function linkOfferChannels(c: OpeningCandidate): Record<LinkOfferChannel, boolean> {
+  return {
+    LINK_EMAIL: c.emailBlockedReason === null,
+    LINK_WA_ME: !c.whatsappBlocked && c.whatsappPhone !== null,
+  };
+}
+
+/**
+ * El texto de wa.me de la oferta con enlace: el de DX-210 (sin datos
+ * clínicos) con el enlace para aceptarlo, en vez de «respóndenos».
+ */
+export function linkOfferMessage({
+  firstName,
+  start,
+  locationName,
+  providerName,
+  clock,
+  url,
+}: {
+  firstName: string;
+  start: string;
+  locationName: string;
+  providerName: string | null;
+  clock: SedeClock;
+  url: string;
+}): string {
+  const first = firstName.trim().split(/\s+/)[0] ?? '';
+  const greeting = first ? `Hola ${first}` : 'Hola';
+  const withWhom = providerName ? ` con ${providerName}` : '';
+  // «10:00 a. m.» ya trae su punto: `endSentence` no pone otro.
+  const slot = endSentence(
+    `${greeting}, te escribimos de ${locationName}. Se liberó un hueco el ` +
+      `${longAppointmentDay(start, clock.timeZone)} a las ${sedeTime(start, clock)}${withWhom}`,
+  );
+  return `${slot} Si te viene bien, acéptalo aquí (se lo queda el primero que lo acepte): ${url}`;
 }
 
 /** Respuesta del paciente a una oferta pendiente (p. ej. contestó el WhatsApp). */
