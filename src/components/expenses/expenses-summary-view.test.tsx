@@ -47,6 +47,16 @@ const copRow: ExpenseSummary['rows'][number] = {
 };
 
 describe('ExpensesSummaryView (DX-274)', () => {
+  // Reloj fijo: los rangos esperados (mayo–octubre de 2026) son los «últimos
+  // seis meses» del 15-10-2026 en la sede (Auckland). Con el reloj real el test
+  // caducaba en cuanto empezaba noviembre en Auckland (31-10 a las 11:00 UTC).
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-15T00:00:00Z'), advanceTimers: true });
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     mockedSummary.mockReset().mockResolvedValue(summary([copRow]));
     mockedCsv.mockReset().mockResolvedValue('csv');
