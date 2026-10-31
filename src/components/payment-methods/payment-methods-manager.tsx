@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { SectionHeader } from '@/components/ui/section-header';
 import type { RowAction } from '@/components/shared/row-actions';
-import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import { PaymentMethodFormModal } from './payment-method-form-modal';
 
 export const paymentMethodsCopy = {
@@ -132,7 +131,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
     // Mientras su cambio de estado va en vuelo, la fila no ofrece otro.
     const busy = pendingId === method.id;
     return [
-      { label: copy.edit, icon: <Pencil aria-hidden />, onSelect: () => afterMenuCloses(() => openModal(method)) },
+      { label: copy.edit, icon: <Pencil aria-hidden />, onSelect: () => openModal(method) },
       method.active
         ? {
             label: copy.deactivate,

@@ -6,7 +6,6 @@ import type { CreditRefund } from '@/lib/patient-credit/patient-credit-api';
 import { formatCurrency } from '@/lib/format/currency';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { SectionHeader } from '@/components/ui/section-header';
-import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import {
   creditSources,
   referencePayments,
@@ -95,12 +94,12 @@ export function CreditBalanceSection({
                 {
                   label: copy.transfer,
                   icon: <ArrowRightLeft aria-hidden />,
-                  onSelect: () => afterMenuCloses(() => setAction({ kind: 'transfer', source })),
+                  onSelect: () => setAction({ kind: 'transfer', source }),
                 },
                 {
                   label: copy.refund,
                   icon: <Undo2 aria-hidden />,
-                  onSelect: () => afterMenuCloses(() => setAction({ kind: 'refund', source })),
+                  onSelect: () => setAction({ kind: 'refund', source }),
                 },
               ]
             : undefined

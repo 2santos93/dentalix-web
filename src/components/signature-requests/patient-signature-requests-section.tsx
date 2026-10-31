@@ -28,7 +28,6 @@ import { SectionError } from '@/components/errors/section-error';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { RowActions, type RowAction } from '@/components/shared/row-actions';
-import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import { SendToSignModal } from './send-to-sign-modal';
 
 const copy = {
@@ -380,11 +379,10 @@ export function PatientSignatureRequestsSection({
         icon: <Link2Off aria-hidden />,
         destructive: true,
         separatorBefore: list.length > 0,
-        onSelect: () =>
-          afterMenuCloses(() => {
-            setRevokeError(null);
-            setConfirmRevoke(r);
-          }),
+        onSelect: () => {
+          setRevokeError(null);
+          setConfirmRevoke(r);
+        },
       });
     }
     return list;
