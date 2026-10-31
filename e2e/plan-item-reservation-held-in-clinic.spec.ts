@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import type { AxeResults } from 'axe-core';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { LATE_BROWSER_TIME, SEDE_TZ, atSede, sedeDayFromToday } from './support/clock';
+import { LATE_BROWSER_TIME, SEDE_TODAY_TZ, atSede, sedeDayFromToday } from './support/clock';
+import { E2E_TODAY_REGION } from './support/regional';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -38,6 +39,14 @@ const DB_SKIP = 'E2E_DATABASE_URL no definido: no se puede mover a hoy la cita q
 const NOTICE = 'Tratamiento reservado en otra cita';
 const CLAIM = /Traer a esta cita/;
 
+/**
+ * DX-449: la sede y el navegador van en `SEDE_TODAY_TZ` (Bogotá salvo cerca de
+ * su medianoche): las citas «de hoy que ya empezaron» caben antes de «ahora»
+ * sin cruzar de día, corra la CI a la hora que corra.
+ */
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
+
 let session: ApiSession;
 let providerId: string;
 let catalogId: string;
@@ -52,7 +61,7 @@ interface Scenario {
 /** `HH:MM` (24 h) de la sede, como el aviso. */
 function sedeClock(at: Date): string {
   return new Intl.DateTimeFormat('es-CO', {
-    timeZone: SEDE_TZ,
+    timeZone: ZONE,
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
@@ -60,12 +69,12 @@ function sedeClock(at: Date): string {
 }
 
 /**
- * Mueve la cita a hoy, ya empezada hace `minutesAgo` min (5 min de largo),
- * sin cruzar la medianoche. Devuelve su nuevo inicio.
+ * Mueve la cita a hoy, ya empezada hace `minutesAgo` min (5 min de largo).
+ * `ZONE` deja al menos 3 h desde la medianoche: sigue siendo de hoy.
+ * Devuelve su nuevo inicio.
  */
 function moveToStartedToday(id: string, minutesAgo: number): Date {
-  const dayStart = atSede(sedeDayFromToday(0), '00:00').getTime();
-  const start = new Date(Math.max(dayStart + (60 - minutesAgo) * MIN, Date.now() - minutesAgo * MIN));
+  const start = new Date(Date.now() - minutesAgo * MIN);
   const end = new Date(start.getTime() + 5 * MIN);
   execFileSync('psql', [
     process.env.E2E_DATABASE_URL as string,
@@ -99,7 +108,7 @@ async function scenario(page: Page, name: string, base: number): Promise<Scenari
   });
   expect(accepted.ok(), await accepted.text()).toBeTruthy();
   const book = (hhmm: string) => {
-    const tomorrow = atSede(sedeDayFromToday(1), hhmm);
+    const tomorrow = atSede(sedeDayFromToday(1, ZONE), hhmm, ZONE);
     return apiPost<{ id: string }>(request, session, '/appointments', {
       patientId: patient.id,
       providerId,
@@ -127,7 +136,7 @@ async function scenario(page: Page, name: string, base: number): Promise<Scenari
 }
 
 async function openTodayList(page: Page) {
-  await page.clock.install({ time: atSede(sedeDayFromToday(0), LATE_BROWSER_TIME) });
+  await page.clock.install({ time: atSede(sedeDayFromToday(0, ZONE), LATE_BROWSER_TIME, ZONE) });
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
@@ -172,6 +181,7 @@ test.beforeAll(async ({ request }) => {
     fullName: admin.fullName,
     email: admin.email,
     password,
+    location: E2E_TODAY_REGION,
   });
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
   const schedule = await request.put(`${API_URL}/locations/schedule`, {

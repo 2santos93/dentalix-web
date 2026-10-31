@@ -3,7 +3,8 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { LATE_BROWSER_TIME, atSede, sedeDayFromToday } from './support/clock';
+import { LATE_BROWSER_TIME, SEDE_TODAY_TZ, atSede, sedeDayFromToday } from './support/clock';
+import { E2E_TODAY_REGION } from './support/regional';
 import { expectNoHorizontalScroll } from './support/layout';
 import { expectTouchTarget } from './support/touch-targets';
 import { API_URL, tenantOrigin } from './support/urls';
@@ -35,6 +36,14 @@ const MIN = 60_000;
 const DB_SKIP = 'E2E_DATABASE_URL no definido: no se puede mover a hoy la cita que ya empezó';
 const NOTICE = 'Tratamiento reservado en otra cita';
 
+/**
+ * DX-449: la sede y el navegador van en `SEDE_TODAY_TZ` (Bogotá salvo cerca de
+ * su medianoche): las citas «de hoy que ya empezaron» caben antes de «ahora»
+ * sin cruzar de día, corra la CI a la hora que corra.
+ */
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
+
 let session: ApiSession;
 let providerId: string;
 let catalogId: string;
@@ -51,7 +60,7 @@ interface Scenario {
 function wall(at: Date): string {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat('es-CO', {
-      timeZone: 'America/Bogota',
+      timeZone: ZONE,
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -67,11 +76,11 @@ function wall(at: Date): string {
 
 /**
  * Mueve la cita a hoy, ya empezada (hace 10 o 16 min; cada escenario en su
- * hueco de 5 min, mismo profesional), sin cruzar la medianoche.
+ * hueco de 5 min, mismo profesional). `ZONE` deja al menos 3 h desde la
+ * medianoche: sigue siendo de hoy.
  */
 function moveToStartedToday(id: string, slot: number): void {
-  const dayStart = atSede(sedeDayFromToday(0), '00:00').getTime();
-  const start = new Date(Math.max(dayStart + 6 * slot * MIN, Date.now() - (10 + 6 * slot) * MIN));
+  const start = new Date(Date.now() - (10 + 6 * slot) * MIN);
   const end = new Date(start.getTime() + 5 * MIN);
   execFileSync('psql', [
     process.env.E2E_DATABASE_URL as string,
@@ -104,7 +113,7 @@ async function scenario(page: Page, name: string, offsetMin: number): Promise<Sc
   });
   expect(accepted.ok(), await accepted.text()).toBeTruthy();
   // A: mañana con el implante; luego, por la BD, hoy y ya empezada.
-  const tomorrow = atSede(sedeDayFromToday(1), `0${8 + offsetMin}:00`);
+  const tomorrow = atSede(sedeDayFromToday(1, ZONE), `0${8 + offsetMin}:00`, ZONE);
   const a = await apiPost<{ id: string }>(request, session, '/appointments', {
     patientId: patient.id,
     providerId,
@@ -114,7 +123,7 @@ async function scenario(page: Page, name: string, offsetMin: number): Promise<Sc
   });
   moveToStartedToday(a.id, offsetMin);
   // B: la semana que viene, con el mismo implante (la reserva de A venció).
-  const futureStart = atSede(sedeDayFromToday(6), `1${offsetMin}:00`);
+  const futureStart = atSede(sedeDayFromToday(6, ZONE), `1${offsetMin}:00`, ZONE);
   const b = await apiPost<{ id: string }>(request, session, '/appointments', {
     patientId: patient.id,
     providerId,
@@ -138,7 +147,7 @@ async function futurePlanItems(page: Page, id: string): Promise<string[]> {
 }
 
 async function openTodayList(page: Page) {
-  await page.clock.install({ time: atSede(sedeDayFromToday(0), LATE_BROWSER_TIME) });
+  await page.clock.install({ time: atSede(sedeDayFromToday(0, ZONE), LATE_BROWSER_TIME, ZONE) });
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
@@ -154,6 +163,7 @@ test.beforeAll(async ({ request }) => {
     fullName: admin.fullName,
     email: admin.email,
     password,
+    location: E2E_TODAY_REGION,
   });
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
   const schedule = await request.put(`${API_URL}/locations/schedule`, {
