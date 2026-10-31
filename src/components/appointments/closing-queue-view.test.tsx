@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ClosingQueueView, closingQueueCopy } from './closing-queue-view';
 import { dismissClosingCopy } from './dismiss-closing-dialog';
-import { NetworkError } from '@/lib/api/api-error';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
+import { getPlan, updateItem, type TreatmentPlan, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
+import { listStaff } from '@/lib/appointments/staff-api';
+import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
+import { CLOSING_QUEUE_CHANGED_EVENT } from './closing-queue-count';
 import {
   dismissClosingItem,
   getClosingQueue,
@@ -18,6 +22,19 @@ jest.mock('../../lib/appointments/closing-queue-api', () => ({
 jest.mock('../../lib/appointments/appointments-api', () => ({
   ...jest.requireActual('../../lib/appointments/appointments-api'),
   updateAppointment: jest.fn(),
+}));
+jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/treatment-plans-api'),
+  getPlan: jest.fn(),
+  updateItem: jest.fn(),
+}));
+jest.mock('../../lib/appointments/staff-api', () => ({
+  ...jest.requireActual('../../lib/appointments/staff-api'),
+  listStaff: jest.fn(),
+}));
+jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
+  ...jest.requireActual('../../lib/clinical-notes/note-templates-api'),
+  listNoteTemplates: jest.fn(() => Promise.resolve([])),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -76,6 +93,7 @@ function queue(over: Partial<ClosingQueue> = {}): ClosingQueue {
     staleInClinic: 0,
     total: 3,
     locations: [{ id: 'l1', name: 'Sede Caracas' }],
+    locationsWithoutZone: [],
     ...over,
   };
 }
@@ -184,5 +202,116 @@ describe('ClosingQueueView (DX-439)', () => {
       'href',
       '/agenda/en-clinica',
     );
+  });
+});
+
+describe('ClosingQueueView — cerrar desde la cita (DX-439)', () => {
+  const plan = getPlan as jest.MockedFunction<typeof getPlan>;
+  const patchItem = updateItem as jest.MockedFunction<typeof updateItem>;
+  const staff = listStaff as jest.MockedFunction<typeof listStaff>;
+
+  it('«Marcar hecho» manda la cita (sede y fecha de la cita) y preselecciona a su profesional', async () => {
+    const norte = 'l-norte';
+    load.mockResolvedValue(
+      queue({
+        treatment: {
+          total: 1,
+          items: [
+            {
+              ...appointment({
+                appointmentId: 'a3',
+                patientName: 'Marta Ruiz',
+                status: 'COMPLETED',
+                locationId: norte,
+                locationName: 'Sede Norte',
+                professionalId: 'd2',
+                professionalName: 'Dr. Dos',
+              }),
+              planId: 'plan1',
+              planItemId: 'item1',
+              procedureCode: 'RES-1',
+              procedureLabel: 'Resina',
+              toothNumber: '16',
+              surfaces: [],
+            },
+          ],
+        },
+      }),
+    );
+    plan.mockResolvedValue({
+      id: 'plan1',
+      items: [{ id: 'item1', status: 'ACCEPTED', performedById: null, performedLocationId: null } as TreatmentPlanItem],
+    } as TreatmentPlan);
+    staff.mockResolvedValue([
+      { userId: 'd1', fullName: 'Dra. Uno', role: 'DENTIST', locationIds: null },
+      { userId: 'd2', fullName: 'Dr. Dos', role: 'DENTIST', locationIds: [norte] },
+    ]);
+    patchItem.mockResolvedValue({ id: 'item1' } as TreatmentPlanItem);
+    const changed = jest.fn();
+    window.addEventListener(CLOSING_QUEUE_CHANGED_EVENT, changed);
+    render(<ClosingQueueView token="t" />);
+    fireEvent.click(await screen.findByRole('button', { name: closingQueueCopy.markDone }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Sede Norte/)).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByRole('combobox')).toHaveValue('d2'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Marcar realizado' }));
+    await waitFor(() =>
+      expect(patchItem).toHaveBeenCalledWith('t', 'plan1', 'item1', {
+        status: 'DONE',
+        performedById: 'd2',
+        appointmentId: 'a3',
+      }),
+    );
+    await waitFor(() => expect(changed).toHaveBeenCalled());
+    window.removeEventListener(CLOSING_QUEUE_CHANGED_EVENT, changed);
+  });
+
+  it('«Escribir evolución» abre la evolución ligada a la cita', async () => {
+    load.mockResolvedValue(queue());
+    render(<ClosingQueueView token="t" />);
+    fireEvent.click(await screen.findByRole('button', { name: closingQueueCopy.writeEvolution }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('heading', { name: 'Registrar evolución' })).toBeInTheDocument();
+    expect(listNoteTemplates).toHaveBeenCalled();
+  });
+
+  it('un rol sin acceso (403) ve el mensaje sin «Reintentar»', async () => {
+    load.mockRejectedValue(new ApiError(403, 'Solo la administración, los odontólogos y recepción ven «Pendiente de cerrar».', { messages: ['Solo la administración, los odontólogos y recepción ven «Pendiente de cerrar».'] }));
+    render(<ClosingQueueView token="t" />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Solo la administración');
+    expect(within(alert).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('descartar algo que ya no estaba pendiente (409) cierra el modal y relee la lista', async () => {
+    load.mockResolvedValueOnce(queue()).mockResolvedValueOnce(queue({ evolution: { total: 0, items: [] }, total: 2 }));
+    dismiss.mockRejectedValue(new ApiError(409, 'Ese pendiente ya no está en «Pendiente de cerrar».', { messages: ['Ese pendiente ya no está en «Pendiente de cerrar».'] }));
+    render(<ClosingQueueView token="t" />);
+    const evolution = await screen.findByRole('table', { name: 'Atendidas sin evolución' });
+    fireEvent.click(within(evolution).getByRole('button', { name: closingQueueCopy.dismiss }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByLabelText('Cita duplicada'));
+    fireEvent.click(within(dialog).getByRole('button', { name: dismissClosingCopy.submit }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('closing-count-EVOLUTION')).toHaveTextContent('0'));
+  });
+
+  it('«Otro» cuenta caracteres: dos emojis no bastan', async () => {
+    load.mockResolvedValue(queue());
+    render(<ClosingQueueView token="t" />);
+    const evolution = await screen.findByRole('table', { name: 'Atendidas sin evolución' });
+    fireEvent.click(within(evolution).getByRole('button', { name: closingQueueCopy.dismiss }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByLabelText('Otro'));
+    fireEvent.change(within(dialog).getByLabelText(dismissClosingCopy.other), { target: { value: '👍👍' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: dismissClosingCopy.submit }));
+    expect(await within(dialog).findByText(dismissClosingCopy.otherRequired)).toBeInTheDocument();
+    expect(dismiss).not.toHaveBeenCalled();
+  });
+
+  it('avisa de las sedes sin zona horaria', async () => {
+    load.mockResolvedValue(queue({ locationsWithoutZone: [{ id: 'l9', name: 'Sede Sur' }] }));
+    render(<ClosingQueueView token="t" />);
+    expect(await screen.findByText(/Sin zona horaria configurada: Sede Sur/)).toBeInTheDocument();
   });
 });

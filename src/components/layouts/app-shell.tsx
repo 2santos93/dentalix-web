@@ -36,7 +36,7 @@ import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
 import { useAnamnesisInboxCount } from '@/components/anamnesis/use-anamnesis-inbox-count';
-import { useClosingQueueCount } from '@/components/appointments/use-closing-queue-count';
+import { ClosingQueueCountProvider, useClosingQueueCount } from '@/components/appointments/closing-queue-count';
 import { CLOSING_QUEUE_HREF, canSeeClosingQueue } from '@/lib/appointments/closing-queue-api';
 
 const ANAMNESIS_HREF = '/anamnesis-por-revisar';
@@ -152,7 +152,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return <SessionLocationsProvider token={token}>
     <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
-      <AppShellContent>{children}</AppShellContent>
+      {/* DX-439: una sola lectura del contador para el menú y la Agenda. */}
+      <ClosingQueueCountProvider token={token} enabled={canSeeClosingQueue(getTokenRole(token))} pathname={pathname}>
+        <AppShellContent>{children}</AppShellContent>
+      </ClosingQueueCountProvider>
     </InClinicProvider>
   </SessionLocationsProvider>;
 }
@@ -194,7 +197,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     pathname,
   );
   // DX-439: pendientes de cierre de las secciones de su rol, en sus sedes.
-  const closingCount = useClosingQueueCount(accessToken, canSeeClosingQueue(role), pathname);
+  const closingQueueCount = useClosingQueueCount();
+  const closingCount = canSeeClosingQueue(role) ? closingQueueCount : 0;
   /** Contador de bandeja de una entrada (anamnesis, pendiente de cerrar). */
   const inboxCount = (href: string) =>
     href === ANAMNESIS_HREF ? anamnesisCount : href === CLOSING_QUEUE_HREF ? closingCount : 0;

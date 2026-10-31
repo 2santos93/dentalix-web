@@ -1,6 +1,7 @@
 'use client';
 import { useId, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { ApiError } from '@/lib/api/api-error';
 import {
   CLOSING_DISMISSAL_REASONS,
   CLOSING_DISMISSAL_REASON_LABELS,
@@ -33,6 +34,11 @@ export const dismissClosingCopy = {
 
 const copy = dismissClosingCopy;
 
+/** Caracteres (puntos de código), como `char_length` en la BD. */
+function chars(value: string): number {
+  return [...value].length;
+}
+
 interface DismissClosingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,6 +49,8 @@ interface DismissClosingDialogProps {
   /** Qué se descarta, p. ej. «Ana Pérez · 30/10/2026 09:00». */
   subject: string;
   onDone: () => void;
+  /** 409: ya no estaba pendiente (se cerró o se descartó a la vez). */
+  onStale: () => void;
 }
 
 /**
@@ -58,6 +66,7 @@ export function DismissClosingDialog({
   planItemId,
   subject,
   onDone,
+  onStale,
 }: DismissClosingDialogProps) {
   const id = useId();
   const reasonName = `${id}-reason`;
@@ -72,10 +81,12 @@ export function DismissClosingDialog({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const trimmed = text.trim();
+    // Caracteres, no unidades UTF-16: lo que cuenta la API y la BD.
+    const length = chars(trimmed);
     const next = {
       reason: reasonCode === null ? copy.reasonRequired : undefined,
       other:
-        reasonCode === 'OTHER' && (trimmed.length < DISMISSAL_TEXT_MIN || trimmed.length > DISMISSAL_TEXT_MAX)
+        reasonCode === 'OTHER' && (length < DISMISSAL_TEXT_MIN || length > DISMISSAL_TEXT_MAX)
           ? copy.otherRequired
           : undefined,
     };
@@ -97,6 +108,10 @@ export function DismissClosingDialog({
       });
       onDone();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        onStale();
+        return;
+      }
       setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
@@ -164,7 +179,9 @@ export function DismissClosingDialog({
           <textarea
             id={otherId}
             rows={2}
-            maxLength={DISMISSAL_TEXT_MAX}
+            // El tope real es de caracteres (lo valida el envío); este solo
+            // corta pegados enormes (un emoji ocupa dos unidades UTF-16).
+            maxLength={DISMISSAL_TEXT_MAX * 2}
             value={text}
             disabled={submitting}
             aria-invalid={errors.other ? true : undefined}
@@ -176,7 +193,7 @@ export function DismissClosingDialog({
             className={cn(fieldClass, errors.other && 'border-danger')}
           />
           <p id={counterId} className="self-end text-xs tabular-nums text-muted">
-            {copy.counter(text.length)}
+            {copy.counter(chars(text))}
           </p>
           {errors.other ? (
             <InlineError id={fieldErrorId(otherId)} className="text-xs">
