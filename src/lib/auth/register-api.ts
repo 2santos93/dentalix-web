@@ -34,3 +34,26 @@ export const REGISTER_LOCATION_FIELDS = {
 export async function registerClinic(input: RegisterInput): Promise<RegisterResponse> {
   return apiFetch<RegisterResponse>('/auth/register', { method: 'POST', body: input });
 }
+
+export type SubdomainAvailability = components['schemas']['SubdomainAvailability'];
+
+/**
+ * Formato de la dirección web, el MISMO que valida la API
+ * (`dentalix-api/src/shared/tenancy/subdomain-rules.ts`): etiqueta DNS de
+ * minúsculas, números y guiones, 1–63, sin guion al principio ni al final y
+ * sin «--» en 3–4 (IDNA). Sin lookbehind (Safari < 16.4). Las reservadas
+ * (www, api…) las dice la API: la lista no se copia aquí.
+ */
+export const SUBDOMAIN_PATTERN = /^(?!.{2}--)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/**
+ * `GET /public/subdomains/:slug/availability` — ¿se puede registrar? Pública,
+ * con límite por IP y sin caché. «available» no la reserva: el envío del
+ * registro puede seguir dando 409.
+ */
+export async function checkSubdomainAvailability(subdomain: string): Promise<SubdomainAvailability> {
+  const res = await apiFetch<components['schemas']['SubdomainAvailabilityDto']>(
+    `/public/subdomains/${encodeURIComponent(subdomain)}/availability`,
+  );
+  return res.status;
+}

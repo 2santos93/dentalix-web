@@ -37,11 +37,23 @@ const CURRENCIES = [
   { code: 'JPY', name: 'Yen japonés', symbol: '¥' },
 ];
 
-/** `GET /public/currencies` responde la lista; `POST /auth/register`, lo que diga el test. */
-function mockApi(register: () => Promise<unknown>) {
-  mockedFetch.mockImplementation(((path: string) =>
-    path === '/public/currencies' ? Promise.resolve(CURRENCIES) : register()) as typeof apiFetch);
+const AVAILABILITY = /^\/public\/subdomains\/([^/]+)\/availability$/;
+
+/**
+ * `GET /public/currencies` responde la lista; la disponibilidad de la
+ * dirección, `availability` (libre por defecto); `POST /auth/register`, lo que
+ * diga el test.
+ */
+function mockApi(register: () => Promise<unknown>, availability: (slug: string) => string = () => 'available') {
+  mockedFetch.mockImplementation(((path: string) => {
+    if (path === '/public/currencies') return Promise.resolve(CURRENCIES);
+    const slug = AVAILABILITY.exec(path)?.[1];
+    if (slug) return Promise.resolve({ subdomain: slug, status: availability(slug) });
+    return register();
+  }) as typeof apiFetch);
 }
+
+const availabilityCalls = () => mockedFetch.mock.calls.filter(([path]) => AVAILABILITY.test(String(path)));
 
 const registerCalls = () => mockedFetch.mock.calls.filter(([path]) => path === '/auth/register');
 
@@ -159,6 +171,80 @@ describe('RegisterForm', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Esa dirección web ya está en uso. Elige otra.');
     expect(alert).not.toHaveTextContent(/correo/i);
+  });
+
+  describe('disponibilidad de la dirección mientras se escribe', () => {
+    const address = () => screen.getByLabelText('Dirección web');
+    const statusLine = () => document.getElementById('register-subdomain-status') as HTMLElement;
+
+    it('al dejar de escribir dice «Disponible» (una sola petición, con lo último escrito)', async () => {
+      mockApi(() => Promise.resolve({ message: 'genérico' }));
+      render(<RegisterForm tenant={null} />);
+      for (const value of ['s', 'so', 'sonrisa']) fireEvent.change(address(), { target: { value } });
+
+      await waitFor(() => expect(statusLine()).toHaveTextContent('Disponible'), { timeout: 2000 });
+      expect(statusLine()).toHaveAttribute('aria-live', 'polite');
+      expect(address()).toHaveAccessibleDescription(expect.stringContaining('Disponible'));
+      expect(availabilityCalls().map(([path]) => path)).toEqual(['/public/subdomains/sonrisa/availability']);
+      // El sufijo sigue a la vista.
+      expect(screen.getByText('.dentalix.app')).toBeInTheDocument();
+    });
+
+    it('en uso: «En uso, prueba otra.» y «Continuar» no avanza', async () => {
+      mockApi(() => Promise.resolve({ message: 'genérico' }), () => 'taken');
+      render(<RegisterForm tenant={null} />);
+      await fillClinicStep();
+      await waitFor(() => expect(statusLine()).toHaveTextContent('En uso, prueba otra.'), { timeout: 2000 });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+      expect(address()).toHaveAttribute('aria-invalid', 'true');
+      expect(address()).toHaveAccessibleDescription('Esa dirección web ya está en uso. Elige otra.');
+      await waitFor(() => expect(address()).toHaveFocus());
+      expect(screen.queryByLabelText(/nombre completo/i)).not.toBeInTheDocument();
+    });
+
+    it('reservada: lo dice la API (la lista no se copia en la web)', async () => {
+      mockApi(() => Promise.resolve({ message: 'genérico' }), () => 'reserved');
+      render(<RegisterForm tenant={null} />);
+      fireEvent.change(address(), { target: { value: 'admin' } });
+      await waitFor(() => expect(statusLine()).toHaveTextContent('Reservada para la plataforma, prueba otra.'), {
+        timeout: 2000,
+      });
+    });
+
+    it('mal formada: la regla del formato, sin preguntar a la API', async () => {
+      mockApi(() => Promise.resolve({ message: 'genérico' }));
+      render(<RegisterForm tenant={null} />);
+      fireEvent.change(address(), { target: { value: 'sonrisa-' } });
+      await waitFor(() => expect(statusLine()).toHaveTextContent('sin guion al principio ni al final'), {
+        timeout: 2000,
+      });
+      expect(availabilityCalls()).toHaveLength(0);
+    });
+
+    it('si no se puede comprobar no afirma nada y deja seguir (lo dirá el envío)', async () => {
+      mockApi(() => Promise.resolve({ message: 'genérico' }));
+      const base = mockedFetch.getMockImplementation()!;
+      mockedFetch.mockImplementation(((path: string, opts?: unknown) =>
+        AVAILABILITY.test(path) ? Promise.reject(new ApiError(429, 'Too Many Requests')) : base(path, opts as never)) as typeof apiFetch);
+      render(<RegisterForm tenant={null} />);
+      await fillClinicStep();
+      await waitFor(() => expect(availabilityCalls().length).toBeGreaterThan(0), { timeout: 2000 });
+      expect(statusLine()).toHaveTextContent('');
+      await continueToAccount();
+    });
+
+    it('un 409 SUBDOMAIN_RESERVED del envío vuelve al campo con su texto', async () => {
+      mockApi(() =>
+        Promise.reject(new ApiError(409, 'Esa dirección está reservada', { code: 'SUBDOMAIN_RESERVED' })),
+      );
+      render(<RegisterForm tenant={null} />);
+      await fillRequiredFields();
+      fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+      await waitFor(() =>
+        expect(address()).toHaveAccessibleDescription('Esa dirección está reservada para la plataforma. Elige otra.'),
+      );
+    });
   });
 
   // G1 (spec §6.7, R18): la sección «Tu sede» carga las monedas sin sesión.
@@ -431,7 +517,7 @@ describe('RegisterForm', () => {
     );
     expect(screen.getByLabelText(/nombre de la clínica/i)).toHaveFocus();
     expect(screen.getByLabelText('Dirección web')).toHaveAccessibleDescription(
-      'Usa solo minúsculas sin tildes, números y guiones (por ejemplo, sonrisa-norte).',
+      'Usa solo minúsculas sin tildes, números y guiones, sin guion al principio ni al final (por ejemplo, sonrisa-norte).',
     );
     expect(screen.queryByLabelText(/nombre completo/i)).not.toBeInTheDocument();
   });
