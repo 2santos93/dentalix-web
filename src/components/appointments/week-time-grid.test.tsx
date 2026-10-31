@@ -278,7 +278,7 @@ it('DX-378: el día, la fila y la hora de cada cita salen del reloj de la sede (
   expect(monday).toContainElement(card);
   expect(tuesday).not.toContainElement(card);
   expect(card.parentElement).toHaveStyle({ top: `${((22 * 60 + 30) / SLOT_MINUTES) * ROW_HEIGHT_PX}px` });
-  expect(card).toHaveAccessibleName(/^Agend\. · 10:30 p\. m\. – 11:00 p\. m\./);
+  expect(card).toHaveAccessibleName(/^Agend\. · pat-1 · 10:30 p\. m\. – 11:00 p\. m\./);
   expect(screen.getByText('9:00 a. m.')).toBeInTheDocument();
 });
 
@@ -308,4 +308,35 @@ it('DX-297 audits all full and compact visible statuses while retaining clinical
     }
   }
   auditRenderedControls(snapshots);
+});
+
+
+it('DX-297: rejilla estrecha conserva estado y paciente legibles junto al indicador médico', () => {
+  const snapshots = [];
+  for (const width of [390, 790]) for (const theme of ['light', 'dark']) {
+    for (const status of ['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const) {
+      const view = render(<div className={theme} style={{ width }}><WeekTimeGrid clock={CLOCK} weekStart={WEEK_START}
+        appointments={[appointment({ id: 'compact', status, patientFirstName: 'Estado 3', patientLastName: 'QA',
+          end: '2026-03-09T09:15:00.000Z',
+          medicalAlerts: { hasCriticalAlert: false, alerts: [], requiresPremedication: false, anamnesisStatus: 'MISSING', anamnesisReviewedAt: null },
+          appointmentType: { id: 'type', name: 'Control', durationMinutes: 15, color: '#0E7490' },
+        })]} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} /></div>);
+      const card = screen.getByTestId('week-grid-appointment');
+      expect(card).toHaveAccessibleName(/09:00–09:15/);
+      expect(card).toHaveAccessibleName(/Estado 3 QA/);
+      expect(card).toHaveAccessibleName(/Control/);
+      snapshots.push({ html: view.container.innerHTML, selector: '[data-testid="week-grid-appointment"]', viewport: { width: width === 390 ? 390 : 1440, height: 900 } });
+      view.unmount();
+    }
+  }
+  const reports = auditRenderedControls(snapshots);
+  for (const report of reports) {
+    // Antes: 90/100 × 20 px; el indicador médico dejaba la hora a ancho cero.
+    // El carril ahora permite leer estado y paciente sin alterar la duración.
+    expect(report.geometry.height).toBe(20);
+    expect(report.geometry.width).toBeGreaterThanOrEqual(180);
+    const patient = report.spans.find(span => span.text === 'Estado 3 QA');
+    expect(patient).toBeDefined();
+    expect(patient!.width).toBeGreaterThanOrEqual(patient!.scrollWidth - 1);
+  }
 });

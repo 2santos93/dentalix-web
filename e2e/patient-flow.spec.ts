@@ -307,7 +307,19 @@ test('DX-242: axe Día/Semana/En clínica 390/1440 claro/oscuro', async ({page},
     await check('dia');
     await page.getByRole('button', {name:'Semana', exact:true}).click();
     for (const [i,id] of qaIds.entries()) {
-      await expect(page.locator(`[data-testid="week-grid-appointment"][data-id="${id}"]`)).toHaveAccessibleName(new RegExp(qaLabels[i]));
+      const card = page.locator(`[data-testid="week-grid-appointment"][data-id="${id}"]`);
+      await expect(card).toHaveAccessibleName(new RegExp(qaLabels[i]));
+      if (i === 2) {
+        // La cita completada de 15 min antes medía 90 × 20 y la hora
+        // desaparecía entre el estado visible y el paciente del nombre.
+        await card.scrollIntoViewIfNeeded();
+        const geometry = await card.boundingBox();
+        expect(geometry!.height).toBe(20);
+        expect(geometry!.width).toBeGreaterThanOrEqual(180);
+        await expect(card).toHaveAccessibleName(/^Complet\. · Estado 3 QA · 09:00–09:15/);
+        const patient = card.getByText('Estado 3 QA', { exact: true });
+        expect(await patient.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+      }
     }
     await page.locator(`[data-testid="week-grid-appointment"][data-id="${qaIds[0]}"]`).scrollIntoViewIfNeeded();
     await check('semana');
