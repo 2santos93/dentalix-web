@@ -264,6 +264,33 @@ describe('anular desde el estado de cuenta (DX-057)', () => {
   });
 });
 
+describe('anular una forma de pago de un cobro dividido (revisión DX-390)', () => {
+  it('avisa antes de anular que se anula el cobro entero y su recibo', async () => {
+    const user = userEvent.setup();
+    const fixture = accountStatementFixture();
+    mockedGet.mockResolvedValue({
+      ...fixture,
+      movements: fixture.movements.map((m) =>
+        m.id === 'pay-2' ? { ...m, splitId: 'pay-2', splitLines: 3 } : m,
+      ),
+    });
+    render(<AccountStatementView token="tok" patientId="pat-1" />);
+    const table = await screen.findByRole('table', { name: /movimientos/i });
+    await user.click(within(table).getByRole('button', { name: /anular abono/i }));
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(dialog).toHaveTextContent(
+      'Es una de las 3 formas de pago de un mismo cobro: se anulan todas y su recibo.',
+    );
+
+    // QA DX-390 (B5): la confirmación dice que se anuló el cobro entero.
+    mockedVoid.mockResolvedValue(undefined);
+    await user.type(within(dialog).getByLabelText(/motivo/i), 'Cobro duplicado');
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText(/^Cobro anulado: 3 formas de pago y su recibo · /)).toBeInTheDocument();
+  });
+});
+
 describe('cobrar desde el estado de cuenta (DX-067)', () => {
   const RECEPTION = tokenForRole('RECEPTION');
   const billablePlan: BillablePlan = {
@@ -329,6 +356,8 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     mockedRecord.mockResolvedValue({
       id: 'pay-new',
       tenantId: 't-1',
+      splitId: null,
+      splitLine: null,
       treatmentPlanId: 'plan-1',
       openingBalanceId: null,
       patientId: 'pat-1',

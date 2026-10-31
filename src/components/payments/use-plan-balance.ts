@@ -15,7 +15,13 @@ export type PlanBalanceState =
  * no sirve: no descuenta los abonos en otra moneda. Solo se pide mientras
  * `active`; la respuesta de otro plan que llega tarde se descarta.
  */
-export function usePlanBalance(token: string, planId: string | null, active: boolean): PlanBalanceState {
+export function usePlanBalance(
+  token: string,
+  planId: string | null,
+  active: boolean,
+  /** Cambiarlo vuelve a leer el saldo (p. ej. tras un 409 de «lo pendiente cambió»). */
+  refresh = 0,
+): PlanBalanceState {
   const [result, setResult] = useState<
     { key: string; balance: PlanBalance } | { key: string; failed: true } | null
   >(null);
@@ -28,7 +34,7 @@ export function usePlanBalance(token: string, planId: string | null, active: boo
     setPrevEnabled(enabled);
     if (enabled) setGeneration((g) => g + 1);
   }
-  const key = `${planId}|${generation}`;
+  const key = `${planId}|${generation}|${refresh}`;
 
   useEffect(() => {
     if (!enabled || planId === null) return;

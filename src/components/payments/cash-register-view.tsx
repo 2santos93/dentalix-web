@@ -573,6 +573,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                                     currency: payment.currency,
                                     paidOn: payment.paidOn,
                                     patientName: payment.patient.fullName,
+                                    splitLines: payment.splitLines,
                                   })
                                 }
                               >
@@ -622,6 +623,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
         subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+        splitLines={voiding.target?.splitLines ?? undefined}
       />
     </>
   );
