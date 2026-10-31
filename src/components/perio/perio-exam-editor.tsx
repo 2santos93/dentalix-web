@@ -27,6 +27,7 @@ import {
 } from '@/lib/perio/perio-grid';
 import { formatCivilDate } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineError } from '@/components/errors/inline-error';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -408,7 +409,7 @@ export function PerioExamEditor({
             {readOnly ? (
               <p
                 role="status"
-                className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm text-ink"
+                className="rounded-lg border border-border bg-surface-sunken px-4 py-3 text-sm text-ink"
               >
                 {copy.readOnly}
               </p>
@@ -431,15 +432,11 @@ export function PerioExamEditor({
             ) : null}
 
             {previous ? (
-              <label className="flex items-center gap-2 text-sm text-ink">
-                <input
-                  type="checkbox"
-                  checked={comparing}
-                  onChange={(e) => setComparing(e.target.checked)}
-                  className="size-4 accent-[var(--color-primary)]"
-                />
-                {copy.compare(formatCivilDate(previous.examDate))}
-              </label>
+              <Checkbox
+                label={copy.compare(formatCivilDate(previous.examDate))}
+                checked={comparing}
+                onChange={(e) => setComparing(e.target.checked)}
+              />
             ) : (
               <p className="text-sm text-muted">{copy.noPrevious}</p>
             )}

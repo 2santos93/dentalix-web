@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 
 // Copy as constants (i18n-ready, es-first) — matches tooth-record-panel.tsx,
 // where this picker used to live inline.
@@ -43,7 +43,7 @@ interface CatalogPickerProps {
  *
  * It exists because the two surfaces had drifted apart — the odontogram had
  * this filtered list while the plan (the surface where the choice becomes a
- * charge) had a bare native `<select>` over the whole ~100-item catalog. The
+ * charge) had a bare native select over the whole ~100-item catalog. The
  * filter is not a nicety: the seeded catalog is taller than the viewport, so
  * without it picking an item means scrolling a list of a hundred radios.
  *
@@ -89,36 +89,41 @@ export function CatalogPicker({
           {copy.noMatches(query.trim())}
         </p>
       ) : (
-        <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
+        // El grupo visible es el `fieldset` de arriba (lo buscan los e2e del plan
+        // por `group`); el radiogroup repite su nombre solo para lectores.
+        <RadioGroup
+          id={`${idPrefix}-items`}
+          name={`${idPrefix}-item`}
+          legend={<span className="sr-only">{legend}</span>}
+          value={value ?? ''}
+          onValueChange={onChange}
+          className="gap-0"
+          optionsClassName="max-h-56 overflow-y-auto rounded-lg border border-border"
+        >
           {visible.map((item) => (
-            <label
+            <RadioOption
               key={item.id}
-              htmlFor={`${idPrefix}-${item.id}`}
-              className={cn(
-                'flex cursor-pointer items-center gap-2 border-b border-hairline px-3 py-2 text-sm text-ink last:border-0 transition-colors hover:bg-surface-2',
-                value === item.id && 'bg-surface-2',
-              )}
-            >
-              <input
-                id={`${idPrefix}-${item.id}`}
-                type="radio"
-                name={`${idPrefix}-item`}
-                value={item.id}
-                checked={value === item.id}
-                onChange={() => onChange(item.id)}
-              />
-              <span
-                aria-hidden="true"
-                className="size-2.5 shrink-0 rounded-[3px] border border-border"
-                style={{ backgroundColor: item.color }}
-              />
-              <span className="min-w-0 flex-1 truncate">{item.labelEs}</span>
-              {showKind ? (
-                <span className="t-label shrink-0 text-muted">{copy.kindLabels[item.kind]}</span>
-              ) : null}
-            </label>
+              id={`${idPrefix}-${item.id}`}
+              value={item.id}
+              className={
+                'items-center border-b border-border-subtle px-3 last:border-0 transition-colors hover:bg-surface-sunken has-checked:bg-surface-sunken'
+              }
+              label={
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-2.5 shrink-0 rounded-[3px] border border-border"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{item.labelEs}</span>
+                  {showKind ? (
+                    <span className="t-label shrink-0 text-muted">{copy.kindLabels[item.kind]}</span>
+                  ) : null}
+                </span>
+              }
+            />
           ))}
-        </div>
+        </RadioGroup>
       )}
     </fieldset>
   );

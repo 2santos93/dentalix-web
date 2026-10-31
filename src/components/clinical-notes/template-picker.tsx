@@ -96,7 +96,7 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
     return (
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-ink">{copy.label}</span>
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-sunken px-3 py-2">
           <span className="min-w-0 text-sm text-ink">
             <span className="block truncate font-medium">{selected.name}</span>
             <span className="block text-xs text-muted">
@@ -157,7 +157,7 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
         ) : (
           groups.map(([folder, items]) => (
             <div key={folder} role="group" aria-label={folder}>
-              <p className="border-t border-hairline bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted">
+              <p className="border-t border-border-subtle bg-surface-sunken px-3 py-1.5 text-xs font-medium text-muted">
                 {folder}
               </p>
               {items.map((t) => (
@@ -194,7 +194,7 @@ function TemplateOption({
   return (
     <label
       className={cn(
-        'flex min-h-11 cursor-pointer items-center gap-3 border-t border-hairline px-3 py-2 text-sm first:border-t-0 hover:bg-surface-2',
+        'flex min-h-11 cursor-pointer items-center gap-3 border-t border-border-subtle px-3 py-2 text-sm first:border-t-0 hover:bg-surface-sunken',
         checked && 'bg-primary/5',
       )}
     >

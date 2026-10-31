@@ -377,7 +377,7 @@ export function NoteTemplateFormModal({
       {body.trim() ? (
         <section aria-label={copy.preview} className="flex flex-col gap-1.5">
           <p className="text-sm font-medium text-ink">{copy.preview}</p>
-          <p className="whitespace-pre-line break-words rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink">
+          <p className="whitespace-pre-line break-words rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink">
             {preview}
           </p>
         </section>

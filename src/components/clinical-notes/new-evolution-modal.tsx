@@ -214,7 +214,7 @@ export function NewEvolutionModal({
       size="lg"
     >
       {appointment ? (
-        <p className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink">
+        <p className="flex items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink">
           <CalendarCheck aria-hidden className="size-4 shrink-0 text-muted" />
           <span className="tabular-nums">
             {appointmentLine(appointment.start, appointment.providerName, clock)}
@@ -302,7 +302,7 @@ export function NewEvolutionModal({
           <button
             type="button"
             onClick={() => setManualNotes(null)}
-            className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="font-medium text-primary-text underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             {copy.recompose}
           </button>

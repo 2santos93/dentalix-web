@@ -56,7 +56,7 @@ export function OdontogramLegend({ items }: OdontogramLegendProps) {
                 width="11"
                 height="11"
                 rx="2"
-                className="fill-surface-2 stroke-muted"
+                className="fill-surface-sunken stroke-muted"
                 strokeWidth="1"
               />
               {origin !== 'THIS_CLINIC' ? (

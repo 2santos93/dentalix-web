@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { createPerioExam, perioErrorMessage, type PerioExamDetail } from '@/lib/perio/perio-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const copy = {
   title: 'Nuevo examen periodontal',
@@ -88,38 +90,32 @@ export function NewPerioExamModal({
       error={error}
     >
       <FormField htmlFor="perio-exam-date" label={copy.date}>
-        <Input
+        <DatePicker
           id="perio-exam-date"
-          type="date"
           required
           max={today()}
-          value={examDate}
-          onChange={(e) => {
-            setExamDate(e.target.value);
+          value={examDate === '' ? null : examDate}
+          onChange={(next) => {
+            setExamDate(next ?? '');
             setDateTouched(true);
           }}
         />
       </FormField>
       <FormField htmlFor="perio-exam-notes" label={copy.notes}>
-        <textarea
+        <Textarea
           id="perio-exam-notes"
           rows={3}
           maxLength={2000}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
       </FormField>
       {hasPrevious ? (
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            checked={copySkipped}
-            onChange={(e) => setCopySkipped(e.target.checked)}
-            className="size-4 accent-[var(--color-primary)]"
-          />
-          {copy.copySkipped}
-        </label>
+        <Checkbox
+          label={copy.copySkipped}
+          checked={copySkipped}
+          onChange={(e) => setCopySkipped(e.target.checked)}
+        />
       ) : null}
     </FormModal>
   );

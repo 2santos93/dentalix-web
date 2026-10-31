@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
 import type { PerioSite } from '@/lib/perio/perio-api';
 import {
   ARCH_TEETH,
@@ -223,7 +224,7 @@ export function PerioChart({
                 onBlur={() => setPending((p) => (p?.id === id ? null : p))}
                 className={cn(
                   'h-7 w-6 rounded-sm bg-transparent text-center text-xs tabular-nums text-ink',
-                  'focus:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary',
+                  'focus:bg-primary-subtle focus:outline-none focus:ring-2 focus:ring-primary',
                   'aria-disabled:cursor-not-allowed aria-disabled:text-muted',
                   danger && 'font-semibold text-danger-text',
                 )}
@@ -322,7 +323,7 @@ export function PerioChart({
                     [flag.key]: !active,
                   })
                 }
-                className="flex h-5 w-6 items-center justify-center rounded-sm hover:bg-bg disabled:cursor-default disabled:hover:bg-transparent"
+                className="flex h-5 w-6 items-center justify-center rounded-sm hover:bg-canvas disabled:cursor-default disabled:hover:bg-transparent"
               >
                 <span
                   aria-hidden
@@ -355,7 +356,7 @@ export function PerioChart({
               colSpan={3}
               className={cn(toothCell, tooth(fdi).skipped && skippedCell)}
             >
-              <select
+              <NativeSelect
                 aria-label={`${copy.furcation} ${fdi} ${row === 'buccal' ? copy.buccal : lingualLabel(upper)}`}
                 value={value ?? ''}
                 disabled={readOnly || tooth(fdi).skipped}
@@ -364,7 +365,8 @@ export function PerioChart({
                     furcation: e.target.value === '' ? null : Number(e.target.value),
                   })
                 }
-                className="h-6 w-full rounded-sm border border-border bg-surface text-center text-xs text-ink disabled:border-transparent disabled:bg-transparent disabled:opacity-100"
+                className="[&>svg]:hidden"
+                  selectClassName={cellSelectClass}
               >
                 <option value="">–</option>
                 {[0, 1, 2, 3].map((n) => (
@@ -372,7 +374,7 @@ export function PerioChart({
                     {n}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </td>
           );
         })}
@@ -387,7 +389,7 @@ export function PerioChart({
         <th
           scope="rowgroup"
           colSpan={1 + teeth.length * 3}
-          className="sticky left-0 bg-surface-2 px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted"
+          className="sticky left-0 bg-surface-sunken px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted"
         >
           {label}
         </th>
@@ -429,8 +431,8 @@ export function PerioChart({
       <table aria-label={upper ? copy.upper : copy.lower} className="border-collapse text-ink">
         <caption className="sr-only">{upper ? copy.upper : copy.lower}</caption>
         <thead>
-          <tr className="border-b border-border bg-surface-2">
-            <th scope="col" className={cn(labelCell, 'bg-surface-2')}>
+          <tr className="border-b border-border bg-surface-sunken">
+            <th scope="col" className={cn(labelCell, 'bg-surface-sunken')}>
               {copy.tooth}
             </th>
             {teeth.map((fdi) => {
@@ -445,7 +447,7 @@ export function PerioChart({
                     disabled={readOnly}
                     onClick={() => onToothChange(fdi, { skipped: !t.skipped })}
                     className={cn(
-                      'w-full rounded-sm px-1 text-sm font-semibold tabular-nums hover:bg-bg disabled:hover:bg-transparent',
+                      'w-full rounded-sm px-1 text-sm font-semibold tabular-nums hover:bg-canvas disabled:hover:bg-transparent',
                       t.skipped && 'text-muted line-through',
                     )}
                   >
@@ -465,7 +467,7 @@ export function PerioChart({
                 colSpan={3}
                 className={cn(toothCell, tooth(fdi).skipped && skippedCell)}
               >
-                <select
+                <NativeSelect
                   aria-label={`${copy.mobility} ${fdi}`}
                   value={tooth(fdi).mobility ?? ''}
                   disabled={readOnly || tooth(fdi).skipped}
@@ -474,7 +476,8 @@ export function PerioChart({
                       mobility: e.target.value === '' ? null : Number(e.target.value),
                     })
                   }
-                  className="h-6 w-full rounded-sm border border-border bg-surface text-center text-xs text-ink disabled:border-transparent disabled:bg-transparent disabled:opacity-100"
+                  className="[&>svg]:hidden"
+                  selectClassName={cellSelectClass}
                 >
                   <option value="">–</option>
                   {[0, 1, 2, 3].map((n) => (
@@ -482,7 +485,7 @@ export function PerioChart({
                       {n}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </td>
             ))}
           </tr>
@@ -497,10 +500,14 @@ export function PerioChart({
 
 const labelCell =
   'sticky left-0 z-10 whitespace-nowrap bg-surface px-2 text-left text-xs font-medium text-muted';
-const toothCell = 'border-l border-hairline px-0.5 text-center';
-const skippedCell = 'bg-bg';
+/** Selector de celda (furca, movilidad): NativeSelect sin chevron, al alto de la fila. */
+const cellSelectClass =
+  'h-6 rounded-sm px-0 pr-0 text-center text-xs pointer-coarse:h-8 pointer-coarse:text-xs disabled:border-transparent disabled:bg-transparent disabled:text-ink';
+
+const toothCell = 'border-l border-border-subtle px-0.5 text-center';
+const skippedCell = 'bg-canvas';
 
 /** El primer sitio de cada diente lleva el separador vertical. */
 function siteCell(index: number): string {
-  return cn('p-0', index % 3 === 0 && 'border-l border-hairline');
+  return cn('p-0', index % 3 === 0 && 'border-l border-border-subtle');
 }

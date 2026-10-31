@@ -344,7 +344,7 @@ export function AnamnesisReviewView({
                 : copy.diffNoPrevious}
             </p>
             {data.diff && data.diff.entries.length > 0 ? (
-              <ul className="divide-y divide-hairline">
+              <ul className="divide-y divide-border-subtle">
                 {data.diff.entries.map((entry, i) => (
                   <DiffRow key={`${entry.section}-${entry.label}-${i}`} entry={entry} />
                 ))}

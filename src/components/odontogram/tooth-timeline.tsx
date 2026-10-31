@@ -169,7 +169,7 @@ export function ToothTimeline({
     <>
       <ol
         aria-label={copy.heading(toothNumber)}
-        className="divide-y divide-hairline border-t border-hairline"
+        className="divide-y divide-border-subtle border-t border-border-subtle"
       >
         {visible.map((record) => {
           const catalogEntry = record.catalogItemId ? catalogById?.get(record.catalogItemId) : undefined;

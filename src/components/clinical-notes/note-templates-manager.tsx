@@ -237,7 +237,7 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
           className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
         >
           <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
+            <tr className="border-b border-border bg-surface-sunken text-left">
               <th scope="col" className="px-4 py-3 font-medium text-muted">
                 {copy.colName}
               </th>
@@ -254,7 +254,7 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
           </thead>
           <tbody>
             {templates.map((t) => (
-              <tr key={t.id} className="border-b border-hairline last:border-0">
+              <tr key={t.id} className="border-b border-border-subtle last:border-0">
                 <td className="px-4 py-3">
                   <p className="font-medium">{t.name}</p>
                   <p className="text-xs text-muted">{t.category ?? copy.noFolder}</p>
