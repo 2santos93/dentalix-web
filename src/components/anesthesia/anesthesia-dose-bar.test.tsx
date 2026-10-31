@@ -1,10 +1,15 @@
 import { render, screen } from '@testing-library/react';
-import { AnesthesiaDoseBar, doseBarCopy } from './anesthesia-dose-bar';
+import {
+  AnesthesiaDoseBar,
+  AnesthesiaDoseBarError,
+  AnesthesiaDoseBarLoading,
+  doseBarCopy,
+} from './anesthesia-dose-bar';
 import type { AnesthesiaDoseSummary } from '@/lib/anesthesia/anesthesia-api';
 
 function summary(overrides: Partial<AnesthesiaDoseSummary>): AnesthesiaDoseSummary {
   return {
-    rulesVersion: 'ANESTHESIA_DOSE_V1',
+    rulesVersion: 'ANESTHESIA_DOSE_V2',
     weightKg: 20,
     totalMg: 72,
     byAnesthetic: [
@@ -25,7 +30,7 @@ function summary(overrides: Partial<AnesthesiaDoseSummary>): AnesthesiaDoseSumma
   };
 }
 
-describe('AnesthesiaDoseBar (DX-307)', () => {
+describe('AnesthesiaDoseBar (DX-307, DX-418)', () => {
   it('bajo el 80 %: barra con el % y sin aviso', () => {
     render(<AnesthesiaDoseBar summary={summary({})} />);
     const meter = screen.getByRole('meter');
@@ -70,5 +75,67 @@ describe('AnesthesiaDoseBar (DX-307)', () => {
     render(<AnesthesiaDoseBar summary={summary({ percent: null, weightKg: null, level: 'NO_WEIGHT' })} />);
     expect(screen.queryByRole('meter')).not.toBeInTheDocument();
     expect(screen.getByText('Dosis máxima no calculada: falta el peso.')).toBeInTheDocument();
+  });
+
+  it('DX-418: dice que es el acumulado del paciente en 24 h y desglosa por evolución y profesional', () => {
+    render(
+      <AnesthesiaDoseBar
+        id="bar"
+        summary={summary({ percent: 154, totalMg: 216, level: 'EXCEEDED' })}
+        window={{
+          hours: 24,
+          from: '2026-10-29T15:00:00.000Z',
+          to: '2026-10-31T15:00:00.000Z',
+          pendingMg: null,
+          parts: [
+            {
+              clinicalEntryId: 'e1',
+              current: false,
+              authorId: 'u1',
+              authorName: 'Dra. Ana Ruiz',
+              locationId: 'l1',
+              locationName: 'Centro',
+              firstAdministeredAt: '2026-10-30T13:00:00.000Z',
+              lastAdministeredAt: '2026-10-30T13:00:00.000Z',
+              carpules: 3,
+              mg: 108,
+              percent: 77,
+            },
+            {
+              clinicalEntryId: 'e2',
+              current: true,
+              authorId: 'u2',
+              authorName: null,
+              locationId: null,
+              locationName: null,
+              firstAdministeredAt: '2026-10-30T15:00:00.000Z',
+              lastAdministeredAt: '2026-10-30T15:00:00.000Z',
+              carpules: 3,
+              mg: 108,
+              percent: 77,
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: doseBarCopy.label })).toHaveTextContent(
+      'Acumulado del paciente en las últimas 24 h',
+    );
+    expect(screen.getByText(doseBarCopy.scope)).toBeInTheDocument();
+    const rows = screen.getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('Otra evolución · Dra. Ana Ruiz · Centro');
+    expect(rows[0]).toHaveTextContent('3 carp. · 108 mg (77 %)');
+    expect(rows[1]).toHaveTextContent(`Esta evolución · ${doseBarCopy.unknownAuthor}`);
+  });
+
+  it('DX-418: carga y error ocupan el sitio de la barra; el error trae reintento', async () => {
+    const onRetry = jest.fn();
+    const { rerender } = render(<AnesthesiaDoseBarLoading id="b" />);
+    expect(screen.getByRole('status')).toHaveTextContent(doseBarCopy.loading);
+    expect(screen.getByRole('heading', { name: doseBarCopy.label })).toBeInTheDocument();
+    rerender(<AnesthesiaDoseBarError id="b" message="La hora de la anestesia no puede ser futura" onRetry={onRetry} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('La hora de la anestesia no puede ser futura');
+    screen.getByRole('button', { name: doseBarCopy.retry }).click();
+    expect(onRetry).toHaveBeenCalled();
   });
 });

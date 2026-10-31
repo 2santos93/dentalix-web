@@ -16,6 +16,12 @@ import { openPatientTab } from './support/patient-tabs';
  *   - al guardar, la evolución muestra el registro y el acumulado, y sigue
  *     tras recargar; la API responde 405 a quien intente editarlo.
  * En escritorio (1440px) y móvil (390px, sin scroll horizontal).
+ *
+ * DX-418: el acumulado es del PACIENTE en las últimas 24 h. Un niño de 20 kg
+ * con 3 carpules de lidocaína (77 %) en una evolución: al abrir «Anestesia»
+ * en otra evolución del mismo día la barra ya marca 108 mg con el desglose
+ * (evolución y profesional), y otros 3 carpules dan 216 mg · 154 % y piden
+ * confirmación y motivo.
  */
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
@@ -123,7 +129,9 @@ for (const viewport of VIEWPORTS) {
       .locator('visible=true');
     await expect(recorded).toContainText('3 carp. · 204 mg · Troncular · 85');
     await expect(recorded).toContainText(REASON);
-    await expect(page.getByText('Acumulado 204 mg · 146 % del máximo').locator('visible=true')).toBeVisible();
+    await expect(
+      page.getByText('Acumulado del paciente en 24 h: 204 mg · 146 % del máximo').locator('visible=true'),
+    ).toBeVisible();
     await expectNoHorizontalScroll(page);
 
     // Inalterable: la API responde 405 remitiendo a la adenda.
@@ -145,5 +153,104 @@ for (const viewport of VIEWPORTS) {
         .getByRole('list', { name: /Anestesia local de la evolución del/ })
         .locator('visible=true'),
     ).toContainText('204 mg', { timeout: 15_000 });
+  });
+}
+
+async function seedTwoEntries(
+  request: APIRequestContext,
+  origin: string,
+  accessToken: string,
+  lastName: string,
+  tag: string,
+) {
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    'X-Tenant-Host': new URL(origin).host,
+  };
+  async function post<T>(path: string, data: object): Promise<T> {
+    const res = await request.post(`${API_URL}${path}`, { headers, data });
+    expect(res.ok(), `POST ${path} falló: ${await res.text()}`).toBeTruthy();
+    return (await res.json()) as T;
+  }
+  const patient = await post<{ id: string }>('/patients', {
+    firstName: 'Mateo',
+    lastName,
+    docType: 'NATIONAL_ID',
+    docNumber: `AW${tag}`.slice(0, 20),
+    sex: 'M',
+    birthDate: '2018-03-01',
+  });
+  const morning = await post<{ id: string }>(`/patients/${patient.id}/clinical-entries`, {
+    reason: 'Exodoncia de la mañana',
+    notes: 'Exodoncia de 85',
+  });
+  await post(`/patients/${patient.id}/clinical-entries`, {
+    reason: 'Urgencia de la tarde',
+    notes: 'Exodoncia de 75',
+  });
+  const catalog = await post<{ id: string; sampleCode: string | null }[]>('/anesthetics/samples', {});
+  const lidocaine = catalog.find((p) => p.sampleCode === 'LIDOCAINE_2_EPI');
+  expect(lidocaine, 'falta la lidocaína de ejemplo').toBeTruthy();
+  await post(`/patients/${patient.id}/clinical-entries/${morning.id}/anesthesia`, {
+    anestheticId: lidocaine!.id,
+    carpules: 3,
+    technique: 'INFILTRATION',
+    weightKg: 20,
+  });
+  return { patientId: patient.id };
+}
+
+for (const viewport of VIEWPORTS) {
+  test(`DX-418: el acumulado del paciente en 24 h suma otra evolución y bloquea al superar el máximo (${viewport.name})`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const tag = `w${suffix}${viewport.width}`;
+    const origin = await registerAndLogin(page, {
+      subdomain: `test-clinic-anesthesia-window-${tag}`,
+      clinicName: `Clinica Anestesia 24h ${tag}`,
+      fullName: 'Ana Acumulado',
+      email: `test.user.anesthesia.window.${tag}@example.com`,
+      password,
+    });
+    const seeded = await seedTwoEntries(page.request, origin, await accessTokenOf(page), `Ventana${tag}`, tag);
+
+    await page.goto(`${origin}/patients/${seeded.patientId}`);
+    await openPatientTab(page, 'Historia clínica');
+    await expect(page.getByText('Exodoncia de 75').locator('visible=true')).toBeVisible({ timeout: 15_000 });
+
+    await page
+      .getByRole('button', { name: /Anestesia de la evolución del .* Urgencia de la tarde/ })
+      .locator('visible=true')
+      .click();
+    const dialog = page.getByRole('dialog', { name: 'Anestesia local' });
+    await expect(dialog.getByText('Aún no hay anestesia registrada en esta evolución.')).toBeVisible();
+
+    // Sin nada en esta evolución, la barra ya enseña lo de la mañana.
+    const bar = dialog.getByRole('region', { name: 'Acumulado del paciente en las últimas 24 h' });
+    await expect(bar).toContainText('108 mg · 77 % del máximo', { timeout: 10_000 });
+    const breakdown = bar.getByRole('list', { name: 'Desglose por evolución y profesional' });
+    await expect(breakdown).toContainText('Otra evolución · Ana Acumulado');
+    await expect(breakdown).toContainText('3 carp. · 108 mg (77 %)');
+
+    await dialog.getByLabel('Anestésico').selectOption({ label: 'Lidocaína 2 % con epinefrina 1:100.000 · 1,8 ml' });
+    await dialog.getByLabel('Carpules').fill('3');
+    await expect(bar).toContainText('216 mg · 154 % del máximo', { timeout: 10_000 });
+    await expect(bar).toContainText('Esta dosis, sin guardar: 108 mg');
+    await expect(dialog.getByText(/Dosis máxima superada: 216 mg de 140 mg \(154 %\)/)).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Registrar anestesia' }).click();
+    await expect(dialog.getByText('Marca la confirmación para guardar pese al aviso.')).toBeVisible();
+    await expectNoHorizontalScroll(page);
+
+    await dialog.getByRole('checkbox', { name: /Confirmo que conozco el aviso/ }).check();
+    await dialog.getByLabel('Motivo').fill('Segunda exodoncia urgente, valorada con la familia');
+    await dialog.getByRole('button', { name: 'Registrar anestesia' }).click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+    await expect(
+      page.getByText('Acumulado del paciente en 24 h: 216 mg · 154 % del máximo').locator('visible=true'),
+    ).toBeVisible();
+    await expectNoHorizontalScroll(page);
   });
 }

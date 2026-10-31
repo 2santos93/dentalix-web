@@ -34,7 +34,12 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
-import { AnesthesiaDoseBar } from './anesthesia-dose-bar';
+import {
+  AnesthesiaDoseBar,
+  AnesthesiaDoseBarError,
+  AnesthesiaDoseBarLoading,
+  doseBarCopy,
+} from './anesthesia-dose-bar';
 
 export const anesthesiaCopy = {
   title: 'Anestesia local',
@@ -65,12 +70,12 @@ export const anesthesiaCopy = {
   weightHintRequired: 'Menor de 12 años: anota el peso antes de guardar.',
   weightHintUsing: (kg: number, source: 'ANAMNESIS' | 'ENTERED' | null) =>
     `Sin anotarlo se usan ${formatDecimal(kg)} kg${
-      source === 'ENTERED' ? ' (pesado en esta evolución)' : source === 'ANAMNESIS' ? ' (de la anamnesis)' : ''
+      source === 'ENTERED' ? ' (pesado en el sillón)' : source === 'ANAMNESIS' ? ' (de la anamnesis)' : ''
     }. Si lo has pesado hoy, anótalo.`,
   weightInvalid: 'Escribe el peso en kg (por ejemplo 18,5).',
   weightRequired: 'Anota el peso: en menores de 12 años la dosis máxima se calcula por peso.',
   anestheticRequired: 'Elige el anestésico.',
-  checking: 'Calculando la dosis…',
+  checking: doseBarCopy.loading,
   checkError: 'No se pudo calcular la dosis. Revisa la conexión e inténtalo de nuevo.',
   blockingTitle: 'Requiere confirmación',
   confirm: 'Confirmo que conozco el aviso y aplico la anestesia bajo mi responsabilidad.',
@@ -98,7 +103,7 @@ type LoadState =
 type CheckState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'error' }
+  | { kind: 'error'; message: string }
   | { kind: 'ready'; check: AnesthesiaCheck };
 
 interface AnesthesiaModalProps {
@@ -121,6 +126,21 @@ function nowHHmm(clock: SedeClock | null): string {
   if (!clock) return '';
   const minute = wallMinuteOfDay(new Date(), clock.timeZone);
   return `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
+}
+
+/**
+ * La hora elegida (hoy, en la zona de la sede) como instante ISO. Va a la
+ * previsualización Y al guardado: centra la ventana de 24 h del acumulado
+ * del paciente (DX-418), así las dos calculan con lo mismo.
+ */
+function administeredAtIso(time: string, clock: SedeClock | null): string | undefined {
+  const minutes = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!clock || !minutes) return undefined;
+  return wallInstant(
+    wallDay(new Date(), clock.timeZone),
+    Number(minutes[1]) * 60 + Number(minutes[2]),
+    clock.timeZone,
+  ).toISOString();
 }
 
 function AlertLines({ alerts }: { alerts: DoseAlert[] }) {
@@ -183,7 +203,9 @@ export function AnesthesiaModal({
   const [reason, setReason] = useState('');
   // Resultado de la última previsualización, con la clave de lo que se pidió.
   const [checkResult, setCheckResult] = useState<
-    { key: string; kind: 'ready'; check: AnesthesiaCheck } | { key: string; kind: 'error' } | null
+    | { key: string; kind: 'ready'; check: AnesthesiaCheck }
+    | { key: string; kind: 'error'; message: string }
+    | null
   >(null);
   const [checkKey, setCheckKey] = useState(0);
   const [errors, setErrors] = useState<Record<string, string | null>>({});
@@ -216,9 +238,10 @@ export function AnesthesiaModal({
   // Previsualización del servidor: con anestésico y carpules válidos. Lo que
   // se pinta se deriva de la clave: sin clave, nada; con una clave aún sin
   // resultado, «calculando».
+  const administeredAt = administeredAtIso(time, clock);
   const currentKey =
     canRecord && anestheticId && carpules !== null && weightKg !== null
-      ? `${anestheticId}|${carpules}|${weightKg ?? ''}|${checkKey}`
+      ? `${anestheticId}|${carpules}|${weightKg ?? ''}|${administeredAt ?? ''}|${checkKey}`
       : null;
   const check: CheckState =
     currentKey === null
@@ -235,16 +258,20 @@ export function AnesthesiaModal({
         anestheticId,
         carpules,
         ...(weightKg !== undefined ? { weightKg } : {}),
+        ...(administeredAt ? { administeredAt } : {}),
       })
         .then((result) => {
           if (seq === requestSeq.current) setCheckResult({ key: currentKey, kind: 'ready', check: result });
         })
-        .catch(() => {
-          if (seq === requestSeq.current) setCheckResult({ key: currentKey, kind: 'error' });
+        .catch((err: unknown) => {
+          // Un 400 (p. ej. hora futura) trae su motivo; la red, el genérico.
+          if (seq === requestSeq.current) {
+            setCheckResult({ key: currentKey, kind: 'error', message: apiErrorMessage(err, anesthesiaCopy.checkError) });
+          }
         });
     }, CHECK_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [currentKey, token, patientId, entryId, anestheticId, carpules, weightKg]);
+  }, [currentKey, token, patientId, entryId, anestheticId, carpules, weightKg, administeredAt]);
 
   const preview = check.kind === 'ready' ? check.check : null;
   const blocking = preview?.summary.alerts.some((a) => a.severity === 'BLOCKING') ?? false;
@@ -291,16 +318,6 @@ export function AnesthesiaModal({
     setErrors(next);
     setFormError(null);
     if (Object.values(next).some(Boolean) || carpules === null) return;
-
-    const minutes = /^(\d{2}):(\d{2})$/.exec(time);
-    const administeredAt =
-      clock && minutes
-        ? wallInstant(
-            wallDay(new Date(), clock.timeZone),
-            Number(minutes[1]) * 60 + Number(minutes[2]),
-            clock.timeZone,
-          ).toISOString()
-        : undefined;
 
     setSubmitting(true);
     try {
@@ -363,9 +380,13 @@ export function AnesthesiaModal({
                 </li>
               ))}
             </ul>
-            {!formVisible ? <AnesthesiaDoseBar summary={entry.summary} id={`${id}-saved-bar`} /> : null}
           </>
         )}
+        {/* DX-418: también sin registros aquí, si el paciente recibió anestesia
+            en otra evolución en las últimas 24 h. */}
+        {!formVisible && entry.window.parts.length > 0 ? (
+          <AnesthesiaDoseBar summary={entry.summary} window={entry.window} clock={clock} id={`${id}-saved-bar`} />
+        ) : null}
       </section>
     );
   }
@@ -526,31 +547,23 @@ export function AnesthesiaModal({
 
   function renderPreview() {
     if (check.kind === 'loading') {
-      return (
-        <p role="status" className="text-sm text-muted">
-          {anesthesiaCopy.checking}
-        </p>
-      );
+      return <AnesthesiaDoseBarLoading id={`${id}-bar`} />;
     }
     if (check.kind === 'error') {
       return (
-        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger">
-          <span>{anesthesiaCopy.checkError}</span>
-          <Button type="button" variant="secondary" size="sm" onClick={() => setCheckKey((k) => k + 1)}>
-            Reintentar
-          </Button>
-        </div>
+        <AnesthesiaDoseBarError id={`${id}-bar`} message={check.message} onRetry={() => setCheckKey((k) => k + 1)} />
       );
     }
     if (check.kind === 'idle') {
-      return entryState && entryState.records.length > 0 ? (
-        <AnesthesiaDoseBar summary={entryState.summary} id={`${id}-bar`} />
+      // DX-418: lo que el paciente ya recibió hoy, en esta u otra evolución.
+      return entryState && entryState.window.parts.length > 0 ? (
+        <AnesthesiaDoseBar summary={entryState.summary} window={entryState.window} clock={clock} id={`${id}-bar`} />
       ) : null;
     }
-    const { summary } = check.check;
+    const { summary, window } = check.check;
     return (
       <div className="flex flex-col gap-3">
-        <AnesthesiaDoseBar summary={summary} id={`${id}-bar`} />
+        <AnesthesiaDoseBar summary={summary} window={window} clock={clock} id={`${id}-bar`} />
         <AlertLines alerts={summary.alerts} />
         {blocking ? (
           <div className="flex flex-col gap-3 rounded-lg border border-danger/40 p-3">
@@ -603,7 +616,8 @@ export function AnesthesiaModal({
       cancelLabel={formVisible ? undefined : anesthesiaCopy.close}
       hideSubmit={!formVisible}
       submitting={submitting}
-      submitDisabled={check.kind === 'loading'}
+      // Sin la barra (calculando o en error) no se ve el acumulado ni el aviso: no se registra a ciegas.
+      submitDisabled={check.kind === 'loading' || check.kind === 'error'}
       error={formError}
     >
       {renderBody()}
