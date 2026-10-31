@@ -17,6 +17,7 @@ import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
+import { SectionHeader } from '@/components/ui/section-header';
 import { AnesthesiaModal } from '@/components/anesthesia/anesthesia-modal';
 import {
   TECHNIQUE_LABELS,
@@ -97,6 +98,8 @@ const copy = {
 interface ClinicalEntriesListProps {
   token: string;
   patientId: string;
+  /** Título de la sección: «Nueva evolución» va en su misma fila. */
+  heading?: string;
 }
 
 /**
@@ -117,7 +120,7 @@ interface ClinicalEntriesListProps {
  * evolución ligada a una cita dice de qué visita es («Cita del dd/mm · Dra.
  * X»).
  */
-export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListProps) {
+export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' }: ClinicalEntriesListProps) {
   // DX-378: el día de la cita, en la zona y con el formato de la sede.
   const sede = useSedeClock(token);
   const clock = sede.status === 'ready' ? sede.clock : null;
@@ -378,9 +381,9 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         {entry.addenda.map((addendum) => (
           <li
             key={addendum.id}
-            className="rounded-md border-l-2 border-primary bg-surface-2 px-3 py-2 text-sm"
+            className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm"
           >
-            <p className="text-xs font-medium uppercase tracking-wide text-muted">
+            <p className="t-caption text-muted">
               {copy.addendumHeading}
             </p>
             <p className="mt-1 text-ink">{addendum.text}</p>
@@ -458,20 +461,23 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          className="w-full sm:w-auto"
-          onClick={() => {
-            setNewKey((k) => k + 1);
-            setNewOpen(true);
-          }}
-        >
-          <Plus aria-hidden />
-          {copy.newEntry}
-        </Button>
-      </div>
+    <section className="flex flex-col gap-3">
+      <SectionHeader
+        title={heading}
+        actions={
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              setNewKey((k) => k + 1);
+              setNewOpen(true);
+            }}
+          >
+            <Plus aria-hidden />
+            {copy.newEntry}
+          </Button>
+        }
+      />
 
       <AsyncSection
         loading={loading}
@@ -592,7 +598,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
               {renderAnesthesia(entry)}
               {renderSedation(entry)}
               {renderAddenda(entry)}
-              <p className="mt-3 border-t border-hairline pt-2 text-xs text-muted">
+              <p className="mt-3 border-t border-border-subtle pt-2 text-xs text-muted">
                 {recordLine(entry.performedById, entry.createdAt)}
               </p>
               <div className="mt-2 flex flex-col items-start gap-2">
@@ -662,6 +668,6 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         patientId={patientId}
         onCreated={handleCreated}
       />
-    </div>
+    </section>
   );
 }

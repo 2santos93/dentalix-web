@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { ClinicalHistoryFields } from './clinical-history-fields';
@@ -14,7 +14,7 @@ function Harness({
     <>
       <ClinicalHistoryFields value={v} onChange={setV} sections={sections} />
       <output data-testid="allergies-count">{v.allergies?.length ?? 0}</output>
-      <output data-testid="embarazo">{String(v.embarazo ?? false)}</output>
+      <output data-testid="embarazo">{String(v.embarazo)}</output>
       <output data-testid="semanas">{v.semanasEmbarazo ?? ''}</output>
       <output data-testid="notes">{v.notes ?? ''}</output>
     </>
@@ -28,10 +28,17 @@ it('agrega una alergia vía el editor embebido y la refleja en el value del padr
   expect(screen.getByTestId('allergies-count')).toHaveTextContent('1');
 });
 
+it('embarazo empieza «Sin responder» (no se envía) y no «No»', () => {
+  render(<Harness />);
+  const g = screen.getByRole('radiogroup', { name: 'Embarazo' });
+  expect(within(g).getByRole('radio', { name: 'Sin responder' })).toBeChecked();
+  expect(screen.getByTestId('embarazo')).toHaveTextContent('undefined');
+});
+
 it('marca embarazo y lo refleja en el value del padre, mostrando semanas', async () => {
   const user = userEvent.setup();
   render(<Harness />);
-  await user.click(screen.getByLabelText(/embarazo/i));
+  await user.click(within(screen.getByRole('radiogroup', { name: 'Embarazo' })).getByRole('radio', { name: 'Sí' }));
   expect(screen.getByTestId('embarazo')).toHaveTextContent('true');
   await user.type(screen.getByLabelText(/semanas de embarazo/i), '12');
   expect(screen.getByTestId('semanas')).toHaveTextContent('12');
