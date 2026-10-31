@@ -21,6 +21,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const copy = {
   hint: (generic: string) => `Vacío: se usa «${generic}».`,
@@ -34,10 +35,6 @@ const copy = {
   forbiddenTitle: 'Solo un administrador puede cambiar los nombres de los documentos.',
   forbiddenHint: 'Cada ficha, recibo y receta muestra el nombre que la clínica haya configurado.',
 };
-
-// 44 px bajo `sm` (DESIGN.md, objetivo táctil de móvil).
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-sm:min-h-11';
 
 const toDrafts = (names: DocumentTypeNames): Record<DocType, string> =>
   Object.fromEntries(DOC_TYPES.map((t) => [t, names[t] ?? ''])) as Record<DocType, string>;
@@ -115,7 +112,7 @@ export function DocumentTypeNamesSettingsSection({
   }
   if (!drafts) {
     return (
-      <div role="status" aria-label="Cargando" className="max-w-2xl rounded-xl border border-border bg-surface p-6">
+      <div role="status" aria-label="Cargando" className="max-w-[720px] rounded-lg border border-border bg-surface p-4 sm:p-6">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="mt-4 h-4 w-72" />
       </div>
@@ -157,8 +154,9 @@ export function DocumentTypeNamesSettingsSection({
     <form
       onSubmit={handleSave}
       noValidate
-      className="flex max-w-2xl flex-col gap-4 rounded-xl border border-border bg-surface px-4 py-4 sm:px-6"
+      className="flex max-w-[720px] flex-col gap-4"
     >
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 sm:p-6">
       {DOC_TYPES.map((type) => {
         const id = `${idPrefix}-${type}`;
         const hintId = `${id}-hint`;
@@ -172,13 +170,12 @@ export function DocumentTypeNamesSettingsSection({
             hintId={hintId}
             error={error}
           >
-            <input
+            <Input
               ref={(el) => {
                 inputRefs.current[type] = el;
               }}
               id={id}
               type="text"
-              className={fieldClass}
               value={current[type]}
               disabled={saving}
               aria-invalid={error ? true : undefined}
@@ -199,14 +196,16 @@ export function DocumentTypeNamesSettingsSection({
           </FormField>
         );
       })}
+      </div>
       {saveError ? <InlineError variant="summary">{saveError}</InlineError> : null}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {/* Guardar fuera de la tarjeta, debajo y a la izquierda (como el resto de Ajustes). */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Button type="submit" loading={saving} className="max-sm:w-full">
+          {copy.save}
+        </Button>
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
-        <Button type="submit" loading={saving} className="max-sm:min-h-11 max-sm:w-full">
-          {copy.save}
-        </Button>
       </div>
     </form>
   );
