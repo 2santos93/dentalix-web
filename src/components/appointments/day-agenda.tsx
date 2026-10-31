@@ -219,12 +219,14 @@ export function DayAgenda({
     // CONTAINER query, not a viewport one: this list renders both full-width on
     // the page (Día view) and inside the agenda's ~384px day drawer. Keyed on
     // the viewport (`md:`), the wide 4-column table used to render — and get
-    // clipped — inside the narrow drawer. `@container` + `@2xl` (42rem) switches
-    // on the space this component actually has.
+    // clipped — inside the narrow drawer. `@container` + `@[40rem]` switches
+    // on the space this component actually has. 40rem, not 42: at 1280 px the
+    // agenda's side column (En clínica · Pendientes) leaves the Día ~664 px,
+    // and a desktop must keep the table (the drawer is ~384 px either way).
     <div className="@container">
-      {/* Wide table — `hidden @2xl:block` on the WRAPPER (not the <table>, which
+      {/* Wide table — `hidden @[40rem]:block` on the WRAPPER (not the <table>, which
           would drop table-layout and collapse the columns to content width). */}
-      <div className="hidden overflow-hidden rounded-xl border border-border bg-surface @2xl:block">
+      <div className="hidden overflow-hidden rounded-xl border border-border bg-surface @[40rem]:block">
         <table aria-label={copy.heading} className="w-full border-collapse text-sm text-ink">
           <caption className="sr-only">{copy.heading}</caption>
           <thead>
@@ -317,7 +319,7 @@ export function DayAgenda({
       </div>
 
       {/* Narrow-container cards (mobile, and the day drawer on any screen) */}
-      <ul aria-label={copy.heading} className="flex flex-col gap-3 @2xl:hidden">
+      <ul aria-label={copy.heading} className="flex flex-col gap-3 @[40rem]:hidden">
         {sorted.map((appointment) => {
           const timeRange = sedeTimeRange(appointment.start, appointment.end, clock.of(appointment.locationId));
           const updating = updatingId === appointment.id;
