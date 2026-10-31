@@ -249,6 +249,10 @@ async function readableText(scope: Locator) {
         (e) =>
           e.checkVisibility() &&
           !e.closest(":disabled,[aria-disabled=true]") &&
+          // Una casilla (`Checkbox` UX v2) no tiene texto: su \`color\` no
+          // pinta nada (la caja la dibuja el primitivo, con borde
+          // \`border-input\` ≥ 3:1). Solo se mide el texto.
+          !e.matches('input[type="checkbox"],input[type="radio"]') &&
           (e.matches("input,select") ||
             [...e.childNodes].some(
               (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim(),
@@ -268,13 +272,8 @@ async function readableText(scope: Locator) {
         const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
         const size = parseFloat(style.fontSize),
           weight = parseInt(style.fontWeight, 10);
-        // Una casilla (`Checkbox` UX v2) no tiene texto: su borde se mide
-        // como componente de interfaz (WCAG 1.4.11, 3:1), no como texto.
-        const minimum = e.matches('input[type="checkbox"],input[type="radio"]')
-          ? 3
-          : size >= 24 || (size >= 18.66 && weight >= 700)
-            ? 3
-            : 4.5;
+        const minimum =
+          size >= 24 || (size >= 18.66 && weight >= 700) ? 3 : 4.5;
         return {
           text: (e.getAttribute("aria-label") ?? e.textContent ?? e.tagName)
             .trim()

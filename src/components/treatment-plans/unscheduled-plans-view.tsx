@@ -19,6 +19,7 @@ import { SedeConfigError } from "@/components/locations/sede-config-error";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { FormField } from "@/components/shared/form-field";
+import { cn } from "@/lib/utils";
 import { AsyncSection } from "@/components/shared/async-section";
 import { ScheduleVisitDialog } from "./schedule-visit-dialog";
 export function UnscheduledPlansView({ token }: { token: string }) {
@@ -112,6 +113,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
           <NativeSelect
             id="unscheduled-location"
             name="unscheduled-location"
+            selectClassName="min-h-11"
             value={locationId}
             onChange={(e) => {
               setLocationId(e.target.value);
@@ -130,6 +132,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
           <NativeSelect
             id="unscheduled-age"
             name="unscheduled-age"
+            selectClassName="min-h-11"
             value={age}
             onChange={(e) => {
               setAge(Number(e.target.value));
@@ -191,6 +194,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                 <Button
                   type="button"
                   variant="secondary"
+                  className="min-h-11"
                   aria-label={`Agendar a ${item.patientName}`}
                   onClick={() => setBooking(item)}
                 >
@@ -202,7 +206,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={`WhatsApp a ${item.patientName}`}
-                    className={buttonVariants({ variant: "ghost" })}
+                    className={cn(buttonVariants({ variant: "ghost" }), "min-h-11")}
                   >
                     WhatsApp
                   </a>
@@ -220,6 +224,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
           <Button
             type="button"
             variant="secondary"
+            className="min-h-11"
             disabled={loading || history.length === 0}
             onClick={() => {
               setCursor(history[history.length - 1]);
@@ -231,6 +236,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
           <Button
             type="button"
             variant="secondary"
+            className="min-h-11"
             disabled={loading || !data.nextCursor}
             onClick={() => {
               setHistory((prev) => [...prev, cursor]);
