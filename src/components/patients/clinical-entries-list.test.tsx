@@ -10,6 +10,8 @@ import { listStaff } from '@/lib/staff/staff-api';
 import { listPatientAnesthesia } from '@/lib/anesthesia/anesthesia-api';
 import { listPatientSedation } from '@/lib/sedation/sedation-api';
 import { checkedSheet } from '@/lib/test/sedation-sheet';
+import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
+import { sedeTime } from '@/lib/locations/sede-clock';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — use a relative path (same convention as the other tests).
@@ -520,6 +522,25 @@ describe('ClinicalEntriesList', () => {
     expect(
       screen.getAllByRole('button', { name: /hoja de sedación de la evolución/i }).length,
     ).toBeGreaterThan(0);
+  });
+
+  it('QA DX-407: dos evoluciones del mismo día tienen botones con nombre propio (motivo y hora de registro)', async () => {
+    const sameDay = [
+      { ...entries[0], id: 'ce-a', reason: 'Exodoncia simple', createdAt: '2026-02-01T15:00:00.000Z' },
+      { ...entries[0], id: 'ce-b', reason: 'Restauraciones bajo sedación', createdAt: '2026-02-01T17:30:00.000Z' },
+    ];
+    mockedList.mockResolvedValue(sameDay);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    await screen.findAllByText('Exodoncia simple');
+    const clock = testAgendaClock([caracasSede()]);
+    for (const prefix of [/^Hoja de sedación de la evolución del /, /^Anestesia de la evolución del /, /^Añadir adenda a la evolución del /]) {
+      // Mismo botón en la tabla (escritorio) y en la tarjeta (móvil): 2 + 2.
+      const names = screen.getAllByRole('button', { name: prefix }).map((b) => b.getAttribute('aria-label'));
+      expect(new Set(names).size).toBe(2);
+      for (const entry of sameDay) {
+        expect(names.some((n) => n?.includes(entry.reason!) && n.includes(sedeTime(entry.createdAt, clock)))).toBe(true);
+      }
+    }
   });
 
   it('DX-407: el aviso de la ficha se recalcula con la hora: una hoja que iba en hora al cargar avisa al pasar el intervalo', async () => {

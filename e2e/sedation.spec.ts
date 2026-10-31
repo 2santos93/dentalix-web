@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 import { openPatientTab } from './support/patient-tabs';
+import { expectNoHorizontalOverflowInDialog, expectNoHorizontalScroll } from './support/layout';
 
 /**
  * e2e (DX-407): hoja de sedación consciente en la evolución.
@@ -17,7 +18,8 @@ import { openPatientTab } from './support/patient-tabs';
  *   - egreso con los 6 criterios, constantes al alta e indicaciones: la hoja
  *     queda cerrada, la ficha lo muestra tras recargar y la API responde 405
  *     a quien intente editarla.
- * En escritorio (1440px) y móvil (390px, sin scroll horizontal).
+ * En escritorio (1440px) y móvil (390px): sin scroll horizontal de la página
+ * NI del diálogo; en móvil la tabla de constantes se desplaza en su marco.
  */
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
@@ -29,11 +31,36 @@ const VIEWPORTS = [
   { name: 'móvil', width: 390, height: 844 },
 ];
 
-async function expectNoHorizontalScroll(page: Page): Promise<void> {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
+/**
+ * Ni la página ni el diálogo se desplazan en horizontal (QA DX-407: a 390 px
+ * la tabla de constantes ensanchaba el diálogo a 594 px sin que la página lo
+ * notara).
+ */
+async function expectNoOverflow(page: Page, dialog: Locator): Promise<void> {
+  await expectNoHorizontalScroll(page);
+  await expectNoHorizontalOverflowInDialog(dialog);
+}
+
+/**
+ * La tabla de constantes cabe o, si no (móvil), se desplaza en su propio
+ * marco, que entonces es una región con nombre a la que se llega con Tab.
+ */
+async function expectVitalsTableReachable(dialog: Locator, mobile: boolean): Promise<void> {
+  const frame = dialog.getByRole('region', { name: 'Tabla de constantes' });
+  if (!mobile) {
+    await expect(frame).toHaveCount(0);
+    return;
+  }
+  await expect(frame).toBeVisible();
+  await expect(frame).toHaveAttribute('tabindex', '0');
+  const { scrollWidth, clientWidth } = await frame.evaluate((el) => ({
+    scrollWidth: el.scrollWidth,
+    clientWidth: el.clientWidth,
+  }));
+  expect(scrollWidth).toBeGreaterThan(clientWidth);
+  await frame.focus();
+  await frame.press('ArrowRight');
+  await expect.poll(() => frame.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
 }
 
 async function fillVitals(dialog: Locator, level: string) {
@@ -115,7 +142,7 @@ for (const viewport of VIEWPORTS) {
     await dialog.getByRole('checkbox', { name: 'El consentimiento de sedación está firmado' }).check();
     await dialog.getByRole('button', { name: 'Abrir hoja de sedación' }).click();
     await expect(dialog.getByText('Hoja abierta con la valoración previa.')).toBeVisible({ timeout: 10_000 });
-    await expectNoHorizontalScroll(page);
+    await expectNoOverflow(page, dialog);
 
     // 2. Checklist previo.
     for (const label of [
@@ -142,6 +169,7 @@ for (const viewport of VIEWPORTS) {
     dialog = await openSheet();
     await expect(dialog.getByRole('alert')).toContainText('Pasó el intervalo de 5 min sin toma');
     await expect(dialog.getByText(/N₂O 30 % · 6 l\/min/)).toBeVisible();
+    await expectNoOverflow(page, dialog);
 
     // 4. Toma intraoperatoria: el aviso desaparece.
     await fillVitals(dialog, 'MINIMAL');
@@ -149,10 +177,22 @@ for (const viewport of VIEWPORTS) {
     await expect(dialog.getByText('Toma registrada.')).toBeVisible({ timeout: 10_000 });
     await expect(dialog.getByRole('alert')).toHaveCount(0);
     await expect(dialog.getByText(/Próxima toma antes de las/)).toBeVisible();
-    await expectNoHorizontalScroll(page);
+    // 20 min sin toma con intervalo de 5: vencieron 3 (la del minuto 20 llegó).
+    await expect(dialog.getByText(/3 intervalos de 5 min vencidos sin toma/)).toBeVisible();
+    // Con una toma, la tabla aparece: el diálogo no se ensancha (QA DX-407).
+    await expectNoOverflow(page, dialog);
+    await expectVitalsTableReachable(dialog, viewport.width < 640);
+    // El formulario de la toma va en una columna en móvil: los campos no se
+    // salen por la derecha.
+    for (const label of ['Hora', 'FC (lpm)', 'TA diastólica', 'CO₂ espirado (mmHg, opcional)']) {
+      const box = await dialog.getByLabel(label, { exact: true }).boundingBox();
+      expect(box, label).not.toBeNull();
+      expect(box!.x + box!.width, `${label}: borde derecho`).toBeLessThanOrEqual(viewport.width);
+    }
 
     // 5. Egreso.
     await dialog.getByRole('radio', { name: 'Egreso' }).check();
+    await expectNoOverflow(page, dialog);
     for (const label of [
       'Función cardiovascular satisfactoria y estable',
       'Vía aérea permeable y estable',
@@ -173,7 +213,7 @@ for (const viewport of VIEWPORTS) {
     await dialog.getByRole('button', { name: 'Firmar egreso' }).click();
     await expect(dialog.getByText('Egreso firmado. La hoja queda cerrada.')).toBeVisible({ timeout: 10_000 });
     await expect(dialog.getByRole('button', { name: 'Registrar toma' })).toHaveCount(0);
-    await expectNoHorizontalScroll(page);
+    await expectNoOverflow(page, dialog);
 
     // Inalterable: la API responde 405 remitiendo a la adenda.
     const patch = await page.request.patch(`${API_URL}${sheetPath}`, {

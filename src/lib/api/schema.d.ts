@@ -1319,7 +1319,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Checklist previo (hora del servidor y quien lo marca) */
+        /** Checklist previo (quien lo marca y su hora, nunca anterior a la valoración) */
         post: operations["SedationController_check"];
         delete?: never;
         options?: never;
@@ -7567,9 +7567,14 @@ export interface components {
             author: components["schemas"]["SedationActorDto"];
             /**
              * Format: date-time
-             * @description Hora del servidor
+             * @description Hora del checklist (la anotada; por defecto, la del registro)
              */
             checkedAt: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            createdAt: string;
         };
         /** @enum {string} */
         SedationAgentKind: "NITROUS_OXIDE" | "ORAL" | "OTHER";
@@ -7654,7 +7659,7 @@ export interface components {
             /** @description Se pasó el intervalo sin toma */
             overdue: boolean;
             overdueMinutes: number;
-            /** @description Huecos pasados mayores que el intervalo */
+            /** @description Intervalos vencidos sin toma entre el inicio y la última toma: en cada hueco, ⌈hueco / intervalo⌉ − 1 (20 min con intervalo de 5 → 3) */
             missedIntervals: number;
         };
         SedationSheetDto: {
@@ -7693,7 +7698,15 @@ export interface components {
             /** Format: uuid */
             consentId: string | null;
             author: components["schemas"]["SedationActorDto"];
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Hora de la valoración (la anotada; por defecto, la del registro)
+             */
+            assessedAt: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
             createdAt: string;
             checklist: components["schemas"]["SedationChecklistRowDto"] | null;
             agents: components["schemas"]["SedationAgentRowDto"][];
@@ -7760,6 +7773,11 @@ export interface components {
              * @description Consentimiento firmado del paciente (patient_consents)
              */
             consentId?: string;
+            /**
+             * Format: date-time
+             * @description Hora de la valoración; por defecto, ahora
+             */
+            assessedAt?: string;
         };
         SedationProblemDto: {
             /** @example MALLAMPATI */
@@ -7780,6 +7798,11 @@ export interface components {
         };
         SedationChecklistDto: {
             items: components["schemas"]["SedationMarkDto"][];
+            /**
+             * Format: date-time
+             * @description Hora del checklist; por defecto, ahora. No puede ser anterior a la valoración
+             */
+            checkedAt?: string;
         };
         SedationAgentDto: {
             kind: components["schemas"]["SedationAgentKind"];

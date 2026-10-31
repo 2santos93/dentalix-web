@@ -53,7 +53,7 @@ const copy = {
   genericLoadError: 'No pudimos cargar las evoluciones.',
   tableLabel: 'Evoluciones del paciente',
   addAddendum: 'Añadir adenda',
-  addAddendumFor: (entryDate: string) => `Añadir adenda a la evolución del ${entryDate}`,
+  addAddendumFor: (entry: string) => `Añadir adenda a la evolución del ${entry}`,
   addendaLabel: (entryDate: string) => `Adendas de la evolución del ${entryDate}`,
   addendumHeading: 'Adenda',
   addendumReason: 'Motivo:',
@@ -63,7 +63,7 @@ const copy = {
   related: 'Relacionado',
   // DX-307: anestesia local registrada en la evolución.
   anesthesia: 'Anestesia',
-  anesthesiaFor: (entryDate: string) => `Anestesia de la evolución del ${entryDate}`,
+  anesthesiaFor: (entry: string) => `Anestesia de la evolución del ${entry}`,
   anesthesiaLabel: (entryDate: string) => `Anestesia local de la evolución del ${entryDate}`,
   anesthesiaLine: (r: AnesthesiaAdministration) =>
     `${r.anestheticName} · ${formatDecimal(r.carpules)} carp. · ${formatDecimal(r.doseMg)} mg · ${TECHNIQUE_LABELS[r.technique]}${r.site ? ` · ${r.site}` : ''}${r.lot ? ` · Lote ${r.lot}` : ''}`,
@@ -76,7 +76,11 @@ const copy = {
     'No pudimos cargar la anestesia registrada en las evoluciones. Ábrela con «Anestesia» en cada evolución o reintenta.',
   // DX-407: hoja de sedación de la evolución.
   sedation: 'Sedación',
-  sedationFor: (entryDate: string) => `Hoja de sedación de la evolución del ${entryDate}`,
+  sedationFor: (entry: string) => `Hoja de sedación de la evolución del ${entry}`,
+  // QA DX-407: dos evoluciones del mismo día no pueden tener botones con el
+  // mismo nombre accesible: fecha, motivo (o el principio de las notas) y la
+  // hora en que se registró.
+  entryName: (date: string, what: string, recorded: string) => `${date} · ${what} · registrada ${recorded}`,
   sedationLine: (s: SedationSheet) =>
     `${GRADE_LABELS[s.grade]}${s.asaClass ? ` · ASA ${s.asaClass}${s.asaEmergency ? 'E' : ''}` : ''} · ${STATUS_LABELS[s.status]}`,
   sedationOverdue: 'Pasó el intervalo de constantes sin toma',
@@ -241,6 +245,14 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
     );
   }
 
+  /** Nombre que distingue la evolución en los botones de su fila. */
+  function entryName(entry: ClinicalEntry): string {
+    const notes = entry.notes.trim().replace(/\s+/g, ' ');
+    const what = entry.reason?.trim() || (notes.length > 40 ? `${notes.slice(0, 40)}…` : notes);
+    const recorded = clock ? sedeTime(entry.createdAt, clock) : formatDateTime(entry.createdAt);
+    return copy.entryName(formatCivilDate(entry.entryDate), what, recorded);
+  }
+
   function renderSedationButton(entry: ClinicalEntry) {
     // Recepción no ve la historia clínica: el botón ni aparece.
     if (role === 'RECEPTION') return null;
@@ -250,7 +262,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         variant="secondary"
         size="sm"
         className="min-h-11 sm:min-h-0"
-        aria-label={copy.sedationFor(formatCivilDate(entry.entryDate))}
+        aria-label={copy.sedationFor(entryName(entry))}
         onClick={() => setSedationFor(entry)}
       >
         {copy.sedation}
@@ -317,7 +329,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         variant="secondary"
         size="sm"
         className="min-h-11 sm:min-h-0"
-        aria-label={copy.anesthesiaFor(formatCivilDate(entry.entryDate))}
+        aria-label={copy.anesthesiaFor(entryName(entry))}
         onClick={() => setAnesthesiaFor(entry)}
       >
         {copy.anesthesia}
@@ -386,7 +398,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         type="button"
         variant="secondary"
         size="sm"
-        aria-label={copy.addAddendumFor(formatCivilDate(entry.entryDate))}
+        aria-label={copy.addAddendumFor(entryName(entry))}
         onClick={() => setAddendumFor(entry)}
       >
         {copy.addAddendum}

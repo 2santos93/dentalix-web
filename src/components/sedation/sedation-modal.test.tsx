@@ -5,11 +5,13 @@ import {
   assessSedation,
   dischargeSedation,
   getEntrySedation,
+  recordSedationAgent,
   recordSedationChecklist,
   recordSedationVitals,
 } from '@/lib/sedation/sedation-api';
 import { ApiError } from '@/lib/api/api-error';
 import { checkedSheet, platformTemplate, sedationSheet } from '@/lib/test/sedation-sheet';
+import { testAgendaClock, utcSede } from '@/lib/test/sede-clock';
 
 jest.mock('../../lib/sedation/sedation-api', () => ({
   ...jest.requireActual('../../lib/sedation/sedation-api'),
@@ -26,6 +28,7 @@ const mocked = {
   assess: assessSedation as jest.Mock,
   checklist: recordSedationChecklist as jest.Mock,
   vitals: recordSedationVitals as jest.Mock,
+  agent: recordSedationAgent as jest.Mock,
   discharge: dischargeSedation as jest.Mock,
 };
 
@@ -350,5 +353,129 @@ describe('SedationModal (DX-407)', () => {
     expect(await screen.findByText(sedationCopy.closed)).toBeInTheDocument();
     expect(screen.getByText('Luis Pérez')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: sedationCopy.submit.VITALS })).not.toBeInTheDocument();
+  });
+});
+
+describe('SedationModal · correcciones de la QA (DX-407)', () => {
+  /** jsdom no maqueta: el ancho del contenido y del marco se fingen. */
+  function fakeWidths(scrollWidth: number, clientWidth: number) {
+    const sw = jest.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(scrollWidth);
+    const cw = jest.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(clientWidth);
+    return () => {
+      sw.mockRestore();
+      cw.mockRestore();
+    };
+  }
+
+  const withVitals = () =>
+    checkedSheet({ status: 'IN_PROGRESS', vitals: [intraBy('u-asis')] });
+
+  it('bug 1: la tabla de constantes que no cabe se desplaza en su marco, que es una región con nombre y foco', async () => {
+    const restore = fakeWidths(594, 356);
+    try {
+      mocked.entry.mockResolvedValue({ template: platformTemplate(), sheet: withVitals() });
+      renderModal();
+      const region = await screen.findByRole('region', { name: sedationCopy.vitalsTable });
+      expect(region).toHaveAttribute('tabindex', '0');
+      expect(region).toHaveClass('overflow-x-auto');
+      expect(within(region).getByRole('table')).toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
+
+  it('bug 1: si la tabla cabe, el marco no es región ni parada de tabulador', async () => {
+    mocked.entry.mockResolvedValue({ template: platformTemplate(), sheet: withVitals() });
+    renderModal();
+    expect(await screen.findByRole('table', { name: sedationCopy.vitalsHeading })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: sedationCopy.vitalsTable })).not.toBeInTheDocument();
+  });
+
+  it('bug 1: en móvil los campos de la toma van en una columna (dos o tres desde sm)', async () => {
+    mocked.entry.mockResolvedValue({ template: platformTemplate(), sheet: withVitals() });
+    renderModal({ role: 'ASSISTANT', userId: 'u-asis' });
+    for (const label of [sedationCopy.phase, sedationCopy.spo2, sedationCopy.heartRate]) {
+      const grid = (await screen.findByLabelText(label)).closest('.grid');
+      expect(grid).toHaveClass('grid-cols-1');
+      expect(grid?.className).not.toMatch(/(^|\s)grid-cols-[23]/);
+    }
+  });
+
+  it('bug 2: cuenta intervalos vencidos sin toma, con el intervalo', async () => {
+    mocked.entry.mockResolvedValue({
+      template: platformTemplate(),
+      sheet: checkedSheet({
+        status: 'IN_PROGRESS',
+        vitals: [intraBy('u-asis')],
+        watch: { ...sedationSheet().watch, missedIntervals: 3 },
+      }),
+    });
+    renderModal();
+    expect(await screen.findByText('3 intervalos de 5 min vencidos sin toma.')).toBeInTheDocument();
+    expect(sedationCopy.missed(1, 5)).toBe('1 intervalo de 5 min vencido sin toma.');
+  });
+
+  it('bug 3: con reloj de sede, la valoración y el checklist envían su hora y la lectura la usa', async () => {
+    const user = userEvent.setup();
+    const clock = testAgendaClock([utcSede()]);
+    mocked.entry.mockResolvedValue({
+      template: platformTemplate(),
+      sheet: sedationSheet({ assessedAt: '2026-10-30T14:07:00.000Z', createdAt: '2026-10-30T15:00:00.000Z' }),
+    });
+    mocked.checklist.mockResolvedValue(checkedSheet());
+    renderModal({ clock });
+    // La lectura dice la hora de la valoración, no la del registro.
+    expect(await screen.findByText('Dra. Ana Ríos · 14:07')).toBeInTheDocument();
+    const time = screen.getByLabelText(sedationCopy.checklistTime);
+    await user.clear(time);
+    await user.type(time, '14:10');
+    for (const item of platformTemplate().checklist.slice(0, 5)) {
+      await user.click(screen.getByRole('checkbox', { name: (name) => name.startsWith(item.label) }));
+    }
+    await user.click(screen.getByRole('button', { name: sedationCopy.submit.CHECKLIST }));
+    await waitFor(() => expect(mocked.checklist).toHaveBeenCalled());
+    expect(new Date(mocked.checklist.mock.calls[0][4] as string).toISOString()).toMatch(/T14:10:00\.000Z$/);
+  });
+
+  it('bug 3: la valoración con reloj envía la hora anotada', async () => {
+    const user = userEvent.setup();
+    mocked.entry.mockResolvedValue({ template: platformTemplate(), sheet: null });
+    mocked.assess.mockResolvedValue(sedationSheet());
+    renderModal({ clock: testAgendaClock([utcSede()]) });
+    const time = await screen.findByLabelText(sedationCopy.assessedAt);
+    await user.clear(time);
+    await user.type(time, '09:05');
+    await user.click(screen.getByRole('button', { name: sedationCopy.submit.ASSESS }));
+    await waitFor(() => expect(mocked.assess).toHaveBeenCalled());
+    expect(mocked.assess.mock.calls[0][3].assessedAt).toMatch(/T09:05:00\.000Z$/);
+  });
+
+  it('bug 4: un valor fuera de rango dice el rango permitido', async () => {
+    const user = userEvent.setup();
+    mocked.entry.mockResolvedValue({ template: platformTemplate(), sheet: checkedSheet() });
+    renderModal();
+    await user.click(await screen.findByRole('radio', { name: sedationCopy.actions.AGENT }));
+    await user.type(screen.getByLabelText(sedationCopy.n2oPercent), '80');
+    await user.click(screen.getByRole('button', { name: sedationCopy.submit.AGENT }));
+    expect(await screen.findByText('Escribe un número entero entre 10 y 70 %.')).toBeInTheDocument();
+    expect(screen.getByLabelText(sedationCopy.n2oPercent)).toHaveAttribute('aria-invalid', 'true');
+    expect(mocked.agent).not.toHaveBeenCalled();
+  });
+
+  it('bug 4: el mensaje dice también los decimales que admite el campo', () => {
+    expect(sedationCopy.outOfRange({ min: 0.1, max: 399, decimals: 1 }, 'kg')).toBe(
+      'Escribe un número entre 0,1 y 399 kg, con 1 decimal como mucho.',
+    );
+    expect(sedationCopy.outOfRange({ min: 0, max: 10 })).toBe('Escribe un número entero entre 0 y 10.');
+  });
+
+  it('bug 6: el radio «Fármaco» y el campo del nombre del fármaco se llaman distinto', async () => {
+    const user = userEvent.setup();
+    mocked.entry.mockResolvedValue({ template: platformTemplate(), sheet: checkedSheet() });
+    renderModal();
+    await user.click(await screen.findByRole('radio', { name: 'Fármaco' }));
+    await user.selectOptions(screen.getByLabelText(sedationCopy.agentKind), 'ORAL');
+    expect(screen.getByRole('textbox', { name: 'Nombre del fármaco' })).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/^Fármaco$/)).toHaveLength(1);
   });
 });

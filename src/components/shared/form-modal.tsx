@@ -122,7 +122,11 @@ export function FormModal({
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        {/* `min-w-0`: el diálogo es grid y sus hijos tienen `min-width: auto`;
+            sin él, una tabla ancha dentro de su marco con scroll (QA DX-407:
+            la de constantes a 390 px) ensancha el formulario entero en vez de
+            desplazarse dentro de su marco. */}
+        <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-4">
           {error ? (
             <div
               ref={errorRef}

@@ -69,3 +69,23 @@ export async function expectDialogInsideViewport(page: Page, dialog: Locator): P
   });
   await expectBoxInside(page, dialog, 'en reposo');
 }
+
+/**
+ * El contenido de un diálogo no se desplaza en horizontal: ni el diálogo ni su
+ * formulario son más anchos que su caja. `expectNoHorizontalScroll` no lo ve
+ * (el documento no se desplaza: el diálogo es `fixed` y recorta), y así se
+ * escapó en QA DX-407 una tabla de 594 px dentro de un diálogo de 356 px.
+ * Lo que sí puede desplazarse es un marco propio dentro (la tabla en su
+ * `overflow-x-auto`), que no cuenta.
+ */
+export async function expectNoHorizontalOverflowInDialog(dialog: Locator): Promise<void> {
+  const boxes = await dialog.evaluate((el) =>
+    [el, ...Array.from(el.querySelectorAll('form'))].map((node) => ({
+      tag: node.tagName.toLowerCase(),
+      overflow: node.scrollWidth - node.clientWidth,
+    })),
+  );
+  for (const { tag, overflow } of boxes) {
+    expect(overflow, `scroll horizontal dentro del diálogo (<${tag}>)`).toBeLessThanOrEqual(0);
+  }
+}

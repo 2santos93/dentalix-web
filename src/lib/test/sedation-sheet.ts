@@ -63,6 +63,7 @@ export function sedationSheet(overrides: Partial<SedationSheet> = {}): SedationS
     consentConfirmed: true,
     consentId: null,
     author: DENTIST,
+    assessedAt: '2026-10-30T15:00:00.000Z',
     createdAt: '2026-10-30T15:00:00.000Z',
     checklist: null,
     agents: [],
@@ -91,6 +92,7 @@ export function checkedSheet(overrides: Partial<SedationSheet> = {}): SedationSh
       items: platformTemplate().checklist.map((i) => ({ code: i.code, label: i.label, checked: true })),
       author: DENTIST,
       checkedAt: '2026-10-30T15:05:00.000Z',
+      createdAt: '2026-10-30T15:05:00.000Z',
     },
     ...overrides,
   });

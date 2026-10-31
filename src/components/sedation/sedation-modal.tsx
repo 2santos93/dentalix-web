@@ -45,6 +45,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollFrame } from '@/components/ui/scroll-frame';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 
@@ -70,6 +71,8 @@ export const sedationCopy = {
   noAgents: 'Sin fármacos registrados.',
   vitalsHeading: 'Constantes',
   noVitals: 'Sin tomas registradas.',
+  // Nombre del marco desplazable de la tabla (distinto del de la sección).
+  vitalsTable: 'Tabla de constantes',
   dischargeHeading: 'Egreso',
   byAt: (name: string | null, time: string) => `${name ?? 'Usuario'} · ${time}`,
   // Aviso de intervalo
@@ -78,7 +81,12 @@ export const sedationCopy = {
       ? `Pasó el intervalo de ${interval} min sin toma: ${minutes} min de retraso. Registra las constantes.`
       : `Pasó el intervalo de ${interval} min sin toma. Registra las constantes.`,
   nextDue: (time: string) => `Próxima toma antes de las ${time}.`,
-  missed: (n: number) => (n === 1 ? '1 intervalo pasado sin toma.' : `${n} intervalos pasados sin toma.`),
+  // Intervalos vencidos sin toma (la regla está en la API: en cada hueco,
+  // ⌈hueco / intervalo⌉ − 1; 20 min con intervalo de 5 son 3).
+  missed: (n: number, interval: number) =>
+    n === 1
+      ? `1 intervalo de ${interval} min vencido sin toma.`
+      : `${n} intervalos de ${interval} min vencidos sin toma.`,
   // Acciones
   actionLegend: 'Qué registrar',
   actions: {
@@ -139,7 +147,8 @@ export const sedationCopy = {
   agentKind: 'Tipo',
   n2oPercent: 'N₂O (%)',
   flow: 'Flujo total (l/min)',
-  drugName: 'Fármaco',
+  // «Fármaco» ya es la opción de «Qué registrar»: el campo se llama distinto.
+  drugName: 'Nombre del fármaco',
   dose: 'Dosis',
   unit: 'Unidad',
   route: 'Vía',
@@ -158,7 +167,14 @@ export const sedationCopy = {
   sameMonitor: 'En sedación moderada quien monitoriza no debería ser el operador: justifícalo.',
   sameMonitorLabel: 'Justificación (operador = monitor)',
   operator: 'Operador (firma)',
-  invalidNumber: 'Escribe un número válido.',
+  /** Un número mal escrito o fuera de rango: dice el rango (y los decimales). */
+  outOfRange: ({ min, max, decimals = 0 }: { min: number; max: number; decimals?: number }, unit = '') => {
+    const range = `entre ${formatDecimal(min)} y ${formatDecimal(max)}${unit ? ` ${unit}` : ''}`;
+    if (decimals === 0) return `Escribe un número entero ${range}.`;
+    return `Escribe un número ${range}, con ${decimals} ${decimals === 1 ? 'decimal' : 'decimales'} como mucho.`;
+  },
+  assessedAt: 'Hora de la valoración',
+  checklistTime: 'Hora del checklist',
   // Lectura
   yes: 'Sí',
   no: 'No',
@@ -268,6 +284,22 @@ const NUMBER_RULES = {
 } as const;
 type NumberField = keyof typeof NUMBER_RULES;
 
+/** Unidad de cada número, para decir el rango permitido. */
+const NUMBER_UNITS: Partial<Record<NumberField, string>> = {
+  fastingLiquids: 'h',
+  fastingSolids: 'h',
+  weight: 'kg',
+  height: 'cm',
+  spo2: '%',
+  heartRate: 'lpm',
+  systolic: 'mmHg',
+  diastolic: 'mmHg',
+  respiratoryRate: 'rpm',
+  etco2: 'mmHg',
+  n2oPercent: '%',
+  flow: 'l/min',
+};
+
 /**
  * Hoja de sedación consciente de una evolución (DX-407): lo registrado
  * (valoración, checklist, fármacos, constantes y egreso) y, según el estado y
@@ -368,7 +400,7 @@ export function SedationModal({
     for (const key of keys) {
       const rule = NUMBER_RULES[key as NumberField];
       const parsed = parseNumber(t(prefix + key), rule);
-      if (parsed === null) bad[prefix + key] = sedationCopy.invalidNumber;
+      if (parsed === null) bad[prefix + key] = sedationCopy.outOfRange(rule, NUMBER_UNITS[key as NumberField]);
       else values[key] = parsed;
     }
     return { values, bad };
@@ -416,6 +448,7 @@ export function SedationModal({
           ...(trim('escortName') ? { escortName: trim('escortName') } : {}),
           ...(trim('escortRelationship') ? { escortRelationship: trim('escortRelationship') } : {}),
           consentConfirmed: f('consent'),
+          ...(time ? { assessedAt: time } : {}),
         });
       }
       case 'CHECKLIST':
@@ -424,6 +457,7 @@ export function SedationModal({
           patientId,
           entryId,
           template.checklist.map((i) => ({ code: i.code, checked: f(`item-${i.code}`) })),
+          time,
         );
       case 'VITALS': {
         const { values, bad } = vitalsPayload('v-');
@@ -532,14 +566,14 @@ export function SedationModal({
     }
     if (!s.watch.active || !s.watch.nextDueAt) {
       return s.watch.missedIntervals > 0 ? (
-        <p className="text-xs text-muted">{sedationCopy.missed(s.watch.missedIntervals)}</p>
+        <p className="text-xs text-muted">{sedationCopy.missed(s.watch.missedIntervals, s.watch.intervalMinutes)}</p>
       ) : null;
     }
     return (
       <p role="status" className="flex items-center gap-2 text-sm text-ink">
         <Clock aria-hidden className="size-4 shrink-0 text-muted" />
         {sedationCopy.nextDue(sedeTime(s.watch.nextDueAt, clock))}
-        {s.watch.missedIntervals > 0 ? ` ${sedationCopy.missed(s.watch.missedIntervals)}` : ''}
+        {s.watch.missedIntervals > 0 ? ` ${sedationCopy.missed(s.watch.missedIntervals, s.watch.intervalMinutes)}` : ''}
       </p>
     );
   }
@@ -552,7 +586,7 @@ export function SedationModal({
     );
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-xs text-muted">
+        <p className="break-words text-xs text-muted">
           {sedationCopy.status}: <span className="font-medium text-ink">{STATUS_LABELS[s.status]}</span>
           {' · '}
           {sedationCopy.template(s.templateVersion, s.vitalsIntervalMinutes)}
@@ -584,7 +618,7 @@ export function SedationModal({
             </Row>
             <Row label={sedationCopy.consentRead}>{s.consentConfirmed ? sedationCopy.yes : sedationCopy.no}</Row>
           </dl>
-          <p className="text-xs text-muted">{by(s.author, s.createdAt)}</p>
+          <p className="text-xs text-muted">{by(s.author, s.assessedAt)}</p>
         </section>
 
         <section aria-labelledby={`${id}-checklist`} className="flex flex-col gap-2">
@@ -642,7 +676,7 @@ export function SedationModal({
           {s.vitals.length === 0 ? (
             <p className="text-sm text-muted">{sedationCopy.noVitals}</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border">
+            <ScrollFrame label={sedationCopy.vitalsTable} className="rounded-lg border border-border">
               <table aria-labelledby={`${id}-vitals`} className="w-full min-w-[34rem] text-sm text-ink">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted">
@@ -675,7 +709,7 @@ export function SedationModal({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollFrame>
           )}
         </section>
 
@@ -783,14 +817,14 @@ export function SedationModal({
 
   function vitalsFields(prefix: string) {
     return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {numberInput(`${prefix}spo2`, sedationCopy.spo2)}
         {numberInput(`${prefix}heartRate`, sedationCopy.heartRate)}
         {numberInput(`${prefix}systolic`, sedationCopy.systolic)}
         {numberInput(`${prefix}diastolic`, sedationCopy.diastolic)}
         {numberInput(`${prefix}respiratoryRate`, sedationCopy.respiratoryRate)}
         {numberInput(`${prefix}etco2`, sedationCopy.etco2)}
-        <div className="col-span-2 sm:col-span-3">
+        <div className="sm:col-span-3">
           <FormField htmlFor={`${id}-${prefix}level`} label={sedationCopy.level}>
             <select
               id={`${id}-${prefix}level`}
@@ -819,6 +853,7 @@ export function SedationModal({
     const reversal = reversalDoses(w ?? null);
     return (
       <div className="flex flex-col gap-3">
+        {timeInput('time', sedationCopy.assessedAt)}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField htmlFor={`${id}-grade`} label={sedationCopy.grade}>
             <select id={`${id}-grade`} value={t('grade', 'MINIMAL')} onChange={setT('grade')} className={selectClass}>
@@ -906,30 +941,33 @@ export function SedationModal({
 
   function renderChecklistForm(tpl: SedationTemplate, s: SedationSheet) {
     return (
-      <fieldset className="flex flex-col gap-1">
-        <legend className="sr-only">{sedationCopy.checklistHeading}</legend>
-        {tpl.checklist.map((item) =>
-          checkbox(
-            `item-${item.code}`,
-            <>
-              {item.label}
-              {item.required ? null : <span className="text-muted"> (opcional)</span>}
-              {item.code === 'REVERSAL_AGENTS' && s.naloxoneMg !== null && s.flumazenilMg !== null ? (
-                <span className="block text-xs tabular-nums text-muted">
-                  {sedationCopy.reversalLine(s.naloxoneMg, s.flumazenilMg)}
-                </span>
-              ) : null}
-            </>,
-          ),
-        )}
-      </fieldset>
+      <div className="flex flex-col gap-3">
+        {timeInput('time', sedationCopy.checklistTime)}
+        <fieldset className="flex flex-col gap-1">
+          <legend className="sr-only">{sedationCopy.checklistHeading}</legend>
+          {tpl.checklist.map((item) =>
+            checkbox(
+              `item-${item.code}`,
+              <>
+                {item.label}
+                {item.required ? null : <span className="text-muted"> (opcional)</span>}
+                {item.code === 'REVERSAL_AGENTS' && s.naloxoneMg !== null && s.flumazenilMg !== null ? (
+                  <span className="block text-xs tabular-nums text-muted">
+                    {sedationCopy.reversalLine(s.naloxoneMg, s.flumazenilMg)}
+                  </span>
+                ) : null}
+              </>,
+            ),
+          )}
+        </fieldset>
+      </div>
     );
   }
 
   function renderVitalsForm(s: SedationSheet) {
     return (
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField htmlFor={`${id}-phase`} label={sedationCopy.phase}>
             <select
               id={`${id}-phase`}

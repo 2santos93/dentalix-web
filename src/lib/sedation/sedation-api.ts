@@ -115,8 +115,13 @@ export function recordSedationChecklist(
   patientId: string,
   entryId: string,
   items: { code: string; checked: boolean }[],
+  /** Hora del checklist (ISO); sin ella, el servidor usa «ahora». */
+  checkedAt?: string,
 ): Promise<SedationSheet> {
-  return post(token, `${entryPath(patientId, entryId)}/checklist`, { items });
+  return post(token, `${entryPath(patientId, entryId)}/checklist`, {
+    items,
+    ...(checkedAt ? { checkedAt } : {}),
+  });
 }
 
 export function recordSedationAgent(
