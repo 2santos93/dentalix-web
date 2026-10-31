@@ -192,8 +192,11 @@ export function FormModal({
               'flex flex-col gap-2',
               // En la hoja del teléfono el pie se queda abajo mientras se
               // desplaza el formulario (la primaria, a todo el ancho, siempre a mano).
+              // El fondo y el filete llegan a los bordes de la pantalla con
+              // sombras (16 px, el padding del diálogo) y no con `-mx-4`: un
+              // margen negativo ensanchaba el formulario 16 px (scrollWidth).
               fullScreenOnMobile &&
-                'max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-4 max-sm:-mb-4 max-sm:mt-auto max-sm:border-t max-sm:border-border-subtle max-sm:bg-surface max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]',
+                'max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mb-4 max-sm:mt-auto max-sm:border-t max-sm:border-border-subtle max-sm:bg-surface max-sm:pt-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] max-sm:shadow-[-16px_0_0_0_var(--color-surface),16px_0_0_0_var(--color-surface),-16px_-1px_0_0_var(--color-border-subtle),16px_-1px_0_0_var(--color-border-subtle)]',
             )}
           >
             {/* Con la prop (aunque valga null) el hueco queda reservado —dos
