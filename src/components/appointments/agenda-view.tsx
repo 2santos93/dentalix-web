@@ -1,5 +1,6 @@
 'use client';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -187,6 +188,9 @@ const copy = {
   wantsEarlierError: 'No pudimos cambiar «Adelantar si hay hueco».',
   selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
   statusLabel: 'Estado',
+  detailProvider: 'Profesional',
+  detailType: 'Tipo',
+  detailReason: 'Motivo',
   // DX-122: bloqueos de agenda y pendientes por agendar.
   blockSchedule: 'Bloquear horario',
   blockCreated: 'Horario bloqueado.',
@@ -1532,9 +1536,20 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     {copy.cancelledBy} {cancellationSummary(liveDetailAppointment)}
                   </p>
                 ) : null}
-                {liveDetailAppointment.reason && (
-                  <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
-                )}
+                {/* Quién atiende, qué tipo y para qué: lo que recepción confirma por teléfono. */}
+                <DescriptionList columns={1} layout="inline">
+                  {staffName(liveDetailAppointment.providerId) ? (
+                    <DescriptionItem label={copy.detailProvider}>
+                      {staffName(liveDetailAppointment.providerId)}
+                    </DescriptionItem>
+                  ) : null}
+                  {liveDetailAppointment.appointmentType ? (
+                    <DescriptionItem label={copy.detailType}>{liveDetailAppointment.appointmentType.name}</DescriptionItem>
+                  ) : null}
+                  {liveDetailAppointment.reason ? (
+                    <DescriptionItem label={copy.detailReason}>{liveDetailAppointment.reason}</DescriptionItem>
+                  ) : null}
+                </DescriptionList>
                 <CoverageDetailLine coverage={liveDetailAppointment.coverage} />
                 <FormField htmlFor="detail-status" label={copy.statusLabel}>
                   {/* DX-295: las flechas no cambian la cita; solo Enter o un clic. */}

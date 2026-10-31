@@ -231,21 +231,21 @@ export function DayAgenda({
           <caption className="sr-only">{copy.heading}</caption>
           <thead>
             <tr className="border-b border-border bg-surface-sunken text-left">
-              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+              <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                 {copy.colTime}
               </th>
-              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+              <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                 {copy.colPatient}
               </th>
               {providerName && (
-                <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+                <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                   {copy.colProvider}
                 </th>
               )}
-              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+              <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                 {copy.colReason}
               </th>
-              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+              <th scope="col" className="px-4 py-2.5 t-caption text-muted">
                 {copy.colStatus}
               </th>
               {onSelectAppointment && (

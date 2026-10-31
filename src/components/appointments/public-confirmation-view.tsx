@@ -113,7 +113,7 @@ function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointm
           dentro del dt, colocado a la izquierda. */}
       {rows.map(({ icon: Icon, label, value, sub }) => (
         <div key={label} className="relative min-w-0 py-3 pl-12 pr-4">
-          <dt className="text-xs font-medium tracking-wide text-muted">
+          <dt className="t-caption text-muted">
             <Icon aria-hidden className="absolute left-4 top-3.5 size-5 text-muted" />
             {label}
           </dt>
@@ -148,7 +148,7 @@ function CancellationPolicyNotice({
       data-testid="public-cancellation-policy"
       className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-4"
     >
-      <h2 id="cancellation-policy-title" className="flex items-center gap-2 text-base font-semibold text-ink">
+      <h2 id="cancellation-policy-title" className="t-title flex items-center gap-2 text-ink">
         <FileText aria-hidden className="size-4 shrink-0 text-muted" />
         {copy.policyTitle}
       </h2>
@@ -288,7 +288,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
             {state.data.status === 'RESPONDED' && (
               <section aria-labelledby="confirmation-done" className="flex flex-col gap-4">
                 <div role="status" className="rounded-xl border border-border bg-surface px-4 py-4">
-                  <h2 id="confirmation-done" className="text-lg font-semibold text-ink">
+                  <h2 id="confirmation-done" className="t-title text-ink">
                     {copy.respondedTitle}
                   </h2>
                   {state.data.response && (

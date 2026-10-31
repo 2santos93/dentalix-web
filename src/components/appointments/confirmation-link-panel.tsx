@@ -137,7 +137,7 @@ export function ConfirmationLinkPanel({ token, appointment, clock, onLinkCreated
 
       {link && (
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-sunken p-3">
-          <label htmlFor={linkId} className="text-xs font-medium tracking-wide text-muted">
+          <label htmlFor={linkId} className="t-caption text-muted">
             {copy.linkLabel}
           </label>
           <Input

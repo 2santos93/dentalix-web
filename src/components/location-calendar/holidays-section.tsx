@@ -231,7 +231,7 @@ export function HolidaysSection({ token, location, holidays, onChanged, noFormat
     <section aria-labelledby={headingId} className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
-          <h2 id={headingId} className="text-lg font-semibold text-ink">
+          <h2 id={headingId} className="t-title text-ink">
             {copy.heading}
           </h2>
           {/* Siempre montada para que se anuncie; no hay toast de éxito en el proyecto. */}
