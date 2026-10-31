@@ -4,6 +4,7 @@ import { Download, History, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { RowActions, type RowAction } from '@/components/shared/row-actions';
+import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Pagination } from '@/components/shared/pagination';
@@ -205,11 +206,12 @@ export function ImportHistory({
               label: historyCopy.undoBalances,
               icon: <Undo2 aria-hidden />,
               separatorBefore: true,
-              onSelect: () => {
-                setUndoError(null);
-                setUndoMode('balances');
-                setUndoing(b);
-              },
+              onSelect: () =>
+                afterMenuCloses(() => {
+                  setUndoError(null);
+                  setUndoMode('balances');
+                  setUndoing(b);
+                }),
             },
           ]
         : []),
@@ -220,11 +222,12 @@ export function ImportHistory({
               icon: <Undo2 aria-hidden />,
               destructive: true,
               separatorBefore: !b.balances?.canUndo,
-              onSelect: () => {
-                setUndoError(null);
-                setUndoMode('batch');
-                setUndoing(b);
-              },
+              onSelect: () =>
+                afterMenuCloses(() => {
+                  setUndoError(null);
+                  setUndoMode('batch');
+                  setUndoing(b);
+                }),
             },
           ]
         : []),

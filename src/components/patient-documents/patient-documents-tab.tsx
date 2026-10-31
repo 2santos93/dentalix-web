@@ -31,6 +31,7 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
+import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
@@ -660,7 +661,7 @@ export function PatientDocumentsTab({
   function documentActions(doc: PatientDocument) {
     return [
       ...(doc.inlineViewable
-        ? [{ label: copy.view, icon: <Eye aria-hidden />, onSelect: () => setViewing(doc) }]
+        ? [{ label: copy.view, icon: <Eye aria-hidden />, onSelect: () => afterMenuCloses(() => setViewing(doc)) }]
         : []),
       {
         label: copy.download,
@@ -675,7 +676,7 @@ export function PatientDocumentsTab({
               icon: <Ban aria-hidden />,
               destructive: true,
               separatorBefore: true,
-              onSelect: () => setVoiding(doc),
+              onSelect: () => afterMenuCloses(() => setVoiding(doc)),
             },
           ]
         : []),

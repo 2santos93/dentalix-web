@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { notifyError } from '@/components/errors/notify';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { ConsentTemplateFormModal } from './consent-template-form-modal';
 
@@ -178,7 +179,7 @@ export function ConsentTemplatesManager({ token, allowed }: ConsentTemplatesMana
           onRowClick={(t) => openModal(t)}
           getRowLabel={(t) => copy.rowLabel(t.title)}
           rowActions={(t) => [
-            { label: copy.edit, icon: <Pencil aria-hidden />, onSelect: () => openModal(t) },
+            { label: copy.edit, icon: <Pencil aria-hidden />, onSelect: () => afterMenuCloses(() => openModal(t)) },
             {
               label: t.active ? copy.deactivate : copy.activate,
               icon: <Power aria-hidden />,

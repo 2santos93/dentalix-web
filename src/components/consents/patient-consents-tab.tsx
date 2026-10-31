@@ -17,6 +17,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import { Callout } from '@/components/ui/callout';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -294,7 +295,7 @@ function ClinicalConsents({
           getRowLabel={(consent) => copy.rowLabel(consent.title, formatDateTime(consent.signedAt))}
           rowActions={(consent) => [
             ...(awaitsMe(consent)
-              ? [{ label: copy.countersign, icon: <PenLine aria-hidden />, onSelect: () => countersign(consent) }]
+              ? [{ label: copy.countersign, icon: <PenLine aria-hidden />, onSelect: () => afterMenuCloses(() => countersign(consent)) }]
               : []),
             {
               label: copy.print,

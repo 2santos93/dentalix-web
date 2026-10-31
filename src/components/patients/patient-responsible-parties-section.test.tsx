@@ -90,6 +90,13 @@ const motherParty: ResponsibleParty = {
 const renderSection = () =>
   render(<PatientResponsiblePartiesSection token="tok" patientId="son" />);
 
+
+/** Editar y quitar viven en el «⋯» de la fila (RowActions). */
+async function partyAction(user: ReturnType<typeof setupUser>, name: string, action: 'Editar' | 'Quitar') {
+  await user.click(await screen.findByRole('button', { name: `Acciones de ${name}` }));
+  await user.click(await screen.findByRole('menuitem', { name: action }));
+}
+
 describe('PatientResponsiblePartiesSection (DX-203)', () => {
   beforeEach(() => {
     jest.resetAllMocks();
@@ -309,7 +316,7 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     const user = setupUser();
 
     // Edición sin tocar la etiqueta: viaja la actual.
-    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    await partyAction(user, 'Claudia Navarro', 'Editar');
     const label = screen.getByLabelText('Nombre del documento (opcional)');
     expect(label).toHaveValue('ID local');
     await user.click(screen.getByLabelText('Recibe los avisos'));
@@ -318,14 +325,14 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     expect(mockedUpdate.mock.calls[0][3]).toMatchObject({ docType: 'NATIONAL_ID', docTypeLabel: 'ID local' });
 
     // Vaciada: viaja null, nunca se omite.
-    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    await partyAction(user, 'Claudia Navarro', 'Editar');
     await user.clear(screen.getByLabelText('Nombre del documento (opcional)'));
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
     expect(mockedUpdate.mock.calls[1][3]).toHaveProperty('docTypeLabel', null);
 
     // Con otro tipo, la etiqueta del anterior no se arrastra.
-    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    await partyAction(user, 'Claudia Navarro', 'Editar');
     await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'PASSPORT');
     expect(screen.getByLabelText('Nombre del documento (opcional)')).toHaveValue('');
     await user.type(screen.getByLabelText('Nombre del documento (opcional)'), '  Documento   A ');
@@ -347,7 +354,7 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     renderSection();
     const user = setupUser();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    await partyAction(user, 'Claudia Navarro', 'Editar');
     const label = screen.getByLabelText('Nombre del documento (opcional)');
     await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'PASSPORT');
     expect(label).toHaveValue('');
@@ -511,7 +518,7 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     mockedUpdate.mockResolvedValue({ ...motherParty, receivesNotices: false });
     renderSection();
     const user = setupUser();
-    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    await partyAction(user, 'Claudia Navarro', 'Editar');
     expect(screen.getByText(/se cambian en su propia ficha/)).toBeInTheDocument();
     await user.click(screen.getByLabelText('Recibe los avisos'));
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
@@ -530,7 +537,7 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     mockedRemove.mockResolvedValue(undefined);
     renderSection();
     const user = setupUser();
-    await user.click(await screen.findByRole('button', { name: 'Quitar a Claudia Navarro' }));
+    await partyAction(user, 'Claudia Navarro', 'Quitar');
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/deja de ser responsable/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Quitar' }));
@@ -544,7 +551,7 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     mockedRemove.mockResolvedValue(undefined);
     renderSection();
     const user = setupUser();
-    await user.click(await screen.findByRole('button', { name: 'Quitar a Claudia Navarro' }));
+    await partyAction(user, 'Claudia Navarro', 'Quitar');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Quitar' }));
     await screen.findByText('Sin responsable registrado');
@@ -554,12 +561,13 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     );
   });
 
-  it('al cancelar el quitar, el foco vuelve a su botón «Quitar»', async () => {
+  it('al cancelar el quitar, el foco vuelve al «⋯» de su fila', async () => {
     mockedGet.mockResolvedValueOnce(data({ parties: [motherParty] }));
     renderSection();
     const user = setupUser();
-    const remove = await screen.findByRole('button', { name: 'Quitar a Claudia Navarro' });
+    const remove = await screen.findByRole('button', { name: 'Acciones de Claudia Navarro' });
     await user.click(remove);
+    await user.click(await screen.findByRole('menuitem', { name: 'Quitar' }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
