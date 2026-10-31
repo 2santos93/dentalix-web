@@ -3,9 +3,14 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { getAnamnesisInboxSummary } from '@/lib/anamnesis/anamnesis-api';
 import { AppShell } from './app-shell';
+import { getClosingQueueCount } from '@/lib/appointments/closing-queue-api';
 import { getInClinic } from '@/lib/appointments/patient-flow';
 
 jest.mock('../../lib/anamnesis/anamnesis-api', () => ({ getAnamnesisInboxSummary: jest.fn().mockResolvedValue({ submitted: 0 }) }));
+jest.mock('../../lib/appointments/closing-queue-api', () => ({
+  ...jest.requireActual('../../lib/appointments/closing-queue-api'),
+  getClosingQueueCount: jest.fn().mockResolvedValue({ total: 0, outcome: 0, evolution: 0, treatment: 0 }),
+}));
 let mockPathname = '/patients';
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
@@ -53,6 +58,7 @@ describe('AppShell', () => {
     window.localStorage.clear();
     mockAccessToken = 'T';
     jest.mocked(getAnamnesisInboxSummary).mockResolvedValue({ submitted: 0 });
+    jest.mocked(getClosingQueueCount).mockResolvedValue({ total: 0, outcome: 0, evolution: 0, treatment: 0 });
   });
 
   it('DX-297 separates the visible anamnesis label and badge in expanded and rail navigation', async () => {
@@ -65,6 +71,20 @@ describe('AppShell', () => {
     snapshots.push({ html: view.container.innerHTML, selector: 'a[href="/anamnesis-por-revisar"]' });
     auditRenderedControls(snapshots);
     expect(screen.getAllByRole('link', { name: 'Anamnesis por revisar · 12' })).toHaveLength(2);
+  });
+
+  it('DX-439: el contador de cierre mantiene el límite de palabra en navegación expandida y rail', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
+    jest.mocked(getClosingQueueCount).mockResolvedValue({ total: 12, outcome: 12, evolution: 0, treatment: 0 });
+    const view = render(<AppShell><h1>Synthetic</h1></AppShell>);
+    await screen.findAllByRole('link', { name: 'Pendiente de cerrar · 12' });
+    const expandedText = screen.getAllByRole('link', { name: 'Pendiente de cerrar · 12' })[0].textContent;
+    const snapshots = [{ html: view.container.innerHTML, selector: 'a[href="/agenda/pendiente-de-cerrar"]' }];
+    await userEvent.click(screen.getByRole('button', { name: 'Colapsar menú' }));
+    snapshots.push({ html: view.container.innerHTML, selector: 'a[href="/agenda/pendiente-de-cerrar"]' });
+    auditRenderedControls(snapshots);
+    expect(expandedText).toBe('Pendiente de cerrar 12');
+    expect(screen.getAllByRole('link', { name: 'Pendiente de cerrar · 12' })).toHaveLength(2);
   });
 
   // La caja es dato financiero: PAYMENT_ROLES en la API (ADMIN + RECEPTION).
