@@ -359,6 +359,18 @@ export function FillOpeningPanel({
           </SheetDescription>
         </SheetHeader>
         <SheetBody className="flex flex-col gap-3 px-4 sm:px-6">
+          {/* Fuera del ternario: «Aceptado por …» sigue a la vista aunque la
+              lista quede vacía (el que aceptó ya no es candidato). */}
+          {slotLinkLabel ? (
+            <Badge
+              data-testid="slot-link-offers"
+              role="status"
+              className="self-start"
+              variant={acceptedBy ? 'success' : (data?.linkOffers.pending ?? 0) > 0 ? 'warning' : 'muted'}
+            >
+              {slotLinkLabel}
+            </Badge>
+          ) : null}
           {loading && !data ? (
             <div role="status" aria-live="polite" className="flex flex-col gap-2">
               <span className="sr-only">{fillOpeningCopy.loading}</span>
@@ -397,15 +409,6 @@ export function FillOpeningPanel({
                   {fillOpeningCopy.count(items.length)}
                   {data?.truncated ? ` · ${fillOpeningCopy.truncated}` : ''}
                 </p>
-                {slotLinkLabel ? (
-                  <Badge
-                    data-testid="slot-link-offers"
-                    role="status"
-                    variant={acceptedBy ? 'success' : (data?.linkOffers.pending ?? 0) > 0 ? 'warning' : 'muted'}
-                  >
-                    {slotLinkLabel}
-                  </Badge>
-                ) : null}
               </div>
               {canAct && !acceptedBy ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2">
@@ -439,7 +442,9 @@ export function FillOpeningPanel({
                     clock={clock}
                     providerName={providerName}
                     locationName={locationName}
-                    canAct={canAct}
+                    // Con el hueco ya aceptado por enlace no queda nada que ofrecer
+                    // ni asignar (la agenda ya lo muestra ocupado).
+                    canAct={canAct && !acceptedBy}
                     busy={busyKey === keyOf(c)}
                     selectable={linkOpen && (linkOfferChannels(c).LINK_EMAIL || linkOfferChannels(c).LINK_WA_ME) && c.offersToday < cap && c.linkOfferState !== 'OPEN'}
                     selected={selected.includes(keyOf(c))}

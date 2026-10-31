@@ -479,5 +479,54 @@ describe('«Ocupar este hueco» (DX-210)', () => {
       expect(screen.getByText(/Faltan menos de 20 minutos/)).toBeInTheDocument();
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
+
+    it('«Aceptado por …» sigue a la vista aunque ya no quede ningún candidato', async () => {
+      mockedList.mockResolvedValueOnce({
+        ...view([]),
+        linkOffers: {
+          pending: 0,
+          total: 1,
+          acceptedBy: { patientId: 'p-ana', firstName: 'Ana', lastName: 'Ríos', at: '2031-03-03T10:00:00.000Z' },
+          expired: false,
+        },
+      });
+      renderPanel();
+      expect(await screen.findByText('Nadie en la lista cabe en este hueco')).toBeInTheDocument();
+      expect(screen.getByTestId('slot-link-offers')).toHaveTextContent('Aceptado por Ana Ríos');
+    });
+
+    it('tras enviar, el modal sigue diciendo a cuántos se envió (no «0 pacientes» ni «Ninguno…»)', async () => {
+      mockedList.mockResolvedValue(view([ana]));
+      mockedLinkOffer.mockResolvedValueOnce(offerResult('p-ana', null, null));
+      renderPanel();
+      await userEvent.click(
+        await screen.findByRole('checkbox', { name: 'Elegir a Ana Ríos para la oferta con enlace' }),
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Enviar oferta con enlace' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Enviar oferta con enlace' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar oferta' }));
+      expect(await within(dialog).findByTestId('link-offer-results')).toHaveTextContent('Ana Ríos · Correo en camino');
+      expect(within(dialog).getByText(/^Un paciente recibe/)).toBeInTheDocument();
+      expect(within(dialog).queryByText(/0 pacientes/)).not.toBeInTheDocument();
+      expect(within(dialog).queryByText(/Ninguno de los elegidos/)).not.toBeInTheDocument();
+    });
+
+    it('con el hueco ya aceptado por enlace no ofrece «Asignar» ni «Ofrecer por WhatsApp»', async () => {
+      const carla = candidate({ patientId: 'p-carla', patientFirstName: 'Carla', patientLastName: 'Paz' });
+      mockedList.mockResolvedValueOnce({
+        ...view([carla]),
+        linkOffers: {
+          pending: 0,
+          total: 2,
+          acceptedBy: { patientId: 'p-ana', firstName: 'Ana', lastName: 'Ríos', at: '2031-03-03T10:00:00.000Z' },
+          expired: false,
+        },
+      });
+      renderPanel();
+      expect(await screen.findByText('Carla Paz')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Asignar/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Llamé/ })).not.toBeInTheDocument();
+    });
   });
 });

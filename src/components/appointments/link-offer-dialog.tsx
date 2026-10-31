@@ -79,10 +79,13 @@ export function LinkOfferDialog({
   clock,
   providerName,
   locationName,
-  candidates,
+  candidates: initialCandidates,
   onSent,
 }: LinkOfferDialogProps) {
   const ids = React.useId();
+  // Los elegidos al abrir: al enviar, el panel limpia su selección y la
+  // recarga, y el modal tiene que seguir hablando de a quién se envió.
+  const [candidates] = useState(initialCandidates);
   const emailCount = candidates.filter((c) => linkOfferChannels(c).LINK_EMAIL).length;
   const [channel, setChannel] = useState<LinkOfferChannel>(emailCount > 0 ? 'LINK_EMAIL' : 'LINK_WA_ME');
   const [submitting, setSubmitting] = useState(false);
@@ -143,7 +146,7 @@ export function LinkOfferDialog({
       cancelLabel={results ? linkOfferCopy.close : undefined}
       submitting={submitting}
       submitDisabled={eligible.length === 0}
-      submitHint={eligible.length === 0 ? linkOfferCopy.none : null}
+      submitHint={results === null && eligible.length === 0 ? linkOfferCopy.none : null}
       hideSubmit={results !== null}
       lockCloseWhileSubmitting
       touchTargets
