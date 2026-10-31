@@ -25,6 +25,13 @@ import { Card } from '@/components/ui/card';
 import { fieldClass } from '@/lib/ui/field-class';
 import { usePrivacyPolicies } from './use-privacy-policies';
 
+/** «en la casilla «…»» para las etiquetas que empiezan por «Casilla»; «en el campo «…»» para el resto. */
+function inField(label: string): string {
+  return label.startsWith('Casilla ')
+    ? `en la casilla ${label.slice('Casilla '.length)}`
+    : `en el campo «${label}»`;
+}
+
 const copy = {
   publish: 'Publicar nueva versión',
   publishFirst: 'Publicar la política',
@@ -40,7 +47,8 @@ const copy = {
   emptyRequired: 'Completa los cuatro textos antes de publicar.',
   placeholders: (remaining: string[]) =>
     `Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: ${remaining.join(', ')}.`,
-  placeholderIn: (placeholder: string, labels: string[]) => `${placeholder} (en ${labels.join(' y ')})`,
+  placeholderIn: (placeholder: string, labels: string[]) =>
+    `${placeholder} (${labels.map(inField).join(' y ')})`,
   genericError: 'No pudimos publicar la política. Intenta de nuevo.',
   loadError: 'No pudimos cargar la política de tratamiento de datos.',
   emptyTitle: 'La clínica aún no ha publicado su política de tratamiento de datos.',

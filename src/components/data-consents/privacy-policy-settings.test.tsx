@@ -116,7 +116,7 @@ it('nombra el campo donde queda un marcador fuera del texto de la política', as
   await user.click(within(dialog).getByRole('button', { name: /^publicar$/i }));
 
   expect(within(dialog).getByRole('alert')).toHaveTextContent(
-    'Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: [Dirección] (en Casilla «Comunicaciones comerciales»).',
+    'Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: [Dirección] (en la casilla «Comunicaciones comerciales»).',
   );
   expect(mockedPublish).not.toHaveBeenCalled();
 });
