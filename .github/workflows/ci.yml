@@ -25,9 +25,9 @@ jobs:
       # build de CI no depende del default del código.
       NEXT_PUBLIC_ROOT_DOMAIN: dentalix.local
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -53,9 +53,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # node del runner: solo para las APIs falsas de la prueba de humo.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: docker build (sin publicar)
