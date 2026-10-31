@@ -1,4 +1,4 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+import { apiUrl } from '@/lib/api/api-base';
 
 // `primaryColor` is tenant-admin-settable data crossing a trust boundary and
 // gets spliced raw into a `<style>` tag in layout.tsx. Validate it here, at
@@ -35,7 +35,7 @@ function safeLogoUrl(raw: unknown): string | null {
 export async function fetchBranding(tenant: string | null, host?: string | null): Promise<Branding> {
   if (!tenant) return EMPTY;
   try {
-    const res = await fetch(`${API}/public/tenant/branding`, {
+    const res = await fetch(`${apiUrl()}/public/tenant/branding`, {
       headers: { 'X-Tenant': tenant, ...(host ? { 'X-Tenant-Host': host } : {}) },
       cache: 'no-store',
     });

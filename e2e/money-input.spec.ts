@@ -156,7 +156,7 @@ for (const v of viewports) {
     await expectDialogInsideViewport(page, payment);
     await payment.getByLabel('Importe').fill('150.000');
     await expect(payment.getByText(money('Se guardará: 150.000,00 COP'))).toBeVisible();
-    await payment.getByLabel('Método').selectOption('CASH');
+    await payment.getByLabel('Método').selectOption({ label: 'Efectivo' });
     await payment.getByRole('button', { name: 'Registrar abono' }).click();
     await expect(payment).toBeHidden({ timeout: 10_000 });
     await expect(panel.getByRole('button', { name: /^Anular abono de 150\.000,00\sCOP/ })).toBeVisible({

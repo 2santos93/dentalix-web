@@ -1,4 +1,6 @@
 import { moneyInputCopy } from '@/lib/format/money';
+import { regionalFormat } from '@/lib/format/regional-format';
+import { moneyWithCode } from '@/lib/format/sede-number';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TreatmentPlansTab } from './treatment-plans-tab';
@@ -122,10 +124,31 @@ jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn(),
 }));
 // DX-376: la previsualización del cobro en otra moneda pide las tasas del día.
+// DX-386: la fuente de la clínica (solo ADMIN) decide qué propone el aviso «sin tasa».
+jest.mock('../../lib/exchange/exchange-settings-api', () => ({
+  ...jest.requireActual('../../lib/exchange/exchange-settings-api'),
+  getExchangeRateSettings: jest.fn().mockResolvedValue({ source: 'MANUAL', manualSince: '2026-10-01', baseCurrency: 'USD' }),
+}));
 jest.mock('../../lib/exchange/exchange-api', () => ({
   getExchangeRates: jest.fn().mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: { COP: 4000 } }),
 }));
 // Recibo de caja (DX-136): el diálogo pide el recibo a la API.
+// DX-377: medios de pago activos de la clínica (el formulario de abono).
+jest.mock('../../lib/payments/payment-methods-api', () => ({
+  ...jest.requireActual('../../lib/payments/payment-methods-api'),
+  listPaymentMethods: jest.fn().mockResolvedValue([
+    {
+      id: 'pm-mobile',
+      name: 'Pago móvil',
+      kind: 'DIGITAL',
+      active: true,
+      requiresReference: true,
+      legacyMethod: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ]),
+}));
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
   getPaymentReceipt: jest.fn(),
@@ -265,6 +288,8 @@ const plan2Detail = { ...plan2, items: [item1], total: item1.price };
 const payment1: Payment = {
   id: 'pay-1',
   tenantId: 't1',
+  splitId: null,
+  splitLine: null,
   treatmentPlanId: 'plan-1',
   openingBalanceId: null,
   patientId: 'pat-1',
@@ -273,6 +298,10 @@ const payment1: Payment = {
   paidAt: '2026-01-05T00:00:00.000Z',
   paidOn: '2026-01-05',
   method: 'CASH',
+  paymentMethodId: null,
+  paymentMethodName: null,
+  reference: null,
+  duplicateReferenceReason: null,
   notes: null,
   createdById: null,
   createdAt: '2026-01-05T00:00:00.000Z',
@@ -286,13 +315,14 @@ const balance1: PlanBalance = {
   billable: 130000,
   paid: 50000,
   balance: 80000,
+  creditMovements: 0,
   paymentsCount: 1,
   ...BALANCE_WITHOUT_ALLOCATIONS,
 };
 
 /** Empty balance/payments — the default for tests that don't exercise the abonos block. */
 function emptyBalance(): PlanBalance {
-  return { planCurrency: 'USD', billable: 0, paid: 0, balance: 0, paymentsCount: 0, ...BALANCE_WITHOUT_ALLOCATIONS };
+  return { planCurrency: 'USD', billable: 0, paid: 0, creditMovements: 0, balance: 0, paymentsCount: 0, ...BALANCE_WITHOUT_ALLOCATIONS };
 }
 
 /**
@@ -322,6 +352,16 @@ const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', curre
  */
 function expectedCurrencyText(amount: number): string {
   return currencyFormatter.format(amount).replace(/\u00A0/g, ' ');
+}
+
+/**
+ * DX-386: la lista de abonos, «Cobrado»/«Pendiente» por ítem y la
+ * previsualización del cobro van con el formato de la sede del fixture (es-CO)
+ * y el código ISO («USD 50.000,00»), nunca con el símbolo.
+ */
+const SEDE_FMT = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+function sedeCurrencyText(amount: number, currency = 'USD'): string {
+  return moneyWithCode(amount, currency, SEDE_FMT).replace(/\u00A0/g, ' ');
 }
 
 /** A promise this test controls the settlement of, to assert on the interim (pending) state — same helper as odontogram-tab.test.tsx / agenda-view.test.tsx. */
@@ -746,7 +786,7 @@ describe('TreatmentPlansTab', () => {
 
     const paymentsTable = await openPaymentsTable(user);
     const row = within(paymentsTable)
-      .getByText(expectedCurrencyText(payment1.amount))
+      .getByText(sedeCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
     await user.click(within(row).getByRole('button', { name: /anular/i }));
 
@@ -756,7 +796,7 @@ describe('TreatmentPlansTab', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mockedVoidPayment).not.toHaveBeenCalled();
-    expect(within(paymentsTable).getByText(expectedCurrencyText(payment1.amount))).toBeInTheDocument();
+    expect(within(paymentsTable).getByText(sedeCurrencyText(payment1.amount))).toBeInTheDocument();
   });
 
   it("changing the plan's status calls updatePlan then refreshes the detail (and the plan list) in place", async () => {
@@ -801,8 +841,10 @@ describe('TreatmentPlansTab', () => {
     expect(within(balanceCard).getByText(expectedCurrencyText(balance1.balance))).toBeInTheDocument();
 
     const paymentsTable = await openPaymentsTable(user);
-    expect(within(paymentsTable).getByText(expectedCurrencyText(payment1.amount))).toBeInTheDocument();
+    expect(within(paymentsTable).getByText(sedeCurrencyText(payment1.amount))).toBeInTheDocument();
     expect(within(paymentsTable).getByText('Efectivo')).toBeInTheDocument();
+    // DX-386: importe y día de cada abono con el formato de la sede y el código ISO.
+    expect(paymentsTable).not.toHaveTextContent('US$');
   });
 
   it('DX-097: la fecha por defecto del abono es hoy en la sede, no en el navegador (20:30 en Bogotá = 01:30Z)', async () => {
@@ -857,9 +899,11 @@ describe('TreatmentPlansTab', () => {
 
     // DX-376: antes de guardar, lo que cubre en la moneda del plan y con qué tasa.
     const preview = await screen.findByTestId('rp-rate-preview');
-    await waitFor(() => expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Equivalente en USD6,25 US$'));
-    expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Pendiente tras el abono79.993,75 US$');
-    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Tasa: 1 USD = 4000,00 COP · manual · \d{2}\/\d{2}\/\d{4}/);
+    await waitFor(() => expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Equivalente en USDUSD 6,25'));
+    expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Pendiente tras el abonoUSD 79.993,75');
+    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Tasa: 1 USD = COP 4\.000,00 · manual · \d{2}\/\d{2}\/\d{4}/);
+    // DX-386: el mismo formato que la «Tasa congelada» de cada abono, sin «US$».
+    expect(preview).not.toHaveTextContent('US$');
 
     const newPayment = { ...payment1, id: 'pay-2', amount: 25000, currency: 'COP' };
     const updatedBalance = { ...balance1, paid: balance1.paid + 25000, balance: balance1.balance - 25000 };
@@ -884,6 +928,46 @@ describe('TreatmentPlansTab', () => {
     expect(await screen.findByText(expectedCurrencyText(updatedBalance.paid))).toBeInTheDocument();
   });
 
+  it('DX-377: el abono del plan usa los medios de la clínica, exige la referencia y confirma la repetida con motivo', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([]);
+    mockedRecordPayment
+      .mockRejectedValueOnce(
+        new ApiError(409, 'Esta referencia ya se usó con este medio de pago en otro abono de los últimos 90 días.', {
+          code: 'PAYMENT_REFERENCE_DUPLICATE',
+        }),
+      )
+      .mockResolvedValueOnce({ ...payment1, id: 'pay-2' });
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+    await user.type(screen.getByLabelText(/^monto$/i), '100');
+    const method = screen.getByLabelText<HTMLSelectElement>(/^método$/i);
+    await waitFor(() => expect(method.querySelector('option[value="pm-mobile"]')).not.toBeNull());
+    await user.selectOptions(method, 'pm-mobile');
+
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+    expect(await screen.findByText('Este medio de pago pide la referencia del pago.')).toBeInTheDocument();
+    expect(mockedRecordPayment).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('Referencia (obligatoria)'), '0412 555');
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+    expect(await screen.findByText(/Esta referencia ya se usó/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Motivo para registrarla igualmente'), 'Dos cuotas');
+    await user.click(screen.getByRole('button', { name: 'Registrar igualmente' }));
+
+    await waitFor(() => expect(mockedRecordPayment).toHaveBeenCalledTimes(2));
+    const [first, second] = mockedRecordPayment.mock.calls;
+    expect(first[2]).toEqual(expect.objectContaining({ paymentMethodId: 'pm-mobile', reference: '0412 555' }));
+    expect(second[2]).toEqual(expect.objectContaining({ duplicateReferenceReason: 'Dos cuotas' }));
+    // El reintento confirmado es el mismo abono: misma Idempotency-Key.
+    expect(second[3]).toBe(first[3]);
+  });
+
   it('"Anular" on an abono calls voidPayment then refreshes balance + list in place', async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedGetPlan.mockResolvedValue(plan1Detail);
@@ -896,7 +980,7 @@ describe('TreatmentPlansTab', () => {
 
     const paymentsTable = await openPaymentsTable(user);
     const row = within(paymentsTable)
-      .getByText(expectedCurrencyText(payment1.amount))
+      .getByText(sedeCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
     const voidButton = within(row).getByRole('button', { name: /anular/i });
 
@@ -934,7 +1018,7 @@ describe('TreatmentPlansTab', () => {
     // Un abono anterior a la numeración no se renumera: «Sin serie».
     expect(within(paymentsTable).getByText('Sin serie')).toBeInTheDocument();
     const row = within(paymentsTable)
-      .getByText(expectedCurrencyText(payment1.amount))
+      .getByText(sedeCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
     await user.click(within(row).getByRole('button', { name: /^recibo$/i }));
 
@@ -1596,7 +1680,7 @@ describe('TreatmentPlansTab', () => {
       );
       const paymentsTable = await openPaymentsTable(user);
       const row = within(paymentsTable)
-        .getByText(expectedCurrencyText(payment1.amount))
+        .getByText(sedeCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
@@ -1628,7 +1712,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const paymentsTable = await openPaymentsTable(user);
       const row = within(paymentsTable)
-        .getByText(expectedCurrencyText(payment1.amount))
+        .getByText(sedeCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
@@ -1656,7 +1740,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const paymentsTable = await openPaymentsTable(user);
       const row = within(paymentsTable)
-        .getByText(expectedCurrencyText(payment1.amount))
+        .getByText(sedeCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
@@ -1696,7 +1780,7 @@ describe('TreatmentPlansTab', () => {
       ...plan1Detail,
       status: 'ACCEPTED' as const,
       items: [{ ...item1, status: 'ACCEPTED' as const }, item2],
-      acceptance: { signerName: 'Ana García', acceptedAt: '2026-10-16T15:30:00.000Z' },
+      acceptance: { signerName: 'Ana García', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null },
     };
 
     it('ofrece «Imprimir presupuesto» y «Aceptar con firma» en un plan sin firmar', async () => {
@@ -2483,14 +2567,14 @@ describe('TreatmentPlansTab', () => {
       expect(names.indexOf('Pendiente')).toBe(names.indexOf('Precio') + 2);
 
       const accepted = within(table).getByText('26').closest('tr') as HTMLTableRowElement;
-      expect(within(accepted).getByText(expectedCurrencyText(50000))).toBeInTheDocument();
-      expect(within(accepted).getByText(expectedCurrencyText(30000))).toBeInTheDocument();
+      expect(within(accepted).getByText(sedeCurrencyText(50000))).toBeInTheDocument();
+      expect(within(accepted).getByText(sedeCurrencyText(30000))).toBeInTheDocument();
       const proposed = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
       expect(within(proposed).getAllByLabelText('Sin importe a cobrar')).toHaveLength(2);
 
       // Tarjetas móviles: «Cobrado {x} · Pendiente {y}».
       expect(
-        screen.getByText(`Cobrado ${expectedCurrencyText(50000)} · Pendiente ${expectedCurrencyText(30000)}`),
+        screen.getByText(`Cobrado ${sedeCurrencyText(50000)} · Pendiente ${sedeCurrencyText(30000)}`),
       ).toBeInTheDocument();
     });
 
@@ -2538,7 +2622,7 @@ describe('TreatmentPlansTab', () => {
 
       const notice = await screen.findByText(withoutRateCopy.title(1));
       expect(notice.closest('[role="status"]')).toHaveTextContent('30/10/2026');
-      expect(screen.getByRole('link', { name: withoutRateCopy.adminLink })).toHaveAttribute(
+      expect(await screen.findByRole('link', { name: withoutRateCopy.adminLink })).toHaveAttribute(
         'href',
         '/settings/tasa-de-cambio',
       );

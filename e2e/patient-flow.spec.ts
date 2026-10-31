@@ -6,10 +6,10 @@ import path from 'node:path';
 import type { AxeResults } from 'axe-core';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { LATE_BROWSER_TIME, atSede, lastSlotToday, sedeDayFromToday, type SedeSlot } from './support/clock';
+import { LATE_BROWSER_TIME, SEDE_TODAY_TZ, atSede, lastSlotToday, sedeDayFromToday, type SedeSlot } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
-import { E2E_BROWSER_LOCALE } from './support/regional';
+import { E2E_BROWSER_LOCALE, E2E_TODAY_REGION } from './support/regional';
 
 /**
  * e2e DX-200: flujo del paciente en la clínica.
@@ -17,7 +17,7 @@ import { E2E_BROWSER_LOCALE } from './support/regional';
  * Una clínica nueva por corrida (una sola sede, sin restricción de horario)
  * con dos odontólogas («Lina Flujo» y «Marta Flujo») y recepción, y dos citas
  * de HOY a las 23:55–23:59 de la sede: Ana con Lina y Berta con Marta. El
- * navegador va con el reloj fijo a las 23:30 de Bogotá (DX-252, TST-030): la
+ * navegador va con el reloj fijo a las 23:30 de la sede (DX-252, TST-030): la
  * misma agenda a cualquier hora, sin `test.skip` cerca de medianoche (ver
  * `lastSlotToday` en support/clock.ts). En serie:
  * 1. 1440 px: recepción marca «Llegó» en la tarjeta de Ana (Día · Lista) y la
@@ -38,13 +38,21 @@ const dentist2 = { fullName: 'Marta Flujo', email: `marta.flu.${suffix}@example.
 const reception = { fullName: 'Rita Recepción', email: `rita.flu.${suffix}@example.com` };
 const last = `Flujo${suffix}`.slice(0, 40);
 
+/**
+ * DX-449: la sede y los navegadores van en `SEDE_TODAY_TZ` (Bogotá salvo
+ * cerca de su medianoche): la franja 23:55–23:59 de hoy queda por venir a
+ * cualquier hora de la CI, sin pedir que se relance el spec.
+ */
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
+
 let session: ApiSession;
 /** La franja de HOY de las dos citas (23:55–23:59 de la sede). */
 let slot: SedeSlot;
 
 /** El reloj del navegador, fijo a las 23:30 de hoy en la sede (y corriendo desde ahí). */
 async function lateEvening(page: Page) {
-  await page.clock.install({ time: atSede(slot.day, LATE_BROWSER_TIME) });
+  await page.clock.install({ time: atSede(slot.day, LATE_BROWSER_TIME, ZONE) });
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -56,6 +64,7 @@ test.beforeAll(async ({ request }) => {
     fullName: admin.fullName,
     email: admin.email,
     password,
+    location: E2E_TODAY_REGION,
   });
   await addStaffViaApi(request, session, { ...dentist, role: 'DENTIST', password });
   await addStaffViaApi(request, session, { ...dentist2, role: 'DENTIST', password });
@@ -70,7 +79,7 @@ test.beforeAll(async ({ request }) => {
   const members = (await staff.json()) as { userId: string; fullName: string }[];
   const idOf = (fullName: string) => members.find((m) => m.fullName === fullName)!.userId;
 
-  slot = lastSlotToday();
+  slot = lastSlotToday('23:55', '23:59', ZONE);
   for (const [i, [name, providerId]] of ([
     ['Ana', idOf(dentist.fullName)],
     ['Berta', idOf(dentist2.fullName)],
@@ -123,7 +132,7 @@ test('1440 px: llegó → en sillón → listo para cobrar → completada', asyn
   await expect(panel.getByRole('link', {name:'Abrir a pantalla completa'})).toHaveAttribute('href','/agenda/en-clinica');
 
   // La odontóloga: «Te esperan 1» en la navegación y su panel.
-  const lina = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Bogota', locale: E2E_BROWSER_LOCALE });
+  const lina = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId: ZONE, locale: E2E_BROWSER_LOCALE });
   await lateEvening(lina);
   await loginAs(lina, origin, dentist.email, password);
   await expect(lina.getByRole('link', { name: 'Agenda · Te espera 1 paciente' }).first()).toBeVisible({
@@ -240,8 +249,8 @@ function moveQaAppointmentToToday(id: string, start: Date, end: Date): void {
 
 test('DX-242: prepara ocho estados reales para QA de accesibilidad', async ({request}) => {
   test.skip(!process.env.E2E_DATABASE_URL, QA_DB_SKIP);
-  const today = sedeDayFromToday(0);
-  const tomorrow = sedeDayFromToday(1);
+  const today = sedeDayFromToday(0, ZONE);
+  const tomorrow = sedeDayFromToday(1, ZONE);
   const qaDentist = {fullName:'Odontóloga Estados QA', email:`estados.${suffix}@example.com`, role:'DENTIST', password};
   await addStaffViaApi(request, session, qaDentist);
   const staff = await request.get(`${API_URL}/staff`, {headers:session.headers});
@@ -251,9 +260,9 @@ test('DX-242: prepara ocho estados reales para QA de accesibilidad', async ({req
     const patient = await apiPost<{id:string}>(request, session, '/patients', {firstName:`Estado ${i+1}`, lastName:'QA', docType:'NATIONAL_ID', docNumber:`EST${i}${suffix}`.slice(0,20), sex:'F'});
     const hhmm = `${String(8 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
     const minutes = i%2 ? 30:15;
-    const draftStart = atSede(tomorrow, hhmm);
+    const draftStart = atSede(tomorrow, hhmm, ZONE);
     const appointment = await apiPost<{id:string}>(request, session, '/appointments', {patientId:patient.id, providerId, start:draftStart.toISOString(), end:new Date(draftStart.getTime()+minutes*MIN).toISOString(), reason:'Control QA'});
-    const start = atSede(today, hhmm);
+    const start = atSede(today, hhmm, ZONE);
     moveQaAppointmentToToday(appointment.id, start, new Date(start.getTime()+minutes*MIN));
     qaIds.push(appointment.id);
     const steps = status === 'IN_CHAIR' ? ['ARRIVED','IN_CHAIR'] : status === 'READY_FOR_CHECKOUT' ? ['ARRIVED','IN_CHAIR','READY_FOR_CHECKOUT'] : status === 'SCHEDULED' ? [] : [status];

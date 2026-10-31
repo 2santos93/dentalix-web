@@ -79,7 +79,8 @@ describe('AppShell', () => {
   // Cada entrada copia el `@Roles(...)` del endpoint de su pantalla (DX-070):
   // DASHBOARD_ROLES, CATALOG_READ_ROLES, INVENTORY_ROLES, STAFF_WRITE_ROLES,
   // AUDIT_READ_ROLES (DX-009), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
-  // RECEIVABLES_ROLES (Cartera, DX-145) y REPORT_ROLES (Reportes, DX-014).
+  // RECEIVABLES_ROLES (Cartera, DX-145) y REPORT_ROLES + PRODUCTION_REPORT_ROLES
+  // (Reportes, DX-014 y DX-423).
   const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
     ADMIN: {
       visible: [
@@ -99,8 +100,8 @@ describe('AppShell', () => {
       hidden: [],
     },
     DENTIST: {
-      visible: ['Pacientes', 'Agenda', 'Catálogo'],
-      hidden: ['Inicio', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      visible: ['Pacientes', 'Agenda', 'Catálogo', 'Reportes'],
+      hidden: ['Inicio', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
     },
     ASSISTANT: {
       visible: ['Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
@@ -284,11 +285,11 @@ describe('AppShell', () => {
       expect(nav.queryByText('Clínica')).not.toBeInTheDocument();
     });
 
-    it('DENTIST: sin Finanzas', async () => {
+    it('DENTIST: Finanzas solo con Reportes (DX-423: su producción)', async () => {
       const nav = sidebarFor('DENTIST');
       await nav.findByRole('link', { name: 'Catálogo' });
-      expect(groupsOf(nav).map(([label]) => label)).toEqual([null, 'Atención', 'Clínica', 'Administración']);
-      expect(nav.queryByText('Finanzas')).not.toBeInTheDocument();
+      expect(groupsOf(nav).map(([label]) => label)).toEqual([null, 'Atención', 'Finanzas', 'Clínica', 'Administración']);
+      expect(groupsOf(nav).find(([label]) => label === 'Finanzas')).toEqual(['Finanzas', ['/reportes']]);
     });
 
     it('«Anamnesis» se lee corta pero conserva el nombre completo', async () => {

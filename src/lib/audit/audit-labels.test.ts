@@ -1,4 +1,5 @@
 import {
+  exchangeRateBackupDetail,
   cancellationDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
@@ -12,6 +13,7 @@ import {
   isPatientOptOut,
   staffLoginDetail,
   cashSessionDetail,
+  sedationDetail,
   scheduleChangeDetail,
   patientFlowDetail,
   planItemAttributionDetail,
@@ -19,8 +21,9 @@ import {
   clinicSettingsDetail,
   locationCalendarDetail,
   staffDetail,
-  hasStaffLocationIds,
   locationNameMap,
+  signatureRequestDetail,
+  confirmationLinkDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -105,6 +108,14 @@ describe('implantSearchDetail (DX-191)', () => {
     );
     expect(staffLoginDetail({ reason: 'REMINDER_OPT_OUT' })).toBeNull();
     expect(staffLoginDetail({})).toBeNull();
+  });
+});
+
+describe('sedationDetail (DX-407)', () => {
+  it('nombra la parte de la hoja de sedación y nada más', () => {
+    expect(sedationDetail({ reason: 'SEDATION_VITALS' })).toBe('Toma de constantes');
+    expect(sedationDetail({ reason: 'SEDATION_DISCHARGE' })).toBe('Egreso');
+    expect(sedationDetail({ reason: 'CASH_SESSION_CLOSED' })).toBeNull();
   });
 });
 
@@ -558,15 +569,6 @@ describe('staffDetail (DX-359)', () => {
     ).toBe('Invitación aceptada · Miembro reactivado · Rol: Recepción · Sedes: Todas las sedes');
   });
 
-  it('hasStaffLocationIds: solo con sedes concretas en algún lado', () => {
-    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: [CENTRO] } } })).toBe(true);
-    expect(hasStaffLocationIds({ staffAccess: { before: { locationIds: [CENTRO] }, after: { locationIds: null } } })).toBe(true);
-    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: null } } })).toBe(false);
-    expect(hasStaffLocationIds({ staffAccess: { after: { locationIds: [] } } })).toBe(false);
-    expect(hasStaffLocationIds({ staffAccess: { after: { role: 'ADMIN' } } })).toBe(false);
-    expect(hasStaffLocationIds({})).toBe(false);
-  });
-
   it('nunca muestra el token, el email ni el nombre aunque llegaran en la metadata', () => {
     const text = staffDetail({
       reason: 'INVITATION_SENT',
@@ -580,5 +582,75 @@ describe('staffDetail (DX-359)', () => {
   it('null para otra reason o sin reason', () => {
     expect(staffDetail({ reason: 'LOGIN_UNLOCKED' })).toBeNull();
     expect(staffDetail({})).toBeNull();
+  });
+});
+
+describe('exchangeRateBackupDetail (DX-402)', () => {
+  it('dice que el barrido usó una tasa manual de un día anterior a «manual desde» como respaldo', () => {
+    expect(
+      exchangeRateBackupDetail({
+        reason: 'EXCHANGE_RATE_BACKUP',
+        origin: 'JOB',
+        exchangeRateBackup: { rateDate: '2026-10-28', manualSince: '2026-10-30', currencies: ['COP', 'USD'] },
+      }),
+    ).toBe('Tasa de respaldo: la manual de un día anterior a «manual desde» (COP, USD) · proceso automático');
+  });
+
+  it('null para otra reason', () => {
+    expect(exchangeRateBackupDetail({ reason: 'RECEIPT_ISSUED' })).toBeNull();
+    expect(exchangeRateBackupDetail({})).toBeNull();
+  });
+
+  it('DX-361: el enlace de confirmación de la cita, generado o reenviado por el personal', () => {
+    expect(confirmationLinkDetail({ reason: 'CONFIRMATION_LINK_CREATED', origin: 'STAFF' })).toBe(
+      'Enlace de confirmación generado · por el personal',
+    );
+    expect(confirmationLinkDetail({ reason: 'CONFIRMATION_LINK_RESENT', origin: 'STAFF' })).toBe(
+      'Enlace de confirmación reenviado · por el personal',
+    );
+    expect(isPatientOptOut({ reason: 'CONFIRMATION_LINK_CREATED', origin: 'STAFF' })).toBe(false);
+  });
+
+  it('DX-361: la respuesta del paciente desde el enlace sale sin usuario, con el estado y el aviso al cancelar', () => {
+    expect(
+      confirmationLinkDetail({
+        reason: 'CONFIRMATION_LINK_CONFIRMED',
+        origin: 'LINK',
+        status: { from: 'SCHEDULED', to: 'CONFIRMED' },
+      }),
+    ).toBe('Cita confirmada · desde el enlace del paciente · Agendada → Confirmada');
+    expect(
+      confirmationLinkDetail({
+        reason: 'CONFIRMATION_LINK_CANCELLED',
+        origin: 'LINK',
+        status: { from: 'CONFIRMED', to: 'CANCELLED' },
+        cancellation: { byKind: 'PATIENT_LINK', reasonCode: null, noticeMinutes: 90, lateCancellation: true },
+      }),
+    ).toBe('Cita cancelada · desde el enlace del paciente · Confirmada → Cancelada · aviso de 90 min · tardía');
+    expect(confirmationLinkDetail({ reason: 'CONFIRMATION_LINK_CALL_REQUESTED', origin: 'LINK' })).toBe(
+      'Pidió que lo llamen · desde el enlace del paciente',
+    );
+    for (const reason of [
+      'CONFIRMATION_LINK_CONFIRMED',
+      'CONFIRMATION_LINK_CANCELLED',
+      'CONFIRMATION_LINK_CALL_REQUESTED',
+    ]) {
+      expect(isPatientOptOut({ reason, origin: 'LINK' })).toBe(true);
+    }
+    expect(confirmationLinkDetail({ reason: 'APPOINTMENT_CANCELLED' })).toBeNull();
+    expect(confirmationLinkDetail({})).toBeNull();
+  });
+
+  it('DX-243: los pasos de la firma a distancia, y los del paciente salen sin usuario', () => {
+    expect(AUDIT_RESOURCE_LABELS.SIGNATURE_REQUEST).toBe('Firma a distancia');
+    expect(signatureRequestDetail({ reason: 'SIGNATURE_LINK_LOCKED', origin: 'LINK' })).toBe(
+      'Enlace bloqueado tras 5 códigos incorrectos',
+    );
+    expect(signatureRequestDetail({ reason: 'CONSENT_COUNTERSIGNED' })).toBe(
+      'Firma del profesional (consentimiento completo)',
+    );
+    expect(signatureRequestDetail({ reason: 'OTRA_COSA' })).toBeNull();
+    expect(isPatientOptOut({ reason: 'SIGNATURE_PATIENT_SIGNED', origin: 'LINK' })).toBe(true);
+    expect(isPatientOptOut({ reason: 'SIGNATURE_REQUEST_SENT' })).toBe(false);
   });
 });

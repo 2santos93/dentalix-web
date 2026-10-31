@@ -47,6 +47,34 @@ const copRow: ExpenseSummary['rows'][number] = {
 };
 
 describe('ExpensesSummaryView (DX-274)', () => {
+  // «Hoy» fijo: las expectativas dicen 2026-10-31 en Pacific/Auckland y con el
+  // reloj real el test caducaba en cuanto allí pasaba la medianoche. Solo se
+  // falsea `Date`; los temporizadores siguen siendo reales para `findBy*`.
+  beforeEach(() => {
+    jest.useFakeTimers({
+      now: new Date('2026-10-31T00:00:00Z'),
+      doNotFake: [
+        'setTimeout',
+        'clearTimeout',
+        'setInterval',
+        'clearInterval',
+        'setImmediate',
+        'clearImmediate',
+        'nextTick',
+        'queueMicrotask',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+        'requestIdleCallback',
+        'cancelIdleCallback',
+        'performance',
+        'hrtime',
+      ],
+    });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     mockedSummary.mockReset().mockResolvedValue(summary([copRow]));
     mockedCsv.mockReset().mockResolvedValue('csv');

@@ -119,7 +119,7 @@ export function CashSettingsForm({ token, allowed }: CashSettingsFormProps) {
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
-      <Button type="submit" loading={saving} className="self-start max-sm:w-full">
+      <Button type="submit" loading={saving} className="self-start max-sm:h-11 max-sm:w-full">
         {copy.save}
       </Button>
     </form>
@@ -158,18 +158,24 @@ function SettingSwitch({
         aria-describedby={`${id}-hint`}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={cn(
-          'relative mt-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
-          checked ? 'bg-primary' : 'bg-bg',
-        )}
+        // DX-395: el botón es el área táctil (44 px de alto en móvil) y la
+        // pista va dentro, con el mismo aspecto en todas las anchuras.
+        className="mt-1 inline-flex h-6 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 max-sm:-mb-2.5 max-sm:-mt-1.5 max-sm:h-11 max-sm:min-w-11"
       >
         <span
           aria-hidden
           className={cn(
-            'inline-block h-5 w-5 rounded-full bg-surface shadow transition-transform',
-            checked ? 'translate-x-5' : 'translate-x-0.5',
+            'relative inline-flex h-6 w-11 items-center rounded-full border border-border transition-colors',
+            checked ? 'bg-primary' : 'bg-bg',
           )}
-        />
+        >
+          <span
+            className={cn(
+              'inline-block h-5 w-5 rounded-full bg-surface shadow transition-transform',
+              checked ? 'translate-x-5' : 'translate-x-0.5',
+            )}
+          />
+        </span>
       </button>
     </div>
   );

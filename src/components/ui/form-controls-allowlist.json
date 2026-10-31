@@ -299,7 +299,7 @@
     "radio": 1
   },
   "src/components/payments/record-payment-modal.tsx": {
-    "select": 3
+    "select": 2
   },
   "src/components/payments/void-payment-modal.tsx": {
     "textarea": 1
@@ -385,7 +385,7 @@
   },
   "src/components/treatment-plans/treatment-plans-tab.tsx": {
     "checkbox": 2,
-    "select": 7,
+    "select": 6,
     "textarea": 2
   },
   "src/components/treatment-plans/unscheduled-plans-view.tsx": {

@@ -49,6 +49,12 @@ interface FormModalProps {
   /** Renders the submit as a destructive action. */
   destructive?: boolean;
   /**
+   * DX-395: por debajo de `sm` (móvil) los campos, selectores y botones del
+   * modal miden al menos 44 px de alto, el mínimo táctil de DESIGN.md. Para
+   * los formularios que se usan de pie en el mostrador (el abono).
+   */
+  touchTargets?: boolean;
+  /**
    * A dónde va el foco al cerrar. Por defecto vuelve a quien abrió el modal;
    * si ese elemento desaparece (p. ej. la tarjeta que se descartó), quien
    * llama lo lleva a otro sitio con `event.preventDefault()`.
@@ -61,6 +67,13 @@ interface FormModalProps {
    */
   lockCloseWhileSubmitting?: boolean;
 }
+
+/**
+ * Altura táctil (44 px) en móvil para todo control del modal; las casillas y
+ * los radios conservan su tamaño (su etiqueta ya da el área táctil).
+ */
+const TOUCH_TARGETS =
+  'max-sm:[&_input:not([type=checkbox]):not([type=radio])]:h-11 max-sm:[&_select]:h-11 max-sm:[&_button]:min-h-11';
 
 /**
  * The standard "create / edit a thing" modal: a form with a titled header, an
@@ -84,6 +97,7 @@ export function FormModal({
   error,
   size = 'default',
   destructive = false,
+  touchTargets = false,
   onCloseAutoFocus,
   lockCloseWhileSubmitting = false,
 }: FormModalProps) {
@@ -100,7 +114,7 @@ export function FormModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn(size === 'lg' && 'max-w-2xl')}
+        className={cn(size === 'lg' && 'max-w-2xl', touchTargets && TOUCH_TARGETS)}
         onCloseAutoFocus={onCloseAutoFocus}
         closeDisabled={lockCloseWhileSubmitting && submitting}
       >
@@ -108,7 +122,11 @@ export function FormModal({
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        {/* `min-w-0`: el diálogo es grid y sus hijos tienen `min-width: auto`;
+            sin él, una tabla ancha dentro de su marco con scroll (QA DX-407:
+            la de constantes a 390 px) ensancha el formulario entero en vez de
+            desplazarse dentro de su marco. */}
+        <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-4">
           {error ? (
             <div
               ref={errorRef}

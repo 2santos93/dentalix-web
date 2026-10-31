@@ -3,7 +3,7 @@ import type { AccountStatement } from '@/lib/account-statement/account-statement
 import {
   installmentLabel,
   isEmptyStatement,
-  methodLabel,
+  movementMethodLabel,
   movementDestination,
   openingAsOfLabel,
   planNamer,
@@ -314,7 +314,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                           <span className="block text-xs">{voidedDetail(m)}</span>
                         ) : null}
                       </Td>
-                      <Td>{methodLabel(m.method)}</Td>
+                      <Td>{movementMethodLabel(m)}</Td>
                       <Td>{m.location.name}</Td>
                       <Td right>
                         {m.voided ? (

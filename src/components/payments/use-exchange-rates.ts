@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { ApiError } from '@/lib/api/api-error';
 import { getExchangeRates, type ExchangeRates } from '@/lib/exchange/exchange-api';
 
 /** Espera tras el último cambio de día antes de pedir sus tasas. */
@@ -9,6 +10,13 @@ export type ExchangeRatesState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'error'; retry: () => void }
+  /**
+   * DX-386: el servidor respondió 500. Con la fuente manual la API solo lee
+   * las tasas registradas (una moneda sin tasa no aparece, no falla); con la
+   * automática, un día sin tasa en caché va al proveedor y, si este no la da,
+   * la API responde 500: la tasa aún no está, no es que no se pudiera consultar.
+   */
+  | { status: 'unavailable'; retry: () => void }
   | { status: 'ready'; rates: ExchangeRates };
 
 /**
@@ -20,7 +28,7 @@ export type ExchangeRatesState =
  */
 export function useExchangeRates(token: string, date: string, active: boolean): ExchangeRatesState {
   const [result, setResult] = useState<
-    { key: string; rates: ExchangeRates } | { key: string; failed: true } | null
+    { key: string; rates: ExchangeRates } | { key: string; failed: 'error' | 'unavailable' } | null
   >(null);
   const [reloadKey, setReloadKey] = useState(0);
   const key = `${date}|${reloadKey}`;
@@ -37,8 +45,9 @@ export function useExchangeRates(token: string, date: string, active: boolean): 
         (rates) => {
           if (!cancelled) setResult({ key, rates });
         },
-        () => {
-          if (!cancelled) setResult({ key, failed: true });
+        (error: unknown) => {
+          if (cancelled) return;
+          setResult({ key, failed: isRateUnavailable(error) ? 'unavailable' : 'error' });
         },
       );
     }, RATES_DEBOUNCE_MS);
@@ -50,6 +59,12 @@ export function useExchangeRates(token: string, date: string, active: boolean): 
 
   if (!enabled) return { status: 'idle' };
   if (!result || result.key !== key) return { status: 'loading' };
-  if ('failed' in result) return { status: 'error', retry: () => setReloadKey((k) => k + 1) };
+  if ('failed' in result) return { status: result.failed, retry: () => setReloadKey((k) => k + 1) };
   return { status: 'ready', rates: result.rates };
+}
+
+// SEC-054: un día sin tasa (fuente automática sin snapshot ni proveedor) es un
+// 503 `EXCHANGE_RATE_UNAVAILABLE`, no un fallo: la tasa aún no está.
+function isRateUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && (error.code === 'EXCHANGE_RATE_UNAVAILABLE' || error.status === 503);
 }

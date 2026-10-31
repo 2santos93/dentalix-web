@@ -533,7 +533,7 @@ export interface paths {
         head?: never;
         /**
          * Cambiar canal, móvil, opt-in de WhatsApp o baja (DX-128)
-         * @description Solo recepción y ADMIN. El móvil se normaliza a E.164 con el país de la sede. WHATSAPP exige un móvil válido (400 `WHATSAPP_REQUIRES_VALID_MOBILE`). Queda en la auditoría con el autor, los campos y el origen.
+         * @description Solo recepción y ADMIN. El móvil se normaliza a E.164; sin «+» se lee con el prefijo telefónico por defecto de la sede. WHATSAPP exige un móvil válido (400 `WHATSAPP_REQUIRES_VALID_MOBILE`). Queda en la auditoría con el autor, los campos y el origen.
          */
         patch: operations["PatientCommunicationController_update"];
         trace?: never;
@@ -691,7 +691,7 @@ export interface paths {
         head?: never;
         /**
          * Editar una cobertura; null vacía los campos opcionales (DX-153)
-         * @description SEC-049: cambiar el pagador o el nº de afiliado borra la verificación y deja la cobertura declarada por quien la edita.
+         * @description SEC-049: cambiar el pagador o el nº de afiliado borra la verificación y deja la cobertura declarada por quien la edita. SEC-053: si quien edita no es ADMIN, cambiar la vigencia (`validFrom`/`validTo`) de una cobertura de pagador externo también la borra; un ADMIN la corrige sin perderla. Las notas, el plan, el titular o la principal no la tocan.
          */
         patch: operations["PatientCoveragesController_update"];
         trace?: never;
@@ -1126,6 +1126,265 @@ export interface paths {
          * @description Las evoluciones ya guardadas no cambian: llevan su texto compuesto. `prompts`, si viene, sustituye todas las preguntas.
          */
         patch: operations["ClinicalNoteTemplatesController_update"];
+        trace?: never;
+    };
+    "/api/v1/anesthetics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Catálogo de anestésicos de la clínica
+         * @description Activos por nombre; con `includeInactive=true`, también los desactivados. Valores de ayuda: no sustituyen la ficha técnica del fabricante.
+         */
+        get: operations["AnestheticsController_list"];
+        put?: never;
+        /** Añadir un anestésico al catálogo */
+        post: operations["AnestheticsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/anesthetics/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cargar anestésicos sugeridos
+         * @description Crea los 5 anestésicos de ejemplo (lidocaína, articaína, mepivacaína, prilocaína y bupivacaína, con dosis máximas de referencia editables) que la clínica aún no tiene, y devuelve los creados. Repetirlo no duplica nada.
+         */
+        post: operations["AnestheticsController_loadSamples"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/anesthetics/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar o desactivar un anestésico
+         * @description Lo ya registrado no cambia: cada anestesia copió los valores del catálogo.
+         */
+        patch: operations["AnestheticsController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/anesthesia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anestesia registrada en las evoluciones del paciente (ficha) */
+        get: operations["AnesthesiaController_listByPatient"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/anesthesia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Anestesia de una evolución y el acumulado del paciente en las últimas 24 h frente al máximo
+         * @description DX-418: el acumulado suma TODAS las administraciones del paciente en la clínica (cualquier evolución, sede y profesional) en una ventana móvil de 24 h, con el desglose por evolución y profesional. Las de otra clínica nunca cuentan.
+         */
+        get: operations["AnesthesiaController_listByEntry"];
+        put?: never;
+        /**
+         * Registra anestesia local en la evolución (inalterable)
+         * @description El servidor calcula los mg, el acumulado del PACIENTE en la ventana de 24 h que contiene la administración con más acumulado (todas sus evoluciones y sedes de la clínica, DX-418) y la fracción del máximo por peso. Al llegar al 100 %, al tope de epinefrina, por debajo de la edad mínima del anestésico (DX-420) o con alergia a anestésicos responde 409 salvo `overrideReason`, que queda sellado y auditado. Dos registros simultáneos del mismo paciente se serializan (bloqueo por paciente): el segundo calcula con el primero.
+         */
+        post: operations["AnesthesiaController_record"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/anesthesia/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Previsualiza la dosis acumulada con un anestésico más
+         * @description No guarda nada. Lee la anamnesis vigente (peso y alergias) y lo ya registrado al paciente en la ventana de 24 h que contiene `administeredAt` (por defecto, ahora; la de más acumulado) en cualquier evolución y sede de la clínica (DX-418). DX-420: aplica el máximo pediátrico (< 12 años), −30 % en menores de 6 meses o con hoja de sedación en las 24 h, la edad mínima del anestésico y el tope de epinefrina por cita (0,04 mg con cardiopatía en la anamnesis), y devuelve «quedan X mg ≈ Y carpules» en `summary.remaining`.
+         */
+        post: operations["AnesthesiaController_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/anesthesia/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** No permitido: la anestesia no se edita */
+        put: operations["AnesthesiaController_rejectPut"];
+        post?: never;
+        /** No permitido: la anestesia no se borra */
+        delete: operations["AnesthesiaController_rejectDelete"];
+        options?: never;
+        head?: never;
+        /** No permitido: la anestesia no se edita */
+        patch: operations["AnesthesiaController_rejectPatch"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/sedation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hojas de sedación de las evoluciones del paciente (ficha) */
+        get: operations["SedationController_listByPatient"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hoja de sedación de una evolución y su plantilla
+         * @description Sin hoja, `sheet` es null y `template` es la plantilla con la que se abriría. `sheet.watch` dice si se pasó el intervalo de constantes sin toma.
+         */
+        get: operations["SedationController_getEntry"];
+        /** No permitido: la hoja de sedación no se edita */
+        put: operations["SedationController_rejectPut"];
+        /**
+         * Abre la hoja con la valoración previa (inalterable)
+         * @description ASA I–V + E, ayuno, Mallampati, peso, talla, acompañante y consentimiento según la plantilla. El servidor calcula el IMC y los reversores por peso. Con ASA III o más exige interconsulta o justificación.
+         */
+        post: operations["SedationController_assess"];
+        /** No permitido: la hoja de sedación no se borra */
+        delete: operations["SedationController_rejectDelete"];
+        options?: never;
+        head?: never;
+        /** No permitido: la hoja de sedación no se edita */
+        patch: operations["SedationController_rejectPatch"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation/checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Checklist previo (quien lo marca y su hora, nunca anterior a la valoración) */
+        post: operations["SedationController_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fármaco de sedación: N2O (% y flujo), oral u otro */
+        post: operations["SedationController_addAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation/vitals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Toma de constantes basal o intraoperatoria
+         * @description También la registra la asistente que monitoriza. La intraoperatoria exige el checklist.
+         */
+        post: operations["SedationController_addVitals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation/discharge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Egreso: cierra la hoja (firma el operador que lo registra)
+         * @description Criterios de alta (o Aldrete modificado ≥ 9), constantes al alta, hora, a quién se entrega, indicaciones entregadas y quien monitorizó. En sedación moderada, si quien monitoriza es el operador, exige justificación.
+         */
+        post: operations["SedationController_discharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/patients/{patientId}/tooth-records": {
@@ -1688,6 +1947,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payment-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PaymentMethodsController_list"];
+        put?: never;
+        post: operations["PaymentMethodsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-methods/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PaymentMethodsController_update"];
+        trace?: never;
+    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -1784,6 +2075,66 @@ export interface paths {
         patch: operations["OpeningCandidatesController_outcome"];
         trace?: never;
     };
+    "/api/v1/public/slot-offers/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente abre la oferta de hueco
+         * @description Fecha, hora, sede y profesional; sin apellidos ni nada clínico. `UNAVAILABLE` si la clínica ya ocupó el hueco por otra vía; `EXPIRED` pasado `expiresAt`.
+         */
+        get: operations["PublicSlotOffersController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/slot-offers/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * El paciente acepta: el primero que acepta se queda el hueco
+         * @description Crea la cita (SCHEDULED) del pendiente o adelanta la cita marcada «Adelantar si hay hueco» (le quita la marca y su hora queda libre), con el horario y el anti-solape de la agenda, en una transacción: una sola aceptación gana y las demás ofertas pendientes del hueco pasan a TAKEN_BY_OTHER. Quien llega tarde recibe 200 con `state` `TAKEN` («Este hueco ya se ocupó»), `UNAVAILABLE` o `EXPIRED`, nunca un 500. Auditado como UPDATE de WAITLIST_OFFER, origen PUBLIC_LINK.
+         */
+        post: operations["PublicSlotOffersController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/slot-offers/{token}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * El paciente rechaza la oferta
+         * @description La oferta queda DECLINED (auditada, origen PUBLIC_LINK). Si ya no estaba abierta, devuelve su estado sin cambiar nada.
+         */
+        post: operations["PublicSlotOffersController_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}/confirmation-link": {
         parameters: {
             query?: never;
@@ -1793,6 +2144,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Genera (o reenvía) el enlace de confirmación de la cita; el anterior deja de valer
+         * @description DX-361: queda en la auditoría como UPDATE de APPOINTMENT (la cita), origen STAFF y `reason` CONFIRMATION_LINK_CREATED, o CONFIRMATION_LINK_RESENT si la cita ya tenía un enlace enviado. Sin el token ni la URL.
+         */
         post: operations["ConfirmationLinksController_create"];
         delete?: never;
         options?: never;
@@ -1809,6 +2164,10 @@ export interface paths {
         };
         get: operations["PublicAppointmentConfirmationsController_get"];
         put?: never;
+        /**
+         * El paciente confirma, cancela o pide que lo llamen
+         * @description DX-361: una respuesta registrada queda en la auditoría de la clínica de la cita como UPDATE de APPOINTMENT, sin usuario (el paciente), origen LINK y `reason` CONFIRMATION_LINK_CONFIRMED, CONFIRMATION_LINK_CANCELLED o CONFIRMATION_LINK_CALL_REQUESTED. Sin el token ni la URL; un enlace desconocido, caducado o ya usado no deja evento.
+         */
         post: operations["PublicAppointmentConfirmationsController_respond"];
         delete?: never;
         options?: never;
@@ -2114,7 +2473,7 @@ export interface paths {
         };
         /**
          * Tasas de un día para la clínica, según su fuente (DX-374)
-         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor.
+         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo).
          */
         get: operations["ExchangeController_rates"];
         put?: never;
@@ -2152,7 +2511,7 @@ export interface paths {
         get: operations["ExchangeSettingsController_settings"];
         /**
          * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
-         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
+         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
          */
         put: operations["ExchangeSettingsController_updateClinicSettings"];
         post?: never;
@@ -2177,7 +2536,7 @@ export interface paths {
         put?: never;
         /**
          * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
-         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
+         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). DX-402: la de un día anterior a `manualSince` sirve, con MANUAL, de tasa de respaldo a los abonos de ese día que siguen sin tasa si el proveedor no tiene la de ese día (GET /payments/rate-backlog/day dice cuántos); nunca cambia una tasa ya congelada. Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
          */
         post: operations["ExchangeSettingsController_register"];
         delete?: never;
@@ -2375,6 +2734,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Caja en CSV: abonos del período con medio y referencia
+         * @description Mismos filtros que `GET /payments` (período, método y medio) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Moneda, Importe.
+         */
+        get: operations["PaymentsController_listCashCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/payments": {
         parameters: {
             query?: never;
@@ -2385,6 +2764,26 @@ export interface paths {
         get: operations["PaymentsController_list"];
         put?: never;
         post: operations["PaymentsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/split-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cobro dividido en varias formas de pago con un solo recibo (DX-390)
+         * @description De 2 a 5 líneas (medio, moneda, importe y referencia), el mismo día. Cada línea es un abono con las reglas de siempre: su medio (referencia obligatoria y aviso de repetida, DX-377), su moneda (tasa congelada del día, DX-375) y su caja (el efectivo entra en la caja abierta de quien cobra, en su moneda, DX-027). Todas se registran en UNA transacción, con UN recibo numerado que lleva todas las líneas y el total en la moneda del plan: si una línea falla, no queda ninguna. Una Idempotency-Key para el cobro entero. Para un solo medio, `POST /treatment-plans/:id/payments`. Anular una línea (`DELETE /payments/:id`) anula el cobro entero y su recibo.
+         */
+        post: operations["PaymentsController_createSplit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2528,6 +2927,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/rate-backlog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Abonos sin tasa desde hace más de 24 h (DX-380, solo ADMIN)
+         * @description Abonos vivos de la clínica que siguen sin base de imputación o sin su tasa congelada pasadas 24 h: el barrido los reintenta con backoff (1 min, 5, 30, 2 h, 24 h). Registrar la tasa del día en Ajustes › Tasa de cambio, corregirla o cambiar la fuente adelanta el reintento al barrido siguiente. Sin datos del abono ni del paciente.
+         */
+        get: operations["PaymentRateBacklogController_backlog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/rate-backlog/day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Abonos sin tasa de un día que necesitan la tasa de una moneda (DX-402, solo ADMIN)
+         * @description Para el aviso del formulario de tasa manual. Con la fuente MANUAL, la tasa manual de un día anterior a `manualSince` es la tasa de respaldo de los abonos pendientes de ese día (sin tasa congelada) si el proveedor no tiene tasa guardada de él: el barrido siguiente la congela, crea la base y lo deja en la auditoría (EXCHANGE_RATE_BACKUP). Nunca cambia una tasa ya congelada. Solo el recuento.
+         */
+        get: operations["PaymentRateBacklogController_day"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/payment-plan": {
         parameters: {
             query?: never;
@@ -2644,6 +3083,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/{id}/credit-transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Traspasar saldo a favor de este plan a otro plan vivo
+         * @description Mismo paciente y misma moneda; importe ≤ saldo a favor del origen. Deja dos asientos inmutables (salida y entrada) sin tocar los abonos.
+         */
+        post: operations["PatientCreditController_transfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/credit-refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Devolver saldo a favor del plan al paciente
+         * @description Con comprobante numerado por sede (serie DEV-…). En efectivo, egreso de la caja abierta de quien devuelve; con «exigir caja abierta» y sin caja, 409.
+         */
+        post: operations["PatientCreditController_refund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/credit-refunds/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comprobante de una devolución (para imprimir) */
+        get: operations["PatientCreditController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/credit-movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Traspasos y devoluciones de saldo a favor del paciente */
+        get: operations["PatientCreditController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-credit/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tope de recepción para mover saldo a favor */
+        get: operations["PatientCreditController_getPolicy"];
+        /** Cambiar el tope de recepción (solo ADMIN) */
+        put: operations["PatientCreditController_updatePolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/locations-comparison": {
         parameters: {
             query?: never;
@@ -2676,6 +3207,66 @@ export interface paths {
          * @description Una fila por sede que ve quien consulta (DX-089: un miembro restringido solo ve las suyas, y el total solo las suma a ellas) y «Total clínica». La cabecera X-Location-Id no acota la comparación: siempre salen todas las sedes visibles. Indicadores (ver `kpis`, la definición de cada uno con su dirección): producción, cobrado, % de cobro, citas atendidas, no-show %, pacientes nuevos, ticket medio y ocupación %, en días civiles de la zona de cada sede (DX-097). Importes por moneda, sin convertir ni sumar monedas distintas. Con `compare`, cada valor trae el del período anterior, su variación % y si mejora o empeora. Una línea por sede, indicador y moneda; UTF-8 con BOM; celdas protegidas contra fórmulas.
          */
         get: operations["LocationsComparisonController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/production-by-procedure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Producción por procedimiento y categoría, con honorario medio frente a catálogo
+         * @description Ítems de plan REALIZADOS (DONE), vivos y de planes vivos, con `completedAt` en el período (días civiles en la zona de la sede) y `performedLocationId` en una de las sedes que ve quien consulta (DX-089): cuenta la sede donde se REALIZÓ, no la del paciente. Agrupado por categoría y código del catálogo, por moneda del plan sin convertir (subtotal y total por moneda, nunca mezclados). ADMIN ve todo el equipo; un DENTIST, solo lo suyo. Los realizados sin fecha o sin sede salen en `unattributed` («Sin atribuir», DX-305). Sin nombres de paciente.
+         */
+        get: operations["ProductionByProcedureController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/production-by-procedure.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Producción por procedimiento en CSV (mismos filtros)
+         * @description Ítems de plan REALIZADOS (DONE), vivos y de planes vivos, con `completedAt` en el período (días civiles en la zona de la sede) y `performedLocationId` en una de las sedes que ve quien consulta (DX-089): cuenta la sede donde se REALIZÓ, no la del paciente. Agrupado por categoría y código del catálogo, por moneda del plan sin convertir (subtotal y total por moneda, nunca mezclados). ADMIN ve todo el equipo; un DENTIST, solo lo suyo. Los realizados sin fecha o sin sede salen en `unattributed` («Sin atribuir», DX-305). Sin nombres de paciente. Las mismas filas, subtotales y totales que la pantalla, con el período y los filtros en la cabecera; UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["ProductionByProcedureController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/production-by-procedure/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detalle de una fila: los ítems realizados de un procedimiento
+         * @description Mismos filtros y alcance que el reporte, más el procedimiento y la moneda de la fila: paciente, fecha, profesional y sede de cada ítem, del más reciente al más antiguo. Lleva el nombre del paciente: solo ADMIN y DENTIST (que ven pacientes), y el DENTIST solo los suyos. Auditado (VIEW).
+         */
+        get: operations["ProductionByProcedureController_items"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3673,6 +4264,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/consents/{id}/countersign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PatientConsentsController_countersign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/consents/{id}": {
         parameters: {
             query?: never;
@@ -3683,6 +4290,82 @@ export interface paths {
         get: operations["PatientConsentsController_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents/{id}/signed-pdf/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PatientConsentsController_retrySignedPdfGeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents/{id}/signed-pdf/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reenviar la copia del PDF firmado al paciente
+         * @description Envía por email (outbox de DX-088, sin nada clínico) un enlace NUEVO de un solo uso para descargar el PDF firmado, al email de la firma a distancia; el anterior deja de servir en la misma transacción. Auditado como SEND de CONSENT, reason SIGNED_PDF_COPY_RESENT. Sin el token ni la URL en la respuesta.
+         */
+        post: operations["PatientConsentsController_resendSignedPdfCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/signed-consent-copies/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente abre el enlace de su copia del PDF firmado
+         * @description Estado del enlace y la marca de la clínica; ni el título del documento ni nada clínico.
+         */
+        get: operations["PublicSignedPdfCopiesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/signed-consent-copies/{token}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Descarga la copia (una sola vez)
+         * @description Gasta el enlace y devuelve una URL firmada de 60 s del PDF archivado (attachment). Queda en la auditoría como EXPORT de CONSENT, origen PUBLIC_LINK, reason SIGNED_PDF_COPY_DOWNLOADED, en la misma transacción. Una segunda vez: 410 `SIGNED_PDF_COPY_LINK_USED` («Este enlace ya se usó»).
+         */
+        post: operations["PublicSignedPdfCopiesController_download"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3991,6 +4674,158 @@ export interface paths {
         put?: never;
         /** Enviar las respuestas (una sola vez; la HC no cambia hasta que se revisa) */
         post: operations["PublicMedicalHistoryController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/signature-requests/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lo que necesita el modal «Enviar a firmar»
+         * @description Plantillas activas (título y versión), profesionales que pueden firmar y a quién iría el enlace (enmascarado) o por qué no se puede enviar.
+         */
+        get: operations["PatientSignatureRequestsController_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/signature-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Solicitudes de firma a distancia del paciente (estado y evidencias) */
+        get: operations["PatientSignatureRequestsController_list"];
+        put?: never;
+        /**
+         * Enviar un consentimiento a firmar o un presupuesto a aceptar a distancia (email)
+         * @description Congela el texto (plantilla, paciente, plan, profesional) y envía por email un enlace de un solo uso que caduca a las 72 h; el documento solo se ve tras un código de 6 dígitos. Un menor (mayoría de la clínica) firma por medio de su responsable. Anula la solicitud anterior del mismo paciente y plantilla aún sin firmar. BUDGET (DX-415): solo odontólogo o ADMIN; congela la foto del presupuesto de un plan «Presentado» y su hash, y anula el enlace anterior del mismo plan; si el plan cambia después, el enlace deja de servir.
+         */
+        post: operations["PatientSignatureRequestsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/signature-requests/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anular un enlace sin firmar
+         * @description Desde ese momento el enlace responde «Enlace no válido». Cancela el email si aún no salió.
+         */
+        post: operations["PatientSignatureRequestsController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado mínimo del enlace (sin documento ni datos del paciente) */
+        get: operations["PublicSignatureController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pedir (o reenviar) el código de 6 dígitos al destino del enlace
+         * @description La primera vez cuenta como apertura. Hasta 5 envíos, con 60 s entre uno y otro (429 con retryAfterSeconds). Pedir otro código no devuelve intentos.
+         */
+        post: operations["PublicSignatureController_code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verificar el código (5 fallos bloquean el enlace) */
+        post: operations["PublicSignatureController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** El documento completo (tras verificar el código) */
+        get: operations["PublicSignatureController_document"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Firmar (una sola vez)
+         * @description Guarda la firma en el consentimiento con su hash y las evidencias (canal, destino enmascarado, horas, IP, navegador). Queda pendiente de la firma del profesional en la app.
+         */
+        post: operations["PublicSignatureController_sign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4747,7 +5582,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -4789,10 +5624,10 @@ export interface components {
             to: string;
         };
         /**
-         * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal).
+         * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). DX-361: en la confirmación de cita por enlace, STAFF = recepción generó o reenvió el enlace; LINK = el paciente respondió desde él.
          * @enum {string}
          */
-        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB";
+        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB" | "PUBLIC_LINK";
         AuditSearchDto: {
             /** @example LOT-AB12 */
             lot?: string;
@@ -4902,6 +5737,22 @@ export interface components {
             before?: components["schemas"]["AuditStaffAccessSideDto"];
             after?: components["schemas"]["AuditStaffAccessSideDto"];
         };
+        AuditExchangeRateBackupDto: {
+            /**
+             * Format: date
+             * @description Día civil de la tasa (el del abono en su sede).
+             * @example 2026-10-28
+             */
+            rateDate: string;
+            /**
+             * Format: date
+             * @description Desde qué día rige la tasa manual de la clínica (posterior a rateDate).
+             * @example 2026-10-30
+             */
+            manualSince: string;
+            /** @description Las monedas de la cotización (ISO 4217). */
+            currencies: string[];
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -4915,7 +5766,7 @@ export interface components {
             move?: components["schemas"]["AuditAppointmentMoveDto"];
             /** @description DX-200: paso del flujo en la clínica (`reason` PATIENT_FLOW o ARRIVAL_UNDONE): estado de la cita antes y después. */
             status?: components["schemas"]["AuditStatusChangeDto"];
-            /** @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). */
+            /** @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). DX-361: en la confirmación de cita por enlace, STAFF = recepción generó o reenvió el enlace; LINK = el paciente respondió desde él. */
             origin?: components["schemas"]["AuditOrigin"];
             /** @description DX-191: búsqueda de implantes por lote/REF — lo buscado y cuántas filas salieron. */
             search?: components["schemas"]["AuditSearchDto"];
@@ -4933,6 +5784,8 @@ export interface components {
             healthRegistration?: components["schemas"]["AuditHealthRegistrationChangeDto"];
             /** @description DX-359: accesos de un miembro antes y después (rol, sedes, nº de registro profesional, especialidad): solo lo que cambió, o un lado en un alta (invitación, aceptación, registro). Nunca el nombre, el email ni nada de la contraseña. */
             staffAccess?: components["schemas"]["AuditStaffAccessChangeDto"];
+            /** @description DX-402: el barrido congeló en un abono (`reason` EXCHANGE_RATE_BACKUP, `origin` JOB, sin usuario) la tasa manual de un día anterior a «manual desde», como tasa de respaldo de un día sin tasa del proveedor. Solo días y monedas; ni importes ni la tasa. */
+            exchangeRateBackup?: components["schemas"]["AuditExchangeRateBackupDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -5341,6 +6194,8 @@ export interface components {
             /** @enum {string} */
             sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             email: string | null;
             address: string | null;
             countryCode: string | null;
@@ -5458,6 +6313,8 @@ export interface components {
             /** @enum {string} */
             sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             email: string | null;
             address: string | null;
             countryCode: string | null;
@@ -5619,6 +6476,8 @@ export interface components {
             /** @enum {string} */
             sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             email: string | null;
             address: string | null;
             countryCode: string | null;
@@ -5759,7 +6618,7 @@ export interface components {
             reason: string;
         };
         /**
-         * @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp).
+         * @description MISSING: sin móvil. INVALID: no es un móvil válido con el prefijo de la sede (no puede ser canal WhatsApp).
          * @enum {string}
          */
         MobileStatus: "MISSING" | "VALID" | "INVALID";
@@ -5811,11 +6670,15 @@ export interface components {
             clinicDefaultChannel: components["schemas"]["ContactChannel"];
             /** @description Tal como está guardado. */
             phone: string | null;
-            /** @description E.164 (+ seguido del indicativo y el número, sin espacios), solo si es un móvil válido. */
+            /** @description E.164 (+ seguido del prefijo y el número, sin espacios), solo si es un móvil válido. */
             phoneE164: string | null;
-            /** @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp). */
+            /** @description MISSING: sin móvil. INVALID: no es un móvil válido con el prefijo de la sede (no puede ser canal WhatsApp). */
             phoneStatus: components["schemas"]["MobileStatus"];
-            /** @description País (ISO 3166-1 alfa-2) con el que se valida un número sin indicativo: el de la sede activa o la principal (sin sedes, el del paciente). null si no hay país o si ese país no tiene indicativo por defecto (hasta DX-329): el número se escribe con +. */
+            /** @description true si los dígitos se pueden leer como dos números válidos distintos: hay que escribirlo con + y su prefijo. */
+            phoneAmbiguous: boolean;
+            /** @description Número válido en formato internacional de la librería, con su extensión si la tiene. null si no es válido. */
+            phoneInternational: string | null;
+            /** @description Región (ISO 3166-1 alfa-2) cuyo prefijo se añade a un número escrito sin +: la de la sede activa o la principal. null si la sede no tiene prefijo por defecto. */
             phoneCountry: string | null;
             email: string | null;
             whatsappOptIn: components["schemas"]["WhatsappOptInDto"] | null;
@@ -5833,7 +6696,7 @@ export interface components {
         };
         UpdatePatientCommunicationDto: {
             contactChannel?: components["schemas"]["ContactChannel"];
-            /** @description Móvil. Se guarda en E.164 si es válido para el país de la sede; null o vacío lo borra. */
+            /** @description Móvil. Se guarda en E.164 si es válido; sin «+» se lee con el prefijo telefónico por defecto de la sede. null o vacío lo borra. */
             phone?: string | null;
             /** @description true registra el opt-in de WhatsApp (exige `whatsappOptInSource` y un móvil válido); false lo retira. */
             whatsappOptIn?: boolean;
@@ -5859,6 +6722,8 @@ export interface components {
             docNumber: string | null;
             email: string | null;
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
         };
         /** @enum {string} */
         ResponsibleRelationship: "MOTHER" | "FATHER" | "LEGAL_GUARDIAN" | "GRANDPARENT" | "SIBLING" | "SPOUSE" | "CHILD" | "OTHER";
@@ -5879,6 +6744,8 @@ export interface components {
             docNumber: string | null;
             email: string | null;
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
             relationship: components["schemas"]["ResponsibleRelationship"];
             isPayer: boolean;
             receivesNotices: boolean;
@@ -6418,6 +7285,10 @@ export interface components {
             showHealthRegistrationNumber: boolean;
             /** @description DX-222: teléfono de la sede o null. */
             phone: string | null;
+            /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
+            phoneInternational: string | null;
+            /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. */
+            defaultPhoneRegion: string | null;
             isActive: boolean;
             /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1). */
             currency: string | null;
@@ -6472,6 +7343,8 @@ export interface components {
             hourCycle?: "h12" | "h23";
             /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. */
             phone?: string;
+            /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. Sin el campo se sugiere desde el país de la sede, si la librería lo admite. */
+            defaultPhoneRegion?: string | null;
         };
         UpdateLocationDto: {
             name?: string;
@@ -6484,6 +7357,8 @@ export interface components {
             showHealthRegistrationNumber?: boolean;
             /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia. */
             phone?: string | null;
+            /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. Vacío o null lo quita; sin el campo no cambia, tampoco al cambiar el país. */
+            defaultPhoneRegion?: string | null;
             /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. */
             currency?: string;
             /**
@@ -6921,6 +7796,719 @@ export interface components {
             prompts?: components["schemas"]["NotePromptInputDto"][];
             /** @description false = desactivarla (sale del selector) */
             active?: boolean;
+        };
+        AnestheticProductDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Lidocaína 2 % con epinefrina 1:100.000 */
+            name: string;
+            /** @example Lidocaína */
+            activeIngredient: string;
+            /**
+             * @description Concentración en %
+             * @example 2
+             */
+            concentrationPct: number;
+            /** @example Epinefrina 1:100.000 */
+            vasoconstrictor: string | null;
+            /** @example 1.8 */
+            mlPerCarpule: number;
+            /** @example 7 */
+            maxMgPerKg: number;
+            /**
+             * @description Tope absoluto en mg
+             * @example 500
+             */
+            maxAbsoluteMg: number;
+            /**
+             * @description DX-420: mg/kg en menores de 12 años (AAPD); null = el de adulto
+             * @example 4.4
+             */
+            pediatricMaxMgPerKg: number | null;
+            /**
+             * @description DX-420: edad mínima en años (AAPD: articaína 4, bupivacaína 12); null = sin mínimo
+             * @example 4
+             */
+            minAgeYears: number | null;
+            /**
+             * @description DX-420: mg de epinefrina por carpule (ml × 1000 / dilución; 1:100.000 → 0,01 mg/ml); 0 sin epinefrina; null = no se sabe
+             * @example 0.018
+             */
+            epinephrineMgPerCarpule: number | null;
+            /** @example LIDOCAINE_2_EPI */
+            sampleCode: string | null;
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateAnestheticProductDto: {
+            name: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor?: string | null;
+            mlPerCarpule: number;
+            maxMgPerKg: number;
+            maxAbsoluteMg: number;
+            /** @description DX-420: mg/kg en menores de 12 años; null = el de adulto */
+            pediatricMaxMgPerKg?: number | null;
+            /** @description DX-420: edad mínima en años; null = sin mínimo */
+            minAgeYears?: number | null;
+            /** @description DX-420: mg de epinefrina por carpule. Sin él, se deduce de la dilución del vasoconstrictor y del volumen (1:100.000 × 1,8 ml = 0,018 mg) */
+            epinephrineMgPerCarpule?: number | null;
+        };
+        UpdateAnestheticProductDto: {
+            name?: string;
+            activeIngredient?: string;
+            concentrationPct?: number;
+            vasoconstrictor?: string | null;
+            mlPerCarpule?: number;
+            maxMgPerKg?: number;
+            maxAbsoluteMg?: number;
+            /** @description DX-420: mg/kg en menores de 12 años; null = el de adulto */
+            pediatricMaxMgPerKg?: number | null;
+            /** @description DX-420: edad mínima en años; null = sin mínimo */
+            minAgeYears?: number | null;
+            /** @description DX-420: mg de epinefrina por carpule. Sin él, se deduce de la dilución del vasoconstrictor y del volumen (1:100.000 × 1,8 ml = 0,018 mg) */
+            epinephrineMgPerCarpule?: number | null;
+            /** @description false = desactivado (no se borra) */
+            active?: boolean;
+        };
+        /** @enum {string} */
+        AnesthesiaTechnique: "INFILTRATION" | "NERVE_BLOCK" | "INTRALIGAMENTARY" | "INTRAPULPAL" | "INTRAOSSEOUS";
+        DoseAlertDto: {
+            /** @example DOSE_OVER_MAX */
+            code: string;
+            /** @enum {string} */
+            severity: "BLOCKING" | "INFO";
+            message: string;
+            source: string;
+        };
+        AnesthesiaAdministrationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: uuid */
+            anestheticId: string;
+            anestheticName: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor: string | null;
+            mlPerCarpule: number;
+            maxMgPerKg: number;
+            maxAbsoluteMg: number;
+            pediatricMaxMgPerKg: number | null;
+            minAgeYears: number | null;
+            epinephrineMgPerCarpule: number | null;
+            carpules: number;
+            doseMg: number;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            site: string | null;
+            lot: string | null;
+            /** Format: date-time */
+            administeredAt: string;
+            weightKg: number | null;
+            /** @enum {string|null} */
+            weightSource: "ANAMNESIS" | "ENTERED" | null;
+            /** @description mg acumulados CON este registro: de la evolución con ANESTHESIA_DOSE_V1; del paciente en 24 h con ANESTHESIA_DOSE_V2 (DX-418) */
+            cumulativeMg: number;
+            cumulativePercent: number | null;
+            /** @description DX-420: mg de epinefrina de esta dosis; null antes de V3 */
+            epinephrineMg: number | null;
+            /** @description DX-420: epinefrina acumulada del paciente en la ventana CON este registro; null antes de V3 */
+            cumulativeEpinephrineMg: number | null;
+            safetyRulesVersion: string;
+            safetyAlerts: components["schemas"]["DoseAlertDto"][];
+            overrideReason: string | null;
+            /** Format: uuid */
+            authorId: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AnestheticDoseDto: {
+            name: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            carpules: number;
+            mg: number;
+            maxMg: number | null;
+            percent: number | null;
+            /**
+             * @description DX-420: mg/kg usado (pediátrico en menores de 12 años si el catálogo lo tiene)
+             * @example 4.4
+             */
+            maxMgPerKg: number;
+            /** @description DX-420: fuente del máximo, para enseñarla */
+            maxSource: string;
+        };
+        DoseAdjustmentDto: {
+            /** @description DX-420: menor de 12 años (máximo pediátrico del catálogo) */
+            pediatric: boolean;
+            /** @description Menor de 6 meses: −30 % */
+            infant: boolean;
+            /** @description Hoja de sedación en esta evolución o en las 24 h: −30 % */
+            sedation: boolean;
+            /**
+             * @description Multiplicador del máximo (1 = sin reducción; 0,49 con las dos)
+             * @example 0.7
+             */
+            factor: number;
+            ageYears: number | null;
+        };
+        EpinephrineSummaryDto: {
+            /**
+             * @description mg de epinefrina del paciente en la misma ventana de 24 h
+             * @example 0.054
+             */
+            totalMg: number;
+            /**
+             * @description Tope por cita: 0,2 mg; 0,04 mg con cardiopatía en la anamnesis
+             * @example 0.04
+             */
+            maxMg: number;
+            percent: number;
+            /** @description Cardiopatía en la anamnesis; null sin anamnesis */
+            cardiac: boolean | null;
+            /** @enum {string} */
+            level: "OK" | "WARNING" | "EXCEEDED";
+        };
+        DoseRemainingDto: {
+            name: string;
+            /** @description mg que quedan de este anestésico */
+            mg: number;
+            /** @description En cuartos de carpule, hacia abajo y sin llegar al 100 % (que ya exige motivo) */
+            carpules: number;
+            /** @example 1.8 */
+            mlPerCarpule: number;
+            /** @enum {string} */
+            limitedBy: "DOSE" | "EPINEPHRINE";
+            /** @description mg de epinefrina que quedan hasta el tope */
+            epinephrineMg: number;
+        };
+        AnesthesiaDoseSummaryDto: {
+            /** @example ANESTHESIA_DOSE_V3 */
+            rulesVersion: string;
+            weightKg: number | null;
+            /** @description mg acumulados del PACIENTE en la ventana de 24 h (DX-418): todas sus evoluciones, sedes y profesionales de la clínica */
+            totalMg: number;
+            byAnesthetic: components["schemas"]["AnestheticDoseDto"][];
+            /** @description Suma de las fracciones de cada máximo, en %; null sin peso */
+            percent: number | null;
+            /** @enum {string} */
+            level: "OK" | "WARNING" | "EXCEEDED" | "NO_WEIGHT";
+            alerts: components["schemas"]["DoseAlertDto"][];
+            adjustment: components["schemas"]["DoseAdjustmentDto"];
+            epinephrine: components["schemas"]["EpinephrineSummaryDto"];
+            /** @description DX-420: «quedan X mg ≈ Y carpules» del anestésico previsualizado (lo que se agote antes: dosis o epinefrina); null sin dosis nueva o sin peso */
+            remaining: components["schemas"]["DoseRemainingDto"] | null;
+        };
+        AnesthesiaDoseWindowPartDto: {
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** @description Es la evolución consultada */
+            current: boolean;
+            /** Format: uuid */
+            authorId: string;
+            /** @description Profesional que la registró */
+            authorName: string | null;
+            /** Format: uuid */
+            locationId: string | null;
+            /** @description Sede (cuentan también las de otra sede de la clínica) */
+            locationName: string | null;
+            /** Format: date-time */
+            firstAdministeredAt: string;
+            /** Format: date-time */
+            lastAdministeredAt: string;
+            carpules: number;
+            mg: number;
+            /** @description Parte del máximo que aporta, en % (redondeada: las partes pueden no sumar el total); null sin peso */
+            percent: number | null;
+        };
+        AnesthesiaDoseWindowDto: {
+            /**
+             * @description DX-418: ventana MÓVIL de 24 h, no el día civil de la sede: las dosis máximas de anestésico local son por sesión / 24 h, y con el día civil 3 carpules a las 23:30 y 3 a las 00:30 empezarían de cero. Es la ventana de 24 h que contiene la administración con más acumulado: «ahora», las últimas 24 h; anotada tarde, puede ser la que acaba en una dosis posterior ya registrada. Nunca suma dosis a más de 24 h entre sí.
+             * @example 24
+             */
+            hours: number;
+            /**
+             * Format: date-time
+             * @description Inicio (incluido)
+             */
+            from: string;
+            /**
+             * Format: date-time
+             * @description Fin (incluido)
+             */
+            to: string;
+            /** @description Lo ya registrado, por evolución y profesional, en orden de administración */
+            parts: components["schemas"]["AnesthesiaDoseWindowPartDto"][];
+            /** @description mg de la dosis previsualizada (sin guardar); null si no hay */
+            pendingMg: number | null;
+        };
+        EntryAnesthesiaDto: {
+            /** @description Lo registrado en esta evolución */
+            records: components["schemas"]["AnesthesiaAdministrationDto"][];
+            /** @description Acumulado del paciente en las últimas 24 h (DX-418) */
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+            ageYears: number | null;
+            weightRequired: boolean;
+            window: components["schemas"]["AnesthesiaDoseWindowDto"];
+        };
+        AnesthesiaDoseCheckDto: {
+            /**
+             * Format: uuid
+             * @description Anestésico del catálogo
+             */
+            anestheticId: string;
+            /** @example 1.5 */
+            carpules: number;
+            /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la valoración de sedación de esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
+            weightKg?: number;
+            /**
+             * Format: date-time
+             * @description Hora de la administración; por defecto, ahora. No puede ser futura. Decide la ventana de 24 h del acumulado del paciente, que la contiene (DX-418): manda la misma al previsualizar y al guardar.
+             */
+            administeredAt?: string;
+        };
+        AnesthesiaCheckDto: {
+            /** @description Acumulado del paciente en la ventana de 24 h CON la dosis previsualizada */
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+            ageYears: number | null;
+            /** @enum {string|null} */
+            weightSource: "ANAMNESIS" | "ENTERED" | null;
+            /** @description Menor de 12 años sin peso: hay que anotarlo */
+            weightRequired: boolean;
+            window: components["schemas"]["AnesthesiaDoseWindowDto"];
+        };
+        RecordAnesthesiaDto: {
+            /**
+             * Format: uuid
+             * @description Anestésico del catálogo
+             */
+            anestheticId: string;
+            /** @example 1.5 */
+            carpules: number;
+            /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la valoración de sedación de esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
+            weightKg?: number;
+            /**
+             * Format: date-time
+             * @description Hora de la administración; por defecto, ahora. No puede ser futura. Decide la ventana de 24 h del acumulado del paciente, que la contiene (DX-418): manda la misma al previsualizar y al guardar.
+             */
+            administeredAt?: string;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            /** @description Zona o dientes FDI */
+            site?: string;
+            /** @description Lote del carpule */
+            lot?: string;
+            /** @description Motivo con el que se confirma superar la dosis máxima, el tope de epinefrina, la edad mínima del anestésico (DX-420) o un aviso de alergia. Sin él, 409. */
+            overrideReason?: string;
+        };
+        RecordedAnesthesiaDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: uuid */
+            anestheticId: string;
+            anestheticName: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor: string | null;
+            mlPerCarpule: number;
+            maxMgPerKg: number;
+            maxAbsoluteMg: number;
+            pediatricMaxMgPerKg: number | null;
+            minAgeYears: number | null;
+            epinephrineMgPerCarpule: number | null;
+            carpules: number;
+            doseMg: number;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            site: string | null;
+            lot: string | null;
+            /** Format: date-time */
+            administeredAt: string;
+            weightKg: number | null;
+            /** @enum {string|null} */
+            weightSource: "ANAMNESIS" | "ENTERED" | null;
+            /** @description mg acumulados CON este registro: de la evolución con ANESTHESIA_DOSE_V1; del paciente en 24 h con ANESTHESIA_DOSE_V2 (DX-418) */
+            cumulativeMg: number;
+            cumulativePercent: number | null;
+            /** @description DX-420: mg de epinefrina de esta dosis; null antes de V3 */
+            epinephrineMg: number | null;
+            /** @description DX-420: epinefrina acumulada del paciente en la ventana CON este registro; null antes de V3 */
+            cumulativeEpinephrineMg: number | null;
+            safetyRulesVersion: string;
+            safetyAlerts: components["schemas"]["DoseAlertDto"][];
+            overrideReason: string | null;
+            /** Format: uuid */
+            authorId: string;
+            /** Format: date-time */
+            createdAt: string;
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+        };
+        AnesthesiaConflictDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @description Mensaje en español con los avisos */
+            message: string;
+            summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
+            safetyAlerts: components["schemas"]["DoseAlertDto"][];
+        };
+        /** @enum {string} */
+        SedationGrade: "MINIMAL" | "MODERATE";
+        /** @enum {string} */
+        AsaClass: "I" | "II" | "III" | "IV" | "V";
+        SedationActorDto: {
+            /** Format: uuid */
+            id: string;
+            name: string | null;
+        };
+        SedationChecklistItemDto: {
+            code: string;
+            label: string;
+            checked: boolean;
+        };
+        SedationChecklistRowDto: {
+            /** Format: uuid */
+            id: string;
+            items: components["schemas"]["SedationChecklistItemDto"][];
+            author: components["schemas"]["SedationActorDto"];
+            /**
+             * Format: date-time
+             * @description Hora del checklist (la anotada; por defecto, la del registro)
+             */
+            checkedAt: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        SedationAgentKind: "NITROUS_OXIDE" | "ORAL" | "OTHER";
+        /** @enum {string} */
+        SedationDoseUnit: "MG" | "MCG" | "ML";
+        /** @enum {string} */
+        SedationRoute: "INHALED" | "ORAL" | "SUBLINGUAL" | "INTRANASAL" | "INTRAMUSCULAR" | "INTRAVENOUS" | "SUBMUCOSAL";
+        SedationAgentRowDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["SedationAgentKind"];
+            drugName: string | null;
+            dose: number | null;
+            doseUnit: components["schemas"]["SedationDoseUnit"] | null;
+            route: components["schemas"]["SedationRoute"];
+            n2oPercent: number | null;
+            flowLpm: number | null;
+            /** Format: date-time */
+            administeredAt: string;
+            author: components["schemas"]["SedationActorDto"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        SedationVitalsPhase: "BASELINE" | "INTRA" | "DISCHARGE";
+        /** @enum {string} */
+        SedationLevel: "AWAKE" | "MINIMAL" | "MODERATE" | "DEEP";
+        SedationVitalsRowDto: {
+            /** Format: uuid */
+            id: string;
+            phase: components["schemas"]["SedationVitalsPhase"];
+            /** Format: date-time */
+            takenAt: string;
+            spo2: number | null;
+            heartRate: number | null;
+            systolic: number | null;
+            diastolic: number | null;
+            respiratoryRate: number | null;
+            etco2: number | null;
+            sedationLevel: components["schemas"]["SedationLevel"] | null;
+            author: components["schemas"]["SedationActorDto"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SedationDischargeCriterionDto: {
+            code: string;
+            label: string;
+            met: boolean;
+        };
+        SedationDischargeRowDto: {
+            /** Format: uuid */
+            id: string;
+            criteria: components["schemas"]["SedationDischargeCriterionDto"][];
+            aldreteScore: number | null;
+            /**
+             * Format: uuid
+             * @description Toma de constantes al alta
+             */
+            vitalsId: string;
+            /** Format: date-time */
+            dischargedAt: string;
+            handedOverToName: string;
+            handedOverToRelationship: string;
+            instructionsDelivered: boolean;
+            /** @description Firma el egreso */
+            operator: components["schemas"]["SedationActorDto"];
+            monitor: components["schemas"]["SedationActorDto"];
+            sameMonitorJustification: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SedationVitalsWatchDto: {
+            intervalMinutes: number;
+            /** @description Sedación en curso (checklist, inicio y sin egreso) */
+            active: boolean;
+            /** Format: date-time */
+            startedAt: string | null;
+            /** Format: date-time */
+            lastTakenAt: string | null;
+            /** Format: date-time */
+            nextDueAt: string | null;
+            /** @description Se pasó el intervalo sin toma */
+            overdue: boolean;
+            overdueMinutes: number;
+            /** @description Intervalos vencidos sin toma entre el inicio y la última toma: en cada hueco, ⌈hueco / intervalo⌉ − 1 (20 min con intervalo de 5 → 3) */
+            missedIntervals: number;
+        };
+        SedationSheetDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            templateVersion: string;
+            rulesVersion: string;
+            vitalsIntervalMinutes: number;
+            /** @enum {string} */
+            status: "ASSESSED" | "CHECKED" | "IN_PROGRESS" | "DISCHARGED";
+            grade: components["schemas"]["SedationGrade"];
+            asaClass: components["schemas"]["AsaClass"] | null;
+            asaEmergency: boolean;
+            highAsaInterconsultation: string | null;
+            highAsaJustification: string | null;
+            fastingClearLiquidsHours: number | null;
+            fastingSolidsHours: number | null;
+            mallampati: number | null;
+            weightKg: number | null;
+            heightCm: number | null;
+            /** @description Calculado */
+            bmi: number | null;
+            /** @description Naloxona 0,1 mg/kg, máx. 2 mg */
+            naloxoneMg: number | null;
+            /** @description Flumazenil 0,01 mg/kg, máx. 0,2 mg */
+            flumazenilMg: number | null;
+            escortName: string | null;
+            escortRelationship: string | null;
+            consentConfirmed: boolean;
+            /** Format: uuid */
+            consentId: string | null;
+            author: components["schemas"]["SedationActorDto"];
+            /**
+             * Format: date-time
+             * @description Hora de la valoración (la anotada; por defecto, la del registro)
+             */
+            assessedAt: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            createdAt: string;
+            checklist: components["schemas"]["SedationChecklistRowDto"] | null;
+            agents: components["schemas"]["SedationAgentRowDto"][];
+            vitals: components["schemas"]["SedationVitalsRowDto"][];
+            discharge: components["schemas"]["SedationDischargeRowDto"] | null;
+            watch: components["schemas"]["SedationVitalsWatchDto"];
+        };
+        SedationChecklistItemDefDto: {
+            code: string;
+            label: string;
+            required: boolean;
+        };
+        SedationDischargeCriterionDefDto: {
+            code: string;
+            label: string;
+        };
+        SedationTemplateDto: {
+            /** @example SEDATION_PLATFORM_V1 */
+            version: string;
+            /**
+             * @description Hoy siempre PLATFORM; la plantilla por clínica llega en DX-409
+             * @enum {string}
+             */
+            source: "PLATFORM" | "CLINIC";
+            /** @example 5 */
+            vitalsIntervalMinutes: number;
+            requiredAssessment: ("ASA" | "FASTING" | "MALLAMPATI" | "WEIGHT" | "HEIGHT" | "ESCORT" | "CONSENT")[];
+            checklist: components["schemas"]["SedationChecklistItemDefDto"][];
+            requiredVitals: ("SPO2" | "HEART_RATE" | "BLOOD_PRESSURE" | "RESPIRATORY_RATE" | "ETCO2" | "SEDATION_LEVEL")[];
+            dischargeCriteria: components["schemas"]["SedationDischargeCriterionDefDto"][];
+            /** @example 9 */
+            aldreteMinimum: number;
+        };
+        EntrySedationDto: {
+            template: components["schemas"]["SedationTemplateDto"];
+            sheet: components["schemas"]["SedationSheetDto"] | null;
+        };
+        SedationAssessmentDto: {
+            grade: components["schemas"]["SedationGrade"];
+            asaClass?: components["schemas"]["AsaClass"];
+            /** @description Sufijo «E» de la ASA (urgencia) */
+            asaEmergency: boolean;
+            /** @description Con ASA III o más: nota de la interconsulta médica */
+            highAsaInterconsultation?: string;
+            /** @description Con ASA III o más, sin interconsulta: justificación */
+            highAsaJustification?: string;
+            /** @description Horas */
+            fastingClearLiquidsHours?: number;
+            /** @description Horas */
+            fastingSolidsHours?: number;
+            mallampati?: number;
+            /** @description Peso medido hoy en el sillón (kg) */
+            weightKg?: number;
+            /** @description Talla (cm) */
+            heightCm?: number;
+            /** @description Acompañante adulto */
+            escortName?: string;
+            /** @example Madre */
+            escortRelationship?: string;
+            /** @description El consentimiento de sedación está firmado */
+            consentConfirmed: boolean;
+            /**
+             * Format: uuid
+             * @description Consentimiento firmado del paciente (patient_consents)
+             */
+            consentId?: string;
+            /**
+             * Format: date-time
+             * @description Hora de la valoración; por defecto, ahora
+             */
+            assessedAt?: string;
+        };
+        SedationProblemDto: {
+            /** @example MALLAMPATI */
+            code: string;
+            message: string;
+        };
+        SedationProblemsDto: {
+            /** @example 400 */
+            statusCode: number;
+            /** @description Lo que falta, en español */
+            message: string;
+            problems: components["schemas"]["SedationProblemDto"][];
+        };
+        SedationMarkDto: {
+            /** @example MONITORS_TESTED */
+            code: string;
+            checked: boolean;
+        };
+        SedationChecklistDto: {
+            items: components["schemas"]["SedationMarkDto"][];
+            /**
+             * Format: date-time
+             * @description Hora del checklist; por defecto, ahora. No puede ser anterior a la valoración
+             */
+            checkedAt?: string;
+        };
+        SedationAgentDto: {
+            kind: components["schemas"]["SedationAgentKind"];
+            /** @description Oral u otro */
+            drugName?: string;
+            dose?: number;
+            doseUnit?: components["schemas"]["SedationDoseUnit"];
+            /** @description N2O: inhalada; oral: por defecto oral */
+            route?: components["schemas"]["SedationRoute"];
+            /** @description N2O: % */
+            n2oPercent?: number;
+            /** @description N2O: flujo total en l/min */
+            flowLpm?: number;
+            /**
+             * Format: date-time
+             * @description Hora de la administración; por defecto, ahora
+             */
+            administeredAt?: string;
+        };
+        SedationVitalsDto: {
+            /** @description SpO2 (%) */
+            spo2?: number;
+            /** @description lpm */
+            heartRate?: number;
+            /** @description mmHg */
+            systolic?: number;
+            /** @description mmHg */
+            diastolic?: number;
+            /** @description rpm */
+            respiratoryRate?: number;
+            /** @description CO2 espirado (mmHg), opcional */
+            etco2?: number;
+            sedationLevel?: components["schemas"]["SedationLevel"];
+            /**
+             * @description La toma al alta va con el egreso
+             * @enum {string}
+             */
+            phase: "BASELINE" | "INTRA";
+            /**
+             * Format: date-time
+             * @description Hora de la toma; por defecto, ahora
+             */
+            takenAt?: string;
+        };
+        SedationCriterionMarkDto: {
+            /** @example AIRWAY_PATENT */
+            code: string;
+            met: boolean;
+        };
+        SedationVitalsValuesDto: {
+            /** @description SpO2 (%) */
+            spo2?: number;
+            /** @description lpm */
+            heartRate?: number;
+            /** @description mmHg */
+            systolic?: number;
+            /** @description mmHg */
+            diastolic?: number;
+            /** @description rpm */
+            respiratoryRate?: number;
+            /** @description CO2 espirado (mmHg), opcional */
+            etco2?: number;
+            sedationLevel?: components["schemas"]["SedationLevel"];
+        };
+        SedationDischargeDto: {
+            criteria: components["schemas"]["SedationCriterionMarkDto"][];
+            /** @description Aldrete modificado; ≥ 9 sustituye a los criterios */
+            aldreteScore?: number;
+            /** @description Constantes al alta */
+            vitals: components["schemas"]["SedationVitalsValuesDto"];
+            /**
+             * Format: date-time
+             * @description Hora del egreso; por defecto, ahora
+             */
+            dischargedAt?: string;
+            /** @description A quién se entrega */
+            handedOverToName: string;
+            /** @example Madre */
+            handedOverToRelationship: string;
+            /** @description Indicaciones entregadas al acompañante */
+            instructionsDelivered: boolean;
+            /**
+             * Format: uuid
+             * @description Quien monitorizó (miembro clínico de la clínica)
+             */
+            monitorId: string;
+            /** @description Sedación moderada con el operador como monitor: justificación (≥ 10 caracteres) */
+            sameMonitorJustification?: string;
         };
         CreateToothRecordDto: {
             /**
@@ -8124,6 +9712,51 @@ export interface components {
             /** @description false (defecto): una cita fuera del horario del profesional se agenda con el aviso PROVIDER_OFF_SCHEDULE. true: se rechaza con 409. */
             strictProviderSchedule: boolean;
         };
+        /**
+         * @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER).
+         * @enum {string}
+         */
+        PaymentMethodKind: "CASH" | "CARD" | "TRANSFER" | "DIGITAL" | "OTHER";
+        /**
+         * @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica.
+         * @enum {string}
+         */
+        PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+        PaymentMethodDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Pago móvil */
+            name: string;
+            /** @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER). */
+            kind: components["schemas"]["PaymentMethodKind"];
+            active: boolean;
+            /** @description Si el abono con este medio exige la referencia del pago. */
+            requiresReference: boolean;
+            /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
+            legacyMethod: components["schemas"]["PaymentMethod"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatePaymentMethodDto: {
+            /** @example Pago móvil */
+            name: string;
+            kind: components["schemas"]["PaymentMethodKind"];
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
+            /** @description Sin indicarlo, no pide referencia. */
+            requiresReference?: boolean;
+        };
+        UpdatePaymentMethodDto: {
+            /** @example Pago móvil */
+            name?: string;
+            kind?: components["schemas"]["PaymentMethodKind"];
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
+            /** @description Sin indicarlo, no pide referencia. */
+            requiresReference?: boolean;
+        };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
         WaitlistSourceAppointmentDto: {
@@ -8240,11 +9873,34 @@ export interface components {
             reason?: string;
             notes?: string;
         };
+        LinkOfferAcceptedByDto: {
+            /** Format: uuid */
+            patientId: string;
+            firstName: string;
+            lastName: string;
+            /** Format: date-time */
+            at: string | null;
+        };
+        SlotLinkOffersDto: {
+            /** @description Enviadas, sin respuesta y aún vigentes («Oferta enviada (n)»). */
+            pending: number;
+            /** @description Enviadas en total para este hueco. */
+            total: number;
+            /** @description «Aceptado por …»: quién se quedó el hueco desde el enlace. */
+            acceptedBy: components["schemas"]["LinkOfferAcceptedByDto"] | null;
+            /** @description «Caducado»: todas caducaron o se rechazaron sin que nadie aceptara. */
+            expired: boolean;
+        };
         /**
          * @description Por qué no se le escribe por WhatsApp: baja de los avisos, canal «Ninguno» o sin el permiso de WhatsApp (fecha y origen) de DX-128. null si se le puede escribir.
          * @enum {string}
          */
         WhatsappOfferBlock: "OPTED_OUT" | "CHANNEL_NONE" | "NO_OPT_IN";
+        /**
+         * @description DX-435: por qué no se le envía el enlace por email (baja o canal «Ninguno» de DX-128, o sin email). null si se puede.
+         * @enum {string}
+         */
+        EmailOfferBlock: "OPTED_OUT" | "CHANNEL_NONE" | "NO_EMAIL";
         /** @enum {string} */
         AppointmentStatus: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
         CandidateAppointmentDto: {
@@ -8258,6 +9914,11 @@ export interface components {
             providerId: string;
             status: components["schemas"]["AppointmentStatus"];
         };
+        /**
+         * @description DX-435: su última oferta con enlace de este hueco: `OPEN` enviada y vigente, `ACCEPTED`, `DECLINED`, `EXPIRED` (caducó) o `TAKEN` (otro aceptó antes). null si no se le envió enlace.
+         * @enum {string}
+         */
+        CandidateLinkOfferState: "OPEN" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "TAKEN";
         OpeningCandidateDto: {
             /**
              * @description `WAITLIST`: pendiente por agendar (DX-122). `APPOINTMENT`: cita futura marcada «Adelantar si hay hueco».
@@ -8276,6 +9937,8 @@ export interface components {
             whatsappBlocked: boolean;
             /** @description Por qué no se le escribe por WhatsApp: baja de los avisos, canal «Ninguno» o sin el permiso de WhatsApp (fecha y origen) de DX-128. null si se le puede escribir. */
             whatsappBlockedReason: components["schemas"]["WhatsappOfferBlock"] | null;
+            /** @description DX-435: por qué no se le envía el enlace por email (baja o canal «Ninguno» de DX-128, o sin email). null si se puede. */
+            emailBlockedReason: components["schemas"]["EmailOfferBlock"] | null;
             /** Format: uuid */
             waitlistEntryId: string | null;
             /** Format: uuid */
@@ -8301,6 +9964,8 @@ export interface components {
              * @description La última oferta de ESTE hueco aún sin respuesta (p. ej. el WhatsApp enviado): su id para anotar la respuesta con `PATCH /appointments/openings/offers/:id`.
              */
             pendingOfferId: string | null;
+            /** @description DX-435: su última oferta con enlace de este hueco: `OPEN` enviada y vigente, `ACCEPTED`, `DECLINED`, `EXPIRED` (caducó) o `TAKEN` (otro aceptó antes). null si no se le envió enlace. */
+            linkOfferState: components["schemas"]["CandidateLinkOfferState"] | null;
         };
         OpeningCandidatesDto: {
             /** Format: uuid */
@@ -8317,20 +9982,23 @@ export interface components {
             providerOffSchedule: boolean;
             /** @description Tope de ofertas por paciente y día. */
             offerCap: number;
+            linkOffers: components["schemas"]["SlotLinkOffersDto"];
+            /** @description DX-435: quedan al menos 20 minutos para el hueco (se puede enviar oferta con enlace). */
+            linkOfferOpen: boolean;
             items: components["schemas"]["OpeningCandidateDto"][];
             /** @description Había más de 50 candidatos. */
             truncated: boolean;
         };
         /**
-         * @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé».
+         * @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé». DX-435 `LINK_EMAIL` / `LINK_WA_ME`: oferta con enlace público que el paciente acepta solo (el primero que acepta se queda el hueco); por email la envía el outbox y por WhatsApp el enlace vuelve en `url` para el texto de wa.me.
          * @enum {string}
          */
-        WaitlistOfferChannel: "WA_ME" | "PHONE";
+        WaitlistOfferChannel: "WA_ME" | "PHONE" | "LINK_WA_ME" | "LINK_EMAIL";
         /**
          * @description Solo con `PHONE`: lo que respondió. Por WhatsApp nace PENDING.
          * @enum {string}
          */
-        WaitlistOfferOutcome: "PENDING" | "ACCEPTED" | "DECLINED" | "NO_ANSWER";
+        WaitlistOfferOutcome: "PENDING" | "ACCEPTED" | "DECLINED" | "NO_ANSWER" | "EXPIRED" | "TAKEN_BY_OTHER";
         CreateWaitlistOfferDto: {
             /** Format: date-time */
             slotStart: string;
@@ -8344,7 +10012,7 @@ export interface components {
             waitlistEntryId?: string;
             /** Format: uuid */
             appointmentId?: string;
-            /** @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé». */
+            /** @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé». DX-435 `LINK_EMAIL` / `LINK_WA_ME`: oferta con enlace público que el paciente acepta solo (el primero que acepta se queda el hueco); por email la envía el outbox y por WhatsApp el enlace vuelve en `url` para el texto de wa.me. */
             channel: components["schemas"]["WaitlistOfferChannel"];
             /** @description Solo con `PHONE`: lo que respondió. Por WhatsApp nace PENDING. */
             outcome?: components["schemas"]["WaitlistOfferOutcome"];
@@ -8379,11 +10047,20 @@ export interface components {
             outcomeById: string | null;
             /** Format: date-time */
             outcomeAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-435: cuándo deja de valer el enlace (solo canales con enlace).
+             */
+            expiresAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** @description Ofertas de hoy al paciente, con esta. */
             offersToday: number;
             offerCap: number;
+            /** @description DX-435, solo `LINK_WA_ME`: el enlace público para el texto prellenado de wa.me. Por email no vuelve (sale por el outbox). */
+            url: string | null;
+            /** @description DX-435, solo `LINK_WA_ME`: E.164 sin `+` para wa.me. */
+            whatsappPhone: string | null;
         };
         RecordWaitlistOfferOutcomeDto: {
             /** @enum {string} */
@@ -8419,8 +10096,59 @@ export interface components {
             outcomeById: string | null;
             /** Format: date-time */
             outcomeAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-435: cuándo deja de valer el enlace (solo canales con enlace).
+             */
+            expiresAt: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        /**
+         * @description `OPEN` se puede aceptar; `ACCEPTED` el hueco es suyo; `DECLINED` la rechazó; `EXPIRED` caducó; `TAKEN` otro paciente aceptó antes («Este hueco ya se ocupó»); `UNAVAILABLE` la clínica lo ocupó o bloqueó por otra vía.
+         * @enum {string}
+         */
+        PublicSlotOfferState: "OPEN" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "TAKEN" | "UNAVAILABLE";
+        PublicSlotOfferClinicDto: {
+            name: string;
+            primaryColor: string | null;
+            logoUrl: string | null;
+        };
+        PublicSlotOfferDetailsDto: {
+            /** @description Solo el nombre de pila (sin apellidos). */
+            patientFirstName: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @example America/Bogota */
+            timeZone: string;
+            /**
+             * @description Locale de la sede: la página pinta el día y la hora como la sede.
+             * @example es-CO
+             */
+            locale: string | null;
+            /** @example h12 */
+            hourCycle: string | null;
+            providerName: string | null;
+            locationName: string;
+            locationAddress: string | null;
+            /**
+             * Format: date-time
+             * @description Si acepta, su cita de esta fecha se adelanta al hueco y esa hora queda libre.
+             */
+            currentAppointmentStart: string | null;
+            /** Format: date-time */
+            expiresAt: string | null;
+        };
+        PublicSlotOfferDto: {
+            /** @description `OPEN` se puede aceptar; `ACCEPTED` el hueco es suyo; `DECLINED` la rechazó; `EXPIRED` caducó; `TAKEN` otro paciente aceptó antes («Este hueco ya se ocupó»); `UNAVAILABLE` la clínica lo ocupó o bloqueó por otra vía. */
+            state: components["schemas"]["PublicSlotOfferState"];
+            /** @description El mensaje para el paciente, en español. */
+            message: string;
+            clinic: components["schemas"]["PublicSlotOfferClinicDto"] | null;
+            /** @description Solo con `OPEN` o `ACCEPTED`. */
+            offer: components["schemas"]["PublicSlotOfferDetailsDto"] | null;
         };
         PublicConfirmationAppointmentDto: {
             /** @description Solo el nombre de pila. */
@@ -8441,10 +10169,7 @@ export interface components {
              * @description Inicio de la cita.
              */
             expiresAt: string;
-            /**
-             * @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable.
-             * @example 573105550101
-             */
+            /** @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable. */
             whatsappPhone: string | null;
             appointment: components["schemas"]["PublicConfirmationAppointmentDto"];
         };
@@ -8572,12 +10297,9 @@ export interface components {
             patientId: string;
             /** @example Ana Pérez */
             patientName: string;
-            /** @description Teléfono tal como está en la ficha, con su indicativo de país si lo tiene. */
+            /** @description Teléfono tal como está en la ficha, con su prefijo si lo tiene. */
             patientPhone: string | null;
-            /**
-             * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
-             * @example 573001234567
-             */
+            /** @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable */
             patientWhatsApp: string | null;
             /** Format: uuid */
             optionGroupId: string | null;
@@ -8699,10 +10421,24 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        TreatmentPlanRemoteAcceptanceDto: {
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            openedAt: string;
+            /** Format: date-time */
+            verifiedAt: string;
+            /** @description IP desde la que firmó */
+            ipAddress: string | null;
+        };
         TreatmentPlanAcceptanceSummaryDto: {
             signerName: string;
             /** Format: date-time */
             acceptedAt: string;
+            /** @description «Aceptado a distancia» (DX-415): el paciente firmó por el enlace con código; null si se firmó en la clínica. */
+            remote: components["schemas"]["TreatmentPlanRemoteAcceptanceDto"] | null;
         };
         TreatmentPlanDto: {
             visitIntervals?: {
@@ -8919,6 +10655,21 @@ export interface components {
             /** @description Ahorro por convenio (v2): Σ max(0, precio de lista − precio de referencia) de los ítems con convenio, en la moneda del plan. 0 en v1. */
             agreementSaving: number;
         };
+        /** @enum {string} */
+        SignatureRequestChannel: "EMAIL";
+        PlanQuoteRemoteAcceptanceDto: {
+            /** Format: uuid */
+            signatureRequestId: string;
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            openedAt: string;
+            /** Format: date-time */
+            verifiedAt: string;
+        };
         PlanQuoteAcceptanceDto: {
             signerName: string;
             /** @description data:image/png;base64,… */
@@ -8934,6 +10685,11 @@ export interface components {
             acceptanceHash: string;
             /** @description false si la foto o la firma guardadas no coinciden con sus hashes */
             integrityOk: boolean;
+            /** @description IP desde la que se firmó (evidencia) */
+            ipAddress: string | null;
+            userAgent: string | null;
+            /** @description DX-415: «Aceptado a distancia» por el paciente con enlace y código; null si se firmó en la clínica. */
+            remote: components["schemas"]["PlanQuoteRemoteAcceptanceDto"] | null;
         };
         PlanQuoteDocumentDto: {
             /** @description Organización clínica actual; separada del contenido firmado. */
@@ -9348,6 +11104,12 @@ export interface components {
             /** @example Caries de la dentina */
             labelEs: string;
         };
+        CashPaymentMethodRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Pago móvil */
+            name: string;
+        };
         CashLocationRefDto: {
             /** Format: uuid */
             id: string;
@@ -9413,6 +11175,9 @@ export interface components {
             currency: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @description DX-377: medio de pago (el inicial de su método si el abono es de una réplica anterior). */
+            paymentMethod: components["schemas"]["CashPaymentMethodRefDto"] | null;
+            reference: string | null;
             notes: string | null;
             location: components["schemas"]["CashLocationRefDto"];
             patient: components["schemas"]["CashPatientRefDto"];
@@ -9420,6 +11185,16 @@ export interface components {
             treatmentPlan: components["schemas"]["CashTreatmentPlanRefDto"] | null;
             /** @description Saldo migrado del abono (DX-262); null si es a un plan */
             openingBalance: components["schemas"]["CashOpeningBalanceRefDto"] | null;
+            /**
+             * Format: uuid
+             * @description DX-390: el cobro dividido del abono (el id de su línea 1); `null` en un abono de una sola forma de pago. Anular una línea anula el cobro entero.
+             */
+            splitId: string | null;
+            /**
+             * @description DX-390: cuántas formas de pago tiene su cobro dividido (también las que el filtro no muestra); `null` en un abono suelto.
+             * @example 2
+             */
+            splitLines: number | null;
         };
         CashScopeDto: {
             /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
@@ -9449,6 +11224,21 @@ export interface components {
             /** @example 2 */
             count: number;
         };
+        CashPaymentMethodTotalDto: {
+            /**
+             * Format: uuid
+             * @description Medio de pago (DX-377). Un abono de una réplica anterior cuenta en el medio inicial de su método; `null` = abonos sin método.
+             */
+            paymentMethodId: string | null;
+            /** @example Pago móvil */
+            name: string | null;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @example 200000 */
+            total: number;
+            /** @example 2 */
+            count: number;
+        };
         CashPaymentsSummaryDto: {
             /** @description Número de abonos del período */
             count: number;
@@ -9456,6 +11246,8 @@ export interface components {
             byCurrency: components["schemas"]["CashCurrencyTotalDto"][];
             /** @description Total por método y moneda. */
             byMethod: components["schemas"]["CashMethodTotalDto"][];
+            /** @description DX-377: total por medio de pago de la clínica y moneda. */
+            byPaymentMethod: components["schemas"]["CashPaymentMethodTotalDto"][];
         };
         CashPaymentsResponseDto: {
             items: components["schemas"]["CashPaymentDto"][];
@@ -9484,8 +11276,20 @@ export interface components {
              * @example 2026-10-16
              */
             paidAt: string;
-            /** @enum {string} */
+            /**
+             * @description Método antiguo (clientes anteriores a DX-377). Con `paymentMethodId` se ignora: el método sale del tipo base del medio. Solo con él, el abono se enlaza al medio inicial de ese método.
+             * @enum {string}
+             */
             method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+            /**
+             * Format: uuid
+             * @description Medio de pago ACTIVO del catálogo de la clínica (GET /payment-methods).
+             */
+            paymentMethodId?: string;
+            /** @description Referencia del pago. Obligatoria si el medio la pide (400). Se compara sin espacios, puntos ni guiones y en mayúsculas (DX-395: «123-456», «123.456» y «123 456» son la misma): si el mismo medio ya la tiene en un abono vivo de ±90 días, 409 `PAYMENT_REFERENCE_DUPLICATE` con `matches`. Más de 60 caracteres: 400 en español. */
+            reference?: string;
+            /** @description Motivo para confirmar una referencia repetida tras el 409. Se guarda en el abono; la auditoría registra la confirmación y los abonos repetidos. Más de 300 caracteres: 400 en español. */
+            duplicateReferenceReason?: string;
             notes?: string;
         };
         FrozenExchangeRateDto: {
@@ -9542,9 +11346,32 @@ export interface components {
              * @example 2026-10-16
              */
             paidOn: string;
-            /** @enum {string|null} */
+            /**
+             * @description Método antiguo, derivado del tipo base del medio (DX-377: DIGITAL se guarda como TRANSFER). Se mantiene para informes y réplicas anteriores.
+             * @enum {string|null}
+             */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /**
+             * Format: uuid
+             * @description Medio de pago del catálogo de la clínica (DX-377).
+             */
+            paymentMethodId: string | null;
+            /** @example Pago móvil */
+            paymentMethodName: string | null;
+            /** @description Referencia del pago tal como la dio el pagador (DX-377). */
+            reference: string | null;
+            /** @description Motivo con que se confirmó una referencia repetida (DX-377); null si no se repetía. */
+            duplicateReferenceReason: string | null;
+            /** @description Solo en la respuesta del alta: ids de los abonos con la misma referencia y medio que se confirmaron con motivo. */
+            duplicateReferenceOf?: string[];
             notes: string | null;
+            /**
+             * Format: uuid
+             * @description DX-390: el cobro dividido del abono (el id de su línea 1, que lleva el recibo único); null en un abono de una sola forma de pago.
+             */
+            splitId: string | null;
+            /** @description DX-390: número de la línea en su cobro dividido (1–5). */
+            splitLine: number | null;
             /** Format: uuid */
             createdById: string | null;
             /** Format: date-time */
@@ -9552,7 +11379,7 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             /**
-             * @description Número del recibo de caja (DX-136): serie de la sede y consecutivo. null en los abonos anteriores a la numeración («sin serie»; su recibo conserva la referencia antigua REC-xxxxxxxx).
+             * @description Número del recibo de caja (DX-136): serie de la sede y consecutivo. null en los abonos anteriores a la numeración («sin serie»; su recibo conserva la referencia antigua REC-xxxxxxxx). DX-390: todas las líneas de un cobro dividido llevan el número de su recibo único.
              * @example NOR-000123
              */
             receiptNumber: string | null;
@@ -9562,6 +11389,50 @@ export interface components {
             frozenRate: components["schemas"]["FrozenExchangeRateDto"] | null;
             /** @description DX-375: la tasa del abono. NOT_NEEDED: está en la moneda de su destino. FROZEN: congeló su tasa al registrarse (o el barrido, si se cobró sin tasa) y saldos y totales la usan siempre, aunque la tasa cambie después. MISSING: «sin tasa»: no había tasa de su día; no cuenta en el saldo del plan hasta que se registre (Ajustes › Tasa de cambio) y el barrido de cada minuto la congele. LEGACY: anterior a la tasa congelada y aún sin congelar: se convierte con la tasa de su día, como antes, hasta que el barrido la congele. */
             exchangeRateStatus: components["schemas"]["PaymentExchangeRateStatus"];
+        };
+        SplitPaymentLineDto: {
+            /** @example 50 */
+            amount: number;
+            /** @description Código ISO 4217 de la línea (puede ser otra que la del plan). */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description Medio de pago ACTIVO de la clínica (GET /payment-methods). Obligatorio en cada línea.
+             */
+            paymentMethodId: string;
+            /** @description Referencia de la línea: obligatoria si su medio la pide (400) y con el aviso de repetida de DX-377 (409 `PAYMENT_REFERENCE_DUPLICATE` con `line`, la línea desde 0). */
+            reference?: string;
+            /** @description Motivo para confirmar la referencia repetida de esta línea. */
+            duplicateReferenceReason?: string;
+        };
+        RecordSplitPaymentDto: {
+            /**
+             * @description El día civil `YYYY-MM-DD` (o un instante con `Z` o desfase) de TODO el cobro, como en un abono (DX-097).
+             * @example 2026-10-30
+             */
+            paidAt: string;
+            lines: components["schemas"]["SplitPaymentLineDto"][];
+            /** @description Confirma que el total, si supera lo pendiente del plan, deja el excedente como saldo a favor (sin ella, 409 `SPLIT_PAYMENT_EXCEEDS_BALANCE`). */
+            confirmCreditBalance?: boolean;
+            notes?: string;
+        };
+        SplitPaymentDto: {
+            /**
+             * Format: uuid
+             * @description Id del cobro: el de su línea 1 (la del recibo).
+             */
+            id: string;
+            /**
+             * @description El número del recibo único del cobro (DX-136).
+             * @example NOR-000123
+             */
+            receiptNumber: string | null;
+            /** @description Moneda del plan: la del total. */
+            planCurrency: string;
+            /** @description Suma de las líneas en la moneda del plan, cada una con su tasa congelada (DX-375); null si alguna quedó «sin tasa». */
+            total: number | null;
+            /** @description Un abono por línea, en orden (`splitLine`). */
+            payments: components["schemas"]["PaymentDto"][];
         };
         PaymentWithoutRateDto: {
             /** Format: uuid */
@@ -9622,7 +11493,12 @@ export interface components {
              */
             paid: number;
             /**
-             * @description billable - paid
+             * @description DX-253: Σ traspasos y devoluciones de saldo a favor del plan en planCurrency, con signo (los abonos no cambian).
+             * @example 0
+             */
+            creditMovements: number;
+            /**
+             * @description billable - paid - creditMovements
              * @example 200
              */
             balance: number;
@@ -9672,6 +11548,36 @@ export interface components {
              */
             equivalentAmount: number | null;
         };
+        ReceiptSplitViewLineDto: {
+            /**
+             * Format: uuid
+             * @description El abono de la línea.
+             */
+            paymentId: string;
+            line: number;
+            /** @example 50 */
+            amount: number;
+            /** @description Código ISO 4217 de la línea. */
+            currency: string;
+            /** @enum {string|null} */
+            method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            paymentMethodName: string | null;
+            reference: string | null;
+            /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
+            equivalentAmount: number | null;
+            /** @description Como `exchangeRate` del recibo, para esta línea. */
+            exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
+        };
+        ReceiptSplitTotalDto: {
+            /** @description Moneda del plan. */
+            currency: string;
+            /** @description null si alguna línea está «sin tasa». */
+            amount: number | null;
+        };
+        ReceiptSplitDto: {
+            lines: components["schemas"]["ReceiptSplitViewLineDto"][];
+            total: components["schemas"]["ReceiptSplitTotalDto"];
+        };
         ReceiptClinicDto: {
             /** @example Clínica Demo */
             name: string;
@@ -9713,6 +11619,10 @@ export interface components {
             currency: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @description DX-377: nombre del medio de pago; ausente en los recibos anteriores. */
+            paymentMethodName?: string | null;
+            /** @description DX-377: referencia del pago; ausente en los recibos anteriores. */
+            reference?: string | null;
             /** Format: date-time */
             paidAt: string;
             /**
@@ -9756,6 +11666,28 @@ export interface components {
             /** @example Recepción Demo */
             fullName: string;
         };
+        ReceiptSplitLineDto: {
+            /**
+             * Format: uuid
+             * @description El abono de la línea.
+             */
+            paymentId: string;
+            line: number;
+            /** @example 50 */
+            amount: number;
+            /** @description Código ISO 4217 de la línea. */
+            currency: string;
+            /** @enum {string|null} */
+            method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            paymentMethodName: string | null;
+            reference: string | null;
+            /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
+            equivalentAmount: number | null;
+        };
+        ReceiptSnapshotSplitDto: {
+            lines: components["schemas"]["ReceiptSplitLineDto"][];
+            total: components["schemas"]["ReceiptSplitTotalDto"];
+        };
         ReceiptSnapshotDto: {
             /** @enum {number} */
             version: 1;
@@ -9773,6 +11705,8 @@ export interface components {
             planBalance: components["schemas"]["ReceiptPlanBalanceDto"] | null;
             /** @description Quién cobró. */
             cashier: components["schemas"]["ReceiptCashierDto"] | null;
+            /** @description DX-390: las formas de pago del cobro dividido y su total al emitir; ausente o null en un abono suelto (`payment` es entonces su línea 1). */
+            split?: components["schemas"]["ReceiptSnapshotSplitDto"] | null;
             /** @example Este documento no es factura */
             legalNotice: string;
         };
@@ -9796,8 +11730,10 @@ export interface components {
             /** Format: date-time */
             voidedAt: string | null;
             voidReason: string | null;
-            /** @description DX-376: la tasa del abono y su equivalente en la moneda de su destino; null si el abono está en esa moneda. */
+            /** @description DX-376: la tasa del abono y su equivalente en la moneda de su destino; null si el abono está en esa moneda o es un cobro dividido (DX-390: cada línea lleva la suya en `split`). */
             exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
+            /** @description DX-390: el cobro dividido del recibo (todas sus formas de pago, cada una con su tasa congelada, y el total en la moneda del plan); null en un abono suelto. El recibo de cualquier línea es el del cobro. */
+            split: components["schemas"]["ReceiptSplitDto"] | null;
             /** @description Foto inmutable al emitir (en los «sin serie», los datos de hoy). */
             snapshot: components["schemas"]["ReceiptSnapshotDto"];
         };
@@ -9964,6 +11900,46 @@ export interface components {
             items: components["schemas"]["AllocationItemOptionDto"][];
             /** @description Las líneas de antes de guardar */
             previous: components["schemas"]["PreviousAllocationLineDto"][];
+        };
+        PaymentRateBacklogDto: {
+            /**
+             * @description Abonos vivos de la clínica que llevan más de 24 h sin tasa (0: no hay aviso)
+             * @example 3
+             */
+            count: number;
+            /**
+             * Format: date-time
+             * @description Desde cuándo espera el más antiguo (UTC; la web lo enseña como día de la sede), o null si count es 0
+             * @example 2026-10-28T14:05:00.000Z
+             */
+            oldestSince: string | null;
+        };
+        PaymentRateOtherMissingDto: {
+            /** @example 0 */
+            count: number;
+            /** @description Las otras monedas sin tasa manual ese día (ISO 4217). */
+            currencies: string[];
+        };
+        PaymentRateBacklogDayDto: {
+            /**
+             * Format: date
+             * @example 2026-10-28
+             */
+            date: string;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * @description Abonos vivos de la clínica de ese día (en su sede) que esperan su tasa, están en esa moneda o van a un plan (o saldo migrado) en esa moneda, y cuya otra moneda es USD o ya tiene tasa manual ese día: a los que servirá de respaldo.
+             * @example 1
+             */
+            count: number;
+            /**
+             * @description Hay tasa del proveedor guardada para ese día: manda la automática y la manual de un día anterior a «manual desde» no se usa.
+             * @example false
+             */
+            providerRateSaved: boolean;
+            /** @description Abonos de ese día que necesitan esa moneda y otra distinta de USD sin tasa manual ese día: la de respaldo solo les servirá cuando se registre también la otra. */
+            otherRatesMissing: components["schemas"]["PaymentRateOtherMissingDto"];
         };
         CreatePaymentPlanDto: {
             /**
@@ -10176,6 +12152,11 @@ export interface components {
              */
             paid: number;
             /**
+             * @description DX-253: Σ traspasos y devoluciones de saldo a favor en esta moneda, con signo. balance = budgeted + openingBalance − paid − creditMovements
+             * @example 0
+             */
+            creditMovements: number;
+            /**
              * @description budgeted + openingBalance - paid (negativo = saldo a favor)
              * @example 1950000
              */
@@ -10219,10 +12200,21 @@ export interface components {
              * @example 1200000
              */
             paid: number;
+            /**
+             * @description DX-253: Σ asientos del saldo a favor del plan en su moneda, con signo (traspasos recibidos − dados − devoluciones). Los abonos no cambian.
+             * @example -200000
+             */
+            creditMovements: number;
             /** @description Abonos vivos del plan hechos en otra moneda (sin convertir) */
             paidOtherCurrencies: components["schemas"]["AccountStatementOtherCurrencyDto"][];
             /** @example 1800000 */
             balance: number;
+        };
+        AccountStatementPaymentMethodRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Pago móvil */
+            name: string;
         };
         AccountStatementLocationRefDto: {
             /** Format: uuid */
@@ -10256,8 +12248,28 @@ export interface components {
             amount: number;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
-            /** @enum {string|null} */
+            /**
+             * @description Método antiguo, derivado del tipo base del medio (un medio digital es TRANSFER). Para mostrar, usar `paymentMethod.name`.
+             * @enum {string|null}
+             */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @description DX-395: medio de pago de la clínica con que se cobró (también los propios, como «Pago móvil»). Un abono de una réplica anterior sin medio lleva el medio inicial de su método; `null` si no tiene método. */
+            paymentMethod: components["schemas"]["AccountStatementPaymentMethodRefDto"] | null;
+            /**
+             * @description DX-395: referencia del pago tal como se tecleó, o `null`. Solo la ven los roles de cobro (este endpoint) y el paciente en su estado de cuenta.
+             * @example ABC 123
+             */
+            reference: string | null;
+            /**
+             * Format: uuid
+             * @description DX-390: el cobro dividido del abono (el id de su línea 1); `null` en un abono de una sola forma de pago. Anular una línea anula el cobro entero.
+             */
+            splitId: string | null;
+            /**
+             * @description DX-390: cuántas formas de pago tiene su cobro dividido; `null` en un abono suelto.
+             * @example 2
+             */
+            splitLines: number | null;
             location: components["schemas"]["AccountStatementLocationRefDto"];
             /**
              * Format: uuid
@@ -10439,12 +12451,9 @@ export interface components {
             id: string;
             /** @example Ana Pérez */
             fullName: string;
-            /** @description Teléfono tal como está en la ficha, con su indicativo de país si lo tiene. */
+            /** @description Teléfono tal como está en la ficha, con su prefijo si lo tiene. */
             phone: string | null;
-            /**
-             * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
-             * @example 573001234567
-             */
+            /** @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable */
             whatsApp: string | null;
         };
         AgingBucketsDto: {
@@ -10568,6 +12577,163 @@ export interface components {
             /** @description Por moneda, de TODAS las filas filtradas (no solo la página) */
             totals: components["schemas"]["AgingTotalDto"][];
         };
+        TransferCreditDto: {
+            /**
+             * Format: uuid
+             * @description Plan vivo del mismo paciente.
+             */
+            targetPlanId: string;
+            /** @example 200000 */
+            amount: number;
+            /** @description La moneda del plan de origen (ISO 4217). */
+            currency: string;
+            reason?: string | null;
+        };
+        CreditTransferResultDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            sourcePlanId: string;
+            /** Format: uuid */
+            targetPlanId: string;
+            currency: string;
+            amount: number;
+            reason: string | null;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description Saldo a favor que le queda al plan de origen. */
+            sourceCreditAfter: number;
+        };
+        RefundCreditDto: {
+            /** @example 100000 */
+            amount: number;
+            /** @description La moneda del plan (ISO 4217). */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            reason: string;
+            /** @description Abonos del plan que se devuelven (al menos uno). */
+            paymentIds: string[];
+        };
+        RefundReceiptClinicDto: {
+            name: string;
+        };
+        RefundReceiptLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string | null;
+            /**
+             * @description IANA de la sede.
+             * @example America/Bogota
+             */
+            timeZone: string;
+        };
+        RefundReceiptPatientDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            documentType: string;
+            docTypeLabel: string | null;
+            docNumber: string | null;
+        };
+        RefundReceiptPlanDto: {
+            /** Format: uuid */
+            id: string;
+            label: string | null;
+            createdAt: string;
+        };
+        RefundPaymentRefDto: {
+            /** Format: uuid */
+            id: string;
+            paidAt: string;
+            amount: number;
+            currency: string;
+            receiptNumber: string;
+        };
+        RefundReceiptByDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string | null;
+        };
+        RefundReceiptSnapshotDto: {
+            number: string;
+            issuedAt: string;
+            clinic: components["schemas"]["RefundReceiptClinicDto"];
+            location: components["schemas"]["RefundReceiptLocationDto"];
+            patient: components["schemas"]["RefundReceiptPatientDto"];
+            plan: components["schemas"]["RefundReceiptPlanDto"];
+            amount: number;
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            reason: string;
+            payments: components["schemas"]["RefundPaymentRefDto"][];
+            creditBefore: number;
+            creditAfter: number;
+            refundedBy: components["schemas"]["RefundReceiptByDto"];
+            /** Format: uuid */
+            cashSessionId: string | null;
+        };
+        CreditRefundDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example DEV-BOG-000001 */
+            number: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            treatmentPlanId: string;
+            currency: string;
+            amount: number;
+            method: components["schemas"]["PaymentMethod"];
+            reason: string;
+            /** Format: uuid */
+            cashSessionId: string | null;
+            paymentIds: string[];
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            createdAt: string;
+            snapshot: components["schemas"]["RefundReceiptSnapshotDto"];
+        };
+        CreditTransferDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            sourcePlanId: string;
+            /** Format: uuid */
+            targetPlanId: string;
+            currency: string;
+            amount: number;
+            reason: string | null;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PatientCreditMovementsDto: {
+            transfers: components["schemas"]["CreditTransferDto"][];
+            refunds: components["schemas"]["CreditRefundDto"][];
+        };
+        CreditPolicyDto: {
+            /** @description Tope de RECEPTION por traspaso o devolución, en la moneda del plan (0 = no puede). ADMIN no tiene tope. */
+            receptionMaxAmount: number;
+        };
+        UpdateCreditPolicyDto: {
+            /** @example 0 */
+            receptionMaxAmount: number;
+        };
         KpiDefinitionDto: {
             /** @enum {string} */
             key: "production" | "collected" | "collectionRate" | "completedAppointments" | "noShowRate" | "newPatients" | "averageTicket" | "occupancy";
@@ -10678,6 +12844,171 @@ export interface components {
             /** @description ¿Alguna fila (o el total) tiene `previousPeriodUnattributed`? La pantalla lo explica junto a «Producción» y «% de cobro» */
             previousPeriodUnattributed: boolean;
         };
+        ProductionFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+            /**
+             * Format: uuid
+             * @description En un DENTIST, siempre él
+             */
+            professionalId: string | null;
+            professionalName: string | null;
+            category: string | null;
+        };
+        ProductionLocationOptionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description false = sede desactivada (sigue saliendo) */
+            isActive: boolean;
+        };
+        ProductionProfessionalOptionDto: {
+            /** Format: uuid */
+            userId: string;
+            fullName: string;
+        };
+        ProductionOptionsDto: {
+            /** @description Las sedes que ve quien consulta (DX-089) */
+            locations: components["schemas"]["ProductionLocationOptionDto"][];
+            /** @description Quién atiende (DENTIST o ADMIN); a un DENTIST, solo él mismo */
+            professionals: components["schemas"]["ProductionProfessionalOptionDto"][];
+            /** @description Categorías del catálogo */
+            categories: string[];
+        };
+        ProcedureRowDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Procedimientos realizados */
+            count: number;
+            /** @description Σ precio */
+            gross: number;
+            /** @description Σ descuento */
+            discounts: number;
+            /** @description Bruto − descuentos */
+            net: number;
+            /** @description Honorario medio: neto ÷ cantidad (2 decimales) */
+            averageNet: number;
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @example D2391 */
+            code: string;
+            /** @example Resina */
+            label: string;
+            /** @description Categoría del catálogo; null = «Sin categoría» */
+            category: string | null;
+            /** @description Honorario medio de catálogo: Σ precio de catálogo congelado en cada ítem (DX-105) ÷ los ítems que lo tienen. null si ninguno lo tiene */
+            catalogAverage: number | null;
+            /** @description Ítems con precio de catálogo congelado */
+            catalogCount: number;
+            /** @description Diferencia % (1 decimal) del neto cobrado frente al catálogo, en los ítems que lo tienen: (Σ neto − Σ catálogo) ÷ Σ catálogo. Negativo = por debajo del catálogo. null sin catálogo o con catálogo 0 */
+            differencePercent: number | null;
+        };
+        CategoryTotalsDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Procedimientos realizados */
+            count: number;
+            /** @description Σ precio */
+            gross: number;
+            /** @description Σ descuento */
+            discounts: number;
+            /** @description Bruto − descuentos */
+            net: number;
+            /** @description Honorario medio: neto ÷ cantidad (2 decimales) */
+            averageNet: number;
+            category: string | null;
+        };
+        ProductionTotalsDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Procedimientos realizados */
+            count: number;
+            /** @description Σ precio */
+            gross: number;
+            /** @description Σ descuento */
+            discounts: number;
+            /** @description Bruto − descuentos */
+            net: number;
+            /** @description Honorario medio: neto ÷ cantidad (2 decimales) */
+            averageNet: number;
+        };
+        ProductionAmountsDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Procedimientos realizados */
+            count: number;
+            /** @description Σ precio */
+            gross: number;
+            /** @description Σ descuento */
+            discounts: number;
+            /** @description Bruto − descuentos */
+            net: number;
+        };
+        ProductionByProcedureDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /**
+             * @description CLINIC: todo el equipo (ADMIN); OWN: solo lo suyo (DENTIST)
+             * @enum {string}
+             */
+            scope: "CLINIC" | "OWN";
+            filters: components["schemas"]["ProductionFiltersDto"];
+            options: components["schemas"]["ProductionOptionsDto"];
+            /** @description Una fila por procedimiento y moneda, por categoría («Sin categoría» al final) y código */
+            rows: components["schemas"]["ProcedureRowDto"][];
+            /** @description Subtotal de cada categoría, por moneda */
+            categoryTotals: components["schemas"]["CategoryTotalsDto"][];
+            /** @description Total por moneda: nunca se suman monedas distintas */
+            totals: components["schemas"]["ProductionTotalsDto"][];
+            /** @description «Sin atribuir» del período (DX-305), por moneda: realizados con `completedAt` en el período pero sin sede de realización (una línea de la tabla). Solo los ve quien ve todas las sedes sin elegir una */
+            unattributed: components["schemas"]["ProductionAmountsDto"][];
+            /** @description Realizados SIN FECHA (`completedAt` nulo), por moneda: no son de ningún período; la pantalla los avisa bajo la tabla y el CSV los pone al final como «Sin fecha». Los que tienen sede, si es de las visibles; los que no, solo para quien ve todas sin elegir una. No cuentan para `hasActivity` */
+            undated: components["schemas"]["ProductionAmountsDto"][];
+            /** @description ¿Hay filas o «Sin atribuir» en el período? (lo sin fecha no cuenta) */
+            hasActivity: boolean;
+        };
+        ProductionItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            completedAt: string;
+            /**
+             * Format: uuid
+             * @description null = paciente eliminado (no se nombra ni se enlaza)
+             */
+            patientId: string | null;
+            patientName: string | null;
+            /** Format: uuid */
+            professionalId: string | null;
+            professionalName: string | null;
+            /**
+             * Format: uuid
+             * @description Sede donde se realizó
+             */
+            locationId: string;
+            locationName: string;
+            /**
+             * @description Zona de la sede donde se realizó: la fecha se pinta con ella
+             * @example America/Bogota
+             */
+            timeZone: string;
+            /** @example 16 */
+            toothNumber: string;
+            currency: string;
+            price: number;
+            discount: number;
+            /** @description Precio − descuento */
+            net: number;
+        };
+        ProductionItemsDto: {
+            items: components["schemas"]["ProductionItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
             requireOpenSession: boolean;
@@ -10696,8 +13027,6 @@ export interface components {
             currency: string;
             amount: number;
         };
-        /** @enum {string} */
-        PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
         CashExpectedLineDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -10729,7 +13058,10 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
-            /** @example PRI-000012 */
+            /**
+             * @description Número del recibo del abono; una forma de pago de un cobro dividido lleva el del recibo único del cobro (DX-390). `null` si el abono es anterior a la numeración.
+             * @example PRI-000012
+             */
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -10748,7 +13080,10 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
-            /** @example PRI-000012 */
+            /**
+             * @description Número del recibo del abono; una forma de pago de un cobro dividido lleva el del recibo único del cobro (DX-390). `null` si el abono es anterior a la numeración.
+             * @example PRI-000012
+             */
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -10801,6 +13136,20 @@ export interface components {
             /** @description Anulada con la caja ya cerrada: sigue restando aquí y la anulación es un ajuste OUTFLOW_VOID en otra caja. */
             bookedAsAdjustment: boolean;
         };
+        CashCreditRefundDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example DEV-BOG-000001 */
+            number: string;
+            amount: number;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            reason: string;
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: components["schemas"]["CashStaffRefDto"];
+            patient: components["schemas"]["CashPatientRefDto"];
+        };
         /**
          * @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada.
          * @enum {string}
@@ -10812,6 +13161,7 @@ export interface components {
             patient: components["schemas"]["CashPatientRefDto"];
             /** @example 2026-10-16 */
             paidOn: string;
+            /** @description Número del recibo del abono; una forma de pago de un cobro dividido lleva el del recibo único del cobro (DX-390). `null` si el abono es anterior a la numeración. */
             receiptNumber: string | null;
         };
         CashAdjustmentExpensePaymentDto: {
@@ -10931,6 +13281,8 @@ export interface components {
             outflows: components["schemas"]["CashOutflowDto"][];
             /** @description Salidas anuladas: no restan salvo si se anularon con la caja cerrada */
             voidedOutflows: components["schemas"]["CashVoidedOutflowDto"][];
+            /** @description DX-253: devoluciones de saldo a favor en efectivo del turno: restan en el esperado de CASH (dentro de «Salidas»). */
+            creditRefunds: components["schemas"]["CashCreditRefundDto"][];
             /** @description Ajustes que cuentan en esta caja */
             adjustments: components["schemas"]["CashAdjustmentDto"][];
             /** @description Ajustes nacidos de esta caja ya cerrada, que cuentan en otra */
@@ -11940,6 +14292,15 @@ export interface components {
             delayMs: number;
             /** @description Con retraso: más de 2 periodos sin correr, o nunca sincronizada */
             overdue: boolean;
+            /** @description DX-380: una sola ejecución a la vez (no encola un tick mientras el anterior siga PENDING o RUNNING) */
+            singleton: boolean;
+            /** @description DX-380: ticks saltados porque el anterior seguía en curso (0 si la tarea no está sincronizada) */
+            skippedCount: number;
+            /**
+             * Format: date-time
+             * @description DX-380: el último tick saltado, o null
+             */
+            lastSkippedAt: string | null;
         };
         JobsStatsDto: {
             /**
@@ -12117,6 +14478,27 @@ export interface components {
             /** @description false = desactivar la plantilla */
             active?: boolean;
         };
+        RemoteConsentEvidenceDto: {
+            /** Format: uuid */
+            signatureRequestId: string;
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            openedAt: string;
+            /**
+             * Format: date-time
+             * @description Código verificado
+             */
+            verifiedAt: string;
+            /**
+             * Format: uuid
+             * @description El profesional que debe firmar en la app (y que nombra el texto)
+             */
+            professionalUserId: string;
+        };
         PatientConsentSummaryDto: {
             /** Format: uuid */
             id: string;
@@ -12144,6 +14526,15 @@ export interface components {
             signedAt: string;
             /** Format: uuid */
             recordedById: string;
+            /** @description DX-243: firmado a distancia por enlace; null si en pantalla */
+            remote: components["schemas"]["RemoteConsentEvidenceDto"] | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional: la misma hora en pantalla; a distancia, la de su firma en la app (null si falta)
+             */
+            professionalSignedAt: string | null;
+            /** @description Completo: con la firma del paciente Y la del profesional. Solo así cuenta como válido. */
+            complete: boolean;
         };
         ConsentPreviewDto: {
             /** Format: uuid */
@@ -12199,11 +14590,24 @@ export interface components {
             signedAt: string;
             /** Format: uuid */
             recordedById: string;
+            /** @description DX-243: firmado a distancia por enlace; null si en pantalla */
+            remote: components["schemas"]["RemoteConsentEvidenceDto"] | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional: la misma hora en pantalla; a distancia, la de su firma en la app (null si falta)
+             */
+            professionalSignedAt: string | null;
+            /** @description Completo: con la firma del paciente Y la del profesional. Solo así cuenta como válido. */
+            complete: boolean;
             /** @description Texto renderizado tal como se firmó */
             body: string;
             /** @description data:image/png;base64,… */
             patientSignature: string;
-            /** @description data:image/png;base64,… */
+            /** @description data:image/png;base64,…; null en uno firmado a distancia hasta que firma el profesional */
+            professionalSignature: string | null;
+        };
+        CountersignPatientConsentDto: {
+            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
             professionalSignature: string;
         };
         ConsentClinicDto: {
@@ -12249,16 +14653,76 @@ export interface components {
             signedAt: string;
             /** Format: uuid */
             recordedById: string;
+            /** @description DX-243: firmado a distancia por enlace; null si en pantalla */
+            remote: components["schemas"]["RemoteConsentEvidenceDto"] | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional: la misma hora en pantalla; a distancia, la de su firma en la app (null si falta)
+             */
+            professionalSignedAt: string | null;
+            /** @description Completo: con la firma del paciente Y la del profesional. Solo así cuenta como válido. */
+            complete: boolean;
             /** @description Texto renderizado tal como se firmó */
             body: string;
             /** @description data:image/png;base64,… */
             patientSignature: string;
-            /** @description data:image/png;base64,… */
-            professionalSignature: string;
+            /** @description data:image/png;base64,…; null en uno firmado a distancia hasta que firma el profesional */
+            professionalSignature: string | null;
             clinic: components["schemas"]["ConsentClinicDto"];
             patient: components["schemas"]["ConsentPatientDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
             integrityOk: boolean;
+            /** @description DX-243: IP desde la que firmó el paciente a distancia (evidencia); null si se firmó en pantalla */
+            remoteIpAddress: string | null;
+        };
+        /** @enum {string} */
+        SignedConsentPdfRetryStatus: "PENDING";
+        SignedConsentPdfRetryDto: {
+            status: components["schemas"]["SignedConsentPdfRetryStatus"];
+        };
+        SignedPdfCopyResentDto: {
+            /**
+             * Format: date-time
+             * @description Hora del envío: «Copia enviada al paciente el …».
+             */
+            sentAt: string;
+            /**
+             * Format: date-time
+             * @description Hasta cuándo vale el enlace nuevo (SIGNED_PDF_COPY_LINK_TTL_HOURS; 168 h por defecto). El anterior ya no sirve.
+             */
+            expiresAt: string;
+            /**
+             * @description Adónde se envió (el email de la firma a distancia), enmascarado.
+             * @example la***@example.com
+             */
+            destinationMasked: string;
+        };
+        /**
+         * @description `AVAILABLE`: se puede descargar una vez. `USED`: el enlace ya se usó. Caducado, invalidado (al reenviar), inventado o de otra clínica: 404.
+         * @enum {string}
+         */
+        PublicSignedPdfCopyState: "AVAILABLE" | "USED";
+        PublicSignedPdfCopyClinicDto: {
+            name: string;
+            primaryColor: string | null;
+            logoUrl: string | null;
+        };
+        PublicSignedPdfCopyDto: {
+            /** @description `AVAILABLE`: se puede descargar una vez. `USED`: el enlace ya se usó. Caducado, invalidado (al reenviar), inventado o de otra clínica: 404. */
+            state: components["schemas"]["PublicSignedPdfCopyState"];
+            /** @example Tu copia del documento firmado está lista para descargar */
+            message: string;
+            clinic: components["schemas"]["PublicSignedPdfCopyClinicDto"] | null;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        SignedPdfCopyDownloadDto: {
+            /** @description URL firmada de 60 s del PDF archivado, como attachment (ábrela de inmediato). */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @example Consentimiento firmado - Exodoncia - 2026-10-31.pdf */
+            fileName: string;
         };
         PostOpTemplateCatalogItemDto: {
             /** Format: uuid */
@@ -12786,6 +15250,395 @@ export interface components {
         PublicAnamnesisSubmittedDto: {
             /** Format: date-time */
             submittedAt: string;
+        };
+        SignatureTemplateOptionDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            version: number;
+            /** @description El texto usa {{tratamiento}}: sin plan, el documento dirá «No especificado» */
+            usesTreatment: boolean;
+            /**
+             * Format: date-time
+             * @description Última vez que el paciente lo firmó y quedó completo (con la firma del profesional)
+             */
+            lastCompletedAt: string | null;
+        };
+        SignatureProfessionalOptionDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            role: components["schemas"]["ClinicRole"];
+        };
+        SignaturePlanOptionDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["TreatmentPlanStatus"];
+            /** @description Nombre de la alternativa (DX-040) */
+            optionLabel: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        ConsentSignerType: "PATIENT" | "GUARDIAN";
+        SignatureRecipientOptionDto: {
+            allowed: boolean;
+            /** @description Por qué no se puede enviar (en español) */
+            reason: string | null;
+            destinationMasked: string | null;
+            signerType: components["schemas"]["ConsentSignerType"] | null;
+            signerName: string | null;
+            /** @description Menor según la mayoría de edad de la clínica: firma su responsable */
+            minor: boolean;
+        };
+        SignatureRequestOptionsDto: {
+            templates: components["schemas"]["SignatureTemplateOptionDto"][];
+            /** @description Quienes pueden firmar un consentimiento como profesional (la regla de la firma en la clínica: odontólogo, asistente, administrador) */
+            professionals: components["schemas"]["SignatureProfessionalOptionDto"][];
+            /**
+             * Format: uuid
+             * @description Quien envía, solo si está en `professionals`
+             */
+            defaultProfessionalId: string | null;
+            /** @description Planes del paciente sin cancelar (para {{tratamiento}}), más recientes primero */
+            plans: components["schemas"]["SignaturePlanOptionDto"][];
+            recipient: components["schemas"]["SignatureRecipientOptionDto"];
+        };
+        /**
+         * @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415).
+         * @enum {string}
+         */
+        SignatureRequestType: "CONSENT" | "BUDGET";
+        /**
+         * @description SENT = enviado; OPENED = abierto (pidió el código); LOCKED = bloqueado tras 5 fallos; EXPIRED = caducado; REVOKED = anulado; SIGNED_BY_PATIENT = falta la firma del profesional; COMPLETE = completo.
+         * @enum {string}
+         */
+        SignatureRequestStatus: "SENT" | "OPENED" | "LOCKED" | "EXPIRED" | "REVOKED" | "SIGNED_BY_PATIENT" | "COMPLETE";
+        /**
+         * @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED)
+         * @enum {string}
+         */
+        SignedConsentPdfStatus: "PENDING" | "READY" | "FAILED";
+        SignatureRequestDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: uuid
+             * @description Sede desde la que se envió (sus horas, con su reloj)
+             */
+            locationId: string;
+            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
+            type: components["schemas"]["SignatureRequestType"];
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /** Format: uuid */
+            templateId: string | null;
+            templateVersion: number | null;
+            /**
+             * Format: uuid
+             * @description BUDGET: el plan cuyo presupuesto se envió. CONSENT: el plan de {{tratamiento}}, si lo hubo.
+             */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            signerType: components["schemas"]["ConsentSignerType"];
+            /** @description Quien firma: el paciente o su responsable */
+            signerName: string;
+            /** Format: uuid */
+            professionalUserId: string;
+            professionalName: string;
+            /** @description SENT = enviado; OPENED = abierto (pidió el código); LOCKED = bloqueado tras 5 fallos; EXPIRED = caducado; REVOKED = anulado; SIGNED_BY_PATIENT = falta la firma del profesional; COMPLETE = completo. */
+            status: components["schemas"]["SignatureRequestStatus"];
+            /** Format: date-time */
+            sentAt: string;
+            sentByName: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            openedAt: string | null;
+            /** Format: date-time */
+            verifiedAt: string | null;
+            /** Format: date-time */
+            lockedAt: string | null;
+            failedAttempts: number;
+            /** Format: date-time */
+            signedAt: string | null;
+            /** Format: date-time */
+            revokedAt: string | null;
+            /** Format: uuid */
+            consentId: string | null;
+            /** @description IP desde la que firmó el paciente (evidencia) */
+            signedIpAddress: string | null;
+            /**
+             * Format: uuid
+             * @description BUDGET (DX-415): la aceptación del plan que produjo la firma del paciente
+             */
+            budgetAcceptanceId: string | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional en la app (Completo)
+             */
+            countersignedAt: string | null;
+            /** @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED) */
+            signedPdfStatus: components["schemas"]["SignedConsentPdfStatus"] | null;
+            /**
+             * Format: uuid
+             * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
+             */
+            signedPdfDocumentId: string | null;
+            /**
+             * Format: date-time
+             * @description DX-443: último envío de la copia del PDF firmado al paciente (o a su responsable) por email, con un enlace de un solo uso; null si aún no se envió (o es de antes de DX-443). Se reenvía con POST /patients/:patientId/consents/:consentId/signed-pdf/copy
+             */
+            signedPdfCopySentAt: string | null;
+        };
+        CreateSignatureRequestDto: {
+            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
+            type: components["schemas"]["SignatureRequestType"];
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /**
+             * Format: uuid
+             * @description Plantilla del consentimiento (obligatoria en CONSENT).
+             */
+            templateId?: string;
+            /**
+             * Format: uuid
+             * @description Plan del paciente. CONSENT: rellena {{tratamiento}} (opcional). BUDGET: el plan «Presentado» cuyo presupuesto se envía (obligatorio).
+             */
+            treatmentPlanId?: string;
+            /**
+             * Format: uuid
+             * @description Profesional que nombra el texto y firmará después en la app. Por defecto, quien envía si tiene rol clínico (recepción debe elegirlo).
+             */
+            professionalId?: string;
+        };
+        SignatureRequestCreatedDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: uuid
+             * @description Sede desde la que se envió (sus horas, con su reloj)
+             */
+            locationId: string;
+            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
+            type: components["schemas"]["SignatureRequestType"];
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /** Format: uuid */
+            templateId: string | null;
+            templateVersion: number | null;
+            /**
+             * Format: uuid
+             * @description BUDGET: el plan cuyo presupuesto se envió. CONSENT: el plan de {{tratamiento}}, si lo hubo.
+             */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            signerType: components["schemas"]["ConsentSignerType"];
+            /** @description Quien firma: el paciente o su responsable */
+            signerName: string;
+            /** Format: uuid */
+            professionalUserId: string;
+            professionalName: string;
+            /** @description SENT = enviado; OPENED = abierto (pidió el código); LOCKED = bloqueado tras 5 fallos; EXPIRED = caducado; REVOKED = anulado; SIGNED_BY_PATIENT = falta la firma del profesional; COMPLETE = completo. */
+            status: components["schemas"]["SignatureRequestStatus"];
+            /** Format: date-time */
+            sentAt: string;
+            sentByName: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            openedAt: string | null;
+            /** Format: date-time */
+            verifiedAt: string | null;
+            /** Format: date-time */
+            lockedAt: string | null;
+            failedAttempts: number;
+            /** Format: date-time */
+            signedAt: string | null;
+            /** Format: date-time */
+            revokedAt: string | null;
+            /** Format: uuid */
+            consentId: string | null;
+            /** @description IP desde la que firmó el paciente (evidencia) */
+            signedIpAddress: string | null;
+            /**
+             * Format: uuid
+             * @description BUDGET (DX-415): la aceptación del plan que produjo la firma del paciente
+             */
+            budgetAcceptanceId: string | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional en la app (Completo)
+             */
+            countersignedAt: string | null;
+            /** @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED) */
+            signedPdfStatus: components["schemas"]["SignedConsentPdfStatus"] | null;
+            /**
+             * Format: uuid
+             * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
+             */
+            signedPdfDocumentId: string | null;
+            /**
+             * Format: date-time
+             * @description DX-443: último envío de la copia del PDF firmado al paciente (o a su responsable) por email, con un enlace de un solo uso; null si aún no se envió (o es de antes de DX-443). Se reenvía con POST /patients/:patientId/consents/:consentId/signed-pdf/copy
+             */
+            signedPdfCopySentAt: string | null;
+            /** @description false si el email no se pudo encolar: la solicitud queda registrada; anúlala y envía otra. */
+            emailQueued: boolean;
+        };
+        PublicSignatureClinicDto: {
+            name: string;
+            logoUrl: string | null;
+            primaryColor: string | null;
+        };
+        PublicSignatureLocationDto: {
+            /** @description Zona IANA de la sede */
+            timeZone: string;
+            locale: string | null;
+            /** @enum {string|null} */
+            hourCycle: "h12" | "h23" | null;
+        };
+        PublicSignatureDto: {
+            type: components["schemas"]["SignatureRequestType"];
+            clinic: components["schemas"]["PublicSignatureClinicDto"];
+            location: components["schemas"]["PublicSignatureLocationDto"];
+            /** @description Adónde va el código (an***@dominio) */
+            destinationMasked: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Hay un código vigente enviado */
+            codeSent: boolean;
+            /**
+             * Format: date-time
+             * @description Desde cuándo se puede pedir otro código (null = ya)
+             */
+            resendAvailableAt: string | null;
+            codeSendsLeft: number;
+        };
+        VerifySignatureCodeDto: {
+            /**
+             * @description 6 dígitos
+             * @example 012345
+             */
+            code: string;
+        };
+        SignatureSessionDto: {
+            /** @description Sesión de este navegador: se manda en la cabecera X-Signature-Session para ver y firmar el documento. Solo se guarda su hash. */
+            sessionToken: string;
+            /** Format: date-time */
+            sessionExpiresAt: string;
+        };
+        PublicBudgetLocationDto: {
+            name: string;
+            address: string | null;
+        };
+        PublicBudgetPatientDto: {
+            name: string;
+            document: string | null;
+        };
+        PublicBudgetAgreementDto: {
+            name: string;
+            payerName: string;
+        };
+        /** @enum {string} */
+        ToothSurface: "MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL";
+        PublicBudgetItemDto: {
+            toothNumber: string;
+            surfaces: components["schemas"]["ToothSurface"][];
+            procedure: string;
+            quantity: number;
+            unitPrice: number;
+            discount: number;
+            subtotal: number;
+            listPrice: number | null;
+            agreementName: string | null;
+        };
+        PublicBudgetTotalDto: {
+            currency: string;
+            gross: number;
+            discount: number;
+            net: number;
+            agreementSaving: number;
+        };
+        PublicBudgetDto: {
+            /** @description Moneda ISO 4217 del plan */
+            currency: string;
+            clinicName: string;
+            location: components["schemas"]["PublicBudgetLocationDto"];
+            patient: components["schemas"]["PublicBudgetPatientDto"];
+            professionalName: string | null;
+            agreement: components["schemas"]["PublicBudgetAgreementDto"] | null;
+            /**
+             * @description YYYY-MM-DD (sede)
+             * @example 2026-10-31
+             */
+            issuedOn: string;
+            /** @example 2026-11-30 */
+            validUntil: string;
+            validityDays: number;
+            items: components["schemas"]["PublicBudgetItemDto"][];
+            totals: components["schemas"]["PublicBudgetTotalDto"][];
+        };
+        PublicSignatureDocumentDto: {
+            type: components["schemas"]["SignatureRequestType"];
+            title: string;
+            /** @description El texto exacto que se firma */
+            body: string;
+            templateVersion: number | null;
+            signerType: components["schemas"]["ConsentSignerType"];
+            signerName: string;
+            /** @description Firma un responsable sin documento registrado: debe escribirlo al firmar */
+            signerDocumentRequired: boolean;
+            professionalName: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            clinic: components["schemas"]["PublicSignatureClinicDto"];
+            location: components["schemas"]["PublicSignatureLocationDto"];
+            /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
+            budget: components["schemas"]["PublicBudgetDto"] | null;
+        };
+        SignPublicSignatureDto: {
+            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
+            signature: string;
+            /** @description Documento del responsable si el enlace no lo trae */
+            signerDocument?: string;
+            /** @description Confirma que leyó el documento completo (debe ser true) */
+            accepted: boolean;
+        };
+        PublicSignedCopyDto: {
+            type: components["schemas"]["SignatureRequestType"];
+            title: string;
+            /** @description El texto exacto que se firma */
+            body: string;
+            templateVersion: number | null;
+            signerType: components["schemas"]["ConsentSignerType"];
+            signerName: string;
+            /** @description Firma un responsable sin documento registrado: debe escribirlo al firmar */
+            signerDocumentRequired: boolean;
+            professionalName: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            clinic: components["schemas"]["PublicSignatureClinicDto"];
+            location: components["schemas"]["PublicSignatureLocationDto"];
+            /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
+            budget: components["schemas"]["PublicBudgetDto"] | null;
+            signerDocument: string | null;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            signedAt: string;
+            /** @description SHA-256 de lo firmado y sus evidencias */
+            contentHash: string;
         };
         /** @enum {string} */
         PerioExamStatus: "DRAFT" | "FINAL";
@@ -17046,6 +19899,694 @@ export interface operations {
             };
         };
     };
+    AnestheticsController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también los desactivados (Ajustes) */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"][];
+                };
+            };
+        };
+    };
+    AnestheticsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAnestheticProductDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"];
+                };
+            };
+            /** @description Valores fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay uno con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnestheticsController_loadSamples: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"][];
+                };
+            };
+        };
+    };
+    AnestheticsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAnestheticProductDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnestheticProductDto"];
+                };
+            };
+            /** @description No es de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay uno con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_listByPatient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnesthesiaAdministrationDto"][];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_listByEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryAnesthesiaDto"];
+                };
+            };
+            /** @description Paciente o evolución no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordAnesthesiaDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordedAnesthesiaDto"];
+                };
+            };
+            /** @description Carpules, peso, hora futura, anestésico desactivado o menor de 12 años sin peso */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, evolución o anestésico no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnesthesiaConflictDto"];
+                };
+            };
+        };
+    };
+    AnesthesiaController_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnesthesiaDoseCheckDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnesthesiaCheckDto"];
+                };
+            };
+            /** @description Carpules, peso u hora inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, evolución o anestésico no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_rejectPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: unknown;
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_rejectDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: unknown;
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnesthesiaController_rejectPatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: unknown;
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_listByPatient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"][];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_getEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntrySedationDto"];
+                };
+            };
+            /** @description Paciente o evolución no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_rejectPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La hoja de sedación no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_assess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationAssessmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución o consentimiento no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La evolución ya tiene hoja */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_rejectDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La hoja de sedación no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_rejectPatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La hoja de sedación no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationChecklistDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución u hoja no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya registrado o egreso firmado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_addAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationAgentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución u hoja no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin checklist o egreso firmado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_addVitals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationVitalsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución u hoja no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin checklist o egreso firmado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_discharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationDischargeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución u hoja no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin checklist o egreso ya firmado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     OdontogramController_create: {
         parameters: {
             query?: never;
@@ -18753,6 +22294,132 @@ export interface operations {
             };
         };
     };
+    PaymentMethodsController_list: {
+        parameters: {
+            query?: {
+                /** @description Incluir los desactivados (la pantalla de Ajustes). */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"][];
+                };
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentMethodDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"];
+                };
+            };
+            /** @description Nombre vacío o tipo desconocido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un medio con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePaymentMethodDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"];
+                };
+            };
+            /** @description Campo inválido, o cambio del tipo base de un medio inicial (DX-377). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un medio con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     WaitlistController_list: {
         parameters: {
             query?: {
@@ -19017,8 +22684,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente */
+            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente. DX-435: por enlace con menos de 20 minutos para el hueco o sobre un hueco ya ocupado, o por email sin email o con baja. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-435 `LINK_EMAIL`: topes del outbox por destinatario o clínica (DX-088). */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19066,6 +22740,111 @@ export interface operations {
             };
             /** @description La oferta ya tenía resultado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSlotOffersController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSlotOfferDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSlotOffersController_accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSlotOfferDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSlotOffersController_decline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSlotOfferDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19399,7 +23178,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20041,7 +23820,7 @@ export interface operations {
     ExchangeController_rates: {
         parameters: {
             query: {
-                /** @description Historical day to fetch USD-base rates for (YYYY-MM-DD). */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -20058,6 +23837,27 @@ export interface operations {
                     "application/json": components["schemas"]["RatesResponseDto"];
                 };
             };
+            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     ExchangeController_convert: {
@@ -20068,7 +23868,7 @@ export interface operations {
                 from: string;
                 /** @description Código ISO 4217 de 3 letras. */
                 to: string;
-                /** @description Historical day whose rate applies to this conversion (YYYY-MM-DD). */
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
             };
             header?: never;
@@ -20085,8 +23885,22 @@ export interface operations {
                     "application/json": components["schemas"]["ConvertResponseDto"];
                 };
             };
-            /** @description Moneda sin tasa ese día: «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español */
+            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20554,6 +24368,8 @@ export interface operations {
                 to: string;
                 /** @description Solo abonos de este método. Sin él, todos los métodos. */
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+                /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
+                paymentMethodId?: string;
                 page?: number;
                 pageSize?: number;
             };
@@ -20574,7 +24390,53 @@ export interface operations {
                     "application/json": components["schemas"]["CashPaymentsResponseDto"];
                 };
             };
-            /** @description Fecha inválida, from > to, período de más de 366 días, método desconocido o sede ajena a la clínica */
+            /** @description Fecha inválida, from > to, período de más de 366 días, método desconocido, medio de pago de otra clínica o sede ajena a la clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentsController_listCashCsv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (YYYY-MM-DD), inclusive, en la zona horaria de la sede de cada abono (la de su horario; con varias sedes en zonas distintas, cada una corta el día a su medianoche). */
+                from: string;
+                /** @description Último día del período (YYYY-MM-DD), inclusive (hasta la medianoche del día siguiente en la zona de la sede). Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
+                to: string;
+                /** @description Solo abonos de este método. Sin él, todos los métodos. */
+                method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+                /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
+                paymentMethodId?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin cabecera: todas las sedes de la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período no válido, medio de otra clínica o más de 10 000 abonos */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20635,7 +24497,14 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. */
+            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. DX-377: `code: PAYMENT_REFERENCE_DUPLICATE` si la referencia y el medio ya están en otro abono vivo de ±90 días (`matches`); se confirma repitiendo con `duplicateReferenceReason`. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20643,6 +24512,60 @@ export interface operations {
                 content?: never;
             };
             /** @description La Idempotency-Key ya se usó con otro plan u otro cuerpo (DX-109): genera una clave nueva. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentsController_createSplit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordSplitPaymentDto"];
+            };
+        };
+        responses: {
+            /** @description El cobro, con su recibo y un abono por línea. Repetir la MISMA petición con la misma Idempotency-Key devuelve el cobro original. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SplitPaymentDto"];
+                };
+            };
+            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` —nunca bajo 0—, `excess` —lo que este cobro supera lo pendiente— y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro abono entró al plan mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otro plan, otro cuerpo o un abono suelto: genera una clave nueva. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20757,6 +24680,13 @@ export interface operations {
             };
             /** @description El abono no existe, ya está anulado o es de otra clínica */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-253: el abono (o una línea de su cobro dividido) es referencia de una devolución de saldo a favor, o del plan ya se traspasó o devolvió saldo a favor y sin este abono quedaría al descubierto */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20971,6 +24901,70 @@ export interface operations {
             };
             /** @description Saldo migrado, plan rechazado o cancelado, sin tasa para la fecha del abono, o la imputación cambió (expectedVersion) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentRateBacklogController_backlog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRateBacklogDto"];
+                };
+            };
+            /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentRateBacklogController_day: {
+        parameters: {
+            query: {
+                /** @description Día civil de la tasa (AAAA-MM-DD, un día que exista). */
+                date: string;
+                /** @description Moneda de la tasa (ISO 4217, tres letras mayúsculas). */
+                currency: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRateBacklogDayDto"];
+                };
+            };
+            /** @description Día que no existe o moneda que no es un código de tres letras */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21284,6 +25278,237 @@ export interface operations {
             };
         };
     };
+    PatientCreditController_transfer: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description UUID. Repetir la MISMA petición con la misma clave devuelve el movimiento original (DX-109); con otro cuerpo, 422. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferCreditDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditTransferResultDto"];
+                };
+            };
+            /** @description Importe mayor que el saldo a favor, otra moneda, el mismo plan o un plan de otro paciente. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DENTIST/ASSISTANT, o RECEPTION por encima del tope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan inexistente o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El destino está cancelado o rechazado, o el saldo cambió a la vez (también si el origen o el destino cambió de moneda antes del bloqueo, DX-438). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otro cuerpo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCreditController_refund: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description UUID. Repetir la MISMA petición con la misma clave devuelve el movimiento original (DX-109); con otro cuerpo, 422. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCreditDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditRefundDto"];
+                };
+            };
+            /** @description Importe mayor que el saldo a favor, otra moneda, sin motivo o abonos de referencia que no son del plan. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DENTIST/ASSISTANT, o RECEPTION por encima del tope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan inexistente o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El saldo cambió a la vez (otra devolución, o el plan cambió de moneda antes del bloqueo, DX-438) o falta la caja abierta exigida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otro cuerpo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCreditController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditRefundDto"];
+                };
+            };
+            /** @description Inexistente o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCreditController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCreditMovementsDto"];
+                };
+            };
+            /** @description Paciente inexistente o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCreditController_getPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPolicyDto"];
+                };
+            };
+        };
+    };
+    PatientCreditController_updatePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCreditPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPolicyDto"];
+                };
+            };
+            /** @description Solo la administración cambia el tope de saldo a favor de recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     LocationsComparisonController_get: {
         parameters: {
             query: {
@@ -21361,6 +25586,145 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo la administración ve los reportes de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProductionByProcedureController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses por calendario («to» anterior a «from» + 24 meses); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo lo realizado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo lo que realizó este profesional (usuario). Un DENTIST solo puede pedir el suyo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+                /** @description Solo los procedimientos de esta categoría del catálogo */
+                category?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionByProcedureDto"];
+                };
+            };
+            /** @description Período inválido o de más de 24 meses */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven la producción por procedimiento. / Solo puedes ver tu propia producción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProductionByProcedureController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses por calendario («to» anterior a «from» + 24 meses); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo lo realizado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo lo que realizó este profesional (usuario). Un DENTIST solo puede pedir el suyo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+                /** @description Solo los procedimientos de esta categoría del catálogo */
+                category?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 24 meses */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven la producción por procedimiento. / Solo puedes ver tu propia producción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProductionByProcedureController_items: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses por calendario («to» anterior a «from» + 24 meses); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo lo realizado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo lo que realizó este profesional (usuario). Un DENTIST solo puede pedir el suyo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+                /** @description Solo los procedimientos de esta categoría del catálogo */
+                category?: string;
+                /** @description El procedimiento del catálogo de la fila */
+                catalogItemId: string;
+                /** @description La moneda de la fila (ISO 4217); sin ella, todas */
+                currency?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionItemsDto"];
+                };
+            };
+            /** @description Período inválido o de más de 24 meses */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven la producción por procedimiento. / Solo puedes ver tu propia producción. / sede fuera de las del usuario */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -24073,6 +28437,60 @@ export interface operations {
             };
         };
     };
+    PatientConsentsController_countersign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CountersignPatientConsentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientConsentSummaryDto"];
+                };
+            };
+            /** @description Falta la firma, no es PNG o supera 200 KB */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el profesional que se eligió al enviarlo a firmar (y que nombra el texto) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Se firmó en la clínica (ya lleva la firma del profesional) o el profesional ya firmó */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PatientConsentsController_get: {
         parameters: {
             query?: never;
@@ -24102,6 +28520,184 @@ export interface operations {
             };
             /** @description Consentimiento no encontrado */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_retrySignedPdfGeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedConsentPdfRetryDto"];
+                };
+            };
+            /** @description Sin un rol de esta clínica (los cuatro roles pueden reintentar) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El PDF firmado ya está archivado o se está generando */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_resendSignedPdfCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedPdfCopyResentDto"];
+                };
+            };
+            /** @description Sin un rol de esta clínica (los cuatro roles pueden reenviar) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El PDF firmado todavía no está archivado, o no se pudo armar el enlace de la clínica */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tope de emails a esta persona o de la clínica */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignedPdfCopiesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignedPdfCopyDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado, caducado, invalidado al reenviar o de otra clínica (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignedPdfCopiesController_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedPdfCopyDownloadDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado, caducado, invalidado al reenviar o de otra clínica (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -24312,7 +28908,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Sin email ni responsable que reciba avisos, sin teléfono con indicativo, o el paciente dio de baja los envíos */
+            /** @description Sin email ni responsable que reciba avisos, sin un teléfono que sirva para WhatsApp, o el paciente dio de baja los envíos */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24840,6 +29436,389 @@ export interface operations {
             };
             /** @description Falta la autorización de datos de salud */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSignatureRequestsController_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureRequestOptionsDto"];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSignatureRequestsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureRequestDto"][];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSignatureRequestsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSignatureRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureRequestCreatedDto"];
+                };
+            };
+            /** @description BUDGET sin plan o sin ítems, sin plantilla, plantilla desactivada, profesional no válido o host no válido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description BUDGET enviado por un rol que no decide el plan (asistente o recepción), o desde una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no tiene formato regional, o BUDGET de un plan que no está «Presentado» (o ya aceptado) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin email, menor sin responsable o paciente dado de baja de los envíos */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSignatureRequestsController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureRequestDto"];
+                };
+            };
+            /** @description Enviada desde una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está firmada o anulada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignatureDto"];
+                };
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignatureDto"];
+                };
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No se pudo encolar el email */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifySignatureCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureSessionDto"];
+                };
+            };
+            /** @description SIGNATURE_CODE_INVALID (con attemptsLeft), SIGNATURE_CODE_EXPIRED o SIGNATURE_LINK_LOCKED (el quinto fallo) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_document: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description La sesión que devolvió POST …/verify */
+                "X-Signature-Session": string;
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignatureDocumentDto"];
+                };
+            };
+            /** @description SIGNATURE_SESSION_REQUIRED: falta la sesión o caducó */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_sign: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description La sesión que devolvió POST …/verify */
+                "X-Signature-Session": string;
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignPublicSignatureDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignedCopyDto"];
+                };
+            };
+            /** @description Firma en blanco, no PNG o de más de 200 KB; sin confirmar la lectura; falta el documento del responsable */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description SIGNATURE_SESSION_REQUIRED: falta la sesión o caducó */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26269,7 +31248,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El documento ya está anulado. */
+            /** @description El documento ya está anulado, o es el PDF firmado de un consentimiento (DX-422), que no se anula. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26429,7 +31408,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Sede por defecto del lote (indicativo de los teléfonos). Sin ella, la sede de escritura. */
+                /** @description Sede por defecto del lote (su prefijo telefónico se usa con los teléfonos sin +). Sin ella, la sede de escritura. */
                 "X-Location-Id"?: string;
             };
             path?: never;

@@ -95,9 +95,19 @@ export function CloseCashSessionModal({
         ...session.floats.map((f) => f.currency),
         ...session.adjustments.map((a) => a.currency),
         ...session.outflows.map((o) => o.currency),
+        // DX-253: las devoluciones de saldo a favor en efectivo también salen del cajón.
+        ...(session.creditRefunds ?? []).map((r) => r.currency),
         ...(defaultCurrency ? [defaultCurrency] : []),
       ]),
-    [blind, session.expected, session.floats, session.adjustments, session.outflows, defaultCurrency],
+    [
+      blind,
+      session.expected,
+      session.floats,
+      session.adjustments,
+      session.outflows,
+      session.creditRefunds,
+      defaultCurrency,
+    ],
   );
   const [rows, setRows] = useState<CountRow[]>(initialRows);
   const [extraCurrency, setExtraCurrency] = useState(defaultCurrency ?? '');

@@ -5,6 +5,7 @@ import { Building2, ChevronLeft, MoreHorizontal, Pencil, ShieldCheck } from 'luc
 import type { Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { ageFrom } from '@/lib/patients/age';
+import { displayPhone } from '@/lib/phone/display-phone';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -91,7 +92,9 @@ function identityItems(patient: Patient): IdentityItem[] {
   if (age !== null) items.push({ key: 'age', text: copy.age(age) });
   const doc = documentText(dtoDocTypeName(patient), patient.docNumber);
   if (doc) items.push({ key: 'doc', text: doc, id: true });
-  if (patient.phone) items.push({ key: 'phone', text: copy.phone(patient.phone) });
+  // DX-387: el formato internacional de la API, o el guardado tal cual.
+  const phone = displayPhone(patient);
+  if (phone) items.push({ key: 'phone', text: copy.phone(phone) });
   return items;
 }
 
@@ -234,12 +237,16 @@ export function PatientRecordHeader({
                 {items.map((item) => (
                   <li
                     key={item.key}
-                    className="flex items-center text-sm text-muted before:w-4 before:shrink-0 before:text-center before:text-faint before:content-['·']"
+                    className="flex min-w-0 items-center text-sm text-muted before:w-4 before:shrink-0 before:text-center before:text-faint before:content-['·']"
                   >
                     {/* El punto es decorativo (pseudo-elemento): cada valor ya
                         se explica solo («34 años», «Documento nacional
-                        DOC-1002», «Tel. …»). */}
-                    <span className={item.id ? 't-id' : 'tnum'}>{item.text}</span>
+                        DOC-1002», «Tel. …»). `min-w-0` + `overflow-wrap`:
+                        un teléfono largo se parte dentro de la franja en vez
+                        de ensanchar la cabecera a 390 px (DX-387). */}
+                    <span className={cn(item.id ? 't-id' : 'tnum', 'min-w-0 [overflow-wrap:anywhere]')}>
+                      {item.text}
+                    </span>
                   </li>
                 ))}
               </ul>

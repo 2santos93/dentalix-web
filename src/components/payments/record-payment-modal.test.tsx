@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RecordPaymentModal, recordPaymentCopy } from './record-payment-modal';
-import { ApiError } from '@/lib/api/client';
+import { ApiError, NetworkError } from '@/lib/api/client';
 import {
   getPlanBalance,
   recordOpeningBalancePayment,
@@ -24,6 +24,32 @@ jest.mock('../../lib/payments/billable-plans-api', () => ({
 }));
 jest.mock('../../lib/exchange/exchange-api', () => ({
   getExchangeRates: jest.fn(),
+}));
+// DX-377: medios de pago activos de la clínica.
+jest.mock('../../lib/payments/payment-methods-api', () => ({
+  ...jest.requireActual('../../lib/payments/payment-methods-api'),
+  listPaymentMethods: jest.fn().mockResolvedValue([
+    {
+      id: 'pm-transfer',
+      name: 'Transferencia',
+      kind: 'TRANSFER',
+      active: true,
+      requiresReference: false,
+      legacyMethod: 'TRANSFER',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'pm-mobile',
+      name: 'Pago móvil',
+      kind: 'DIGITAL',
+      active: true,
+      requiresReference: true,
+      legacyMethod: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ]),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
@@ -52,6 +78,7 @@ function usdBalance(overrides: Partial<PlanBalance> = {}): PlanBalance {
     billable: 500,
     paid: 0,
     balance: 500,
+    creditMovements: 0,
     paymentsCount: 0,
     paymentsWithoutRate: [],
     allocated: 0,
@@ -102,7 +129,13 @@ function savedPayment(
     paidAt: '2026-10-01T00:00:00.000Z',
     paidOn: '2026-10-01',
     method: 'TRANSFER',
+    paymentMethodId: null,
+    paymentMethodName: null,
+    reference: null,
+    duplicateReferenceReason: null,
     notes: null,
+    splitId: null,
+    splitLine: null,
     createdById: 'u-1',
     createdAt: '2026-10-16T12:00:00.000Z',
     updatedAt: '2026-10-16T12:00:00.000Z',
@@ -170,17 +203,23 @@ it('propone el primer plan, su moneda y la fecha de hoy, y enseña su saldo', as
 
   const plan = await within(dialog).findByLabelText('Plan');
   expect(plan).toHaveValue('plan-cop');
-  expect(within(plan).getAllByRole('option').map((o) => money(o.textContent))).toEqual([
-    'Plan del 01/08/2026 · Aceptado · Saldo 1.800.000,00 COP',
-    'Plan del 10/09/2026 · Aceptado · Saldo 500,00 US$',
-  ]);
+  await waitFor(() =>
+    expect(within(plan).getAllByRole('option').map((o) => money(o.textContent))).toEqual([
+      'Plan del 01/08/2026 · Aceptado · Saldo COP 1.800.000,00',
+      'Plan del 10/09/2026 · Aceptado · Saldo USD 500,00',
+    ]),
+  );
   expect(within(dialog).getByLabelText('Moneda')).toHaveValue('COP');
   expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toMatch(
     /^\d{4}-\d{2}-\d{2}$/,
   );
+  // DX-386: con el formato de la sede y el código ISO, nunca «US$».
   expect(money(dialog.textContent)).toContain(
-    'Saldo 1.800.000,00 COP · Total 3.000.000,00 COP · Abonado 1.200.000,00 COP',
+    'Saldo COP 1.800.000,00 · Total COP 3.000.000,00 · Abonado COP 1.200.000,00',
   );
+  // El único «US$» es el nombre de la moneda en su selector.
+  expect(document.getElementById('rp-plan-hint')).not.toHaveTextContent('US$');
+  expect(within(dialog).getByLabelText('Plan')).not.toHaveTextContent('US$');
 
   // Cambiar de plan propone la moneda del plan nuevo.
   await userEvent.setup().selectOptions(plan, 'plan-usd');
@@ -268,7 +307,7 @@ it('un abono guardado sin tasa lo dice en el aviso', async () => {
   await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
 
   await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-  expect(onRecorded.mock.calls[0][0]).toMatch(/^Abono registrado: 50,00\sUS\$ · .+\. /);
+  expect(onRecorded.mock.calls[0][0]).toMatch(/^Abono registrado: USD\s50,00 · .+\. /);
   expect(onRecorded.mock.calls[0][0]).toContain(recordPaymentCopy.recordedWithoutRate);
 });
 
@@ -281,7 +320,7 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   await within(dialog).findByLabelText('Plan');
 
   await user.type(within(dialog).getByLabelText('Importe'), '150000');
-  await user.selectOptions(within(dialog).getByLabelText('Método'), 'TRANSFER');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Transferencia');
   await user.clear(within(dialog).getByLabelText('Fecha de pago'));
   await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
   await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
@@ -294,14 +333,142 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
         amount: 150000,
         currency: 'COP',
         paidAt: '2026-10-01',
-        method: 'TRANSFER',
+        paymentMethodId: 'pm-transfer',
       },
       expect.stringMatching(/^[0-9a-f-]{36}$/),
     ),
   );
   expect(onRecorded).toHaveBeenCalledWith(
-    expect.stringMatching(/^Abono registrado: 150\.000,00\sCOP · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
+    expect.stringMatching(/^Abono registrado: COP\s150\.000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
   );
+});
+
+it('DX-377: un medio que pide referencia la exige antes de llamar a la API', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  expect(await within(dialog).findByText('Este medio de pago pide la referencia del pago.')).toBeInTheDocument();
+  expect(mockedRecord).not.toHaveBeenCalled();
+});
+
+it('DX-377: referencia repetida (409): avisa, pide motivo y reintenta con él y la misma clave', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  mockedRecord
+    .mockRejectedValueOnce(
+      new ApiError(409, 'Esta referencia ya se usó con este medio de pago en otro abono de los últimos 90 días.', {
+        code: 'PAYMENT_REFERENCE_DUPLICATE',
+      }),
+    )
+    .mockResolvedValueOnce(savedPayment());
+  const { onRecorded } = renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  await user.type(within(dialog).getByLabelText('Referencia (obligatoria)'), ' 0412 555 ');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  expect(await within(dialog).findByText(/Esta referencia ya se usó/)).toBeInTheDocument();
+  await user.type(within(dialog).getByLabelText('Motivo para registrarla igualmente'), 'Dos cuotas, una operación');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar igualmente' }));
+
+  await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+  const [first, second] = mockedRecord.mock.calls;
+  expect(first[2]).toEqual(expect.objectContaining({ paymentMethodId: 'pm-mobile', reference: '0412 555' }));
+  expect(second[2]).toEqual(
+    expect.objectContaining({ reference: '0412 555', duplicateReferenceReason: 'Dos cuotas, una operación' }),
+  );
+  expect(second[3]).toBe(first[3]);
+});
+
+it('DX-395: la referencia que falta marca aria-invalid, describe el error y recibe el foco', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  const reference = within(dialog).getByLabelText('Referencia (obligatoria)');
+  await waitFor(() => expect(reference).toHaveFocus());
+  expect(reference).toHaveAttribute('aria-invalid', 'true');
+  expect(reference).toHaveAccessibleDescription('Este medio de pago pide la referencia del pago.');
+  // Sin el globo nativo: el mensaje es el propio, y el campo no lleva `required`.
+  expect(reference).not.toHaveAttribute('required');
+  expect(reference).toHaveAttribute('aria-required', 'true');
+});
+
+it('DX-395: una referencia de solo guiones, puntos o espacios cuenta como vacía (la API la rechaza)', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  const reference = within(dialog).getByLabelText('Referencia (obligatoria)');
+  await user.type(reference, ' -. – ');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  await waitFor(() => expect(reference).toHaveFocus());
+  expect(reference).toHaveAttribute('aria-invalid', 'true');
+  expect(reference).toHaveAccessibleDescription('Este medio de pago pide la referencia del pago.');
+  expect(mockedRecord).not.toHaveBeenCalled();
+});
+
+it('DX-395: el aviso de repetida lleva el foco al motivo; sin motivo, el campo lo dice', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  mockedRecord.mockRejectedValueOnce(
+    new ApiError(409, 'Esta referencia ya se usó con este medio de pago en otro abono de los últimos 90 días.', {
+      code: 'PAYMENT_REFERENCE_DUPLICATE',
+    }),
+  );
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  await user.type(within(dialog).getByLabelText('Referencia (obligatoria)'), '123-456');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  const reason = await within(dialog).findByLabelText('Motivo para registrarla igualmente');
+  await waitFor(() => expect(reason).toHaveFocus());
+  expect(reason).not.toHaveAttribute('required');
+  expect(reason).toHaveAccessibleDescription('Queda guardado con el abono y en la auditoría.');
+
+  // Se aleja el foco y se intenta sin motivo: error en el campo y foco de vuelta.
+  await user.click(within(dialog).getByLabelText('Importe'));
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar igualmente' }));
+  await waitFor(() => expect(reason).toHaveFocus());
+  expect(reason).toHaveAttribute('aria-invalid', 'true');
+  expect(reason).toHaveAccessibleDescription('Escribe el motivo para registrar la referencia repetida.');
+  expect(mockedRecord).toHaveBeenCalledTimes(1);
+
+  // Escribirlo retira el error.
+  await user.type(reason, 'Dos cuotas');
+  expect(reason).not.toHaveAttribute('aria-invalid');
+});
+
+it('DX-395: a 390 px los controles y la X del modal miden al menos 44 px', async () => {
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  // jsdom no mide: se comprueba que llevan la altura táctil por debajo de sm.
+  expect(dialog.className).toContain('max-sm:[&_input:not([type=checkbox]):not([type=radio])]:h-11');
+  expect(dialog.className).toContain('max-sm:[&_select]:h-11');
+  expect(dialog.className).toContain('max-sm:[&_button]:min-h-11');
+  expect(within(dialog).getByRole('button', { name: 'Cerrar' }).className).toContain('max-sm:size-11');
 });
 
 it('valida el importe en español sin llamar a la API', async () => {
@@ -413,7 +580,7 @@ it('el aviso dice lo que la API registró, no lo que quedó en el formulario (re
 
   await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
   expect(onRecorded).toHaveBeenCalledWith(
-    expect.stringMatching(/^Abono registrado: 1\.?000,00\sCOP · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
+    expect.stringMatching(/^Abono registrado: COP\s1\.?000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
   );
 });
 
@@ -434,11 +601,13 @@ describe('DX-262: abono contra el saldo migrado', () => {
     // QA D2: con saldo migrado, la ayuda no habla solo de «plan».
     expect(dialog).toHaveTextContent('El abono se aplica al plan o al saldo migrado que elijas y aparece en la caja de hoy.');
     // Solo los saldos con algo pendiente.
-    expect(
-      within(target)
-        .getAllByRole('option')
-        .map((o) => money(o.textContent)),
-    ).toEqual(['Un plan de tratamiento', 'Saldo migrado · Ortodoncia 2025 · pendiente 150.000,00 COP']);
+    await waitFor(() =>
+      expect(
+        within(target)
+          .getAllByRole('option')
+          .map((o) => money(o.textContent)),
+      ).toEqual(['Un plan de tratamiento', 'Saldo migrado · Ortodoncia 2025 · pendiente COP 150.000,00']),
+    );
     await user.selectOptions(target, 'ob:ob-1');
     expect(within(dialog).queryByLabelText('Plan')).not.toBeInTheDocument();
     expect(within(dialog).getByLabelText('Moneda')).toHaveValue('COP');
@@ -488,13 +657,13 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await user.type(within(dialog).getByLabelText('Importe'), '1825');
 
-    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD50,00 US$'));
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
     const date = (within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value;
     expect(mockedRates).toHaveBeenCalledWith('tok', date);
     const [y, m, d] = date.split('-');
     const text = money(preview(dialog).textContent);
-    expect(text).toContain(`Tasa: 1 USD = 36,50 VES · automática · ${d}/${m}/${y}`);
-    expect(text).toContain('Pendiente tras el abono450,00 US$');
+    expect(text).toContain(`Tasa: 1 USD = VES 36,50 · automática · ${d}/${m}/${y}`);
+    expect(text).toContain('Pendiente tras el abonoUSD 450,00');
   });
 
   it('cambiar la fecha pide la tasa de ese día', async () => {
@@ -508,7 +677,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
   it('sin importe enseña la tasa e invita a escribirlo', async () => {
     const { user, dialog } = await openUsdPlan();
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
-    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('1 USD = 36,50 VES'));
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('1 USD = VES 36,50'));
     expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.typeAmount);
   });
 
@@ -529,7 +698,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     const retry = await within(dialog).findByRole('button', { name: recordPaymentCopy.preview.retry });
     expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.error);
     await user.click(retry);
-    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD50,00 US$'));
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
 
     mockedRates.mockRejectedValueOnce(new Error('red'));
     await user.clear(within(dialog).getByLabelText('Fecha de pago'));
@@ -537,6 +706,63 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await within(dialog).findByRole('button', { name: recordPaymentCopy.preview.retry });
     await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+  });
+
+  // DX-386/SEC-054: con la fuente automática, un día sin tasa en caché y sin
+  // proveedor responde 503 EXCHANGE_RATE_UNAVAILABLE: no es «no se pudo
+  // consultar», es que la tasa aún no está.
+  it('si el servidor no tiene aún la tasa del proveedor lo dice como aviso, no como fallo, y deja guardar', async () => {
+    mockedRates.mockRejectedValue(
+      new ApiError(503, 'No hay tasa de cambio disponible para esa fecha.', { code: 'EXCHANGE_RATE_UNAVAILABLE' }),
+    );
+    mockedRecord.mockResolvedValue(
+      savedPayment({ amount: 1825, currency: 'VES', treatmentPlanId: 'plan-usd', exchangeRateStatus: 'MISSING' }),
+    );
+    const { user, dialog, onRecorded } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+
+    const date = (within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value;
+    const [y, m, d] = date.split('-');
+    await waitFor(() =>
+      expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.unavailable(`${d}/${m}/${y}`)),
+    );
+    expect(preview(dialog)).not.toHaveTextContent(recordPaymentCopy.preview.error);
+    // Se puede volver a consultar sin esperar al barrido.
+    mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 36.5 } });
+    await user.click(within(dialog).getByRole('button', { name: recordPaymentCopy.preview.retry }));
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+  });
+
+  it('un error del servidor (500) dice que no se pudo consultar, no que la tasa aún no está', async () => {
+    mockedRates.mockRejectedValue(new ApiError(500, 'Internal server error'));
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await waitFor(() => expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.error));
+    expect(preview(dialog)).not.toHaveTextContent(/aún no está disponible/);
+  });
+
+  it('un fallo de red sigue diciendo que no se pudo consultar', async () => {
+    mockedRates.mockRejectedValue(new NetworkError(new TypeError('Failed to fetch')));
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await waitFor(() => expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.error));
+    expect(preview(dialog)).not.toHaveTextContent(/aún no está disponible/);
+  });
+
+  it('con otra sede, la previsualización usa su formato y el código ISO (DX-386)', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD50,00 USD'));
+    const date = (within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value;
+    const [y, m, d] = date.split('-');
+    expect(money(preview(dialog).textContent)).toContain(`Tasa: 1 USD = 36,50 VES · automática · ${d}.${m}.${y}`);
+    expect(preview(dialog)).not.toHaveTextContent('US$');
   });
 
   it('sin tasa del día lo dice y deja guardar: el abono queda «sin tasa»', async () => {
@@ -572,7 +798,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await user.type(within(dialog).getByLabelText('Importe'), '1825');
 
-    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Pendiente tras el abono400,00 US$'));
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Pendiente tras el abonoUSD 400,00'));
     expect(mockedBalance).toHaveBeenCalledWith('tok', 'plan-usd');
   });
 
@@ -587,7 +813,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await user.type(within(dialog).getByLabelText('Importe'), '1825');
 
-    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Pendiente tras el abono450,00 US$'));
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Pendiente tras el abonoUSD 450,00'));
     expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.pendingWithoutRate(1));
   });
 
@@ -597,7 +823,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await user.type(within(dialog).getByLabelText('Importe'), '1825');
 
-    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD50,00 US$'));
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
     await waitFor(() => expect(preview(dialog)).toHaveTextContent(recordPaymentCopy.preview.pendingUnavailable));
     expect(preview(dialog)).not.toHaveTextContent(/Pendiente tras el abono/);
   });
@@ -609,7 +835,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await user.type(within(dialog).getByLabelText('Importe'), '10000');
     // 10.000 / 0,12345678 = 81.000,01 (con la tasa cruda saldría 81.000,00).
-    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD81.000,01 US$'));
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 81.000,01'));
   });
 
   it('al escribir la fecha deprisa no pide la tasa de cada día intermedio: solo la del día final', async () => {

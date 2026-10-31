@@ -175,20 +175,20 @@ for (const viewport of [
     const target = dialog.getByLabel('Abonar a');
     await expect(target).toBeVisible({ timeout: 10_000 });
     const option = target.locator('option', { hasText: 'Cartera anterior' });
-    await expect(option).toHaveText(/^Saldo migrado · Cartera anterior · pendiente 100\.000,00/);
+    await expect(option).toHaveText(/^Saldo migrado · Cartera anterior · pendiente COP\s100\.000,00/);
     await target.selectOption((await option.getAttribute('value')) ?? '');
     await expect(dialog.getByLabel('Moneda')).toBeDisabled();
-    await expect(dialog).toContainText(/Pendiente: 100\.000,00/);
+    await expect(dialog).toContainText(/Pendiente: COP\s100\.000,00/);
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
 
     // Pasarse de lo pendiente: no se registra y se dice en español.
     const submit = dialog.getByRole('button', { name: 'Registrar abono' });
     await dialog.getByLabel('Importe').fill('100000,01');
     await submit.click();
-    await expect(dialog).toContainText(/El abono supera lo pendiente del saldo migrado: quedan 100\.000,00/);
+    await expect(dialog).toContainText(/El abono supera lo pendiente del saldo migrado: quedan COP\s100\.000,00/);
 
     await dialog.getByLabel('Importe').fill('40000');
-    await dialog.getByLabel('Método').selectOption('CASH');
+    await dialog.getByLabel('Método').selectOption({ label: 'Efectivo' });
     await submit.click();
     await expect(dialog).toBeHidden({ timeout: 10_000 });
     await expect(page.getByRole('status').filter({ hasText: 'Abono registrado' })).toBeVisible();

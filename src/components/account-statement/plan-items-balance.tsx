@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { getPlanBalance, type PlanBalance } from '@/lib/payments/payments-api';
 import { allocationCopy } from '@/lib/payments/allocation-copy';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -31,13 +32,15 @@ const copy = planItemsBalanceCopy;
  * cubre lo cobrado, ítem por ítem, y lo que queda «sin imputar». Solo lectura:
  * reasignar es del ADMIN, desde el plan. Se monta al abrirse el desplegable,
  * así que carga entonces (`GET /treatment-plans/:id/balance`) y no antes. Las
- * cifras van en la moneda que dice el propio saldo (`planCurrency`).
+ * cifras van en la moneda que dice el propio saldo (`planCurrency`), con el
+ * formato de la sede y el código ISO (DX-386).
  */
 export function PlanItemsBalance({ token, planId }: { token: string; planId: string }) {
   const [balance, setBalance] = useState<PlanBalance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const fmt = readyFormat(useSedeFormat(token));
 
   useEffect(() => {
     let cancelled = false;
@@ -102,13 +105,13 @@ export function PlanItemsBalance({ token, planId }: { token: string; planId: str
                         <StatusBadge kind="treatmentPlanItem" status={item.status} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums" data-label={copy.colBillable}>
-                        <ItemBillableValue item={item} currency={balance.planCurrency} />
+                        <ItemBillableValue item={item} currency={balance.planCurrency} fmt={fmt} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums" data-label={copy.colPaid}>
-                        <ItemPaidValue item={item} currency={balance.planCurrency} />
+                        <ItemPaidValue item={item} currency={balance.planCurrency} fmt={fmt} />
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums" data-label={copy.colPending}>
-                        <ItemPendingValue item={item} currency={balance.planCurrency} />
+                        <ItemPendingValue item={item} currency={balance.planCurrency} fmt={fmt} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -123,7 +126,7 @@ export function PlanItemsBalance({ token, planId }: { token: string; planId: str
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
                 <dt className="t-label text-muted">{allocationCopy.unallocated}</dt>
                 <dd className="font-medium text-ink tabular-nums">
-                  {formatCurrency(balance.unallocated, balance.planCurrency)}
+                  {sedeMoney(balance.unallocated, balance.planCurrency, fmt)}
                 </dd>
                 <dd className="w-full text-xs text-muted">{allocationCopy.unallocatedHelp}</dd>
               </div>

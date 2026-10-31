@@ -27,6 +27,8 @@ const copy = {
   amount: 'Valor',
   method: 'Método',
   methodFallback: 'Sin especificar',
+  // DX-377: referencia del pago, si la tiene.
+  reference: 'Referencia',
   paidOn: 'Fecha del abono',
   concept: 'Concepto',
   // DX-262: abono contra el saldo migrado (sin plan).
@@ -45,6 +47,12 @@ const copy = {
   equivalent: (currency: string) => `Equivalente en ${currency}`,
   rateApplied: (pair: string, source: string, date: string) => `Tasa aplicada: ${pair} (${source}, ${date})`,
   rateMissing: 'Tasa aplicada: sin tasa de cambio de su día. El equivalente se calcula cuando se registre.',
+  // DX-390: cobro dividido en varias formas de pago con un solo recibo.
+  splitTotal: (currency: string) => `Total en ${currency}`,
+  splitTotalMissing: 'Total pendiente de la tasa de cambio de alguna forma de pago.',
+  splitLines: 'Formas de pago',
+  splitEquivalent: (amount: string) => `equivale a ${amount}`,
+  splitWithoutRate: 'sin tasa de su día',
   cashier: 'Recibió',
   signature: 'Firma y sello',
 };
@@ -72,6 +80,8 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
   // DX-376: la tasa congelada del abono (DX-375), no la del día: reimprimir da
   // la misma. Un abono anterior aún sin congelar (LEGACY) no imprime tasa.
   const exchange = receipt.exchangeRate;
+  // DX-390: un cobro dividido lleva su total y una fila por forma de pago.
+  const split = receipt.split ?? null;
   const frozen = exchange?.status === 'FROZEN' && exchange.rate && exchange.equivalentAmount !== null
     ? { rate: exchange.rate, equivalent: exchange.equivalentAmount }
     : null;
@@ -156,41 +166,52 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
             </span>
           </Field>
         ) : null}
-        <Field label={copy.amount}>
-          <span
-            className={cn(
-              'font-semibold tabular-nums',
-              narrow ? 'text-base' : 'text-lg',
-              receipt.voided && 'line-through',
-            )}
-          >
-            {formatCurrency(payment.amount, payment.currency)}
-          </span>
-        </Field>
-        {frozen ? (
-          <Field label={copy.equivalent(frozen.rate.currency)}>
-            <span className={cn('font-semibold tabular-nums', receipt.voided && 'line-through')}>
-              {formatCurrency(frozen.equivalent, frozen.rate.currency)}
-            </span>
-          </Field>
-        ) : null}
-        {frozen || exchange?.status === 'MISSING' ? (
-          <div data-testid="receipt-rate" className={cn('min-w-0 text-xs text-[#4b5563]', !narrow && 'sm:col-span-2')}>
-            <dt className="sr-only">{copy.rateTerm}</dt>
-            <dd className="break-words tabular-nums">
-              {frozen
-                ? copy.rateApplied(
-                    ratePairLabel(payment.currency, frozen.rate, (amount, currency) => formatCurrency(amount, currency)),
-                    paymentRateCopy.source[frozen.rate.source],
-                    formatCivilDate(frozen.rate.date),
-                  )
-                : copy.rateMissing}
-            </dd>
-          </div>
-        ) : null}
-        <Field label={copy.method}>
-          {payment.method ? PAYMENT_METHOD_LABELS[payment.method] : copy.methodFallback}
-        </Field>
+        {split ? (
+          <SplitFields split={split} narrow={narrow} voided={receipt.voided} />
+        ) : (
+          <>
+            <Field label={copy.amount}>
+              <span
+                className={cn(
+                  'font-semibold tabular-nums',
+                  narrow ? 'text-base' : 'text-lg',
+                  receipt.voided && 'line-through',
+                )}
+              >
+                {formatCurrency(payment.amount, payment.currency)}
+              </span>
+            </Field>
+            {frozen ? (
+              <Field label={copy.equivalent(frozen.rate.currency)}>
+                <span className={cn('font-semibold tabular-nums', receipt.voided && 'line-through')}>
+                  {formatCurrency(frozen.equivalent, frozen.rate.currency)}
+                </span>
+              </Field>
+            ) : null}
+            {frozen || exchange?.status === 'MISSING' ? (
+              <div data-testid="receipt-rate" className={cn('min-w-0 text-xs text-[#4b5563]', !narrow && 'sm:col-span-2')}>
+                <dt className="sr-only">{copy.rateTerm}</dt>
+                <dd className="break-words tabular-nums">
+                  {frozen
+                    ? copy.rateApplied(
+                        ratePairLabel(payment.currency, frozen.rate, (amount, currency) => formatCurrency(amount, currency)),
+                        paymentRateCopy.source[frozen.rate.source],
+                        formatCivilDate(frozen.rate.date),
+                      )
+                    : copy.rateMissing}
+                </dd>
+              </div>
+            ) : null}
+            <Field label={copy.method}>
+              {payment.paymentMethodName ?? (payment.method ? PAYMENT_METHOD_LABELS[payment.method] : copy.methodFallback)}
+            </Field>
+            {payment.reference ? (
+              <Field label={copy.reference}>
+                <span className="font-mono">{payment.reference}</span>
+              </Field>
+            ) : null}
+          </>
+        )}
         <Field label={copy.paidOn}>
           <span className="tabular-nums">{formatCivilDate(payment.paidOn)}</span>
         </Field>
@@ -223,5 +244,60 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">{label}</dt>
       <dd className="break-words">{children}</dd>
     </div>
+  );
+}
+
+/** DX-390: el total en la moneda del plan y cada forma de pago del cobro. */
+function SplitFields({
+  split,
+  narrow,
+  voided,
+}: {
+  split: NonNullable<PaymentReceipt['split']>;
+  narrow: boolean;
+  voided: boolean;
+}) {
+  return (
+    <>
+      <Field label={copy.splitTotal(split.total.currency)}>
+        {split.total.amount !== null ? (
+          <span className={cn('font-semibold tabular-nums', narrow ? 'text-base' : 'text-lg', voided && 'line-through')}>
+            {formatCurrency(split.total.amount, split.total.currency)}
+          </span>
+        ) : (
+          <span className="text-xs text-[#4b5563]">{copy.splitTotalMissing}</span>
+        )}
+      </Field>
+      <div data-testid="receipt-split-lines" className={cn('min-w-0', !narrow && 'sm:col-span-2')}>
+        <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">{copy.splitLines}</dt>
+        <dd>
+          <ol className="mt-1 flex flex-col divide-y divide-[#e5e7eb] border-y border-[#e5e7eb]">
+            {split.lines.map((line) => (
+              <li key={line.paymentId} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1.5">
+                <span className="min-w-0 break-words">
+                  {line.paymentMethodName ?? (line.method ? PAYMENT_METHOD_LABELS[line.method] : copy.methodFallback)}
+                  {line.reference ? (
+                    <span className="font-mono text-xs text-[#4b5563]">
+                      {' '}
+                      · {copy.reference} {line.reference}
+                    </span>
+                  ) : null}
+                </span>
+                <span className={cn('text-right tabular-nums', voided && 'line-through')}>
+                  <span className="font-semibold">{formatCurrency(line.amount, line.currency)}</span>
+                  {line.currency !== split.total.currency ? (
+                    <span className="block text-xs text-[#4b5563]">
+                      {line.equivalentAmount !== null
+                        ? copy.splitEquivalent(formatCurrency(line.equivalentAmount, split.total.currency))
+                        : copy.splitWithoutRate}
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </dd>
+      </div>
+    </>
   );
 }

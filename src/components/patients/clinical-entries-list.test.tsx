@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClinicalEntriesList } from './clinical-entries-list';
 import {
@@ -7,6 +7,11 @@ import {
   createClinicalEntryAddendum,
 } from '@/lib/patients/clinical-api';
 import { listStaff } from '@/lib/staff/staff-api';
+import { listPatientAnesthesia } from '@/lib/anesthesia/anesthesia-api';
+import { listPatientSedation } from '@/lib/sedation/sedation-api';
+import { checkedSheet } from '@/lib/test/sedation-sheet';
+import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
+import { sedeTime } from '@/lib/locations/sede-clock';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — use a relative path (same convention as the other tests).
@@ -23,6 +28,16 @@ jest.mock('../../lib/patients/clinical-api', () => ({
 // El autor de cada evolución se resuelve contra el personal de la clínica.
 jest.mock('../../lib/staff/staff-api', () => ({
   listStaff: jest.fn(),
+}));
+// DX-307: la anestesia de las evoluciones se pide aparte (fail soft).
+jest.mock('../../lib/anesthesia/anesthesia-api', () => ({
+  ...jest.requireActual('../../lib/anesthesia/anesthesia-api'),
+  listPatientAnesthesia: jest.fn().mockResolvedValue([]),
+}));
+// DX-407: las hojas de sedación también se piden aparte (fail soft).
+jest.mock('../../lib/sedation/sedation-api', () => ({
+  ...jest.requireActual('../../lib/sedation/sedation-api'),
+  listPatientSedation: jest.fn().mockResolvedValue([]),
 }));
 // DX-170: el modal «Nueva evolución» pide las plantillas al abrirse.
 jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
@@ -377,5 +392,277 @@ describe('ClinicalEntriesList', () => {
       expect(await within(dialog).findByText(/evolución no encontrada/i)).toBeInTheDocument();
       expect(within(dialog).getByLabelText(/texto de la adenda/i)).toHaveValue('Texto');
     });
+  });
+
+  it('DX-307: la anestesia registrada sale bajo su evolución con el acumulado', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientAnesthesia as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'an-1',
+        patientId: 'p1',
+        clinicalEntryId: 'ce-2',
+        locationId: null,
+        anestheticId: 'a1',
+        anestheticName: 'Articaína 4 %',
+        activeIngredient: 'Articaína',
+        concentrationPct: 4,
+        vasoconstrictor: null,
+        mlPerCarpule: 1.7,
+        maxMgPerKg: 7,
+        maxAbsoluteMg: 500,
+        carpules: 3,
+        doseMg: 204,
+        technique: 'NERVE_BLOCK',
+        site: '85',
+        lot: 'L-1',
+        administeredAt: '2026-02-01T15:00:00.000Z',
+        weightKg: 20,
+        weightSource: 'ANAMNESIS',
+        cumulativeMg: 204,
+        cumulativePercent: 146,
+        safetyRulesVersion: 'ANESTHESIA_DOSE_V1',
+        safetyAlerts: [],
+        overrideReason: 'Exodoncia compleja',
+        authorId: 'u1',
+        createdAt: '2026-02-01T15:00:00.000Z',
+      },
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    const lists = await screen.findAllByRole('list', { name: /anestesia local de la evolución/i });
+    expect(lists[0]).toHaveTextContent('Articaína 4 % · 3 carp. · 204 mg · Troncular · 85 · Lote L-1');
+    expect(screen.getAllByText('Acumulado 204 mg · 146 % del máximo').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /anestesia de la evolución/i }).length).toBeGreaterThan(0);
+  });
+
+  it('DX-307: el acumulado es el del último registro creado, aunque su hora sea anterior', async () => {
+    // La API ordena por hora de administración. La hora se elige al minuto (o
+    // se anota tarde), así que el último registro creado puede salir antes en
+    // la lista; su acumulado es el que cuenta todo lo de la evolución.
+    mockedList.mockResolvedValue(entries);
+    const base = {
+      patientId: 'p1',
+      clinicalEntryId: 'ce-2',
+      locationId: null,
+      activeIngredient: 'x',
+      concentrationPct: 2,
+      vasoconstrictor: null,
+      mlPerCarpule: 1.8,
+      maxMgPerKg: 7,
+      maxAbsoluteMg: 500,
+      technique: 'NERVE_BLOCK',
+      site: null,
+      lot: null,
+      weightKg: 32,
+      weightSource: 'ANAMNESIS',
+      safetyRulesVersion: 'ANESTHESIA_DOSE_V1',
+      safetyAlerts: [],
+      overrideReason: null,
+      authorId: 'u1',
+    };
+    (listPatientAnesthesia as jest.Mock).mockResolvedValueOnce([
+      {
+        ...base,
+        id: 'an-2',
+        anestheticId: 'a2',
+        anestheticName: 'Articaína 4 %',
+        carpules: 3,
+        doseMg: 204,
+        administeredAt: '2026-02-01T15:00:00.000Z',
+        cumulativeMg: 276,
+        cumulativePercent: 123,
+        createdAt: '2026-02-01T15:00:56.000Z',
+      },
+      {
+        ...base,
+        id: 'an-1',
+        anestheticId: 'a1',
+        anestheticName: 'Lidocaína 2 %',
+        carpules: 2,
+        doseMg: 72,
+        administeredAt: '2026-02-01T15:00:15.000Z',
+        cumulativeMg: 72,
+        cumulativePercent: 32,
+        createdAt: '2026-02-01T15:00:15.000Z',
+      },
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect((await screen.findAllByText('Acumulado 276 mg · 123 % del máximo')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Acumulado 72 mg · 32 % del máximo')).not.toBeInTheDocument();
+  });
+
+  it('DX-418: con las reglas V2 el acumulado sellado se lee como del paciente en 24 h', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientAnesthesia as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'an-1',
+        patientId: 'p1',
+        clinicalEntryId: 'ce-2',
+        locationId: null,
+        anestheticId: 'a1',
+        anestheticName: 'Lidocaína 2 %',
+        activeIngredient: 'Lidocaína',
+        concentrationPct: 2,
+        vasoconstrictor: null,
+        mlPerCarpule: 1.8,
+        maxMgPerKg: 7,
+        maxAbsoluteMg: 500,
+        carpules: 3,
+        doseMg: 108,
+        technique: 'INFILTRATION',
+        site: null,
+        lot: null,
+        administeredAt: '2026-02-01T15:00:00.000Z',
+        weightKg: 20,
+        weightSource: 'ENTERED',
+        cumulativeMg: 216,
+        cumulativePercent: 154,
+        safetyRulesVersion: 'ANESTHESIA_DOSE_V2',
+        safetyAlerts: [],
+        overrideReason: 'Segunda intervención urgente',
+        authorId: 'u1',
+        createdAt: '2026-02-01T15:00:00.000Z',
+      },
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(
+      (await screen.findAllByText('Acumulado del paciente en 24 h: 216 mg · 154 % del máximo')).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('DX-420: con las reglas V3 el acumulado sellado sigue siendo del paciente en 24 h', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientAnesthesia as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'an-1',
+        patientId: 'p1',
+        clinicalEntryId: 'ce-2',
+        locationId: null,
+        anestheticId: 'a1',
+        anestheticName: 'Lidocaína 2 %',
+        activeIngredient: 'Lidocaína',
+        concentrationPct: 2,
+        vasoconstrictor: null,
+        mlPerCarpule: 1.8,
+        maxMgPerKg: 7,
+        maxAbsoluteMg: 500,
+        carpules: 3,
+        doseMg: 108,
+        technique: 'INFILTRATION',
+        site: null,
+        lot: null,
+        administeredAt: '2026-02-01T15:00:00.000Z',
+        weightKg: 20,
+        weightSource: 'ENTERED',
+        cumulativeMg: 216,
+        cumulativePercent: 154,
+        safetyRulesVersion: 'ANESTHESIA_DOSE_V3',
+        pediatricMaxMgPerKg: null,
+        minAgeYears: null,
+        epinephrineMgPerCarpule: 0.018,
+        epinephrineMg: 0.054,
+        cumulativeEpinephrineMg: 0.108,
+        safetyAlerts: [],
+        overrideReason: 'Segunda intervención urgente',
+        authorId: 'u1',
+        createdAt: '2026-02-01T15:00:00.000Z',
+      },
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(
+      (await screen.findAllByText('Acumulado del paciente en 24 h: 216 mg · 154 % del máximo')).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('DX-307: si la anestesia no carga lo dice, para que no parezca que no la hubo', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientAnesthesia as jest.Mock).mockRejectedValueOnce(new Error('red'));
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(await screen.findByText(/no pudimos cargar la anestesia registrada/i)).toBeInTheDocument();
+  });
+
+  it('DX-407: la hoja de sedación sale bajo su evolución y avisa si va tarde', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientSedation as jest.Mock).mockResolvedValueOnce([
+      checkedSheet({
+        status: 'IN_PROGRESS',
+        watch: {
+          intervalMinutes: 5,
+          active: true,
+          startedAt: '2026-02-01T15:00:00.000Z',
+          lastTakenAt: '2026-02-01T15:04:00.000Z',
+          nextDueAt: '2026-02-01T15:09:00.000Z',
+          overdue: true,
+          overdueMinutes: 3,
+          missedIntervals: 0,
+        },
+      }),
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(
+      (await screen.findAllByText('Moderada (consciente) · ASA II · En curso')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pasó el intervalo de constantes sin toma').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', { name: /hoja de sedación de la evolución/i }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('QA DX-407: dos evoluciones del mismo día tienen botones con nombre propio (motivo y hora de registro)', async () => {
+    const sameDay = [
+      { ...entries[0], id: 'ce-a', reason: 'Exodoncia simple', createdAt: '2026-02-01T15:00:00.000Z' },
+      { ...entries[0], id: 'ce-b', reason: 'Restauraciones bajo sedación', createdAt: '2026-02-01T17:30:00.000Z' },
+    ];
+    mockedList.mockResolvedValue(sameDay);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    await screen.findAllByText('Exodoncia simple');
+    const clock = testAgendaClock([caracasSede()]);
+    for (const prefix of [/^Hoja de sedación de la evolución del /, /^Anestesia de la evolución del /, /^Añadir adenda a la evolución del /]) {
+      // Mismo botón en la tabla (escritorio) y en la tarjeta (móvil): 2 + 2.
+      const names = screen.getAllByRole('button', { name: prefix }).map((b) => b.getAttribute('aria-label'));
+      expect(new Set(names).size).toBe(2);
+      for (const entry of sameDay) {
+        expect(names.some((n) => n?.includes(entry.reason!) && n.includes(sedeTime(entry.createdAt, clock)))).toBe(true);
+      }
+    }
+  });
+
+  it('DX-407: el aviso de la ficha se recalcula con la hora: una hoja que iba en hora al cargar avisa al pasar el intervalo', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick', 'setImmediate'] });
+    try {
+      mockedList.mockResolvedValue(entries);
+      (listPatientSedation as jest.Mock).mockResolvedValueOnce([
+        checkedSheet({
+          status: 'IN_PROGRESS',
+          watch: {
+            intervalMinutes: 5,
+            active: true,
+            startedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+            lastTakenAt: null,
+            nextDueAt: new Date(Date.now() + 60_000).toISOString(),
+            overdue: false,
+            overdueMinutes: 0,
+            missedIntervals: 0,
+          },
+        }),
+      ]);
+      render(<ClinicalEntriesList token="token" patientId="p1" />);
+      expect(
+        (await screen.findAllByText('Moderada (consciente) · ASA II · En curso')).length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByText('Pasó el intervalo de constantes sin toma')).not.toBeInTheDocument();
+      act(() => {
+        jest.advanceTimersByTime(2 * 60_000);
+      });
+      expect(screen.getAllByText('Pasó el intervalo de constantes sin toma').length).toBeGreaterThan(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('DX-407: si las hojas de sedación no cargan lo dice', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientSedation as jest.Mock).mockRejectedValueOnce(new Error('red'));
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(await screen.findByText(/no pudimos cargar las hojas de sedación/i)).toBeInTheDocument();
   });
 });

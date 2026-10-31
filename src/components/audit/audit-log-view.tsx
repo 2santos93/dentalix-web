@@ -20,28 +20,36 @@ import {
   AUDIT_RESOURCE_OPTIONS,
   actorRoleLabel,
   communicationDetail,
+  confirmationLinkDetail,
   implantSearchDetail,
   isPatientOptOut,
   staffLoginDetail,
   staffDetail,
-  hasStaffLocationIds,
   locationNameMap,
   type LocationNames,
   cashSessionDetail,
+  sedationDetail,
   scheduleChangeDetail,
   cancellationDetail,
   healthRegistrationDetail,
   clinicSettingsDetail,
+  exchangeRateBackupDetail,
   locationCalendarDetail,
   patientFlowDetail,
   importBatchDetail,
   planItemAttributionDetail,
   anamnesisDetail,
+  signatureRequestDetail,
 } from '@/lib/audit/audit-labels';
+import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
-import { listLocations } from '@/lib/locations/locations-api';
-import { formatDateTimeInZone, zonedDayStart } from '@/lib/format/date';
+import { screenLocation, sedeClockFor, type SedeClockError } from '@/lib/locations/sede-clock';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { isValidRange, MAX_RANGE_DAYS } from '@/lib/payments/cash-period';
+import { isCivilDay } from '@/lib/time/civil-day';
+import { wallInstant } from '@/lib/time/wall-clock';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -83,6 +91,8 @@ const copy = {
   patientFallback: 'seleccionado',
   clearPatient: 'Quitar el filtro de paciente',
   colWhen: 'Fecha y hora',
+  // DX-362: la hora en la sede del evento, cuando su reloj marca otra.
+  sedeTime: ({ name, when, offset }: AuditSedeTime) => `En ${name}: ${when}${offset ? ` ${offset}` : ''}`,
   colActor: 'Usuario',
   colAction: 'Acción',
   colResource: 'Recurso',
@@ -109,6 +119,9 @@ const copy = {
 
 const PAGE_SIZE = 50;
 
+/** Valor de una celda con varias líneas: en móvil, a la derecha de su etiqueta y en bloque. */
+const cellValueClass = 'min-w-0 max-sm:text-right';
+
 interface Filters {
   actorUserId: string;
   action: AuditAction | '';
@@ -125,11 +138,20 @@ const NO_FILTERS: Filters = {
   to: '',
 };
 
-/** El día siguiente a `YYYY-MM-DD` (el `to` de la API es excluido). */
-function nextDay(day: string): string {
-  const d = new Date(`${day}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
+const MINUTES_PER_DAY = 24 * 60;
+
+/** La lista de sedes no cargó: sin ella no hay reloj (la misma regla que `useSedeClock`). */
+const LOCATIONS_ERROR: SedeClockError = {
+  status: 'error',
+  kind: 'locale',
+  message: SEDE_LOCALE_ERROR,
+  locationId: null,
+};
+
+/** El instante del minuto `minute` del día `day` en `timeZone`; `null` si el día no es válido. */
+function dayInstant(day: string, minute: number, timeZone: string | null): string | null {
+  if (!timeZone || !isCivilDay(day)) return null;
+  return wallInstant(day, minute, timeZone).toISOString();
 }
 
 function rangeError({ from, to }: Filters): string | null {
@@ -157,19 +179,42 @@ interface AuditLogViewProps {
  * vacío. La API pagina por CURSOR, así que la navegación es Anterior/Siguiente
  * con una pila de cursores, sin total.
  *
- * La hora de cada evento se pinta en la zona de su sede (la API la manda con
- * cada fila), y los días de los filtros se interpretan en la zona de la
- * clínica: así todos leen la hora que vio la clínica, no la del navegador.
+ * DX-362: todas las horas y los días de los filtros van en la zona y con el
+ * formato de la sede de la pantalla (la activa, o la principal en «Todas las
+ * sedes»), dicha junto a los filtros, y cada hora lleva su desfase: la lista,
+ * que la API ordena por instante, se lee cronológica. Un evento de una sede
+ * cuyo reloj marca otra hora añade debajo la de su sede (la que vio la
+ * clínica, DX-009/DX-314). Sin el reloj de la sede no se pinta ninguna hora:
+ * «Falta un dato de la sede» con su reintento, nunca otra zona ni otro
+ * formato (G1-B).
  */
 export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewProps) {
   const locked = Boolean(patientId) && !onClearPatient;
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   // Pila de cursores: el último es la página que se ve; `null` = la primera.
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  // La zona con la que se leen los días de los filtros la dice la API (llega
-  // con cada página). Hasta saberla, un filtro de fechas espera: nunca se
-  // convierte con otra zona.
-  const [timeZone, setTimeZone] = useState<string | null>(null);
+  // El reloj de la pantalla. Hasta tenerlo no se pide nada: sin él no hay
+  // con qué contar los días ni con qué pintar las horas.
+  const locationsState = useLocationsState(token);
+  const locations = locationsState.status === 'ready' ? locationsState.locations : null;
+  const activeLocationId = locationsState.status === 'ready' ? locationsState.activeLocationId : null;
+  const locationsFailed = locationsState.status === 'error';
+  const sede = useMemo(
+    () =>
+      locationsFailed ? LOCATIONS_ERROR : locations ? sedeClockFor(locations, activeLocationId) : null,
+    [locationsFailed, locations, activeLocationId],
+  );
+  const clock = sede?.status === 'ready' ? sede.clock : null;
+  const timeZone = clock?.timeZone ?? null;
+  const reference = useMemo(
+    () => (locations ? screenLocation(locations, activeLocationId) : undefined),
+    [locations, activeLocationId],
+  );
+  // DX-359: nombres de las sedes para los accesos del personal (`staffAccess`
+  // solo trae ids) y para la hora de la sede de cada evento.
+  const locationNames = useMemo(() => (locations ? locationNameMap(locations) : null), [locations]);
+  // El desfase de hoy en el aviso de la zona; cada fila dice el suyo.
+  const [now] = useState(() => new Date());
   const [data, setData] = useState<AuditEventsPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -177,19 +222,27 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
   const [reloadKey, setReloadKey] = useState(0);
   const rangeErrorId = React.useId();
   const hintId = React.useId();
+  const zoneHintId = React.useId();
+
+  // Otra sede activa, otra zona: los días cuentan otro rango, así que la
+  // paginación vuelve a la primera página (ajuste en el render, sin efecto).
+  const [cursorsZone, setCursorsZone] = useState(timeZone);
+  if (cursorsZone !== timeZone) {
+    setCursorsZone(timeZone);
+    setCursors([null]);
+  }
 
   const invalidRange = rangeError(filters);
   const cursor = cursors[cursors.length - 1];
 
-  // La query que sale hacia la API. Con el rango inválido no hay query: lo
-  // último cargado se oculta y no se pide nada que se sabe que daría 400.
-  const needsZone = timeZone === null && (filters.from !== '' || filters.to !== '');
-  // Los instantes salen de la zona solo si hay fechas: así la zona que llega con
-  // cada página no cambia la consulta (ni la repite) cuando no hay fechas.
-  const fromInstant = filters.from && timeZone ? zonedDayStart(filters.from, timeZone) : null;
-  const toInstant = filters.to && timeZone ? zonedDayStart(nextDay(filters.to), timeZone) : null;
+  // La query que sale hacia la API. Sin el reloj de la sede o con el rango
+  // inválido no hay query: no se pide nada que no se pueda pintar o que se
+  // sabe que daría 400. Los días se cuentan en la zona de la pantalla, cada
+  // uno con su desfase (el `to` de la API es excluido: el fin del día).
+  const fromInstant = dayInstant(filters.from, 0, timeZone);
+  const toInstant = dayInstant(filters.to, MINUTES_PER_DAY, timeZone);
   const query = useMemo<AuditEventsQuery | null>(() => {
-    if (invalidRange || needsZone) return null;
+    if (invalidRange || !timeZone) return null;
     const q: AuditEventsQuery = { limit: PAGE_SIZE };
     if (patientId) q.patientId = patientId;
     if (filters.actorUserId) q.actorUserId = filters.actorUserId;
@@ -199,7 +252,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
     if (toInstant) q.to = toInstant;
     if (cursor) q.cursor = cursor;
     return q;
-  }, [invalidRange, needsZone, patientId, filters, fromInstant, toInstant, cursor]);
+  }, [invalidRange, timeZone, patientId, filters, fromInstant, toInstant, cursor]);
 
   useEffect(() => {
     if (!token || !query) return;
@@ -210,7 +263,6 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
         const res = await listAuditEvents(token, q);
         if (cancelled) return;
         setData(res);
-        setTimeZone(res.timeZone);
         setLoadError(null);
         setForbidden(false);
       } catch (err) {
@@ -227,25 +279,6 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
     };
   }, [token, query, reloadKey]);
 
-  // Fechas escritas antes de que llegue la primera página: se pide solo la
-  // zona (una página de un evento, que no se pinta) y luego la consulta real.
-  useEffect(() => {
-    if (!token || !needsZone) return;
-    let cancelled = false;
-    listAuditEvents(token, { limit: 1, ...(patientId ? { patientId } : {}) })
-      .then((res) => {
-        if (!cancelled) setTimeZone(res.timeZone);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setLoadError(copy.loadError);
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, needsZone, patientId, reloadKey]);
-
   // Cada cambio de filtro vuelve a la primera página en el MISMO render.
   function changeFilters(patch: Partial<Filters>) {
     setFilters((current) => ({ ...current, ...patch }));
@@ -260,7 +293,17 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
     filters.from !== '' ||
     filters.to !== '';
   const patientName = items.find((e) => e.patient)?.patient?.fullName ?? copy.patientFallback;
-  const locationNames = useLocationNames(token, items.some((e) => hasStaffLocationIds(e.metadata)));
+  const zoneHint = clock && reference ? auditZoneHint(reference, clock, now) : null;
+  // La zona describe las fechas siempre, también junto al error del rango: el
+  // día que se corrige se sigue contando en esa zona.
+  const dateDescribedBy =
+    [
+      invalidRange ? rangeErrorId : null,
+      zoneHint ? zoneHintId : null,
+      !invalidRange && !filters.from && !filters.to ? hintId : null,
+    ]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   return (
     <div className="flex flex-col gap-3">
@@ -315,9 +358,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
               max={filters.to || undefined}
               onChange={(e) => changeFilters({ from: e.target.value })}
               aria-invalid={invalidRange !== null}
-              aria-describedby={
-                invalidRange ? rangeErrorId : !filters.from && !filters.to ? hintId : undefined
-              }
+              aria-describedby={dateDescribedBy}
               className="min-w-0 tabular-nums sm:w-36"
             />
           </label>
@@ -329,9 +370,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
               min={filters.from || undefined}
               onChange={(e) => changeFilters({ to: e.target.value })}
               aria-invalid={invalidRange !== null}
-              aria-describedby={
-                invalidRange ? rangeErrorId : !filters.from && !filters.to ? hintId : undefined
-              }
+              aria-describedby={dateDescribedBy}
               className="min-w-0 tabular-nums sm:w-36"
             />
           </label>
@@ -343,13 +382,20 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
         ) : null}
       </div>
 
-      {invalidRange ? (
-        <InlineError id={rangeErrorId}>{invalidRange}</InlineError>
-      ) : !filters.from && !filters.to ? (
-        <p id={hintId} className="text-xs text-muted">
-          {copy.rangeHint}
-        </p>
-      ) : null}
+      <div className="flex flex-col gap-1 empty:hidden">
+        {zoneHint ? (
+          <p id={zoneHintId} className="text-xs text-muted">
+            {zoneHint}
+          </p>
+        ) : null}
+        {invalidRange ? (
+          <InlineError id={rangeErrorId}>{invalidRange}</InlineError>
+        ) : !filters.from && !filters.to ? (
+          <p id={hintId} className="text-xs text-muted">
+            {copy.rangeHint}
+          </p>
+        ) : null}
+      </div>
 
       {patientId && onClearPatient ? (
         <div>
@@ -377,9 +423,18 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
         />
       ) : null}
 
-      {!forbidden && !invalidRange ? (
+      {sede?.status === 'error' && !forbidden && !invalidRange ? (
+        <SedeConfigError
+          kind={sede.kind}
+          description={sede.message}
+          onRetry={locationsState.retry}
+          locationId={sede.locationId}
+        />
+      ) : null}
+
+      {sede?.status !== 'error' && !forbidden && !invalidRange ? (
         <AsyncSection
-          loading={loading}
+          loading={loading || !clock}
           error={loadError}
           onRetry={() => setReloadKey((k) => k + 1)}
           isEmpty={items.length === 0}
@@ -403,21 +458,25 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((event) => (
-                  <AuditRow
-                    key={event.id}
-                    event={event}
-                    showPatient={!patientId}
-                    locationNames={locationNames}
-                  />
-                ))}
+                {/* Sin reloj, AsyncSection pinta el esqueleto: ninguna fila se formatea. */}
+                {clock
+                  ? items.map((event) => (
+                      <AuditRow
+                        key={event.id}
+                        event={event}
+                        time={auditTime(event, clock, locationNames)}
+                        showPatient={!patientId}
+                        locationNames={locationNames}
+                      />
+                    ))
+                  : null}
               </TableBody>
             </Table>
           </Card>
         </AsyncSection>
       ) : null}
 
-      {!forbidden && !invalidRange && !loadError && (cursors.length > 1 || data?.nextCursor) ? (
+      {clock && !forbidden && !invalidRange && !loadError && (cursors.length > 1 || data?.nextCursor) ? (
         <nav
           aria-label={copy.pagination}
           className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"
@@ -454,46 +513,25 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
   );
 }
 
-/**
- * DX-359: nombres de las sedes para los accesos del personal (`staffAccess`
- * solo trae ids). Se piden una vez y solo si alguna fila los necesita; si no
- * cargan, `null` y las sedes se cuentan (nunca se pinta un id).
- */
-function useLocationNames(token: string, needed: boolean): LocationNames | null {
-  const [names, setNames] = useState<LocationNames | null>(null);
-  const loaded = names !== null;
-  useEffect(() => {
-    if (!token || !needed || loaded) return;
-    let cancelled = false;
-    listLocations(token)
-      .then((locations) => {
-        if (!cancelled) setNames(locationNameMap(locations));
-      })
-      .catch(() => {
-        // Sin nombres: el detalle cuenta las sedes.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, needed, loaded]);
-  return names;
-}
-
 function AuditRow({
   event,
+  time,
   showPatient,
   locationNames,
 }: {
   event: AuditEvent;
+  time: AuditTime;
   showPatient: boolean;
   locationNames: LocationNames | null;
 }) {
   const detail =
     communicationDetail(event.metadata) ??
+    confirmationLinkDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
     staffLoginDetail(event.metadata) ??
     staffDetail(event.metadata, locationNames) ??
     cashSessionDetail(event.metadata) ??
+    sedationDetail(event.metadata) ??
     scheduleChangeDetail(event.metadata) ??
     cancellationDetail(event.metadata) ??
     patientFlowDetail(event.metadata) ??
@@ -502,23 +540,34 @@ function AuditRow({
     healthRegistrationDetail(event.metadata) ??
     clinicSettingsDetail(event.metadata) ??
     locationCalendarDetail(event.metadata) ??
-    anamnesisDetail(event.metadata);
+    exchangeRateBackupDetail(event.metadata) ??
+    anamnesisDetail(event.metadata) ??
+    signatureRequestDetail(event.metadata);
   return (
     <TableRow>
-      <TableCell className="whitespace-nowrap tabular-nums" data-label={copy.colWhen}>
-        {formatDateTimeInZone(event.occurredAt, event.timeZone)}
+      <TableCell className="tabular-nums" data-label={copy.colWhen}>
+        {/* Un solo bloque: en móvil la celda es flex (etiqueta | valor). */}
+        <div className={cellValueClass}>
+          <time dateTime={time.iso} className="whitespace-nowrap text-ink">
+            {time.reference.when}
+          </time>{' '}
+          <span className="whitespace-nowrap text-xs text-muted">{time.reference.offset}</span>
+          {time.sede ? <span className="block text-xs text-muted">{copy.sedeTime(time.sede)}</span> : null}
+        </div>
       </TableCell>
       <TableCell data-label={copy.colActor}>
-        <span className="block font-medium text-ink">
-          {event.actor
-            ? (event.actor.fullName ?? copy.formerMember)
-            : isPatientOptOut(event.metadata)
-              ? copy.patientActor
-              : copy.unknownActor}
-        </span>
-        <span className="block text-xs text-muted">
-          {actorRoleLabel(event.actor?.role ?? null)}
-        </span>
+        <div className={cellValueClass}>
+          <span className="block font-medium text-ink">
+            {event.actor
+              ? (event.actor.fullName ?? copy.formerMember)
+              : isPatientOptOut(event.metadata)
+                ? copy.patientActor
+                : copy.unknownActor}
+          </span>
+          <span className="block text-xs text-muted">
+            {actorRoleLabel(event.actor?.role ?? null)}
+          </span>
+        </div>
       </TableCell>
       <TableCell data-label={copy.colAction}>
         <Badge variant={AUDIT_ACTION_VARIANT[event.action]}>
@@ -526,8 +575,10 @@ function AuditRow({
         </Badge>
       </TableCell>
       <TableCell data-label={copy.colResource}>
-        {AUDIT_RESOURCE_LABELS[event.resourceType]}
-        {detail ? <span className="block text-xs text-muted">{detail}</span> : null}
+        <div className={cellValueClass}>
+          {AUDIT_RESOURCE_LABELS[event.resourceType]}
+          {detail ? <span className="block text-xs text-muted">{detail}</span> : null}
+        </div>
       </TableCell>
       {showPatient ? (
         <TableCell data-label={copy.colPatient}>
@@ -544,12 +595,14 @@ function AuditRow({
         </TableCell>
       ) : null}
       <TableCell data-label={copy.colOrigin}>
-        <span className="block tabular-nums text-ink">{event.ip ?? copy.noIp}</span>
-        {event.userAgent ? (
-          <span className="block max-w-56 truncate text-xs text-muted" title={event.userAgent}>
-            {event.userAgent}
-          </span>
-        ) : null}
+        <div className={cellValueClass}>
+          <span className="block tabular-nums text-ink">{event.ip ?? copy.noIp}</span>
+          {event.userAgent ? (
+            <span className="block max-w-56 truncate text-xs text-muted max-sm:ml-auto" title={event.userAgent}>
+              {event.userAgent}
+            </span>
+          ) : null}
+        </div>
       </TableCell>
     </TableRow>
   );

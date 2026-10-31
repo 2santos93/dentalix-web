@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import { apiFetch, apiFetchOrNull, apiFetchText } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
 
 export type RecordPaymentInput = components['schemas']['RecordPaymentDto'];
@@ -41,6 +41,37 @@ export async function recordPayment(
   idempotencyKey: string,
 ): Promise<Payment> {
   return apiFetch<Payment>(`/treatment-plans/${planId}/payments`, {
+    method: 'POST',
+    body: input,
+    token,
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
+}
+
+export type RecordSplitPaymentInput = components['schemas']['RecordSplitPaymentDto'];
+export type SplitPaymentLineInput = components['schemas']['SplitPaymentLineDto'];
+export type SplitPayment = components['schemas']['SplitPaymentDto'];
+
+/** DX-390: líneas de un cobro dividido (con una sola es un abono de siempre). */
+export const SPLIT_MAX_LINES = 5;
+
+/** DX-390: 409 del cobro cuyo total supera lo pendiente sin confirmar el saldo a favor. */
+export const SPLIT_PAYMENT_EXCEEDS_BALANCE = 'SPLIT_PAYMENT_EXCEEDS_BALANCE';
+/** Revisión DX-390: otro abono entró al plan entre la lectura de lo pendiente y el cobro (409). */
+export const SPLIT_PAYMENT_BALANCE_CHANGED = 'SPLIT_PAYMENT_BALANCE_CHANGED';
+
+/**
+ * `POST /treatment-plans/:id/split-payments` (DX-390): un cobro en 2–5 formas
+ * de pago, cada una un abono, con UN recibo y en una sola transacción. Una
+ * Idempotency-Key para el cobro entero.
+ */
+export async function recordSplitPayment(
+  token: string,
+  planId: string,
+  input: RecordSplitPaymentInput,
+  idempotencyKey: string,
+): Promise<SplitPayment> {
+  return apiFetch<SplitPayment>(`/treatment-plans/${planId}/split-payments`, {
     method: 'POST',
     body: input,
     token,
@@ -115,15 +146,36 @@ export type CashPaymentsQuery = NonNullable<
  * `GET /payments` — la caja: abonos de la clínica en el período (`from`/`to`
  * días civiles, ambos inclusive), de la sede activa (la cabecera
  * `X-Location-Id` la pone `apiFetch`) o de todas, con el resumen del período
- * por moneda y método. `method`/`page` ausentes no viajan en la query.
+ * por moneda y método. `method`/`paymentMethodId`/`page` ausentes no viajan
+ * en la query.
  */
 export async function listCashPayments(
   token: string,
   params: CashPaymentsQuery,
 ): Promise<CashPaymentsResponse> {
-  const search = new URLSearchParams({ from: params.from, to: params.to });
-  if (params.method) search.set('method', params.method);
+  const search = cashSearch(params);
   if (params.page) search.set('page', String(params.page));
   if (params.pageSize) search.set('pageSize', String(params.pageSize));
   return apiFetch<CashPaymentsResponse>(`/payments?${search.toString()}`, { token });
+}
+
+export type CashPaymentsCsvQuery = NonNullable<
+  paths['/api/v1/payments.csv']['get']['parameters']['query']
+>;
+
+/**
+ * `GET /payments.csv` (DX-395) — la caja del período en CSV, con medio y
+ * referencia: mismos filtros y sede que `listCashPayments`, sin paginar. La
+ * API lo construye (UTF-8 con BOM, celdas protegidas contra fórmulas).
+ */
+export function downloadCashPaymentsCsv(token: string, params: CashPaymentsCsvQuery): Promise<string> {
+  return apiFetchText(`/payments.csv?${cashSearch(params).toString()}`, { token });
+}
+
+/** Período, método y medio (DX-395); los ausentes no viajan en la query. */
+function cashSearch(params: CashPaymentsCsvQuery): URLSearchParams {
+  const search = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.method) search.set('method', params.method);
+  if (params.paymentMethodId) search.set('paymentMethodId', params.paymentMethodId);
+  return search;
 }

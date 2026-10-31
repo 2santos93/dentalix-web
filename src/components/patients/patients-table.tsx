@@ -1,5 +1,6 @@
 'use client';
 import type { Patient } from '@/lib/patients/patients-api';
+import { displayPhone } from '@/lib/phone/display-phone';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Avatar } from '@/components/ui/avatar';
@@ -82,8 +83,17 @@ function columns(clock: SedeClock | null): DataListColumn<Patient>[] {
     {
       id: 'phone',
       header: copy.colPhone,
-      cell: (p) => <span className="whitespace-nowrap text-muted tabular-nums">{p.phone ?? copy.fallback}</span>,
-      mobileCell: (p) => p.phone,
+      // DX-387: el formato internacional de la API, o el guardado tal cual. Un
+      // teléfono largo se parte en su celda/tarjeta en vez de ensancharla.
+      cell: (p) => (
+        <span className="min-w-0 text-muted tabular-nums [overflow-wrap:anywhere]">
+          {displayPhone(p) ?? copy.fallback}
+        </span>
+      ),
+      mobileCell: (p) => {
+        const phone = displayPhone(p);
+        return phone ? <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">{phone}</span> : null;
+      },
     },
     {
       id: 'coverage',

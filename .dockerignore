@@ -1,0 +1,25 @@
+# DX-083: el contexto de `docker build` lleva solo el código. Nada de .env
+# (las variables se dan al contenedor en runtime), ni builds ni dependencias
+# locales (se instalan dentro), ni tests, informes o estado de Playwright.
+.git
+.github
+.next
+node_modules
+.env*
+!.env.example
+coverage
+e2e
+playwright-report
+test-results
+.playwright-mcp
+.planning
+.mcp.json
+docs
+*.log
+Dockerfile
+.dockerignore
+playwright.config.ts
+jest.config.ts
+jest.setup.ts
+**/*.test.ts
+**/*.test.tsx

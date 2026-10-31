@@ -93,8 +93,9 @@ const DISCOUNTS: NavItem = {
   icon: BadgePercent,
   roles: ['ADMIN'],
 };
-// Reportes (DX-014): REPORT_ROLES.
-const REPORTS: NavItem = { href: '/reportes', label: 'Reportes', icon: ChartColumn, roles: ['ADMIN'] };
+// Reportes (DX-014): «Comparar sedes» (REPORT_ROLES) y «Producción por
+// procedimiento» (PRODUCTION_REPORT_ROLES, DX-423: el odontólogo ve la suya).
+const REPORTS: NavItem = { href: '/reportes', label: 'Reportes', icon: ChartColumn, roles: ['ADMIN', 'DENTIST'] };
 // CATALOG_READ_ROLES: recepción no registra clínico.
 const CATALOG: NavItem = {
   href: '/catalog',
@@ -146,7 +147,9 @@ export function visibleNavGroups(role: ClinicRole | null): NavGroup[] {
 const TAB_PREFERENCES: Record<ClinicRole, string[]> = {
   ADMIN: ['/dashboard', '/agenda', '/patients', '/caja'],
   RECEPTION: ['/agenda', '/patients', '/caja', '/presupuestos'],
-  DENTIST: ['/agenda', '/patients', '/presupuestos', ANAMNESIS_HREF, '/inventory'],
+  // `/catalog` explícito: desde DX-423 el odontólogo también ve Reportes, que
+  // va antes en el orden del menú y le quitaría la pestaña al catálogo.
+  DENTIST: ['/agenda', '/patients', '/presupuestos', ANAMNESIS_HREF, '/inventory', '/catalog'],
   ASSISTANT: ['/agenda', '/patients', '/presupuestos', ANAMNESIS_HREF, '/inventory'],
 };
 

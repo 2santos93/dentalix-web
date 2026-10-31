@@ -364,6 +364,7 @@ export function PatientCoverageSection({
           onlyCoverage={
             dialog.coverage ? (coverages?.length ?? 0) === 1 : (coverages?.length ?? 0) === 0
           }
+          editorIsAdmin={mayVerify}
           onSaved={() => {
             announce(copy.saved);
             reload();

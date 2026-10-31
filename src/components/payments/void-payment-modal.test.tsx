@@ -77,3 +77,20 @@ describe('VoidPaymentModal', () => {
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
   });
 });
+
+it('DX-390: avisa de que una forma de pago de un cobro dividido se anula con todo el cobro', () => {
+  render(
+    <VoidPaymentModal
+      open
+      onOpenChange={jest.fn()}
+      onConfirm={jest.fn()}
+      submitting={false}
+      error={null}
+      restrictedToOwnToday={false}
+      splitLines={3}
+    />,
+  );
+  expect(screen.getByRole('note')).toHaveTextContent(
+    'Es una de las 3 formas de pago de un mismo cobro: se anulan todas y su recibo.',
+  );
+});

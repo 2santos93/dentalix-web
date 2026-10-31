@@ -28,7 +28,6 @@ import {
   recordPayment,
   voidPayment,
   type Payment,
-  type PaymentMethod,
   type PlanBalance,
   type PlanItemBalance,
   type RecordPaymentInput,
@@ -62,9 +61,11 @@ import { Disclosure } from '@/components/shared/disclosure';
 import { CatalogPicker } from '@/components/odontogram/catalog-picker';
 import { ToothPicker } from '@/components/odontogram/tooth-picker';
 import {
-  PAYMENT_METHOD_LABELS,
-  PAYMENT_METHOD_OPTIONS,
-} from '@/lib/payments/payment-method';
+  PaymentMethodSelect,
+  PaymentReferenceFields,
+  paymentMethodFieldsCopy,
+  usePaymentMethodFields,
+} from '@/components/payments/payment-method-fields';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
@@ -81,10 +82,11 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { cn } from '@/lib/utils';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { formatDateTime } from '@/lib/format/date';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
@@ -310,7 +312,6 @@ const copy = {
   paymentCurrencyLabel: 'Moneda',
   paymentDateLabel: 'Fecha',
   paymentMethodLabel: 'Método',
-  paymentMethodEmptyOption: 'Sin especificar',
   paymentNotesLabel: 'Notas',
   addPaymentSubmit: 'Registrar abono',
   addPaymentSubmitting: 'Registrando…',
@@ -340,8 +341,8 @@ const copy = {
   allocationAction: 'Imputación',
   // Con varios abonos, «Imputación, Imputación…» no dice de cuál: el lector
   // oye también el recibo (o el importe, si no tiene serie).
-  allocationActionContext: (payment: Payment) =>
-    ` del abono ${payment.receiptNumber ?? formatCurrency(payment.amount, payment.currency)}`,
+  allocationActionContext: (payment: Payment, fmt: RegionalFormat | null) =>
+    ` del abono ${payment.receiptNumber ?? sedeMoney(payment.amount, payment.currency, fmt)}`,
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
 
@@ -460,6 +461,8 @@ interface ItemsTableProps {
     selectedIds: ReadonlySet<string>;
     onToggle: (itemId: string, checked: boolean) => void;
   };
+  /** DX-386: formato de la sede para «Cobrado» y «Pendiente»; `null` mientras carga («—»). */
+  fmt: RegionalFormat | null;
 }
 
 /**
@@ -795,6 +798,7 @@ function ItemsTable({
   markDoneOnly = false,
   itemBalances,
   selection,
+  fmt,
 }: ItemsTableProps) {
   // SEC-050: el ítem de un cargo vigente no se quita, no cambia de estado ni
   // entra en «Descuento %».
@@ -873,7 +877,7 @@ function ItemsTable({
                     {formatCurrency(item.price, currency)}
                     <ItemDiscountLine item={item} currency={currency} />
                   </TableCell>
-                  {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} /> : null}
+                  {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} fmt={fmt} /> : null}
                   <TableCell>
                     <div className="flex flex-col items-start gap-1.5">
                       <StatusBadge kind="treatmentPlanItem" status={item.status} />
@@ -966,7 +970,7 @@ function ItemsTable({
               </p>
               {itemBalances?.has(item.id) ? (
                 <div className="mt-1">
-                  <ItemPaidLine item={itemBalances.get(item.id)} currency={currency} />
+                  <ItemPaidLine item={itemBalances.get(item.id)} currency={currency} fmt={fmt} />
                 </div>
               ) : null}
               <div className="mt-1">
@@ -1036,7 +1040,7 @@ interface PaymentsListProps {
   manualPaymentIds?: ReadonlySet<string>;
   /** DX-051: abre «Imputar abono»; solo ADMIN y en un plan que se cobra. */
   onAllocate?: (paymentId: string, trigger: HTMLElement) => void;
-  /** DX-375/DX-378: formato de la sede para la tasa congelada; `null` mientras carga («—»). */
+  /** DX-375/DX-378/DX-386: formato de la sede para importe, día y tasa congelada; `null` mientras carga («—»). */
   fmt: RegionalFormat | null;
 }
 
@@ -1082,7 +1086,7 @@ function PaymentsList({
               const voiding = voidingPaymentId === payment.id;
               return (
                 <TableRow key={payment.id}>
-                  <TableCell>{formatCivilDate(payment.paidOn)}</TableCell>
+                  <TableCell>{sedeCivilDate(payment.paidOn, fmt)}</TableCell>
                   <TableCell className="tabular-nums">
                     {payment.receiptNumber ?? (
                       <span className="text-muted">{copy.paymentReceiptLegacy}</span>
@@ -1090,7 +1094,7 @@ function PaymentsList({
                   </TableCell>
                   <TableCell className="font-medium">
                     <span className="inline-flex flex-wrap items-center gap-2">
-                      {formatCurrency(payment.amount, payment.currency)}
+                      {sedeMoney(payment.amount, payment.currency, fmt)}
                       {manualPaymentIds?.has(payment.id) ? (
                         <Badge variant="muted">{copy.manualAllocation}</Badge>
                       ) : null}
@@ -1123,7 +1127,7 @@ function PaymentsList({
                           onClick={(e) => onAllocate(payment.id, e.currentTarget)}
                         >
                           {copy.allocationAction}
-                          <span className="sr-only">{copy.allocationActionContext(payment)}</span>
+                          <span className="sr-only">{copy.allocationActionContext(payment, fmt)}</span>
                         </Button>
                       ) : null}
                       <Separator orientation="vertical" className="h-5" />
@@ -1153,7 +1157,7 @@ function PaymentsList({
           return (
             <li key={payment.id} className="p-4">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-ink tabular-nums">{formatCivilDate(payment.paidOn)}</span>
+                <span className="font-medium text-ink tabular-nums">{sedeCivilDate(payment.paidOn, fmt)}</span>
                 {payment.method ? (
                   <StatusBadge kind="paymentMethod" status={payment.method} />
                 ) : (
@@ -1161,7 +1165,7 @@ function PaymentsList({
                 )}
               </div>
               <p className="mt-2 flex flex-wrap items-center gap-2 font-medium text-ink tabular-nums">
-                {formatCurrency(payment.amount, payment.currency)}
+                {sedeMoney(payment.amount, payment.currency, fmt)}
                 {manualPaymentIds?.has(payment.id) ? (
                   <Badge variant="muted">{copy.manualAllocation}</Badge>
                 ) : null}
@@ -1190,7 +1194,7 @@ function PaymentsList({
                       onClick={(e) => onAllocate(payment.id, e.currentTarget)}
                     >
                       {copy.allocationAction}
-                      <span className="sr-only">{copy.allocationActionContext(payment)}</span>
+                      <span className="sr-only">{copy.allocationActionContext(payment, fmt)}</span>
                     </Button>
                   ) : null}
                 </div>
@@ -1355,6 +1359,9 @@ export function TreatmentPlansTab({
   const paymentIdempotencyKeyRef = useRef<string | null>(null);
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  // DX-377: medio de la clínica, referencia y aviso de repetida (el mismo que
+  // «Registrar abono»).
+  const paymentMethodFields = usePaymentMethodFields(token, showPaymentForm);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentCurrency, setPaymentCurrency] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
@@ -1364,7 +1371,6 @@ export function TreatmentPlansTab({
     setPrevSedeTimeZone(sedeTimeZone);
     if (sedeTimeZone && paymentDate === '') setPaymentDate(sedeToday(sedeTimeZone));
   }
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [addPaymentSubmitting, setAddPaymentSubmitting] = useState(false);
   const [addPaymentValidationError, setAddPaymentValidationError] = useState<string | null>(null);
@@ -1575,7 +1581,7 @@ export function TreatmentPlansTab({
     setPaymentAmount('');
     setPaymentCurrency('');
     setPaymentDate('');
-    setPaymentMethod('');
+    paymentMethodFields.reset();
     setPaymentNotes('');
     setAddPaymentValidationError(null);
     setPaymentAmountError(null);
@@ -1891,7 +1897,7 @@ export function TreatmentPlansTab({
     setPaymentCurrency(planDetail?.currency ?? '');
     // DX-097: hoy en la zona de la sede, no en la del navegador.
     setPaymentDate(sedeTimeZone ? sedeToday(sedeTimeZone) : '');
-    setPaymentMethod('');
+    paymentMethodFields.reset();
     setPaymentNotes('');
     setAddPaymentValidationError(null);
     setPaymentAmountError(null);
@@ -1926,6 +1932,9 @@ export function TreatmentPlansTab({
       setAddPaymentValidationError(copy.invalidPaymentDate);
       return;
     }
+    // DX-395: la referencia o el motivo que faltan se marcan en su campo,
+    // que recibe el foco.
+    if (!paymentMethodFields.validate()) return;
 
     setAddPaymentSubmitting(true);
     try {
@@ -1934,7 +1943,7 @@ export function TreatmentPlansTab({
         currency: currencyValue,
         // DX-097: el DÍA elegido; la API lo guarda al mediodía de la sede.
         paidAt: paymentDate,
-        ...(paymentMethod ? { method: paymentMethod } : {}),
+        ...paymentMethodFields.body(),
         ...(paymentNotes.trim() ? { notes: paymentNotes.trim() } : {}),
       };
       // Defensive: if the form was somehow submitted without an open-time key,
@@ -1946,13 +1955,15 @@ export function TreatmentPlansTab({
       // Success → rotate: the next abono is a genuinely different payment.
       paymentIdempotencyKeyRef.current = crypto.randomUUID();
       setPaymentAmount('');
-      setPaymentMethod('');
+      paymentMethodFields.reset();
       setPaymentNotes('');
       setShowPaymentForm(false);
       await refreshBalanceAndPayments();
     } catch (err) {
       // Key intentionally NOT rotated here: a retry of this same click must
       // reuse it so the backend dedups instead of double-charging.
+      // DX-377: la referencia repetida se avisa junto al campo y pide motivo.
+      if (paymentMethodFields.catchDuplicate(err)) return;
       // Un 400 técnico (importe/moneda) se dice en español (apiErrorMessage).
       setAddPaymentError(apiErrorMessage(err, copy.genericAddPaymentError));
     } finally {
@@ -2530,6 +2541,7 @@ export function TreatmentPlansTab({
                   }
                   onVoidFee={role === 'ADMIN' ? setFeeToVoid : undefined}
                   itemBalances={itemBalances}
+                  fmt={sedeFmt}
                   locked={signed}
                   closed={closed}
                   markDoneOnly={planDetail?.status === 'COMPLETED'}
@@ -2613,10 +2625,13 @@ export function TreatmentPlansTab({
                             onOpenChange={setShowPaymentForm}
                             title={copy.registerPayment}
                             onSubmit={handleAddPayment}
-                            submitLabel={copy.addPaymentSubmit}
+                            submitLabel={
+                              paymentMethodFields.duplicate ? paymentMethodFieldsCopy.duplicateSubmit : copy.addPaymentSubmit
+                            }
                             submitting={addPaymentSubmitting}
                             error={addPaymentValidationError ?? addPaymentError}
                             size="lg"
+                            touchTargets
                           >
                             {/* Va antes de los campos: la sede a la que se
                                 atribuye el abono se lee ANTES de escribir el
@@ -2661,6 +2676,7 @@ export function TreatmentPlansTab({
                                   paymentsWithoutRate: planBalance.paymentsWithoutRate.length,
                                 }}
                                 date={paymentDate}
+                                fmt={sedeFmt}
                               />
                             ) : null}
 
@@ -2683,22 +2699,14 @@ export function TreatmentPlansTab({
                                 )}
                               </FormField>
 
-                              <FormField htmlFor="tp-payment-method" label={copy.paymentMethodLabel}>
-                                <select
-                                  id="tp-payment-method"
-                                  value={paymentMethod}
-                                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | '')}
-                                  className={fieldClass}
-                                >
-                                  <option value="">{copy.paymentMethodEmptyOption}</option>
-                                  {PAYMENT_METHOD_OPTIONS.map((method) => (
-                                    <option key={method} value={method}>
-                                      {PAYMENT_METHOD_LABELS[method]}
-                                    </option>
-                                  ))}
-                                </select>
-                              </FormField>
+                              <PaymentMethodSelect
+                                fields={paymentMethodFields}
+                                id="tp-payment-method"
+                                label={copy.paymentMethodLabel}
+                              />
                             </div>
+
+                            <PaymentReferenceFields fields={paymentMethodFields} idPrefix="tp-payment" />
 
                             <FormField htmlFor="tp-payment-notes" label={copy.paymentNotesLabel}>
                               <textarea
@@ -3075,7 +3083,14 @@ export function TreatmentPlansTab({
         error={paymentActionError}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={role !== 'ADMIN'}
+        splitLines={splitLinesOf(payments, paymentToVoid)}
       />
     </div>
   );
+}
+
+/** DX-390: cuántas formas de pago tiene el cobro dividido del abono (0 si es suelto). */
+function splitLinesOf(payments: Payment[], paymentId: string | null): number {
+  const splitId = payments.find((p) => p.id === paymentId)?.splitId;
+  return splitId ? payments.filter((p) => p.splitId === splitId).length : 0;
 }

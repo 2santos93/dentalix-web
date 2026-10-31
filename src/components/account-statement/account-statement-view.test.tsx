@@ -105,10 +105,19 @@ it('lista movimientos con método y sede, marcando los anulados', async () => {
   expect(rows[0]).toHaveTextContent('Anulado por Rita Recepción: Cobro duplicado');
   expect(rows[0]).toHaveTextContent('Sede Norte');
   expect(rows[0]).toHaveTextContent('Tarjeta');
-  expect(rows[1]).toHaveTextContent('Transferencia');
+  // DX-395: el medio de la clínica y la referencia, no el método antiguo.
+  expect(rows[1]).toHaveTextContent('Pago móvil · Ref. ABC 123');
+  expect(rows[1]).not.toHaveTextContent('Transferencia');
   expect(rows[1]).not.toHaveTextContent(/anulado/i);
   expect(rows[1]).toHaveTextContent('Plan del');
   expect(rows[2]).toHaveTextContent(/sin método/i);
+});
+
+it('DX-395: la vista imprimible también lleva «Pago móvil · Ref. ABC 123»', async () => {
+  mockedGet.mockResolvedValue(accountStatementFixture());
+  render(<AccountStatementPrintView token="tok" patientId="pat-1" />);
+  const table = await screen.findByRole('table', { name: /movimientos/i });
+  expect(within(table).getByRole('row', { name: /Pago móvil/ })).toHaveTextContent('Pago móvil · Ref. ABC 123');
 });
 
 it('lista las cuotas con su estado: pagada, vencida, pendiente', async () => {
@@ -255,6 +264,33 @@ describe('anular desde el estado de cuenta (DX-057)', () => {
   });
 });
 
+describe('anular una forma de pago de un cobro dividido (revisión DX-390)', () => {
+  it('avisa antes de anular que se anula el cobro entero y su recibo', async () => {
+    const user = userEvent.setup();
+    const fixture = accountStatementFixture();
+    mockedGet.mockResolvedValue({
+      ...fixture,
+      movements: fixture.movements.map((m) =>
+        m.id === 'pay-2' ? { ...m, splitId: 'pay-2', splitLines: 3 } : m,
+      ),
+    });
+    render(<AccountStatementView token="tok" patientId="pat-1" />);
+    const table = await screen.findByRole('table', { name: /movimientos/i });
+    await user.click(within(table).getByRole('button', { name: /anular abono/i }));
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(dialog).toHaveTextContent(
+      'Es una de las 3 formas de pago de un mismo cobro: se anulan todas y su recibo.',
+    );
+
+    // QA DX-390 (B5): la confirmación dice que se anuló el cobro entero.
+    mockedVoid.mockResolvedValue(undefined);
+    await user.type(within(dialog).getByLabelText(/motivo/i), 'Cobro duplicado');
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText(/^Cobro anulado: 3 formas de pago y su recibo · /)).toBeInTheDocument();
+  });
+});
+
 describe('cobrar desde el estado de cuenta (DX-067)', () => {
   const RECEPTION = tokenForRole('RECEPTION');
   const billablePlan: BillablePlan = {
@@ -320,6 +356,8 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     mockedRecord.mockResolvedValue({
       id: 'pay-new',
       tenantId: 't-1',
+      splitId: null,
+      splitLine: null,
       treatmentPlanId: 'plan-1',
       openingBalanceId: null,
       patientId: 'pat-1',
@@ -328,6 +366,10 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       paidAt: '2026-10-16T00:00:00.000Z',
       paidOn: '2026-10-16',
       method: null,
+      paymentMethodId: null,
+      paymentMethodName: null,
+      reference: null,
+      duplicateReferenceReason: null,
       notes: null,
       createdById: 'u-recep',
       createdAt: '2026-10-16T12:00:00.000Z',
@@ -359,7 +401,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       expect.any(String),
     );
     expect(money((await screen.findByText(/abono registrado/i)).textContent)).toMatch(
-      /50\.000,00 COP/,
+      /COP 50\.000,00/,
     );
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
     // DX-150: avisa a la ficha para releer la marca de saldo y la cobranza.
@@ -459,6 +501,7 @@ describe('cobrado por ítem de cada plan (DX-051)', () => {
     billable: 3000000,
     paid: 1200000,
     balance: 1800000,
+    creditMovements: 0,
     paymentsCount: 2,
     paymentsWithoutRate: [],
     allocated: 1200000,

@@ -7,7 +7,9 @@ import { accessTokenOf, loginAs, registerAndLogin } from './support/auth';
 import { addStaffViaApi, apiPost, type ApiSession } from './support/api';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
-import { E2E_BROWSER_LOCALE } from './support/regional';
+import { E2E_BROWSER_LOCALE, E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
+import { moneyWithCode } from '../src/lib/format/sede-number';
 
 /**
  * e2e (DX-051): imputación de abonos a los ítems del plan.
@@ -37,6 +39,8 @@ const password = 'Password123!';
 // Mismo formateador que la app (`formatCurrency`, locale `es`, dos decimales).
 const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 const money = (amount: number) => usd.format(amount);
+/** DX-386: «Cobrado»/«Pendiente» por ítem con el formato de la sede y el código ISO («USD 100,00»). */
+const sedeUsd = (amount: number) => moneyWithCode(amount, 'USD', regionalFormat(E2E_REGION));
 
 interface Seeded {
   patientId: string;
@@ -119,8 +123,8 @@ async function expectItem(panel: Locator, mobile: boolean, procedure: string, ex
       await expect(pending.getByRole('img', { name: 'Sin importe a cobrar' })).toBeVisible();
       return;
     }
-    await expect(paid).toHaveText(money(expected.paid));
-    await expect(pending).toHaveText(expected.pending === 0 ? 'Cubierto' : money(expected.pending));
+    await expect(paid).toHaveText(sedeUsd(expected.paid));
+    await expect(pending).toHaveText(expected.pending === 0 ? 'Cubierto' : sedeUsd(expected.pending));
     return;
   }
   const card = panel.locator('li').filter({ hasText: procedure }).locator('visible=true');
@@ -129,10 +133,10 @@ async function expectItem(panel: Locator, mobile: boolean, procedure: string, ex
     return;
   }
   if (expected.pending === 0) {
-    await expect(card).toContainText(`Cobrado ${money(expected.paid)} ·`);
+    await expect(card).toContainText(`Cobrado ${sedeUsd(expected.paid)} ·`);
     await expect(card.getByText('Cubierto', { exact: true })).toBeVisible();
   } else {
-    await expect(card).toContainText(`Cobrado ${money(expected.paid)} · Pendiente ${money(expected.pending)}`);
+    await expect(card).toContainText(`Cobrado ${sedeUsd(expected.paid)} · Pendiente ${sedeUsd(expected.pending)}`);
   }
 }
 
@@ -179,7 +183,7 @@ async function receptionSees(browser: Browser, origin: string, viewport: { width
       [data.proposed, 30],
     ] as const) {
       const row = detail.locator('tr').filter({ hasText: procedure });
-      await expect(row.locator('td[data-label="Cobrado"]')).toHaveText(money(paid));
+      await expect(row.locator('td[data-label="Cobrado"]')).toHaveText(sedeUsd(paid));
     }
     // Solo lectura: recepción no imputa ni ve el plan clínico.
     await expect(page.getByRole('button', { name: 'Imputación' })).toHaveCount(0);

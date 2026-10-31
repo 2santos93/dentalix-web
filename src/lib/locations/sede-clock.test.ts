@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import {
   locationClock,
+  screenLocation,
   sedeClockFor,
   sedeMinute,
   sedeMinuteRanges,
@@ -54,6 +55,16 @@ describe('sedeTime / sedeTimeRange', () => {
   it('without the clock of the sede: «—», never the browser time', () => {
     expect(sedeTime(AT_1930_UTC, null)).toBe('—');
     expect(sedeTimeRange(AT_1930_UTC, AT_1930_UTC, null)).toBe('—');
+  });
+});
+
+describe('screenLocation (DX-362)', () => {
+  it('is the active sede; in «Todas las sedes», or with an active one that is gone, the principal', () => {
+    const retired = clinicLocation({ id: 'retired', isActive: false });
+    expect(screenLocation([retired, madrid, caracas], 'caracas')?.id).toBe('caracas');
+    expect(screenLocation([retired, madrid, caracas], null)?.id).toBe('madrid');
+    expect(screenLocation([retired, madrid, caracas], 'borrada')?.id).toBe('madrid');
+    expect(screenLocation([retired], null)).toBeUndefined();
   });
 });
 

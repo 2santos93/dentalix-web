@@ -1,6 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 import { E2E_BROWSER_LOCALE } from './e2e/support/regional';
 import { WEB_PORT } from './e2e/support/urls';
+import { SEDE_TODAY_TZ } from './e2e/support/clock';
+
+// DX-449: la zona «de hoy» se elige una vez, en el proceso principal; los
+// workers la heredan por el entorno y todos los specs usan la misma.
+process.env.E2E_SEDE_TODAY_TZ ??= SEDE_TODAY_TZ;
 
 /**
  * Suite e2e de la web contra la API y la base reales.

@@ -16,7 +16,8 @@ import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/
  *     variación; ordena por una columna (aria-sort) y exporta el CSV con los
  *     filtros activos («Mes anterior», «Mismo período del año anterior»).
  *  2. A 390 px, la tarjeta de cada sede, sin scroll horizontal.
- *  3. Un odontólogo no ve la entrada y, si abre la URL, ve el aviso (403).
+ *  3. Un odontólogo ve «Reportes» solo con su producción (DX-423): ni la
+ *     pestaña ni la tabla de «Comparar sedes».
  *  4. axe sin violaciones serias en claro y oscuro, a 390 y 1440 px. Las
  *     capturas y los JSON de axe van a DX014_QA_DIR (o a test-results).
  *
@@ -153,14 +154,18 @@ test('ADMIN a 390 px: tarjetas por sede sin scroll horizontal', async ({ page })
   await expectNoHorizontalScrollIn(page);
 });
 
-test('DENTIST: sin entrada en el menú y aviso si abre la URL', async ({ page }) => {
+test('DENTIST: «Reportes» solo con su producción, sin «Comparar sedes» (DX-423)', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, DENTIST_EMAIL, DEMO_PASSWORD);
   await expect(page.getByRole('link', { name: 'Pacientes' }).filter({ visible: true }).first()).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Reportes' })).toHaveCount(0);
-  await page.goto(`${origin}/reportes`);
-  await expect(page.getByText('Tu rol no tiene acceso a los reportes.')).toBeVisible({ timeout: 30_000 });
+  // Aunque pida la pestaña por URL, la de la administración no está.
+  await page.goto(`${origin}/reportes?tab=comparar-sedes`);
+  await expect(page.getByRole('tab', { name: 'Producción por procedimiento', selected: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByRole('tab', { name: 'Comparar sedes' })).toHaveCount(0);
+  await expect(page.getByRole('table', { name: 'Indicadores por sede y total de la clínica' })).toHaveCount(0);
 });
 
 test('axe: /reportes a 390 y 1440 px, en claro y oscuro', async ({ page }, testInfo) => {

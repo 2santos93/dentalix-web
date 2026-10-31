@@ -1,8 +1,9 @@
 'use client';
 import { Loader2, TriangleAlert } from 'lucide-react';
 import { FieldError } from '@/components/errors/field-error';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { Button } from '@/components/ui/button';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { convertWithRate, paymentRateCopy, quoteFromRates, ratePairLabel, ratePerBase } from '@/lib/payments/payment-rate';
 import type { ExchangeRatesState } from './use-exchange-rates';
 
@@ -13,6 +14,9 @@ export const ratePreviewCopy = {
   error: 'No se pudo consultar la tasa',
   retry: 'Reintentar la consulta de la tasa',
   errorHint: 'Puedes registrar el abono igual: se convierte con la tasa de su día.',
+  // DX-386: fuente automática sin la tasa del día todavía (el proveedor no la dio).
+  unavailable: (date: string) =>
+    `La tasa del proveedor para el ${date} aún no está disponible; reintentamos solos. El abono se guarda igual y queda «sin tasa» hasta que llegue.`,
   rate: (pair: string, source: string, date: string) => `Tasa: ${pair} · ${source} · ${date}`,
   typeAmount: 'Escribe el importe para ver cuánto cubre del plan.',
   equivalent: (currency: string) => `Equivalente en ${currency}`,
@@ -25,7 +29,7 @@ export const ratePreviewCopy = {
       ? 'No cuenta 1 abono anterior «sin tasa»: lo pendiente real será menor cuando se registre su tasa.'
       : `No cuenta ${n} abonos anteriores «sin tasa»: lo pendiente real será menor cuando se registre su tasa.`,
   missing: (currency: string, date: string) =>
-    `No hay tasa de ${currency} para el ${date}: el abono se guarda igual y queda «sin tasa» hasta que se registre la tasa de ese día.`,
+    `No hay tasa de ${currency} para el ${date}: el abono se guarda igual y queda «sin tasa» hasta que haya tasa de ese día.`,
 };
 const copy = ratePreviewCopy;
 
@@ -44,6 +48,8 @@ interface PaymentRatePreviewProps {
   planBalance: PreviewPlanBalance;
   /** Día del abono (AAAA-MM-DD): el de la tasa que congelará (DX-375). */
   date: string;
+  /** Formato de la sede (DX-378/DX-386); `null` mientras carga: importes y días «—». */
+  fmt: RegionalFormat | null;
 }
 
 export type PreviewPlanBalance = { balance: number; paymentsWithoutRate: number } | 'loading' | 'error';
@@ -63,6 +69,7 @@ export function PaymentRatePreview({
   planCurrency,
   planBalance,
   date,
+  fmt,
 }: PaymentRatePreviewProps) {
   return (
     <section
@@ -79,12 +86,14 @@ export function PaymentRatePreview({
         planCurrency={planCurrency}
         planBalance={planBalance}
         date={date}
+        fmt={fmt}
       />
     </section>
   );
 }
 
-function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance, date }: PaymentRatePreviewProps) {
+function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance, date, fmt }: PaymentRatePreviewProps) {
+  const money = (value: number, currency: string) => sedeMoney(value, currency, fmt);
   if (state.status === 'idle') return null;
   if (state.status === 'loading') {
     return (
@@ -102,6 +111,19 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
       </div>
     );
   }
+  if (state.status === 'unavailable') {
+    return (
+      <div className="mt-1 space-y-1">
+        <p className="flex items-start gap-2">
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
+          <span>{copy.unavailable(sedeCivilDate(date, fmt))}</span>
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={state.retry} className="max-sm:min-h-11">
+          {copy.retry}
+        </Button>
+      </div>
+    );
+  }
   const { source } = state.rates;
   // La misma tasa que congela la API (8 decimales; una que redondea a 0 es «sin tasa»).
   const rate = quoteFromRates(state.rates, paymentCurrency, planCurrency);
@@ -110,14 +132,14 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
     return (
       <p className="mt-1 flex items-start gap-2">
         <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
-        <span>{copy.missing(missing, formatCivilDate(date))}</span>
+        <span>{copy.missing(missing, sedeCivilDate(date, fmt))}</span>
       </p>
     );
   }
   const rateLine = copy.rate(
-    ratePairLabel(paymentCurrency, rate, (value, currency) => formatCurrency(value, currency)),
+    ratePairLabel(paymentCurrency, rate, money),
     paymentRateCopy.source[source],
-    formatCivilDate(date),
+    sedeCivilDate(date, fmt),
   );
   if (amount === null) {
     return (
@@ -135,12 +157,12 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
       <dl className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2">
         <div className="min-w-0">
           <dt className="text-muted">{copy.equivalent(planCurrency)}</dt>
-          <dd className="font-semibold tabular-nums">{formatCurrency(equivalent, planCurrency)}</dd>
+          <dd className="font-semibold tabular-nums">{money(equivalent, planCurrency)}</dd>
         </div>
         {after !== null ? (
           <div className="min-w-0">
             <dt className="text-muted">{after < 0 ? copy.inFavorAfter : copy.pendingAfter}</dt>
-            <dd className="font-semibold tabular-nums">{formatCurrency(Math.abs(after), planCurrency)}</dd>
+            <dd className="font-semibold tabular-nums">{money(Math.abs(after), planCurrency)}</dd>
           </div>
         ) : planBalance === 'loading' ? (
           <div className="min-w-0 flex items-center">

@@ -312,6 +312,58 @@ describe('PatientCoverageSection (DX-153)', () => {
       expect(within(rows[2]).queryByTestId('coverage-verification')).not.toBeInTheDocument();
     });
 
+    it('SEC-053: recepción quita el fin de una verificada; al guardar la ficha la relee y enseña «Sin verificar»', async () => {
+      const verified = coverage({
+        validFrom: '2025-01-01',
+        validTo: '2025-12-31',
+        status: 'EXPIRED',
+        verifiedAt: '2025-02-01T10:00:00.000Z',
+        verifiedById: 'admin-1',
+        verifiedByName: 'Ana Gómez',
+      });
+      // Lo que devuelve la API tras el PATCH: sin fin, vigente y sin verificar.
+      const saved = coverage({
+        validFrom: '2025-01-01',
+        validTo: null,
+        status: 'ACTIVE',
+        declaredById: 'recep-1',
+      });
+      mockedList.mockResolvedValueOnce([verified]).mockResolvedValueOnce([saved]);
+      mockedUpdate.mockResolvedValue(saved);
+      const onChanged = jest.fn();
+      renderSection(onChanged);
+      const user = setupUser();
+
+      const row = await screen.findByTestId('coverage-row');
+      expect(within(row).getByTestId('coverage-verification')).toHaveTextContent('Verificada');
+      await rowAction(user, 'Sanitas', 'Editar');
+      const dialog = await screen.findByRole('dialog');
+      const to = within(dialog).getByLabelText('Vigente hasta');
+      expect(to).toHaveAccessibleDescription(
+        'Déjala vacía si no tiene fecha de fin. Cambiar las fechas quita la verificación del administrador.',
+      );
+      await user.clear(to);
+      await user.click(within(dialog).getByRole('button', { name: /guardar/i }));
+
+      await waitFor(() =>
+        expect(mockedUpdate).toHaveBeenCalledWith(
+          'tok',
+          'p1',
+          'c1',
+          expect.objectContaining({ validFrom: '2025-01-01', validTo: null }),
+        ),
+      );
+      expect(await screen.findByText('Cobertura guardada.')).toBeInTheDocument();
+      await waitFor(() =>
+        expect(
+          within(screen.getByTestId('coverage-row')).getByTestId('coverage-verification'),
+        ).toHaveTextContent('Sin verificar'),
+      );
+      expect(screen.queryByText(/Verificada por Ana Gómez/)).not.toBeInTheDocument();
+      expect(mockedList).toHaveBeenCalledTimes(2);
+      expect(onChanged).toHaveBeenCalledTimes(1);
+    });
+
     it('recepción no ve «Verificar»', async () => {
       mockedList.mockResolvedValue([coverage()]);
       renderSection();

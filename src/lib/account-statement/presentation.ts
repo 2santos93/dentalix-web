@@ -19,6 +19,8 @@ export const statementCopy = {
   downPayment: 'Inicial',
   installment: (sequence: number | null) => `Cuota ${sequence ?? ''}`.trim(),
   methodNone: 'Sin método',
+  // DX-395: referencia del pago junto a su medio.
+  referenceLabel: (reference: string) => `Ref. ${reference}`,
   voided: 'Anulado',
   voidedBy: (name: string) => `Anulado por ${name}`,
   voidedByUnknownMember: 'un usuario ajeno a la clínica',
@@ -87,6 +89,31 @@ export function movementDestination(
 
 export function methodLabel(method: PaymentMethod | null): string {
   return method ? PAYMENT_METHOD_LABELS[method] : statementCopy.methodNone;
+}
+
+/** El nombre del medio de un abono: el de la clínica (DX-395) o su método. */
+export function movementMediumName(
+  movement: Pick<AccountStatementMovement, 'method' | 'paymentMethod'>,
+): string {
+  return movement.paymentMethod?.name ?? methodLabel(movement.method);
+}
+
+/** «Ref. ABC 123», o `null` sin referencia (DX-395). */
+export function movementReferenceLabel(movement: Pick<AccountStatementMovement, 'reference'>): string | null {
+  return movement.reference ? statementCopy.referenceLabel(movement.reference) : null;
+}
+
+/**
+ * «Pago móvil · Ref. ABC 123» (DX-395): el medio con que la clínica cobró —no
+ * el método antiguo, que dice «Transferencia» para un pago móvil— y la
+ * referencia del pago, para el estado de cuenta que se entrega al paciente.
+ */
+export function movementMethodLabel(
+  movement: Pick<AccountStatementMovement, 'method' | 'paymentMethod' | 'reference'>,
+): string {
+  const reference = movementReferenceLabel(movement);
+  const name = movementMediumName(movement);
+  return reference ? `${name} · ${reference}` : name;
 }
 
 /**

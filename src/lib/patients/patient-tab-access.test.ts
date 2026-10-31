@@ -6,7 +6,6 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
     expect(access['clinical-history']).toBe(false);
     expect(access.odontogram).toBe(false);
     expect(access['treatment-plans']).toBe(false);
-    expect(access.consents).toBe(false);
     expect(access.perio).toBe(false);
     expect(access.prescriptions).toBe(false);
     // Sí lo suyo: datos, estado de cuenta y autorizaciones de datos.
@@ -18,6 +17,9 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
     expect(access.implants).toBe(true);
     // DX-151: los cuatro roles leen y suben documentos.
     expect(access.documents).toBe(true);
+    // DX-243: envía consentimientos a firmar a distancia y ve su estado (la
+    // pestaña no le enseña los documentos firmados).
+    expect(access.consents).toBe(true);
   });
 
   it.each(['DENTIST', 'ASSISTANT'] as const)(

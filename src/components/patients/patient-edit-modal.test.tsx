@@ -436,6 +436,31 @@ describe('PatientEditModal', () => {
     expect(screen.getByLabelText(/ocupación/i)).toHaveValue('');
   });
 
+  it.each([
+    ['no válido', 'Para elegir WhatsApp el paciente necesita un móvil válido. Revisa el número o escríbelo con + y su prefijo.'],
+    ['con dos lecturas', 'Ese número se puede leer de dos formas. Escríbelo con + y su prefijo.'],
+  ])('el 400 del móvil %s va junto a «Teléfono», con el foco, no arriba del formulario (DX-329)', async (_, message) => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    mockedUpdate.mockRejectedValue(
+      new ApiError(400, message, { messages: [message], code: 'WHATSAPP_REQUIRES_VALID_MOBILE' }),
+    );
+    const user = userEvent.setup();
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const phone = screen.getByLabelText('Teléfono');
+    await user.type(phone, '0058 412 1234567');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    await waitFor(() => expect(phone).toHaveAccessibleDescription(message));
+    expect(phone).toHaveAttribute('aria-invalid', 'true');
+    expect(phone).toHaveFocus();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+
+    await user.type(phone, '8');
+    expect(phone).not.toHaveAttribute('aria-invalid');
+  });
+
   it('muestra el error del backend tal cual', async () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedUpdate.mockRejectedValue(new ApiError(409, 'Documento duplicado'));

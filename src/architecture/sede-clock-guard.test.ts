@@ -53,7 +53,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/anamnesis/public-anamnesis-view.tsx': PUBLIC_PAGE,
   'components/appointments/public-confirmation-view.tsx': PUBLIC_PAGE,
   'components/reminders/public-reminder-opt-out-view.tsx': PUBLIC_PAGE,
-  'components/audit/audit-log-view.tsx': ZONE_24H,
   'components/cash-sessions/cash-session-report.tsx': ZONE_24H,
   'components/cash-sessions/cash-shifts-view.tsx': ZONE_24H,
   'lib/clinical/medical-alerts.ts': ZONE_24H,
@@ -99,7 +98,7 @@ const PENDING: Readonly<Record<string, string>> = {
   'lib/treatment-plans/plan-options.ts': STAMP,
 };
 
-/** Las pantallas de DX-378: no pueden volver a la lista. */
+/** Las pantallas de DX-378 (y las migradas después): no pueden volver a la lista. */
 const MIGRATED = [
   'components/appointments/agenda-view.tsx',
   'components/appointments/appointment-display.tsx',
@@ -121,7 +120,35 @@ const MIGRATED = [
   'components/discounts/discount-report-view.tsx',
   'components/expenses/expenses-view.tsx',
   'components/expenses/expenses-summary-view.tsx',
+  // DX-362: el registro de auditoría, con la zona de la pantalla y su desfase en cada hora.
+  'components/audit/audit-log-view.tsx',
 ];
+
+/**
+ * DX-386: pantallas de cobro cuyos importes ya van con `sedeMoney` (código
+ * ISO y separadores de la sede): no pueden volver a `formatCurrency`
+ * (símbolo «US$» e idioma fijo).
+ */
+const MONEY_WITH_CODE = [
+  'components/payments/record-payment-modal.tsx',
+  'components/payments/payment-rate-preview.tsx',
+  'components/payments/without-rate-notice.tsx',
+  'components/treatment-plans/item-paid-cell.tsx',
+  'components/account-statement/plan-items-balance.tsx',
+];
+
+/** Los nombres que el fichero importa de `@/lib/format/currency`. */
+function currencyImports(source: ts.SourceFile): string[] {
+  return source.statements.flatMap((statement) => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) return [];
+    if (statement.moduleSpecifier.text !== '@/lib/format/currency') return [];
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) return ['*'];
+    return bindings && ts.isNamedImports(bindings)
+      ? bindings.elements.map((element) => (element.propertyName ?? element.name).text)
+      : [];
+  });
+}
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -250,6 +277,14 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
   it('no amount is painted with the currency symbol (fmt.money) outside lib/format: always the ISO code', () => {
     const offenders = files.flatMap(({ rel, source }) => symbolMoneyCalls(source).map((hit) => `${rel}:${hit}`));
     expect(offenders).toEqual([]);
+  });
+
+  it('the DX-386 payment screens paint amounts with the ISO code and never go back to formatCurrency', () => {
+    for (const rel of MONEY_WITH_CODE) {
+      const file = files.find((f) => f.rel === rel);
+      expect([rel, file !== undefined]).toEqual([rel, true]);
+      expect([rel, file ? currencyImports(file.source) : []]).toEqual([rel, []]);
+    }
   });
 
   it('the scan covers components, app and lib, and skips lib/format and tests', () => {

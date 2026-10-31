@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
-import { ArrowLeftRight, Lock, Plus } from 'lucide-react';
+import { ArrowLeftRight, Info, Lock, Plus, TriangleAlert } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -16,6 +16,7 @@ import {
   type ManualExchangeRate,
 } from '@/lib/exchange/exchange-settings-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { getRateBacklogDay, type RateBacklogDay } from '@/lib/payments/rate-backlog-api';
 import { sedeCivilDate } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
@@ -26,6 +27,7 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { SectionError } from '@/components/errors/section-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,21 +39,21 @@ export const exchangeRateCopy = {
   sourceHints: {
     AUTOMATIC: 'La tasa del día la da un proveedor de tasas de cambio. Es la opción con la que empieza toda clínica.',
     MANUAL:
-      'Desde el día en que se elige, la clínica registra cada día la tasa de cada moneda. Un día sin tasa registrada, los abonos en esa moneda quedan sin tasa: no se usa la de otro día. Los días anteriores siguen con la tasa automática.',
+      'Desde el día en que se elige, la clínica registra cada día la tasa de cada moneda. Un día sin tasa registrada, los abonos en esa moneda quedan sin tasa: no se usa la de otro día. Los días anteriores siguen con la tasa automática; si un abono de un día anterior se quedó sin ella, la tasa manual que registres para ese día le sirve de respaldo.',
   } satisfies Record<ExchangeRateSource, string>,
   /** Con la fecha en el formato de la sede; sin formato, sin fecha (R11). */
   manualSince: (date: string | null) => (date ? `Manual desde el ${date}` : 'Manual'),
   change: 'Cambiar',
   sourceDialogTitle: 'Cambiar de dónde sale la tasa',
   sourceDialogDescription:
-    'Con la manual, la tasa registrada rige desde hoy. Cada abono conserva la tasa con la que se registró, así que cambiar de fuente no mueve ningún saldo ya calculado; los abonos que estén sin tasa la toman de la fuente nueva. El cambio queda en la auditoría.',
+    'Con la manual, la tasa registrada rige desde hoy. Cada abono conserva la tasa con la que se registró, así que cambiar de fuente no mueve ningún saldo ya calculado. Los abonos que siguen sin tasa la toman en cuanto haya tasa de su día: con la manual, también los de un día anterior al cambio, con la tasa que registres para ese día como respaldo. El cambio queda en la auditoría.',
   sourceLegend: 'Fuente de la tasa',
   save: 'Guardar',
   sourceSaved: 'Fuente de la tasa guardada.',
   sourceSaveError: 'No pudimos guardar la fuente de la tasa. Intenta de nuevo.',
   ratesHeading: 'Tasas manuales',
   ratesHint: (base: string) =>
-    `Unidades de cada moneda por 1 ${base}, por día. Se usan desde el día en que la clínica pasó a manual. Una tasa se puede corregir hasta que algún abono la use.`,
+    `Unidades de cada moneda por 1 ${base}, por día. Se usan desde el día en que la clínica pasó a manual; la de un día anterior sirve de respaldo a los abonos de ese día que sigan sin tasa. Una tasa se puede corregir hasta que algún abono la use.`,
   ratesAutomaticNote:
     'Con la fuente automática estas tasas no se usan. Puedes dejar la de hoy registrada antes de cambiar a manual.',
   register: 'Registrar tasa',
@@ -96,6 +98,35 @@ export const rateFormCopy = {
   dateFuture: 'Ese día aún no ha llegado en la sede.',
   currencyMissing: 'Elige la moneda.',
   genericError: 'No pudimos registrar la tasa. Intenta de nuevo.',
+  // DX-402: con la fuente automática ninguna tasa manual se usa.
+  automaticNote:
+    'Con la fuente automática esta tasa no se usa. Si pasas a manual, la de un día anterior servirá de respaldo a los abonos de ese día que sigan sin tasa.',
+  // DX-402: un día anterior a «manual desde»: la tasa solo sirve de respaldo
+  // a los abonos de ese día que siguen sin tasa (y sin tasa del proveedor).
+  backup: {
+    heading: (since: string) => `Este día es anterior a «manual desde» (${since}).`,
+    pickCurrency:
+      'Su tasa solo sirve de respaldo a los abonos de ese día que sigan sin tasa. Elige la moneda para ver a cuántos se aplicará.',
+    checking: 'Comprobando los abonos sin tasa de ese día…',
+    applies: (count: number, currency: string) =>
+      count === 1
+        ? `Servirá de respaldo al abono sin tasa de ese día que necesita la tasa de ${currency}: el saldo lo contará en un minuto. No cambia ninguna tasa ya congelada.`
+        : `Servirá de respaldo a los ${count} abonos sin tasa de ese día que necesitan la tasa de ${currency}: el saldo los contará en un minuto. No cambia ninguna tasa ya congelada.`,
+    none: (currency: string) =>
+      `No hay abonos sin tasa de ese día que necesiten la tasa de ${currency}, así que ahora no se usará. Solo serviría de respaldo a un abono de ese día que se quedara sin tasa.`,
+    // Entre dos monedas no USD la de respaldo necesita las dos tasas del día.
+    otherMissing: (count: number, currencies: string[]) =>
+      count === 1
+        ? `Otro abono sin tasa de ese día necesita además la tasa de ${currencies.join(', ')}: le servirá cuando registres también esa.`
+        : `Otros ${count} abonos sin tasa de ese día necesitan además la tasa de ${currencies.join(', ')}: les servirá cuando registres también esa.`,
+    onlyOther: (count: number, currency: string, currencies: string[]) =>
+      count === 1
+        ? `El abono sin tasa de ese día que necesita la tasa de ${currency} necesita además la de ${currencies.join(', ')}: esta no se usará hasta que registres también esa.`
+        : `Los ${count} abonos sin tasa de ese día que necesitan la tasa de ${currency} necesitan además la de ${currencies.join(', ')}: esta no se usará hasta que registres también esa.`,
+    provider: 'Ese día ya tiene la tasa del proveedor: los abonos de ese día usan esa, así que esta no se usará.',
+    unknown:
+      'Su tasa solo sirve de respaldo a los abonos de ese día que sigan sin tasa, si el proveedor no tiene la de ese día.',
+  },
 };
 
 // DX-375: corregir una tasa que ningún abono usó.
@@ -356,6 +387,8 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           onOpenChange={setRateOpen}
           token={token}
           baseCurrency={state.baseCurrency}
+          source={state.source}
+          manualSince={state.manualSince}
           onSaved={(rate) => {
             setState((prev) => (prev ? { ...prev, rates: sortRates([rate, ...prev.rates]) } : prev));
             setNotice(copy.rateSaved(rate.currency));
@@ -588,6 +621,9 @@ const rateInputId = (field: RateField) => `${RATE_FORM_ID}-${field}`;
 interface RateFormModalProps {
   /** Moneda base de las tasas (la da la API): no se ofrece y nombra la tasa. */
   baseCurrency: string;
+  /** Fuente de la clínica y desde qué día rige la manual (DX-402). */
+  source: ExchangeRateSource;
+  manualSince: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
@@ -599,10 +635,21 @@ interface RateFormModalProps {
  * y no admite días futuros (la API vuelve a comprobarlo); la moneda sale de la
  * lista de monedas sin la moneda base, que da la API. Un 400 con `field` va
  * junto a su campo; el 409 (ya hay una tasa ese día) arriba del modal. El padre lo monta
- * con una `key` por apertura.
+ * con una `key` por apertura. DX-402: con la fuente manual y un día anterior a
+ * «manual desde», dice a cuántos abonos sin tasa de ese día servirá de
+ * respaldo o que no se usará; con la automática, que no se usa.
  */
-export function RateFormModal({ open, onOpenChange, token, baseCurrency, onSaved }: RateFormModalProps) {
+export function RateFormModal({
+  open,
+  onOpenChange,
+  token,
+  baseCurrency,
+  source,
+  manualSince,
+  onSaved,
+}: RateFormModalProps) {
   const timeZone = readyTimeZone(useSedeTimeZone(token));
+  const fmt = readyFormat(useSedeFormat(token));
   const today = timeZone ? sedeToday(timeZone) : null;
   const [date, setDate] = useState<string | null>(null);
   const [currency, setCurrency] = useState('');
@@ -612,6 +659,8 @@ export function RateFormModal({ open, onOpenChange, token, baseCurrency, onSaved
   const [submitting, setSubmitting] = useState(false);
   // Hasta que se sabe la zona de la sede, el día por defecto es «hoy» allí.
   const dateValue = date ?? today ?? '';
+  const backupSince =
+    source === 'MANUAL' && manualSince && dateValue !== '' && dateValue < manualSince ? manualSince : null;
 
   function clearError(field: RateField) {
     setErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -733,6 +782,92 @@ export function RateFormModal({ open, onOpenChange, token, baseCurrency, onSaved
           className="max-sm:min-h-11 tabular-nums"
         />
       </FormField>
+      {source === 'AUTOMATIC' ? <p className="text-sm text-muted">{rateFormCopy.automaticNote}</p> : null}
+      {backupSince ? (
+        <BackupRateNotice
+          token={token}
+          date={dateValue}
+          currency={currency}
+          sinceLabel={sedeCivilDate(backupSince, fmt)}
+        />
+      ) : null}
     </FormModal>
+  );
+}
+
+type BackupPreview =
+  | { status: 'loading' }
+  | { status: 'ready'; day: RateBacklogDay }
+  | { status: 'error' };
+
+/**
+ * DX-402: la tasa de un día anterior a «manual desde» solo sirve de respaldo a
+ * los abonos de ese día que siguen sin tasa (y sin tasa del proveedor). Dice
+ * a cuántos se aplicará o que no se usará. Es una indicación, no un error:
+ * si no se puede comprobar, explica la regla sin prometer nada (sin toast:
+ * el formulario sigue sirviendo igual). `role="status"`: el lector la anuncia
+ * al cambiar el día o la moneda, sin interrumpir.
+ */
+function BackupRateNotice({
+  token,
+  date,
+  currency,
+  sinceLabel,
+}: {
+  token: string;
+  date: string;
+  currency: string;
+  sinceLabel: string;
+}) {
+  const copy = rateFormCopy.backup;
+  const [preview, setPreview] = useState<{ key: string; value: BackupPreview } | null>(null);
+  const key = `${date}|${currency}`;
+
+  useEffect(() => {
+    if (currency === '') return;
+    let cancelled = false;
+    getRateBacklogDay(token, date, currency)
+      .then((day) => {
+        if (!cancelled) setPreview({ key: `${date}|${currency}`, value: { status: 'ready', day } });
+      })
+      .catch(() => {
+        if (!cancelled) setPreview({ key: `${date}|${currency}`, value: { status: 'error' } });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, date, currency]);
+
+  const current: BackupPreview = preview?.key === key ? preview.value : { status: 'loading' };
+  let text: string;
+  let unused = false;
+  if (currency === '') text = copy.pickCurrency;
+  else if (current.status === 'loading') text = copy.checking;
+  else if (current.status === 'error') text = copy.unknown;
+  else if (current.day.providerRateSaved) {
+    text = copy.provider;
+    unused = true;
+  } else {
+    const { count, otherRatesMissing: other } = current.day;
+    const others = other.count > 0 ? other : null;
+    if (count > 0) {
+      text = copy.applies(count, currency);
+      if (others) text = `${text} ${copy.otherMissing(others.count, others.currencies)}`;
+    } else {
+      text = others ? copy.onlyOther(others.count, currency, others.currencies) : copy.none(currency);
+      unused = true;
+    }
+  }
+
+  return (
+    <Callout
+      tone={unused ? 'warning' : 'neutral'}
+      role="status"
+      data-testid="manual-rate-backup-notice"
+      icon={unused ? TriangleAlert : Info}
+      title={copy.heading(sinceLabel)}
+    >
+      <p>{text}</p>
+    </Callout>
   );
 }

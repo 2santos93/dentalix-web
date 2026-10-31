@@ -212,7 +212,7 @@ test('la ficha muestra el bloque «Cobranza» y el chip con importe para recepci
   const payment = page.getByRole('dialog', { name: 'Registrar abono' });
   await expect(payment.getByLabel('Plan')).toBeVisible({ timeout: 10_000 });
   await payment.getByLabel('Importe').fill('200000');
-  await payment.getByLabel('Método').selectOption('CASH');
+  await payment.getByLabel('Método').selectOption({ label: 'Efectivo' });
   await payment.getByRole('button', { name: 'Registrar abono' }).click();
   await expect(payment).toBeHidden({ timeout: 10_000 });
   await expect(block.getByTestId('promise-row').getByText('Cumplido')).toBeVisible({ timeout: 15_000 });

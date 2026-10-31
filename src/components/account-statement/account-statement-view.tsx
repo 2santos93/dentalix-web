@@ -15,6 +15,8 @@ import {
   installmentLabel,
   isEmptyStatement,
   methodLabel,
+  movementMediumName,
+  movementReferenceLabel,
   movementDestination,
   openingAsOfLabel,
   openingNoteFor,
@@ -52,6 +54,9 @@ import { PlanItemsBalance } from './plan-items-balance';
 import { canRecordPayments } from '@/lib/payments/billable-plans-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
+import { CreditBalanceSection } from '@/components/patient-credit/credit-balance-section';
+import { CreditRefundDialog } from '@/components/patient-credit/credit-refund-dialog';
+import { canMoveCredit, type CreditRefund } from '@/lib/patient-credit/patient-credit-api';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -159,6 +164,9 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // Recibo de caja (DX-136) de cualquier movimiento, también de los anulados
   // (sale marcado «ANULADO»).
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
+  // Saldo a favor (DX-253): traspaso y devolución (con su comprobante).
+  const canCredit = canMoveCredit(getTokenRole(token));
+  const [issuedRefund, setIssuedRefund] = useState<CreditRefund | null>(null);
 
   function openCharge(kind: 'payment' | 'payment-plan') {
     setChargeNotice(null);
@@ -272,6 +280,14 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
               statement={data}
               onVoid={voiding.request}
               onReceipt={setReceiptPaymentId}
+              canCredit={canCredit}
+              onTransferred={charged}
+              onRefunded={(refund) => {
+                setIssuedRefund(refund);
+                setChargeNotice(null);
+                setReloadKey((k) => k + 1);
+                onChanged?.();
+              }}
             />
           ) : null}
         </AsyncSection>
@@ -306,6 +322,13 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         </>
       ) : null}
 
+      <CreditRefundDialog
+        refund={issuedRefund}
+        onOpenChange={(open) => {
+          if (!open) setIssuedRefund(null);
+        }}
+      />
+
       <PaymentReceiptDialog
         token={token}
         paymentId={receiptPaymentId}
@@ -327,6 +350,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
         subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+        splitLines={voiding.target?.splitLines ?? undefined}
       />
     </section>
   );
@@ -337,12 +361,19 @@ function StatementBody({
   statement,
   onVoid,
   onReceipt,
+  canCredit,
+  onTransferred,
+  onRefunded,
 }: {
   token: string;
   statement: AccountStatement;
   onVoid: (target: VoidPaymentTarget) => void;
   /** Abre el recibo de caja del abono (DX-136). */
   onReceipt: (paymentId: string) => void;
+  /** DX-253: ADMIN y recepción ven «Aplicar a otro plan» y «Devolver». */
+  canCredit: boolean;
+  onTransferred: (notice: string) => void;
+  onRefunded: (refund: CreditRefund) => void;
 }) {
   const planName = planNamer(statement.plans);
   return (
@@ -354,6 +385,15 @@ function StatementBody({
           ))}
         </div>
       ) : null}
+
+      <CreditBalanceSection
+        token={token}
+        statement={statement}
+        planName={planName}
+        canAct={canCredit}
+        onTransferred={onTransferred}
+        onRefunded={onRefunded}
+      />
 
       {statement.openingBalances.length > 0 ? (
         <SubSection title={statementCopy.openingHeading}>
@@ -530,13 +570,20 @@ function StatementBody({
                       <VoidedDetail movement={m} />
                     </TableCell>
                     <TableCell data-label={copy.colMethod}>
+                      {/* DX-395: el medio de la clínica (no el método antiguo) y la referencia. */}
                       {m.method ? (
                         <StatusBadge kind="paymentMethod" status={m.method}>
-                          {methodLabel(m.method)}
+                          {movementMediumName(m)}
                         </StatusBadge>
                       ) : (
                         <span className="text-muted">{methodLabel(null)}</span>
                       )}
+                      {movementReferenceLabel(m) ? (
+                        <span className="mt-1 block font-mono text-xs text-muted">
+                          <span className="sr-only"> · </span>
+                          {movementReferenceLabel(m)}
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell data-label={copy.colLocation}>{m.location.name}</TableCell>
                     <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>
@@ -581,6 +628,7 @@ function StatementBody({
                                 amount: m.amount,
                                 currency: m.currency,
                                 paidOn: m.paidOn,
+                                splitLines: m.splitLines,
                               })
                             }
                           >

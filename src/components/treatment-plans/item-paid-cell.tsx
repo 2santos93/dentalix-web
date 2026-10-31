@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { TableCell } from '@/components/ui/table';
-import { formatCurrency } from '@/lib/format/currency';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 import type { PlanItemBalance } from '@/lib/payments/payments-api';
 
 export const itemPaidCopy = {
@@ -34,19 +35,27 @@ function FullyPaid() {
  * «Ver por ítem» del estado de cuenta (recepción): sin importe a cobrar
  * (propuesto, o de un plan rechazado o cancelado) es «—» con nombre
  * accesible, no una fila de ceros que se lee como «gratis»; pendiente 0 en un
- * ítem facturable es la marca «Cubierto».
+ * ítem facturable es la marca «Cubierto». Los importes, con el formato de la
+ * sede y el código ISO de la moneda (DX-386); sin formato todavía, «—».
  */
-export function ItemBillableValue({ item, currency }: { item: PlanItemBalance; currency: string }) {
-  return item.billable === 0 ? <NotBillable /> : <>{formatCurrency(item.billable, currency)}</>;
+interface ItemFigureProps {
+  item: PlanItemBalance;
+  currency: string;
+  /** Formato de la sede; `null` mientras carga. */
+  fmt: RegionalFormat | null;
 }
 
-export function ItemPaidValue({ item, currency }: { item: PlanItemBalance; currency: string }) {
-  return item.billable === 0 ? <NotBillable /> : <>{formatCurrency(item.paid, currency)}</>;
+export function ItemBillableValue({ item, currency, fmt }: ItemFigureProps) {
+  return item.billable === 0 ? <NotBillable /> : <>{sedeMoney(item.billable, currency, fmt)}</>;
 }
 
-export function ItemPendingValue({ item, currency }: { item: PlanItemBalance; currency: string }) {
+export function ItemPaidValue({ item, currency, fmt }: ItemFigureProps) {
+  return item.billable === 0 ? <NotBillable /> : <>{sedeMoney(item.paid, currency, fmt)}</>;
+}
+
+export function ItemPendingValue({ item, currency, fmt }: ItemFigureProps) {
   if (item.billable === 0) return <NotBillable />;
-  return item.balance === 0 ? <FullyPaid /> : <>{formatCurrency(item.balance, currency)}</>;
+  return item.balance === 0 ? <FullyPaid /> : <>{sedeMoney(item.balance, currency, fmt)}</>;
 }
 
 /**
@@ -54,7 +63,7 @@ export function ItemPendingValue({ item, currency }: { item: PlanItemBalance; cu
  * la moneda del plan. Sin el saldo del ítem (aún no llegó, o el ítem es más
  * nuevo que la respuesta), dos celdas con «—» para no inventar un cero.
  */
-export function ItemPaidCell({ item, currency }: { item: PlanItemBalance | undefined; currency: string }) {
+export function ItemPaidCell({ item, currency, fmt }: Omit<ItemFigureProps, 'item'> & { item: PlanItemBalance | undefined }) {
   if (!item) {
     return (
       <>
@@ -71,17 +80,17 @@ export function ItemPaidCell({ item, currency }: { item: PlanItemBalance | undef
   return (
     <>
       <TableCell className={figures} data-label={itemPaidCopy.colPaid}>
-        <ItemPaidValue item={item} currency={currency} />
+        <ItemPaidValue item={item} currency={currency} fmt={fmt} />
       </TableCell>
       <TableCell className={figures} data-label={itemPaidCopy.colPending}>
-        <ItemPendingValue item={item} currency={currency} />
+        <ItemPendingValue item={item} currency={currency} fmt={fmt} />
       </TableCell>
     </>
   );
 }
 
 /** Lo mismo en la tarjeta móvil del ítem: «Cobrado {x} · Pendiente {y}». */
-export function ItemPaidLine({ item, currency }: { item: PlanItemBalance | undefined; currency: string }) {
+export function ItemPaidLine({ item, currency, fmt }: Omit<ItemFigureProps, 'item'> & { item: PlanItemBalance | undefined }) {
   if (!item) return null;
   if (item.billable === 0) {
     return (
@@ -93,14 +102,14 @@ export function ItemPaidLine({ item, currency }: { item: PlanItemBalance | undef
   if (item.balance === 0) {
     return (
       <p className="flex flex-wrap items-center gap-2 text-sm text-muted tabular-nums">
-        <span>{itemPaidCopy.linePaid(formatCurrency(item.paid, currency))}</span>
+        <span>{itemPaidCopy.linePaid(sedeMoney(item.paid, currency, fmt))}</span>
         <FullyPaid />
       </p>
     );
   }
   return (
     <p className="text-sm text-muted tabular-nums">
-      {itemPaidCopy.line(formatCurrency(item.paid, currency), formatCurrency(item.balance, currency))}
+      {itemPaidCopy.line(sedeMoney(item.paid, currency, fmt), sedeMoney(item.balance, currency, fmt))}
     </p>
   );
 }

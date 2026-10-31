@@ -1,22 +1,74 @@
 import nextConfig from '../../../next.config';
 import { MAX_PATIENT_DOCUMENT_BYTES } from '@/lib/patient-documents/patient-documents-api';
-import { API_PROXY_MAX_BODY_BYTES, API_PROXY_PATH, apiOrigin, apiRewrites, filesOrigin } from './api-base';
+import {
+  API_PROXY_MAX_BODY_BYTES,
+  API_PROXY_PATH,
+  DEV_API_URL,
+  apiOrigin,
+  apiProxyDestination,
+  apiUrl,
+  assertRuntimeConfig,
+  filesOrigin,
+  legacyEnvWarnings,
+} from './api-base';
 
 describe('api-base', () => {
   it('el navegador habla con la API por el MISMO origen (/api/v1), para que la cookie de sesión sea del host de la clínica', () => {
     expect(API_PROXY_PATH).toBe('/api/v1');
   });
 
-  it('reescribe /api/v1/* hacia la API configurada', () => {
-    expect(apiRewrites('http://localhost:3130/api/v1')).toEqual([
-      { source: '/api/v1/:path*', destination: 'http://localhost:3130/api/v1/:path*' },
-    ]);
+  it('DX-083: la URL de la API sale de la variable de SERVIDOR API_URL al llamar (runtime), no al compilar', () => {
+    expect(apiUrl({ API_URL: 'https://api.staging.dentalix.app/api/v1' })).toBe('https://api.staging.dentalix.app/api/v1');
+    expect(apiUrl({ API_URL: '  https://api.dentalix.app/api/v1 ' })).toBe('https://api.dentalix.app/api/v1');
+    // Sin variable (desarrollo): la API local. Una NEXT_PUBLIC_* ya no cuenta.
+    expect(apiUrl({})).toBe(DEV_API_URL);
+    expect(apiUrl({ NEXT_PUBLIC_API_URL: 'https://otra/api/v1' })).toBe(DEV_API_URL);
+  });
+
+  it('reescribe /api/v1/* hacia la API configurada, con su query', () => {
+    const url = new URL('http://demo.localhost:3001/api/v1/patients?search=ana&page=2');
+    expect(apiProxyDestination(url, 'http://localhost:3130/api/v1').href).toBe(
+      'http://localhost:3130/api/v1/patients?search=ana&page=2',
+    );
   });
 
   it('tolera una barra final en la URL de la API', () => {
-    expect(apiRewrites('https://api.dentalix.app/api/v1/')[0].destination).toBe(
-      'https://api.dentalix.app/api/v1/:path*',
+    const url = new URL('http://demo.localhost:3001/api/v1/auth/refresh');
+    expect(apiProxyDestination(url, 'https://api.dentalix.app/api/v1/').href).toBe(
+      'https://api.dentalix.app/api/v1/auth/refresh',
     );
+  });
+
+  it('OPS-024: en producción no arranca sin API_URL http(s) válida ni con FILES_ORIGIN inválido', () => {
+    expect(() => assertRuntimeConfig({ NODE_ENV: 'production' })).toThrow(/API_URL/);
+    expect(() => assertRuntimeConfig({ NODE_ENV: 'production', API_URL: '  ' })).toThrow(/API_URL/);
+    expect(() => assertRuntimeConfig({ NODE_ENV: 'production', API_URL: 'api.dentalix.app' })).toThrow(/API_URL/);
+    expect(() => assertRuntimeConfig({ NODE_ENV: 'production', API_URL: 'ftp://api.dentalix.app' })).toThrow(/API_URL/);
+    expect(() =>
+      assertRuntimeConfig({ NODE_ENV: 'production', API_URL: 'https://api.dentalix.app/api/v1', FILES_ORIGIN: 'bucket' }),
+    ).toThrow(/FILES_ORIGIN/);
+    expect(() =>
+      assertRuntimeConfig({
+        NODE_ENV: 'production',
+        API_URL: 'http://api.interna:3000/api/v1',
+        FILES_ORIGIN: 'https://archivos.dentalix.app',
+      }),
+    ).not.toThrow();
+    // Fuera de producción, los defaults de desarrollo.
+    expect(() => assertRuntimeConfig({ NODE_ENV: 'development' })).not.toThrow();
+  });
+
+  it('DX-083: las antiguas NEXT_PUBLIC_API_URL/NEXT_PUBLIC_FILES_ORIGIN ya no se leen y se avisa de renombrarlas', () => {
+    expect(legacyEnvWarnings({})).toEqual([]);
+    expect(legacyEnvWarnings({ API_URL: 'http://localhost:3000/api/v1' })).toEqual([]);
+    const [api] = legacyEnvWarnings({ NEXT_PUBLIC_API_URL: 'http://localhost:3100/api/v1' });
+    expect(api).toMatch(/NEXT_PUBLIC_API_URL ya no se lee.*API_URL/);
+    const [files] = legacyEnvWarnings({ NEXT_PUBLIC_FILES_ORIGIN: 'http://localhost:9000' });
+    expect(files).toMatch(/NEXT_PUBLIC_FILES_ORIGIN ya no se lee.*FILES_ORIGIN/);
+    // En producción el error de arranque también lo dice.
+    expect(() =>
+      assertRuntimeConfig({ NODE_ENV: 'production', NEXT_PUBLIC_API_URL: 'https://api.dentalix.app/api/v1' }),
+    ).toThrow(/NEXT_PUBLIC_API_URL.*API_URL/);
   });
 
   it('apiOrigin da solo el origen (para img-src de logos y avatares)', () => {

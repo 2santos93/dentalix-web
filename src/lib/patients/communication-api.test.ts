@@ -1,6 +1,5 @@
 import {
   canEditCommunication,
-  formatE164,
   getPatientCommunication,
   getPatientOptOutWarnings,
   updatePatientCommunication,
@@ -9,7 +8,6 @@ import {
 } from './communication-api';
 import type { Patient } from './patients-api';
 import { apiFetch } from '../api/client';
-import { countryName } from '../locations/countries';
 
 jest.mock('../api/client', () => ({ apiFetch: jest.fn() }));
 const mockedFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
@@ -41,20 +39,6 @@ describe('communication-api (DX-128)', () => {
     expect(canEditCommunication(null)).toBe(false);
   });
 
-  it.each([
-    ['+573101234567', '+57 310 123 4567'],
-    ['+34612345678', '+34 612 34 56 78'],
-    ['+525512345678', '+525512345678'],
-  ])('formatea %s', (e164, label) => {
-    expect(formatE164(e164)).toBe(label);
-  });
-
-  it('the phone hint names the country with the shared name', () => {
-    expect(countryName('VE')).toBe('Venezuela');
-    expect(countryName('ZZ')).toBe('ZZ');
-    expect(countryName(null)).toBeNull();
-  });
-
   it('lleva a la ficha lo que cambió el bloque, sin tocar el resto', () => {
     const patient = { id: 'p1', firstName: 'Ana', phone: null, email: 'a@x.co' } as unknown as Patient;
     const saved: PatientCommunication = {
@@ -64,6 +48,8 @@ describe('communication-api (DX-128)', () => {
       phone: '+573101234567',
       phoneE164: '+573101234567',
       phoneStatus: 'VALID',
+      phoneAmbiguous: false,
+      phoneInternational: '+57 310 1234567',
       phoneCountry: 'CO',
       email: 'a@x.co',
       whatsappOptIn: {
@@ -83,6 +69,8 @@ describe('communication-api (DX-128)', () => {
     expect(withCommunication(patient, saved)).toEqual({
       ...patient,
       phone: '+573101234567',
+      // DX-387: la cabecera y «Datos» pintan el formato internacional nuevo.
+      phoneInternational: '+57 310 1234567',
       contactChannel: 'WHATSAPP',
       whatsappOptInAt: '2026-10-17T10:00:00.000Z',
       whatsappOptInSource: 'IN_PERSON',

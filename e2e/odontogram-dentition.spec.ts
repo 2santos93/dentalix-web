@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
+import { LATE_BROWSER_TIME, addDays, atSede, birthDateTurnedLastMonth, sedeDayFromToday } from './support/clock';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
 
@@ -20,6 +21,12 @@ import { API_URL } from './support/urls';
  *     (sin el 64 y con el 55 todavía en la boca).
  * En escritorio (1440px) y móvil (390px, sin scroll horizontal de la página y
  * con los diálogos dentro de la pantalla).
+ *
+ * DX-209 (TST-025): las fechas son días de la SEDE (`e2e/support/clock.ts`), no
+ * del proceso de Node (UTC en la CI), y el reloj del navegador va a las 23:30
+ * de la sede (`LATE_BROWSER_TIME`), la hora en la que el día del navegador y
+ * el de UTC ya no coinciden. La fecha de nacimiento es un día 15 (nunca un
+ * 29/02 que no existe), así que el spec vale también un 31 de marzo.
  */
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
@@ -31,23 +38,12 @@ const VIEWPORTS = [
   { name: 'móvil', width: 390, height: 844 },
 ];
 
-function day(offsetDays: number): string {
-  const d = new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-/** Fecha de nacimiento de alguien que cumplió 7 años hace un mes. */
-function sevenYearsOld(): string {
-  const [y, m, d] = day(-31).split('-');
-  return `${Number(y) - 7}-${m}-${d}`;
-}
-
 async function seed(
   request: APIRequestContext,
   origin: string,
   accessToken: string,
   tag: string,
+  today: string,
 ): Promise<{ patientId: string; catalogLabel: string }> {
   const headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -71,7 +67,8 @@ async function seed(
     docType: 'NATIONAL_ID',
     docNumber: `DT${tag}`.slice(0, 20),
     sex: 'F',
-    birthDate: sevenYearsOld(),
+    // 7 años cumplidos el mes pasado: dentición mixta.
+    birthDate: birthDateTurnedLastMonth(7, today),
   });
   return { patientId: patient.id, catalogLabel };
 }
@@ -79,6 +76,9 @@ async function seed(
 for (const viewport of VIEWPORTS) {
   test(`dentición mixta, exfoliar, origen, anular y carta a una fecha (${viewport.name})`, async ({ page }) => {
     test.setTimeout(120_000);
+    // «Hoy» de la sede en el reloj real (el de la API), una sola vez.
+    const today = sedeDayFromToday(0);
+    await page.clock.install({ time: atSede(today, LATE_BROWSER_TIME) });
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const tag = `${suffix}${viewport.width}`;
     const origin = await registerAndLogin(page, {
@@ -88,7 +88,7 @@ for (const viewport of VIEWPORTS) {
       email: `test.user.dent.${tag}@example.com`,
       password,
     });
-    const { patientId, catalogLabel } = await seed(page.request, origin, await accessTokenOf(page), tag);
+    const { patientId, catalogLabel } = await seed(page.request, origin, await accessTokenOf(page), tag, today);
 
     await page.goto(`${origin}/patients/${patientId}?tab=odontogram`);
     const chart = page.getByRole('group', { name: 'Odontograma', exact: true });
@@ -155,11 +155,9 @@ for (const viewport of VIEWPORTS) {
     await expect(voidedItem).toContainText(VOID_REASON);
     await expect(chart.getByRole('group', { name: 'Diente 64 (temporal), sano' })).toBeVisible({ timeout: 10_000 });
 
-    // --- La carta de anteayer: solo lectura, sin el 64 y con el 55 en la boca ---
-    // Dos días y no uno: `day()` usa el día del navegador (UTC en CI) y la
-    // carta el de la sede; entre las 00:00 y las 05:00 UTC «ayer» en UTC
-    // todavía es hoy en Bogotá y la carta ya incluiría la exfoliación.
-    await page.getByLabel('Ver la carta al').fill(day(-2));
+    // --- La carta de ayer: solo lectura, sin el 64 y con el 55 en la boca ---
+    // Ayer de la SEDE, la misma zona en la que la API fecha la carta.
+    await page.getByLabel('Ver la carta al').fill(addDays(today, -1));
     await expect(page.getByText(/· solo lectura/)).toBeVisible({ timeout: 10_000 });
     await expect(chart.getByRole('group', { name: 'Diente 55 (temporal), sano' })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('button', { name: 'Cambiar dentición' })).toHaveCount(0);

@@ -230,3 +230,81 @@ describe('DX-376: abono en otra moneda', () => {
     expect(text(screen.getByTestId('receipt-document'))).not.toMatch(/venezuela|bcv|banco central/i);
   });
 });
+
+it('DX-377: el recibo muestra el medio de pago de la clínica y la referencia', () => {
+  const receipt = paymentReceiptFixture();
+  render(
+    <PaymentReceiptDocument
+      receipt={{
+        ...receipt,
+        snapshot: {
+          ...receipt.snapshot,
+          payment: {
+            ...receipt.snapshot.payment,
+            method: 'TRANSFER',
+            paymentMethodName: 'Pago móvil',
+            reference: '0412 555',
+          },
+        },
+      }}
+    />,
+  );
+  const doc = screen.getByTestId('receipt-document');
+  expect(doc).toHaveTextContent('Pago móvil');
+  expect(doc).toHaveTextContent('Referencia');
+  expect(doc).toHaveTextContent('0412 555');
+});
+
+describe('DX-390: cobro dividido', () => {
+  const line = (n: number, amount: number, currency: string, equivalentAmount: number | null) => ({
+    paymentId: `pay-${n}`,
+    line: n,
+    amount,
+    currency,
+    method: (n === 1 ? 'CASH' : 'TRANSFER') as 'CASH' | 'TRANSFER',
+    paymentMethodName: n === 1 ? 'Efectivo' : 'Pago móvil',
+    reference: n === 1 ? null : 'PM-77',
+    equivalentAmount,
+    exchangeRate: null,
+  });
+
+  it('un solo recibo con cada forma de pago, su equivalente y el total en la moneda del plan', () => {
+    render(
+      <PaymentReceiptDocument
+        receipt={paymentReceiptFixture({
+          split: {
+            lines: [line(1, 50, 'USD', 200000), line(2, 100000, 'COP', 100000)],
+            total: { currency: 'COP', amount: 300000 },
+          },
+        })}
+      />,
+    );
+    const doc = screen.getByTestId('receipt-document');
+    expect(text(doc)).toContain('Total en COP');
+    expect(text(doc)).toContain('300.000,00 COP');
+    const lines = screen.getByTestId('receipt-split-lines');
+    expect(lines.querySelectorAll('li')).toHaveLength(2);
+    expect(text(lines)).toContain('Efectivo');
+    expect(text(lines)).toContain('equivale a 200.000,00 COP');
+    expect(text(lines)).toContain('Pago móvil · Referencia PM-77');
+    // El «Valor» de un abono suelto no sale.
+    expect(screen.queryByText('Valor')).not.toBeInTheDocument();
+  });
+
+  it('con una forma de pago sin tasa, lo dice y no inventa el total', () => {
+    render(
+      <PaymentReceiptDocument
+        receipt={paymentReceiptFixture({
+          split: {
+            lines: [line(1, 50, 'USD', null), line(2, 100000, 'COP', 100000)],
+            total: { currency: 'COP', amount: null },
+          },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('receipt-split-lines')).toHaveTextContent('sin tasa de su día');
+    expect(screen.getByTestId('receipt-document')).toHaveTextContent(
+      'Total pendiente de la tasa de cambio de alguna forma de pago.',
+    );
+  });
+});

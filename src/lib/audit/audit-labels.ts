@@ -104,6 +104,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PROVIDER_SCHEDULE: 'Horario del profesional',
   // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
   MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
+  // DX-243: firma a distancia (enviar, abrir, código, bloqueo, firma, anular).
+  SIGNATURE_REQUEST: 'Firma a distancia',
   // DX-279: nueva versión de la política de cancelación de una sede.
   CANCELLATION_POLICY: 'Política de cancelación',
   // DX-274: gastos de la sede, sus pagos y su soporte.
@@ -120,6 +122,11 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // alta de la clínica en el registro (el resourceId es la clínica).
   STAFF_INVITATION: 'Invitación al personal',
   CLINIC: 'Clínica',
+  PAYMENT_METHOD: 'Medio de pago',
+  ANESTHETIC_PRODUCT: 'Catálogo de anestésicos',
+  ANESTHESIA_ADMINISTRATION: 'Anestesia de evolución',
+  SEDATION_RECORD: 'Hoja de sedación',
+  PATIENT_CREDIT: 'Saldo a favor',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -151,6 +158,8 @@ const ORIGIN_LABELS: Record<AuditOrigin, string> = {
   STAFF: 'anotado por el personal',
   // DX-150: el barrido de cobranza cierra compromisos sin usuario.
   JOB: 'proceso automático',
+  // DX-435: el paciente desde el enlace público de la oferta de hueco.
+  PUBLIC_LINK: 'desde el enlace de la oferta',
 };
 
 /**
@@ -164,15 +173,36 @@ export function communicationDetail(metadata: AuditMetadata): string | null {
   return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
 }
 
+/** DX-243: pasos de la firma a distancia que hace el propio paciente. */
+const PATIENT_SIGNATURE_REASONS = new Set([
+  'SIGNATURE_LINK_OPENED',
+  'SIGNATURE_CODE_SENT',
+  'SIGNATURE_CODE_VERIFIED',
+  'SIGNATURE_LINK_LOCKED',
+  'SIGNATURE_PATIENT_SIGNED',
+]);
+
+/** DX-361: respuestas del paciente desde el enlace de confirmación de la cita. */
+const PATIENT_CONFIRMATION_REASONS = new Set([
+  'CONFIRMATION_LINK_CONFIRMED',
+  'CONFIRMATION_LINK_CANCELLED',
+  'CONFIRMATION_LINK_CALL_REQUESTED',
+]);
+
 /**
  * DX-128: la baja la hizo el propio paciente (el evento no tiene usuario).
  * DX-099: también el envío de la anamnesis por enlace y su autorización.
+ * DX-243: y los pasos del enlace de firma a distancia.
+ * DX-361: y su respuesta al enlace de confirmación de la cita.
  */
 export function isPatientOptOut(metadata: AuditMetadata): boolean {
   return (
     metadata.reason === 'REMINDER_OPT_OUT' ||
     metadata.reason === 'ANAMNESIS_SUBMITTED' ||
-    metadata.reason === 'ANAMNESIS_LINK'
+    metadata.reason === 'ANAMNESIS_LINK' ||
+    (metadata.reason !== undefined &&
+      (PATIENT_SIGNATURE_REASONS.has(metadata.reason) ||
+        PATIENT_CONFIRMATION_REASONS.has(metadata.reason)))
   );
 }
 
@@ -188,6 +218,22 @@ const ANAMNESIS_REASONS: Record<string, string> = {
 /** DX-099: qué pasó con la anamnesis por enlace, o null si no es de ella. */
 export function anamnesisDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && ANAMNESIS_REASONS[metadata.reason]) ?? null;
+}
+
+const SIGNATURE_REASONS: Record<string, string> = {
+  SIGNATURE_REQUEST_SENT: 'Enviado a firmar a distancia',
+  SIGNATURE_REQUEST_REVOKED: 'Enlace de firma anulado',
+  SIGNATURE_LINK_OPENED: 'Enlace de firma abierto',
+  SIGNATURE_CODE_SENT: 'Código de verificación enviado',
+  SIGNATURE_CODE_VERIFIED: 'Código de verificación correcto',
+  SIGNATURE_LINK_LOCKED: 'Enlace bloqueado tras 5 códigos incorrectos',
+  SIGNATURE_PATIENT_SIGNED: 'Firmado por el paciente a distancia',
+  CONSENT_COUNTERSIGNED: 'Firma del profesional (consentimiento completo)',
+};
+
+/** DX-243: qué pasó con la firma a distancia, o null si no es de ella. */
+export function signatureRequestDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && SIGNATURE_REASONS[metadata.reason]) ?? null;
 }
 
 const STAFF_LOGIN_REASONS: Record<string, string> = {
@@ -319,12 +365,6 @@ export function staffDetail(
   return parts.join(' · ');
 }
 
-/** Si algún lado de `staffAccess` trae sedes concretas (hacen falta sus nombres). */
-export function hasStaffLocationIds(metadata: AuditMetadata): boolean {
-  const { before, after } = metadata.staffAccess ?? {};
-  return [before, after].some((side) => Array.isArray(side?.locationIds) && side.locationIds.length > 0);
-}
-
 const CASH_SESSION_REASONS: Record<string, string> = {
   CASH_SESSION_CLOSED: 'Cierre de caja',
   CASH_SESSION_REOPENED: 'Reapertura de caja',
@@ -332,6 +372,19 @@ const CASH_SESSION_REASONS: Record<string, string> = {
   CASH_SESSION_CURRENT: 'Caja abierta propia',
   CASH_SETTINGS: 'Ajustes de caja',
 };
+
+const SEDATION_REASONS: Record<string, string> = {
+  SEDATION_ASSESSMENT: 'Valoración previa',
+  SEDATION_CHECKLIST: 'Checklist previo',
+  SEDATION_AGENT: 'Fármaco de sedación',
+  SEDATION_VITALS: 'Toma de constantes',
+  SEDATION_DISCHARGE: 'Egreso',
+};
+
+/** DX-407: qué parte de la hoja de sedación se registró, o null si no es de ella. */
+export function sedationDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && SEDATION_REASONS[metadata.reason]) ?? null;
+}
 
 /** DX-027: qué se hizo con la caja por turno, o null si no es de caja. */
 export function cashSessionDetail(metadata: AuditMetadata): string | null {
@@ -469,6 +522,44 @@ export function planItemAttributionDetail(metadata: AuditMetadata): string | nul
   }
   if (before.completedAt && after.completedAt && before.completedAt !== after.completedAt) {
     parts.push(`Fecha ${formatDate(before.completedAt)} → ${formatDate(after.completedAt)}`);
+  }
+  return parts.join(' · ');
+}
+
+const CONFIRMATION_LINK_REASONS: Record<string, string> = {
+  CONFIRMATION_LINK_CREATED: 'Enlace de confirmación generado',
+  CONFIRMATION_LINK_RESENT: 'Enlace de confirmación reenviado',
+  CONFIRMATION_LINK_CONFIRMED: 'Cita confirmada',
+  CONFIRMATION_LINK_CANCELLED: 'Cita cancelada',
+  CONFIRMATION_LINK_CALL_REQUESTED: 'Pidió que lo llamen',
+};
+
+/** De dónde salió: recepción con el botón de la agenda o el paciente con el enlace. */
+const CONFIRMATION_LINK_ORIGINS: Partial<Record<AuditOrigin, string>> = {
+  STAFF: 'por el personal',
+  LINK: 'desde el enlace del paciente',
+};
+
+/**
+ * DX-361: el enlace de confirmación de una cita («Enlace de confirmación
+ * reenviado · por el personal», «Cita cancelada · desde el enlace del
+ * paciente · Agendada → Cancelada · aviso de 90 min · tardía»). La metadata
+ * nunca trae el token ni la URL. null si el evento no es del enlace.
+ */
+export function confirmationLinkDetail(metadata: AuditMetadata): string | null {
+  const what = metadata.reason ? CONFIRMATION_LINK_REASONS[metadata.reason] : undefined;
+  if (!what) return null;
+  const parts = [what];
+  const origin = metadata.origin ? CONFIRMATION_LINK_ORIGINS[metadata.origin] : undefined;
+  if (origin) parts.push(origin);
+  if (metadata.status) {
+    const label = (code: string) => APPOINTMENT_STATUS_LABELS[code] ?? code;
+    parts.push(`${label(metadata.status.from)} → ${label(metadata.status.to)}`);
+  }
+  const c = metadata.cancellation;
+  if (c) {
+    parts.push(`aviso de ${c.noticeMinutes} min`);
+    if (c.lateCancellation) parts.push('tardía');
   }
   return parts.join(' · ');
 }
@@ -630,6 +721,21 @@ const LOCATION_CALENDAR_REASONS: Record<string, string> = {
   HOLIDAY_DELETED: 'Festivo eliminado',
   HOLIDAYS_IMPORTED: 'Festivos importados',
 };
+
+/**
+ * DX-402: el barrido congeló en un abono, como tasa de respaldo, la tasa
+ * manual de un día anterior a «manual desde» (un día sin tasa del proveedor).
+ * Las monedas y el origen; los días van en la metadata (sin formato de sede
+ * aquí, no se muestran).
+ */
+export function exchangeRateBackupDetail(metadata: AuditMetadata): string | null {
+  if (metadata.reason !== 'EXCHANGE_RATE_BACKUP') return null;
+  const currencies = metadata.exchangeRateBackup?.currencies ?? [];
+  const what = `Tasa de respaldo: la manual de un día anterior a «manual desde»${
+    currencies.length > 0 ? ` (${currencies.join(', ')})` : ''
+  }`;
+  return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
+}
 
 /** DX-316: qué cambió en el calendario de una sede, o null si el evento no es de él. */
 export function locationCalendarDetail(metadata: AuditMetadata): string | null {

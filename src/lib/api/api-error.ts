@@ -37,6 +37,11 @@ export class ApiError extends Error {
    * calendario de la sede (DX-316): la pantalla puede llevar a él.
    */
   public readonly holidayId: string | null;
+  /**
+   * La forma de pago (desde 0) de un cobro dividido a la que se refiere el
+   * 409 de referencia repetida (DX-390): el motivo se pide en esa línea.
+   */
+  public readonly line: number | null;
 
   constructor(
     public readonly status: number,
@@ -48,6 +53,7 @@ export class ApiError extends Error {
       field?: string | null;
       locationId?: string | null;
       holidayId?: string | null;
+      line?: number | null;
     } = {},
   ) {
     super(message);
@@ -58,6 +64,7 @@ export class ApiError extends Error {
     this.field = details.field ?? null;
     this.locationId = details.locationId ?? null;
     this.holidayId = details.holidayId ?? null;
+    this.line = details.line ?? null;
   }
 }
 

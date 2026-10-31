@@ -13,6 +13,7 @@ const patients: Patient[] = [
     birthDate: '1990-05-10T00:00:00.000Z',
     sex: 'F',
     phone: '3001234567',
+    phoneInternational: '+57 300 1234567',
     email: 'ana@example.com',
     address: null,
     notes: null,
@@ -77,6 +78,33 @@ describe('PatientsTable', () => {
     expect(screen.queryByText('ana@example.com')).not.toBeInTheDocument();
   });
 
+  it('shows the international phone of the API, or the stored one when it has none (DX-387)', () => {
+    const stored = { ...patients[1], id: '3', phone: 'casa: 2345', phoneInternational: null };
+    render(<PatientsTable patients={[patients[0], stored]} loading={false} />);
+    expect(screen.getAllByText('+57 300 1234567')).toHaveLength(1);
+    expect(screen.queryByText('3001234567')).not.toBeInTheDocument();
+    expect(screen.getAllByText('casa: 2345')).toHaveLength(1);
+  });
+
+  it('a long phone wraps in its cell and in the phone card instead of widening them (DX-387)', () => {
+    const phone = '+58 412 1234567 ext. 123456';
+    const rows = [{ ...patients[0], phoneInternational: phone }];
+    const { unmount } = render(<PatientsTable patients={rows} loading={false} />);
+    const cell = screen.getByText(phone);
+    expect(cell).toHaveClass('[overflow-wrap:anywhere]');
+    expect(cell).toHaveClass('min-w-0');
+    unmount();
+    const restore = mockPhone(true);
+    try {
+      render(<PatientsTable patients={rows} loading={false} />);
+      const card = screen.getByText(phone);
+      expect(card).toHaveClass('[overflow-wrap:anywhere]');
+      expect(card).toHaveClass('min-w-0');
+    } finally {
+      restore();
+    }
+  });
+
   it('el documento usa .t-id (cero con barra) y la edad sale de la fecha de nacimiento', () => {
     render(<PatientsTable patients={patients} loading={false} />);
     expect(screen.getByText('123456')).toHaveClass('t-id');
@@ -101,7 +129,7 @@ describe('PatientsTable', () => {
       render(<PatientsTable patients={patients} loading={false} />);
       expect(screen.queryByRole('table')).not.toBeInTheDocument();
       const [ana, luis] = within(screen.getByRole('list', { name: 'Pacientes' })).getAllByRole('listitem');
-      expect(ana).toHaveTextContent(/^AGAna García\d+ años123456 · 3001234567$/);
+      expect(ana).toHaveTextContent(/^AGAna García\d+ años123456 · \+57 300 1234567$/);
       expect(within(ana).getByRole('link')).toHaveAttribute('href', '/patients/1');
       // Sin teléfono no hay « · » colgando ni «—».
       expect(luis).toHaveTextContent(/^LPLuis Pérez987654$/);
