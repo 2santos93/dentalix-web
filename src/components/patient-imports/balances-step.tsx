@@ -23,6 +23,7 @@ import { saveCsv } from '@/lib/files/save-csv';
 import { ImportIssuesTable } from './import-issues-table';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeNumber } from '@/lib/format/sede-number';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export const balancesCopy = {
   title: 'Saldos de los pacientes (opcional)',
@@ -159,7 +160,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
 
   return (
     <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-5">
-      <h2 id={headingId} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
+      <h2 id={headingId} tabIndex={-1} className="t-title text-ink focus:outline-none">
         {balancesCopy.title}
       </h2>
       <p className="max-w-prose text-sm text-muted">{balancesCopy.hint}</p>
@@ -173,27 +174,18 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
         className="sr-only"
         onChange={(e) => void onFile(e.target.files?.[0])}
       />
-      <div className="flex flex-col gap-1">
-        <label htmlFor={`${id}-add`} className="flex min-h-11 items-center gap-2 text-sm text-ink md:min-h-0">
-          <input
-            id={`${id}-add`}
-            type="checkbox"
-            checked={addToExisting}
-            disabled={busy}
-            aria-describedby={`${id}-add-hint`}
-            onChange={(e) => {
-              const next = e.target.checked;
-              setAddToExisting(next);
-              if (lastFile.current) void onFile(lastFile.current, next);
-            }}
-            className="size-4 accent-primary"
-          />
-          {balancesCopy.addToExisting}
-        </label>
-        <p id={`${id}-add-hint`} className="max-w-prose text-xs text-muted">
-          {balancesCopy.addToExistingHint}
-        </p>
-      </div>
+      <Checkbox
+        id={`${id}-add`}
+        checked={addToExisting}
+        disabled={busy}
+        onChange={(e) => {
+          const next = e.target.checked;
+          setAddToExisting(next);
+          if (lastFile.current) void onFile(lastFile.current, next);
+        }}
+        label={balancesCopy.addToExisting}
+        description={<span className="block max-w-prose">{balancesCopy.addToExistingHint}</span>}
+      />
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <Button
           type="button"
@@ -256,8 +248,8 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
               ] as [string, number][]
             ).map(([label, value]) => (
               <div key={label} className="flex flex-col gap-0.5 border-l border-border pl-3">
-                <dt className="text-xs font-medium text-muted">{label}</dt>
-                <dd className="text-base font-semibold tabular-nums text-ink">{n(value)}</dd>
+                <dt className="t-overline">{label}</dt>
+                <dd className="t-title tnum text-ink">{n(value)}</dd>
               </div>
             ))}
           </dl>

@@ -59,7 +59,7 @@ export function ImportProgress({
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h2 id={headingId} tabIndex={-1} className="min-w-0 break-words text-lg font-semibold text-ink focus:outline-none">
+        <h2 id={headingId} tabIndex={-1} className="min-w-0 break-words t-title text-ink focus:outline-none">
           {copy.title(batch.fileName)}
         </h2>
         <StatusBadge kind="patientImport" status={batch.status} />
@@ -78,8 +78,8 @@ export function ImportProgress({
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
         {counts.map(([label, value]) => (
           <div key={label} className="flex flex-col gap-0.5 border-l border-border pl-3">
-            <dt className="text-xs font-medium text-muted">{label}</dt>
-            <dd className="text-base font-semibold tabular-nums text-ink">{n(value)}</dd>
+            <dt className="t-overline">{label}</dt>
+            <dd className="t-title tnum text-ink">{n(value)}</dd>
           </div>
         ))}
       </dl>

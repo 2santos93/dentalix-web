@@ -207,7 +207,9 @@ for (const viewport of [
     await page.goto(`${origin}/settings/importar-pacientes`);
     const history = page.getByRole('list', { name: 'Importaciones de la clínica' });
     const firstRow = history.getByRole('listitem').filter({ hasText: firstFile }).first();
-    await firstRow.getByRole('button', { name: `Retirar los saldos migrados de ${firstFile}` }).click();
+    // Informe y deshacer viven en el «⋯» del lote.
+    await firstRow.getByRole('button', { name: `Acciones de ${firstFile}` }).click();
+    await page.getByRole('menuitem', { name: 'Retirar saldos migrados', exact: true }).click();
     const undoDialog = page.getByRole('dialog');
     await undoDialog.getByRole('button', { name: 'Retirar saldos' }).click();
     await expect(undoDialog).toContainText(
@@ -218,10 +220,18 @@ for (const viewport of [
 
     // …y el de I2, sin abonos, se retira (el paciente no se toca).
     const secondRow = history.getByRole('listitem').filter({ hasText: onlyBalancesFile }).first();
-    await secondRow.getByRole('button', { name: `Retirar los saldos migrados de ${onlyBalancesFile}` }).click();
+    await secondRow.getByRole('button', { name: `Acciones de ${onlyBalancesFile}` }).click();
+    await page.getByRole('menuitem', { name: 'Retirar saldos migrados', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Retirar saldos' }).click();
     await expect(page.getByText('Saldos migrados retirados.')).toBeVisible();
-    await expect(secondRow.getByRole('button', { name: /Retirar los saldos migrados/ })).toHaveCount(0);
+    // Ya no se ofrece retirarlos: o el lote se queda sin «⋯», o su menú no lo trae.
+    const secondMenu = secondRow.getByRole('button', { name: `Acciones de ${onlyBalancesFile}` });
+    if ((await secondMenu.count()) > 0) {
+      await secondMenu.click();
+      await expect(page.getByRole('menu')).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: 'Retirar saldos migrados', exact: true })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+    }
   });
 }
 

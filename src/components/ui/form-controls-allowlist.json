@@ -217,15 +217,6 @@
   "src/components/odontogram/void-record-dialog.tsx": {
     "textarea": 1
   },
-  "src/components/patient-imports/balances-step.tsx": {
-    "checkbox": 1
-  },
-  "src/components/patient-imports/column-mapping-fields.tsx": {
-    "select": 3
-  },
-  "src/components/patient-imports/patient-import-wizard.tsx": {
-    "radio": 1
-  },
   "src/components/payers/payer-form-modal.tsx": {
     "select": 2
   },
