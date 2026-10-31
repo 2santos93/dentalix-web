@@ -103,7 +103,7 @@ describe('AppShell', () => {
         'Reportes',
         'Pendiente de cerrar',
       ],
-      // M2: la Auditoría vive en Ajustes → «Datos y seguridad», no en el shell.
+      // M2: la Auditoría vive en Ajustes → «Herramientas y registros», no en el shell.
       hidden: ['Auditoría'],
     },
     DENTIST: {
