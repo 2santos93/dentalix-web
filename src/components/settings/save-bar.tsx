@@ -3,13 +3,13 @@ import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
+import { useUnsavedChanges } from './unsaved-changes';
 
 export const saveBarCopy = {
   dirty: 'Cambios sin guardar',
   saving: 'Guardando…',
   discard: 'Descartar',
   save: 'Guardar',
-  leave: 'Hay cambios sin guardar. ¿Salir igualmente?',
 };
 
 function sameValue(a: unknown, b: unknown): boolean {
@@ -37,7 +37,9 @@ export interface SettingsDraft<T> {
  * borrador lo sigue; con cambios pendientes, el borrador manda (no se pisa lo
  * que la persona escribió).
  *
- * Mientras hay cambios, cerrar o recargar la pestaña pregunta antes de salir.
+ * Mientras hay cambios, salir pregunta antes: cerrar o recargar la pestaña
+ * (aviso del navegador) y navegar dentro de la app — enlace, ⌘K o «Atrás» —
+ * (diálogo de `UnsavedChangesGuard`, ver unsaved-changes.tsx).
  */
 export function useSettingsDraft<T>(saved: T, equals: (a: T, b: T) => boolean = sameValue): SettingsDraft<T> {
   const [base, setBase] = React.useState<T>(saved);
@@ -54,14 +56,8 @@ export function useSettingsDraft<T>(saved: T, equals: (a: T, b: T) => boolean = 
 
   const dirty = !equals(draft, base);
 
-  React.useEffect(() => {
-    if (!dirty) return;
-    function warn(event: BeforeUnloadEvent) {
-      event.preventDefault();
-    }
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  // Salir con cambios (pestaña, enlaces de la app, ⌘K, «Atrás») pregunta antes.
+  useUnsavedChanges(dirty);
 
   const update = React.useCallback((patch: Partial<T>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
