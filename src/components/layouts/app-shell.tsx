@@ -75,9 +75,9 @@ const NAV: NavItem[] = [
   // Gastos de la sede (DX-274): EXPENSE_ROLES en la API. Junto a cartera y
   // descuentos, bajo /caja.
   { href: '/caja/gastos', label: 'Gastos', icon: ReceiptText, roles: ['ADMIN'] },
-  // Reportes (DX-014): REPORT_ROLES en la API. «Comparar sedes» y los que
-  // vengan, en pestañas.
-  { href: '/reportes', label: 'Reportes', icon: ChartColumn, roles: ['ADMIN'] },
+  // Reportes (DX-014): «Comparar sedes» (REPORT_ROLES) y «Producción por
+  // procedimiento» (PRODUCTION_REPORT_ROLES, DX-423: el odontólogo ve la suya).
+  { href: '/reportes', label: 'Reportes', icon: ChartColumn, roles: ['ADMIN', 'DENTIST'] },
   // Presupuestos por seguir (DX-040): TREATMENT_PLAN_FOLLOW_UP_ROLES en la API.
   {
     href: '/presupuestos',
