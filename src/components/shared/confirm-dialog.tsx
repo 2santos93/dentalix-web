@@ -32,6 +32,8 @@ interface ConfirmDialogProps {
    * coloca aquí con `event.preventDefault()` para que no caiga en <body>.
    */
   onCloseAutoFocus?: (event: Event) => void;
+  /** Contenido extra entre la descripción y el error (p. ej. un aviso). */
+  children?: React.ReactNode;
 }
 
 /**
@@ -50,6 +52,7 @@ export function ConfirmDialog({
   destructive = true,
   error,
   onCloseAutoFocus,
+  children,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -58,6 +61,7 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
+        {children}
         {error ? <InlineError variant="summary">{error}</InlineError> : null}
         <DialogFooter>
           <DialogClose asChild>

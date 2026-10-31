@@ -469,12 +469,32 @@ export interface paths {
         post?: never;
         /**
          * Archivar paciente (borrado blando, solo ADMIN)
-         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención legal (15 años desde la última atención, 30 con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva, salvo que tenga citas programadas o confirmadas (409 `PATIENT_HAS_PENDING_APPOINTMENTS`: hay que cancelarlas o cerrarlas antes).
+         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención legal (15 años desde la última atención, 30 con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva, salvo que tenga citas programadas o confirmadas (409 `PATIENT_HAS_PENDING_APPOINTMENTS`: hay que cancelarlas o cerrarlas antes). DX-461: en la misma transacción anula sus enlaces públicos vivos (ofertas de hueco, firma y presupuesto a distancia, copia del PDF firmado y anamnesis): sus rutas públicas responden como a un enlace caducado y desarchivar no los reactiva. Si anuló alguno, queda un audit_event (UPDATE de PATIENT, `PATIENT_ARCHIVED_LINKS_REVOKED`) con cuántos de cada tipo.
          */
         delete: operations["PatientsController_archive"];
         options?: never;
         head?: never;
         patch: operations["PatientsController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/live-public-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enlaces públicos vivos que anularía archivar (solo ADMIN)
+         * @description DX-461. Para avisar en el diálogo de archivar: cuántas ofertas de hueco, firmas y presupuestos a distancia, copias del PDF firmado y anamnesis enviados siguen sirviendo hoy (sin usar, sin anular y sin caducar), en todas las sedes: el paciente es de la clínica. Solo números. 404 si el paciente no existe en la clínica o ya está archivado.
+         */
+        get: operations["PatientsController_livePublicLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/patients/{id}/retention": {
@@ -6782,6 +6802,20 @@ export interface components {
             message: string;
             /** Format: date */
             retentionUntil: string | null;
+        };
+        LivePublicLinksDto: {
+            /** @description Ofertas de hueco con enlace pendientes (DX-435) */
+            slotOffers: number;
+            /** @description Consentimientos enviados a firmar a distancia sin firmar (DX-243) */
+            consentSignatures: number;
+            /** @description Presupuestos enviados a aceptar a distancia sin firmar (DX-415) */
+            budgetSignatures: number;
+            /** @description Enlaces de la copia del PDF firmado sin descargar (DX-443) */
+            signedPdfCopies: number;
+            /** @description Cuestionarios de salud (anamnesis) sin responder (DX-099) */
+            anamnesis: number;
+            /** @description Suma de todos los tipos */
+            total: number;
         };
         SetRetentionExtensionDto: {
             /** @description Motivo (obligatorio). Queda en el rastro de retención del paciente con el autor y la fecha; no se copia al registro de auditoría. */
@@ -18309,6 +18343,41 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PatientDto"];
                 };
+            };
+        };
+    };
+    PatientsController_livePublicLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LivePublicLinksDto"];
+                };
+            };
+            /** @description Rol distinto de ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente inexistente o archivado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
