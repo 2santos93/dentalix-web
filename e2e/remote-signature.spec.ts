@@ -207,4 +207,32 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
     await expect(signatureRows(page).first().getByText('Completo', { exact: true })).toBeVisible();
     await expect(signatureRows(page).first()).toContainText(/Completo: el profesional firmó el/);
   });
+
+  // DX-422: la API genera en segundo plano el PDF firmado (con su página de
+  // evidencias) y lo archiva en los documentos del paciente.
+  for (const { width, height, label } of [
+    { width: 1440, height: 900, label: '1440' },
+    { width: 390, height: 844, label: '390 px' },
+  ]) {
+    test(`recepción descarga el PDF firmado desde la fila del envío (${label})`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await loginAs(page, origin, RECEPTION_EMAIL, DEMO_PASSWORD);
+      await page.goto(`${origin}/patients/${patientId}?tab=consents`);
+      const row = signatureRows(page).first();
+      await expect(row.getByText('Completo', { exact: true })).toBeVisible({ timeout: 15_000 });
+      // La cola lo genera en segundos; mientras, la fila dice «Generando…».
+      await expect(async () => {
+        await page.reload();
+        await expect(signatureRows(page).first()).toContainText('PDF firmado archivado en Documentos del paciente.', {
+          timeout: 2_000,
+        });
+      }).toPass({ timeout: 30_000 });
+      const button = signatureRows(page).first().getByRole('button', { name: `Descargar PDF de ${TEMPLATE_TITLE}` });
+      await expect(button).toBeVisible();
+      await expectNoHorizontalScroll(page);
+      const [download] = await Promise.all([page.waitForEvent('download'), button.click()]);
+      expect(download.suggestedFilename()).toMatch(/^Consentimiento firmado - .+\.pdf$/);
+    });
+  }
 });
+

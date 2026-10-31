@@ -107,6 +107,24 @@ export function revokeSignatureRequest(
   });
 }
 
+export type SignedConsentPdfStatus = Schemas['SignedConsentPdfStatus'];
+export type SignedConsentPdfRetry = Schemas['SignedConsentPdfRetryDto'];
+
+/**
+ * DX-422: `POST /patients/:id/consents/:consentId/signed-pdf/retry` — vuelve a
+ * encolar el PDF firmado que la API no pudo generar (FAILED). Los cuatro roles.
+ */
+export function retrySignedConsentPdf(
+  token: string,
+  patientId: string,
+  consentId: string,
+): Promise<SignedConsentPdfRetry> {
+  return apiFetch<SignedConsentPdfRetry>(
+    `/patients/${encodeURIComponent(patientId)}/consents/${encodeURIComponent(consentId)}/signed-pdf/retry`,
+    { method: 'POST', token },
+  );
+}
+
 // --- Página pública /firmar/[token] (sin sesión; la clínica sale del host) ---
 
 const publicPath = (linkToken: string) => `/public/sign/${encodeURIComponent(linkToken)}`;
