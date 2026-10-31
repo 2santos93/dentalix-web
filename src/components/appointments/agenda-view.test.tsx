@@ -277,6 +277,21 @@ describe('AgendaView', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('DX-339: «Agenda de contingencia» solo para ADMIN y RECEPTION, y abre su diálogo', async () => {
+    mockedListStaff.mockResolvedValue([]);
+    mockedListAppointments.mockResolvedValue([]);
+    const tokenFor = (role: string) => `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.s`;
+    const user = userEvent.setup();
+
+    const { unmount } = await renderAgenda(<AgendaView token={tokenFor('DENTIST')} />);
+    expect(screen.queryByRole('button', { name: 'Agenda de contingencia' })).not.toBeInTheDocument();
+    unmount();
+
+    await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
+    await user.click(screen.getByRole('button', { name: 'Agenda de contingencia' }));
+    expect(await screen.findByRole('dialog', { name: 'Agenda de contingencia' })).toBeInTheDocument();
+  });
+
   it('defaults the provider filter to "Todos" (all providers) and offers each staff member as an option', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);

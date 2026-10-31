@@ -80,7 +80,9 @@ import {
   STATUS_LABELS,
   patientLabel,
 } from '@/components/appointments/appointment-display';
-import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair, FileDown } from 'lucide-react';
+import { ContingencyAgendaDialog, contingencyCopy } from '@/components/appointments/contingency-agenda-dialog';
+import { canDownloadContingencyAgenda } from '@/lib/appointments/contingency-agenda-api';
 import { InClinicPanel, focusLocationSwitcher, inClinicCopy } from '@/components/appointments/in-clinic-panel';
 import {
   dismissReservedToasts,
@@ -410,6 +412,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [activeLocationId] = useState(getActiveLocationId);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
+  // DX-339: agenda de contingencia en PDF (ADMIN y RECEPTION).
+  const [showContingency, setShowContingency] = useState(false);
   const [removingBlock, setRemovingBlock] = useState<ScheduleBlockLike | null>(null);
   const [removeBlockError, setRemoveBlockError] = useState<string | null>(null);
   const [removingBlockPending, setRemovingBlockPending] = useState(false);
@@ -1121,6 +1125,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             {/* En el teléfono «Bloquear horario» baja, como icono con su
                 nombre, a la fila de «En clínica» y «Pendientes»: así «Nueva
                 cita» cabe junto al periodo. */}
+            {canDownloadContingencyAgenda(role) && !phone ? (
+              <Button type="button" variant="secondary" onClick={() => setShowContingency(true)}>
+                <FileDown aria-hidden /> {contingencyCopy.button}
+              </Button>
+            ) : null}
             {canWriteBlocks && !phone ? (
               <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
                 <CalendarOff aria-hidden /> {copy.blockSchedule}
@@ -1220,6 +1229,19 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 >
                   <CalendarOff aria-hidden />
                   <span className="sr-only">{copy.blockSchedule}</span>
+                </Button>
+              ) : null}
+              {canDownloadContingencyAgenda(role) && phone ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="flex-none!"
+                  title={contingencyCopy.button}
+                  onClick={() => setShowContingency(true)}
+                >
+                  <FileDown aria-hidden />
+                  <span className="sr-only">{contingencyCopy.button}</span>
                 </Button>
               ) : null}
             </div>
@@ -1777,6 +1799,15 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             providerName: staffName(evolutionFor.providerId),
           }}
           onCreated={() => toast.success(copy.evolutionSaved(patientLabel(evolutionFor)))}
+        />
+      ) : null}
+
+      {showContingency ? (
+        <ContingencyAgendaDialog
+          open
+          onOpenChange={setShowContingency}
+          token={token}
+          defaultLocationId={activeLocationId}
         />
       ) : null}
 
