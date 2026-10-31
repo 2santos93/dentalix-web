@@ -125,6 +125,43 @@ export function retrySignedConsentPdf(
   );
 }
 
+export type SignedPdfCopyResent = Schemas['SignedPdfCopyResentDto'];
+
+/**
+ * DX-443: `POST /patients/:id/consents/:consentId/signed-pdf/copy` — reenvía al
+ * paciente (o a su responsable) la copia del PDF firmado con un enlace nuevo
+ * de un solo uso; el anterior deja de servir. Los cuatro roles.
+ */
+export function resendSignedConsentPdfCopy(
+  token: string,
+  patientId: string,
+  consentId: string,
+): Promise<SignedPdfCopyResent> {
+  return apiFetch<SignedPdfCopyResent>(
+    `/patients/${encodeURIComponent(patientId)}/consents/${encodeURIComponent(consentId)}/signed-pdf/copy`,
+    { method: 'POST', token },
+  );
+}
+
+// --- Página pública /copia/[token] (DX-443; sin sesión, la clínica sale del host) ---
+
+export type PublicSignedPdfCopy = Schemas['PublicSignedPdfCopyDto'];
+export type SignedPdfCopyDownload = Schemas['SignedPdfCopyDownloadDto'];
+/** Código del 410 cuando el enlace de la copia ya se usó. */
+export const SIGNED_PDF_COPY_LINK_USED = 'SIGNED_PDF_COPY_LINK_USED';
+
+const copyPath = (linkToken: string) => `/public/signed-consent-copies/${encodeURIComponent(linkToken)}`;
+
+/** `GET …/:token`: solo lee (los previsualizadores del correo lo abren solos). */
+export function getPublicSignedPdfCopy(linkToken: string): Promise<PublicSignedPdfCopy> {
+  return apiFetch<PublicSignedPdfCopy>(copyPath(linkToken));
+}
+
+/** `POST …/:token/download`: gasta el enlace y da una URL firmada de 60 s del PDF. */
+export function downloadPublicSignedPdfCopy(linkToken: string): Promise<SignedPdfCopyDownload> {
+  return apiFetch<SignedPdfCopyDownload>(`${copyPath(linkToken)}/download`, { method: 'POST' });
+}
+
 // --- Página pública /firmar/[token] (sin sesión; la clínica sale del host) ---
 
 const publicPath = (linkToken: string) => `/public/sign/${encodeURIComponent(linkToken)}`;

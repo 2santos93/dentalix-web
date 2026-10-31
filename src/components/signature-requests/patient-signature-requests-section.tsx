@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Download, FileSignature, RotateCcw, Send } from 'lucide-react';
+import { Download, FileSignature, MailCheck, RotateCcw, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { notifyError } from '@/components/errors/notify';
@@ -13,6 +13,7 @@ import {
   canRevokeSignatureRequest,
   signatureStatusLabel,
   listSignatureRequests,
+  resendSignedConsentPdfCopy,
   retrySignedConsentPdf,
   revokeSignatureRequest,
   type SignatureRequest,
@@ -75,6 +76,12 @@ const copy = {
   pdfFor: (title: string) => ` de ${title}`,
   downloadPdfError: 'No pudimos descargar el PDF firmado. Intenta de nuevo.',
   retryPdfError: 'No pudimos volver a generar el PDF firmado. Intenta de nuevo.',
+  // DX-443: la copia del PDF al paciente por un enlace de un solo uso.
+  copySent: (when: string) => `Copia enviada al paciente el ${when} (enlace de un solo uso).`,
+  copyNotSent: 'Aún no se ha enviado la copia al paciente.',
+  resendCopy: 'Reenviar copia',
+  resentToast: (to: string) => `Copia enviada a ${to}. El enlace anterior ya no sirve.`,
+  resendCopyError: 'No pudimos reenviar la copia. Intenta de nuevo.',
 };
 
 // Variantes de Badge (DESIGN.md · Chips): en curso con borde, esperando al
@@ -133,12 +140,34 @@ function evidence(r: SignatureRequest, clock: SedeClock | null, userId: string |
 const PDF_POLL_MS = 5_000;
 const PDF_POLL_MAX = 24;
 
+/** Clave de «ocupado» del botón «Reenviar copia» (aparte de la del PDF). */
+function copyBusyKey(id: string): string {
+  return `${id}:copy`;
+}
+
 function hasPendingPdf(rows: readonly SignatureRequest[]): boolean {
   return rows.some((r) => r.status === 'COMPLETE' && r.signedPdfStatus === 'PENDING');
 }
 
-function SignedPdfStatusLine({ status }: { status: SignatureRequest['signedPdfStatus'] }) {
-  if (status === 'READY') return <p className="text-sm text-muted">{copy.pdfReady}</p>;
+function SignedPdfStatusLine({
+  status,
+  copySentAt,
+  clock,
+}: {
+  status: SignatureRequest['signedPdfStatus'];
+  copySentAt: string | null;
+  clock: SedeClock | null;
+}) {
+  if (status === 'READY') {
+    return (
+      <>
+        <p className="text-sm text-muted">{copy.pdfReady}</p>
+        <p className="text-sm text-muted tabular-nums">
+          {copySentAt ? copy.copySent(at(copySentAt, clock)) : copy.copyNotSent}
+        </p>
+      </>
+    );
+  }
   if (status === 'PENDING') {
     return (
       <p role="status" className="text-sm text-muted">
@@ -304,6 +333,27 @@ export function PatientSignatureRequestsSection({
     }
   }
 
+  /**
+   * DX-443: «Reenviar copia» — la API envía un enlace nuevo de un solo uso al
+   * email de la firma e invalida el anterior. La fila se actualiza con la hora.
+   */
+  async function handleResendCopy(r: SignatureRequest) {
+    if (!r.consentId) return;
+    const key = copyBusyKey(r.id);
+    setBusy(key, true);
+    try {
+      const resent = await resendSignedConsentPdfCopy(token, patientId, r.consentId);
+      setRows((current) =>
+        current.map((row) => (row.id === r.id ? { ...row, signedPdfCopySentAt: resent.sentAt } : row)),
+      );
+      toast.success(copy.resentToast(resent.destinationMasked));
+    } catch (err) {
+      notifyError(apiErrorMessage(err, copy.resendCopyError), { onRetry: () => void handleResendCopy(r) });
+    } finally {
+      setBusy(key, false);
+    }
+  }
+
   function handleSent(created: SignatureRequestCreated) {
     if (created.emailQueued) toast.success(copy.sentToast(created.destinationMasked));
     else toast.warning(copy.notQueued);
@@ -382,22 +432,43 @@ export function PatientSignatureRequestsSection({
                     </li>
                   ))}
                 </ul>
-                <SignedPdfStatusLine status={r.status === 'COMPLETE' ? r.signedPdfStatus : null} />
+                <SignedPdfStatusLine
+                  status={r.status === 'COMPLETE' ? r.signedPdfStatus : null}
+                  copySentAt={r.signedPdfCopySentAt}
+                  clock={clockOf(r.locationId)}
+                />
               </div>
               {r.status === 'COMPLETE' && r.signedPdfStatus === 'READY' && r.signedPdfDocumentId ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="min-h-11 shrink-0 sm:min-h-9"
-                  loading={pdfBusy.has(r.id)}
-                  disabled={pdfBusy.has(r.id)}
-                  onClick={() => void handleDownloadPdf(r)}
-                >
-                  <Download aria-hidden />
-                  {copy.downloadPdf}
-                  <span className="sr-only">{copy.pdfFor(r.title)}</span>
-                </Button>
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="min-h-11 sm:min-h-9"
+                    loading={pdfBusy.has(r.id)}
+                    disabled={pdfBusy.has(r.id)}
+                    onClick={() => void handleDownloadPdf(r)}
+                  >
+                    <Download aria-hidden />
+                    {copy.downloadPdf}
+                    <span className="sr-only">{copy.pdfFor(r.title)}</span>
+                  </Button>
+                  {r.consentId ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="min-h-11 sm:min-h-9"
+                      loading={pdfBusy.has(copyBusyKey(r.id))}
+                      disabled={pdfBusy.has(copyBusyKey(r.id))}
+                      onClick={() => void handleResendCopy(r)}
+                    >
+                      <MailCheck aria-hidden />
+                      {copy.resendCopy}
+                      <span className="sr-only">{copy.pdfFor(r.title)}</span>
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
               {r.status === 'COMPLETE' && r.signedPdfStatus === 'FAILED' && r.consentId ? (
                 <Button

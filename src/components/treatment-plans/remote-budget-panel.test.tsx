@@ -97,6 +97,7 @@ function budgetRequest(overrides: Partial<SignatureRequest> = {}): SignatureRequ
     countersignedAt: null,
     signedPdfStatus: null,
     signedPdfDocumentId: null,
+    signedPdfCopySentAt: null,
     ...overrides,
   };
 }
