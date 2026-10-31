@@ -7,18 +7,98 @@
  * zona de la sede, nunca con `getHours()`/`setHours()` del proceso.
  */
 export const SEDE_TZ = 'America/Bogota';
-/** Bogotá no tiene horario de verano: -05:00 todo el año. */
-const SEDE_OFFSET = '-05:00';
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * DX-449 (TST-053): zona de las sedes de los specs que necesitan citas de HOY
+ * ya empezadas o por empezar. La API decide «hoy» con su reloj real y la zona
+ * de la sede: a las 00:05 de Bogotá no cabe una cita «de hace 10 min» y a las
+ * 23:54 no queda franja de hoy por agendar, y la CI de los merges nocturnos
+ * (04:40–06:00 UTC) salía en rojo. Bogotá mientras queden al menos
+ * `SEDE_TODAY_MARGIN_MINUTES` desde y hasta su medianoche; si no, una zona sin
+ * horario de verano en la que ahora es cerca del mediodía.
+ */
+export const SEDE_TODAY_MARGIN_MINUTES = 180;
+
+/** Una zona por desfase entero de UTC−11 a UTC+12, todas sin horario de verano. */
+export const NOON_ZONE_CANDIDATES: readonly string[] = [
+  'Pacific/Pago_Pago',
+  'Pacific/Honolulu',
+  'Pacific/Gambier',
+  'Pacific/Pitcairn',
+  'America/Phoenix',
+  'America/Regina',
+  SEDE_TZ,
+  'America/La_Paz',
+  'America/Sao_Paulo',
+  'America/Noronha',
+  'Atlantic/Cape_Verde',
+  'Africa/Abidjan',
+  'Africa/Lagos',
+  'Africa/Maputo',
+  'Africa/Nairobi',
+  'Asia/Dubai',
+  'Asia/Tashkent',
+  'Asia/Dhaka',
+  'Asia/Bangkok',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Australia/Brisbane',
+  'Pacific/Guadalcanal',
+  'Pacific/Tarawa',
+];
+
+/** Minutos transcurridos del día civil de `zone` en `at`. */
+export function minutesIntoDay(at: Date, zone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(at);
+  const part = (type: 'hour' | 'minute') => Number(parts.find((p) => p.type === type)?.value);
+  return part('hour') * 60 + part('minute');
+}
+
+function minutesFromMidnight(at: Date, zone: string): number {
+  const minutes = minutesIntoDay(at, zone);
+  return Math.min(minutes, 24 * 60 - minutes);
+}
+
+/** Bogotá si su medianoche queda a más del margen; si no, la candidata más cerca del mediodía. */
+export function sedeTodayZone(now = new Date()): string {
+  if (minutesFromMidnight(now, SEDE_TZ) >= SEDE_TODAY_MARGIN_MINUTES) return SEDE_TZ;
+  let best = SEDE_TZ;
+  for (const zone of NOON_ZONE_CANDIDATES) {
+    if (minutesFromMidnight(now, zone) > minutesFromMidnight(now, best)) best = zone;
+  }
+  return best;
+}
+
+/**
+ * La zona «de hoy» de ESTA corrida: playwright.config.ts la elige una vez al
+ * arrancar (`E2E_SEDE_TODAY_TZ`) y los workers la heredan, así todos los specs
+ * y la sede que registran usan la misma aunque la suite cruce una frontera.
+ */
+export const SEDE_TODAY_TZ = process.env.E2E_SEDE_TODAY_TZ ?? sedeTodayZone();
+
+/** Desfase `±HH:MM` (o `Z`) de `zone` el día `day`. */
+function zoneOffset(day: string, zone: string): string {
+  const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+    .formatToParts(new Date(`${day}T12:00:00Z`))
+    .find((p) => p.type === 'timeZoneName')?.value;
+  if (!name || name === 'GMT') return 'Z';
+  return name.slice(3);
+}
+
 /** `YYYY-MM-DD` de un instante, en la zona de la sede. */
-export function sedeDate(at: Date): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: SEDE_TZ }).format(at);
+export function sedeDate(at: Date, zone = SEDE_TZ): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(at);
 }
 
 /** El día de la sede que cae `days` días después de hoy (`YYYY-MM-DD`). */
-export function sedeDayFromToday(days: number): string {
-  return sedeDate(new Date(Date.now() + days * DAY_MS));
+export function sedeDayFromToday(days: number, zone = SEDE_TZ): string {
+  return sedeDate(new Date(Date.now() + days * DAY_MS), zone);
 }
 
 /** El día civil `days` días después de `day` (`YYYY-MM-DD`; calendario puro, sin zona). */
@@ -44,13 +124,13 @@ export function birthDateTurnedLastMonth(years: number, today: string): string {
 }
 
 /** El instante de `day` (`YYYY-MM-DD`) a la hora `hhmm` (`HH:MM`) de la sede. */
-export function atSede(day: string, hhmm: string): Date {
-  return new Date(`${day}T${hhmm}:00${SEDE_OFFSET}`);
+export function atSede(day: string, hhmm: string, zone = SEDE_TZ): Date {
+  return new Date(`${day}T${hhmm}:00${zoneOffset(day, zone)}`);
 }
 
 /** `HH:MM` como lo pinta la app (`toLocaleTimeString('es', …)`), en la sede. */
-export function sedeTime(at: Date): string {
-  return at.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', timeZone: SEDE_TZ });
+export function sedeTime(at: Date, zone = SEDE_TZ): string {
+  return at.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', timeZone: zone });
 }
 
 /**
@@ -76,19 +156,21 @@ export interface SedeSlot {
  * venir. La API sí usa su reloj real: rechaza agendar en el pasado, marca la
  * llegada solo el día de la cita y no liga una evolución a un día futuro. Por
  * eso «hoy» es el día de la sede en el reloj de la máquina (el mismo de la API
- * en la CI y en local), y la franja va al final del día para que valga a
- * cualquier hora en la que se pueda crear. Si el reloj ya pasó de las 23:53
- * (no queda margen ni para la llegada puntual), falla con un mensaje que lo
- * dice en vez de saltarse el test.
+ * en la CI y en local), y la franja va al final del día.
+ *
+ * DX-449: con `zone` = `SEDE_TODAY_TZ` (y la sede registrada en esa zona) la
+ * franja vale a cualquier hora: esa zona deja al menos 3 h hasta la
+ * medianoche. Con otra zona, si ya no hay margen, falla diciendo qué zona
+ * usar en vez de pedir que se relance el spec.
  */
-export function lastSlotToday(start = '23:55', end = '23:59'): SedeSlot {
+export function lastSlotToday(start = '23:55', end = '23:59', zone = SEDE_TZ): SedeSlot {
   const now = new Date();
-  const day = sedeDate(now);
-  const slot = { day, start: atSede(day, start), end: atSede(day, end), label: `${start}–${end}` };
+  const day = sedeDate(now, zone);
+  const slot = { day, start: atSede(day, start, zone), end: atSede(day, end, zone), label: `${start}–${end}` };
   const marginMs = 2 * 60_000;
   if (slot.start.getTime() - now.getTime() < marginMs) {
     throw new Error(
-      `Son las ${sedeTime(now)} en la sede: la franja de hoy ${slot.label} ya no se puede agendar con margen (la API usa su reloj real). Vuelve a lanzar el spec pasada la medianoche de Bogotá.`,
+      `Son las ${sedeTime(now, zone)} en ${zone}: la franja de hoy ${slot.label} ya no se puede agendar con margen. Registra la sede en SEDE_TODAY_TZ y pásala como zona (DX-449).`,
     );
   }
   return slot;

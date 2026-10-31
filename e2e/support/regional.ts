@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { HourCycle } from '../../src/lib/format/regional-format';
 import { countryName } from '../../src/lib/locations/countries';
-import { SEDE_TZ } from './clock';
+import { SEDE_TODAY_TZ, SEDE_TZ } from './clock';
 
 /**
  * Idioma del navegador de la suite (`locale` de playwright.config.ts): `es`,
@@ -40,6 +40,13 @@ export const E2E_REGION: RegionalSettings = {
   locale: 'es-CO',
   hourCycle: 'h23',
 };
+
+/**
+ * DX-449: la región de las sedes con citas de HOY (ya empezadas o por
+ * empezar): la de la suite con la zona `SEDE_TODAY_TZ`. El spec que la usa
+ * abre el navegador en esa misma zona (`timezoneId`).
+ */
+export const E2E_TODAY_REGION: RegionalSettings = { ...E2E_REGION, timeZone: SEDE_TODAY_TZ };
 
 /**
  * Elige el país en el selector «País» (DX-312, combobox con búsqueda): vacía
