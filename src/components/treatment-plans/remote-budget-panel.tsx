@@ -8,12 +8,12 @@ import { useSedeClock, type SedeClock } from '@/lib/locations/sede-clock';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
   canRevokeSignatureRequest,
-  canSendToSign,
   latestBudgetRequest,
   listSignatureRequests,
   signatureStatusLabel,
   type SignatureRequest,
 } from '@/lib/signature-requests/signature-requests-api';
+import { canAcceptPlan } from '@/lib/treatment-plans/plan-quote-api';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -86,7 +86,8 @@ export function RemoteAcceptanceEvidence({
  * «Enviar a aceptar» del presupuesto presentado (DX-415): el estado del último
  * enlace de este plan (Enviado · Abierto · Bloqueado · Caducado · Anulado) y
  * el botón que abre la confirmación. Solo en un plan «Presentado», sin aceptar
- * y con ítems; el aceptado a distancia lo pinta `PlanQuoteActions`.
+ * y con ítems, y solo para quien decide el plan; el aceptado a distancia lo
+ * pinta `PlanQuoteActions`.
  */
 export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudgetPanelProps) {
   const [request, setRequest] = useState<SignatureRequest | null>(null);
@@ -98,8 +99,10 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
   const sede = useSedeClock(token);
   const screenClock = sede.status === 'ready' ? sede.clock : null;
 
+  // Quien decide el plan (odontólogo o ADMIN): al firmarlo el paciente, el
+  // plan queda aceptado a nombre de quien lo envió (la API lo exige, 403).
   const sendable =
-    canSendToSign(role) && plan.status === 'PRESENTED' && !plan.acceptance && (plan.items?.length ?? 0) > 0;
+    canAcceptPlan(role) && plan.status === 'PRESENTED' && !plan.acceptance && (plan.items?.length ?? 0) > 0;
 
   useEffect(() => {
     if (!sendable) return;

@@ -4507,8 +4507,8 @@ export interface paths {
         get: operations["PatientSignatureRequestsController_list"];
         put?: never;
         /**
-         * Enviar un consentimiento a firmar a distancia (email)
-         * @description Congela el texto (plantilla, paciente, plan, profesional) y envía por email un enlace de un solo uso que caduca a las 72 h; el documento solo se ve tras un código de 6 dígitos. Un menor (mayoría de la clínica) firma por medio de su responsable. Anula la solicitud anterior del mismo paciente y plantilla aún sin firmar. BUDGET responde 400 (llega con DX-415).
+         * Enviar un consentimiento a firmar o un presupuesto a aceptar a distancia (email)
+         * @description Congela el texto (plantilla, paciente, plan, profesional) y envía por email un enlace de un solo uso que caduca a las 72 h; el documento solo se ve tras un código de 6 dígitos. Un menor (mayoría de la clínica) firma por medio de su responsable. Anula la solicitud anterior del mismo paciente y plantilla aún sin firmar. BUDGET (DX-415): solo odontólogo o ADMIN; congela la foto del presupuesto de un plan «Presentado» y su hash, y anula el enlace anterior del mismo plan; si el plan cambia después, el enlace deja de servir.
          */
         post: operations["PatientSignatureRequestsController_create"];
         delete?: never;
@@ -28558,8 +28558,15 @@ export interface operations {
                     "application/json": components["schemas"]["SignatureRequestCreatedDto"];
                 };
             };
-            /** @description BUDGET (aún no disponible), sin plantilla, plantilla desactivada, profesional no válido o host no válido */
+            /** @description BUDGET sin plan o sin ítems, sin plantilla, plantilla desactivada, profesional no válido o host no válido */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description BUDGET enviado por un rol que no decide el plan (asistente o recepción), o desde una sede no permitida */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -28572,7 +28579,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La sede no tiene formato regional */
+            /** @description La sede no tiene formato regional, o BUDGET de un plan que no está «Presentado» (o ya aceptado) */
             409: {
                 headers: {
                     [name: string]: unknown;

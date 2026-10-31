@@ -114,7 +114,7 @@ const OPTIONS: SignatureRequestOptions = {
   },
 };
 
-function renderActions(p: TreatmentPlan, role: 'DENTIST' | 'RECEPTION' = 'RECEPTION') {
+function renderActions(p: TreatmentPlan, role: 'DENTIST' | 'ASSISTANT' | 'RECEPTION' = 'DENTIST') {
   render(<PlanQuoteActions token="tok" patientId="p1" plan={p} role={role} onAccepted={jest.fn()} />);
 }
 
@@ -175,6 +175,13 @@ describe('Enviar a aceptar el presupuesto (DX-415)', () => {
     expect(await screen.findByText('No pudimos cargar el estado del envío.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+  });
+
+  it('asistente y recepción no deciden el plan: no hay «Enviar a aceptar» (la API responde 403)', () => {
+    renderActions(plan(), 'ASSISTANT');
+    renderActions(plan(), 'RECEPTION');
+    expect(screen.queryByRole('button', { name: /enviar a aceptar/i })).not.toBeInTheDocument();
+    expect(mockedList).not.toHaveBeenCalled();
   });
 
   it('borrador, sin ítems o ya aceptado: no hay «Enviar a aceptar»', () => {
