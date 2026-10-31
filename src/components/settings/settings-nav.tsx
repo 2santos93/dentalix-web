@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -30,9 +31,17 @@ export function SettingsNav({ className }: { className?: string }) {
   const pathname = usePathname() ?? '';
   const token = useAuthStore((s) => s.accessToken);
   const sections = visibleSettingsSections(getTokenRole(token));
+  const navRef = useRef<HTMLElement>(null);
+
+  // La sub-navegación tiene su propio scroll: la pantalla activa (Auditoría,
+  // al final de la lista) se trae a la vista, sin mover la página.
+  useEffect(() => {
+    const active = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    active?.scrollIntoView?.({ block: 'nearest' });
+  }, [pathname]);
 
   return (
-    <nav aria-label={settingsNavCopy.label} className={cn('flex flex-col gap-4', className)}>
+    <nav ref={navRef} aria-label={settingsNavCopy.label} className={cn('flex flex-col gap-4', className)}>
       <Link
         href={SETTINGS_BACK.href}
         className="t-title self-start rounded-sm text-ink hover:text-primary-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
