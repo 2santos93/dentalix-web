@@ -1525,7 +1525,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   {sedeTimeRange(liveDetailAppointment.start, liveDetailAppointment.end, clock.of(liveDetailAppointment.locationId))}
                 </SheetDescription>
               </SheetHeader>
-              <SheetBody className="flex flex-col gap-4">
+              <SheetBody className="flex flex-col gap-4 [&>*]:shrink-0">
                 {/* DX-247: «Requiere premedicación» y las alertas, primero. */}
                 <AppointmentMedicalAlerts flags={liveDetailAppointment.medicalAlerts} />
                 {/* DX-279: inasistencias y cancelaciones tardías del paciente (12 meses). */}

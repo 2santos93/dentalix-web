@@ -550,7 +550,8 @@ function AppointmentTable<T extends ClosingAppointment>({
     {
       id: 'when',
       header: copy.colWhen,
-      mobile: 'trailing',
+      // En la tarjeta, en la línea de apoyo: el nombre del paciente cabe entero.
+      mobile: 'meta',
       cellClassName: 'tabular-nums',
       cell: (row) => when(row, fmt),
     },

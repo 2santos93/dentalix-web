@@ -1,5 +1,6 @@
 'use client';
 import * as React from 'react';
+import { submitOnEnter } from '@/components/appointments/submit-on-enter';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
@@ -208,7 +209,7 @@ export function OpeningsDialog({
           <DialogDescription>{copy.description(entry.durationMinutes)}</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={search} noValidate className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <form onSubmit={search} onKeyDownCapture={submitOnEnter} noValidate className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
           <FormField htmlFor="openings-provider" label={copy.provider}>
             <NativeSelect
               id="openings-provider"

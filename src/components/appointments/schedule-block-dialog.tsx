@@ -1,5 +1,6 @@
 'use client';
 import * as React from 'react';
+import { submitOnEnter } from '@/components/appointments/submit-on-enter';
 import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -354,7 +355,7 @@ export function ScheduleBlockDialog({
           {copy.back}
         </Button>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2" onKeyDownCapture={submitOnEnter}>
           {!ownOnly && (
             <RadioGroup
               id="block-scope"

@@ -1,5 +1,6 @@
 'use client';
 import * as React from 'react';
+import { submitOnEnter } from '@/components/appointments/submit-on-enter';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { updateAppointment, type Appointment } from '@/lib/appointments/appointments-api';
@@ -121,7 +122,8 @@ export function MoveAppointmentDialog({
       submitting={submitting}
       error={error}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* Enter en la fecha o la hora mueve la cita, como en un campo de texto. */}
+      <div className="grid gap-4 sm:grid-cols-2" onKeyDownCapture={submitOnEnter}>
         <FormField htmlFor="move-date" label={copy.date}>
           <DatePicker
             id="move-date"

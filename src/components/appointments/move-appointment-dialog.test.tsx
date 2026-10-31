@@ -63,12 +63,6 @@ function renderDialog(onMoved = jest.fn()) {
   return onMoved;
 }
 
-async function tabTo(user: ReturnType<typeof userEvent.setup>, name: string) {
-  const target = screen.getByRole('button', { name });
-  for (let i = 0; i < 20 && document.activeElement !== target; i += 1) await user.tab();
-  expect(target).toHaveFocus();
-}
-
 describe('MoveAppointmentDialog (DX-121)', () => {
   beforeEach(() => mockedUpdate.mockReset());
 
@@ -88,9 +82,7 @@ describe('MoveAppointmentDialog (DX-121)', () => {
 
     await user.selectOptions(screen.getByLabelText('Profesional'), 'prov-2');
     await typeTime(user, 'Hora de inicio', '15:00');
-    // Los segmentos de hora no envían con Enter (no son un <input>): Tab hasta
-    // «Mover cita» y Enter, sin ratón.
-    await tabTo(user, 'Mover cita');
+    // Envío implícito con Enter desde el campo de hora (submitOnEnter).
     await user.keyboard('{Enter}');
 
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
@@ -141,7 +133,6 @@ describe('MoveAppointmentDialog con el reloj de la sede (DX-378)', () => {
     expect(readTime('Hora de inicio')).toBe('09:00');
     expect(screen.getByText('Dura 90 min: terminaría a las 10:30 a. m.')).toBeInTheDocument();
     await typeTime(user, 'Hora de inicio', '15:00');
-    await tabTo(user, 'Mover cita');
     await user.keyboard('{Enter}');
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     expect(mockedUpdate).toHaveBeenCalledWith('tok', 'apt-1', {
