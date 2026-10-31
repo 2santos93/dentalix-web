@@ -1,62 +1,109 @@
 'use client';
 import * as React from 'react';
+import { useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
-import { fieldClass } from '@/lib/ui/field-class';
+import { ConditionSummaryText } from '@/components/clinical/condition-summary';
 import { cn } from '@/lib/utils';
 import {
   type Condition, type ConditionStatus,
-  CONDITION_STATUS_LABELS, STANDARD_CONDITIONS,
+  CONDITION_STATUS_LABELS, CONDITION_UNANSWERED_LABEL, STANDARD_CONDITIONS,
 } from '@/lib/clinical/clinical-types';
 
-const copy = { legend: 'Condiciones médicas', status: 'Estado', note: 'Nota' };
+const copy = {
+  legend: 'Condiciones médicas',
+  hint: 'Marque solo lo que se preguntó. Lo que quede «Sin responder» se guarda así, nunca como «No».',
+  note: 'Nota',
+};
 
+/** Valor del radio «Sin responder»: la condición no va en la lista. */
+const UNANSWERED = '';
+type Choice = ConditionStatus | typeof UNANSWERED;
+const CHOICES: { value: Choice; label: string }[] = [
+  { value: UNANSWERED, label: CONDITION_UNANSWERED_LABEL },
+  { value: 'SI', label: CONDITION_STATUS_LABELS.SI },
+  { value: 'NO', label: CONDITION_STATUS_LABELS.NO },
+  { value: 'DESCONOCE', label: CONDITION_STATUS_LABELS.DESCONOCE },
+];
+
+/**
+ * Checklist de condiciones de la anamnesis del personal. Cada condición
+ * empieza «Sin responder» (no figura en `value`) y solo entra en la lista
+ * cuando alguien elige Sí / No / No sabe: una pregunta que nadie hizo nunca
+ * se guarda como «No» (hallazgo negativo falso en un documento médico-legal).
+ * Volver a «Sin responder» la quita de la lista.
+ */
 export function ConditionChecklist({ value, onChange }: { value: Condition[]; onChange: (n: Condition[]) => void }) {
+  const ids = useId();
+  const hintId = `${ids}-hint`;
   const findRow = (codigo: string) => value.find((c) => c.codigo === codigo);
 
-  const update = (codigo: string, etiqueta: string, patch: Partial<Condition>) => {
-    const current = findRow(codigo);
-    const next: Condition = {
-      codigo,
-      etiqueta,
-      estado: current?.estado ?? 'NO',
-      esAlerta: false,
-      nota: current?.nota,
-      ...patch,
-    };
+  const answer = (codigo: string, etiqueta: string, choice: Choice) => {
     const rest = value.filter((c) => c.codigo !== codigo);
-    // Keep the row even at the default estado 'NO' as long as it carries a
-    // note — otherwise every keystroke in the note field for a not-yet-marked
-    // condition gets dropped (the row was filtered out, so the controlled
-    // Input's value resets to '' on the next render before the user can type
-    // a second character).
-    const hasNota = !!next.nota?.trim();
-    onChange(next.estado === 'NO' && !hasNota ? rest : [...rest, next]);
+    if (choice === UNANSWERED) {
+      onChange(rest);
+      return;
+    }
+    const current = findRow(codigo);
+    onChange([...rest, { codigo, etiqueta, estado: choice, esAlerta: false, nota: current?.nota }]);
+  };
+
+  const setNote = (codigo: string, nota: string) => {
+    onChange(value.map((c) => (c.codigo === codigo ? { ...c, nota } : c)));
   };
 
   return (
-    <fieldset className="flex flex-col gap-3">
+    <fieldset className="flex flex-col gap-3" aria-describedby={hintId}>
       <legend className="t-label text-ink">{copy.legend}</legend>
+      <div id={hintId} className="flex flex-col gap-1 text-sm">
+        <p className="text-muted">{copy.hint}</p>
+        <p>
+          <ConditionSummaryText conditions={value} />
+        </p>
+      </div>
       <ul className="flex flex-col gap-3">
         {STANDARD_CONDITIONS.map(({ codigo, etiqueta }) => {
           const row = findRow(codigo);
-          const estado: ConditionStatus = row?.estado ?? 'NO';
+          const selected: Choice = row?.estado ?? UNANSWERED;
+          const labelId = `${ids}-${codigo}-label`;
+          const noteId = `${ids}-${codigo}-note`;
           return (
-            <li key={codigo} className="rounded-lg border border-border p-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="flex-1">
-                <FormField htmlFor={`cs-${codigo}`} label={etiqueta}>
-                  <select id={`cs-${codigo}`} className={cn(fieldClass, 'h-10')} value={estado}
-                    aria-label={`${copy.status} (${etiqueta})`}
-                    onChange={(e) => update(codigo, etiqueta, { estado: e.target.value as ConditionStatus })}>
-                    {Object.entries(CONDITION_STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                </FormField>
+            <li key={codigo} className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <span id={labelId} className="text-sm font-medium text-ink">{etiqueta}</span>
+              <div role="radiogroup" aria-labelledby={labelId} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {CHOICES.map((choice) => {
+                  const checked = selected === choice.value;
+                  return (
+                    <label
+                      key={choice.value || 'unanswered'}
+                      className={cn(
+                        'flex min-h-11 cursor-pointer items-center justify-center rounded-lg border px-2 text-center text-sm font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary',
+                        checked
+                          ? choice.value === UNANSWERED
+                            ? 'border-border bg-surface-2 text-muted'
+                            : 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-surface text-ink hover:bg-surface-2',
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name={`${ids}-${codigo}`}
+                        value={choice.value}
+                        checked={checked}
+                        onChange={() => answer(codigo, etiqueta, choice.value)}
+                        className="sr-only"
+                      />
+                      {choice.label}
+                    </label>
+                  );
+                })}
               </div>
-              <div className="flex-1">
-                <FormField htmlFor={`cn-${codigo}`} label={`${copy.note} (${etiqueta})`}>
-                  <Input id={`cn-${codigo}`} value={row?.nota ?? ''} onChange={(e) => update(codigo, etiqueta, { nota: e.target.value })} />
+              {/* La nota va con una respuesta: sin ella no hay fila que guardar. */}
+              {row && (
+                <FormField htmlFor={noteId} label={`${copy.note} (${etiqueta})`}>
+                  <Input id={noteId} value={row.nota ?? ''} onChange={(e) => setNote(codigo, e.target.value)} />
                 </FormField>
-              </div>
+              )}
             </li>
           );
         })}
