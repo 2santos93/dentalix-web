@@ -21,7 +21,7 @@ import {
   TECHNIQUE_LABELS,
   formatDecimal,
   listPatientAnesthesia,
-  PATIENT_WINDOW_RULES_VERSION,
+  isPatientWindowRules,
   type AnesthesiaAdministration,
 } from '@/lib/anesthesia/anesthesia-api';
 import { sedeTime } from '@/lib/locations/sede-clock';
@@ -68,10 +68,10 @@ const copy = {
   anesthesiaLabel: (entryDate: string) => `Anestesia local de la evolución del ${entryDate}`,
   anesthesiaLine: (r: AnesthesiaAdministration) =>
     `${r.anestheticName} · ${formatDecimal(r.carpules)} carp. · ${formatDecimal(r.doseMg)} mg · ${TECHNIQUE_LABELS[r.technique]}${r.site ? ` · ${r.site}` : ''}${r.lot ? ` · Lote ${r.lot}` : ''}`,
-  // DX-418: desde las reglas V2 el acumulado sellado es del paciente en 24 h
-  // (todas sus evoluciones); en V1 era solo de la evolución.
+  // DX-418: desde las reglas V2 (también V3, DX-420) el acumulado sellado es
+  // del paciente en 24 h (todas sus evoluciones); en V1 era solo de la evolución.
   anesthesiaTotal: (mg: number, percent: number | null, rulesVersion: string) =>
-    `${rulesVersion === PATIENT_WINDOW_RULES_VERSION ? 'Acumulado del paciente en 24 h:' : 'Acumulado'} ${formatDecimal(mg)} mg · ${
+    `${isPatientWindowRules(rulesVersion) ? 'Acumulado del paciente en 24 h:' : 'Acumulado'} ${formatDecimal(mg)} mg · ${
       percent === null ? 'dosis máxima no calculada: falta el peso' : `${percent} % del máximo`
     }`,
   anesthesiaOverride: 'Confirmado con motivo:',

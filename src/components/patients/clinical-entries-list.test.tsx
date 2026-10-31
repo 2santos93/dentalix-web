@@ -529,6 +529,50 @@ describe('ClinicalEntriesList', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('DX-420: con las reglas V3 el acumulado sellado sigue siendo del paciente en 24 h', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientAnesthesia as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'an-1',
+        patientId: 'p1',
+        clinicalEntryId: 'ce-2',
+        locationId: null,
+        anestheticId: 'a1',
+        anestheticName: 'Lidocaína 2 %',
+        activeIngredient: 'Lidocaína',
+        concentrationPct: 2,
+        vasoconstrictor: null,
+        mlPerCarpule: 1.8,
+        maxMgPerKg: 7,
+        maxAbsoluteMg: 500,
+        carpules: 3,
+        doseMg: 108,
+        technique: 'INFILTRATION',
+        site: null,
+        lot: null,
+        administeredAt: '2026-02-01T15:00:00.000Z',
+        weightKg: 20,
+        weightSource: 'ENTERED',
+        cumulativeMg: 216,
+        cumulativePercent: 154,
+        safetyRulesVersion: 'ANESTHESIA_DOSE_V3',
+        pediatricMaxMgPerKg: null,
+        minAgeYears: null,
+        epinephrineMgPerCarpule: 0.018,
+        epinephrineMg: 0.054,
+        cumulativeEpinephrineMg: 0.108,
+        safetyAlerts: [],
+        overrideReason: 'Segunda intervención urgente',
+        authorId: 'u1',
+        createdAt: '2026-02-01T15:00:00.000Z',
+      },
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(
+      (await screen.findAllByText('Acumulado del paciente en 24 h: 216 mg · 154 % del máximo')).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('DX-307: si la anestesia no carga lo dice, para que no parezca que no la hubo', async () => {
     mockedList.mockResolvedValue(entries);
     (listPatientAnesthesia as jest.Mock).mockRejectedValueOnce(new Error('red'));

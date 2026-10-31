@@ -24,8 +24,16 @@ export type AnesthesiaDoseCheckInput = components['schemas']['AnesthesiaDoseChec
 export type EpinephrineSummary = components['schemas']['EpinephrineSummaryDto'];
 export type DoseRemaining = components['schemas']['DoseRemainingDto'];
 
-/** Versión de las reglas desde la que el acumulado es del paciente en 24 h (DX-418). */
-export const PATIENT_WINDOW_RULES_VERSION = 'ANESTHESIA_DOSE_V2';
+/** Única versión de las reglas cuyo acumulado sellado es solo de la evolución (DX-307). */
+export const PER_ENTRY_RULES_VERSION = 'ANESTHESIA_DOSE_V1';
+
+/**
+ * Desde V2 (DX-418) el acumulado sellado es del paciente en 24 h; V3 (DX-420)
+ * y las siguientes lo mantienen.
+ */
+export function isPatientWindowRules(rulesVersion: string): boolean {
+  return rulesVersion !== PER_ENTRY_RULES_VERSION;
+}
 
 /** Topes que repite la API. */
 export const OVERRIDE_REASON_MIN = 10;
