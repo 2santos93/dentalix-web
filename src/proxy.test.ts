@@ -82,7 +82,7 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
   it('DX-151: la CSP deja enmarcar e incrustar las URL firmadas de documentos (origen de la API por defecto)', () => {
     const csp = run('http://demo.localhost:3001/patients/p1').headers.get('content-security-policy') as string;
     const frameSrc = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith('frame-src'));
-    expect(frameSrc).toBe(`frame-src 'self' ${new URL(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1').origin}`);
+    expect(frameSrc).toBe(`frame-src 'self' ${new URL(process.env.API_URL ?? 'http://localhost:3000/api/v1').origin}`);
   });
 
   it('DX-259: un POST a /api/v1 con más de 1 MB es 413 aquí, sin llegar a la API; lo demás sigue al rewrite sin tocar', async () => {
@@ -103,7 +103,7 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
       }),
     );
     expect(small.status).toBe(200);
-    expect(small.headers.get('x-middleware-next')).toBe('1');
+    expect(small.headers.get('x-middleware-rewrite')).toBe('http://localhost:3000/api/v1/auth/login');
     expect(small.headers.get('content-security-policy')).toBeNull();
     expect(forwarded(small, 'x-nonce')).toBeNull();
   });
@@ -138,8 +138,41 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
     }
   });
 
-  it('DX-259: sobre /api/v1 solo corre si la petición trae cuerpo (Content-Length)', () => {
-    const api = config.matcher[1];
-    expect(api).toEqual({ source: '/api/v1/:path*', has: [{ type: 'header', key: 'content-length' }] });
+  it('DX-083: corre sobre todo /api/v1 (también los GET sin cuerpo), que reescribe hacia la API', () => {
+    expect(config.matcher[1]).toEqual({ source: '/api/v1/:path*' });
+    expect(unstable_doesMiddlewareMatch({ config, url: '/api/v1/auth/refresh' })).toBe(true);
+  });
+});
+
+describe('proxy (DX-083: URL de la API y origen de ficheros en runtime)', () => {
+  const saved = { API_URL: process.env.API_URL, FILES_ORIGIN: process.env.FILES_ORIGIN };
+  afterEach(() => {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  it('el mismo build reescribe /api/v1 hacia la API que diga API_URL en cada momento, con ruta y query', () => {
+    process.env.API_URL = 'https://api.staging.dentalix.app/api/v1';
+    const a = run('http://demo.dentalix.app/api/v1/patients?page=2', { host: 'demo.dentalix.app' });
+    expect(a.headers.get('x-middleware-rewrite')).toBe('https://api.staging.dentalix.app/api/v1/patients?page=2');
+    expect(a.headers.get('content-security-policy')).toBeNull();
+
+    process.env.API_URL = 'https://api.dentalix.app/api/v1/';
+    const b = run('http://demo.dentalix.app/api/v1/auth/refresh', { host: 'demo.dentalix.app' });
+    expect(b.headers.get('x-middleware-rewrite')).toBe('https://api.dentalix.app/api/v1/auth/refresh');
+  });
+
+  it('OPS-041: la CSP de las páginas toma el origen de la API y de FILES_ORIGIN en runtime', () => {
+    process.env.API_URL = 'https://api.staging.dentalix.app/api/v1';
+    process.env.FILES_ORIGIN = 'https://bucket-staging.example.com';
+    const csp = run('http://demo.dentalix.app/patients/p1').headers.get('content-security-policy') as string;
+    expect(csp).toContain("frame-src 'self' https://bucket-staging.example.com");
+    expect(csp).toMatch(/img-src [^;]*https:\/\/api\.staging\.dentalix\.app[^;]*https:\/\/bucket-staging\.example\.com/);
+
+    process.env.FILES_ORIGIN = 'https://bucket.example.com';
+    const other = run('http://demo.dentalix.app/patients/p1').headers.get('content-security-policy') as string;
+    expect(other).toContain("frame-src 'self' https://bucket.example.com");
   });
 });

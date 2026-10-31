@@ -2,7 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { API_URL } from '@/lib/api/api-base';
+import { apiUrl } from '@/lib/api/api-base';
 import { importUploadPaths, MAX_IMPORT_BYTES, type ImportUploadTarget } from './import-upload-routes';
 
 /**
@@ -74,7 +74,7 @@ function apiError(statusCode: number, error: string, message: string, close = fa
 }
 
 export interface ForwardImportUploadOptions {
-  /** URL de la API (`NEXT_PUBLIC_API_URL`); solo los tests la cambian. */
+  /** URL de la API (`API_URL`, en runtime); solo los tests la cambian. */
   apiUrl?: string;
   idleTimeoutMs?: number;
 }
@@ -126,7 +126,7 @@ export async function forwardImportUpload(
   // TRUST_PROXY), nunca de un X-Forwarded-Host que mande el cliente.
   headers['x-forwarded-host'] = req.headers.get('host') ?? '';
 
-  const url = new URL(`${(opts.apiUrl ?? API_URL).replace(/\/+$/, '')}${paths.api}`);
+  const url = new URL(`${(opts.apiUrl ?? apiUrl()).replace(/\/+$/, '')}${paths.api}`);
   const client = url.protocol === 'https:' ? https : http;
   const body = Readable.fromWeb(req.body as import('node:stream/web').ReadableStream<Uint8Array>);
   try {
