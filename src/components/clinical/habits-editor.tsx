@@ -6,9 +6,9 @@ import { FormField } from '@/components/shared/form-field';
 import {
   AnswerGroup,
   AnswerSection,
-  YES_NO_CHOICES,
-  answerFromBoolean,
-  booleanFromAnswer,
+  TRI_STATE_CHOICES,
+  answerOfChoice,
+  choiceOf,
 } from '@/components/clinical/answer-group';
 import { type Habits } from '@/lib/clinical/clinical-types';
 
@@ -34,27 +34,27 @@ function prune<T extends object>(obj: T): T | undefined {
 const numberOrUndefined = (raw: string) => (raw === '' ? undefined : Number(raw));
 
 /**
- * Hábitos de la anamnesis del personal. Cada pregunta es Sí / No con
- * «Sin responder» por defecto: un hábito que nadie preguntó no se envía
- * (el API los acepta ausentes) y nunca se guarda como «No».
+ * Hábitos de la anamnesis del personal. Cada pregunta es Sí / No / No sabe
+ * (como las condiciones) con «Sin responder» por defecto: un hábito que nadie
+ * preguntó no se envía y nunca se guarda como «No».
  */
 export function HabitsEditor({ value, onChange }: { value: Habits; onChange: (n: Habits) => void }) {
   const ids = useId();
   const emit = (next: Habits) => onChange(prune(next) ?? {});
 
-  const setSmoking = (answer: string) => {
-    const activo = booleanFromAnswer(answer);
+  const setSmoking = (choice: string) => {
+    const estado = answerOfChoice(choice);
     emit({
       ...value,
-      tabaquismo: activo === undefined ? undefined : { ...value.tabaquismo, activo },
+      tabaquismo: estado === undefined ? undefined : { ...value.tabaquismo, estado },
     });
   };
   const patchSmoking = (patch: Partial<NonNullable<Habits['tabaquismo']>>) =>
-    emit({ ...value, tabaquismo: { activo: true, ...value.tabaquismo, ...patch } });
+    emit({ ...value, tabaquismo: { estado: 'SI', ...value.tabaquismo, ...patch } });
 
-  const setAlcohol = (answer: string) => {
-    const activo = booleanFromAnswer(answer);
-    emit({ ...value, alcohol: activo === undefined ? undefined : { ...value.alcohol, activo } });
+  const setAlcohol = (choice: string) => {
+    const estado = answerOfChoice(choice);
+    emit({ ...value, alcohol: estado === undefined ? undefined : { ...value.alcohol, estado } });
   };
   const patchHygiene = (patch: Partial<Hygiene>) =>
     emit({ ...value, higieneOral: prune({ ...value.higieneOral, ...patch }) });
@@ -63,9 +63,9 @@ export function HabitsEditor({ value, onChange }: { value: Habits; onChange: (n:
     <AnswerGroup
       id={`${ids}-${key}`}
       legend={label}
-      value={answerFromBoolean(value.higieneOral?.[key])}
-      choices={YES_NO_CHOICES}
-      onChange={(a) => patchHygiene({ [key]: booleanFromAnswer(a) })}
+      value={choiceOf(value.higieneOral?.[key])}
+      choices={TRI_STATE_CHOICES}
+      onChange={(a) => patchHygiene({ [key]: answerOfChoice(a) })}
     />
   );
 
@@ -74,11 +74,11 @@ export function HabitsEditor({ value, onChange }: { value: Habits; onChange: (n:
       <AnswerGroup
         id={`${ids}-tabaco`}
         legend={copy.smokes}
-        value={answerFromBoolean(value.tabaquismo?.activo)}
-        choices={YES_NO_CHOICES}
+        value={choiceOf(value.tabaquismo?.estado)}
+        choices={TRI_STATE_CHOICES}
         onChange={setSmoking}
       >
-        {value.tabaquismo?.activo && (
+        {value.tabaquismo?.estado === 'SI' && (
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField htmlFor={`${ids}-tabaco-porDia`} label={copy.perDay}>
               <Input id={`${ids}-tabaco-porDia`} type="number" inputMode="numeric" min={0}
@@ -97,15 +97,15 @@ export function HabitsEditor({ value, onChange }: { value: Habits; onChange: (n:
       <AnswerGroup
         id={`${ids}-alcohol`}
         legend={copy.drinks}
-        value={answerFromBoolean(value.alcohol?.activo)}
-        choices={YES_NO_CHOICES}
+        value={choiceOf(value.alcohol?.estado)}
+        choices={TRI_STATE_CHOICES}
         onChange={setAlcohol}
       >
-        {value.alcohol?.activo && (
+        {value.alcohol?.estado === 'SI' && (
           <FormField htmlFor={`${ids}-alcohol-frecuencia`} label={copy.frequency}>
             <Input id={`${ids}-alcohol-frecuencia`} value={value.alcohol?.frecuencia ?? ''}
               onChange={(e) =>
-                emit({ ...value, alcohol: { activo: true, ...value.alcohol, frecuencia: e.target.value } })
+                emit({ ...value, alcohol: { estado: 'SI', ...value.alcohol, frecuencia: e.target.value } })
               } />
           </FormField>
         )}
@@ -114,17 +114,17 @@ export function HabitsEditor({ value, onChange }: { value: Habits; onChange: (n:
       <AnswerGroup
         id={`${ids}-sustancias`}
         legend={copy.substances}
-        value={answerFromBoolean(value.sustancias)}
-        choices={YES_NO_CHOICES}
-        onChange={(a) => emit({ ...value, sustancias: booleanFromAnswer(a) })}
+        value={choiceOf(value.sustancias)}
+        choices={TRI_STATE_CHOICES}
+        onChange={(a) => emit({ ...value, sustancias: answerOfChoice(a) })}
       />
 
       <AnswerGroup
         id={`${ids}-bruxismo`}
         legend={copy.bruxism}
-        value={answerFromBoolean(value.bruxismo)}
-        choices={YES_NO_CHOICES}
-        onChange={(a) => emit({ ...value, bruxismo: booleanFromAnswer(a) })}
+        value={choiceOf(value.bruxismo)}
+        choices={TRI_STATE_CHOICES}
+        onChange={(a) => emit({ ...value, bruxismo: answerOfChoice(a) })}
       />
 
       <li className="border-b border-border-subtle py-3">

@@ -18,6 +18,12 @@ import type { components } from '@/lib/api/schema';
 export type AllergyType = 'MEDICAMENTO' | 'MATERIAL' | 'ALIMENTO' | 'AMBIENTAL';
 export type AllergySeverity = 'LEVE' | 'MODERADA' | 'ANAFILAXIA';
 export type ConditionStatus = 'SI' | 'NO' | 'DESCONOCE';
+/**
+ * Respuesta tri-estado de hábitos y embarazo (la misma que las condiciones).
+ * Ausente = «Sin responder», nunca «No». El API devuelve también las versiones
+ * anteriores en esta forma (las leía con booleanos: true «Sí», false «No»).
+ */
+export type AnswerStatus = components['schemas']['AnamnesisAnswerStatus'];
 
 export interface Allergy {
   alergeno: string;
@@ -41,15 +47,15 @@ export interface Medication {
   esAlerta: boolean;
 }
 export interface Habits {
-  tabaquismo?: { activo: boolean; porDia?: number; anios?: number };
-  alcohol?: { activo: boolean; frecuencia?: string };
-  sustancias?: boolean;
-  bruxismo?: boolean;
+  tabaquismo?: { estado: AnswerStatus; porDia?: number; anios?: number };
+  alcohol?: { estado: AnswerStatus; frecuencia?: string };
+  sustancias?: AnswerStatus;
+  bruxismo?: AnswerStatus;
   higieneOral?: {
     cepilladoPorDia?: number;
-    hilo?: boolean;
-    enjuague?: boolean;
-    cremaConFluor?: boolean;
+    hilo?: AnswerStatus;
+    enjuague?: AnswerStatus;
+    cremaConFluor?: AnswerStatus;
   };
   dieta?: string;
 }
@@ -92,16 +98,17 @@ export interface SafetyFlags {
 }
 
 // `CreatePatientDto['medicalHistory']` == the generated `SaveMedicalHistoryDto`
-// shape. The scalar leaf fields (`familyHistory`/`notes`/`embarazo`/
+// shape. The scalar leaf fields (`familyHistory`/`notes`/`pregnancy`/
 // `semanasEmbarazo`) generate correctly and are kept from the schema; the
 // nested array/object fields are swapped for the hand-typed shapes above
-// (see file-level comment).
+// (see file-level comment). `embarazo` (booleano deprecado del API, solo
+// para clientes anteriores) se quita: la web manda `pregnancy`.
 type GeneratedSaveMedicalHistoryDto = NonNullable<
   components['schemas']['CreatePatientDto']['medicalHistory']
 >;
 export type ClinicalHistoryValue = Omit<
   GeneratedSaveMedicalHistoryDto,
-  'allergies' | 'conditions' | 'medications' | 'habits' | 'dentalHistory' | 'surgeries' | 'vitalSigns'
+  'allergies' | 'conditions' | 'medications' | 'habits' | 'dentalHistory' | 'surgeries' | 'vitalSigns' | 'embarazo'
 > & {
   allergies?: Allergy[];
   conditions?: Condition[];

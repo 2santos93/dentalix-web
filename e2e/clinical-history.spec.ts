@@ -120,6 +120,16 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   await anamnesisSection.getByRole('button', { name: 'Agregar alergia' }).click();
   await anamnesisSection.getByLabel('Alérgeno').fill(allergenValue);
   await anamnesisSection.getByLabel('Notas').fill(anamnesisNotesValue);
+  // Tri-estado: un «No» elegido al embarazo y un «No sabe» en hábitos se
+  // guardan tal cual (antes el «No» del embarazo volvía «Sin responder»).
+  await anamnesisSection
+    .getByRole('radiogroup', { name: 'Embarazo' })
+    .getByRole('radio', { name: 'No', exact: true })
+    .check();
+  await anamnesisSection
+    .getByRole('radiogroup', { name: 'Bruxismo' })
+    .getByRole('radio', { name: 'No sabe', exact: true })
+    .check();
 
   const anamnesisSaveError = anamnesisSection.locator('p[role="alert"]');
   // Primera versión: «Guardar anamnesis» (con versión previa, «Guardar nueva versión»).
@@ -136,6 +146,8 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
     });
   await expect(anamnesisSection.locator('dd', { hasText: allergenValue })).toBeVisible();
   await expect(anamnesisSection.getByText('Versión 1')).toBeVisible();
+  await expect(anamnesisSection.locator('dt', { hasText: 'Embarazo' }).locator('+ dd')).toHaveText('No');
+  await expect(anamnesisSection.getByText('No sabe: Bruxismo')).toBeVisible();
 
   // --- Add a clinical evolution ---
   // DX-170: el formulario vive en el modal «Nueva evolución» (sin plantilla:
@@ -181,6 +193,16 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   // «Actualizar anamnesis» parte de la versión vigente: lo guardado vuelve al formulario.
   await anamnesisSectionAfterReload.getByRole('button', { name: 'Actualizar anamnesis' }).click();
   await expect(anamnesisSectionAfterReload.getByLabel('Alérgeno')).toHaveValue(allergenValue);
+  await expect(
+    anamnesisSectionAfterReload
+      .getByRole('radiogroup', { name: 'Embarazo' })
+      .getByRole('radio', { name: 'No', exact: true }),
+  ).toBeChecked();
+  await expect(
+    anamnesisSectionAfterReload
+      .getByRole('radiogroup', { name: 'Bruxismo' })
+      .getByRole('radio', { name: 'No sabe', exact: true }),
+  ).toBeChecked();
   await expect(
     evolutionsSectionAfterReload.locator('table').getByText(evolutionNotes),
   ).toBeVisible({ timeout: 10_000 });

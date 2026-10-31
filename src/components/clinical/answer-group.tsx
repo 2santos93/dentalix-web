@@ -1,7 +1,11 @@
 'use client';
 import * as React from 'react';
 import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
-import { CONDITION_UNANSWERED_LABEL } from '@/lib/clinical/clinical-types';
+import {
+  CONDITION_STATUS_LABELS,
+  CONDITION_UNANSWERED_LABEL,
+  type AnswerStatus,
+} from '@/lib/clinical/clinical-types';
 
 /** Valor del radio «Sin responder»: el dato no se guarda. */
 export const UNANSWERED = '';
@@ -11,25 +15,25 @@ export interface AnswerChoice<V extends string> {
   label: string;
 }
 
-/** Sí / No con «Sin responder» delante (hábitos, embarazo). */
-export const YES_NO_CHOICES: AnswerChoice<'SI' | 'NO'>[] = [
+/**
+ * Sí / No / No sabe con «Sin responder» delante: condiciones, hábitos y
+ * embarazo (las mismas cuatro respuestas en todo el formulario).
+ */
+export const TRI_STATE_CHOICES: AnswerChoice<AnswerStatus>[] = [
   { value: UNANSWERED, label: CONDITION_UNANSWERED_LABEL },
-  { value: 'SI', label: 'Sí' },
-  { value: 'NO', label: 'No' },
+  { value: 'SI', label: CONDITION_STATUS_LABELS.SI },
+  { value: 'NO', label: CONDITION_STATUS_LABELS.NO },
+  { value: 'DESCONOCE', label: CONDITION_STATUS_LABELS.DESCONOCE },
 ];
 
-/** `true` → «SI», `false` → «NO», ausente → «Sin responder». */
-export function answerFromBoolean(value: boolean | undefined | null): 'SI' | 'NO' | typeof UNANSWERED {
-  if (value === true) return 'SI';
-  if (value === false) return 'NO';
-  return UNANSWERED;
+/** Respuesta guardada → radio; ausente → «Sin responder». */
+export function choiceOf(value: AnswerStatus | null | undefined): AnswerStatus | typeof UNANSWERED {
+  return value ?? UNANSWERED;
 }
 
-/** Lo inverso: «Sin responder» → `undefined` (el campo no se envía). */
-export function booleanFromAnswer(answer: string): boolean | undefined {
-  if (answer === 'SI') return true;
-  if (answer === 'NO') return false;
-  return undefined;
+/** Radio → respuesta; «Sin responder» → `undefined` (el campo no se envía). */
+export function answerOfChoice(choice: string): AnswerStatus | undefined {
+  return choice === 'SI' || choice === 'NO' || choice === 'DESCONOCE' ? choice : undefined;
 }
 
 interface AnswerGroupProps<V extends string> {
