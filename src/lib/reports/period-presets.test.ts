@@ -1,4 +1,4 @@
-import { isValidPeriod, MAX_PERIOD_DAYS, PERIOD_PRESETS, PRODUCTION_MAX_PERIOD_DAYS, periodFor } from './period-presets';
+import { isValidPeriod, isWithinMonths, MAX_PERIOD_DAYS, PERIOD_PRESETS, periodFor } from './period-presets';
 
 describe('periodos de «Comparar sedes» (DX-014)', () => {
   const today = '2026-10-24';
@@ -43,9 +43,11 @@ describe('periodos de «Comparar sedes» (DX-014)', () => {
     expect(periodFor('custom', today)).toBeNull();
   });
 
-  it('DX-423: con otro tope, 24 meses (731 días) caben y uno más no', () => {
-    expect(isValidPeriod({ from: '2024-11-01', to: '2026-10-31' }, PRODUCTION_MAX_PERIOD_DAYS)).toBe(true);
-    expect(isValidPeriod({ from: '2024-10-31', to: '2026-11-01' }, PRODUCTION_MAX_PERIOD_DAYS)).toBe(false);
-    expect(isValidPeriod({ from: '2024-11-01', to: '2026-10-31' })).toBe(false);
+  it('DX-423: 24 meses por calendario («hasta» anterior a «desde» + 24 meses), no por días', () => {
+    expect(isWithinMonths({ from: '2024-11-01', to: '2026-10-31' }, 24)).toBe(true);
+    // 731 días, pero 24 meses y un día.
+    expect(isWithinMonths({ from: '2025-01-01', to: '2027-01-01' }, 24)).toBe(false);
+    expect(isWithinMonths({ from: '2026-10-31', to: '2026-10-01' }, 24)).toBe(false);
+    expect(isWithinMonths({ from: '2026-10-01', to: '2026-10-01' }, 24)).toBe(true);
   });
 });

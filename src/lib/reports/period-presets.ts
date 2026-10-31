@@ -19,13 +19,27 @@ export const MAX_PERIOD_DAYS = 366;
 
 const DAY_MS = 86_400_000;
 
-/** Como `PRODUCTION_MAX_DAYS` en la API (DX-423): 24 meses, con un 29 de febrero. */
-export const PRODUCTION_MAX_PERIOD_DAYS = 731;
+/** Como `PRODUCTION_MAX_MONTHS` en la API (DX-423). */
+export const PRODUCTION_MAX_PERIOD_MONTHS = 24;
 
-/** ¿«Desde» ≤ «Hasta» y caben como mucho `maxDays` días (ambos incluidos)? */
-export function isValidPeriod({ from, to }: CivilPeriod, maxDays = MAX_PERIOD_DAYS): boolean {
+/**
+ * ¿«Desde» ≤ «Hasta» y «Hasta» anterior a «Desde» + `months` meses, por
+ * calendario (como la API: el 31 cae en el último día del mes de destino)?
+ */
+export function isWithinMonths({ from, to }: CivilPeriod, months: number): boolean {
+  if (from > to) return false;
+  const [y, m, d] = from.split('-').map(Number);
+  const target = m - 1 + months;
+  const year = y + Math.floor(target / 12);
+  const month = target % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return to < iso(year, month, Math.min(d, lastDay));
+}
+
+/** ¿«Desde» ≤ «Hasta» y caben como mucho 366 días (ambos incluidos)? */
+export function isValidPeriod({ from, to }: CivilPeriod): boolean {
   const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS + 1;
-  return days >= 1 && days <= maxDays;
+  return days >= 1 && days <= MAX_PERIOD_DAYS;
 }
 
 function iso(y: number, m: number, d: number): string {

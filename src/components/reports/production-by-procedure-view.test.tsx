@@ -263,6 +263,40 @@ describe('ProductionByProcedureView (DX-423)', () => {
     );
   });
 
+  it('detalle: paciente eliminado sin nombre ni enlace, y cada fecha con la zona de SU sede', async () => {
+    mockedItems.mockResolvedValue({
+      items: [
+        {
+          id: 'i2',
+          // 03:00 UTC del 01/10: en Bogotá aún es el 30/09; en Tokio, el 01/10.
+          completedAt: '2026-10-01T03:00:00.000Z',
+          patientId: null,
+          patientName: null,
+          professionalId: 'u2',
+          professionalName: 'Dr. Dos',
+          locationId: 'l9',
+          locationName: 'Sede Tokio',
+          timeZone: 'Asia/Tokyo',
+          toothNumber: '16',
+          currency: 'COP',
+          price: 80,
+          discount: 0,
+          net: 80,
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 25,
+    } as unknown as Awaited<ReturnType<typeof getProductionItems>>);
+    render(<ProductionByProcedureView token="t" />);
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: 'Ver los procedimientos de RES-1 Resina en COP' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('Paciente eliminado')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('link')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('01/10/2026')).toBeInTheDocument();
+  });
+
   it('exporta el CSV con los mismos filtros', async () => {
     mockedCsv.mockResolvedValue('csv');
     render(<ProductionByProcedureView token="t" />);

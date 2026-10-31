@@ -12742,9 +12742,12 @@ export interface components {
             id: string;
             /** Format: date-time */
             completedAt: string;
-            /** Format: uuid */
-            patientId: string;
-            patientName: string;
+            /**
+             * Format: uuid
+             * @description null = paciente eliminado (no se nombra ni se enlaza)
+             */
+            patientId: string | null;
+            patientName: string | null;
             /** Format: uuid */
             professionalId: string | null;
             professionalName: string | null;
@@ -12754,6 +12757,11 @@ export interface components {
              */
             locationId: string;
             locationName: string;
+            /**
+             * @description Zona de la sede donde se realizó: la fecha se pinta con ella
+             * @example America/Bogota
+             */
+            timeZone: string;
             /** @example 16 */
             toothNumber: string;
             currency: string;
@@ -25166,11 +25174,11 @@ export interface operations {
     ProductionByProcedureController_get: {
         parameters: {
             query: {
-                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses (731 días); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses por calendario («to» anterior a «from» + 24 meses); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
-                /** @description Solo lo realizado en esta sede (400 si no es de la clínica; 403 si no es de las del usuario). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                /** @description Solo lo realizado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
                 locationId?: string;
                 /** @description Solo lo que realizó este profesional (usuario). Un DENTIST solo puede pedir el suyo (403 si no); sin él, ve igualmente solo lo suyo. */
                 professionalId?: string;
@@ -25191,7 +25199,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProductionByProcedureDto"];
                 };
             };
-            /** @description Período inválido o de más de 24 meses, o sede que no es de esta clínica */
+            /** @description Período inválido o de más de 24 meses */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25210,11 +25218,11 @@ export interface operations {
     ProductionByProcedureController_csv: {
         parameters: {
             query: {
-                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses (731 días); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses por calendario («to» anterior a «from» + 24 meses); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
-                /** @description Solo lo realizado en esta sede (400 si no es de la clínica; 403 si no es de las del usuario). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                /** @description Solo lo realizado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
                 locationId?: string;
                 /** @description Solo lo que realizó este profesional (usuario). Un DENTIST solo puede pedir el suyo (403 si no); sin él, ve igualmente solo lo suyo. */
                 professionalId?: string;
@@ -25236,7 +25244,7 @@ export interface operations {
                     "text/csv": string;
                 };
             };
-            /** @description Período inválido o de más de 24 meses, o sede que no es de esta clínica */
+            /** @description Período inválido o de más de 24 meses */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25255,11 +25263,11 @@ export interface operations {
     ProductionByProcedureController_items: {
         parameters: {
             query: {
-                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses (731 días); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses por calendario («to» anterior a «from» + 24 meses); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
-                /** @description Solo lo realizado en esta sede (400 si no es de la clínica; 403 si no es de las del usuario). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                /** @description Solo lo realizado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
                 locationId?: string;
                 /** @description Solo lo que realizó este profesional (usuario). Un DENTIST solo puede pedir el suyo (403 si no); sin él, ve igualmente solo lo suyo. */
                 professionalId?: string;
@@ -25286,7 +25294,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProductionItemsDto"];
                 };
             };
-            /** @description Período inválido o de más de 24 meses, o sede que no es de esta clínica */
+            /** @description Período inválido o de más de 24 meses */
             400: {
                 headers: {
                     [name: string]: unknown;

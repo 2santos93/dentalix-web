@@ -10,10 +10,10 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
 import { moneyWithCode } from '@/lib/format/sede-number';
 import { saveCsv } from '@/lib/files/save-csv';
 import {
-  isValidPeriod,
+  isWithinMonths,
   PERIOD_PRESETS,
   periodFor,
-  PRODUCTION_MAX_PERIOD_DAYS,
+  PRODUCTION_MAX_PERIOD_MONTHS,
   type PeriodPresetKey,
 } from '@/lib/reports/period-presets';
 import { productionLines, type ProductionLine } from '@/lib/reports/production-table';
@@ -369,7 +369,7 @@ export function ProductionByProcedureView({ token }: { token: string }) {
 
   const presetPeriod = today ? periodFor(preset, today) : null;
   const period = preset === 'custom' ? (custom ?? (today ? periodFor('this_month', today) : null)) : presetPeriod;
-  const invalidPeriod = preset === 'custom' && period !== null && !isValidPeriod(period, PRODUCTION_MAX_PERIOD_DAYS);
+  const invalidPeriod = preset === 'custom' && period !== null && !isWithinMonths(period, PRODUCTION_MAX_PERIOD_MONTHS);
   const filters: ProductionFilters | null =
     period && !invalidPeriod
       ? {
@@ -620,13 +620,12 @@ export function ProductionByProcedureView({ token }: { token: string }) {
                 </p>
               ) : null}
               <ProductionTable lines={lines} fmt={fmt} onOpen={setOpenRow} />
-              {filters && timeZone ? (
+              {filters ? (
                 <ProductionItemsDialog
                   token={token}
                   filters={filters}
                   row={openRow}
                   fmt={fmt}
-                  timeZone={timeZone}
                   onClose={() => setOpenRow(null)}
                 />
               ) : null}

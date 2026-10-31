@@ -28,6 +28,7 @@ export const productionItemsCopy = {
   tooth: 'Diente',
   net: 'Neto',
   noProfessional: '—',
+  deletedPatient: 'Paciente eliminado',
   loadError: 'No pudimos cargar los procedimientos de la fila.',
   empty: 'No hay procedimientos en esta fila',
 };
@@ -46,14 +47,12 @@ export function ProductionItemsDialog({
   filters,
   row,
   fmt,
-  timeZone,
   onClose,
 }: {
   token: string;
   filters: ProductionFilters;
   row: ProcedureRow | null;
   fmt: RegionalFormat;
-  timeZone: string;
   onClose: () => void;
 }) {
   const [page, setPage] = useState(1);
@@ -148,15 +147,19 @@ export function ProductionItemsDialog({
                         {data.items.map((item) => (
                           <tr key={item.id} data-testid="production-item" className="h-11">
                             <td className="whitespace-nowrap px-3 py-2 tabular-nums text-ink">
-                              {fmt.date(new Date(item.completedAt), timeZone)}
+                              {fmt.date(new Date(item.completedAt), item.timeZone)}
                             </td>
                             <td className="px-3 py-2">
-                              <Link
-                                href={`/patients/${item.patientId}`}
-                                className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
-                              >
-                                {item.patientName}
-                              </Link>
+                              {item.patientId && item.patientName ? (
+                                <Link
+                                  href={`/patients/${item.patientId}`}
+                                  className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                                >
+                                  {item.patientName}
+                                </Link>
+                              ) : (
+                                <span className="text-muted">{productionItemsCopy.deletedPatient}</span>
+                              )}
                             </td>
                             <td className="px-3 py-2 text-ink">
                               {item.professionalName ?? productionItemsCopy.noProfessional}
