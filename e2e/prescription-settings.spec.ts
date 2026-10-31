@@ -219,7 +219,8 @@ test('admin turns on words and HC and sets 10 days; the next prescription follow
   await expect(words).not.toBeChecked();
   await expect(record).not.toBeChecked();
   await expect(validity).toHaveValue('30');
-  await expect(save).toBeDisabled();
+  // Sin cambios no hay «Guardar» (barra «Cambios sin guardar», plantilla de Ajustes).
+  await expect(save).toHaveCount(0);
   await words.click();
   await record.click();
   await validity.fill('10');
@@ -227,7 +228,7 @@ test('admin turns on words and HC and sets 10 days; the next prescription follow
   await expect(page.getByRole('status').filter({ hasText: 'Ajustes de la receta guardados.' })).toBeVisible();
   await expect(words).toBeChecked();
   await expect(record).toBeChecked();
-  await expect(save).toBeDisabled();
+  await expect(save).toHaveCount(0);
   const stored = await request.get(`${API_URL}/prescriptions/settings`, { headers: session.headers });
   expect(await stored.json()).toEqual({ printQuantityInWords: true, requireClinicalRecordNumber: true, validityDays: 10 });
 

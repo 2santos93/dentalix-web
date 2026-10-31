@@ -13,6 +13,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
+import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import {
   Dialog,
   DialogClose,
@@ -25,6 +26,8 @@ import {
 
 /** Opciones del selector; la API acepta cualquier número de 1 a 60. */
 const MONTH_OPTIONS = [3, 6, 12, 18, 24, 36, 48, 60];
+/** Lo que trae una clínica nueva (la API). */
+const DEFAULT_MONTHS = 12;
 
 const copy = {
   title: 'Vigencia de la anamnesis',
@@ -46,8 +49,8 @@ const copy = {
 
 
 /**
- * Ajustes → Historia clínica (DX-247): cuántos meses vale la anamnesis en la
- * clínica (12 por defecto). Solo ADMIN la cambia, en un modal.
+ * Ajustes → Historia clínica (DX-247): cuántos meses es válida la anamnesis en
+ * la clínica (12 por defecto). Solo ADMIN la cambia, en un modal.
  */
 export function AnamnesisSettingsSection({ token, allowed }: { token: string; allowed: boolean }) {
   const [settings, setSettings] = useState<AnamnesisSettings | null>(null);
@@ -93,7 +96,7 @@ export function AnamnesisSettingsSection({ token, allowed }: { token: string; al
   }
   if (!settings) {
     return (
-      <div role="status" aria-label="Cargando" className="max-w-[720px] rounded-lg border border-border bg-surface p-6">
+      <div role="status" aria-label="Cargando" className="rounded-xl border border-border bg-surface p-6">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="mt-4 h-4 w-72" />
       </div>
@@ -120,33 +123,32 @@ export function AnamnesisSettingsSection({ token, allowed }: { token: string; al
   }
 
   return (
-    <div className="flex max-w-[720px] flex-col gap-3">
-      {/* Fila de ajuste: nombre y valor (dato) a la izquierda, «Cambiar» a la
-          derecha; la explicación debajo. Sin icono: la fila del índice ya lo lleva. */}
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface px-4 py-4 sm:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-            <p className="t-label text-muted">{copy.title}</p>
-            <p data-testid="anamnesis-validity" className="t-data text-base text-ink">
-              {copy.months(settings.anamnesisValidityMonths)}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            className="shrink-0 max-sm:w-full"
-            onClick={() => {
-              setDraft(settings.anamnesisValidityMonths);
-              setSaveError(null);
-              setNotice('');
-              setOpen(true);
-            }}
-          >
-            {copy.change}
-          </Button>
-        </div>
-        <p className="text-sm text-muted">{copy.hint}</p>
-      </div>
+    <div className="flex flex-col gap-3">
+      {/* Fila de política (plantilla de Ajustes): etiqueta y ayuda a la
+          izquierda; el valor en tipo dato y «Cambiar» (diálogo) a la derecha. */}
+      <SettingRows>
+        <SettingRow
+          label={copy.title}
+          description={copy.hint}
+          isDefault={settings.anamnesisValidityMonths === DEFAULT_MONTHS}
+          value={<span data-testid="anamnesis-validity">{copy.months(settings.anamnesisValidityMonths)}</span>}
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              className="max-sm:min-h-11"
+              onClick={() => {
+                setDraft(settings.anamnesisValidityMonths);
+                setSaveError(null);
+                setNotice('');
+                setOpen(true);
+              }}
+            >
+              {copy.change}
+            </Button>
+          }
+        />
+      </SettingRows>
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>

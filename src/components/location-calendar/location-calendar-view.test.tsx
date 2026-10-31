@@ -60,7 +60,7 @@ function renderView() {
   return render(<LocationCalendarView token="tok" allowed />);
 }
 
-const sedeSelect = () => screen.getByRole('combobox', { name: 'Sede' }) as HTMLSelectElement;
+const editing = () => screen.getByTestId('calendar-sede');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -73,26 +73,49 @@ beforeEach(() => {
 });
 
 describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
-  it('defaults to the active location and switches with the Sede select, updating ?sede=', async () => {
+  it('defaults to the active location, says which one it edits and has no sede select of its own', async () => {
     setActiveLocationId('sur');
-    const user = setupUser();
     renderView();
     expect(await screen.findByTestId('working-weekdays-summary')).toHaveTextContent('Domingo a jueves');
-    expect(sedeSelect().value).toBe('sur');
+    expect(editing()).toHaveTextContent('Editando: Sede Sur');
     expect(mockedGet).toHaveBeenCalledWith('tok', 'sur');
+    // DESIGN.md → Settings pages → Per sede: nunca un segundo `<select>` de sede.
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sedes' })).toHaveAttribute('href', '/settings/sedes');
+  });
 
-    await user.selectOptions(sedeSelect(), 'Sede Norte');
-    expect(replace).toHaveBeenCalledWith('/settings/calendario?sede=norte', { scroll: false });
+  it('follows the shell sede switcher: a change drops ?sede= and opens the new active sede', async () => {
+    setActiveLocationId('sur');
+    search = new URLSearchParams('sede=sur');
+    renderView();
+    expect(await screen.findByTestId('working-weekdays-summary')).toHaveTextContent('Domingo a jueves');
+
+    setActiveLocationId('norte');
+    expect(replace).toHaveBeenCalledWith('/settings/calendario', { scroll: false });
+    await waitFor(() => expect(editing()).toHaveTextContent('Editando: Sede Norte'));
     await waitFor(() => expect(screen.getByTestId('working-weekdays-summary')).toHaveTextContent('Lunes a viernes'));
-    expect(sedeSelect().value).toBe('norte');
     expect(mockedGet).toHaveBeenLastCalledWith('tok', 'norte');
+  });
+
+  it('the week follows the edited sede locale (en-US starts on Sunday, de-DE on Monday)', async () => {
+    setActiveLocationId('sur');
+    renderView();
+    await screen.findByTestId('working-weekdays-summary');
+    const days = () =>
+      within(screen.getByRole('group', { name: 'Días hábiles' }))
+        .getAllByRole('checkbox')
+        .map((box) => (box as HTMLInputElement).labels?.[0]?.textContent);
+    expect(days()[0]).toBe('Domingo');
+    setActiveLocationId('norte');
+    await waitFor(() => expect(editing()).toHaveTextContent('Editando: Sede Norte'));
+    await waitFor(() => expect(days()[0]).toBe('Lunes'));
   });
 
   it('without an active location («Todas las sedes») picks the first active one', async () => {
     mockedList.mockResolvedValue([vieja, norte, sur]);
     renderView();
     await screen.findByTestId('working-weekdays-summary');
-    expect(sedeSelect().value).toBe('norte');
+    expect(editing()).toHaveTextContent('Editando: Sede Norte');
   });
 
   it('?sede=<id> preselects that location', async () => {
@@ -100,16 +123,16 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
     search = new URLSearchParams('sede=sur');
     renderView();
     expect(await screen.findByTestId('working-weekdays-summary')).toHaveTextContent('Domingo a jueves');
-    expect(sedeSelect().value).toBe('sur');
+    expect(editing()).toHaveTextContent('Editando: Sede Sur');
     expect(mockedGet).toHaveBeenCalledWith('tok', 'sur');
     expect(mockedGet).not.toHaveBeenCalledWith('tok', 'norte');
   });
 
-  it('an inactive location reads «(inactiva)» in the Sede select', async () => {
+  it('an inactive location (opened from its sheet) reads «(inactiva)»', async () => {
+    search = new URLSearchParams('sede=vieja');
     renderView();
     await screen.findByTestId('working-weekdays-summary');
-    const options = within(sedeSelect()).getAllByRole('option').map((o) => o.textContent);
-    expect(options).toEqual(['Sede Norte', 'Sede Sur', 'Sede Vieja (inactiva)']);
+    expect(editing()).toHaveTextContent('Editando: Sede Vieja (inactiva)');
   });
 
   it('load failure shows SectionError with retry', async () => {
@@ -134,7 +157,7 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
   it('a non-ADMIN sees the locked state and nothing is fetched', () => {
     render(<LocationCalendarView token="tok" allowed={false} />);
     expect(screen.getByRole('status')).toHaveTextContent('Solo administración cambia el calendario de la sede.');
-    expect(screen.queryByRole('combobox', { name: 'Sede' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('calendar-sede')).not.toBeInTheDocument();
     expect(mockedList).not.toHaveBeenCalled();
     expect(mockedGet).not.toHaveBeenCalled();
   });
@@ -152,7 +175,7 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
     search = new URLSearchParams('sede=otra-clinica');
     renderView();
     await screen.findByTestId('working-weekdays-summary');
-    expect(sedeSelect().value).toBe('norte');
+    expect(editing()).toHaveTextContent('Editando: Sede Norte');
     expect(replace).toHaveBeenCalledWith('/settings/calendario?sede=norte', { scroll: false });
     expect(mockedGet).not.toHaveBeenCalledWith('tok', 'otra-clinica');
     expect(mockedGet).toHaveBeenCalledWith('tok', 'norte');
@@ -244,7 +267,7 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
       workingWeekdays: [1, 2, 3, 4, 5],
       holidays: [{ id: 'h1', date: '2027-05-03', name: 'Cierre', recurring: false }],
     });
-    await user.selectOptions(sedeSelect(), 'Sede Sur');
+    setActiveLocationId('sur');
     await screen.findByText('Cierre');
     expect(within(screen.getByRole('region', { name: 'Festivos' })).getByRole('button', { name: 'Importar' })).toBeInTheDocument();
   });

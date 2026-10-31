@@ -104,7 +104,7 @@ describe('AppointmentTypesManager (DX-121)', () => {
     expect((await screen.findAllByText('Urgencia')).length).toBeGreaterThan(0);
   });
 
-  it('desactivar y retirar (con confirmación)', async () => {
+  it('desactivar y eliminar (con confirmación)', async () => {
     const user = setupUser();
     mockedUpdate.mockResolvedValue({ ...endo, active: false });
     mockedDelete.mockResolvedValue(undefined);
@@ -118,8 +118,8 @@ describe('AppointmentTypesManager (DX-121)', () => {
     expect(await within(table).findByText('Inactivo')).toBeInTheDocument();
 
     await user.click(within(table).getByRole('button', { name: 'Acciones de Endodoncia' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Retirar' }));
-    await user.click(await screen.findByRole('button', { name: 'Retirar tipo' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Eliminar' }));
+    await user.click(await screen.findByRole('button', { name: 'Eliminar tipo' }));
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'type-1'));
     await waitFor(() => expect(screen.queryByRole('table', { name: 'Tipos de cita' })).not.toBeInTheDocument());
   });

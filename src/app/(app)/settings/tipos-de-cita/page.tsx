@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { AppointmentTypesManager } from '@/components/appointment-types/appointment-types-manager';
 
 const copy = {
@@ -36,15 +35,11 @@ export default function AppointmentTypesPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
-      {/* Plantilla de Ajustes: columna de 720 px alineada a la izquierda. */}
-      <div className="w-full max-w-[45rem]">
-        <AppointmentTypesManager
-          token={accessToken}
-          allowed={canManageAppointmentTypes(getTokenRole(accessToken))}
-        />
-      </div>
-    </>
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
+      <AppointmentTypesManager
+        token={accessToken}
+        allowed={canManageAppointmentTypes(getTokenRole(accessToken))}
+      />
+    </SettingsPage>
   );
 }

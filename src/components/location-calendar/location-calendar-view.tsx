@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useId, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Lock } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -8,18 +9,21 @@ import { getLocationCalendar, type LocationCalendar } from '@/lib/locations/loca
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { NO_ACTIVE_LOCATION_ERROR } from '@/lib/locations/use-sede-time-zone';
+import { onLocationChange } from '@/lib/locations/location-store';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Skeleton } from '@/components/ui/skeleton';
-import { NativeSelect } from '@/components/ui/native-select';
 import { SectionHeader } from '@/components/ui/section-header';
 import { HolidaysSection } from './holidays-section';
 import { WorkingWeekdaysForm } from './working-weekdays-form';
 
 export const locationCalendarCopy = {
-  sede: 'Sede',
+  /** Qué sede se edita (plantilla de Ajustes, como Horarios). */
+  editing: (name: string) => `Editando: ${name}`,
   inactive: 'inactiva',
+  otherSede: 'Para otra sede, cámbiala en el selector de sede o ábrela desde',
+  sedesLink: 'Sedes',
   weekdaysHeading: 'Días hábiles',
   loadingLabel: 'Cargando',
   locationsError: 'No pudimos cargar las sedes.',
@@ -48,13 +52,16 @@ export function pickCalendarLocation(
   return byId(requestedId) ?? byId(activeLocationId) ?? locations.find((l) => l.isActive) ?? locations[0];
 }
 
-function optionLabel(location: ClinicLocation): string {
+function sedeLabel(location: ClinicLocation): string {
   return location.isActive ? location.name : `${location.name} (${copy.inactive})`;
 }
 
 /**
- * Ajustes › Calendario de la sede (DX-316, spec §7.2): selector de sede y, de
- * la sede elegida, sus días hábiles y sus festivos. Solo ADMIN: al resto se le
+ * Ajustes › Calendario de la sede (DX-316, spec §7.2): de la sede que se
+ * edita, sus días hábiles y sus festivos. La sede no se elige con un selector
+ * propio (DESIGN.md → Settings pages → Per sede): es la de `?sede=` (la ficha
+ * de la sede enlaza aquí) o la activa del selector del shell, y la pantalla
+ * dice cuál es («Editando: Sede Norte»). Solo ADMIN: al resto se le
  * dice sin pedir nada a la API, como en Mayoría de edad (`allowed` sale del
  * rol del token); si el rol del token está viejo, el 403 de la API se enseña
  * en la sección.
@@ -63,12 +70,7 @@ export function LocationCalendarView({ token, allowed }: { token: string; allowe
   if (!allowed) {
     return <EmptyState role="status" icon={<Lock aria-hidden />} title={copy.forbiddenTitle} description={copy.forbiddenHint} />;
   }
-  // Plantilla de Ajustes: una columna de formulario de 720 px, alineada a la izquierda.
-  return (
-    <div className="w-full max-w-[45rem]">
-      <AllowedLocationCalendarView token={token} />
-    </div>
-  );
+  return <AllowedLocationCalendarView token={token} />;
 }
 
 function AllowedLocationCalendarView({ token }: { token: string }) {
@@ -76,7 +78,6 @@ function AllowedLocationCalendarView({ token }: { token: string }) {
   const pathname = usePathname();
   const requestedId = useSearchParams().get('sede');
   const state = useLocationsState(token);
-  const selectId = useId();
   const location =
     state.status === 'ready' ? pickCalendarLocation(state.locations, requestedId, state.activeLocationId) : undefined;
 
@@ -89,6 +90,19 @@ function AllowedLocationCalendarView({ token }: { token: string }) {
     }
   }, [requestedId, location, router, pathname]);
 
+  // Cambiar la sede en el selector del shell manda: un `?sede=` (de la ficha de
+  // una sede) deja de fijarla y la pantalla pasa a la sede activa.
+  useEffect(
+    () =>
+      onLocationChange(() => {
+        // El selector del shell recarga la página justo después: la URL se
+        // corrige ya (síncrono) para que la recarga no vuelva a la sede fijada.
+        window.history.replaceState(window.history.state, '', pathname);
+        router.replace(pathname, { scroll: false });
+      }),
+    [router, pathname],
+  );
+
   if (state.status === 'loading') return <LoadingBlock />;
   if (state.status === 'error') {
     return <SectionError description={copy.locationsError} onRetry={state.retry} />;
@@ -97,23 +111,22 @@ function AllowedLocationCalendarView({ token }: { token: string }) {
     return <SectionError description={NO_ACTIVE_LOCATION_ERROR} onRetry={state.retry} />;
   }
 
-  function choose(id: string) {
-    router.replace(`${pathname}?sede=${encodeURIComponent(id)}`, { scroll: false });
-  }
-
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor={selectId} className="t-label text-ink">
-          {copy.sede}
-        </label>
-        <NativeSelect id={selectId} className="sm:w-80" value={location.id} onChange={(e) => choose(e.target.value)}>
-          {state.locations.map((l) => (
-            <option key={l.id} value={l.id}>
-              {optionLabel(l)}
-            </option>
-          ))}
-        </NativeSelect>
+      <div className="flex flex-col gap-1 text-sm text-muted">
+        <p data-testid="calendar-sede" className="font-medium text-ink">
+          {copy.editing(sedeLabel(location))}
+        </p>
+        <p>
+          {copy.otherSede}{' '}
+          <Link
+            href="/settings/sedes"
+            className="font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+          >
+            {copy.sedesLink}
+          </Link>
+          .
+        </p>
       </div>
       {/* Al cambiar de sede se monta de cero: nada de la anterior se queda en pantalla. */}
       <LocationCalendarSections key={location.id} token={token} location={location} onRetryLocations={state.retry} />
@@ -188,6 +201,7 @@ function LocationCalendarSections({
           token={token}
           locationId={location.id}
           initial={calendar.workingWeekdays}
+          locale={location.locale}
           // Solo los días: los festivos de la pantalla pueden ser más nuevos que la respuesta del PUT.
           onSaved={(saved) => setCalendar((c) => (c ? { ...c, workingWeekdays: saved.workingWeekdays } : saved))}
         />
@@ -207,7 +221,7 @@ function LocationCalendarSections({
 function LoadingBlock() {
   return (
     <div role="status" aria-label={copy.loadingLabel} className="flex flex-col gap-3">
-      <Skeleton className="h-10 w-full sm:w-80" />
+      <Skeleton className="h-5 w-48" />
       <Skeleton className="h-11 w-full" />
       <Skeleton className="h-4 w-48" />
     </div>

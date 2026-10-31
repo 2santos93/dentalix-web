@@ -2,8 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { PrivacyPolicySettings } from '@/components/data-consents/privacy-policy-settings';
 
 const copy = {
@@ -38,10 +37,9 @@ export default function PrivacySettingsPage() {
   if (!accessToken) return null;
 
   return (
-    // Columna de ajustes: 720 px alineada al borde del contenido (antes centrada).
-    <div className="w-full max-w-[720px]">
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    // Plantilla de Ajustes: columna de 720 px alineada a la izquierda (antes centrada).
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
       <PrivacyPolicySettings token={accessToken} />
-    </div>
+    </SettingsPage>
   );
 }

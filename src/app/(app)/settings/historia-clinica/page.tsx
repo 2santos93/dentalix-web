@@ -4,13 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { AnamnesisSettingsSection } from '@/components/clinical/anamnesis-settings';
 
 const copy = {
   title: 'Historia clínica',
-  description: 'Cuánto tiempo es válida la anamnesis antes de pedir que se revise, en todas las sedes de la clínica.',
+  description: 'Cuánto tiempo es válida la anamnesis antes de pedir que se revise.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -35,12 +34,11 @@ export default function ClinicalHistorySettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
       <AnamnesisSettingsSection
         token={accessToken}
         allowed={canManageAnamnesisSettings(getTokenRole(accessToken))}
       />
-    </>
+    </SettingsPage>
   );
 }

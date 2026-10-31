@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
 import { FormField } from '@/components/shared/form-field';
+import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import {
   Dialog,
   DialogClose,
@@ -53,6 +54,9 @@ const copy = {
  * `fallback`. El 404 se fija también, para que diga qué no cargó y no
  * «no encontramos lo que buscas».
  */
+/** Lo que trae una clínica nueva (la API). */
+const DEFAULT_MAJORITY_AGE = 18;
+
 const loadErrorOptions = { fallback: copy.loadError, byStatus: { 404: copy.loadError } };
 
 /**
@@ -103,7 +107,7 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
   }
   if (!settings) {
     return (
-      <div role="status" aria-label="Cargando" className="max-w-[720px] rounded-lg border border-border bg-surface p-4 sm:p-6">
+      <div role="status" aria-label="Cargando" className="rounded-xl border border-border bg-surface p-4 sm:p-6">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="mt-4 h-4 w-72" />
       </div>
@@ -130,33 +134,32 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
   }
 
   return (
-    <div className="flex max-w-[720px] flex-col gap-3">
+    <div className="flex flex-col gap-3">
       {/* Fila de política (plantilla de Ajustes): etiqueta y ayuda a la
-          izquierda; el valor en tipo dato y «Cambiar» a la derecha. */}
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:p-6">
-        <div className="min-w-0">
-          <p className="t-label text-ink">{copy.title}</p>
-          <p className="mt-1 max-w-[60ch] text-sm text-muted">{copy.hint}</p>
-        </div>
-        <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
-          <p data-testid="majority-age" className="t-title tnum text-ink">
-            {copy.years(settings.majorityAge)}
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            className="max-sm:min-h-11"
-            onClick={() => {
-              setDraft(settings.majorityAge);
-              setSaveError(null);
-              setNotice('');
-              setOpen(true);
-            }}
-          >
-            {copy.change}
-          </Button>
-        </div>
-      </div>
+          izquierda; el valor en tipo dato y «Cambiar» (diálogo) a la derecha. */}
+      <SettingRows>
+        <SettingRow
+          label={copy.title}
+          description={copy.hint}
+          isDefault={settings.majorityAge === DEFAULT_MAJORITY_AGE}
+          value={<span data-testid="majority-age">{copy.years(settings.majorityAge)}</span>}
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              className="max-sm:min-h-11"
+              onClick={() => {
+                setDraft(settings.majorityAge);
+                setSaveError(null);
+                setNotice('');
+                setOpen(true);
+              }}
+            >
+              {copy.change}
+            </Button>
+          }
+        />
+      </SettingRows>
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>

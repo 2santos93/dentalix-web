@@ -187,7 +187,7 @@ export function PostOpTemplatesManager({ token, allowed }: PostOpTemplatesManage
     {
       id: 'code',
       header: copy.colCode,
-      cell: (t) => <span className="t-id text-xs">{t.code}</span>,
+      cell: (t) => <span className="t-id whitespace-nowrap text-xs">{t.code}</span>,
       mobileCell: (t) => <span className="t-id">{t.code}</span>,
     },
     { id: 'title', header: copy.colTitle, mobile: 'primary', cell: (t) => t.title },

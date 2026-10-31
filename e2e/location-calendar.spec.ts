@@ -17,9 +17,11 @@ import { tenantOrigin } from './support/urls';
  * - B: `de-DE` / `Europe/Berlin` / EUR / 24 h (fechas DD.MM.YYYY).
  *
  *  1. Una sede nueva tiene lunes a viernes y ningún festivo, y la pantalla lo dice.
- *  2. El ADMIN pone domingo a jueves en B y se guarda; tras un error de
+ *  2. El ADMIN pone domingo a jueves en B y se guarda desde la barra
+ *     «Cambios sin guardar» (sin cambios no hay «Guardar»); tras un error de
  *     guardado el foco vuelve a «Guardar días hábiles» y tras guardar bien, a
- *     la primera casilla (en jsdom no se distingue).
+ *     la primera casilla (en jsdom no se distingue). La semana empieza donde
+ *     la empieza el locale de la sede (A en-US: domingo; B de-DE: lunes).
  *  3. Alta, edición y retirada de un festivo, con la fecha en el orden de cada
  *     sede y el día de la semana correcto en un navegador en otra zona que Jest.
  *  4. El mismo ICS dos veces: 12 nuevos y luego 12 ya existían; la lista
@@ -52,6 +54,16 @@ const VIEWPORTS = [
 ] as const;
 const WEEK = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
+const SEDES = { A: SEDE_A, B: SEDE_B } as const;
+
+/** Los nombres de las casillas, en el orden en que salen. */
+async function weekOrderShown(page: Page): Promise<string[]> {
+  return page
+    .getByRole('group', { name: 'Días hábiles' })
+    .getByRole('checkbox')
+    .evaluateAll((boxes) => boxes.map((b) => (b as HTMLInputElement).labels?.[0]?.textContent ?? ''));
+}
+
 let session: ApiSession;
 const ids: Record<'A' | 'B', string> = { A: '', B: '' };
 
@@ -83,7 +95,7 @@ async function shoot(page: Page, name: string, target?: Locator): Promise<void> 
 async function openCalendar(page: Page, sede: 'A' | 'B'): Promise<void> {
   await page.goto(`${origin}/settings/calendario?sede=${ids[sede]}`);
   await expect(page.getByRole('heading', { level: 1, name: 'Calendario de la sede' })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('main').getByLabel('Sede', { exact: true })).toHaveValue(ids[sede]);
+  await expect(page.getByTestId('calendar-sede')).toHaveText(`Editando: ${SEDES[sede].name}`);
   await expect(page.getByRole('checkbox', { name: 'Lunes' })).toBeVisible({ timeout: 15_000 });
 }
 
@@ -145,7 +157,10 @@ test('new location shows Monday–Friday and the empty state', async ({ page }) 
 
   await expectWeek(page, ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
   await expect(page.getByTestId('working-weekdays-summary')).toHaveText('Lunes a viernes');
-  await expect(page.getByRole('button', { name: 'Guardar días hábiles' })).toBeDisabled();
+  // Sin cambios no hay nada que guardar: ni barra ni «Guardar» deshabilitado a la vista.
+  await expect(page.getByRole('button', { name: 'Guardar días hábiles' })).toHaveCount(0);
+  // A es en-US: su semana empieza en domingo (weekOrder, como Horarios).
+  expect(await weekOrderShown(page)).toEqual(['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']);
   const section = holidaysSection(page);
   await expect(section.getByText('Añade los festivos de tu sede')).toBeVisible();
   await expect(section.getByText('Dentalix no trae los festivos de ningún país.', { exact: false })).toBeVisible();
@@ -171,8 +186,10 @@ test('admin sets Sunday–Thursday on B and it persists after reload', async ({ 
   await page.getByRole('link', { name: 'Abrir Sede B', exact: true }).click();
   await page.getByRole('link', { name: 'Calendario Sede B', exact: true }).click();
   await expect(page).toHaveURL(`${origin}/settings/calendario?sede=${ids.B}`);
-  await expect(page.getByRole('main').getByLabel('Sede', { exact: true })).toHaveValue(ids.B);
+  await expect(page.getByTestId('calendar-sede')).toHaveText('Editando: Sede B');
   await expectWeek(page, ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
+  // B es de-DE: su semana empieza en lunes.
+  expect(await weekOrderShown(page)).toEqual(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']);
 
   await page.getByRole('checkbox', { name: 'Viernes', exact: true }).uncheck();
   await page.getByRole('checkbox', { name: 'Domingo', exact: true }).check();
@@ -200,15 +217,17 @@ test('admin sets Sunday–Thursday on B and it persists after reload', async ({ 
   await expect(page.getByRole('status').filter({ hasText: 'Guardado' })).toBeVisible();
   await expect(page.getByText('Los días hábiles no son válidos.')).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: 'Lunes', exact: true })).toBeFocused();
-  await expect(save).toBeDisabled();
+  // Guardado: sin cambios, la barra se va.
+  await expect(save).toHaveCount(0);
   await shoot(page, 'weekdays');
 
   await page.reload();
   await expect(page.getByRole('checkbox', { name: 'Lunes' })).toBeVisible({ timeout: 15_000 });
   await expectWeek(page, ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves']);
   await expect(page.getByTestId('working-weekdays-summary')).toHaveText('Domingo a jueves');
-  // A sigue con lunes a viernes: el calendario es de cada sede.
-  await page.getByRole('main').getByLabel('Sede', { exact: true }).selectOption(ids.A);
+  // A sigue con lunes a viernes: el calendario es de cada sede (sin selector
+  // propio: se llega a A por su enlace, como desde su ficha).
+  await openCalendar(page, 'A');
   await expect(page).toHaveURL(`${origin}/settings/calendario?sede=${ids.A}`);
   await expect(page.getByTestId('working-weekdays-summary')).toHaveText('Lunes a viernes');
 });

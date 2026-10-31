@@ -110,9 +110,9 @@ describe('PrescriptionTemplatesManager', () => {
     expect(await within(table).findByText('Post-exodoncia adulto')).toBeInTheDocument();
 
     await user.click(within(table).getByRole('button', { name: 'Acciones de «Post-exodoncia adulto»' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Retirar' }));
-    const confirm = await screen.findByRole('dialog', { name: '¿Retirar la plantilla?' });
-    await user.click(within(confirm).getByRole('button', { name: 'Retirar' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Eliminar' }));
+    const confirm = await screen.findByRole('dialog', { name: '¿Eliminar la plantilla?' });
+    await user.click(within(confirm).getByRole('button', { name: 'Eliminar' }));
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'tpl1'));
     expect(await screen.findByText('Todavía no hay plantillas de receta.')).toBeInTheDocument();
   });

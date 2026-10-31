@@ -25,7 +25,7 @@ describe('Ajustes → Calendario de la sede (DX-316)', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Calendario de la sede' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Qué días cuentan como hábiles y qué días son festivo en cada sede. Lo usan los plazos que se cuentan en días hábiles.',
+        'Qué días cuentan como hábiles y qué días son festivos en cada sede. Lo usan los plazos que se cuentan en días hábiles.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Ajustes/ })).toHaveAttribute('href', '/settings');

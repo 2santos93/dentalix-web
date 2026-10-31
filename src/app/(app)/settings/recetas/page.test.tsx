@@ -38,7 +38,7 @@ describe('Ajustes › Recetas (DX-324)', () => {
     expect(screen.getByRole('heading', { name: 'Datos de la receta' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Se aplican a las recetas que se emitan desde ahora, en todas las sedes. Las ya emitidas no cambian.',
+        'Se aplican a las recetas que se emitan desde ahora. Las ya emitidas no cambian.',
       ),
     ).toBeInTheDocument();
     const form = screen.getByRole('region', { name: 'Datos de la receta (form)' });
@@ -48,6 +48,8 @@ describe('Ajustes › Recetas (DX-324)', () => {
     expect(form.compareDocumentPosition(templates) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container).not.toHaveTextContent(/país|sedes →|Ajustes → Sedes/i);
     expect(screen.queryByRole('link', { name: /Sedes/ })).not.toBeInTheDocument();
+    // El alcance va en la línea de la plantilla, no en las frases.
+    expect(screen.getByTestId('settings-scope')).toHaveTextContent('Aplica a toda la clínica');
   });
 
   it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])(

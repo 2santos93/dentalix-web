@@ -328,7 +328,10 @@ test('ADMIN sets a local name in Ajustes and it shows in the create form, the re
   await expect(page.getByText('Nombres guardados.')).toBeVisible();
   await page.reload();
   await expect(national).toHaveValue('Documento A', { timeout: 15_000 });
-  await national.fill('Documento A');
+  // Sin cambios no hay «Guardar» (barra de cambios, B6). Volver a guardar el
+  // mismo nombre (con un espacio de más, que se normaliza) sigue valiendo.
+  await expect(page.getByRole('button', { name: 'Guardar' })).toHaveCount(0);
+  await national.fill('Documento  A');
   await page.getByRole('button', { name: 'Guardar' }).click();
   await expect(page.getByText('Nombres guardados.')).toBeVisible();
   await shoot(page, 'document-type-names', page.getByText('Nombres guardados.'));

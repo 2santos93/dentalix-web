@@ -40,13 +40,13 @@ const copy = {
   edit: 'Editar',
   deactivate: 'Desactivar',
   activate: 'Activar',
-  remove: 'Retirar',
+  remove: 'Eliminar',
   toggleError: (name: string) => `No pudimos cambiar el estado de «${name}».`,
-  removeTitle: (name: string) => `¿Retirar «${name}»?`,
+  removeTitle: (name: string) => `¿Eliminar «${name}»?`,
   removeDescription:
     'Deja de aparecer aquí y al agendar. Las citas que ya lo usan lo conservan, con su color.',
-  removeConfirm: 'Retirar tipo',
-  removeError: 'No pudimos retirar el tipo de cita.',
+  removeConfirm: 'Eliminar tipo',
+  removeError: 'No pudimos eliminar el tipo de cita.',
 };
 
 interface AppointmentTypesManagerProps {
@@ -76,7 +76,7 @@ function TypeSwatch({ type }: { type: AppointmentType }) {
 
 /**
  * Gestión de tipos de cita en /settings/tipos-de-cita (DX-121). Crear, editar,
- * desactivar (sale del selector al agendar) y retirar (borrado lógico). Nada de
+ * desactivar (sale del selector al agendar) y eliminar (borrado lógico). Nada de
  * esto cambia las citas ya agendadas.
  */
 export function AppointmentTypesManager({ token, allowed }: AppointmentTypesManagerProps) {

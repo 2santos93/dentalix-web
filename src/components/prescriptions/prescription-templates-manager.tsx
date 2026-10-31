@@ -32,13 +32,13 @@ const copy = {
   colMedications: 'Medicamentos',
   colUpdated: 'Actualizada',
   edit: 'Editar',
-  remove: 'Retirar',
+  remove: 'Eliminar',
   rowLabel: (name: string) => `«${name}»`,
-  removeTitle: '¿Retirar la plantilla?',
+  removeTitle: '¿Eliminar la plantilla?',
   removeBody: (name: string) =>
     `«${name}» dejará de ofrecerse al emitir. Las recetas ya emitidas no cambian.`,
-  removeConfirm: 'Retirar',
-  removeError: 'No pudimos retirar la plantilla.',
+  removeConfirm: 'Eliminar',
+  removeError: 'No pudimos eliminar la plantilla.',
 };
 
 interface PrescriptionTemplatesManagerProps {
@@ -49,7 +49,7 @@ interface PrescriptionTemplatesManagerProps {
 
 /**
  * Gestión de plantillas de receta (DX-013) en /settings/recetas, en el mismo
- * patrón que las de consentimiento: crear y editar en modal, y retirar (borrado
+ * patrón que las de consentimiento: crear y editar en modal, y eliminar (borrado
  * blando) con confirmación.
  */
 export function PrescriptionTemplatesManager({ token, allowed }: PrescriptionTemplatesManagerProps) {

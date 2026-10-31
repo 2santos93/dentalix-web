@@ -4,13 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManagePatientSettings } from '@/lib/patients/patient-settings-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { MajorityAgeSettingsSection } from '@/components/patients/majority-age-settings';
 
 const copy = {
   title: 'Mayoría de edad',
-  description: 'Desde qué edad un paciente recibe sus propios avisos, en todas las sedes de la clínica.',
+  description: 'Desde qué edad un paciente recibe sus propios avisos.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -35,12 +34,11 @@ export default function MajorityAgeSettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
       <MajorityAgeSettingsSection
         token={accessToken}
         allowed={canManagePatientSettings(getTokenRole(accessToken))}
       />
-    </>
+    </SettingsPage>
   );
 }
