@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { FileText, Lock, Plus } from 'lucide-react';
+import { Eye, EyeOff, FileText, Lock, Pencil, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -14,6 +14,8 @@ import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { notifyError } from '@/components/errors/notify';
 import { Badge } from '@/components/ui/badge';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { RowActions, type RowAction } from '@/components/shared/row-actions';
 import { Button } from '@/components/ui/button';
 import { NoteTemplateFormModal } from './note-template-form-modal';
 
@@ -32,14 +34,15 @@ export const noteTemplatesManagerCopy = {
   colName: 'Plantilla',
   colPrompts: 'Preguntas',
   colStatus: 'Estado',
-  colActions: 'Acciones',
+  colFolder: 'Carpeta',
+  promptsCount: (n: number) => (n === 1 ? '1 pregunta' : `${n} preguntas`),
+  moreActions: 'Más acciones de plantillas',
   noFolder: 'Sin carpeta',
   active: 'Activa',
   inactive: 'Desactivada',
   edit: 'Editar',
   deactivate: 'Desactivar',
   activate: 'Activar',
-  actionFor: (action: string, name: string) => `${action} «${name}»`,
   toggleError: (name: string) => `No pudimos cambiar el estado de «${name}».`,
   samplesLoaded: (n: number) =>
     n === 0
@@ -77,7 +80,6 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
   const [editing, setEditing] = useState<NoteTemplate | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
-  const [pendingId, setPendingId] = useState<string | null>(null);
   const [loadingSamples, setLoadingSamples] = useState(false);
 
   useEffect(() => {
@@ -130,7 +132,6 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
   }
 
   async function toggleActive(template: NoteTemplate) {
-    setPendingId(template.id);
     try {
       upsert(await updateNoteTemplate(token, template.id, { active: !template.active }));
     } catch {
@@ -138,8 +139,6 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
       notifyError(copy.toggleError(template.name), {
         onRetry: () => void toggleActive(template),
       });
-    } finally {
-      setPendingId(null);
     }
   }
 
@@ -156,59 +155,68 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
     }
   }
 
-  function actions(t: NoteTemplate) {
-    const toggleLabel = t.active ? copy.deactivate : copy.activate;
-    return (
-      <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => openModal(t)}
-          aria-label={copy.actionFor(copy.edit, t.name)}
-        >
-          {copy.edit}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          loading={pendingId === t.id}
-          onClick={() => void toggleActive(t)}
-          aria-label={copy.actionFor(toggleLabel, t.name)}
-        >
-          {toggleLabel}
-        </Button>
-      </div>
-    );
+  function rowActions(t: NoteTemplate): RowAction[] {
+    return [
+      { label: copy.edit, icon: <Pencil aria-hidden />, onSelect: () => openModal(t) },
+      {
+        label: t.active ? copy.deactivate : copy.activate,
+        icon: t.active ? <EyeOff aria-hidden /> : <Eye aria-hidden />,
+        onSelect: () => void toggleActive(t),
+      },
+    ];
   }
 
-  function status(t: NoteTemplate) {
-    return (
-      <Badge variant={t.active ? 'success' : 'muted'}>{t.active ? copy.active : copy.inactive}</Badge>
-    );
-  }
+  const columns: DataListColumn<NoteTemplate>[] = [
+    {
+      id: 'name',
+      header: copy.colName,
+      mobile: 'primary',
+      cell: (t) => <span className="font-medium">{t.name}</span>,
+    },
+    {
+      id: 'folder',
+      header: copy.colFolder,
+      cell: (t) => t.category ?? <span className="text-muted">{copy.noFolder}</span>,
+      mobileCell: (t) => t.category ?? copy.noFolder,
+    },
+    {
+      id: 'prompts',
+      header: copy.colPrompts,
+      numeric: true,
+      cell: (t) => t.prompts.length,
+      mobileCell: (t) => copy.promptsCount(t.prompts.length),
+    },
+    {
+      id: 'status',
+      header: copy.colStatus,
+      mobile: 'trailing',
+      cell: (t) => (
+        <Badge variant={t.active ? 'success' : 'neutral'}>{t.active ? copy.active : copy.inactive}</Badge>
+      ),
+    },
+  ];
+
+  // Con plantillas, cargar las de ejemplo es una acción rara (de arranque): va
+  // al «⋯» de la barra y no compite con «Nueva plantilla». Sin ninguna, vive en
+  // el vacío.
+  const barMenu: RowAction[] = [
+    { label: copy.loadSamples, icon: <FileText aria-hidden />, onSelect: () => void loadSamples() },
+  ];
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted" aria-live="polite">
-          {loading || error ? '' : copy.count(templates.length)}
+          {loading || error || templates.length === 0 ? '' : copy.count(templates.length)}
         </p>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button
-            type="button"
-            variant="secondary"
-            loading={loadingSamples}
-            onClick={() => void loadSamples()}
-            className="w-full sm:w-auto"
-          >
-            {copy.loadSamples}
-          </Button>
-          <Button type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
+        <div className="flex items-center gap-2">
+          <Button type="button" onClick={() => openModal(null)} className="flex-1 sm:flex-none">
             <Plus aria-hidden />
             {copy.newTemplate}
           </Button>
+          {!loading && !error && templates.length > 0 ? (
+            <RowActions label={copy.moreActions} actions={barMenu} busy={loadingSamples} className="size-10 border border-border" />
+          ) : null}
         </div>
       </div>
 
@@ -232,60 +240,15 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
           </Button>
         }
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-sunken text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colName}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                {copy.colPrompts}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {templates.map((t) => (
-              <tr key={t.id} className="border-b border-border-subtle last:border-0">
-                <td className="px-4 py-3">
-                  <p className="font-medium">{t.name}</p>
-                  <p className="text-xs text-muted">{t.category ?? copy.noFolder}</p>
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">{t.prompts.length}</td>
-                <td className="px-4 py-3">{status(t)}</td>
-                <td className="px-4 py-3">{actions(t)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {templates.map((t) => (
-            <li
-              key={t.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="break-words font-medium">{t.name}</p>
-                  <p className="text-xs text-muted">
-                    {t.category ?? copy.noFolder} · {t.prompts.length} {copy.colPrompts.toLowerCase()}
-                  </p>
-                </div>
-                {status(t)}
-              </div>
-              {actions(t)}
-            </li>
-          ))}
-        </ul>
+        <DataList
+          label={copy.tableLabel}
+          rows={templates}
+          columns={columns}
+          getRowKey={(t) => t.id}
+          onRowClick={(t) => openModal(t)}
+          rowActions={rowActions}
+          getRowLabel={(t) => t.name}
+        />
       </AsyncSection>
 
       <NoteTemplateFormModal
