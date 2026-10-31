@@ -3387,6 +3387,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{locationId}/contingency-agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Descargar la agenda de contingencia de la sede, generada ahora (PDF)
+         * @description Citas de HOY y MAÑANA de la sede (días civiles en su zona IANA; horas en su zona, locale y reloj), sin canceladas ni inasistencias: hora, paciente, teléfono (formato internacional con la región de la sede), profesional, tipo de cita y alertas no clínicas (confirmada o no, en la clínica/atendida, primera visita, pidió que le llamen y «Alerta médica: ver ficha» como sí/no). Nunca notas ni motivo de la cita ni nada de la historia clínica. A4 apaisado. Auditado: EXPORT · LOCATION · CONTINGENCY_AGENDA_DOWNLOADED.
+         */
+        get: operations["ContingencyAgendaController_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{locationId}/contingency-agenda/nightly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado de la copia nocturna de la sede
+         * @description Cada noche, desde las 02:00 en la zona de la sede, se genera y guarda su agenda de contingencia (hoy y mañana); se conserva solo la última. Dice si hay copia, de qué día y cuándo se generó; sin datos de pacientes (no se audita).
+         */
+        get: operations["ContingencyAgendaController_nightly"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{locationId}/contingency-agenda/nightly/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Descargar la copia nocturna de la agenda de contingencia (PDF)
+         * @description La última copia guardada, tal cual se generó (puede ser de un día anterior: ver GET …/nightly). Citas de HOY y MAÑANA de la sede (días civiles en su zona IANA; horas en su zona, locale y reloj), sin canceladas ni inasistencias: hora, paciente, teléfono (formato internacional con la región de la sede), profesional, tipo de cita y alertas no clínicas (confirmada o no, en la clínica/atendida, primera visita, pidió que le llamen y «Alerta médica: ver ficha» como sí/no). Nunca notas ni motivo de la cita ni nada de la historia clínica. A4 apaisado. Auditado: EXPORT · LOCATION · CONTINGENCY_AGENDA_NIGHTLY_DOWNLOADED.
+         */
+        get: operations["ContingencyAgendaController_downloadNightly"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cash-sessions/settings": {
         parameters: {
             query?: never;
@@ -13383,6 +13443,28 @@ export interface components {
             reasonCode: components["schemas"]["ClosingDismissalReason"];
             /** Format: date-time */
             createdAt: string;
+        };
+        ContingencyNightlyInfoDto: {
+            /** @description Hay una copia nocturna guardada para la sede. */
+            available: boolean;
+            /** @description La copia es la de HOY en la zona de la sede (cubre hoy y mañana). false si no hay copia o es de un día anterior. */
+            current: boolean;
+            /**
+             * Format: date
+             * @description «Hoy» (día civil en la zona de la sede) al generarla: cubre ese día y el siguiente. null sin copia.
+             * @example 2026-11-02
+             */
+            forDate: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se generó (UTC). null sin copia.
+             */
+            generatedAt: string | null;
+            /**
+             * @description Citas que lleva (sin canceladas ni inasistencias). null sin copia.
+             * @example 18
+             */
+            appointmentCount: number | null;
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -26331,6 +26413,144 @@ export interface operations {
             };
             /** @description Ya no está pendiente: se cerró o ya se había descartado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContingencyAgendaController_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sede de la clínica. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (attachment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description locationId no es un uuid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y recepción descargan la agenda de contingencia. / sede fuera de las permitidas al usuario (DX-089, code LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe en esta clínica (otra clínica, retirada o desactivada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no tiene zona horaria válida (LOCATION_TIMEZONE_REQUIRED) o formato regional y reloj (LOCATION_LOCALE_REQUIRED) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContingencyAgendaController_nightly: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sede de la clínica. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContingencyNightlyInfoDto"];
+                };
+            };
+            /** @description locationId no es un uuid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y recepción descargan la agenda de contingencia. / sede fuera de las permitidas al usuario (DX-089, code LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe en esta clínica (otra clínica, retirada o desactivada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContingencyAgendaController_downloadNightly: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sede de la clínica. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (attachment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description locationId no es un uuid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y recepción descargan la agenda de contingencia. / sede fuera de las permitidas al usuario (DX-089, code LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe en esta clínica (otra clínica, retirada o desactivada), o la sede aún no tiene copia nocturna */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

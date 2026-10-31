@@ -424,6 +424,44 @@ export async function apiFetchText(path: string, opts: ApiOptions = {}): Promise
 }
 
 /**
+ * El nombre de fichero de una cabecera `Content-Disposition`: `filename*`
+ * (UTF-8, RFC 5987) si viene y se puede leer; si no, `filename`. `null` si no
+ * hay ninguno.
+ */
+export function fileNameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const extended = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (extended) {
+    try {
+      return decodeURIComponent(extended[1].trim());
+    } catch {
+      return null;
+    }
+  }
+  const plain = /filename="([^"]+)"/i.exec(header);
+  return plain ? plain[1] : null;
+}
+
+export interface ApiBlob {
+  blob: Blob;
+  /** El que propone la API en `Content-Disposition`, o `null`. */
+  fileName: string | null;
+}
+
+/**
+ * Como `apiFetch`, pero devuelve el cuerpo como `Blob` y el nombre del
+ * fichero: para las descargas binarias (el PDF de la agenda de contingencia,
+ * DX-339). Mismos refresh, cabeceras y errores (`ApiError` en español).
+ */
+export async function apiFetchBlob(path: string, opts: ApiOptions = {}): Promise<ApiBlob> {
+  const res = await doFetch(path, opts);
+  return {
+    blob: await res.blob(),
+    fileName: fileNameFromDisposition(res.headers?.get('Content-Disposition') ?? null),
+  };
+}
+
+/**
  * Same as `apiFetch`, but tolerates a `200` response with an EMPTY body
  * (content-length 0) by returning `null` instead of throwing — `res.json()`
  * throws on an empty string, which is exactly what

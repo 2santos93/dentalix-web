@@ -11,7 +11,16 @@
  * @jest-environment jsdom
  * @jest-environment-options {"url": "http://acme.localhost:3001"}
  */
-import { apiFetch, apiFetchOrNull, apiFetchText, ApiError, bootstrapSession, NetworkError } from './client';
+import {
+  apiFetch,
+  apiFetchBlob,
+  apiFetchOrNull,
+  apiFetchText,
+  ApiError,
+  bootstrapSession,
+  fileNameFromDisposition,
+  NetworkError,
+} from './client';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import {
   getActiveLocationId,
@@ -564,6 +573,53 @@ describe('apiFetchText (DX-145)', () => {
       status: 403,
       message: 'Solo la administración puede exportar la cartera.',
     });
+  });
+});
+
+describe('apiFetchBlob (DX-339)', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it('devuelve el cuerpo como Blob y el nombre del fichero de Content-Disposition', async () => {
+    const blob = new Blob(['%PDF-1.3'], { type: 'application/pdf' });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => blob,
+      headers: new Headers({
+        'Content-Disposition': `attachment; filename="agenda-sede-norte.pdf"; filename*=UTF-8''agenda-sede-norte.pdf`,
+      }),
+    }) as unknown as typeof fetch;
+    await expect(apiFetchBlob('/locations/l1/contingency-agenda', { token: 'T' })).resolves.toEqual({
+      blob,
+      fileName: 'agenda-sede-norte.pdf',
+    });
+  });
+
+  it('un error sigue siendo ApiError con el mensaje y el código de la API', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ message: 'Configura una zona horaria válida para la sede.', code: 'LOCATION_TIMEZONE_REQUIRED' }),
+    }) as unknown as typeof fetch;
+    await expect(apiFetchBlob('/locations/l1/contingency-agenda')).rejects.toMatchObject({
+      status: 409,
+      code: 'LOCATION_TIMEZONE_REQUIRED',
+    });
+  });
+});
+
+describe('fileNameFromDisposition (DX-339)', () => {
+  it('prefiere filename* (UTF-8) y si no, filename', () => {
+    expect(fileNameFromDisposition(`attachment; filename="a.pdf"; filename*=UTF-8''Se%C3%B1or.pdf`)).toBe('Señor.pdf');
+    expect(fileNameFromDisposition('attachment; filename="b.pdf"')).toBe('b.pdf');
+  });
+
+  it('sin cabecera, sin nombre o mal codificado: null', () => {
+    expect(fileNameFromDisposition(null)).toBeNull();
+    expect(fileNameFromDisposition('attachment')).toBeNull();
+    expect(fileNameFromDisposition(`attachment; filename*=UTF-8''%E0%A4%A`)).toBeNull();
   });
 });
 
