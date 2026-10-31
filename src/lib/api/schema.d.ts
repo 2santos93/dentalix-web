@@ -2084,6 +2084,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Genera (o reenvía) el enlace de confirmación de la cita; el anterior deja de valer
+         * @description DX-361: queda en la auditoría como UPDATE de APPOINTMENT (la cita), origen STAFF y `reason` CONFIRMATION_LINK_CREATED, o CONFIRMATION_LINK_RESENT si la cita ya tenía un enlace enviado. Sin el token ni la URL.
+         */
         post: operations["ConfirmationLinksController_create"];
         delete?: never;
         options?: never;
@@ -2100,6 +2104,10 @@ export interface paths {
         };
         get: operations["PublicAppointmentConfirmationsController_get"];
         put?: never;
+        /**
+         * El paciente confirma, cancela o pide que lo llamen
+         * @description DX-361: una respuesta registrada queda en la auditoría de la clínica de la cita como UPDATE de APPOINTMENT, sin usuario (el paciente), origen LINK y `reason` CONFIRMATION_LINK_CONFIRMED, CONFIRMATION_LINK_CANCELLED o CONFIRMATION_LINK_CALL_REQUESTED. Sin el token ni la URL; un enlace desconocido, caducado o ya usado no deja evento.
+         */
         post: operations["PublicAppointmentConfirmationsController_respond"];
         delete?: never;
         options?: never;
@@ -5420,7 +5428,7 @@ export interface components {
             to: string;
         };
         /**
-         * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal).
+         * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). DX-361: en la confirmación de cita por enlace, STAFF = recepción generó o reenvió el enlace; LINK = el paciente respondió desde él.
          * @enum {string}
          */
         AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB";
@@ -5562,7 +5570,7 @@ export interface components {
             move?: components["schemas"]["AuditAppointmentMoveDto"];
             /** @description DX-200: paso del flujo en la clínica (`reason` PATIENT_FLOW o ARRIVAL_UNDONE): estado de la cita antes y después. */
             status?: components["schemas"]["AuditStatusChangeDto"];
-            /** @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). */
+            /** @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). DX-361: en la confirmación de cita por enlace, STAFF = recepción generó o reenvió el enlace; LINK = el paciente respondió desde él. */
             origin?: components["schemas"]["AuditOrigin"];
             /** @description DX-191: búsqueda de implantes por lote/REF — lo buscado y cuántas filas salieron. */
             search?: components["schemas"]["AuditSearchDto"];

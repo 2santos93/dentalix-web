@@ -20,6 +20,7 @@ import {
   AUDIT_RESOURCE_OPTIONS,
   actorRoleLabel,
   communicationDetail,
+  confirmationLinkDetail,
   implantSearchDetail,
   isPatientOptOut,
   staffLoginDetail,
@@ -525,6 +526,7 @@ function AuditRow({
 }) {
   const detail =
     communicationDetail(event.metadata) ??
+    confirmationLinkDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
     staffLoginDetail(event.metadata) ??
     staffDetail(event.metadata, locationNames) ??
