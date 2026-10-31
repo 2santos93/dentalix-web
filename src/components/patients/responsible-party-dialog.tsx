@@ -28,8 +28,9 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 
 export const responsibleDialogCopy = {
   createTitle: 'Añadir responsable',
@@ -262,29 +263,16 @@ export function ResponsiblePartyDialog({
       error={saveError}
     >
       {!editing ? (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-medium text-ink">{copy.kindLegend}</legend>
-          <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
-            {(
-              [
-                ['PATIENT', copy.kindPatient],
-                ['CONTACT', copy.kindContact],
-              ] as const
-            ).map(([value, label]) => (
-              <label key={value} className="flex min-h-11 items-center gap-2 text-sm text-ink sm:min-h-0">
-                <input
-                  type="radio"
-                  name={`${ids}-kind`}
-                  value={value}
-                  checked={draft.kind === value}
-                  onChange={() => set('kind', value)}
-                  className="size-4 accent-[var(--color-primary)]"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <RadioGroup
+          id={`${ids}-kind`}
+          legend={copy.kindLegend}
+          value={draft.kind}
+          onValueChange={(value) => set('kind', value as typeof draft.kind)}
+          optionsClassName="gap-1 sm:flex-row sm:gap-6"
+        >
+          <RadioOption value="PATIENT" label={copy.kindPatient} />
+          <RadioOption value="CONTACT" label={copy.kindContact} />
+        </RadioGroup>
       ) : null}
 
       {draft.kind === 'PATIENT' ? (
@@ -294,7 +282,7 @@ export function ResponsiblePartyDialog({
             className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2"
           >
             <div className="flex min-w-0 items-center gap-2">
-              <Check aria-hidden className="size-4 shrink-0 text-primary" />
+              <Check aria-hidden className="size-4 shrink-0 text-primary-text" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-ink">
                   {draft.patient.firstName} {draft.patient.lastName}
@@ -369,7 +357,7 @@ export function ResponsiblePartyDialog({
                     <button
                       type="button"
                       onClick={() => set('patient', p)}
-                      className="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                     >
                       <span className="truncate text-sm text-ink">
                         {p.firstName} {p.lastName}
@@ -397,7 +385,7 @@ export function ResponsiblePartyDialog({
           </FormField>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField htmlFor={`${ids}-doctype`} label={copy.docType}>
-              <select
+              <NativeSelect
                 id={`${ids}-doctype`}
                 value={draft.docType}
                 onChange={(e) => {
@@ -409,7 +397,6 @@ export function ResponsiblePartyDialog({
                   set('docTypeLabel', next !== '' && next === seeded.docType ? seeded.docTypeLabel : '');
                   setLabelError(null);
                 }}
-                className={cn(fieldClass, 'h-10')}
               >
                 <option value="">{copy.docTypeNone}</option>
                 {DOC_TYPES.map((t) => (
@@ -417,7 +404,7 @@ export function ResponsiblePartyDialog({
                     {docTypeOptionLabel(t, docTypeNames)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FormField>
             <FormField htmlFor={`${ids}-docnumber`} label={copy.docNumber}>
               <Input
@@ -483,18 +470,17 @@ export function ResponsiblePartyDialog({
       ) : null}
 
       <FormField htmlFor={`${ids}-relationship`} label={copy.relationship}>
-        <select
+        <NativeSelect
           id={`${ids}-relationship`}
           value={draft.relationship}
           onChange={(e) => set('relationship', e.target.value as ResponsibleRelationship)}
-          className={cn(fieldClass, 'h-10')}
         >
           {RELATIONSHIPS.map((r) => (
             <option key={r} value={r}>
               {RELATIONSHIP_LABELS[r]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
 
       {(
@@ -503,24 +489,14 @@ export function ResponsiblePartyDialog({
           ['receivesNotices', copy.receivesNotices, copy.receivesNoticesHint],
         ] as const
       ).map(([key, label, hint]) => (
-        <div key={key} className="flex items-start gap-3">
-          <input
-            id={`${ids}-${key}`}
-            type="checkbox"
-            checked={draft[key]}
-            onChange={(e) => set(key, e.target.checked)}
-            aria-describedby={`${ids}-${key}-hint`}
-            className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-          />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor={`${ids}-${key}`} className="text-sm font-medium text-ink">
-              {label}
-            </label>
-            <p id={`${ids}-${key}-hint`} className="text-xs text-muted">
-              {hint}
-            </p>
-          </div>
-        </div>
+        <Checkbox
+          key={key}
+          id={`${ids}-${key}`}
+          checked={draft[key]}
+          onChange={(e) => set(key, e.target.checked)}
+          label={label}
+          description={hint}
+        />
       ))}
     </FormModal>
   );
