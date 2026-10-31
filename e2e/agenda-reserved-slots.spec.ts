@@ -103,10 +103,13 @@ async function openDay(page: Page) {
 }
 
 async function startBooking(page: Page, doc: string, start: string, type: string): Promise<Locator> {
-  await column(page, dentist.fullName)
-    .getByRole('button', { name: `Nueva cita con ${dentist.fullName}` })
-    .click();
+  // El botón «Nueva cita con …» de la columna solo sale mientras la columna
+  // está vacía (tras la cita del test anterior ya no): se usa el de cabecera
+  // y se elige el profesional en el formulario (abre con el día de la agenda).
+  await page.getByRole('button', { name: 'Nueva cita', exact: true }).click();
   const form = page.getByRole('form', { name: 'Agendar cita' });
+  await form.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
+  await expect(form.getByLabel('Fecha', { exact: true })).toHaveValue(DAY);
   await form.getByLabel('Paciente', { exact: true }).fill(doc);
   await expect(form.getByRole('button', { name: 'Cambiar' })).toBeVisible({ timeout: 10_000 });
   await form.getByLabel('Tipo de cita (opcional)').selectOption({ label: `${type} · 30 min` });
