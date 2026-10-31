@@ -55,12 +55,6 @@
   "src/components/appointments/week-agenda.tsx": {
     "select": 1
   },
-  "src/components/audit/audit-log-view.tsx": {
-    "select": 3
-  },
-  "src/components/auth/break-glass-step.tsx": {
-    "textarea": 2
-  },
   "src/components/cash-sessions/cash-adjustment-modal.tsx": {
     "select": 2,
     "textarea": 1
@@ -330,15 +324,6 @@
   },
   "src/components/shared/list-toolbar.tsx": {
     "select": 1
-  },
-  "src/components/staff/staff-locations-card.tsx": {
-    "checkbox": 2
-  },
-  "src/components/staff/staff-member-profile.tsx": {
-    "select": 2
-  },
-  "src/components/staff/staff-view.tsx": {
-    "select": 3
   },
   "src/components/treatment-plans/mark-done-modal.tsx": {
     "select": 2
