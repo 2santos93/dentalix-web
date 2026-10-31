@@ -354,15 +354,14 @@ function payerFiles(): string[] {
 
 /**
  * En todo `src` (producción, `schema.d.ts` incluido): ningún código de pagador
- * antiguo ni rótulo de pagador con país. Excepciones: el normalizador legado y
- * los nombres de pagadores reales (los de ejemplo del contrato).
+ * antiguo ni rótulo de pagador con país. Única excepción: el normalizador
+ * legado. El contrato ya no trae nombres de pagadores reales de ejemplo
+ * (DX-323): un nombre de aseguradora con «EPS» también cuenta.
  */
 const LEGACY_PAYER_CODE =
   /\b(?:MUTUA_ES|PREPAGADA_CO|EPS_CO)\b|['"`](?:EMPRESA|OTRO)['"`]|PAYER_COUNTRY_LABELS|PAYER_NO_COUNTRY_LABEL|PayerCountry|\((?:Colombia|España)\)|\bEPS\b|\b[Mm]utuas?\b|\b[Pp]repagadas?\b/;
-const REAL_PAYER_NAMES = /\bSura EPS\b/g;
-
 function legacyPayerCodeHit(line: string): boolean {
-  return LEGACY_PAYER_CODE.test(line.replace(REAL_PAYER_NAMES, ''));
+  return LEGACY_PAYER_CODE.test(line);
 }
 
 /**
@@ -482,11 +481,12 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
       'Aseguradoras, EPS y demás',
       'Mutua',
       'prepagadas',
+      '/** @example Convenio Sura EPS */',
     ]) {
       expect([line, legacyPayerCodeHit(line)]).toEqual([line, true]);
     }
     for (const line of [
-      '/** @example Convenio Sura EPS */',
+      '/** @example Convenio Empresa Alfa */',
       "type: 'OTHER',",
       'mutuamente',
       "country: 'CO'",
@@ -566,13 +566,8 @@ function namesCountryDocument(line: string): boolean {
  * ticket que la quita. Cualquier otra coincidencia se arregla, no se añade
  * aquí.
  */
-const COUNTRY_DOCUMENT_LINE_EXCEPTIONS: readonly { file: string; line: string; until: string }[] = [
-  {
-    file: 'components/payments/payment-receipt-document.tsx',
-    line: 'taxId: (value: string) => `NIT/NIF ${value}`,',
-    until: 'DX-019',
-  },
-];
+// Vacía desde DX-323: el recibo dice «Id. fiscal», sin sigla de un país.
+const COUNTRY_DOCUMENT_LINE_EXCEPTIONS: readonly { file: string; line: string; until: string }[] = [];
 
 function isLineException(rel: string, line: string): boolean {
   return COUNTRY_DOCUMENT_LINE_EXCEPTIONS.some((e) => e.file === rel && e.line === line.trim());
@@ -758,11 +753,11 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
       'synthetic.ts:5: const a = 1; // CC 1002',
       "synthetic.ts:7: const c = 'rif: J-1';",
     ]);
-    // La excepción es la línea exacta de su fichero, no la sigla.
+    // Sin excepciones (DX-323): la sigla fiscal de un país cuenta también en el recibo.
     const receipt = 'components/payments/payment-receipt-document.tsx';
-    expect(countryDocumentHits(receipt, '  taxId: (value: string) => `NIT/NIF ${value}`,')).toEqual([]);
+    expect(countryDocumentHits(receipt, '  taxId: (value: string) => `NIT/NIF ${value}`,')).toHaveLength(1);
     expect(countryDocumentHits(receipt, "  taxIdLabel: 'NIT',")).toEqual([`${receipt}:1: taxIdLabel: 'NIT',`]);
-    expect(countryDocumentHits('other.tsx', 'taxId: (value: string) => `NIT/NIF ${value}`,')).toHaveLength(1);
+    expect(countryDocumentHits(receipt, '  taxId: (value: string) => `Id. fiscal ${value}`,')).toEqual([]);
     for (const line of [
       'Cédula de ciudadanía',
       'cedula de extranjería',

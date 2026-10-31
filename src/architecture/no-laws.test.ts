@@ -228,3 +228,99 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
     }
   });
 });
+
+/**
+ * DX-323/DX-325: Dentalix es mundial y ningún país es el de por defecto. Ni el
+ * código de producción ni sus comentarios ni el contrato generado nombran
+ * Colombia, sus leyes y autoridades, su zona, locale o prefijo, sus
+ * aseguradoras y siglas sanitarias o fiscales, sus figuras legales ni sus
+ * ciudades. Aquí los comentarios cuentan: un comentario que justifica el
+ * código con la ley de un país es lo que vuelve a colar la regla. Las únicas
+ * excepciones son el layout de recetas ya emitidas (se reimprimen byte a byte,
+ * con sus líneas fijadas arriba) y las listas de referencia mundiales en JSON,
+ * que no se recorren. Los literales se arman por partes.
+ */
+const COLOMBIA_TERMS: ReadonlyArray<[string, RegExp]> = [
+  ['país', new RegExp('colombi', 'i')],
+  ['zona o ciudad', new RegExp('bogot[aá]|medell[ií]n|barranquilla|antioquia|cundinamarca', 'i')],
+  ['locale', new RegExp('\\bes-' + 'CO\\b')],
+  ['prefijo', new RegExp('(?<![\\w+])\\+' + '57\\b')],
+  [
+    'ley o autoridad',
+    new RegExp(
+      ['\\b15' + '81\\b', '\\b13' + '77\\b', 'superinten' + 'dencia', '83' + '9/2017', '19' + '95/1999', '48' + '16/2008'].join('|'),
+      'i',
+    ),
+  ],
+  [
+    'aseguradora',
+    new RegExp(
+      '\\b(?:' +
+        ['fami' + 'sanar', 'sani' + 'tas', 'nueva ' + 'eps', 'su' + 'ra', 'compen' + 'sar', 'coo' + 'meva', 'salud ' + 'total'].join('|') +
+        ')\\b',
+      'i',
+    ),
+  ],
+  ['sigla nacional', new RegExp('\\b(?:' + ['EP' + 'S', 'RI' + 'PS', 'CU' + 'PS', 'RE' + 'PS', 'DI' + 'AN', 'NI' + 'T'].join('|') + ')\\b')],
+  ['figura legal de un país', new RegExp('acudi' + 'ente', 'i')],
+];
+
+function colombiaHit(line: string): string | null {
+  const hit = COLOMBIA_TERMS.find(([, pattern]) => pattern.test(line));
+  return hit ? hit[0] : null;
+}
+
+describe('arquitectura: sin Colombia (DX-323, DX-325)', () => {
+  it('no production line, comment or generated contract line is Colombian', () => {
+    const files = [
+      ...productionFiles().filter((path) => rel(path) !== PRESCRIPTION_LEGACY_LAYOUT),
+      join(SRC, ...API_SCHEMA.split('/')),
+    ];
+    expect(files.length).toBeGreaterThan(300);
+    const hits = files.flatMap((file) =>
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .flatMap((line, i) => {
+          const kind = colombiaHit(line);
+          return kind ? [`${rel(file)}:${i + 1} (${kind}): ${line.trim()}`] : [];
+        }),
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it('the Colombia patterns catch each retired form and skip neutral text', () => {
+    for (const line of [
+      `// ${'Colom' + 'bia'} (UTC-5)`,
+      ` * @example America/${'Bogo' + 'ta'}`,
+      ` * (medianoche UTC sería la tarde en ${'Bogo' + 'tá'})`,
+      ` * @example ${'es-' + 'CO'}`,
+      `  hint: 'p. ej. +${'57'} 300 000 0000',`,
+      `  // Autorización ${'Ley ' + '1581'} (DX-037)`,
+      `  checklist: '(${'Dec. ' + '1377'}, art. 6)',`,
+      `  // retención legal (${'Res. ' + '839'}/2017)`,
+      ` * adenda (${'Res. ' + '1995'}/1999 art. 18)`,
+      `/** @example Convenio ${'Su' + 'ra'} ${'EP' + 'S'} */`,
+      `'${'Fami' + 'sanar'}'`,
+      `'Aseguradora / ${'EP' + 'S'}'`,
+      `  taxId: (value: string) => \`${'NI' + 'T'}/NIF \${value}\`,`,
+      `  LEGAL_GUARDIAN: '${'Acudi' + 'ente'} o tutor legal',`,
+      `'el código ${'RI' + 'PS'}'`,
+    ]) {
+      expect({ line, caught: colombiaHit(line) !== null }).toEqual({ line, caught: true });
+    }
+    for (const line of [
+      ' * @example UTC',
+      ' * @example es',
+      "const ZERO = ['COP', 'CLP', 'JPY'];",
+      '  EPS_CO',
+      '  taxId: (value: string) => `Id. fiscal ${value}`,',
+      "  LEGAL_GUARDIAN: 'Tutor legal',",
+      "'+00 000 000 0001'",
+      "'surable'",
+      'const steps = 3;',
+      "  'America/Caracas',",
+    ]) {
+      expect({ line, caught: colombiaHit(line) !== null }).toEqual({ line, caught: false });
+    }
+  });
+});
