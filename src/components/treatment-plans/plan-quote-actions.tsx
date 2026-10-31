@@ -36,6 +36,11 @@ interface PlanQuoteActionsProps {
   role: ClinicRole | null;
   /** Tras firmar: el padre recarga el plan (estado, ítems congelados, saldo). */
   onAccepted: (quote: PlanQuote) => void;
+  /**
+   * D2: ¿«Aceptar con firma» es LA primaria de la vista? La pestaña la elige
+   * por el estado del plan (`planPrimaryAction`); si no, va en secundario.
+   */
+  acceptPrimary?: boolean;
 }
 
 /**
@@ -45,7 +50,14 @@ interface PlanQuoteActionsProps {
  * DX-415: un presupuesto presentado se puede «Enviar a aceptar» a distancia;
  * aceptado así, dice «Aceptado a distancia» con sus evidencias.
  */
-export function PlanQuoteActions({ token, patientId, plan, role, onAccepted }: PlanQuoteActionsProps) {
+export function PlanQuoteActions({
+  token,
+  patientId,
+  plan,
+  role,
+  onAccepted,
+  acceptPrimary = true,
+}: PlanQuoteActionsProps) {
   const [accepting, setAccepting] = useState(false);
   const acceptance = plan.acceptance ?? null;
   const mayAccept = canAcceptPlan(role);
@@ -85,7 +97,11 @@ export function PlanQuoteActions({ token, patientId, plan, role, onAccepted }: P
           </Button>
         ) : null}
         {acceptable ? (
-          <Button type="button" onClick={() => setAccepting(true)}>
+          <Button
+            type="button"
+            variant={acceptPrimary ? 'default' : 'secondary'}
+            onClick={() => setAccepting(true)}
+          >
             <PenLine aria-hidden />
             {copy.accept}
           </Button>

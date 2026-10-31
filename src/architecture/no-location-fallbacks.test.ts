@@ -549,7 +549,8 @@ const GENERATED_LIST_COPIES = [COUNTRY_LIST_COPY, PHONE_REGION_LIST_COPY];
  * editables en el formulario (`useRegionalDraft`); nunca rellenan ni
  * sustituyen lo guardado. Sus datos (generados) usan códigos de país como
  * claves («CC» es Islas Cocos, no un documento) y su módulo es el único que
- * busca por país.
+ * busca por país. Registro de la decisión (D2): DESIGN.md › Settings pages ›
+ * «A sede's regional config». No añadir más ficheros aquí sin otra decisión.
  */
 const COUNTRY_REGIONAL_DATA = 'lib/locations/country-regional.json';
 const COUNTRY_REGIONAL_LIB = 'lib/locations/country-regional.ts';

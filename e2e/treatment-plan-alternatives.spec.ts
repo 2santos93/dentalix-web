@@ -15,7 +15,7 @@ import { openSection } from './support/nav';
  *     las presenta y acepta la A: la B queda «Rechazado» (otra opción aceptada);
  *   - la asistente ve el plan, pero no tiene «Presentar» ni «Aceptado»;
  *   - recepción entra en «Presupuestos por seguir» desde el menú, ve el grupo
- *     A/B de la demo (presentado hace 9 días, sin cita) con monto, días,
+ *     A/B de la demo en UNA fila (D2; presentado hace 9 días, sin cita) con monto, días,
  *     teléfono y WhatsApp prellenado, y marca un presupuesto como rechazado
  *     con motivo: sale de la lista.
  * En escritorio (1440px) y en móvil (390px, sin scroll horizontal).
@@ -233,12 +233,18 @@ for (const viewport of [
       ? page.getByRole('list', { name: 'Presupuestos presentados sin aceptar' })
       : page.getByRole('table', { name: 'Presupuestos presentados sin aceptar' });
     const rowRole = phone ? 'listitem' : 'row';
-    // El grupo A/B de la demo: dos filas del mismo paciente.
+    // D2: el grupo A/B de la demo es UNA fila (una conversación con el
+    // paciente): las dos opciones anidadas, la antigüedad de la más antigua y
+    // un solo WhatsApp.
     const demoRows = table.getByRole(rowRole).filter({ hasText: DEMO_OPTIONS_PATIENT });
-    await expect(demoRows).toHaveCount(2, { timeout: 15_000 });
-    await expect(demoRows.filter({ hasText: 'Opción A: implante' })).toContainText(/hace [89] días/);
+    await expect(demoRows).toHaveCount(1, { timeout: 15_000 });
+    await expect(demoRows).toContainText('Opción A: implante');
+    await expect(demoRows).toContainText('Opción B: puente fijo');
+    await expect(demoRows).toContainText(/hace [89] días/);
+    if (!phone) await expect(demoRows).toContainText('2 opciones');
+    await expect(demoRows.getByRole('link', { name: `WhatsApp a ${DEMO_OPTIONS_PATIENT}` })).toHaveCount(1);
     await expect(
-      demoRows.filter({ hasText: 'Opción B: puente fijo' }).getByRole('link', {
+      demoRows.getByRole('link', {
         name: `WhatsApp a ${DEMO_OPTIONS_PATIENT}`,
       }),
     ).toHaveAttribute('href', /^https:\/\/wa\.me\/573195550110\?text=Hola%20Carolina/);

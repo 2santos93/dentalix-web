@@ -59,6 +59,8 @@ interface PlanItemFormProps {
   role: ClinicRole | null;
   /** Tras agregar: refresca el plan y el saldo (y se espera antes de reactivar el botón). */
   onAdded: () => Promise<unknown>;
+  /** D2: ¿«Agregar ítem» es LA primaria de la vista? Si no, secundario. */
+  submitPrimary?: boolean;
 }
 
 /**
@@ -75,6 +77,7 @@ export function PlanItemForm({
   discountRules,
   role,
   onAdded,
+  submitPrimary = true,
 }: PlanItemFormProps) {
   // Add-item form state.
   const [toothNumber, setToothNumber] = useState('');
@@ -408,7 +411,12 @@ export function PlanItemForm({
       {addItemValidationError && <InlineError>{addItemValidationError}</InlineError>}
       {addItemError && <InlineError>{addItemError}</InlineError>}
 
-      <Button type="submit" disabled={addItemSubmitting || addPriceLoading} className="self-start">
+      <Button
+        type="submit"
+        variant={submitPrimary ? 'default' : 'secondary'}
+        disabled={addItemSubmitting || addPriceLoading}
+        className="self-start"
+      >
         {addItemSubmitting ? copy.addItemSubmitting : copy.addItemSubmit}
       </Button>
     </form>

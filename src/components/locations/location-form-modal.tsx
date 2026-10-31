@@ -63,6 +63,11 @@ export const locationFormCopy = {
   consequencesTitle: 'Qué cambia al guardar',
   consequenceCurrency: (before: string, after: string) =>
     `Moneda: lo ya registrado en ${before} (cobros con su tasa de cambio, gastos, presupuestos y listas de precios) se queda en ${before}; no se convierte. Lo nuevo se registrará en ${after}. La numeración de los recibos no cambia.`,
+  // D2 (decisión registrada en DESIGN.md › Settings pages): cambiar la zona
+  // NO congela el día civil de cada movimiento — lo guardado son instantes
+  // UTC y el día se deriva con la zona ACTUAL, así que corregir una zona mal
+  // puesta re-cuenta la historia en la buena. Nada guardado se reescribe; este
+  // texto lo dice antes de guardar y la API pide confirmación (409).
   consequenceTimeZone: (after: string) =>
     `Zona horaria: las citas no se mueven, conservan su hora exacta. El horario de la sede y de los profesionales se leerá en ${after}, y la caja y los informes contarán los días con esa zona, también los de lo ya registrado.`,
   consequenceFormat: (after: string) =>

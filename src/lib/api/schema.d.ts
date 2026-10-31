@@ -10819,13 +10819,15 @@ export interface components {
             itemCount: number;
         };
         PendingFollowUpPageDto: {
+            /** @description Las opciones de los grupos de esta página: las de un mismo grupo (`optionGroupId`) salen seguidas y nunca se parten entre páginas */
             items: components["schemas"]["PendingFollowUpItemDto"][];
+            /** @description Grupos por seguir (un plan suelto es su propio grupo): lo que se pagina con page/pageSize */
             total: number;
             page: number;
             pageSize: number;
         };
         PendingFollowUpCountDto: {
-            /** @description Planes por seguir con esos filtros (todas las páginas) */
+            /** @description Presupuestos por seguir con esos filtros (todas las páginas), contando las opciones A/B de un plan como uno solo */
             total: number;
         };
         CreateTreatmentPlanDto: {
@@ -23883,7 +23885,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cuántos planes saldrían en «Presupuestos por seguir» con los mismos filtros */
+            /** @description Cuántos presupuestos (grupos de opciones) saldrían en «Presupuestos por seguir» con los mismos filtros */
             200: {
                 headers: {
                     [name: string]: unknown;
