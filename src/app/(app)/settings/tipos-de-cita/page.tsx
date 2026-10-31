@@ -38,10 +38,13 @@ export default function AppointmentTypesPage() {
   return (
     <>
       <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
-      <AppointmentTypesManager
-        token={accessToken}
-        allowed={canManageAppointmentTypes(getTokenRole(accessToken))}
-      />
+      {/* Plantilla de Ajustes: columna de 720 px alineada a la izquierda. */}
+      <div className="w-full max-w-[45rem]">
+        <AppointmentTypesManager
+          token={accessToken}
+          allowed={canManageAppointmentTypes(getTokenRole(accessToken))}
+        />
+      </div>
     </>
   );
 }

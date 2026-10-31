@@ -1,5 +1,6 @@
 'use client';
 import * as React from 'react';
+import { submitOnEnter } from '@/components/appointments/submit-on-enter';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { updateAppointment, type Appointment } from '@/lib/appointments/appointments-api';
@@ -17,7 +18,10 @@ import { wallDay } from '@/lib/time/wall-clock';
 import { patientLabel } from '@/components/appointments/appointment-display';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { TimeField } from '@/components/ui/date-field';
+import { NativeSelect } from '@/components/ui/native-select';
+import { isCivilDay } from '@/lib/time/civil-day';
 import { endSentence } from '@/lib/format/text';
 
 const copy = {
@@ -37,9 +41,6 @@ const copy = {
       : endSentence(`Fuera del horario de atención. Ese día se atiende: ${ranges}`),
   genericError: 'No pudimos mover la cita. Intenta de nuevo.',
 };
-
-const selectClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg';
 
 interface MoveAppointmentDialogProps {
   open: boolean;
@@ -86,7 +87,7 @@ export function MoveAppointmentDialog({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    if (!date || startMinute === null || !providerId) {
+    if (!isCivilDay(date) || startMinute === null || !providerId) {
       setError(copy.missing);
       return;
     }
@@ -121,14 +122,14 @@ export function MoveAppointmentDialog({
       submitting={submitting}
       error={error}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* Enter en la fecha o la hora mueve la cita, como en un campo de texto. */}
+      <div className="grid gap-4 sm:grid-cols-2" onKeyDownCapture={submitOnEnter}>
         <FormField htmlFor="move-date" label={copy.date}>
-          <Input
+          <DatePicker
             id="move-date"
-            type="date"
             required
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+            value={date || null}
+            onChange={(next) => setDate(next ?? '')}
           />
         </FormField>
         <FormField
@@ -136,30 +137,27 @@ export function MoveAppointmentDialog({
           label={copy.time}
           hint={endLabel ? copy.duration(duration, endLabel) : undefined}
         >
-          <Input
+          <TimeField
             id="move-time"
-            type="time"
-            step={300}
             required
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
+            value={time || null}
+            onChange={(next) => setTime(next ?? '')}
           />
         </FormField>
       </div>
       <FormField htmlFor="move-provider" label={copy.provider}>
-        <select
+        <NativeSelect
           id="move-provider"
           required
           value={providerId}
           onChange={(e) => setProviderId(e.target.value)}
-          className={selectClass}
         >
           {providers.map((p) => (
             <option key={p.userId} value={p.userId}>
               {p.fullName}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
     </FormModal>
   );

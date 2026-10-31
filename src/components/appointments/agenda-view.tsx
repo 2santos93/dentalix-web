@@ -1,4 +1,6 @@
 'use client';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -188,6 +190,9 @@ const copy = {
   wantsEarlierError: 'No pudimos cambiar «Adelantar si hay hueco».',
   selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
   statusLabel: 'Estado',
+  detailProvider: 'Profesional',
+  detailType: 'Tipo',
+  detailReason: 'Motivo',
   // DX-122: bloqueos de agenda y pendientes por agendar.
   blockSchedule: 'Bloquear horario',
   blockCreated: 'Horario bloqueado.',
@@ -1341,15 +1346,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             {columnsMode && offToday.length > 0 ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <span className="text-muted">{copy.hiddenProviders(offToday.length)}</span>
-                <label className="inline-flex min-h-11 items-center gap-2 font-medium text-ink sm:min-h-0">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-[var(--color-primary)]"
-                    checked={showAllProviders}
-                    onChange={(e) => setShowAllProviders(e.target.checked)}
-                  />
-                  {copy.showAllProviders}
-                </label>
+                <Checkbox
+                  checked={showAllProviders}
+                  onChange={(e) => setShowAllProviders(e.target.checked)}
+                  label={copy.showAllProviders}
+                />
               </div>
             ) : null}
             {dayLayout === 'list' ? (
@@ -1546,7 +1547,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   {sedeTimeRange(liveDetailAppointment.start, liveDetailAppointment.end, clock.of(liveDetailAppointment.locationId))}
                 </SheetDescription>
               </SheetHeader>
-              <SheetBody className="flex flex-col gap-4">
+              <SheetBody className="flex flex-col gap-4 [&>*]:shrink-0">
                 {/* DX-247: «Requiere premedicación» y las alertas, primero. */}
                 <AppointmentMedicalAlerts flags={liveDetailAppointment.medicalAlerts} />
                 {/* DX-279: inasistencias y cancelaciones tardías del paciente (12 meses). */}
@@ -1557,9 +1558,20 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     {copy.cancelledBy} {cancellationSummary(liveDetailAppointment)}
                   </p>
                 ) : null}
-                {liveDetailAppointment.reason && (
-                  <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
-                )}
+                {/* Quién atiende, qué tipo y para qué: lo que recepción confirma por teléfono. */}
+                <DescriptionList columns={1} layout="inline">
+                  {staffName(liveDetailAppointment.providerId) ? (
+                    <DescriptionItem label={copy.detailProvider}>
+                      {staffName(liveDetailAppointment.providerId)}
+                    </DescriptionItem>
+                  ) : null}
+                  {liveDetailAppointment.appointmentType ? (
+                    <DescriptionItem label={copy.detailType}>{liveDetailAppointment.appointmentType.name}</DescriptionItem>
+                  ) : null}
+                  {liveDetailAppointment.reason ? (
+                    <DescriptionItem label={copy.detailReason}>{liveDetailAppointment.reason}</DescriptionItem>
+                  ) : null}
+                </DescriptionList>
                 <CoverageDetailLine coverage={liveDetailAppointment.coverage} />
                 <FormField htmlFor="detail-status" label={copy.statusLabel}>
                   {/* DX-295: las flechas no cambian la cita; solo Enter o un clic. */}
@@ -1578,27 +1590,16 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 {canChangeWantsEarlier(role) &&
                 (liveDetailAppointment.status === 'SCHEDULED' ||
                   liveDetailAppointment.status === 'CONFIRMED') ? (
-                  <div className="flex items-start gap-3">
-                    <input
-                      id="detail-wants-earlier"
-                      type="checkbox"
-                      checked={liveDetailAppointment.wantsEarlier}
-                      disabled={updatingId === liveDetailAppointment.id}
-                      onChange={(e) =>
-                        void handleWantsEarlierChange(liveDetailAppointment.id, e.target.checked)
-                      }
-                      aria-describedby="detail-wants-earlier-hint"
-                      className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-                    />
-                    <div className="flex flex-col gap-0.5">
-                      <label htmlFor="detail-wants-earlier" className="text-sm font-medium text-ink">
-                        {WANTS_EARLIER_LABEL}
-                      </label>
-                      <p id="detail-wants-earlier-hint" className="text-xs text-muted">
-                        {copy.wantsEarlierHint}
-                      </p>
-                    </div>
-                  </div>
+                  <Checkbox
+                    id="detail-wants-earlier"
+                    checked={liveDetailAppointment.wantsEarlier}
+                    disabled={updatingId === liveDetailAppointment.id}
+                    onChange={(e) =>
+                      void handleWantsEarlierChange(liveDetailAppointment.id, e.target.checked)
+                    }
+                    label={WANTS_EARLIER_LABEL}
+                    description={copy.wantsEarlierHint}
+                  />
                 ) : null}
                 {liveDetailAppointment.status === 'CANCELLED' &&
                 new Date(liveDetailAppointment.end).getTime() > Date.now() &&
@@ -1660,7 +1661,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     inicio). Solo citas aún por atender. */}
                 {liveDetailAppointment.status === 'SCHEDULED' ||
                 liveDetailAppointment.status === 'CONFIRMED' ? (
-                  <div className="border-t border-hairline pt-4">
+                  <div className="border-t border-border-subtle pt-4">
                     <AnamnesisLinkPanel
                       key={`anamnesis-${liveDetailAppointment.id}`}
                       token={token}

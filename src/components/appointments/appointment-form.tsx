@@ -1,5 +1,6 @@
 'use client';
 import * as React from 'react';
+import { submitOnEnter } from '@/components/appointments/submit-on-enter';
 import { useEffect, useRef, useState } from 'react';
 import { PatientMedicalAlertsNotice } from '@/components/clinical/appointment-medical-alerts';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -27,13 +28,18 @@ import {
 import { sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
-import { civilWeekday } from '@/lib/time/civil-day';
+import { civilWeekday, isCivilDay } from '@/lib/time/civil-day';
 import { wallInstant } from '@/lib/time/wall-clock';
 import { UserPlus, Loader2, Search, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
+import { TimeField } from '@/components/ui/date-field';
+import { fieldLabelId } from '@/components/shared/form-field';
 import {
   Dialog,
   DialogContent,
@@ -49,6 +55,8 @@ import { useProviderDay } from '@/components/appointments/use-provider-day';
 import { fitsRanges } from '@/lib/locations/provider-schedule';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { endSentence } from '@/lib/format/text';
+import { controlHeight, fieldClass } from '@/lib/ui/field-class';
+import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
@@ -217,7 +225,10 @@ export function AppointmentForm({
   const [typesReloadKey, setTypesReloadKey] = useState(0);
   const [appointmentTypeId, setAppointmentTypeId] = useState('');
 
-  const [date, setDate] = useState(defaultDate ?? '');
+  // Lo escrito en el campo (puede ir a medias: «0002-11-01» mientras se teclea
+  // el año) y el día civil que vale para todo lo demás.
+  const [dateDraft, setDate] = useState(defaultDate ?? '');
+  const date = dateDraft !== '' && isCivilDay(dateDraft) ? dateDraft : '';
   const [startTime, setStartTime] = useState(defaultStartTime ?? '');
   const [endTime, setEndTime] = useState(defaultEndTime ?? '');
   const [reason, setReason] = useState(defaultReason ?? '');
@@ -504,7 +515,7 @@ export function AppointmentForm({
     patients.length === 0;
 
   return (
-    <form onSubmit={handleSubmit} aria-label={copy.submit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} onKeyDownCapture={submitOnEnter} aria-label={copy.submit} className="flex flex-col gap-4">
       <Dialog open={showPatientDialog} onOpenChange={setShowPatientDialog}>
         <DialogContent>
           <DialogHeader>
@@ -548,7 +559,7 @@ export function AppointmentForm({
               className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2"
             >
               <div className="flex min-w-0 items-center gap-2">
-                <Check className="size-4 shrink-0 text-primary" />
+                <Check className="size-4 shrink-0 text-primary-text" />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-ink">
                     {fullPatientName(selectedPatient)}
@@ -579,7 +590,7 @@ export function AppointmentForm({
                 placeholder={copy.patientSearchPlaceholder}
                 value={patientQuery}
                 onChange={(e) => setPatientQuery(e.target.value)}
-                className="flex h-10 w-full rounded-lg border border-border bg-surface pl-9 pr-9 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+                className={cn(fieldClass, controlHeight, 'pl-9 pr-9')}
               />
               {patientsLoading && (
                 <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted" />
@@ -603,7 +614,7 @@ export function AppointmentForm({
               >
                 <span
                   aria-hidden
-                  className="flex size-9 items-center justify-center rounded-full bg-bg text-muted"
+                  className="flex size-9 items-center justify-center rounded-full bg-surface-sunken text-muted"
                 >
                   <Search className="size-4" />
                 </span>
@@ -633,7 +644,7 @@ export function AppointmentForm({
                       role="option"
                       aria-selected={false}
                       onClick={() => handlePatientSelect(p)}
-                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                     >
                       <span className="truncate text-sm text-ink">{fullPatientName(p)}</span>
                       <span className="shrink-0 text-xs text-muted">{patientDocLabel(p)}</span>
@@ -657,13 +668,12 @@ export function AppointmentForm({
             className="h-10 w-full"
           />
         ) : (
-          <select
+          <NativeSelect
             id="appointment-provider"
             required
             disabled={staffLoading}
             value={providerId}
             onChange={(e) => setProviderId(e.target.value)}
-            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="" disabled>
               {staffLoading ? copy.providerLoading : copy.providerPlaceholder}
@@ -673,7 +683,7 @@ export function AppointmentForm({
                 {s.fullName}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         )}
       </div>
 
@@ -688,12 +698,11 @@ export function AppointmentForm({
             className="h-10 w-full"
           />
         ) : (
-          <select
+          <NativeSelect
             id="appointment-type"
             value={appointmentTypeId}
             onChange={(e) => handleTypeChange(e.target.value)}
             aria-describedby="appointment-type-hint"
-            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
             <option value="">{copy.typeNone}</option>
             {types.map((t) => (
@@ -701,7 +710,7 @@ export function AppointmentForm({
                 {copy.typeOption(t.name, t.durationMinutes)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         )}
         <p id="appointment-type-hint" className="text-xs text-muted">
           {copy.typeHint}
@@ -710,7 +719,7 @@ export function AppointmentForm({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="flex flex-col gap-1">
-          <label htmlFor="appointment-date" className="text-sm font-medium text-ink">
+          <label id={fieldLabelId('appointment-date')} htmlFor="appointment-date" className="text-sm font-medium text-ink">
             {copy.dateLabel}
           </label>
           {sede.status === 'error' ? (
@@ -723,18 +732,16 @@ export function AppointmentForm({
               onRetry={sede.retry}
             />
           ) : (
-            <input
+            <DatePicker
               id="appointment-date"
-              type="date"
               required
               disabled={!clock}
-              // No se puede agendar en el pasado: el date picker no ofrece días
+              // No se puede agendar en el pasado: el calendario no ofrece días
               // anteriores a hoy en la sede. "Hoy a una hora ya pasada" lo cubre
               // la validación del instante en handleSubmit (y el backend con un 400).
               min={today && minimumDate && minimumDate > today ? minimumDate : today}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+              value={dateDraft || null}
+              onChange={(next) => setDate(next ?? '')}
             />
           )}
           {/* Pista del horario del día elegido: que se VEA por qué una hora no
@@ -749,29 +756,25 @@ export function AppointmentForm({
           )}
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="appointment-start-time" className="text-sm font-medium text-ink">
+          <label id={fieldLabelId('appointment-start-time')} htmlFor="appointment-start-time" className="text-sm font-medium text-ink">
             {copy.startTimeLabel}
           </label>
-          <input
+          <TimeField
             id="appointment-start-time"
-            type="time"
             required
-            value={startTime}
-            onChange={(e) => handleStartTimeChange(e.target.value)}
-            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+            value={startTime || null}
+            onChange={(next) => handleStartTimeChange(next ?? '')}
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="appointment-end-time" className="text-sm font-medium text-ink">
+          <label id={fieldLabelId('appointment-end-time')} htmlFor="appointment-end-time" className="text-sm font-medium text-ink">
             {copy.endTimeLabel}
           </label>
-          <input
+          <TimeField
             id="appointment-end-time"
-            type="time"
             required
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+            value={endTime || null}
+            onChange={(next) => setEndTime(next ?? '')}
           />
         </div>
       </div>
@@ -780,34 +783,22 @@ export function AppointmentForm({
         <label htmlFor="appointment-reason" className="text-sm font-medium text-ink">
           {copy.reasonLabel}
         </label>
-        <input
+        <Input
           id="appointment-reason"
           type="text"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
 
       {canMarkWantsEarlier ? (
-        <div className="flex items-start gap-3">
-          <input
-            id="appointment-wants-earlier"
-            type="checkbox"
-            checked={wantsEarlier}
-            onChange={(e) => setWantsEarlier(e.target.checked)}
-            aria-describedby="appointment-wants-earlier-hint"
-            className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-          />
-          <div className="flex flex-col gap-0.5">
-            <label htmlFor="appointment-wants-earlier" className="text-sm font-medium text-ink">
-              {copy.wantsEarlierLabel}
-            </label>
-            <p id="appointment-wants-earlier-hint" className="text-xs text-muted">
-              {copy.wantsEarlierHint}
-            </p>
-          </div>
-        </div>
+        <Checkbox
+          id="appointment-wants-earlier"
+          checked={wantsEarlier}
+          onChange={(e) => setWantsEarlier(e.target.checked)}
+          label={copy.wantsEarlierLabel}
+          description={copy.wantsEarlierHint}
+        />
       ) : null}
 
       {(() => {

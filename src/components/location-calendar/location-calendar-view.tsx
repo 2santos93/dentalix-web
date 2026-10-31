@@ -12,6 +12,8 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Skeleton } from '@/components/ui/skeleton';
+import { NativeSelect } from '@/components/ui/native-select';
+import { SectionHeader } from '@/components/ui/section-header';
 import { HolidaysSection } from './holidays-section';
 import { WorkingWeekdaysForm } from './working-weekdays-form';
 
@@ -30,10 +32,6 @@ export const locationCalendarCopy = {
 };
 
 const copy = locationCalendarCopy;
-
-// 44 px bajo `sm` (DESIGN.md, objetivo táctil de móvil).
-const selectClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-11 sm:w-80';
 
 /**
  * La sede de la pantalla: la de `?sede=` si existe; si no, la misma regla que
@@ -65,7 +63,12 @@ export function LocationCalendarView({ token, allowed }: { token: string; allowe
   if (!allowed) {
     return <EmptyState role="status" icon={<Lock aria-hidden />} title={copy.forbiddenTitle} description={copy.forbiddenHint} />;
   }
-  return <AllowedLocationCalendarView token={token} />;
+  // Plantilla de Ajustes: una columna de formulario de 720 px, alineada a la izquierda.
+  return (
+    <div className="w-full max-w-[45rem]">
+      <AllowedLocationCalendarView token={token} />
+    </div>
+  );
 }
 
 function AllowedLocationCalendarView({ token }: { token: string }) {
@@ -101,16 +104,16 @@ function AllowedLocationCalendarView({ token }: { token: string }) {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={selectId} className="text-sm font-medium text-ink">
+        <label htmlFor={selectId} className="t-label text-ink">
           {copy.sede}
         </label>
-        <select id={selectId} className={selectClass} value={location.id} onChange={(e) => choose(e.target.value)}>
+        <NativeSelect id={selectId} className="sm:w-80" value={location.id} onChange={(e) => choose(e.target.value)}>
           {state.locations.map((l) => (
             <option key={l.id} value={l.id}>
               {optionLabel(l)}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
       {/* Al cambiar de sede se monta de cero: nada de la anterior se queda en pantalla. */}
       <LocationCalendarSections key={location.id} token={token} location={location} onRetryLocations={state.retry} />
@@ -179,9 +182,7 @@ function LocationCalendarSections({
         />
       )}
       <section aria-labelledby="working-weekdays-heading" className="flex flex-col gap-3">
-        <h2 id="working-weekdays-heading" className="text-lg font-semibold text-ink">
-          {copy.weekdaysHeading}
-        </h2>
+        <SectionHeader title={copy.weekdaysHeading} titleId="working-weekdays-heading" />
         {/* Los nombres de los días no dependen del formato de la sede: el formulario va siempre (M3). */}
         <WorkingWeekdaysForm
           token={token}

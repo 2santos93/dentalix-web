@@ -254,8 +254,8 @@ test('una cita fuera de su horario se agenda con el aviso; «Buscar hueco» en l
   const form = page.getByRole('form', { name: 'Agendar cita' });
   await form.getByLabel('Paciente', { exact: true }).fill(`ROT${suffix}`.slice(0, 20));
   await expect(form.getByRole('button', { name: 'Cambiar' })).toBeVisible({ timeout: 10_000 });
-  await form.getByLabel('Hora de inicio').fill('10:00');
-  await form.getByLabel('Hora de fin').fill('10:30');
+  await fillTime(form, 'Hora de inicio', '10:00');
+  await fillTime(form, 'Hora de fin', '10:30');
   await expect(form.getByTestId('provider-off-schedule')).toContainText(
     `${dentist.fullName} no atiende en esta sede ese día. Se puede agendar igual; quedará el aviso.`,
   );
@@ -273,8 +273,8 @@ test('una cita fuera de su horario se agenda con el aviso; «Buscar hueco» en l
   await entry.getByRole('button', { name: `Buscar hueco para Bruno ${patientLast}` }).click();
   const search = page.getByRole('dialog', { name: `Buscar hueco para Bruno ${patientLast}` });
   await search.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
-  await search.getByLabel('Hasta', { exact: true }).fill(NEXT_THURSDAY);
-  await search.getByLabel('Desde', { exact: true }).fill(MONDAY);
+  await fillDate(search, 'Hasta', NEXT_THURSDAY);
+  await fillDate(search, 'Desde', MONDAY);
   await search.getByRole('button', { name: 'Buscar' }).click();
   const openings = search.getByTestId('opening');
   // Solo el jueves de esta semana (el de la siguiente tiene la excepción).

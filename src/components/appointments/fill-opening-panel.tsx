@@ -412,7 +412,7 @@ export function FillOpeningPanel({
                 </p>
               </div>
               {canAct && !acceptedBy ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2">
                   {linkOpen ? (
                     <>
                       <span className="text-xs tabular-nums text-muted" aria-live="polite">
@@ -433,7 +433,7 @@ export function FillOpeningPanel({
                   )}
                 </div>
               ) : null}
-              <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+              <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
                 {items.map((c) => (
                   <CandidateRow
                     key={keyOf(c)}
@@ -677,7 +677,7 @@ function CandidateRow({
               id={outcomeGroupId}
               role="group"
               aria-label={fillOpeningCopy.outcomeLegend(name)}
-              className="flex flex-wrap gap-2 rounded-lg bg-surface-2 p-2"
+              className="flex flex-wrap gap-2 rounded-lg bg-surface-sunken p-2"
             >
               {(Object.keys(fillOpeningCopy.outcomes) as OfferOutcome[]).map((outcome) => (
                 <Button

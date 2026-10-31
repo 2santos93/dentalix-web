@@ -1,5 +1,5 @@
 import { test, expect } from './support/test';
-import { fillDate } from './support/dates';
+import { fillDate, fillTime, readDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
@@ -152,9 +152,9 @@ for (const browserClock of ['23:30', '06:00']) {
     await expect(appointmentForm.getByText(`${patientFirstName} ${patientLastName}`)).toBeVisible();
     await appointmentForm.getByLabel('Profesional', { exact: true }).selectOption({ label: fullName });
     // El formulario hereda el día que se está viendo (`defaultDate`): el ancla.
-    await expect(appointmentForm.getByLabel('Fecha', { exact: true })).toHaveValue(anchorDay);
-    await appointmentForm.getByLabel('Hora de inicio').fill(startTime);
-    await appointmentForm.getByLabel('Hora de fin').fill(endTime);
+    await expect.poll(() => readDate(appointmentForm, 'Fecha')).toBe(anchorDay);
+    await fillTime(appointmentForm, 'Hora de inicio', startTime);
+    await fillTime(appointmentForm, 'Hora de fin', endTime);
     await appointmentForm.getByLabel('Motivo (opcional)').fill(appointmentReason);
 
     const saveError = appointmentForm.locator('p[role="alert"]');

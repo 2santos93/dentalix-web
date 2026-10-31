@@ -4,7 +4,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { sedeDayFromToday } from './support/clock';
 import { API_URL, tenantOrigin } from './support/urls';
-import { fillDate, fillTime } from './support/dates';
+import { fillDate, fillTime, readDate } from './support/dates';
 
 /**
  * e2e DX-446: huecos reservados para urgencias.
@@ -110,11 +110,11 @@ async function startBooking(page: Page, doc: string, start: string, type: string
   await page.getByRole('button', { name: 'Nueva cita', exact: true }).click();
   const form = page.getByRole('form', { name: 'Agendar cita' });
   await form.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
-  await expect(form.getByLabel('Fecha', { exact: true })).toHaveValue(DAY);
+  await expect.poll(() => readDate(form, 'Fecha')).toBe(DAY);
   await form.getByLabel('Paciente', { exact: true }).fill(doc);
   await expect(form.getByRole('button', { name: 'Cambiar' })).toBeVisible({ timeout: 10_000 });
   await form.getByLabel('Tipo de cita (opcional)').selectOption({ label: `${type} · 30 min` });
-  await form.getByLabel('Hora de inicio', { exact: true }).fill(start);
+  await fillTime(form, 'Hora de inicio', start);
   return form;
 }
 
@@ -129,10 +129,10 @@ test('recepción reserva 15:00–16:00 de Luis para urgencias y la agenda lo pin
   await dialog.getByLabel('Motivo', { exact: true }).selectOption('RESERVED');
   await expect(dialog.getByRole('checkbox', { name: /Consulta de urgencia/ })).toBeChecked();
   await expect(dialog.getByRole('checkbox', { name: /Limpieza/ })).not.toBeChecked();
-  await dialog.getByLabel('Desde', { exact: true }).fill(DAY);
-  await dialog.getByLabel('Hasta (incluido)').fill(DAY);
-  await dialog.getByLabel('Hora de inicio', { exact: true }).fill('15:00');
-  await dialog.getByLabel('Hora de fin', { exact: true }).fill('16:00');
+  await fillDate(dialog, 'Desde', DAY);
+  await fillDate(dialog, 'Hasta (incluido)', DAY);
+  await fillTime(dialog, 'Hora de inicio', '15:00');
+  await fillTime(dialog, 'Hora de fin', '16:00');
   await fillTime(dialog, 'Liberar a partir de (opcional)', '11:00');
   await dialog.getByRole('button', { name: 'Bloquear', exact: true }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
@@ -157,7 +157,7 @@ test('recepción: «Limpieza» en el hueco reservado da 409 legible; «Consulta 
   await expect(form.getByRole('button', { name: 'Agendar igualmente' })).toHaveCount(0);
 
   await form.getByLabel('Tipo de cita (opcional)').selectOption({ label: 'Consulta de urgencia · 30 min' });
-  await form.getByLabel('Hora de inicio', { exact: true }).fill('15:00');
+  await fillTime(form, 'Hora de inicio', '15:00');
   await form.getByRole('button', { name: 'Agendar cita' }).click();
   await expect(form).toBeHidden({ timeout: 10_000 });
 });

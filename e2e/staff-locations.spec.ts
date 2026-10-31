@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Browser, type Page } from './support/test';
-import { fillDate } from './support/dates';
+import { fillDate, fillTime } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { accessTokenOf, loginAs, registerAndLogin } from './support/auth';
@@ -277,8 +277,8 @@ for (const viewport of VIEWPORTS) {
       await form.getByLabel('Paciente', { exact: true }).fill(northName);
       await expect(form.getByRole('button', { name: 'Cambiar' })).toBeVisible({ timeout: 10_000 });
       await form.getByLabel('Profesional', { exact: true }).selectOption({ label: ownerName });
-      await form.getByLabel('Hora de inicio').fill('11:00');
-      await form.getByLabel('Hora de fin').fill('11:30');
+      await fillTime(form, 'Hora de inicio', '11:00');
+      await fillTime(form, 'Hora de fin', '11:30');
       await form.getByLabel('Motivo (opcional)').fill(reason);
       await form.getByRole('button', { name: 'Agendar cita' }).click();
       await expect(form).toBeHidden({ timeout: 10_000 });

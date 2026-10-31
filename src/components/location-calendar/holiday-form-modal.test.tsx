@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { dateGroup, readDate, typeDate } from '@/components/appointments/date-segments-for-tests';
 import { HolidayFormModal, holidayFormCopy } from './holiday-form-modal';
 import { createHoliday, updateHoliday, type LocationHoliday } from '@/lib/locations/location-calendar-api';
 import { ApiError } from '@/lib/api/api-error';
@@ -31,7 +32,8 @@ function renderModal(holiday?: LocationHoliday) {
   return { onSaved, onOpenChange };
 }
 
-const dateInput = () => screen.getByLabelText(copy.date) as HTMLInputElement;
+/** La fecha es un `DatePicker` por segmentos: el primero (el día, en `es`) lleva foco e invalidez. */
+const daySegment = () => within(dateGroup(copy.date)).getAllByRole('spinbutton')[0];
 const nameInput = () => screen.getByLabelText(copy.name) as HTMLInputElement;
 const recurringBox = () => screen.getByRole('checkbox', { name: copy.recurring }) as HTMLInputElement;
 
@@ -43,10 +45,10 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     const user = setupUser();
     const { onSaved, onOpenChange } = renderModal();
     expect(screen.getByRole('heading', { name: copy.createTitle })).toBeInTheDocument();
-    expect(dateInput()).toHaveAttribute('type', 'date');
+    expect(daySegment()).toHaveAttribute('data-type', 'day');
     expect(nameInput()).toHaveAttribute('maxLength', '120');
 
-    await user.type(dateInput(), '2027-12-25');
+    await typeDate(user, copy.date, '2027-12-25');
     await user.type(nameInput(), '  Navidad ');
     await user.click(recurringBox());
     await user.click(screen.getByRole('button', { name: copy.create }));
@@ -64,8 +66,8 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     await user.click(screen.getByRole('button', { name: copy.create }));
     expect(screen.getByText(copy.dateMissing)).toBeInTheDocument();
     expect(screen.getByText(copy.nameMissing)).toBeInTheDocument();
-    expect(dateInput()).toHaveAttribute('aria-invalid', 'true');
-    expect(dateInput()).toHaveFocus();
+    expect(daySegment()).toHaveAttribute('aria-invalid', 'true');
+    expect(daySegment()).toHaveFocus();
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
@@ -78,7 +80,7 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     );
     const user = setupUser();
     const { onSaved, onOpenChange } = renderModal();
-    await user.type(dateInput(), '2027-05-03');
+    await typeDate(user, copy.date, '2027-05-03');
     await user.type(nameInput(), 'Fiesta');
     await user.click(screen.getByRole('button', { name: copy.create }));
 
@@ -86,7 +88,7 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     expect(onSaved).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
     // Lo escrito se queda para corregirlo.
-    expect(dateInput().value).toBe('2027-05-03');
+    expect(readDate(copy.date)).toBe('2027-05-03');
     expect(nameInput().value).toBe('Fiesta');
   });
 
@@ -101,13 +103,13 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     );
     const user = setupUser();
     renderModal();
-    await user.type(dateInput(), '2027-05-03');
+    await typeDate(user, copy.date, '2027-05-03');
     await user.type(nameInput(), 'Fiesta');
     await user.click(screen.getByRole('button', { name: copy.create }));
 
     const banner = await screen.findByText(/Fecha «x» no válida/);
     expect(banner).toHaveTextContent('El nombre es obligatorio (hasta 120 caracteres).');
-    expect(dateInput()).not.toHaveAttribute('aria-invalid');
+    expect(daySegment()).not.toHaveAttribute('aria-invalid');
     expect(nameInput()).not.toHaveAttribute('aria-invalid');
   });
 
@@ -117,12 +119,12 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     );
     const user = setupUser();
     renderModal();
-    await user.type(dateInput(), '2027-05-03');
+    await typeDate(user, copy.date, '2027-05-03');
     await user.type(nameInput(), 'Fiesta');
     await user.click(screen.getByRole('button', { name: copy.create }));
 
     expect(await screen.findByText('El identificador de la sede no es válido.')).toBeInTheDocument();
-    expect(dateInput()).not.toHaveAttribute('aria-invalid');
+    expect(daySegment()).not.toHaveAttribute('aria-invalid');
     expect(nameInput()).not.toHaveAttribute('aria-invalid');
     expect(recurringBox()).not.toHaveAttribute('aria-invalid');
   });
@@ -132,7 +134,7 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     mockedCreate.mockRejectedValue(new ApiError(409, message, { code: 'LOCATION_HOLIDAY_LIMIT' }));
     const user = setupUser();
     renderModal();
-    await user.type(dateInput(), '2027-05-03');
+    await typeDate(user, copy.date, '2027-05-03');
     await user.type(nameInput(), 'Fiesta');
     await user.click(screen.getByRole('button', { name: copy.create }));
     expect(await screen.findByText(message)).toBeInTheDocument();
@@ -144,13 +146,14 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     );
     const user = setupUser();
     renderModal();
-    await user.type(dateInput(), '2028-02-29');
+    await typeDate(user, copy.date, '2028-02-29');
     await user.type(nameInput(), 'Bisiesto');
     await user.click(recurringBox());
     await user.click(screen.getByRole('button', { name: copy.create }));
 
     const message = await screen.findByText('Un festivo de cada año no puede ser el 29 de febrero.');
-    expect(recurringBox()).toHaveAttribute('aria-describedby', message.closest('[id]')?.id);
+    // La casilla lleva su pista y el error: los dos se leen.
+    expect(recurringBox().getAttribute('aria-describedby')?.split(' ')).toContain(message.closest('[id]')?.id);
     expect(recurringBox()).toHaveFocus();
   });
 
@@ -159,7 +162,7 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     const user = setupUser();
     const { onSaved } = renderModal(mayo);
     expect(screen.getByRole('heading', { name: copy.editTitle })).toBeInTheDocument();
-    expect(dateInput().value).toBe('2027-05-03');
+    expect(readDate(copy.date)).toBe('2027-05-03');
     expect(nameInput().value).toBe('Fiesta local');
     expect(recurringBox().checked).toBe(false);
 

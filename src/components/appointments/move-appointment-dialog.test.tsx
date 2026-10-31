@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { readDate, readTime, typeTime } from './date-segments-for-tests';
 import { MoveAppointmentDialog } from './move-appointment-dialog';
 import { ApiError } from '@/lib/api/client';
 import { updateAppointment, type Appointment } from '@/lib/appointments/appointments-api';
@@ -67,8 +68,8 @@ describe('MoveAppointmentDialog (DX-121)', () => {
 
   it('parte de la fecha, hora y profesional actuales', () => {
     renderDialog();
-    expect(screen.getByLabelText('Fecha')).toHaveValue(FUTURE);
-    expect(screen.getByLabelText('Hora de inicio')).toHaveValue('09:00');
+    expect(readDate('Fecha')).toBe(FUTURE);
+    expect(readTime('Hora de inicio')).toBe('09:00');
     expect(screen.getByLabelText('Profesional')).toHaveValue('prov-1');
     expect(screen.getByText('Dura 90 min: terminaría a las 10:30.')).toBeInTheDocument();
   });
@@ -79,12 +80,9 @@ describe('MoveAppointmentDialog (DX-121)', () => {
     mockedUpdate.mockResolvedValue(moved);
     const onMoved = renderDialog();
 
-    const time = screen.getByLabelText('Hora de inicio');
-    await user.clear(time);
-    await user.type(time, '15:00');
     await user.selectOptions(screen.getByLabelText('Profesional'), 'prov-2');
-    // Envío implícito con Enter desde un campo del formulario.
-    time.focus();
+    await typeTime(user, 'Hora de inicio', '15:00');
+    // Envío implícito con Enter desde el campo de hora (submitOnEnter).
     await user.keyboard('{Enter}');
 
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
@@ -132,12 +130,9 @@ describe('MoveAppointmentDialog con el reloj de la sede (DX-378)', () => {
         onMoved={jest.fn()}
       />,
     );
-    expect(screen.getByLabelText('Hora de inicio')).toHaveValue('09:00');
+    expect(readTime('Hora de inicio')).toBe('09:00');
     expect(screen.getByText('Dura 90 min: terminaría a las 10:30 a. m.')).toBeInTheDocument();
-    const time = screen.getByLabelText('Hora de inicio');
-    await user.clear(time);
-    await user.type(time, '15:00');
-    time.focus();
+    await typeTime(user, 'Hora de inicio', '15:00');
     await user.keyboard('{Enter}');
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     expect(mockedUpdate).toHaveBeenCalledWith('tok', 'apt-1', {

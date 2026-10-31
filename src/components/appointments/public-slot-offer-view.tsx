@@ -84,10 +84,10 @@ function SlotSummary({ details }: { details: PublicSlotOfferDetails }) {
     { icon: MapPin, label: publicSlotOfferCopy.locationLabel, value: details.locationName, sub: details.locationAddress },
   ];
   return (
-    <dl className="divide-y divide-hairline rounded-xl border border-border bg-surface">
+    <dl className="divide-y divide-border-subtle rounded-xl border border-border bg-surface">
       {rows.map(({ icon: Icon, label, value, sub }) => (
         <div key={label} className="relative min-w-0 py-3 pl-12 pr-4">
-          <dt className="text-xs font-medium tracking-wide text-muted">
+          <dt className="t-caption text-muted">
             <Icon aria-hidden className="absolute left-4 top-3.5 size-5 text-muted" />
             {label}
           </dt>
@@ -146,7 +146,7 @@ export function PublicSlotOfferView({ token }: { token: string }) {
   const clock = details ? slotClock(details) : null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
@@ -184,7 +184,7 @@ export function PublicSlotOfferView({ token }: { token: string }) {
                   className="size-10 shrink-0 rounded-lg object-contain"
                 />
               )}
-              <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight text-ink">
+              <h1 className="t-display min-w-0 break-words text-ink">
                 {clinic?.name ?? publicSlotOfferCopy.fallbackClinic}
               </h1>
             </header>
@@ -198,7 +198,7 @@ export function PublicSlotOfferView({ token }: { token: string }) {
             {data.state === 'ACCEPTED' && (
               <section aria-labelledby="slot-offer-accepted" className="flex flex-col gap-4">
                 <div role="status" className="rounded-xl border border-border bg-surface px-4 py-4">
-                  <h2 id="slot-offer-accepted" className="text-lg font-semibold text-ink">
+                  <h2 id="slot-offer-accepted" className="t-title text-ink">
                     {data.message}
                   </h2>
                   <p className="mt-1 text-sm text-ink">{publicSlotOfferCopy.acceptedLead}</p>
@@ -215,7 +215,7 @@ export function PublicSlotOfferView({ token }: { token: string }) {
                 </p>
                 <SlotSummary details={details} />
                 {details.currentAppointmentStart ? (
-                  <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm tabular-nums text-ink">
+                  <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm tabular-nums text-ink">
                     {publicSlotOfferCopy.movesFrom(
                       `${longAppointmentDay(details.currentAppointmentStart, details.timeZone)} a las ${sedeTime(details.currentAppointmentStart, clock)}`,
                     )}

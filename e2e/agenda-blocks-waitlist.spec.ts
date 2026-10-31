@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
-import { fillDate } from './support/dates';
+import { fillDate, fillTime } from './support/dates';
 import { confirmCancellation } from './support/cancellation';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
@@ -120,8 +120,8 @@ test('recepción bloquea las vacaciones de Luis: se ven en la agenda y una cita 
   const dialog = page.getByRole('dialog', { name: 'Bloquear horario' });
   await dialog.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
   await expect(dialog.getByLabel('Motivo', { exact: true })).toHaveValue('VACATION');
-  await dialog.getByLabel('Desde', { exact: true }).fill(VACATION_DAY);
-  await dialog.getByLabel('Hasta (incluido)').fill(VACATION_DAY);
+  await fillDate(dialog, 'Desde', VACATION_DAY);
+  await fillDate(dialog, 'Hasta (incluido)', VACATION_DAY);
   await dialog.getByLabel('Nota (opcional)').fill('Vacaciones de Luis');
   await dialog.getByRole('button', { name: 'Bloquear', exact: true }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
@@ -138,8 +138,8 @@ test('recepción bloquea las vacaciones de Luis: se ven en la agenda y una cita 
   const form = page.getByRole('form', { name: 'Agendar cita' });
   await form.getByLabel('Paciente', { exact: true }).fill(camilaDoc);
   await expect(form.getByRole('button', { name: 'Cambiar' })).toBeVisible({ timeout: 10_000 });
-  await form.getByLabel('Hora de inicio', { exact: true }).fill('10:00');
-  await form.getByLabel('Hora de fin').fill('10:30');
+  await fillTime(form, 'Hora de inicio', '10:00');
+  await fillTime(form, 'Hora de fin', '10:30');
   await form.getByRole('button', { name: 'Agendar cita' }).click();
   await expect(
     // Un día completo se nombra por el día elegido, no por el fin exclusivo.
@@ -185,14 +185,14 @@ test('cancelar una cita la deja en «Pendientes» y reactivarla la saca; «Busca
   await expect(search.getByLabel('Profesional', { exact: true }).locator('option:checked')).toHaveText(dentist.fullName);
 
   // El día de vacaciones de Luis no tiene huecos.
-  await search.getByLabel('Desde', { exact: true }).fill(VACATION_DAY);
-  await search.getByLabel('Hasta', { exact: true }).fill(VACATION_DAY);
+  await fillDate(search, 'Desde', VACATION_DAY);
+  await fillDate(search, 'Hasta', VACATION_DAY);
   await search.getByRole('button', { name: 'Buscar' }).click();
   await expect(search.getByText('No hay huecos libres en estas fechas')).toBeVisible({ timeout: 10_000 });
 
   // El día de la cita: solo dentro del horario (9–13 y 15–19).
-  await search.getByLabel('Hasta', { exact: true }).fill(BOOK_DAY);
-  await search.getByLabel('Desde', { exact: true }).fill(BOOK_DAY);
+  await fillDate(search, 'Hasta', BOOK_DAY);
+  await fillDate(search, 'Desde', BOOK_DAY);
   await search.getByRole('button', { name: 'Buscar' }).click();
   const openings = search.getByTestId('opening');
   await expect(openings).toHaveCount(2, { timeout: 10_000 });
@@ -236,7 +236,7 @@ test('móvil (390 px): «Pendientes» es un cajón a pantalla completa y el form
   const dialog = page.getByRole('dialog', { name: 'Bloquear horario' });
   await expect(dialog.getByLabel('Motivo', { exact: true })).toBeVisible();
   await dialog.getByLabel('Motivo', { exact: true }).selectOption('LUNCH');
-  await expect(dialog.getByLabel('Hora de inicio', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'Hora de inicio', exact: true })).toBeVisible();
   // Tras la animación de entrada: el modal entero dentro de los 390 px.
   await expect
     .poll(async () => {

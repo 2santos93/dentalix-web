@@ -1,4 +1,5 @@
 'use client';
+import { Textarea } from '@/components/ui/textarea';
 import * as React from 'react';
 import { useId, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -16,7 +17,6 @@ import { STATUS_LABELS } from '@/components/appointments/appointment-display';
 import { FormModal } from '@/components/shared/form-modal';
 import { Label } from '@/components/ui/label';
 import { InlineError } from '@/components/errors/inline-error';
-import { fieldClass } from '@/lib/ui/field-class';
 
 export const completedExitCopy = {
   title: (to: string) => `¿Pasar la cita completada a «${to}»?`,
@@ -93,9 +93,10 @@ export function CompletedExitModal({
     >
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={id}>{completedExitCopy.reason}</Label>
-        <textarea
+        <Textarea
           id={id}
           rows={3}
+          autoGrow
           maxLength={STATUS_REASON_MAX}
           value={reason}
           disabled={submitting}
@@ -105,7 +106,6 @@ export function CompletedExitModal({
             setReason(e.target.value);
             setValidation(null);
           }}
-          className={fieldClass}
         />
         <div id={hintId}>
           {validation ? (

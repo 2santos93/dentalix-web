@@ -8,50 +8,6 @@
     "radio": 1,
     "select": 1
   },
-  "src/components/appointments/agenda-view.tsx": {
-    "checkbox": 2
-  },
-  "src/components/appointments/appointment-form.tsx": {
-    "checkbox": 1,
-    "select": 2
-  },
-  "src/components/appointments/appointment-status-select.tsx": {
-    "select": 1
-  },
-  "src/components/appointments/cancel-appointment-dialog.tsx": {
-    "radio": 1,
-    "select": 1,
-    "textarea": 2
-  },
-  "src/components/appointments/completed-exit-modal.tsx": {
-    "textarea": 1
-  },
-  "src/components/appointments/day-agenda.tsx": {
-    "select": 1
-  },
-  "src/components/appointments/fee-reason-modal.tsx": {
-    "textarea": 1
-  },
-  "src/components/appointments/move-appointment-dialog.tsx": {
-    "select": 1
-  },
-  "src/components/appointments/openings-dialog.tsx": {
-    "select": 1
-  },
-  "src/components/appointments/public-confirmation-view.tsx": {
-    "checkbox": 1
-  },
-  "src/components/appointments/schedule-block-dialog.tsx": {
-    "checkbox": 2,
-    "radio": 1,
-    "select": 4
-  },
-  "src/components/appointments/waitlist-panel.tsx": {
-    "textarea": 1
-  },
-  "src/components/appointments/week-agenda.tsx": {
-    "select": 1
-  },
   "src/components/cash-sessions/cash-adjustment-modal.tsx": {
     "select": 2,
     "textarea": 1
@@ -119,15 +75,6 @@
     "select": 2,
     "textarea": 1
   },
-  "src/components/location-calendar/holiday-form-modal.tsx": {
-    "checkbox": 1
-  },
-  "src/components/location-calendar/location-calendar-view.tsx": {
-    "select": 1
-  },
-  "src/components/location-calendar/working-weekdays-form.tsx": {
-    "checkbox": 1
-  },
   "src/components/locations/location-switcher.tsx": {
     "select": 2
   },
@@ -160,9 +107,6 @@
   },
   "src/components/receivables/receivables-view.tsx": {
     "select": 4
-  },
-  "src/components/reminders/reminder-settings-modal.tsx": {
-    "checkbox": 1
   },
   "src/components/reports/locations-comparison-view.tsx": {
     "select": 3

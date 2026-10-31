@@ -9,6 +9,7 @@ import { setWorkingWeekdays, type LocationCalendar } from '@/lib/locations/locat
 import { describeWorkingWeekdays, ISO_WEEK_ORDER } from '@/lib/locations/location-calendar';
 import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export const workingWeekdaysCopy = {
   legend: 'Días hábiles',
@@ -117,16 +118,14 @@ export function WorkingWeekdaysForm({ token, locationId, initial, onSaved }: Wor
               <label
                 key={day}
                 htmlFor={inputId}
-                className="flex min-h-11 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-border bg-surface px-1 py-2 text-center text-sm text-ink has-[:checked]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-bg"
+                className="flex min-h-11 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-border bg-surface px-1 py-2 text-center text-sm text-ink transition-colors hover:bg-surface-sunken has-checked:border-primary-border has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary-text"
               >
-                <input
+                <Checkbox
                   ref={first ? firstDayRef : undefined}
                   id={inputId}
-                  type="checkbox"
                   checked={days.includes(day)}
                   onChange={(e) => toggle(day, e.target.checked)}
                   disabled={saving}
-                  className="size-4 shrink-0 accent-[var(--color-primary)] focus-visible:outline-none"
                 />
                 {/* Casilla encima del nombre: «Miércoles» cabe entero en una cuarta parte de 390 px. */}
                 <span className="break-words">{capitalize(weekdayName(day))}</span>
@@ -137,12 +136,12 @@ export function WorkingWeekdaysForm({ token, locationId, initial, onSaved }: Wor
       </fieldset>
       {/* El error, justo debajo de las casillas que lo provocan (DESIGN, escalón 4). */}
       {message ? <InlineError id={errorId}>{message}</InlineError> : null}
-      <p data-testid="working-weekdays-summary" className="font-medium text-ink">
+      <p data-testid="working-weekdays-summary" className="text-sm text-ink">
         {isEmpty ? copy.noSummary : describeWorkingWeekdays(days, { weekdayName })}
       </p>
       <p id={helpId} className="max-w-[68ch] text-sm text-muted">
         {copy.help}{' '}
-        <Link href="/settings/horarios" className="font-medium text-ink underline underline-offset-2 hover:text-primary">
+        <Link href="/settings/horarios" className="font-medium text-primary-text underline-offset-2 hover:underline">
           {copy.schedulesLink}
         </Link>
       </p>

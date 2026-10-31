@@ -1,14 +1,11 @@
 'use client';
 import { useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { InClinicView } from '@/components/appointments/in-clinic-view';
 
 const copy = {
   checkingSession: 'Verificando sesión…',
-  back: 'Agenda',
 };
 
 /**
@@ -34,16 +31,5 @@ export default function InClinicPage() {
   }
   if (!accessToken) return null;
 
-  return (
-    <div className="flex flex-col gap-6">
-      <Link
-        href="/agenda"
-        className="inline-flex h-11 items-center gap-1 self-start rounded-md text-sm font-medium text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:h-9"
-      >
-        <ChevronLeft aria-hidden className="size-4" />
-        {copy.back}
-      </Link>
-      <InClinicView token={accessToken} />
-    </div>
-  );
+  return <InClinicView token={accessToken} />;
 }

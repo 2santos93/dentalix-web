@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
+import { fillDate, readDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -227,7 +228,7 @@ test('add, edit and delete a holiday on A', async ({ page }) => {
     await section.getByRole('button', { name: 'Añadir festivo' }).click();
     const dialog = page.getByRole('dialog', { name: 'Añadir festivo' });
     await expect(dialog).toBeVisible();
-    await dialog.getByLabel('Fecha').fill('2027-05-03');
+    await fillDate(dialog, 'Fecha', '2027-05-03');
     await dialog.getByLabel('Nombre').fill('Fiesta de la sede');
     if (sede === 'A') await shoot(page, 'holiday-modal');
     await dialog.getByRole('button', { name: 'Añadir festivo' }).click();
@@ -241,7 +242,7 @@ test('add, edit and delete a holiday on A', async ({ page }) => {
     await section.getByRole('button', { name: `Acciones de Fiesta de la sede, ${shown}` }).click();
     await page.getByRole('menuitem', { name: 'Editar' }).click();
     const edit = page.getByRole('dialog', { name: 'Editar festivo' });
-    await expect(edit.getByLabel('Fecha')).toHaveValue('2027-05-03');
+    await expect.poll(() => readDate(edit, 'Fecha')).toBe('2027-05-03');
     await edit.getByLabel('Nombre').fill('Fiesta mayor de la sede');
     await edit.getByRole('button', { name: 'Guardar festivo' }).click();
     await expect(edit).toBeHidden();
