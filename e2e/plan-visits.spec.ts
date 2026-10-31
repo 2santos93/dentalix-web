@@ -268,8 +268,13 @@ async function readableText(scope: Locator) {
         const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
         const size = parseFloat(style.fontSize),
           weight = parseInt(style.fontWeight, 10);
-        const minimum =
-          size >= 24 || (size >= 18.66 && weight >= 700) ? 3 : 4.5;
+        // Una casilla (`Checkbox` UX v2) no tiene texto: su borde se mide
+        // como componente de interfaz (WCAG 1.4.11, 3:1), no como texto.
+        const minimum = e.matches('input[type="checkbox"],input[type="radio"]')
+          ? 3
+          : size >= 24 || (size >= 18.66 && weight >= 700)
+            ? 3
+            : 4.5;
         return {
           text: (e.getAttribute("aria-label") ?? e.textContent ?? e.tagName)
             .trim()

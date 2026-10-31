@@ -454,6 +454,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
               disabled={mediums.status === 'loading'}
               onChange={(e) => changeMedium(e.target.value)}
               className="sm:w-56"
+              selectClassName="max-sm:h-11"
             >
               <option value={ALL_MEDIUMS}>
                 {mediums.status === 'loading' ? copy.mediumsLoading : copy.mediumAll}

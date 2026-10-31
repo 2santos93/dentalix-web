@@ -232,6 +232,7 @@ export function MarkDoneModal({
             <Label htmlFor={locationSelectId}>{copy.locationLabel}</Label>
             <NativeSelect
               id={locationSelectId}
+              selectClassName="max-md:h-11"
               value={locationId}
               disabled={submitting}
               aria-required
@@ -303,6 +304,7 @@ export function MarkDoneModal({
         ) : (
           <NativeSelect
             id={selectId}
+            selectClassName="max-md:h-11"
             value={performerId}
             disabled={submitting}
             aria-required

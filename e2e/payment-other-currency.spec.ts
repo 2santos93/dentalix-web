@@ -175,13 +175,15 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
     { pair: '1 USD = 36,50 VES', day: YESTERDAY },
     { pair: '1 USD = 40,00 VES', day: TODAY },
   ];
-  const receipts = panel.getByRole('button', { name: /^Recibo/ }).locator('visible=true');
+  // UX v2: «Recibo» vive en el «⋯» de cada abono.
+  const receipts = panel.getByRole('button', { name: /^Acciones de abono/ });
   await expect(receipts).toHaveCount(2);
 
   async function readReceipts(): Promise<string[]> {
     const texts: string[] = [];
     for (let i = 0; i < 2; i += 1) {
       await receipts.nth(i).click();
+      await page.getByRole('menuitem', { name: 'Recibo' }).click();
       const doc = page.getByTestId('receipt-document');
       await expect(doc).toContainText('Tasa aplicada', { timeout: 15_000 });
       await expect(doc).toContainText(/Equivalente en USD/);
