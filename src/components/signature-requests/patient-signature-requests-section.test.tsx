@@ -4,6 +4,7 @@ import { PatientSignatureRequestsSection } from './patient-signature-requests-se
 import { ApiError } from '@/lib/api/api-error';
 import {
   listSignatureRequests,
+  resendSignedConsentPdfCopy,
   retrySignedConsentPdf,
   revokeSignatureRequest,
   type SignatureRequest,
@@ -19,6 +20,7 @@ jest.mock('../../lib/signature-requests/signature-requests-api', () => ({
   listSignatureRequests: jest.fn(),
   revokeSignatureRequest: jest.fn(),
   retrySignedConsentPdf: jest.fn(),
+  resendSignedConsentPdfCopy: jest.fn(),
   getSignatureRequestOptions: jest.fn(() => new Promise(() => {})),
 }));
 jest.mock('../../lib/patient-documents/patient-documents-api', () => ({
@@ -36,6 +38,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
 const mockedList = listSignatureRequests as jest.MockedFunction<typeof listSignatureRequests>;
 const mockedRevoke = revokeSignatureRequest as jest.MockedFunction<typeof revokeSignatureRequest>;
 const mockedRetry = retrySignedConsentPdf as jest.MockedFunction<typeof retrySignedConsentPdf>;
+const mockedResend = resendSignedConsentPdfCopy as jest.MockedFunction<typeof resendSignedConsentPdfCopy>;
 const mockedUrl = getPatientDocumentUrl as jest.MockedFunction<typeof getPatientDocumentUrl>;
 const mockedDownload = startDownload as jest.MockedFunction<typeof startDownload>;
 
@@ -71,6 +74,7 @@ function request(overrides: Partial<SignatureRequest> = {}): SignatureRequest {
     countersignedAt: null,
     signedPdfStatus: null,
     signedPdfDocumentId: null,
+    signedPdfCopySentAt: null,
     ...overrides,
   };
 }
@@ -255,6 +259,56 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
       );
       expect(screen.getByRole('button', { name: /Descargar PDF/ })).toBeEnabled();
       expect(mockedDownload).not.toHaveBeenCalled();
+    });
+
+    it('DX-443: dice cuándo salió la copia al paciente y «Reenviar copia» envía un enlace nuevo', async () => {
+      mockedList.mockResolvedValue([
+        complete({
+          signedPdfStatus: 'READY',
+          signedPdfDocumentId: 'doc-1',
+          signedPdfCopySentAt: '2026-10-30T16:01:00.000Z',
+        }),
+      ]);
+      mockedResend.mockReset();
+      mockedResend.mockResolvedValue({
+        sentAt: '2026-10-31T14:00:00.000Z',
+        expiresAt: '2026-11-07T14:00:00.000Z',
+        destinationMasked: 'la***@example.com',
+      });
+      const user = setupUser();
+      render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+      expect(await screen.findByText(/Copia enviada al paciente el 30\/10\/2026/)).toBeInTheDocument();
+      const button = screen.getByRole('button', { name: /Reenviar copia/ });
+      expect(button).toHaveAccessibleName('Reenviar copia de Consentimiento informado — Exodoncia');
+      await user.click(button);
+      expect(mockedResend).toHaveBeenCalledWith('tok', 'p1', 'pc-1');
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith(
+          'Copia enviada a la***@example.com. El enlace anterior ya no sirve.',
+        ),
+      );
+      expect(await screen.findByText(/Copia enviada al paciente el 31\/10\/2026/)).toBeInTheDocument();
+    });
+
+    it('DX-443: sin copia enviada lo dice; si el reenvío falla, avisa con el mensaje de la API y deja reintentar', async () => {
+      mockedList.mockResolvedValue([complete({ signedPdfStatus: 'READY', signedPdfDocumentId: 'doc-1' })]);
+      mockedResend.mockReset();
+      mockedResend.mockRejectedValue(
+        new ApiError(429, 'Ya enviamos un correo a esta persona hace un momento.'),
+      );
+      const user = setupUser();
+      render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+      expect(await screen.findByText('Aún no se ha enviado la copia al paciente.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /Reenviar copia/ }));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('correo'), expect.anything()));
+      expect(screen.getByRole('button', { name: /Reenviar copia/ })).toBeEnabled();
+    });
+
+    it('DX-443: sin el PDF listo no ofrece reenviar la copia', async () => {
+      mockedList.mockResolvedValue([complete({ signedPdfStatus: 'PENDING' })]);
+      render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+      await screen.findByText('Generando el PDF firmado: aparecerá aquí y en Documentos del paciente.');
+      expect(screen.queryByRole('button', { name: /Reenviar copia/ })).toBeNull();
     });
 
     it('generándose: lo dice y no ofrece descargar todavía', async () => {

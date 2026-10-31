@@ -234,5 +234,81 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       expect(download.suggestedFilename()).toMatch(/^Consentimiento firmado - .+\.pdf$/);
     });
   }
-});
 
+  // DX-443: al quedar archivado, la paciente recibe su copia por email con un
+  // enlace de un solo uso (sin nada clínico en el correo ni en la página).
+  let copyToken = '';
+
+  test('la paciente descarga su copia del PDF firmado una sola vez (390 px, sin sesión)', async ({ browser }) => {
+    copyToken = await linkFromMail(PATIENT_EMAIL, /\/copia\/([A-Za-z0-9_-]{43})/);
+    const context = await browser.newContext({
+      locale: E2E_BROWSER_LOCALE,
+      timezoneId: 'America/Bogota',
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    try {
+      // El enlace del correo apunta al subdominio de la clínica: se abre en el
+      // origen de la suite con el mismo token.
+      const response = await page.goto(`${origin}/copia/${copyToken}`);
+      expect(response?.headers()['cache-control']).toBe('no-store');
+      expect(response?.headers()['referrer-policy']).toBe('no-referrer');
+      expect(response?.headers()['x-robots-tag']).toBe('noindex, nofollow');
+      await expect(page.getByText('Tu copia del documento firmado está lista para descargar')).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.getByText(/Exodoncia/)).toHaveCount(0);
+      await expectNoHorizontalScroll(page);
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: 'Descargar PDF' }).click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(/^Consentimiento firmado - .+\.pdf$/);
+      await expect(page.getByRole('heading', { name: 'Descarga iniciada' })).toBeVisible();
+
+      // Una sola vez: después, «enlace usado».
+      await page.goto(`${origin}/copia/${copyToken}`);
+      await expect(page.getByRole('heading', { name: 'Este enlace ya se usó' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Descargar PDF' })).toHaveCount(0);
+      await expectNoHorizontalScroll(page);
+    } finally {
+      await context.close();
+    }
+  });
+
+  for (const { width, height, label } of [
+    { width: 1440, height: 900, label: '1440' },
+    { width: 390, height: 844, label: '390 px' },
+  ]) {
+    test(`recepción ve «Copia enviada al paciente» y reenvía la copia (${label})`, async ({ page, browser }) => {
+      expect(copyToken, 'el test anterior no dejó el enlace de la copia').not.toBe('');
+      await page.setViewportSize({ width, height });
+      await loginAs(page, origin, RECEPTION_EMAIL, DEMO_PASSWORD);
+      await page.goto(`${origin}/patients/${patientId}?tab=consents`);
+      const row = signatureRows(page).first();
+      await expect(row).toContainText(/Copia enviada al paciente el /, { timeout: 15_000 });
+      await expectNoHorizontalScroll(page);
+      await row.getByRole('button', { name: `Reenviar copia de ${TEMPLATE_TITLE}` }).click();
+      await expect(page.getByText('Copia enviada a la***@example.com. El enlace anterior ya no sirve.')).toBeVisible();
+      const previous = copyToken;
+      await expect(async () => {
+        copyToken = await linkFromMail(PATIENT_EMAIL, /\/copia\/([A-Za-z0-9_-]{43})/);
+        expect(copyToken).not.toBe(previous);
+      }).toPass({ timeout: 15_000 });
+
+      // El enlace anterior ya no sirve; el nuevo, sí.
+      const patient = await browser.newPage();
+      try {
+        await patient.goto(`${origin}/copia/${previous}`);
+        await expect(patient.getByRole('heading', { name: /Enlace no válido|Este enlace ya se usó/ })).toBeVisible({
+          timeout: 15_000,
+        });
+        await patient.goto(`${origin}/copia/${copyToken}`);
+        await expect(patient.getByRole('button', { name: 'Descargar PDF' })).toBeVisible({ timeout: 15_000 });
+      } finally {
+        await patient.close();
+      }
+    });
+  }
+});

@@ -4312,6 +4312,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/consents/{id}/signed-pdf/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reenviar la copia del PDF firmado al paciente
+         * @description Envía por email (outbox de DX-088, sin nada clínico) un enlace NUEVO de un solo uso para descargar el PDF firmado, al email de la firma a distancia; el anterior deja de servir en la misma transacción. Auditado como SEND de CONSENT, reason SIGNED_PDF_COPY_RESENT. Sin el token ni la URL en la respuesta.
+         */
+        post: operations["PatientConsentsController_resendSignedPdfCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/signed-consent-copies/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente abre el enlace de su copia del PDF firmado
+         * @description Estado del enlace y la marca de la clínica; ni el título del documento ni nada clínico.
+         */
+        get: operations["PublicSignedPdfCopiesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/signed-consent-copies/{token}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Descarga la copia (una sola vez)
+         * @description Gasta el enlace y devuelve una URL firmada de 60 s del PDF archivado (attachment). Queda en la auditoría como EXPORT de CONSENT, origen PUBLIC_LINK, reason SIGNED_PDF_COPY_DOWNLOADED, en la misma transacción. Una segunda vez: 410 `SIGNED_PDF_COPY_LINK_USED` («Este enlace ya se usó»).
+         */
+        post: operations["PublicSignedPdfCopiesController_download"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/post-op-templates": {
         parameters: {
             query?: never;
@@ -14620,6 +14680,50 @@ export interface components {
         SignedConsentPdfRetryDto: {
             status: components["schemas"]["SignedConsentPdfRetryStatus"];
         };
+        SignedPdfCopyResentDto: {
+            /**
+             * Format: date-time
+             * @description Hora del envío: «Copia enviada al paciente el …».
+             */
+            sentAt: string;
+            /**
+             * Format: date-time
+             * @description Hasta cuándo vale el enlace nuevo (SIGNED_PDF_COPY_LINK_TTL_HOURS; 168 h por defecto). El anterior ya no sirve.
+             */
+            expiresAt: string;
+            /**
+             * @description Adónde se envió (el email de la firma a distancia), enmascarado.
+             * @example la***@example.com
+             */
+            destinationMasked: string;
+        };
+        /**
+         * @description `AVAILABLE`: se puede descargar una vez. `USED`: el enlace ya se usó. Caducado, invalidado (al reenviar), inventado o de otra clínica: 404.
+         * @enum {string}
+         */
+        PublicSignedPdfCopyState: "AVAILABLE" | "USED";
+        PublicSignedPdfCopyClinicDto: {
+            name: string;
+            primaryColor: string | null;
+            logoUrl: string | null;
+        };
+        PublicSignedPdfCopyDto: {
+            /** @description `AVAILABLE`: se puede descargar una vez. `USED`: el enlace ya se usó. Caducado, invalidado (al reenviar), inventado o de otra clínica: 404. */
+            state: components["schemas"]["PublicSignedPdfCopyState"];
+            /** @example Tu copia del documento firmado está lista para descargar */
+            message: string;
+            clinic: components["schemas"]["PublicSignedPdfCopyClinicDto"] | null;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        SignedPdfCopyDownloadDto: {
+            /** @description URL firmada de 60 s del PDF archivado, como attachment (ábrela de inmediato). */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @example Consentimiento firmado - Exodoncia - 2026-10-31.pdf */
+            fileName: string;
+        };
         PostOpTemplateCatalogItemDto: {
             /** Format: uuid */
             id: string;
@@ -15284,6 +15388,11 @@ export interface components {
              * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
              */
             signedPdfDocumentId: string | null;
+            /**
+             * Format: date-time
+             * @description DX-443: último envío de la copia del PDF firmado al paciente (o a su responsable) por email, con un enlace de un solo uso; null si aún no se envió (o es de antes de DX-443). Se reenvía con POST /patients/:patientId/consents/:consentId/signed-pdf/copy
+             */
+            signedPdfCopySentAt: string | null;
         };
         CreateSignatureRequestDto: {
             /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
@@ -15374,6 +15483,11 @@ export interface components {
              * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
              */
             signedPdfDocumentId: string | null;
+            /**
+             * Format: date-time
+             * @description DX-443: último envío de la copia del PDF firmado al paciente (o a su responsable) por email, con un enlace de un solo uso; null si aún no se envió (o es de antes de DX-443). Se reenvía con POST /patients/:patientId/consents/:consentId/signed-pdf/copy
+             */
+            signedPdfCopySentAt: string | null;
             /** @description false si el email no se pudo encolar: la solicitud queda registrada; anúlala y envía otra. */
             emailQueued: boolean;
         };
@@ -23064,7 +23178,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25211,7 +25325,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El destino está cancelado o rechazado, o el saldo cambió a la vez. */
+            /** @description El destino está cancelado o rechazado, o el saldo cambió a la vez (también si el origen o el destino cambió de moneda antes del bloqueo, DX-438). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25274,7 +25388,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El saldo cambió a la vez (otra devolución) o falta la caja abierta exigida. */
+            /** @description El saldo cambió a la vez (otra devolución, o el plan cambió de moneda antes del bloqueo, DX-438) o falta la caja abierta exigida. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -28449,6 +28563,141 @@ export interface operations {
             };
             /** @description El PDF firmado ya está archivado o se está generando */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_resendSignedPdfCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedPdfCopyResentDto"];
+                };
+            };
+            /** @description Sin un rol de esta clínica (los cuatro roles pueden reenviar) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El PDF firmado todavía no está archivado, o no se pudo armar el enlace de la clínica */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tope de emails a esta persona o de la clínica */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignedPdfCopiesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignedPdfCopyDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado, caducado, invalidado al reenviar o de otra clínica (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignedPdfCopiesController_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedPdfCopyDownloadDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado, caducado, invalidado al reenviar o de otra clínica (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

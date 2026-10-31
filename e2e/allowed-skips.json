@@ -224,6 +224,27 @@
       "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
       "requiresUnset": "E2E_MAIL_DIR",
       "reason": "Sin E2E_MAIL_DIR no se pueden leer el enlace ni el código del presupuesto a distancia."
+    },
+    {
+      "file": "e2e/remote-signature.spec.ts",
+      "title": "Firma a distancia de consentimientos (DX-243) › la paciente descarga su copia del PDF firmado una sola vez (390 px, sin sesión)",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se puede leer el enlace de la copia del PDF firmado (DX-443)."
+    },
+    {
+      "file": "e2e/remote-signature.spec.ts",
+      "title": "Firma a distancia de consentimientos (DX-243) › recepción ve «Copia enviada al paciente» y reenvía la copia (1440)",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se puede leer el enlace de la copia del PDF firmado (DX-443)."
+    },
+    {
+      "file": "e2e/remote-signature.spec.ts",
+      "title": "Firma a distancia de consentimientos (DX-243) › recepción ve «Copia enviada al paciente» y reenvía la copia (390 px)",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se puede leer el enlace de la copia del PDF firmado (DX-443)."
     }
   ]
 }
