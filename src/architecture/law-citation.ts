@@ -4,13 +4,6 @@
  * se arman por partes para que este fichero no se delate a sí mismo.
  */
 
-/** Nombres de regímenes de protección de datos y salud, y leyes o decretos con número. */
-export const LAW_NAME = new RegExp(
-  String.raw`\b(?:h[aá]beas\s+data|lgpd|gdpr|rgpd|hipaa|ccpa|lopdgdd|lopd|lfpdppp|pipeda)\b` +
-    String.raw`|\b(?:ley|decreto|reglamento)\s+(?:org[aá]nica\s+|estatutaria\s+|\(ue\)\s+)?(?:n\.?[º°o]\s*)?\d`,
-  'i',
-);
-
 const NUM = String.raw`(?:n\.?[º°o]\.?\s*|no\.\s*)?`;
 
 /** Regímenes por su sigla y normas con número, en español, inglés y portugués. */

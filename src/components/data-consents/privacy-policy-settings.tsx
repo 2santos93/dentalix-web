@@ -227,7 +227,6 @@ function PolicyTextarea({
   value,
   onChange,
   rows = 3,
-  describedBy,
   hint,
   hintId,
 }: {
@@ -236,7 +235,6 @@ function PolicyTextarea({
   value: string;
   onChange: (value: string) => void;
   rows?: number;
-  describedBy?: string;
   hint?: string;
   hintId?: string;
 }) {
@@ -247,7 +245,7 @@ function PolicyTextarea({
         rows={rows}
         required
         value={value}
-        aria-describedby={[describedBy, hint ? hintId : undefined].filter(Boolean).join(' ') || undefined}
+        aria-describedby={hint ? hintId : undefined}
         onChange={(e) => onChange(e.target.value)}
         className={fieldClass}
       />

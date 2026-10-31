@@ -73,4 +73,23 @@ describe('unfilledPlaceholders', () => {
       unfilledPlaceholders({ ...FILLED, policyText: 'Canal de atención: [correo o teléfono de contacto].' }),
     ).toEqual(['[Correo o teléfono de contacto]']);
   });
+
+  it('atrapa el marcador con espacios distintos dentro: nbsp, doble espacio o salto de línea', () => {
+    for (const variant of ['[Nombre\u00a0de la clínica]', '[Nombre  de la clínica]', '[Nombre de la\nclínica]']) {
+      expect({ variant, found: unfilledPlaceholders({ ...FILLED, policyText: `Responsable: ${variant}.` }) }).toEqual({
+        variant,
+        found: ['[Nombre de la clínica]'],
+      });
+    }
+  });
+
+  it('atrapa el marcador con espacios junto a los corchetes', () => {
+    expect(unfilledPlaceholders({ ...FILLED, policyText: 'Con domicilio en [ Dirección ].' })).toEqual(['[Dirección]']);
+  });
+
+  it('no bloquea los corchetes propios de la clínica', () => {
+    expect(
+      unfilledPlaceholders({ ...FILLED, policyText: 'Ver [ anexo  1 ] y [Nombre del paciente].' }),
+    ).toEqual([]);
+  });
 });

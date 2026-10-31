@@ -27,17 +27,31 @@ export const POLICY_TEMPLATE: PublishPrivacyPolicyInput = {
 };
 
 /**
+ * Forma comparable de un texto: NFC, minúsculas, cada tramo de espacios
+ * (incluidos nbsp y saltos de línea) en un solo espacio, y sin espacios justo
+ * dentro de los corchetes.
+ */
+function comparable(text: string): string {
+  return text
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\[ /g, '[')
+    .replace(/ \]/g, ']');
+}
+
+/**
  * Marcadores de la plantilla que siguen en algún texto del borrador, en el
- * orden de `POLICY_TEMPLATE_PLACEHOLDERS`. Sin distinguir mayúsculas, para
- * atrapar también los de una plantilla anterior. Solo busca esos literales:
- * los corchetes propios de la clínica no cuentan.
+ * orden de `POLICY_TEMPLATE_PLACEHOLDERS`. Sin distinguir mayúsculas ni
+ * espacios, para atrapar también los de una plantilla anterior o retocados.
+ * Solo busca esos literales: los corchetes propios de la clínica no cuentan.
  */
 export function unfilledPlaceholders(draft: PublishPrivacyPolicyInput): string[] {
   const texts = [draft.policyText, draft.generalText, draft.sensitiveHealthText, draft.marketingText].map(
-    (text) => text.normalize('NFC').toLowerCase(),
+    comparable,
   );
   return POLICY_TEMPLATE_PLACEHOLDERS.filter((placeholder) => {
-    const needle = placeholder.normalize('NFC').toLowerCase();
+    const needle = comparable(placeholder);
     return texts.some((text) => text.includes(needle));
   });
 }
