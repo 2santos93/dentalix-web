@@ -206,7 +206,7 @@ export function LocationSwitcher({
         className="relative inline-flex h-11 max-w-[6.5rem] shrink-0 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-within:ring-2 focus-within:ring-primary"
       >
         <MapPin aria-hidden className="size-4 shrink-0" />
-        <span aria-hidden className="min-w-0 truncate text-[13px] font-medium text-ink">
+        <span aria-hidden className="min-w-0 truncate text-[0.8125rem] font-medium text-ink">
           {short}
         </span>
         <ChevronDown aria-hidden className="size-3.5 shrink-0" />
