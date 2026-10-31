@@ -458,6 +458,47 @@ describe('bootstrapSession — arranque de sesión al cargar la página (DX-062)
     expect(useAuthStore.getState()).toMatchObject({ accessToken: 'A1', _hasHydrated: true });
   });
 
+  it('recarga con el refresh en vuelo: la respuesta abortada NO cierra la sesión y el arranque siguiente la recupera con la cookie anterior', async () => {
+    // Una API mínima con la regla de la familia del refresh: el token vigente
+    // rota; el anterior, dentro de la gracia, recibe el vigente. El navegador
+    // solo guarda la cookie de una respuesta que llega entera.
+    let jar = 'rt-1';
+    let current = 'rt-1';
+    let previous: string | null = null;
+    let abortNext = true;
+    const presented: string[] = [];
+    global.fetch = jest.fn(async () => {
+      presented.push(jar);
+      if (jar !== current && jar !== previous) {
+        return { ok: false, status: 401, json: async () => ({ message: 'Invalid refresh token' }) };
+      }
+      if (jar === current) {
+        previous = current;
+        current = `rt-${presented.length + 1}`;
+      }
+      if (abortNext) {
+        // La API ya rotó; la página se recarga y el fetch se aborta: la
+        // cookie nueva nunca llega al navegador.
+        abortNext = false;
+        throw new DOMException('The user aborted a request.', 'AbortError');
+      }
+      jar = current;
+      return ok({ accessToken: `A-${current}` });
+    }) as unknown as typeof fetch;
+
+    // Carga 1: abortada. Nada de cerrar sesión (no fue un 401).
+    await bootstrapSession();
+    expect(useAuthStore.getState().accessToken).toBeNull();
+
+    // Carga 2 (la página nueva): arranca con la cookie que quedó.
+    useAuthStore.setState({ accessToken: null, _hasHydrated: false });
+    await bootstrapSession();
+
+    expect(presented).toEqual(['rt-1', 'rt-1']);
+    expect(jar).toBe('rt-2');
+    expect(useAuthStore.getState()).toMatchObject({ accessToken: 'A-rt-2', _hasHydrated: true });
+  });
+
   it('sin cookie (401): queda resuelta SIN sesión (la página manda a /login)', async () => {
     global.fetch = jest
       .fn()

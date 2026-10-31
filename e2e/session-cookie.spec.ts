@@ -4,6 +4,7 @@ import { test, expect, type Page } from './support/test';
 import { accessTokenOf, registerAndLogin, SESSION_COOKIE, sessionCookie } from './support/auth';
 import { registerClinicViaApi } from './support/api';
 import { API_URL, tenantOrigin } from './support/urls';
+import { ageRefreshRotation, E2E_DATABASE_URL } from './support/db';
 
 /**
  * DX-062 — Sesión web: refresh en cookie HttpOnly del host de la clínica,
@@ -125,6 +126,50 @@ test('recargar mantiene la sesión; cerrar sesión borra la cookie y el refresh 
   await expect(page).toHaveURL(`${origin}/login`, { timeout: 10_000 });
 });
 
+test('recargar con el /auth/refresh en vuelo no cierra la sesión (la API rotó, la respuesta se perdió)', async ({
+  page,
+}) => {
+  const clinic = newClinic('vuelo');
+  const origin = await registerAndLogin(page, clinic);
+  await page.goto(`${origin}/patients`);
+  await expect(page.getByRole('heading', { name: 'Pacientes' })).toBeVisible({ timeout: 15_000 });
+  const before = await sessionCookie(page, origin);
+  expect(before).toBeTruthy();
+
+  // El arranque de la carga siguiente llega a la API (que rota la cookie),
+  // pero su respuesta nunca vuelve al navegador: la recarga la cancela. Se
+  // repone la cookie que había, por si el fetch del route la hubiera guardado.
+  let rotated!: () => void;
+  const apiRotated = new Promise<void>((resolve) => (rotated = resolve));
+  await page.route(
+    '**/api/v1/auth/refresh',
+    async (route) => {
+      const response = await route.fetch();
+      expect(response.status()).toBe(201);
+      await page.context().addCookies([before!]);
+      rotated();
+      // Sin fulfill: la recarga de abajo cancela la petición.
+    },
+    { times: 1 },
+  );
+  await page.goto(`${origin}/agenda`, { waitUntil: 'commit' });
+  await apiRotated;
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  expect((await sessionCookie(page, origin))?.value).toBe(before!.value);
+
+  // La carga nueva arranca con la cookie ANTERIOR: sigue dentro de la sesión.
+  await page.reload();
+  await expect(page).toHaveURL(`${origin}/agenda`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible({ timeout: 15_000 });
+  const after = await sessionCookie(page, origin);
+  expect(after?.value).toBeTruthy();
+  expect(after?.value).not.toBe(before!.value);
+
+  // Y la sesión sigue renovando con normalidad.
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible({ timeout: 15_000 });
+});
+
 test('la sesión de una clínica no sirve en otra (cookie por host y refresh validado por clínica)', async ({
   page,
 }) => {
@@ -185,7 +230,10 @@ test('migración: una sesión antigua en localStorage pasa a la cookie y se borr
   await expect(page.getByRole('heading', { name: 'Pacientes' })).toBeVisible({ timeout: 15_000 });
   expect(await page.evaluate(() => localStorage.getItem('dentalix-auth'))).toBeNull();
   expect((await sessionCookie(page, origin))?.httpOnly).toBe(true);
-  // El refresh antiguo se usó una vez (un solo uso): ya no sirve.
+  // El refresh antiguo se usó una vez (un solo uso): pasada la gracia de la
+  // respuesta perdida, ya no sirve.
+  test.skip(!E2E_DATABASE_URL, 'E2E_DATABASE_URL no definido: no se puede envejecer la rotación del refresh');
+  ageRefreshRotation(legacy.refreshToken);
   const reuse = await page.request.post(`${API_URL}/auth/refresh`, {
     data: { refreshToken: legacy.refreshToken },
   });
