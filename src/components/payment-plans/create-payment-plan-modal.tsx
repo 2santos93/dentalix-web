@@ -36,7 +36,7 @@ const PERIODICITY_OPTIONS: { value: Periodicity; label: string }[] = [
 // <select> nativo con el aspecto del átomo Input (misma cadena que
 // treatment-plans-tab.tsx; nativo por accesibilidad y tests).
 const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;

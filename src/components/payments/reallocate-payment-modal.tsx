@@ -274,7 +274,7 @@ export function ReallocatePaymentModal({
                             key={value}
                             htmlFor={id}
                             className={cn(
-                              'flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 transition-colors hover:bg-surface-2',
+                              'flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 transition-colors hover:bg-surface-sunken',
                               'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary',
                               mode === value && 'border-primary',
                             )}

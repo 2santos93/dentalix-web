@@ -97,7 +97,7 @@ export function PaymentReceiptPrintView({
   return (
     <div
       data-format={format}
-      className="receipt-print-page flex min-h-full flex-1 flex-col bg-surface-2 print:bg-white"
+      className="receipt-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:bg-white"
     >
       {receipt ? <title>{copy.documentTitle(receipt.reference)}</title> : null}
       <div
@@ -120,7 +120,7 @@ export function PaymentReceiptPrintView({
                 aria-current={f === format ? 'page' : undefined}
                 className={cn(
                   'flex min-h-9 flex-1 items-center justify-center whitespace-nowrap rounded-sm px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                  f === format ? 'bg-primary/10 text-primary' : 'text-muted hover:bg-surface-2',
+                  f === format ? 'bg-primary/10 text-primary-text' : 'text-muted hover:bg-surface-sunken',
                 )}
               >
                 {f === 'a4' ? copy.a4 : copy.roll}

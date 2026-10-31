@@ -16,7 +16,9 @@ import { apiErrorMessage } from "@/lib/api/error-message";
 import { NO_SEDE_FORMAT, sedeMoney } from "@/lib/format/sede-number";
 import { useSedeClock } from "@/lib/locations/sede-clock";
 import { SedeConfigError } from "@/components/locations/sede-config-error";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { FormField } from "@/components/shared/form-field";
 import { AsyncSection } from "@/components/shared/async-section";
 import { ScheduleVisitDialog } from "./schedule-visit-dialog";
 export function UnscheduledPlansView({ token }: { token: string }) {
@@ -99,19 +101,17 @@ export function UnscheduledPlansView({ token }: { token: string }) {
           locationId={sede.locationId}
         />
       ) : null}
-      <div>
-        <h2 className="text-xl font-semibold text-ink">Aceptado sin agendar</h2>
-        <p className="mt-2 max-w-[65ch] text-sm text-muted">
-          Tratamiento aceptado que aún no tiene una cita futura. Agenda la
-          siguiente visita y respeta el intervalo indicado.
-        </p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-          Sede
-          <select
+      {/* El nombre de la lista ya lo dice la pestaña: aquí solo la línea que
+          explica qué hacer con ella. */}
+      <p className="max-w-[68ch] text-sm text-muted">
+        Tratamiento aceptado que aún no tiene una cita futura. Agenda la
+        siguiente visita y respeta el intervalo indicado.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
+        <FormField htmlFor="unscheduled-location" label="Sede">
+          <NativeSelect
+            id="unscheduled-location"
             name="unscheduled-location"
-            className="min-h-11 rounded-lg border border-border bg-surface px-3 text-ink focus-visible:ring-2 focus-visible:ring-primary"
             value={locationId}
             onChange={(e) => {
               setLocationId(e.target.value);
@@ -124,13 +124,12 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                 {l.name}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-          Días desde la aceptación
-          <select
+          </NativeSelect>
+        </FormField>
+        <FormField htmlFor="unscheduled-age" label="Días desde la aceptación">
+          <NativeSelect
+            id="unscheduled-age"
             name="unscheduled-age"
-            className="min-h-11 rounded-lg border border-border bg-surface px-3 text-ink focus-visible:ring-2 focus-visible:ring-primary"
             value={age}
             onChange={(e) => {
               setAge(Number(e.target.value));
@@ -142,8 +141,8 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                 {n === 0 ? "Cualquier antigüedad" : `${n} días o más`}
               </option>
             ))}
-          </select>
-        </label>
+          </NativeSelect>
+        </FormField>
       </div>
       <AsyncSection
         loading={loading}
@@ -153,7 +152,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
         emptyTitle="No hay tratamiento aceptado pendiente de agendar en esta sede"
         emptyDescription="Los tratamientos aceptados aparecerán aquí mientras no tengan una cita futura enlazada."
       >
-        <ul className="divide-y divide-hairline rounded-xl border border-border bg-surface">
+        <ul className="divide-y divide-border-subtle rounded-xl border border-border bg-surface">
           {data?.items.map((item) => (
             <li
               key={item.planId}
@@ -162,7 +161,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
               <div className="min-w-0">
                 <Link
                   href={`/patients/${item.patientId}?tab=plan&planId=${item.planId}`}
-                  className="inline-flex min-h-11 items-center text-base font-semibold text-ink underline-offset-4 hover:underline"
+                  className="inline-flex min-h-11 items-center text-base font-semibold text-ink underline-offset-4 hover:text-primary-text hover:underline"
                 >
                   {item.patientName}
                 </Link>
@@ -183,7 +182,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                 </p>
               </div>
               <div className="flex items-baseline gap-2 lg:flex-col lg:items-end">
-                <span className="font-semibold text-ink tabular-nums">
+                <span className="t-data font-semibold text-ink">
                   {sedeMoney(item.total, item.currency, clock?.fmt ?? null)}
                 </span>
                 <span className="text-sm text-muted">{item.currency}</span>
@@ -191,8 +190,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  variant="outline"
-                  className="min-h-11"
+                  variant="secondary"
                   aria-label={`Agendar a ${item.patientName}`}
                   onClick={() => setBooking(item)}
                 >
@@ -204,7 +202,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={`WhatsApp a ${item.patientName}`}
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className={buttonVariants({ variant: "ghost" })}
                   >
                     WhatsApp
                   </a>
@@ -221,8 +219,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
         >
           <Button
             type="button"
-            variant="outline"
-            className="min-h-11"
+            variant="secondary"
             disabled={loading || history.length === 0}
             onClick={() => {
               setCursor(history[history.length - 1]);
@@ -233,8 +230,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
           </Button>
           <Button
             type="button"
-            variant="outline"
-            className="min-h-11"
+            variant="secondary"
             disabled={loading || !data.nextCursor}
             onClick={() => {
               setHistory((prev) => [...prev, cursor]);

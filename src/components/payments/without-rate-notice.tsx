@@ -39,7 +39,7 @@ export const withoutRateCopy = {
 };
 
 const linkClass =
-  'inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:min-h-0';
+  'inline-flex min-h-11 items-center font-medium text-primary-text underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas sm:min-h-0';
 
 /**
  * De dónde sale la tasa del día de cada abono: manual desde `manualSince`

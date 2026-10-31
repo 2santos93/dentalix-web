@@ -102,7 +102,7 @@ export function PlanOptionsComparison({
                   key={option.id}
                   aria-label={label}
                   aria-current={current ? true : undefined}
-                  className={cn('flex min-w-0 flex-col gap-2 bg-surface p-4', current && 'bg-surface-2')}
+                  className={cn('flex min-w-0 flex-col gap-2 bg-surface p-4', current && 'bg-surface-sunken')}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="min-w-0 font-medium text-ink">{label}</span>

@@ -97,7 +97,7 @@ export function FamilyAccountStatementSection({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+          <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
             {data.members.map((m) => (
               <li
                 key={m.patient.id}
@@ -136,7 +136,7 @@ export function FamilyAccountStatementSection({
             <p
               key={t.currency}
               data-testid="family-total"
-              className="flex flex-wrap justify-between gap-2 rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm font-semibold tabular-nums text-ink"
+              className="flex flex-wrap justify-between gap-2 rounded-xl border border-border bg-surface-sunken px-4 py-3 text-sm font-semibold tabular-nums text-ink"
             >
               <span>
                 {copy.totalsHeading} ({t.currency})

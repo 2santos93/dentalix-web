@@ -76,7 +76,7 @@ export function PaymentRatePreview({
       data-testid="rp-rate-preview"
       aria-label={copy.title(planCurrency)}
       aria-live="polite"
-      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink"
+      className="rounded-lg border border-border bg-surface-sunken px-3 py-2 text-sm text-ink"
     >
       <p className="t-label text-muted">{copy.title(planCurrency)}</p>
       <PreviewBody

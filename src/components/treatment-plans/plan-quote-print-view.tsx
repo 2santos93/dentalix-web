@@ -128,7 +128,7 @@ export function PlanQuotePrintView({
   }, [data]);
 
   return (
-    <div className="quote-print-page flex min-h-full flex-1 flex-col bg-surface-2 print:min-h-0 print:bg-white">
+    <div className="quote-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
       {data ? <title>{copy.documentTitle(data.patient.name)}</title> : null}
       <div
         role="toolbar"

@@ -362,30 +362,5 @@
   },
   "src/components/staff/staff-view.tsx": {
     "select": 3
-  },
-  "src/components/treatment-plans/mark-done-modal.tsx": {
-    "select": 2
-  },
-  "src/components/treatment-plans/pending-follow-up-view.tsx": {
-    "select": 1
-  },
-  "src/components/treatment-plans/plan-visits-board.tsx": {
-    "select": 1
-  },
-  "src/components/treatment-plans/reject-plan-modal.tsx": {
-    "radio": 1,
-    "textarea": 1
-  },
-  "src/components/treatment-plans/schedule-visit-dialog.tsx": {
-    "checkbox": 1,
-    "select": 1
-  },
-  "src/components/treatment-plans/treatment-plans-tab.tsx": {
-    "checkbox": 2,
-    "select": 6,
-    "textarea": 2
-  },
-  "src/components/treatment-plans/unscheduled-plans-view.tsx": {
-    "select": 2
   }
 }

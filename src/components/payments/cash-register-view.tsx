@@ -504,7 +504,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         <TableCell data-label={copy.colPatient}>
                           <Link
                             href={`/patients/${payment.patient.id}`}
-                            className="font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            className="font-medium text-ink underline-offset-4 hover:text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                           >
                             {payment.patient.fullName}
                           </Link>
@@ -653,8 +653,8 @@ function ScopeMarker({
   restricted?: boolean;
 }) {
   return (
-    <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-muted">
-      <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
+    <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-sunken px-3 py-1.5 text-sm text-muted">
+      <Building2 aria-hidden className="size-4 shrink-0 text-muted" />
       <span>{location ? copy.scopeLocation(location.name) : restricted ? copy.scopeMine : copy.scopeAll}</span>
     </p>
   );
@@ -670,13 +670,13 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
   const headingId = React.useId();
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
-      <div className="flex items-baseline justify-between gap-4 border-b border-hairline px-4 py-3 sm:px-6">
+      <div className="flex items-baseline justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-6">
         <h2 id={headingId} className="t-title text-ink">
           {copy.summaryTitle}
         </h2>
         <span className="text-sm text-muted tabular-nums">{copy.paymentsCount(summary.count)}</span>
       </div>
-      <div className="grid gap-0 sm:grid-cols-2 sm:divide-x sm:divide-hairline">
+      <div className="grid gap-0 sm:grid-cols-2 sm:divide-x sm:divide-border-subtle">
         <SummaryList label={copy.byCurrency}>
           {summary.byCurrency.map((row) => (
             <SummaryRow
@@ -687,7 +687,7 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
             />
           ))}
         </SummaryList>
-        <SummaryList label={copy.byMethod} className="max-sm:border-t max-sm:border-hairline">
+        <SummaryList label={copy.byMethod} className="max-sm:border-t max-sm:border-border-subtle">
           {/* DX-377: por medio de pago de la clínica y moneda. */}
           {summary.byPaymentMethod.map((row) => (
             <SummaryRow
@@ -718,7 +718,7 @@ function SummaryList({
       <p id={labelId} className="t-label text-muted">
         {label}
       </p>
-      <ul aria-labelledby={labelId} className="mt-1 divide-y divide-hairline">
+      <ul aria-labelledby={labelId} className="mt-1 divide-y divide-border-subtle">
         {children}
       </ul>
     </div>

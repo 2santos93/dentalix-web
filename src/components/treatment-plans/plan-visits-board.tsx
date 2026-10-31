@@ -15,6 +15,8 @@ import {
 import { formatCivilDate } from "@/lib/format/date";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { InlineError } from "@/components/errors/inline-error";
 import { ScheduleVisitDialog } from "./schedule-visit-dialog";
 
@@ -22,8 +24,6 @@ import { ScheduleVisitDialog } from "./schedule-visit-dialog";
 function toothLabel(toothNumber: string): string {
   return toothNumber ? `diente ${toothNumber}` : "sin diente";
 }
-const field =
-  "min-h-11 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 export function PlanVisitsBoard({
   token,
   plan,
@@ -217,7 +217,7 @@ export function PlanVisitsBoard({
             aria-label={title}
             className="min-w-0 rounded-xl border border-border bg-surface"
           >
-            <div className="flex flex-col gap-4 border-b border-hairline p-4">
+            <div className="flex flex-col gap-4 border-b border-border-subtle p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h4 className="font-semibold text-ink">{title}</h4>
                 {visit && visit.planItemIds.length > 0 ? (
@@ -236,11 +236,10 @@ export function PlanVisitsBoard({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
                     Etiqueta de visita {number}
-                    <input
+                    <Input
                       disabled={saving}
                       name={`visit-${number}-label`}
                       maxLength={60}
-                      className={field}
                       value={assignment[0]?.visitLabel ?? ""}
                       onChange={(e) => label(number, e.target.value)}
                     />
@@ -248,14 +247,13 @@ export function PlanVisitsBoard({
                   {number > 1 ? (
                     <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
                       Días desde la visita anterior
-                      <input
+                      <Input
                         disabled={saving}
                         name={`visit-${number}-interval`}
                         type="number"
                         inputMode="numeric"
                         min={0}
                         max={3650}
-                        className={field}
                         value={intervals[String(number)] ?? 0}
                         onChange={(e) => {
                           setDirty(true);
@@ -292,11 +290,10 @@ export function PlanVisitsBoard({
                       Mover a visita: {toothLabel(item.toothNumber)}, ítem{" "}
                       {(plan.items ?? []).findIndex((i) => i.id === item.id) +
                         1}
-                      <select
+                      <NativeSelect
                         disabled={saving}
                         aria-label={`Mover a visita: ${toothLabel(item.toothNumber)}, ítem ${(plan.items ?? []).findIndex((i) => i.id === item.id) + 1}`}
                         name={`visit-item-${item.id}`}
-                        className={field}
                         value={number}
                         onChange={(e) => move(item.id, Number(e.target.value))}
                       >
@@ -308,7 +305,7 @@ export function PlanVisitsBoard({
                         {next <= 1000 ? (
                           <option value={next}>Nueva visita {next}</option>
                         ) : null}
-                      </select>
+                      </NativeSelect>
                     </label>
                   ))}
                 </div>

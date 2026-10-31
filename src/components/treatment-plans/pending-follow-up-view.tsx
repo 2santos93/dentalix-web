@@ -16,21 +16,16 @@ import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatDate } from '@/lib/format/date';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { NativeSelect } from '@/components/ui/native-select';
+import { FormField } from '@/components/shared/form-field';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Pagination } from '@/components/shared/pagination';
-import { PageHeader } from '@/components/shared/page-header';
-import { ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ResultCount } from '@/components/shared/list-toolbar';
 import { RejectPlanModal } from './reject-plan-modal';
-import { cn } from '@/lib/utils';
 
-const copy = {
-  title: 'Presupuestos por seguir',
-  description:
-    'Presupuestos presentados que el paciente aún no acepta y sin cita agendada: llámalo o escríbele antes de que se enfríen.',
+export const pendingFollowUpCopy = {
   scopeAll: 'Todas las sedes',
   scopeMine: 'Mis sedes',
   scopeLocation: (name: string) => `Presentados en ${name}`,
@@ -53,7 +48,6 @@ const copy = {
   whatsappLabel: (name: string) => `WhatsApp a ${name}`,
   noWhatsApp: 'El teléfono no sirve para WhatsApp',
   reject: 'Marcar rechazado',
-  rejectLabel: (name: string) => `Marcar rechazado: ${name}`,
   rejectSubject: (label: string | null, name: string) => `${label ?? 'Plan único'} · ${name}`,
   rejected: 'Presupuesto marcado como rechazado.',
   // Sin «Intenta de nuevo.»: `AsyncSection` → `SectionError` trae su botón.
@@ -65,6 +59,8 @@ const copy = {
   empty: 'No hay presupuestos por seguir.',
   emptyHint: 'Cada presupuesto presentado sin respuesta y sin cita aparece aquí pasado el plazo elegido.',
 };
+
+const copy = pendingFollowUpCopy;
 
 const AGE_OPTIONS = [7, 15, 30, 60] as const;
 
@@ -93,8 +89,6 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
   const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [clinicName, setClinicName] = useState<string | null>(null);
-  const [locations, setLocations] = useState<ClinicLocation[]>([]);
-  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<PendingFollowUpItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -130,8 +124,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
     };
   }, [token, olderThanDays, page, reloadKey]);
 
-  // Nombre de la clínica (para el mensaje) y la sede activa (para el alcance):
-  // fallan en silencio, solo afinan el texto.
+  // Nombre de la clínica (para el mensaje): falla en silencio, solo afina el texto.
   useEffect(() => {
     let cancelled = false;
     fetchClinicName()
@@ -140,15 +133,6 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
       })
       .catch(() => {
         /* sin nombre, el mensaje dice «la clínica» */
-      });
-    listLocations(token)
-      .then((list) => {
-        if (cancelled) return;
-        setLocations(list ?? []);
-        setActiveLocationId(getActiveLocationId());
-      })
-      .catch(() => {
-        /* sin sedes no se nombra ninguna */
       });
     return () => {
       cancelled = true;
@@ -161,40 +145,71 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
   }
 
   const items = data?.items ?? [];
-  const activeLocation = locations.find((l) => l.id === activeLocationId) ?? null;
+
+  const columns: DataListColumn<PendingFollowUpItem>[] = [
+    {
+      id: 'patient',
+      header: copy.colPatient,
+      mobile: 'primary',
+      cell: (row) => (
+        <Link
+          href={`/patients/${row.patientId}`}
+          className="font-medium text-ink underline-offset-4 hover:text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+        >
+          {row.patientName}
+        </Link>
+      ),
+    },
+    {
+      id: 'option',
+      header: copy.colOption,
+      cell: (row) => <span className="text-muted">{row.optionLabel ?? copy.noOption}</span>,
+      mobileCell: (row) => row.optionLabel ?? copy.noOption,
+    },
+    {
+      id: 'amount',
+      header: copy.colAmount,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (row) => <span className="font-medium text-ink">{formatCurrency(row.total, row.currency)}</span>,
+    },
+    {
+      id: 'presented',
+      header: copy.colPresented,
+      cell: (row) => (
+        <span className="tabular-nums">
+          {formatDate(row.presentedAt)}
+          <span className="t-caption block text-muted">{copy.daysAgo(row.daysSincePresented)}</span>
+        </span>
+      ),
+      // En el teléfono, la antigüedad es lo que decide a quién llamar.
+      mobileCell: (row) => copy.daysAgo(row.daysSincePresented),
+    },
+    {
+      id: 'contact',
+      header: copy.colPhone,
+      cell: (row) => <ContactLinks row={row} clinicName={clinicName} />,
+    },
+  ];
 
   return (
     <>
-      <PageHeader
-        title={copy.title}
-        description={copy.description}
-        meta={
-          <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-muted">
-            <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
-            <span>{activeLocation ? copy.scopeLocation(activeLocation.name)
-                : getTokenAllowedLocationIds(token) !== null
-                  ? copy.scopeMine
-                  : copy.scopeAll}</span>
-          </p>
-        }
-      />
-
       <div className="flex flex-col gap-3">
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="flex min-w-0 flex-col gap-1.5 text-sm text-muted sm:flex-row sm:items-center sm:gap-2">
-            <span className="shrink-0">{copy.ageLabel}</span>
-            <select
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
+          <FormField htmlFor="follow-up-age" label={copy.ageLabel} className="sm:w-56">
+            <NativeSelect
+              id="follow-up-age"
+              size="sm"
               value={olderThanDays}
               onChange={(e) => changeAge(Number(e.target.value))}
-              className={cn(toolbarFieldClass, 'sm:w-40')}
             >
               {AGE_OPTIONS.map((days) => (
                 <option key={days} value={days}>
                   {copy.ageOption(days)}
                 </option>
               ))}
-            </select>
-          </label>
+            </NativeSelect>
+          </FormField>
         </div>
 
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
@@ -223,102 +238,26 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
               emptyDescription={copy.emptyHint}
               skeleton={<TableSkeleton rows={4} />}
             >
-              <Card className="overflow-hidden p-0">
-                <Table aria-label={copy.tableLabel}>
-                  <caption className="sr-only">{copy.tableLabel}</caption>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead scope="col">{copy.colPatient}</TableHead>
-                      <TableHead scope="col">{copy.colOption}</TableHead>
-                      <TableHead scope="col" className="text-right">
-                        {copy.colAmount}
-                      </TableHead>
-                      <TableHead scope="col">{copy.colPresented}</TableHead>
-                      <TableHead scope="col">{copy.colPhone}</TableHead>
-                      <TableHead scope="col">
-                        <span className="sr-only">{copy.colActions}</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((row) => {
-                      const whatsapp = followUpWhatsAppHref(row, clinicName);
-                      return (
-                        <TableRow key={row.planId}>
-                          <TableCell data-label={copy.colPatient}>
-                            <Link
-                              href={`/patients/${row.patientId}`}
-                              className="font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            >
-                              {row.patientName}
-                            </Link>
-                          </TableCell>
-                          <TableCell className="text-muted" data-label={copy.colOption}>
-                            {row.optionLabel ?? copy.noOption}
-                          </TableCell>
-                          <TableCell
-                            className="text-right font-medium tabular-nums text-ink"
-                            data-label={copy.colAmount}
-                          >
-                            {formatCurrency(row.total, row.currency)}
-                          </TableCell>
-                          <TableCell className="tabular-nums" data-label={copy.colPresented}>
-                            {formatDate(row.presentedAt)}
-                            <span className="block text-xs text-muted">
-                              {copy.daysAgo(row.daysSincePresented)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="tabular-nums" data-label={copy.colPhone}>
-                            {row.patientPhone ? (
-                              <a
-                                href={telHref(row.patientPhone)}
-                                aria-label={copy.call(row.patientName, row.patientPhone)}
-                                className="inline-flex min-h-11 items-center gap-1.5 text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                              >
-                                <Phone aria-hidden className="size-4 text-muted" />
-                                {row.patientPhone}
-                              </a>
-                            ) : (
-                              <span className="text-muted">{copy.noPhone}</span>
-                            )}
-                          </TableCell>
-                          <TableCell data-label={copy.colActions}>
-                            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                              {whatsapp ? (
-                                <Button asChild variant="outline" size="sm">
-                                  <a
-                                    href={whatsapp}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    aria-label={copy.whatsappLabel(row.patientName)}
-                                  >
-                                    <MessageCircle aria-hidden />
-                                    {copy.whatsapp}
-                                  </a>
-                                </Button>
-                              ) : row.patientPhone ? (
-                                <span className="text-xs text-muted">{copy.noWhatsApp}</span>
-                              ) : null}
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                aria-label={copy.rejectLabel(row.patientName)}
-                                onClick={() => {
-                                  setNotice(null);
-                                  setRejecting(row);
-                                }}
-                              >
-                                {copy.reject}
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </Card>
+              {/* Tabla desde \`sm\`, tarjeta compacta en el teléfono (paciente +
+                  monto / opción · antigüedad · llamar · WhatsApp). «Marcar
+                  rechazado» cierra la conversación: va en el «⋯», con su motivo. */}
+              <DataList
+                label={copy.tableLabel}
+                rows={items}
+                columns={columns}
+                getRowKey={(row) => row.planId}
+                getRowLabel={(row) => row.patientName}
+                rowActions={(row) => [
+                  {
+                    label: copy.reject,
+                    destructive: true,
+                    onSelect: () => {
+                      setNotice(null);
+                      setRejecting(row);
+                    },
+                  },
+                ]}
+              />
             </AsyncSection>
 
             {!loadError ? (
@@ -352,5 +291,78 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
         />
       ) : null}
     </>
+  );
+}
+
+/** Llamar (\`tel:\`) y WhatsApp prellenado: el bloque de contacto de la fila. */
+function ContactLinks({ row, clinicName }: { row: PendingFollowUpItem; clinicName: string | null }) {
+  if (!row.patientPhone) return <span className="text-muted">{copy.noPhone}</span>;
+  const whatsapp = followUpWhatsAppHref(row, clinicName);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
+      <a
+        href={telHref(row.patientPhone)}
+        aria-label={copy.call(row.patientName, row.patientPhone)}
+        className={contactLinkClass}
+      >
+        <Phone aria-hidden className="size-4 text-muted" />
+        <span className="tabular-nums">{row.patientPhone}</span>
+      </a>
+      {whatsapp ? (
+        <a
+          href={whatsapp}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={copy.whatsappLabel(row.patientName)}
+          className={contactLinkClass}
+        >
+          <MessageCircle aria-hidden className="size-4 text-muted" />
+          {copy.whatsapp}
+        </a>
+      ) : (
+        <span className="t-caption text-muted">{copy.noWhatsApp}</span>
+      )}
+    </span>
+  );
+}
+
+const contactLinkClass =
+  'relative z-10 inline-flex min-h-11 items-center gap-1.5 text-ink underline-offset-4 hover:text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-0';
+
+/**
+ * Alcance de «Presupuestos por seguir» para el hueco \`meta\` del \`PageHeader\`
+ * de la página: la sede activa, «Mis sedes» (rol restringido) o «Todas las
+ * sedes». Lee las sedes en el cliente y falla en silencio (solo afina el texto).
+ */
+export function FollowUpScopeMarker({ token }: { token: string }) {
+  const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    listLocations(token)
+      .then((list) => {
+        if (cancelled) return;
+        setLocations(list ?? []);
+        setActiveLocationId(getActiveLocationId());
+      })
+      .catch(() => {
+        /* sin sedes no se nombra ninguna */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+  const activeLocation = locations.find((l) => l.id === activeLocationId) ?? null;
+  return (
+    <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-sunken px-3 py-1.5 text-sm text-muted">
+      <Building2 aria-hidden className="size-4 shrink-0 text-muted" />
+      <span>
+        {activeLocation
+          ? copy.scopeLocation(activeLocation.name)
+          : getTokenAllowedLocationIds(token) !== null
+            ? copy.scopeMine
+            : copy.scopeAll}
+      </span>
+    </p>
   );
 }

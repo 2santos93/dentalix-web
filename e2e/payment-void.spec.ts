@@ -80,7 +80,9 @@ for (const viewport of [
       timeout: 15_000,
     });
     await panel.getByRole('button', { name: /^Abonos y saldo\s+\d+ abonos?$/ }).click();
-    await panel.getByRole('button', { name: 'Anular' }).locator('visible=true').first().click();
+    // UX v2: «Anular» vive en el «⋯» de la fila del abono.
+    await panel.getByRole('button', { name: /^Acciones de abono/ }).first().click();
+    await page.getByRole('menuitem', { name: 'Anular' }).click();
 
     const dialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
     await expect(dialog).toBeVisible();

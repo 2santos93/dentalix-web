@@ -16,6 +16,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { NativeSelect } from "@/components/ui/native-select";
 import { AsyncSection } from "@/components/shared/async-section";
 import { InlineError } from "@/components/errors/inline-error";
 import { apiErrorMessage } from "@/lib/api/error-message";
@@ -166,37 +168,30 @@ export function ScheduleVisitDialog({
           {patient && clock && minimumDay ? (
             <div className="flex flex-col gap-4">
               <fieldset className="flex flex-col gap-2">
-                <legend className="mb-2 text-sm font-medium text-ink">
+                <legend className="t-label mb-1 text-ink">
                   Tratamientos de la visita
                 </legend>
                 {visit.planItemIds.map((id, index) => (
-                  <label
+                  <Checkbox
                     key={id}
-                    className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-ink"
-                  >
-                    <input
-                      type="checkbox"
-                      name="planItemIds"
-                      value={id}
-                      checked={selected.includes(id)}
-                      onChange={(e) =>
-                        setSelected((prev) =>
-                          e.target.checked
-                            ? [...prev, id]
-                            : prev.filter((i) => i !== id),
-                        )
-                      }
-                      className="size-5 accent-primary"
-                    />
-                    Tratamiento {index + 1} de la visita {visit.number}
-                  </label>
+                    name="planItemIds"
+                    value={id}
+                    checked={selected.includes(id)}
+                    onChange={(e) =>
+                      setSelected((prev) =>
+                        e.target.checked
+                          ? [...prev, id]
+                          : prev.filter((i) => i !== id),
+                      )
+                    }
+                    label={`Tratamiento ${index + 1} de la visita ${visit.number}`}
+                  />
                 ))}
               </fieldset>
               <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
                 <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
                   Profesional para buscar hueco
-                  <select
-                    className="min-h-11 rounded-lg border border-border bg-surface px-3 text-ink"
+                  <NativeSelect
                     value={provider}
                     onChange={(e) => changeProvider(e.target.value)}
                   >
@@ -205,7 +200,7 @@ export function ScheduleVisitDialog({
                         {s.fullName}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
                 <Button
                   type="button"

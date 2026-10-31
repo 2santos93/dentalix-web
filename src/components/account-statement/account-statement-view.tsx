@@ -742,7 +742,7 @@ function PlanRows({
             href={quoteHref}
             target="_blank"
             rel="noopener"
-            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
+            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
           >
             <FileText aria-hidden className="size-4" />
             {copy.quoteLink}
@@ -750,7 +750,7 @@ function PlanRows({
           </a>
         </TableCell>
       </TableRow>
-      <TableRow id={detailId} hidden={!open} className="bg-bg/40 hover:bg-bg/40">
+      <TableRow id={detailId} hidden={!open} className="bg-canvas/40 hover:bg-canvas/40">
         {/* `max-sm:block`: sin `data-label`, la celda no lleva etiqueta en
             móvil; el detalle ocupa la tarjeta entera. */}
         <TableCell colSpan={PLAN_COLUMNS} className="max-sm:block max-sm:py-2">
@@ -797,7 +797,7 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
       aria-label={copy.summaryLabel(row.currency)}
       className="overflow-hidden rounded-xl border border-border bg-surface"
     >
-      <div className="flex items-baseline justify-between gap-4 border-b border-hairline px-4 py-3 sm:px-6">
+      <div className="flex items-baseline justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-6">
         <p className="t-label text-muted">
           {row.currency}
         </p>
@@ -846,7 +846,7 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
       {row.openingPending > 0 ? (
         <p
           data-testid="opening"
-          className="border-t border-hairline px-4 py-2 text-xs text-muted sm:px-6"
+          className="border-t border-border-subtle px-4 py-2 text-xs text-muted sm:px-6"
         >
           {statementCopy.openingIncluded}{' '}
           <span className="font-medium tabular-nums text-ink">
@@ -874,7 +874,7 @@ function Figure({
   return (
     <div
       className={cn(
-        'border-hairline px-4 py-3 sm:px-6',
+        'border-border-subtle px-4 py-3 sm:px-6',
         // Filetes de la rejilla: 2 columnas hasta `lg` (con el raíl, una
         // tablet no tiene ancho para cuatro importes), 4 desde ahí.
         'max-lg:odd:border-r max-lg:[&:nth-child(n+3)]:border-t lg:[&:not(:first-child)]:border-l',

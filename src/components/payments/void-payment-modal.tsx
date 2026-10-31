@@ -91,7 +91,7 @@ export function VoidPaymentModal({
       destructive
     >
       {subject ? (
-        <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-ink tabular-nums">
+        <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm font-medium text-ink tabular-nums">
           {subject}
         </p>
       ) : null}
