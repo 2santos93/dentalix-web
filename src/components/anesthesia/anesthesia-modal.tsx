@@ -616,7 +616,8 @@ export function AnesthesiaModal({
       cancelLabel={formVisible ? undefined : anesthesiaCopy.close}
       hideSubmit={!formVisible}
       submitting={submitting}
-      submitDisabled={check.kind === 'loading'}
+      // Sin la barra (calculando o en error) no se ve el acumulado ni el aviso: no se registra a ciegas.
+      submitDisabled={check.kind === 'loading' || check.kind === 'error'}
       error={formError}
     >
       {renderBody()}

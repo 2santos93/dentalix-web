@@ -348,7 +348,7 @@ describe('AnesthesiaModal (DX-307)', () => {
       expect(screen.getByRole('checkbox', { name: anesthesiaCopy.confirm })).toBeInTheDocument();
     });
 
-    it('mientras calcula, la barra dice que calcula; si falla, dice por qué y se reintenta', async () => {
+    it('mientras calcula, la barra dice que calcula; si falla, dice por qué, no deja registrar y se reintenta', async () => {
       const user = userEvent.setup();
       let rejectFirst!: (err: Error) => void;
       mocked.check
@@ -366,6 +366,8 @@ describe('AnesthesiaModal (DX-307)', () => {
       rejectFirst(new Error('red'));
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent(anesthesiaCopy.checkError);
+      // Sin acumulado ni avisos a la vista no se registra a ciegas.
+      expect(screen.getByRole('button', { name: anesthesiaCopy.submit })).toBeDisabled();
       await user.click(screen.getByRole('button', { name: 'Reintentar' }));
       expect(await screen.findByText(/68 mg · 49 % del máximo/)).toBeInTheDocument();
     });
