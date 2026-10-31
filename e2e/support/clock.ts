@@ -21,6 +21,28 @@ export function sedeDayFromToday(days: number): string {
   return sedeDate(new Date(Date.now() + days * DAY_MS));
 }
 
+/** El día civil `days` días después de `day` (`YYYY-MM-DD`; calendario puro, sin zona). */
+export function addDays(day: string, days: number): string {
+  const at = new Date(`${day}T12:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
+}
+
+/**
+ * DX-209 (TST-025): fecha de nacimiento SEGURA de alguien que cumplió `years`
+ * años el mes pasado, vista desde `today` (`YYYY-MM-DD` de la sede): el día 15
+ * del mes anterior, `years` años antes. El 15 existe en todos los meses y años
+ * (restar días y años a «hoy» daba un 29/02 de un año no bisiesto o un 31 que
+ * no existe), y entre ese 15 y hoy hay de 2 a 7 semanas: la edad es `years` a
+ * cualquier hora y en cualquier zona, lejos del cumpleaños.
+ */
+export function birthDateTurnedLastMonth(years: number, today: string): string {
+  const [year, month] = today.split('-').map(Number);
+  const birthMonth = month === 1 ? 12 : month - 1;
+  const birthYear = (month === 1 ? year - 1 : year) - years;
+  return `${birthYear}-${String(birthMonth).padStart(2, '0')}-15`;
+}
+
 /** El instante de `day` (`YYYY-MM-DD`) a la hora `hhmm` (`HH:MM`) de la sede. */
 export function atSede(day: string, hhmm: string): Date {
   return new Date(`${day}T${hhmm}:00${SEDE_OFFSET}`);
