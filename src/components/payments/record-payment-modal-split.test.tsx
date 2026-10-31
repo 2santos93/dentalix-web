@@ -98,6 +98,7 @@ function copBalance(balance: number): PlanBalance {
     allocated: 0,
     unallocated: 0,
     unconvertedPaymentsCount: 0,
+    rateProviderTimedOut: false,
     manualPaymentIds: [],
     items: [],
   };
@@ -433,8 +434,12 @@ describe('correcciones de QA (DX-390)', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
     await waitFor(() => expect(mockedSplit).toHaveBeenCalledTimes(1));
-    for (const id of ['rp-amount', 'rp-currency', 'rp-method', 'rp-reference', 'rp-date', 'rp-line-2-reference']) {
+    for (const id of ['rp-amount', 'rp-currency', 'rp-method', 'rp-reference', 'rp-line-2-reference']) {
       expect(document.getElementById(id)).toBeDisabled();
+    }
+    // La fecha es un `DatePicker` por segmentos: sus segmentos quedan inertes.
+    for (const segment of within(within(dialog).getByRole('group', { name: 'Fecha de pago' })).getAllByRole('spinbutton')) {
+      expect(segment).toHaveAttribute('aria-disabled', 'true');
     }
     fail(new ApiError(500, 'boom'));
     await within(dialog).findByRole('alert');

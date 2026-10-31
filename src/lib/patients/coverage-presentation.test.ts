@@ -45,11 +45,11 @@ describe('coverageStatusBadge (DX-153)', () => {
   it('marca vencida y pendiente de inicio; la vigente no lleva insignia', () => {
     expect(coverageStatusBadge({ status: 'EXPIRED' })).toEqual({
       label: 'Vencida',
-      variant: 'warning',
+      variant: 'danger',
     });
     expect(coverageStatusBadge({ status: 'NOT_STARTED' })).toEqual({
       label: 'Pendiente de inicio',
-      variant: 'secondary',
+      variant: 'warning',
     });
     expect(coverageStatusBadge({ status: 'ACTIVE' })).toBeNull();
   });

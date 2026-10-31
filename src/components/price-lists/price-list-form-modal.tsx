@@ -12,6 +12,7 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { clinicBaseCurrency, locationCurrency } from '@/lib/locations/location-settings';
 
@@ -36,10 +37,6 @@ const copy = {
   invalidName: 'El nombre debe tener entre 2 y 120 caracteres.',
   genericError: 'No pudimos guardar la lista de precios. Intenta de nuevo.',
 };
-
-// <select> nativo con el aspecto del átomo Input.
-const selectClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface PriceListFormModalProps {
   open: boolean;
@@ -127,6 +124,7 @@ export function PriceListFormModal({
       submitLabel={editing ? copy.save : copy.create}
       submitting={submitting}
       error={error}
+      touchTargets
     >
       <FormField htmlFor="price-list-name" label={copy.name}>
         <Input
@@ -167,11 +165,10 @@ export function PriceListFormModal({
         )}
       </FormField>
       <FormField htmlFor="price-list-location" label={copy.location} hint={copy.locationHint}>
-        <select
+        <NativeSelect
           id="price-list-location"
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
-          className={selectClass}
         >
           <option value="">{copy.wholeClinic}</option>
           {options.map((l) => (
@@ -179,7 +176,7 @@ export function PriceListFormModal({
               {l.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
     </FormModal>
   );

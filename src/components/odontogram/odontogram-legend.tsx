@@ -7,6 +7,7 @@ import { ORIGIN_LABELS, ORIGIN_ORDER, ORIGIN_PATTERN_ID } from '@/lib/odontogram
 // tooth.tsx convention until next-intl wiring lands.
 const copy = {
   title: 'Referencias del odontograma',
+  caption: 'Leyenda',
   originTitle: 'Origen de los registros',
 };
 
@@ -32,6 +33,10 @@ interface OdontogramLegendProps {
 export function OdontogramLegend({ items }: OdontogramLegendProps) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
+      {/* Nombrada: sin título, la fila de muestras se leía como controles. */}
+      <p aria-hidden className="t-caption text-muted">
+        {copy.caption}
+      </p>
       {items.length > 0 ? (
         <ul aria-label={copy.title} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
           {items.map((item) => (
@@ -56,7 +61,7 @@ export function OdontogramLegend({ items }: OdontogramLegendProps) {
                 width="11"
                 height="11"
                 rx="2"
-                className="fill-surface-2 stroke-muted"
+                className="fill-surface-sunken stroke-muted"
                 strokeWidth="1"
               />
               {origin !== 'THIS_CLINIC' ? (

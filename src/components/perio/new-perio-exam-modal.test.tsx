@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { NewPerioExamModal } from './new-perio-exam-modal';
 import { createPerioExam } from '@/lib/perio/perio-api';
 import { setupUser } from '@/lib/test/user';
@@ -46,9 +46,10 @@ describe('NewPerioExamModal', () => {
     mockedCreate.mockResolvedValue({ id: 'e1' } as never);
     renderModal(false);
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Fecha del examen'), {
-      target: { value: '2026-04-15' },
-    });
+    // DatePicker de segmentos (formato de la sede): se teclea día, mes y año.
+    const group = screen.getByRole('group', { name: 'Fecha del examen' });
+    await user.click(within(group).getAllByRole('spinbutton')[0]);
+    await user.keyboard('15042026');
     await user.click(screen.getByRole('button', { name: 'Crear examen' }));
     expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', {
       examDate: '2026-04-15',

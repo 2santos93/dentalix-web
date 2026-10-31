@@ -96,6 +96,18 @@ function day(name: string) {
   return screen.getByRole('group', { name });
 }
 
+/** Los tramos son `TimeField` (segmentos hora/minuto, 24 h en `es`): se escribe por segmentos. */
+async function typeTime(
+  user: ReturnType<typeof userEvent.setup>,
+  scope: ReturnType<typeof within>,
+  name: string,
+  digits: string,
+) {
+  const [hour] = scope.getAllByRole('spinbutton').filter((el: HTMLElement) => el.closest(`[aria-label="${name}"]`));
+  await user.click(hour);
+  await user.keyboard(digits);
+}
+
 describe('ProviderSchedulesPanel', () => {
   it('carga con esqueleto y, sin horario, muestra el estado vacío que explica la regla', async () => {
     render(<ProviderSchedulesPanel token="tok" canEdit />);
@@ -126,17 +138,13 @@ describe('ProviderSchedulesPanel', () => {
 
     await user.click(within(day('Lunes')).getByRole('button', { name: 'Agregar tramo en Sede A' }));
     const lunesA = within(day('Lunes'));
-    await user.clear(lunesA.getByLabelText('Desde, Lunes, Sede A, tramo 1'));
-    await user.type(lunesA.getByLabelText('Desde, Lunes, Sede A, tramo 1'), '08:00');
-    await user.clear(lunesA.getByLabelText('Hasta, Lunes, Sede A, tramo 1'));
-    await user.type(lunesA.getByLabelText('Hasta, Lunes, Sede A, tramo 1'), '13:00');
+    await typeTime(user, lunesA, 'Desde, Lunes, Sede A, tramo 1', '0800');
+    await typeTime(user, lunesA, 'Hasta, Lunes, Sede A, tramo 1', '1300');
 
     await user.click(within(day('Jueves')).getByRole('button', { name: 'Agregar tramo en Sede B' }));
     const juevesB = within(day('Jueves'));
-    await user.clear(juevesB.getByLabelText('Desde, Jueves, Sede B, tramo 1'));
-    await user.type(juevesB.getByLabelText('Desde, Jueves, Sede B, tramo 1'), '14:00');
-    await user.clear(juevesB.getByLabelText('Hasta, Jueves, Sede B, tramo 1'));
-    await user.type(juevesB.getByLabelText('Hasta, Jueves, Sede B, tramo 1'), '19:00');
+    await typeTime(user, juevesB, 'Desde, Jueves, Sede B, tramo 1', '1400');
+    await typeTime(user, juevesB, 'Hasta, Jueves, Sede B, tramo 1', '1900');
 
     await user.click(screen.getByRole('button', { name: 'Guardar horario' }));
 
@@ -196,7 +204,9 @@ describe('ProviderSchedulesPanel', () => {
     await user.click(within(dialog).getByRole('checkbox', { name: 'Miércoles' }));
     await user.click(within(dialog).getByRole('button', { name: 'Copiar' }));
 
-    expect(within(day('Miércoles')).getByLabelText('Desde, Miércoles, Sede A, tramo 1')).toHaveValue('08:00');
+    expect(within(day('Miércoles')).getByRole('group', { name: 'Desde, Miércoles, Sede A, tramo 1' })).toHaveTextContent(
+      /08\D*00/,
+    );
     await user.click(screen.getByRole('button', { name: 'Guardar horario' }));
     await waitFor(() =>
       expect(mockedReplace).toHaveBeenCalledWith('tok', 'dra-x', {
@@ -276,7 +286,10 @@ describe('ProviderSchedulesPanel', () => {
     await user.click(await screen.findByRole('button', { name: 'Añadir excepción' }));
     const dialog = await screen.findByRole('dialog');
     await user.selectOptions(within(dialog).getByLabelText('Sede'), B);
-    await user.type(within(dialog).getByLabelText('Fecha'), '2031-10-23');
+    // `DatePicker` (B6): segmentos dd/mm/aaaa del formato «es».
+    const [dayInput] = within(within(dialog).getByRole('group', { name: 'Fecha' })).getAllByRole('spinbutton');
+    await user.click(dayInput);
+    await user.keyboard('23102031');
     await user.type(within(dialog).getByLabelText('Nota (opcional)'), 'Congreso');
     await user.click(within(dialog).getByRole('button', { name: 'Guardar excepción' }));
 
@@ -321,7 +334,7 @@ describe('ProviderSchedulesPanel', () => {
     mockedUpdateSettings.mockResolvedValue({ strictProviderSchedule: true });
     const user = userEvent.setup();
     render(<ProviderSchedulesPanel token="tok" canEdit />);
-    const toggle = await screen.findByRole('checkbox', { name: /Modo estricto/ });
+    const toggle = await screen.findByRole('switch', { name: /Modo estricto/ });
     await user.click(toggle);
     await waitFor(() =>
       expect(mockedUpdateSettings).toHaveBeenCalledWith('tok', { strictProviderSchedule: true }),

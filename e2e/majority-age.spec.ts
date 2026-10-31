@@ -241,9 +241,12 @@ test('capturas a 390 y 1440 px en claro y oscuro: ajuste, modal, ficha y auditor
       await shot('ficha', width, theme);
 
       await page.goto(`${origin}/settings/auditoria`);
-      const row = page.getByRole('table', { name: 'Registro de auditoría' }).getByRole('row').filter({
-        hasText: AUDIT_DETAIL,
-      });
+      // B6: el registro es una tabla desde 640 px y una lista de tarjetas en el teléfono (DataList).
+      const row = (
+        width < 640
+          ? page.getByRole('list', { name: 'Registro de auditoría' }).getByRole('listitem')
+          : page.getByRole('table', { name: 'Registro de auditoría' }).getByRole('row')
+      ).filter({ hasText: AUDIT_DETAIL });
       await expect(row).toBeVisible({ timeout: 15_000 });
       await row.scrollIntoViewIfNeeded();
       await expectNoHorizontalScroll(page);

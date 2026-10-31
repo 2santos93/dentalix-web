@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -31,11 +31,15 @@ import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 import { PrescriptionItemFields } from './prescription-item-fields';
 import { PrescriptionSafetyPanel, type SafetyState } from './prescription-safety-panel';
+
+/** Memorizado: solo se repinta cuando cambia su fecha (ver `handleDateChange`). */
+const MemoDatePicker = React.memo(DatePicker);
 
 const copy = {
   title: 'Nueva receta',
@@ -149,6 +153,14 @@ function NewPrescriptionForm({
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Estable, para el DatePicker memorizado: react-aria es caro de pintar y el
+  // modal se repinta con cada tecla de los medicamentos. Sin esto la escritura
+  // se frena tanto que la comprobación de seguridad (debounce de 400 ms) salta
+  // a mitad de una palabra.
+  const handleDateChange = useCallback((value: string | null) => {
+    setDispensationDate(value ?? '');
+    setError(null);
+  }, []);
   const [itemErrors, setItemErrors] = useState<ItemDraftErrors[]>([]);
   const [licenseError, setLicenseError] = useState<string | null>(null);
 
@@ -419,12 +431,11 @@ function NewPrescriptionForm({
                 }}
               />
             ) : (
-              <select
+              <NativeSelect
                 id="rx-template"
                 value={templateId}
                 disabled={templates === null}
                 onChange={(e) => applyTemplate(e.target.value)}
-                className={cn(fieldClass, 'h-10')}
               >
                 <option value="">{copy.templateBlank}</option>
                 {(templates ?? []).map((t) => (
@@ -432,7 +443,7 @@ function NewPrescriptionForm({
                     {t.name} · {copy.templateCount(t.items.length)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             )}
           </FormField>
 
@@ -465,16 +476,7 @@ function NewPrescriptionForm({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField htmlFor="rx-date" label={copy.dateLabel} hint={copy.dateHint}>
-              <Input
-                id="rx-date"
-                type="date"
-                value={dispensationDate}
-                onChange={(e) => {
-                  setDispensationDate(e.target.value);
-                  setError(null);
-                }}
-                className="tabular-nums"
-              />
+              <MemoDatePicker id="rx-date" value={dispensationDate || null} onChange={handleDateChange} />
             </FormField>
             {needsLicense ? (
               <FormField
@@ -499,16 +501,16 @@ function NewPrescriptionForm({
             ) : null}
           </div>
           <FormField htmlFor="rx-notes" label={copy.notesLabel}>
-            <textarea
+            <Textarea
               id="rx-notes"
               rows={2}
+              autoGrow
               value={notes}
               maxLength={1000}
               onChange={(e) => {
                 setNotes(e.target.value);
                 setError(null);
               }}
-              className={cn(fieldClass, 'h-auto font-[inherit]')}
             />
           </FormField>
 

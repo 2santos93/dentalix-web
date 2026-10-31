@@ -4,21 +4,21 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { LocationCalendarView } from '@/components/location-calendar/location-calendar-view';
 
 const copy = {
   title: 'Calendario de la sede',
   description:
-    'Qué días cuentan como hábiles y qué días son festivo en cada sede. Lo usan los plazos que se cuentan en días hábiles.',
+    'Qué días cuentan como hábiles y qué días son festivos en cada sede. Lo usan los plazos que se cuentan en días hábiles.',
   checkingSession: 'Verificando sesión…',
 };
 
 /**
  * Ajustes › Calendario de la sede (DX-316). Solo ADMIN: al resto se le enseña
  * el estado bloqueado sin llamar a la API, como en Mayoría de edad.
- * `?sede=<id>` elige la sede.
+ * `?sede=<id>` (desde la ficha de la sede) elige la sede; sin él, la activa del
+ * selector del shell. La vista dice cuál se edita.
  */
 export default function LocationCalendarPage() {
   const router = useRouter();
@@ -40,8 +40,7 @@ export default function LocationCalendarPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="sede">
       {/* `useSearchParams` (en la vista) exige un límite de Suspense. */}
       <Suspense fallback={null}>
         <LocationCalendarView
@@ -49,6 +48,6 @@ export default function LocationCalendarPage() {
           allowed={canManageLocationCalendar(getTokenRole(accessToken))}
         />
       </Suspense>
-    </>
+    </SettingsPage>
   );
 }

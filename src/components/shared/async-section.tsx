@@ -74,7 +74,7 @@ function DefaultSkeleton() {
 export function TableSkeleton({ rows = 4 }: { rows?: number }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border" role="status" aria-label="Cargando">
-      <div className="border-b border-border bg-surface-2 px-4 py-3">
+      <div className="border-b border-border bg-surface-sunken px-4 py-3">
         <Skeleton className="h-3 w-32" />
       </div>
       <div className="divide-y divide-hairline">

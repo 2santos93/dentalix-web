@@ -1,8 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, LockKeyhole } from 'lucide-react';
+import { LockKeyhole } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ApiError } from '@/lib/api/api-error';
 import {
@@ -17,9 +16,14 @@ import {
 } from '@/lib/staff/staff-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { NativeSelect } from '@/components/ui/native-select';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Callout } from '@/components/ui/callout';
+import { SectionHeader } from '@/components/ui/section-header';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { FormField } from '@/components/shared/form-field';
+import { PageHeader } from '@/components/shared/page-header';
+import { DATA_SECTION_CLASS } from '@/components/patients/data-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
@@ -39,7 +43,10 @@ import { toast } from 'sonner';
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  back: 'Volver a Personal',
+  // Mientras carga (o si falla) la cabecera no tiene nombre que poner.
+  title: 'Perfil del miembro',
+  description: 'Cambia su nombre, su rol o su acceso a la clínica.',
+  back: 'Personal',
   sedeLoading: 'Cargando la sede. Vuelve a intentarlo en un momento.',
   sectionTitle: 'Datos del miembro',
   fullNameLabel: 'Nombre completo',
@@ -52,7 +59,7 @@ const copy = {
   specialtyHint: 'Sale en sus recetas, bajo su nombre.',
   save: 'Guardar cambios',
   saving: 'Guardando…',
-  statusActive: 'Aceptado',
+  statusActive: 'Activo',
   statusInactive: 'Inactivo',
   accessTitle: 'Acceso',
   accessActiveHint: 'Puede entrar a la clínica con su cuenta.',
@@ -107,11 +114,6 @@ const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
   { value: 'ASSISTANT', label: 'Asistente' },
   { value: 'RECEPTION', label: 'Recepción' },
 ];
-
-// Native <select> styled to match the Input atom (kept native for a11y/tests) —
-// same class as agenda-view.tsx's `fieldClass`.
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface StaffMemberProfileProps {
   token: string;
@@ -328,14 +330,23 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
     specialty.trim() === (member.professionalSpecialty ?? '');
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link href="/staff">
-            <ArrowLeft /> {copy.back}
-          </Link>
-        </Button>
-      </div>
+    <>
+      {/* Patrón de ficha: la cabecera es la identidad (nombre + estado); la
+          acción primaria es «Guardar cambios», en su sección. */}
+      <PageHeader
+        back={{ href: '/staff', label: copy.back }}
+        title={member?.fullName ?? copy.title}
+        description={copy.description}
+        meta={
+          member ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <StatusBadge kind="staff" status={member.status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE'}>
+                {member.status === 'ACTIVE' ? copy.statusActive : copy.statusInactive}
+              </StatusBadge>
+            </div>
+          ) : null
+        }
+      />
 
       <AsyncSection
         loading={loading}
@@ -348,18 +359,12 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         }
       >
         {member && (
+          // Secciones planas separadas por una línea, sin tarjetas apiladas
+          // (DESIGN.md → Cards: «prefiere una sección con título a otra tarjeta»).
           <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-ink">{member.fullName}</h2>
-              <Badge variant={member.status === 'ACTIVE' ? 'success' : 'secondary'}>
-                {member.status === 'ACTIVE' ? copy.statusActive : copy.statusInactive}
-              </Badge>
-            </div>
-
-            <Card className="p-5">
+            <section aria-labelledby="profile-data-title" className={DATA_SECTION_CLASS}>
+              <SectionHeader titleId="profile-data-title" title={copy.sectionTitle} />
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <h3 className="text-base font-semibold text-ink">{copy.sectionTitle}</h3>
-
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField htmlFor="profile-full-name" label={copy.fullNameLabel}>
                     <Input
@@ -370,31 +375,19 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                       onChange={(e) => setFullName(e.target.value)}
                     />
                   </FormField>
-                  <FormField
-                    htmlFor="profile-email"
-                    label={copy.emailLabel}
-                    hint={copy.emailHint}
-                  >
-                    <Input id="profile-email" type="email" readOnly value={member.email} />
+                  <FormField htmlFor="profile-role" label={copy.roleLabel}>
+                    <NativeSelect
+                      id="profile-role"
+                      value={role}
+                      onChange={(e) => setRole(e.target.value as ClinicRole)}
+                    >
+                      {ROLE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </NativeSelect>
                   </FormField>
-                </div>
-
-                <FormField htmlFor="profile-role" label={copy.roleLabel}>
-                  <select
-                    id="profile-role"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as ClinicRole)}
-                    className={fieldClass}
-                  >
-                    {ROLE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-
-                <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     htmlFor="profile-license"
                     label={copy.licenseLabel}
@@ -433,28 +426,28 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                   type="submit"
                   loading={saving}
                   disabled={isUnchanged}
-                  className="self-start"
+                  className="self-start max-sm:w-full"
                 >
                   {copy.save}
                 </Button>
               </form>
-            </Card>
+            </section>
 
             {canBlock &&
             member.status === 'ACTIVE' &&
             (member.role === 'DENTIST' || member.role === 'ADMIN') ? (
-              <Card className="flex flex-col gap-3 p-5">
-                <h3 className="text-base font-semibold text-ink">{copy.agendaTitle}</h3>
-                <p className="text-sm text-muted">{copy.agendaHint}</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="self-start"
-                  onClick={() => void openBlockDialog()}
-                >
-                  {copy.blockAgenda}
-                </Button>
-              </Card>
+              <section aria-labelledby="profile-agenda-title" className={DATA_SECTION_CLASS}>
+                <SectionHeader
+                  titleId="profile-agenda-title"
+                  title={copy.agendaTitle}
+                  description={copy.agendaHint}
+                  actions={
+                    <Button type="button" variant="secondary" onClick={() => void openBlockDialog()}>
+                      {copy.blockAgenda}
+                    </Button>
+                  }
+                />
+              </section>
             ) : null}
 
             {/* DX-089: sedes del miembro; la API solo deja verlas y cambiarlas al ADMIN. */}
@@ -462,53 +455,68 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
               <StaffLocationsCard token={token} userId={userId} memberRole={member.role} />
             ) : null}
 
-            <Card className="flex flex-col gap-3 p-5">
-              <h3 className="text-base font-semibold text-ink">{copy.accessTitle}</h3>
-              <p className="text-sm text-muted">
-                {member.status === 'ACTIVE'
-                  ? copy.accessActiveHint
-                  : copy.accessInactiveHint}
-              </p>
-              {member.status === 'ACTIVE' ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  className="self-start"
-                  disabled={changingAccess}
-                  onClick={() => setConfirmingDeactivate(true)}
-                >
-                  {copy.deactivate}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="self-start"
-                  loading={changingAccess}
-                  onClick={() => void handleReactivate()}
-                >
-                  {copy.reactivate}
-                </Button>
-              )}
+            <section aria-labelledby="profile-access-title" className={DATA_SECTION_CLASS}>
+              <SectionHeader
+                titleId="profile-access-title"
+                title={copy.accessTitle}
+                description={
+                  member.status === 'ACTIVE' ? copy.accessActiveHint : copy.accessInactiveHint
+                }
+              />
+              {/* El correo identifica la cuenta: se lee aquí, junto al acceso,
+                  en vez de en un campo de solo lectura dentro del formulario. */}
+              <DescriptionList columns={1}>
+                <DescriptionItem label={copy.emailLabel}>
+                  <span className="break-all">{member.email}</span>
+                  <span className="mt-1 block text-sm text-muted">{copy.emailHint}</span>
+                </DescriptionItem>
+              </DescriptionList>
               {blockedMinutes !== null ? (
-                <div className="mt-1 flex flex-col gap-3 border-t border-hairline pt-4">
-                  <p className="flex items-start gap-1.5 text-sm text-warning">
-                    <LockKeyhole className="mt-0.5 size-4 shrink-0" aria-hidden />
-                    <span>{copy.loginBlocked(blockedMinutes)}</span>
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="self-start"
-                    disabled={unlocking}
-                    onClick={() => setConfirmingUnlock(true)}
+                <div className="flex flex-col gap-2">
+                  <Callout
+                    tone="warning"
+                    icon={LockKeyhole}
+                    action={
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={unlocking}
+                        onClick={() => setConfirmingUnlock(true)}
+                      >
+                        {copy.unlockLogin}
+                      </Button>
+                    }
                   >
-                    {copy.unlockLogin}
-                  </Button>
+                    {copy.loginBlocked(blockedMinutes)}
+                  </Callout>
                   {unlockRefused ? <InlineError>{unlockRefused}</InlineError> : null}
                 </div>
               ) : null}
-            </Card>
+              <div>
+                {member.status === 'ACTIVE' ? (
+                  // Destructiva en su forma «ghost»: el botón solo abre la
+                  // confirmación, que es donde va el rojo sólido.
+                  <Button
+                    type="button"
+                    variant="destructive-ghost"
+                    disabled={changingAccess}
+                    onClick={() => setConfirmingDeactivate(true)}
+                  >
+                    {copy.deactivate}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    loading={changingAccess}
+                    onClick={() => void handleReactivate()}
+                  >
+                    {copy.reactivate}
+                  </Button>
+                )}
+              </div>
+            </section>
           </div>
         )}
       </AsyncSection>
@@ -558,6 +566,6 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         destructive={false}
         onConfirm={() => void handleUnlock()}
       />
-    </div>
+    </>
   );
 }

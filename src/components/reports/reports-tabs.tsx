@@ -1,8 +1,6 @@
 'use client';
-import * as React from 'react';
-import { useRef, type KeyboardEvent } from 'react';
 import type { ClinicRole } from '@/lib/me/me-api';
-import { cn } from '@/lib/utils';
+import { TabBar } from '@/components/ui/tabs';
 
 /**
  * Pestañas de «Reportes» (DX-014): «Comparar sedes» (solo ADMIN) y
@@ -52,56 +50,18 @@ export function ReportsTabs({
   onChange: (tab: ReportTabKey) => void;
   tabs?: readonly ReportTab[];
 }) {
-  const refs = useRef<Partial<Record<ReportTabKey, HTMLButtonElement | null>>>({});
-
-  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    const last = tabs.length - 1;
-    const next =
-      event.key === 'ArrowRight'
-        ? index === last
-          ? 0
-          : index + 1
-        : event.key === 'ArrowLeft'
-          ? index === 0
-            ? last
-            : index - 1
-          : event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? last
-              : null;
-    if (next === null) return;
-    event.preventDefault();
-    refs.current[tabs[next].key]?.focus();
-  }
-
   return (
-    <div role="tablist" aria-label={copy.tablist} className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
-      {tabs.map((tab, index) => {
-        const selected = tab.key === active;
-        return (
-          <button
-            key={tab.key}
-            ref={(el) => {
-              refs.current[tab.key] = el;
-            }}
-            type="button"
-            role="tab"
-            id={reportTabId(tab.key)}
-            aria-selected={selected}
-            aria-controls={reportPanelId(tab.key)}
-            tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(tab.key)}
-            onKeyDown={(event) => onKeyDown(event, index)}
-            className={cn(
-              '-mb-px min-h-11 whitespace-nowrap border-b-2 px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-              selected ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-ink',
-            )}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+    <TabBar
+      aria-label={copy.tablist}
+      value={active}
+      onValueChange={onChange}
+      className="mb-6"
+      items={tabs.map((tab) => ({
+        value: tab.key,
+        label: tab.label,
+        id: reportTabId(tab.key),
+        controls: reportPanelId(tab.key),
+      }))}
+    />
   );
 }

@@ -6,6 +6,7 @@ import {
   type ImportFieldKey,
   type ImportInspect,
 } from '@/lib/patient-imports/patient-imports-api';
+import { NativeSelect } from '@/components/ui/native-select';
 import {
   DOC_TYPES,
   docTypeOptionLabel,
@@ -25,9 +26,6 @@ const copy = {
   defaultDocTypeNone: '— Ninguno: la fila da error —',
 };
 
-export const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
-
 interface ColumnMappingFieldsProps {
   inspect: ImportInspect;
   mapping: ColumnMapping;
@@ -41,7 +39,7 @@ interface ColumnMappingFieldsProps {
 
 /**
  * Mapeo de columnas (paso 2 de DX-107). Una fila por dato de la ficha con un
- * <select> nativo (etiquetado) de las cabeceras del archivo y el valor de la
+ * <NativeSelect> nativo (etiquetado) de las cabeceras del archivo y el valor de la
  * primera fila para reconocerla. En escritorio es una rejilla de tres
  * columnas; bajo `sm` cada dato se apila (etiqueta, selector, ejemplo).
  */
@@ -67,18 +65,18 @@ export function ColumnMappingFields({
     // min-w-0: un <fieldset> tiene `min-inline-size: min-content` y el selector
     // más ancho lo sacaba 3 px del asistente a 390 px (QA D1).
     <fieldset className="flex min-w-0 flex-col gap-3" disabled={disabled}>
-      <legend className="text-base font-semibold text-ink">{copy.legend}</legend>
+      <legend className="t-title text-ink">{copy.legend}</legend>
       <p className="text-sm text-muted">{copy.hint}</p>
-      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
         <div
           aria-hidden
-          className="hidden grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)_minmax(0,1fr)] gap-4 border-b border-border bg-surface-2 px-4 py-2 text-xs font-medium text-muted sm:grid"
+          className="hidden grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)_minmax(0,1fr)] gap-4 border-b border-border bg-surface-sunken px-4 py-2 t-label text-muted sm:grid"
         >
           <span>{copy.field}</span>
           <span>{copy.column}</span>
           <span>{copy.sample}</span>
         </div>
-        <ul className="divide-y divide-hairline">
+        <ul className="divide-y divide-border-subtle">
           {inspect.fields.map((field) => {
             const key = field.key as ImportFieldKey;
             const selectId = `${id}-${field.key}`;
@@ -92,17 +90,16 @@ export function ColumnMappingFields({
                 <label htmlFor={selectId} className="text-sm font-medium text-ink">
                   {field.label}
                   {field.required ? (
-                    <span className="text-danger" aria-hidden>
+                    <span className="text-danger-text" aria-hidden>
                       {' '}
                       {copy.required}
                     </span>
                   ) : null}
                 </label>
-                <select
+                <NativeSelect
                   id={selectId}
                   aria-describedby={sampleId}
                   aria-required={field.required || undefined}
-                  className={fieldClass}
                   value={mapping[key] ?? ''}
                   onChange={(e) => {
                     const next = { ...mapping };
@@ -119,7 +116,7 @@ export function ColumnMappingFields({
                         {h}
                       </option>
                     ))}
-                </select>
+                </NativeSelect>
                 <p id={sampleId} className="min-w-0 truncate text-sm text-muted">
                   <span className="sm:hidden">{copy.sample}: </span>
                   {sample ?? copy.noSample}
@@ -133,9 +130,8 @@ export function ColumnMappingFields({
         <label htmlFor={`${id}-default-doc`} className="text-sm font-medium text-ink">
           {copy.defaultDocType}
         </label>
-        <select
+        <NativeSelect
           id={`${id}-default-doc`}
-          className={fieldClass}
           value={defaultDocType ?? ''}
           onChange={(e) => onDefaultDocTypeChange((e.target.value || null) as DocType | null)}
         >
@@ -145,7 +141,7 @@ export function ColumnMappingFields({
               {docTypeOptionLabel(t, docTypeNames)}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
     </fieldset>
   );

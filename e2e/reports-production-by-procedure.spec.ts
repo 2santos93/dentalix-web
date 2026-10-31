@@ -5,6 +5,8 @@ import { test, expect, type Page } from './support/test';
 import { loginAs } from './support/auth';
 import { tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll } from './support/layout';
+import { fillDate } from './support/dates';
+import { openSection } from './support/nav';
 
 /**
  * e2e (DX-423): «Reportes» → «Producción por procedimiento» contra la clínica
@@ -32,10 +34,12 @@ const origin = tenantOrigin(DEMO_SUBDOMAIN);
 
 async function openProduction(page: Page, email = ADMIN_EMAIL): Promise<void> {
   await loginAs(page, origin, email, DEMO_PASSWORD);
-  await page.getByRole('link', { name: 'Reportes' }).filter({ visible: true }).first().click();
+  await openSection(page, 'Reportes');
   await expect(page).toHaveURL(new RegExp(`${origin}/reportes`));
+  // ADMIN tiene dos informes (pestañas); el odontólogo solo este, sin barra de pestañas.
+  await expect(page.getByLabel('Período')).toBeVisible({ timeout: 30_000 });
   const tab = page.getByRole('tab', { name: 'Producción por procedimiento' });
-  if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
+  if ((await tab.count()) > 0 && (await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
   await expect(page).toHaveURL(new RegExp(`/reportes(\\?tab=produccion)?$`));
   // «Este año»: la demo tiene producción en los dos últimos meses.
   await page.getByLabel('Período').selectOption('this_year');
@@ -155,8 +159,8 @@ test('ADMIN: un período sin realizados (enero de 2020) muestra el estado vacío
   await page.setViewportSize({ width: 1440, height: 900 });
   await openProduction(page);
   await page.getByLabel('Período').selectOption('custom');
-  await page.getByLabel('Desde').fill('2020-01-01');
-  await page.getByLabel('Hasta').fill('2020-01-31');
+  await fillDate(page, 'Desde', '2020-01-01');
+  await fillDate(page, 'Hasta', '2020-01-31');
   await expect(page.getByText('No hay procedimientos realizados en este período')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('table', { name: TABLE })).toHaveCount(0);
   await expect(page.getByTestId('production-undated')).toBeVisible();
@@ -166,7 +170,7 @@ test('DENTIST: solo su producción, sin filtro de profesional', async ({ page })
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openProduction(page, DENTIST_EMAIL);
-  await expect(page.getByRole('tab')).toHaveCount(1);
+  await expect(page.getByRole('tab')).toHaveCount(0);
   await expect(page.getByText('Solo tu producción', { exact: false })).toBeVisible();
   await expect(page.getByLabel('Profesional')).toHaveCount(0);
 });

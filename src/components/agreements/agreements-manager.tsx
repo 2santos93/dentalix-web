@@ -22,10 +22,11 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { notifyError } from '@/components/errors/notify';
+import type { RowAction } from '@/components/shared/row-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { AgreementFormModal } from './agreement-form-modal';
-import { AGREEMENT_KIND_LABELS } from './agreement-labels';
 
 /**
  * SEC-047: un convenio de pagador OTHER solo lo asigna ADMIN. El relleno de
@@ -34,7 +35,7 @@ import { AGREEMENT_KIND_LABELS } from './agreement-labels';
 function InternalPayerNote({ agreement }: { agreement: Agreement }) {
   if (isExternalPayer(agreement.payer.type)) return null;
   return (
-    <span className="mt-1 flex items-start gap-1.5 text-xs text-warning">
+    <span className="mt-1 flex items-start gap-1.5 t-caption font-normal text-warning-text">
       <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
       <span>{copy.internalPayer}</span>
     </span>
@@ -54,13 +55,10 @@ const copy = {
   internalPayer:
     'Solo un administrador podrá asignarlo. Si es una aseguradora o una empresa, reclasifica el pagador.',
   colName: 'Convenio',
-  colKind: 'Tipo',
   colCondition: 'Condición',
   colLocation: 'Sede',
   colValidity: 'Vigencia',
   colPatients: 'Pacientes',
-  colStatus: 'Estado',
-  colActions: 'Acciones',
   wholeClinic: 'Toda la clínica',
   unknownLocation: 'Sede',
   noLimit: 'Sin límite',
@@ -73,17 +71,21 @@ const copy = {
     return copy.noLimit;
   },
   byCategory: (n: number) => (n === 1 ? '1 categoría con porcentaje propio' : `${n} categorías con porcentaje propio`),
-  active: 'Activo',
+  /** El tipo va dicho en la condición: «15 % de descuento» o «Lista: …». */
+  percentCondition: (percent: string) => `${percent} de descuento`,
+  listCondition: (name: string) => `Lista: ${name}`,
+  patients: (n: number) => (n === 1 ? '1 paciente' : `${n} pacientes`),
   inactive: 'Inactivo',
-  edit: 'Editar',
   deactivate: 'Desactivar',
-  activate: 'Activar',
+  activate: 'Reactivar',
   remove: 'Retirar',
-  actionFor: (action: string, name: string) => `${action} «${name}»`,
   toggleError: (name: string) => `No pudimos cambiar el estado de «${name}».`,
   removeTitle: (name: string) => `¿Retirar «${name}»?`,
   removeDescription:
     'Deja de aparecer aquí y de aplicarse. No se puede retirar mientras tenga pacientes asignados; en ese caso, desactívalo.',
+  /** La consecuencia, con el número: lo que decide si retirar es posible. */
+  removeWithPatients: (n: number) =>
+    `${n === 1 ? 'Tiene 1 paciente asignado' : `Tiene ${n} pacientes asignados`}: no se puede retirar mientras los tenga. Desactívalo para que deje de aplicarse.`,
   removeConfirm: 'Retirar convenio',
   removeError: 'No pudimos retirar el convenio.',
 };
@@ -114,7 +116,7 @@ function distinctCategories(items: { category: string | null }[]): string[] {
 /**
  * Gestión de convenios en /settings/convenios (DX-105). Crear, editar,
  * desactivar (deja de fijar precios) y retirar (la API responde 409 si hay
- * pacientes asignados).
+ * pacientes asignados). La fila abre la edición; el resto va en su «⋯».
  */
 export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
   const sedeFormat = useSedeFormat(token);
@@ -186,9 +188,11 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
   }
 
   function conditionText(a: Agreement): string {
-    if (a.kind === 'PRICE_LIST') return a.priceList?.name ?? '—';
+    if (a.kind === 'PRICE_LIST') return copy.listCondition(a.priceList?.name ?? '—');
     // DX-378 (FE-078): el % con el formato de la sede, no con «es».
-    const general = a.percent === null || !fmt ? NO_SEDE_FORMAT : fmt.percent(a.percent, 2);
+    const general = copy.percentCondition(
+      a.percent === null || !fmt ? NO_SEDE_FORMAT : fmt.percent(a.percent, 2),
+    );
     const n = Object.keys(a.percentByCategory ?? {}).length;
     return n > 0 ? `${general} · ${copy.byCategory(n)}` : general;
   }
@@ -236,72 +240,99 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
     }
   }
 
-  function actions(agreement: Agreement) {
-    const toggleLabel = agreement.active ? copy.deactivate : copy.activate;
-    return (
-      <div className="flex flex-wrap gap-2 md:justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="max-md:h-11"
-          onClick={() => openModal(agreement)}
-          aria-label={copy.actionFor(copy.edit, agreement.name)}
-        >
-          {copy.edit}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="max-md:h-11"
-          loading={pendingId === agreement.id}
-          onClick={() => void toggleActive(agreement)}
-          aria-label={copy.actionFor(toggleLabel, agreement.name)}
-        >
-          {toggleLabel}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="max-md:h-11"
-          onClick={() => {
-            setRemoveError(null);
-            setRemoving(agreement);
-          }}
-          aria-label={copy.actionFor(copy.remove, agreement.name)}
-        >
-          {copy.remove}
-        </Button>
-      </div>
-    );
+  function rowActions(agreement: Agreement): RowAction[] {
+    const busy = pendingId === agreement.id;
+    return [
+      {
+        label: agreement.active ? copy.deactivate : copy.activate,
+        onSelect: () => void toggleActive(agreement),
+        disabled: busy,
+      },
+      {
+        label: copy.remove,
+        destructive: true,
+        separatorBefore: true,
+        disabled: busy,
+        onSelect: () => {
+          setRemoveError(null);
+          setRemoving(agreement);
+        },
+      },
+    ];
   }
 
-  function status(agreement: Agreement) {
-    return (
-      <Badge variant={agreement.active ? 'success' : 'muted'}>
-        {agreement.active ? copy.active : copy.inactive}
-      </Badge>
-    );
-  }
+  const columns: DataListColumn<Agreement>[] = [
+    {
+      id: 'name',
+      header: copy.colName,
+      mobile: 'primary',
+      cell: (a) => (
+        <span className="flex min-w-0 flex-col">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate">{a.name}</span>
+            {/* El estado solo se pinta cuando es la excepción (critique-settings). */}
+            {a.active ? null : <Badge variant="neutral">{copy.inactive}</Badge>}
+          </span>
+          <span className="t-caption font-normal text-muted">{a.payer.name}</span>
+          <InternalPayerNote agreement={a} />
+        </span>
+      ),
+      mobileCell: (a) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate">{a.name}</span>
+          {a.active ? null : <Badge variant="neutral">{copy.inactive}</Badge>}
+        </span>
+      ),
+    },
+    {
+      id: 'condition',
+      header: copy.colCondition,
+      cell: (a) => conditionText(a),
+      // En el teléfono el pagador (y su aviso) van en la línea 2, delante.
+      mobileCell: (a) => (
+        <>
+          {a.payer.name} · {conditionText(a)}
+          <InternalPayerNote agreement={a} />
+        </>
+      ),
+    },
+    { id: 'location', header: copy.colLocation, cell: (a) => locationLabel(a), showFrom: 'lg' },
+    {
+      id: 'validity',
+      header: copy.colValidity,
+      cell: (a) => copy.validity(a.validFrom, a.validTo, fmt),
+      cellClassName: 'tabular-nums',
+    },
+    {
+      id: 'patients',
+      header: copy.colPatients,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (a) => a.assignedCount,
+      // En el teléfono el conteo se queda: es lo que dice si retirar es seguro.
+      mobileCell: (a) => copy.patients(a.assignedCount),
+    },
+  ];
+
+  const isEmpty = !loading && !error && agreements.length === 0;
+  const newButton = (
+    <Button ref={newButtonRef} type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
+      <Plus aria-hidden />
+      {copy.newAgreement}
+    </Button>
+  );
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted" aria-live="polite">
-          {loading || error ? '' : copy.count(agreements.length)}
-        </p>
-        <Button
-          ref={newButtonRef}
-          type="button"
-          onClick={() => openModal(null)}
-          className="w-full sm:w-auto"
-        >
-          <Plus aria-hidden />
-          {copy.newAgreement}
-        </Button>
-      </div>
+      {/* Lista vacía: sin «0 convenios» y la acción dentro del estado vacío. */}
+      {isEmpty ? null : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="t-body text-muted" aria-live="polite">
+            {loading || error ? '' : copy.count(agreements.length)}
+          </p>
+          {newButton}
+        </div>
+      )}
 
       {sedeFormat.status === 'error' ? (
         <SedeConfigError
@@ -320,81 +351,17 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
         emptyTitle={copy.empty}
         emptyDescription={copy.emptyHint}
         emptyIcon={<Handshake aria-hidden />}
+        emptyAction={newButton}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colName}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colKind}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colCondition}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colLocation}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colValidity}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                {copy.colPatients}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {agreements.map((a) => (
-              <tr key={a.id} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-3">
-                  <span className="font-medium">{a.name}</span>
-                  <span className="block text-xs text-muted">{a.payer.name}</span>
-                  <InternalPayerNote agreement={a} />
-                </td>
-                <td className="px-4 py-3">{AGREEMENT_KIND_LABELS[a.kind]}</td>
-                <td className="px-4 py-3">{conditionText(a)}</td>
-                <td className="px-4 py-3">{locationLabel(a)}</td>
-                <td className="px-4 py-3 tabular-nums">{copy.validity(a.validFrom, a.validTo, fmt)}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{a.assignedCount}</td>
-                <td className="px-4 py-3">{status(a)}</td>
-                <td className="px-4 py-3">{actions(a)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {agreements.map((a) => (
-            <li
-              key={a.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="min-w-0 break-words font-medium">{a.name}</span>
-                {status(a)}
-              </div>
-              <p className="text-xs text-muted">
-                {a.payer.name} · {AGREEMENT_KIND_LABELS[a.kind]}
-              </p>
-              <InternalPayerNote agreement={a} />
-              <p>{conditionText(a)}</p>
-              <p className="text-xs text-muted">
-                {locationLabel(a)} · {copy.validity(a.validFrom, a.validTo, fmt)}
-              </p>
-              {actions(a)}
-            </li>
-          ))}
-        </ul>
+        <DataList
+          label={copy.tableLabel}
+          rows={agreements}
+          columns={columns}
+          getRowKey={(a) => a.id}
+          onRowClick={(a) => openModal(a)}
+          rowActions={rowActions}
+          getRowLabel={(a) => a.name}
+        />
       </AsyncSection>
 
       <AgreementFormModal
@@ -416,7 +383,11 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
           if (!open) setRemoving(null);
         }}
         title={removing ? copy.removeTitle(removing.name) : ''}
-        description={copy.removeDescription}
+        description={
+          removing && removing.assignedCount > 0
+            ? copy.removeWithPatients(removing.assignedCount)
+            : copy.removeDescription
+        }
         confirmLabel={copy.removeConfirm}
         onConfirm={() => void confirmRemove()}
         confirming={removeBusy}

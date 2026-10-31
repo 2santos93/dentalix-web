@@ -13,6 +13,7 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const copy = {
   title: (location: string) => `Recordatorios de ${location}`,
@@ -109,24 +110,13 @@ export function ReminderSettingsModal({
       submitting={submitting}
       error={error}
     >
-      <div className="flex items-start gap-3">
-        <input
-          id={enabledId}
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => setEnabled(e.target.checked)}
-          aria-describedby={`${enabledId}-hint`}
-          className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-        />
-        <div className="flex flex-col gap-0.5">
-          <label htmlFor={enabledId} className="text-sm font-medium text-ink">
-            {copy.enabled}
-          </label>
-          <p id={`${enabledId}-hint`} className="text-xs text-muted">
-            {copy.enabledHint}
-          </p>
-        </div>
-      </div>
+      <Checkbox
+        id={enabledId}
+        checked={enabled}
+        onChange={(e) => setEnabled(e.target.checked)}
+        label={copy.enabled}
+        description={copy.enabledHint}
+      />
 
       <fieldset className="flex flex-col gap-3" aria-describedby={hintId}>
         <legend className="text-sm font-medium text-ink">{copy.leadsLegend}</legend>

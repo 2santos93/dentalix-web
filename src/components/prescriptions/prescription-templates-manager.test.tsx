@@ -98,7 +98,8 @@ describe('PrescriptionTemplatesManager', () => {
     mockedDelete.mockResolvedValue(undefined);
     render(<PrescriptionTemplatesManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Plantillas de receta' });
-    await user.click(within(table).getByRole('button', { name: 'Editar «Post-exodoncia»' }));
+    await user.click(within(table).getByRole('button', { name: 'Acciones de «Post-exodoncia»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
     const dialog = await screen.findByRole('dialog', { name: 'Editar plantilla de receta' });
     expect(within(dialog).getByLabelText(/principio activo/i)).toHaveValue('Ibuprofeno');
     const name = within(dialog).getByLabelText('Nombre');
@@ -108,9 +109,10 @@ describe('PrescriptionTemplatesManager', () => {
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
     expect(await within(table).findByText('Post-exodoncia adulto')).toBeInTheDocument();
 
-    await user.click(within(table).getByRole('button', { name: 'Retirar «Post-exodoncia adulto»' }));
-    const confirm = await screen.findByRole('dialog', { name: '¿Retirar la plantilla?' });
-    await user.click(within(confirm).getByRole('button', { name: 'Retirar' }));
+    await user.click(within(table).getByRole('button', { name: 'Acciones de «Post-exodoncia adulto»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Eliminar' }));
+    const confirm = await screen.findByRole('dialog', { name: '¿Eliminar la plantilla?' });
+    await user.click(within(confirm).getByRole('button', { name: 'Eliminar' }));
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'tpl1'));
     expect(await screen.findByText('Todavía no hay plantillas de receta.')).toBeInTheDocument();
   });

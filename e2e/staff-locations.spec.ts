@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Browser, type Page } from './support/test';
+import { fillDate, fillTime } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { accessTokenOf, loginAs, registerAndLogin } from './support/auth';
@@ -7,6 +8,7 @@ import { atSede, sedeDate, sedeDayFromToday, sedeTime } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
 import { E2E_BROWSER_LOCALE, E2E_REGION } from './support/regional';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (DX-089): personal restringido a sedes.
@@ -126,7 +128,7 @@ async function openDayList(page: Page, origin: string, day: string): Promise<voi
   await expect(page.getByRole('heading', { name: 'Agenda', exact: true })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  await fillDate(page, 'Fecha', day);
 }
 
 async function receptionPage(browser: Browser, width: number, height: number): Promise<Page> {
@@ -255,10 +257,10 @@ for (const viewport of VIEWPORTS) {
 
       // Caja: solo el abono de Norte.
       await rec.goto(`${origin}/caja`);
-      const cash = rec.getByRole('table', { name: 'Abonos del período' });
+      const cash = dataList(rec, 'Abonos del período');
       await expect(cash).toBeVisible({ timeout: 15_000 });
-      await expect(cash.getByRole('row').filter({ hasText: northName })).toContainText(figure(41_000));
-      await expect(cash.getByRole('row').filter({ hasText: centerName })).toHaveCount(0);
+      await expect(dataListRows(cash).filter({ hasText: northName })).toContainText(figure(41_000));
+      await expect(dataListRows(cash).filter({ hasText: centerName })).toHaveCount(0);
 
       // La ficha del paciente de la OTRA sede se abre: los pacientes son de la clínica.
       await rec.goto(`${origin}/patients/${centerPatient.id}`);
@@ -276,8 +278,8 @@ for (const viewport of VIEWPORTS) {
       await form.getByLabel('Paciente', { exact: true }).fill(northName);
       await expect(form.getByRole('button', { name: 'Cambiar' })).toBeVisible({ timeout: 10_000 });
       await form.getByLabel('Profesional', { exact: true }).selectOption({ label: ownerName });
-      await form.getByLabel('Hora de inicio').fill('11:00');
-      await form.getByLabel('Hora de fin').fill('11:30');
+      await fillTime(form, 'Hora de inicio', '11:00');
+      await fillTime(form, 'Hora de fin', '11:30');
       await form.getByLabel('Motivo (opcional)').fill(reason);
       await form.getByRole('button', { name: 'Agendar cita' }).click();
       await expect(form).toBeHidden({ timeout: 10_000 });

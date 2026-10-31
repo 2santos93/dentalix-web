@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './support/test';
+import { fillDate, fillTime } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -92,8 +93,9 @@ async function useSede(page: Page, id: string | null) {
 async function setRange(page: Page, day: string, sede: string, from: string, to: string) {
   const group = page.getByRole('group', { name: day, exact: true });
   await group.getByRole('button', { name: `Agregar tramo en ${sede}` }).click();
-  await group.getByLabel(`Desde, ${day}, ${sede}, tramo 1`).fill(from);
-  await group.getByLabel(`Hasta, ${day}, ${sede}, tramo 1`).fill(to);
+  // Los tramos son `TimeField` (B6): se escriben por segmentos.
+  await fillTime(group, `Desde, ${day}, ${sede}, tramo 1`, from);
+  await fillTime(group, `Hasta, ${day}, ${sede}, tramo 1`, to);
 }
 
 test('ADMIN define la rotación en dos sedes, copia el lunes al miércoles, añade una excepción y el cuadrante lo muestra', async ({
@@ -115,7 +117,7 @@ test('ADMIN define la rotación en dos sedes, copia el lunes al miércoles, aña
   await copyDialog.getByRole('checkbox', { name: 'Miércoles' }).check();
   await copyDialog.getByRole('button', { name: 'Copiar' }).click();
   await expect(copyDialog).toBeHidden();
-  await expect(page.getByLabel(`Desde, Miércoles, ${sedeAName}, tramo 1`)).toHaveValue('08:00');
+  await expect(page.getByRole('group', { name: `Desde, Miércoles, ${sedeAName}, tramo 1` })).toHaveText(/08\D*00/);
 
   // Un tramo del jueves en las dos sedes a la vez: no se guarda.
   await setRange(page, 'Jueves', sedeB, '14:00', '19:00');
@@ -136,7 +138,7 @@ test('ADMIN define la rotación en dos sedes, copia el lunes al miércoles, aña
   await page.getByRole('button', { name: 'Añadir excepción' }).click();
   const overrideDialog = page.getByRole('dialog', { name: 'Nueva excepción' });
   await overrideDialog.getByLabel('Sede', { exact: true }).selectOption({ label: sedeB });
-  await overrideDialog.getByLabel('Fecha').fill(NEXT_THURSDAY);
+  await fillDate(overrideDialog, 'Fecha', NEXT_THURSDAY);
   await overrideDialog.getByLabel('Nota (opcional)').fill('Congreso');
   await overrideDialog.getByRole('button', { name: 'Guardar excepción' }).click();
   await expect(overrideDialog).toBeHidden({ timeout: 10_000 });
@@ -181,7 +183,7 @@ test('agenda Día: en la sede B el lunes no sale (con «Mostrar todos»); en la 
   await useSede(page, sedeBId);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(MONDAY);
+  await fillDate(page, 'Fecha', MONDAY);
 
   const ximena = page.locator(`[data-testid="day-column"][data-provider-id="${dentistId}"]`);
   await expect(page.getByText('1 profesional no atiende este día en esta sede.')).toBeVisible({ timeout: 15_000 });
@@ -194,7 +196,7 @@ test('agenda Día: en la sede B el lunes no sale (con «Mostrar todos»); en la 
   await useSede(page, sedeAId);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(MONDAY);
+  await fillDate(page, 'Fecha', MONDAY);
   await expect(ximena).toHaveCount(1, { timeout: 15_000 });
   await expect(page.getByText(/no atiende este día en esta sede/)).toBeHidden();
   await expect(page.locator('[data-testid="day-column-header"]').filter({ hasText: dentist.fullName })).toContainText(
@@ -243,7 +245,7 @@ test('una cita fuera de su horario se agenda con el aviso; «Buscar hueco» en l
   await useSede(page, sedeAId);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(plusDays(MONDAY, 1));
+  await fillDate(page, 'Fecha', plusDays(MONDAY, 1));
 
   // Martes en la sede A: no trabaja. Se cita igual (Mostrar todos) y avisa.
   await page.getByRole('checkbox', { name: 'Mostrar todos' }).check({ timeout: 15_000 });
@@ -252,8 +254,8 @@ test('una cita fuera de su horario se agenda con el aviso; «Buscar hueco» en l
   const form = page.getByRole('form', { name: 'Agendar cita' });
   await form.getByLabel('Paciente', { exact: true }).fill(`ROT${suffix}`.slice(0, 20));
   await expect(form.getByRole('button', { name: 'Cambiar' })).toBeVisible({ timeout: 10_000 });
-  await form.getByLabel('Hora de inicio').fill('10:00');
-  await form.getByLabel('Hora de fin').fill('10:30');
+  await fillTime(form, 'Hora de inicio', '10:00');
+  await fillTime(form, 'Hora de fin', '10:30');
   await expect(form.getByTestId('provider-off-schedule')).toContainText(
     `${dentist.fullName} no atiende en esta sede ese día. Se puede agendar igual; quedará el aviso.`,
   );
@@ -271,8 +273,8 @@ test('una cita fuera de su horario se agenda con el aviso; «Buscar hueco» en l
   await entry.getByRole('button', { name: `Buscar hueco para Bruno ${patientLast}` }).click();
   const search = page.getByRole('dialog', { name: `Buscar hueco para Bruno ${patientLast}` });
   await search.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
-  await search.getByLabel('Hasta', { exact: true }).fill(NEXT_THURSDAY);
-  await search.getByLabel('Desde', { exact: true }).fill(MONDAY);
+  await fillDate(search, 'Hasta', NEXT_THURSDAY);
+  await fillDate(search, 'Desde', MONDAY);
   await search.getByRole('button', { name: 'Buscar' }).click();
   const openings = search.getByTestId('opening');
   // Solo el jueves de esta semana (el de la siguiente tiene la excepción).
@@ -291,9 +293,11 @@ test('390 px: el editor va en acordeón por días y ni el editor ni el cuadrante
   const toggle = jueves.getByRole('button', { name: /^Jueves/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false', { timeout: 10_000 });
   await expect(toggle).toContainText(`${sedeB} 14:00–19:00`);
-  await expect(jueves.getByLabel(`Desde, Jueves, ${sedeB}, tramo 1`)).toBeHidden();
+  // Los tramos son `TimeField` (B6): el grupo lleva el nombre; sus segmentos, «hora, …».
+  const desde = jueves.getByRole('group', { name: `Desde, Jueves, ${sedeB}, tramo 1`, exact: true });
+  await expect(desde).toBeHidden();
   await toggle.click();
-  await expect(jueves.getByLabel(`Desde, Jueves, ${sedeB}, tramo 1`)).toBeVisible();
+  await expect(desde).toBeVisible();
   await expectNoHorizontalScroll(page);
 
   await page.getByRole('tab', { name: 'Cuadrante' }).click();

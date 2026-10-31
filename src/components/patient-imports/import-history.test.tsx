@@ -47,6 +47,13 @@ const page = (items = [completed]) => ({
 
 beforeEach(() => jest.clearAllMocks());
 
+
+/** Informe y deshacer viven en el «⋯» del lote (RowActions). */
+async function historyAction(user: ReturnType<typeof userEvent.setup>, fileName: string, action: string) {
+  await user.click(await screen.findByRole('button', { name: `Acciones de ${fileName}` }));
+  await user.click(await screen.findByRole('menuitem', { name: action }));
+}
+
 it('carga con esqueleto y luego lista cada lote con su estado y resultado', async () => {
   mockedList.mockResolvedValue(page());
   render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
@@ -88,18 +95,17 @@ it('deshacer: pide confirmación y deja el lote como deshecho', async () => {
   });
   const user = userEvent.setup();
   render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
-  await user.click(
-    await screen.findByRole('button', {
-      name: /deshacer el lote pacientes\.csv/i,
-    }),
-  );
+  await historyAction(user, 'pacientes.csv', 'Deshacer lote');
   const dialog = screen.getByRole('dialog');
   expect(dialog).toHaveTextContent(/Se retirarán los 1 pacientes/);
   await user.click(within(dialog).getByRole('button', { name: 'Deshacer lote' }));
   expect(mockedUndo).toHaveBeenCalledWith('tok', 'batch-1');
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByText('Deshecho: 1 pacientes retirados, 1 fichas revertidas')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /deshacer el lote/i })).not.toBeInTheDocument();
+  // Deshecho: el «⋯» del lote ya no ofrece deshacerlo.
+  await user.click(screen.getByRole('button', { name: 'Acciones de pacientes.csv' }));
+  await screen.findAllByRole('menuitem');
+  expect(screen.queryByRole('menuitem', { name: 'Deshacer lote' })).not.toBeInTheDocument();
 });
 
 it('deshacer rechazado (409): el motivo en el diálogo y el lote intacto', async () => {
@@ -109,7 +115,7 @@ it('deshacer rechazado (409): el motivo en el diálogo y el lote intacto', async
   );
   const user = userEvent.setup();
   render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
-  await user.click(await screen.findByRole('button', { name: /deshacer el lote/i }));
+  await historyAction(user, 'pacientes.csv', 'Deshacer lote');
   await user.click(
     within(screen.getByRole('dialog')).getByRole('button', {
       name: 'Deshacer lote',
@@ -158,8 +164,14 @@ it('«Informe» solo si sigue disponible (revisión: tras la purga daría 410)',
   mockedList.mockResolvedValue(page([completed, purged]));
   render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   await screen.findByText('viejo.csv');
-  expect(screen.getByRole('button', { name: /informe.*pacientes\.csv/i })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /informe.*viejo\.csv/i })).not.toBeInTheDocument();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Acciones de pacientes.csv' }));
+  expect(await screen.findByRole('menuitem', { name: 'Descargar informe de errores' })).toBeInTheDocument();
+  await user.keyboard('{Escape}');
+  await user.click(screen.getByRole('button', { name: 'Acciones de viejo.csv' }));
+  expect(await screen.findAllByRole('menuitem')).not.toContainEqual(
+    expect.objectContaining({ textContent: expect.stringContaining('informe') }),
+  );
 });
 
 it('Way-Out Rule: el aviso de fallo del refresco trae «Reintentar»', async () => {
@@ -232,11 +244,7 @@ it('DX-262: con saldos migrados, el deshacer avisa de que también se retiran y 
   });
   const user = userEvent.setup();
   render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
-  await user.click(
-    await screen.findByRole('button', {
-      name: /deshacer el lote pacientes\.csv/i,
-    }),
-  );
+  await historyAction(user, 'pacientes.csv', 'Deshacer lote');
   const dialog = screen.getByRole('dialog');
   expect(dialog).toHaveTextContent(/también sus 3 saldos migrados/);
   await user.click(within(dialog).getByRole('button', { name: 'Deshacer lote' }));
@@ -259,11 +267,7 @@ it('DX-262: «Retirar saldos migrados» retira solo los saldos (aunque los pacie
   });
   const user = userEvent.setup();
   render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
-  await user.click(
-    await screen.findByRole('button', {
-      name: /retirar los saldos migrados de pacientes\.csv/i,
-    }),
-  );
+  await historyAction(user, 'pacientes.csv', 'Retirar saldos migrados');
   const dialog = screen.getByRole('dialog');
   expect(dialog).toHaveTextContent(/Se retirarán sus 2 saldos migrados/);
   expect(dialog).toHaveTextContent(/los pacientes no se tocan/);

@@ -26,9 +26,9 @@ import { FormModal } from '@/components/shared/form-modal';
 import { MoneyInput } from '@/components/shared/money-input';
 import { SingleFileField, useSingleFileUpload } from '@/components/shared/single-file-field';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import {
   ExpenseCategoryField,
   ExpenseDescriptionField,
@@ -300,6 +300,7 @@ export function ExpenseFormModal({
       submitDisabled={upload.busy || !form.locationId || !today}
       error={error}
       size="lg"
+      touchTargets
       onCloseAutoFocus={onCloseAutoFocus}
     >
       {zoneError ? <SectionError description={zoneError} onRetry={retryZone} /> : null}
@@ -318,20 +319,19 @@ export function ExpenseFormModal({
               retryId="expense-location"
             />
           ) : (
-            <select
+            <NativeSelect
               id="expense-location"
               value={form.locationId}
               disabled={submitting || hasPayments || locations.length <= 1}
               onChange={(e) => changeLocation(e.target.value)}
               aria-describedby={hasPayments ? 'expense-location-hint' : undefined}
-              className={cn(fieldClass, 'h-10')}
             >
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           )}
         </FormField>
         <ExpenseCategoryField
@@ -416,40 +416,39 @@ export function ExpenseFormModal({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="expense-invoice-date" label={expenseFormCopy.invoiceDate} error={errors.invoiceDate}>
-          <Input
+          <DatePicker
             id="expense-invoice-date"
-            type="date"
+            name="invoiceDate"
             max={today ?? undefined}
-            value={form.invoiceDate}
+            value={form.invoiceDate || null}
             disabled={submitting}
-            onChange={(e) => {
-              patch({ invoiceDate: e.target.value });
+            onChange={(invoiceDate) => {
+              patch({ invoiceDate: invoiceDate ?? '' });
               clearError('invoiceDate');
             }}
             aria-invalid={errors.invoiceDate ? true : undefined}
             aria-describedby={errors.invoiceDate ? fieldErrorId('expense-invoice-date') : undefined}
-            className="tabular-nums"
           />
         </FormField>
         <FormField
           htmlFor="expense-due-date"
           label={expenseFormCopy.dueDate}
           hint={expenseFormCopy.dueDateHint}
+          hintId="expense-due-date-hint"
           error={errors.dueDate}
         >
-          <Input
+          <DatePicker
             id="expense-due-date"
-            type="date"
+            name="dueDate"
             min={form.invoiceDate || undefined}
-            value={form.dueDate}
+            value={form.dueDate || null}
             disabled={submitting}
-            onChange={(e) => {
-              patch({ dueDate: e.target.value });
+            onChange={(dueDate) => {
+              patch({ dueDate: dueDate ?? '' });
               clearError('dueDate');
             }}
             aria-invalid={errors.dueDate ? true : undefined}
-            aria-describedby={errors.dueDate ? fieldErrorId('expense-due-date') : undefined}
-            className="tabular-nums"
+            aria-describedby={errors.dueDate ? fieldErrorId('expense-due-date') : 'expense-due-date-hint'}
           />
         </FormField>
       </div>
@@ -471,29 +470,18 @@ export function ExpenseFormModal({
             }
           />
 
-          <div className="flex flex-col gap-4 border-t border-hairline pt-4">
-            <div className="flex items-start gap-3">
-              <input
-                id="expense-paid"
-                type="checkbox"
-                checked={form.paid}
-                disabled={submitting}
-                onChange={(e) => {
-                  patch({ paid: e.target.checked });
-                  clearError('paidOn');
-                }}
-                aria-describedby="expense-paid-hint"
-                className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-              />
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <label htmlFor="expense-paid" className="text-sm font-medium text-ink">
-                  {expenseFormCopy.paid}
-                </label>
-                <p id="expense-paid-hint" className="text-xs text-muted">
-                  {expenseFormCopy.paidHint}
-                </p>
-              </div>
-            </div>
+          <div className="flex flex-col gap-4 border-t border-border-subtle pt-4">
+            <Checkbox
+              id="expense-paid"
+              checked={form.paid}
+              disabled={submitting}
+              onChange={(e) => {
+                patch({ paid: e.target.checked });
+                clearError('paidOn');
+              }}
+              label={expenseFormCopy.paid}
+              description={expenseFormCopy.paidHint}
+            />
             {form.paid ? (
               <ExpensePaymentFields
                 idPrefix="expense-payment"

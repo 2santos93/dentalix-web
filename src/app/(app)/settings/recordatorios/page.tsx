@@ -4,14 +4,13 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { ReminderSettingsManager } from '@/components/reminders/reminder-settings-manager';
 
 const copy = {
   title: 'Recordatorios',
   description:
-    'Emails automáticos antes de cada cita, por sede, con un enlace para que el paciente confirme o cancele.',
+    'Correos automáticos antes de cada cita, con un enlace para que el paciente confirme o cancele.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -36,12 +35,11 @@ export default function RemindersSettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="sede">
       <ReminderSettingsManager
         token={accessToken}
         allowed={canManageReminders(getTokenRole(accessToken))}
       />
-    </>
+    </SettingsPage>
   );
 }

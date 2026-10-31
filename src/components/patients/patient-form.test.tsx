@@ -70,7 +70,7 @@ describe('PatientForm', () => {
   it('renders optional fields with accessible labels', async () => {
     render(<PatientForm token="tok" />);
     expect(screen.getByLabelText(/número de documento/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/nacimiento/i)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /nacimiento/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/teléfono/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/correo/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/dirección/i)).toBeInTheDocument();

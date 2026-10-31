@@ -7,6 +7,7 @@ import { E2E_DATABASE_URL } from './support/db';
 import { expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
+import { fillDate } from './support/dates';
 
 /**
  * e2e (DX-376): cobro en otra moneda que la del plan. Plan en USD y dos abonos
@@ -127,7 +128,8 @@ async function payInVes(page: Page, amount: string, day: string, rateText: strin
   const currency = dialog.getByLabel('Moneda');
   await expect(currency.locator(`option[value="${CURRENCY}"]`)).toHaveCount(1, { timeout: 15_000 });
   await currency.selectOption(CURRENCY);
-  await dialog.getByLabel('Fecha de pago').fill(day);
+  // UX v2: `DatePicker` por segmentos.
+  await fillDate(dialog, 'Fecha de pago', day);
   await dialog.getByLabel('Importe').fill(amount);
 
   const preview = dialog.getByTestId('rp-rate-preview');
@@ -165,7 +167,7 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
   await loginAs(page, origin, adminEmail, password);
   await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
   const panel = page.locator('#tabpanel-treatment-plans');
-  const fold = panel.getByRole('button', { name: /^Abonos y saldo/ });
+  const fold = panel.getByRole('button', { name: /^Abonos registrados/ });
   await expect(fold).toBeVisible({ timeout: 15_000 });
   if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
 
@@ -173,13 +175,15 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
     { pair: '1 USD = 36,50 VES', day: YESTERDAY },
     { pair: '1 USD = 40,00 VES', day: TODAY },
   ];
-  const receipts = panel.getByRole('button', { name: /^Recibo/ }).locator('visible=true');
+  // UX v2: «Recibo» vive en el «⋯» de cada abono.
+  const receipts = panel.getByRole('button', { name: /^Acciones de abono/ });
   await expect(receipts).toHaveCount(2);
 
   async function readReceipts(): Promise<string[]> {
     const texts: string[] = [];
     for (let i = 0; i < 2; i += 1) {
       await receipts.nth(i).click();
+      await page.getByRole('menuitem', { name: 'Recibo' }).click();
       const doc = page.getByTestId('receipt-document');
       await expect(doc).toContainText('Tasa aplicada', { timeout: 15_000 });
       await expect(doc).toContainText(/Equivalente en USD/);
@@ -200,7 +204,7 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
   // La tasa de ayer cambia después: la reimpresión usa la congelada del abono.
   setProviderRate(YESTERDAY, 50);
   await page.reload();
-  const foldAgain = panel.getByRole('button', { name: /^Abonos y saldo/ });
+  const foldAgain = panel.getByRole('button', { name: /^Abonos registrados/ });
   if ((await foldAgain.getAttribute('aria-expanded')) !== 'true') await foldAgain.click();
   const again = await readReceipts();
   expect(again).toEqual(first);

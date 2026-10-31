@@ -20,18 +20,11 @@ import { formatDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FormModal } from '@/components/shared/form-modal';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { ConsentScopeFields } from './consent-scope-fields';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { SectionHeader } from '@/components/ui/section-header';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -181,20 +174,20 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 id={headingId} className="t-title text-ink">
-            {copy.title}
-          </h2>
-          <p className="mt-1 max-w-[68ch] text-sm text-muted">{copy.description}</p>
-        </div>
-        {!loading && !error && canRecord ? (
-          <Button variant="secondary" className="w-full sm:w-auto" onClick={openRecord}>
-            <ShieldCheck aria-hidden />
-            {copy.record}
-          </Button>
-        ) : null}
-      </div>
+      <SectionHeader
+        as="h2"
+        titleId={headingId}
+        title={copy.title}
+        description={<span className="block max-w-[68ch]">{copy.description}</span>}
+        actions={
+          !loading && !error && canRecord ? (
+            <Button variant="secondary" className="w-full sm:w-auto" onClick={openRecord}>
+              <ShieldCheck aria-hidden />
+              {copy.record}
+            </Button>
+          ) : undefined
+        }
+      />
 
       <AsyncSection
         loading={loading}
@@ -209,8 +202,8 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
         {data ? (
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-3">
-              <h3 className="t-label text-muted">{copy.currentHeading}</h3>
-              <ul className="divide-y divide-hairline rounded-xl border border-border bg-surface">
+              <SectionHeader as="h3" title={copy.currentHeading} />
+              <ul className="divide-y divide-border-subtle rounded-lg border border-border bg-surface">
                 {current.map((status) => (
                   <CurrentRow
                     key={status.scope}
@@ -229,7 +222,7 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
             </div>
 
             <div className="flex flex-col gap-3">
-              <h3 className="t-label text-muted">{copy.historyHeading}</h3>
+              <SectionHeader as="h3" title={copy.historyHeading} />
               <HistoryTable rows={data.consents.history} />
             </div>
           </div>
@@ -274,10 +267,9 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
   );
 }
 
-function StatusBadge({ granted }: { granted: boolean | null }) {
-  if (granted === true) return <Badge variant="success">{copy.granted}</Badge>;
-  if (granted === false) return <Badge variant="warning">{copy.denied}</Badge>;
-  return <Badge variant="muted">{copy.pending}</Badge>;
+function DecisionBadge({ granted }: { granted: boolean | null }) {
+  const status = granted === true ? 'GRANTED' : granted === false ? 'DENIED' : 'UNDECIDED';
+  return <StatusBadge kind="dataConsent" status={status} />;
 }
 
 function versionLabel(row: DataConsentRecord): string {
@@ -307,62 +299,61 @@ function CurrentRow({
           </span>
         ) : null}
       </div>
-      <div className="flex items-center gap-3">
-        <StatusBadge granted={status.granted} />
-        {onRevoke ? (
-          <Button variant="secondary" size="sm" onClick={onRevoke}>
-            {copy.revokeMarketing}
-            <span className="sr-only"> {SCOPE_LABELS.MARKETING.toLowerCase()}</span>
-          </Button>
-        ) : null}
+      {/* La columna de la acción se reserva en todas las filas: los chips
+          quedan alineados aunque solo una fila pueda revocarse. */}
+      <div className="flex items-center gap-3 sm:justify-end">
+        <DecisionBadge granted={status.granted} />
+        <span className="flex sm:w-24 sm:justify-end">
+          {onRevoke ? (
+            <Button variant="secondary" size="sm" onClick={onRevoke}>
+              {copy.revokeMarketing}
+              <span className="sr-only"> {SCOPE_LABELS.MARKETING.toLowerCase()}</span>
+            </Button>
+          ) : null}
+        </span>
       </div>
     </li>
   );
 }
 
+function channelLabel(row: DataConsentRecord): string {
+  return row.channel === 'LEGACY'
+    ? copy.channelLegacy
+    : row.channel === 'PATIENT_LINK'
+      ? copy.channelPatientLink
+      : copy.channelInPerson;
+}
+
+const historyColumns: DataListColumn<DataConsentRecord>[] = [
+  {
+    id: 'date',
+    header: copy.colDate,
+    cell: (row) => <span className="tnum">{formatDateTime(row.recordedAt)}</span>,
+    mobileCell: (row) => formatDateTime(row.recordedAt),
+  },
+  { id: 'scope', header: copy.colScope, cell: (row) => SCOPE_LABELS[row.scope], mobile: 'primary' },
+  {
+    id: 'decision',
+    header: copy.colDecision,
+    mobile: 'trailing',
+    cell: (row) => (
+      <StatusBadge kind="dataConsent" status={row.granted ? 'GRANTED' : 'DENIED'}>
+        {row.granted ? copy.decisionGranted : copy.decisionDenied}
+      </StatusBadge>
+    ),
+  },
+  { id: 'version', header: copy.colVersion, cell: (row) => <span className="tnum">{versionLabel(row)}</span>, mobileCell: versionLabel },
+  { id: 'by', header: copy.colBy, cell: (row) => row.recordedBy?.fullName ?? copy.unknownUser },
+  {
+    id: 'channel',
+    header: copy.colChannel,
+    cell: (row) => <span className="text-muted">{channelLabel(row)}</span>,
+    mobileCell: channelLabel,
+  },
+];
+
 function HistoryTable({ rows }: { rows: DataConsentRecord[] }) {
   return (
-    <Card className="overflow-hidden p-0 shadow-none">
-      <Table aria-label={copy.historyTable}>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead scope="col">{copy.colDate}</TableHead>
-            <TableHead scope="col">{copy.colScope}</TableHead>
-            <TableHead scope="col">{copy.colDecision}</TableHead>
-            <TableHead scope="col">{copy.colVersion}</TableHead>
-            <TableHead scope="col">{copy.colBy}</TableHead>
-            <TableHead scope="col">{copy.colChannel}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell className="tabular-nums" data-label={copy.colDate}>
-                {formatDateTime(row.recordedAt)}
-              </TableCell>
-              <TableCell data-label={copy.colScope}>{SCOPE_LABELS[row.scope]}</TableCell>
-              <TableCell data-label={copy.colDecision}>
-                <Badge variant={row.granted ? 'success' : 'warning'}>
-                  {row.granted ? copy.decisionGranted : copy.decisionDenied}
-                </Badge>
-              </TableCell>
-              <TableCell className="tabular-nums" data-label={copy.colVersion}>
-                {versionLabel(row)}
-              </TableCell>
-              <TableCell data-label={copy.colBy}>
-                {row.recordedBy?.fullName ?? copy.unknownUser}
-              </TableCell>
-              <TableCell className="text-muted" data-label={copy.colChannel}>
-                {row.channel === 'LEGACY'
-                  ? copy.channelLegacy
-                  : row.channel === 'PATIENT_LINK'
-                    ? copy.channelPatientLink
-                    : copy.channelInPerson}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Card>
+    <DataList label={copy.historyTable} rows={rows} columns={historyColumns} getRowKey={(row) => row.id} />
   );
 }

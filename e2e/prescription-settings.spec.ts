@@ -127,7 +127,7 @@ async function openPrint(page: Page, href: string): Promise<void> {
 
 async function openSettings(page: Page) {
   await page.goto(`${origin}/settings/recetas`);
-  const words = page.getByRole('switch', { name: 'Cantidad en letras' });
+  const words = page.getByRole('checkbox', { name: 'Cantidad en letras' });
   await expect(words).toBeVisible({ timeout: 15_000 });
   return words;
 }
@@ -213,21 +213,22 @@ test('admin turns on words and HC and sets 10 days; the next prescription follow
 
   // Una clínica nueva nace sin letras, sin nº de HC y con 30 días.
   const words = await openSettings(page);
-  const record = page.getByRole('switch', { name: 'Exigir el nº de historia clínica' });
+  const record = page.getByRole('checkbox', { name: 'Exigir el nº de historia clínica' });
   const validity = page.getByLabel('Validez (días)');
   const save = page.getByRole('button', { name: 'Guardar' });
-  await expect(words).toHaveAttribute('aria-checked', 'false');
-  await expect(record).toHaveAttribute('aria-checked', 'false');
+  await expect(words).not.toBeChecked();
+  await expect(record).not.toBeChecked();
   await expect(validity).toHaveValue('30');
-  await expect(save).toBeDisabled();
+  // Sin cambios no hay «Guardar» (barra «Cambios sin guardar», plantilla de Ajustes).
+  await expect(save).toHaveCount(0);
   await words.click();
   await record.click();
   await validity.fill('10');
   await save.click();
   await expect(page.getByRole('status').filter({ hasText: 'Ajustes de la receta guardados.' })).toBeVisible();
-  await expect(words).toHaveAttribute('aria-checked', 'true');
-  await expect(record).toHaveAttribute('aria-checked', 'true');
-  await expect(save).toBeDisabled();
+  await expect(words).toBeChecked();
+  await expect(record).toBeChecked();
+  await expect(save).toHaveCount(0);
   const stored = await request.get(`${API_URL}/prescriptions/settings`, { headers: session.headers });
   expect(await stored.json()).toEqual({ printQuantityInWords: true, requireClinicalRecordNumber: true, validityDays: 10 });
 
@@ -371,7 +372,7 @@ test('a DENTIST does not see Ajustes › Recetas and the page shows exactly one 
   await expect(main.getByText('Solo administración cambia los datos de la receta.')).toBeVisible({ timeout: 15_000 });
   await expect(main.getByText('Las recetas se emiten con los ajustes que fije administración.')).toBeVisible();
   await expect(main.locator('svg.lucide-lock')).toHaveCount(1);
-  await expect(main.getByRole('switch')).toHaveCount(0);
+  await expect(main.getByRole('checkbox')).toHaveCount(0);
   await expect(main.getByRole('button', { name: 'Guardar' })).toHaveCount(0);
   await expect(main.getByRole('heading', { name: 'Datos de la receta' })).toHaveCount(0);
 });
@@ -430,7 +431,12 @@ test('390 px has no horizontal scroll in settings, modal and print view (capture
     await shoot(page, 'staff-specialty', viewport.width);
 
     await page.goto(`${origin}/settings/auditoria`);
-    const row = page.getByRole('table', { name: 'Registro de auditoría' }).getByRole('row').filter({ hasText: AUDIT_DETAIL });
+    // B6: el registro es una tabla desde 640 px y una lista de tarjetas en el teléfono (DataList).
+    const row = (
+      narrow
+        ? page.getByRole('list', { name: 'Registro de auditoría' }).getByRole('listitem')
+        : page.getByRole('table', { name: 'Registro de auditoría' }).getByRole('row')
+    ).filter({ hasText: AUDIT_DETAIL });
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.scrollIntoViewIfNeeded();
     if (narrow) await expectNoHorizontalScroll(page);

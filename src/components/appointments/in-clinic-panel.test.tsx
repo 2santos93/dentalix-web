@@ -59,6 +59,11 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
       anamnesisReviewedAt: '2026-09-01T00:00:00.000Z',
     },
     planItemsReservedElsewhere: [],
+    urgent: false,
+    walkIn: false,
+    overbooked: false,
+    triageFlags: [],
+    triageNote: null,
     ...overrides,
   };
 }
@@ -132,6 +137,72 @@ describe('InClinicPanel (DX-200)', () => {
       within(screen.getByTestId('in-clinic-group-readyForCheckout')).getByText('Por cobrar 7 min'),
     ).toBeInTheDocument();
     expect(screen.getByText('4 pacientes')).toBeInTheDocument();
+  });
+
+  it('DX-470 (QA): una llegada sin cita no muestra puntualidad («tarde») ni su color', () => {
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({
+            waiting: [
+              item({
+                appointmentId: 'u1',
+                urgent: true,
+                walkIn: true,
+                punctuality: 'LATE',
+                minutesInStatus: 3,
+                arrivedAt: '2026-10-19T14:03:00.000Z',
+              }),
+              item({ appointmentId: 'n1', patientFirstName: 'Berta', punctuality: 'LATE', arrivedAt: '2026-10-19T14:03:00.000Z' }),
+            ],
+          }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const [walkIn, normal] = screen.getAllByTestId('in-clinic-item');
+    expect(walkIn).not.toHaveTextContent(/tarde/i);
+    expect(within(walkIn).getByText(/^Llegó \d{1,2}:\d{2}/)).toBeInTheDocument();
+    expect(walkIn).not.toHaveAttribute('data-punctuality');
+    const badge = within(walkIn).getByText('Espera 3 min');
+    expect(badge).not.toHaveAttribute('data-status');
+    expect(normal).toHaveTextContent(/hasta 5 min tarde/);
+  });
+
+  it('DX-470: la urgencia sin cita sale con su insignia, sus señales y la nota', () => {
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({
+            waiting: [
+              item({
+                appointmentId: 'u1',
+                urgent: true,
+                walkIn: true,
+                overbooked: true,
+                triageFlags: ['PAIN', 'SWELLING'],
+                triageNote: 'Muela 36',
+              }),
+              item({ appointmentId: 'n1', patientFirstName: 'Berta' }),
+            ],
+          }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const [urgent, normal] = screen.getAllByTestId('in-clinic-item');
+    const triage = within(urgent).getByRole('list', { name: 'Señales de triaje de Ana Ríos' });
+    expect(within(triage).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Urgencia',
+      'Sin cita',
+      'Sobrecupo',
+      'Dolor',
+      'Inflamación',
+    ]);
+    expect(within(urgent).getByText('Muela 36')).toBeInTheDocument();
+    expect(within(normal).queryByTestId('in-clinic-triage')).not.toBeInTheDocument();
   });
 
   it('in-clinic panel shows 12 h for an h12 location and 24 h for an h23 location', () => {
@@ -238,8 +309,27 @@ describe('InClinicPanel (DX-200)', () => {
     setActiveLocationId(null);
     mockedLocations.mockResolvedValue([sede('loc-1'), sede('loc-2')]);
     render(<Harness role="ADMIN" />);
-    expect(await screen.findByText('Elige una sede')).toBeInTheDocument();
+    expect(await screen.findByText('Elige una sede para ver quién está en la clínica.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Elegir sede' })).toBeInTheDocument();
     expect(mockedGet).not.toHaveBeenCalled();
+  });
+
+  it('a pantalla completa sin sede: estado vacío con «Elegir sede» dentro, sin decir dónde está el selector', async () => {
+    const choose = jest.fn();
+    render(
+      <InClinicPanel
+        state={staticState({ noLocation: true })}
+        role="ADMIN"
+        runner={noRunner as never}
+        showTitle={false}
+        onChooseLocation={choose}
+      />,
+    );
+    const empty = screen.getByTestId('in-clinic-no-location');
+    expect(within(empty).getByText('Este panel es por sede')).toBeInTheDocument();
+    expect(empty).not.toHaveTextContent(/arriba/);
+    await userEvent.click(within(empty).getByRole('button', { name: 'Elegir sede' }));
+    expect(choose).toHaveBeenCalled();
   });
 
   it('una clínica de una sede no elige sede: el panel es el de esa sede', async () => {

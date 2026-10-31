@@ -17,6 +17,9 @@ import {
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const copy = {
@@ -185,29 +188,30 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
   function templatePicker(d: PostOpSuggestions, selectedId: string | null) {
     if (d.suggested.length > 0) {
       return (
-        <fieldset className="flex flex-col gap-1">
-          <legend className="sr-only">{copy.suggestedLegend}</legend>
-          {d.suggested.map((t) => (
-            <label
+        <RadioGroup
+          id={`${ids}-template`}
+          legend={<span className="sr-only">{copy.suggestedLegend}</span>}
+          value={selectedId ?? ''}
+          onValueChange={(value) => {
+            setInteracted(true);
+            setChosenId(value);
+          }}
+          className="gap-0"
+        >
+          {d.suggested.map((t, i) => (
+            <RadioOption
               key={t.id}
-              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 hover:bg-surface-2"
-            >
-              <input
-                type="radio"
-                name={`${ids}-template`}
-                value={t.id}
-                checked={selectedId === t.id}
-                onChange={() => {
-                  setInteracted(true);
-                  setChosenId(t.id);
-                }}
-                className="size-4 accent-primary"
-              />
-              <span className="text-sm text-ink">{t.title}</span>
-              <span className="text-xs tabular-nums text-muted">{copy.version(t.code, t.version)}</span>
-            </label>
+              id={i === 0 ? `${ids}-template` : undefined}
+              value={t.id}
+              label={
+                <>
+                  {t.title}{' '}
+                  <span className="t-caption t-data text-muted">{copy.version(t.code, t.version)}</span>
+                </>
+              }
+            />
           ))}
-        </fieldset>
+        </RadioGroup>
       );
     }
     return (
@@ -217,17 +221,14 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
         </p>
         {d.others.length > 0 ? (
           <>
-            <label htmlFor={othersId} className="text-xs font-medium text-muted">
-              {copy.othersLabel}
-            </label>
-            <select
+            <Label htmlFor={othersId}>{copy.othersLabel}</Label>
+            <NativeSelect
               id={othersId}
               value={selectedId ?? ''}
               onChange={(e) => {
                 setInteracted(true);
                 setChosenId(e.target.value || null);
               }}
-              className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <option value="">{copy.choose}</option>
               {d.others.map((t: PostOpTemplateSummary) => (
@@ -235,7 +236,7 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
                   {`${t.title} (${copy.version(t.code, t.version)})`}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </>
         ) : (
           <p className="text-sm text-muted">{copy.noTemplates}</p>
@@ -356,15 +357,15 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
         )}
 
         <div className="flex flex-col gap-2">
-          <h4 id={deliveredId} className="text-xs font-medium tracking-wide text-muted">
+          <h4 id={deliveredId} className="t-caption text-muted">
             {copy.deliveredHeading}
           </h4>
           {data.deliveries.length === 0 ? (
             <p className="text-sm text-muted">{copy.noDeliveries}</p>
           ) : (
-            <ul aria-labelledby={deliveredId} className="flex flex-col divide-y divide-hairline">
+            <ul aria-labelledby={deliveredId} className="flex flex-col divide-y divide-border-subtle">
               {data.deliveries.map((d) => (
-                <li key={d.id} className="py-2 text-sm tabular-nums text-ink first:pt-0 last:pb-0">
+                <li key={d.id} className="t-data py-2 text-sm text-ink first:pt-0 last:pb-0">
                   {[
                     copy.version(d.templateCode, d.templateVersion),
                     copy.channel[d.channel],
@@ -381,8 +382,8 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
   }
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3 border-t border-hairline pt-4">
-      <h3 id={headingId} className="text-sm font-semibold text-ink">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3 border-t border-border-subtle pt-4">
+      <h3 id={headingId} className="t-title text-ink">
         {copy.heading}
       </h3>
       {body()}

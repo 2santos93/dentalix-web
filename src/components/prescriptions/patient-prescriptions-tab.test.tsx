@@ -99,25 +99,27 @@ describe('PatientPrescriptionsTab', () => {
       'href',
       '/print/patients/p1/prescriptions/rx1',
     );
-    expect(within(issued).getByRole('button', { name: /anular/i })).toBeInTheDocument();
+    expect(within(issued).getByRole('button', { name: /^Acciones de receta del/ })).toBeInTheDocument();
     expect(voided).toHaveTextContent('Anulada');
     expect(voided).toHaveTextContent(/por Dra\. Laura Ruiz\. Motivo: Dosis equivocada/);
     expect(within(voided).getByText(/Amoxicilina/).closest('ul')).toHaveClass('line-through');
-    expect(within(voided).queryByRole('button', { name: /anular/i })).not.toBeInTheDocument();
+    expect(within(voided).queryByRole('button', { name: /^Acciones de receta del/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /editar|borrar|eliminar/i })).not.toBeInTheDocument();
   });
 
   it('otro odontólogo no ve «Anular» en una receta ajena; un ADMIN sí', async () => {
+    const user = setupUser();
     mockedList.mockResolvedValue([makePrescription()]);
     const { unmount } = render(
       <PatientPrescriptionsTab token={tokenFor('DENTIST', 'u-otro')} patientId="p1" />,
     );
     await screen.findByRole('table', { name: 'Recetas del paciente' });
-    expect(screen.queryByRole('button', { name: /^anular/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Acciones de receta del/ })).not.toBeInTheDocument();
     unmount();
     render(<PatientPrescriptionsTab token={tokenFor('ADMIN', 'u-admin')} patientId="p1" />);
     await screen.findByRole('table', { name: 'Recetas del paciente' });
-    expect(screen.getAllByRole('button', { name: /^anular/i }).length).toBeGreaterThan(0);
+    await user.click(screen.getAllByRole('button', { name: /^Acciones de receta del/ })[0]);
+    expect(await screen.findByRole('menuitem', { name: 'Anular' })).toBeInTheDocument();
   });
 
   it('anular pide motivo y deja la fila tachada', async () => {
@@ -133,7 +135,8 @@ describe('PatientPrescriptionsTab', () => {
     );
     render(<PatientPrescriptionsTab token={DENTIST} patientId="p1" />);
     const table = await screen.findByRole('table', { name: 'Recetas del paciente' });
-    await user.click(within(table).getByRole('button', { name: /anular/i }));
+    await user.click(within(table).getByRole('button', { name: /^Acciones de receta del/ }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Anular' }));
     const dialog = await screen.findByRole('dialog', { name: 'Anular receta' });
     const submit = within(dialog).getByRole('button', { name: 'Anular receta' });
     expect(submit).toBeDisabled();

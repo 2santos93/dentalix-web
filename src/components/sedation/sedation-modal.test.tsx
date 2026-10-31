@@ -426,9 +426,10 @@ describe('SedationModal · correcciones de la QA (DX-407)', () => {
     renderModal({ clock });
     // La lectura dice la hora de la valoración, no la del registro.
     expect(await screen.findByText('Dra. Ana Ríos · 14:07')).toBeInTheDocument();
-    const time = screen.getByLabelText(sedationCopy.checklistTime);
-    await user.clear(time);
-    await user.type(time, '14:10');
+    // TimeField por segmentos (UX v2): hora y minutos se escriben seguidos.
+    const [hour] = within(screen.getByRole('group', { name: sedationCopy.checklistTime })).getAllByRole('spinbutton');
+    await user.click(hour);
+    await user.keyboard('1410');
     for (const item of platformTemplate().checklist.slice(0, 5)) {
       await user.click(screen.getByRole('checkbox', { name: (name) => name.startsWith(item.label) }));
     }
@@ -442,9 +443,9 @@ describe('SedationModal · correcciones de la QA (DX-407)', () => {
     mocked.entry.mockResolvedValue({ template: platformTemplate(), sheet: null });
     mocked.assess.mockResolvedValue(sedationSheet());
     renderModal({ clock: testAgendaClock([utcSede()]) });
-    const time = await screen.findByLabelText(sedationCopy.assessedAt);
-    await user.clear(time);
-    await user.type(time, '09:05');
+    const [hour] = within(await screen.findByRole('group', { name: sedationCopy.assessedAt })).getAllByRole('spinbutton');
+    await user.click(hour);
+    await user.keyboard('0905');
     await user.click(screen.getByRole('button', { name: sedationCopy.submit.ASSESS }));
     await waitFor(() => expect(mocked.assess).toHaveBeenCalled());
     expect(mocked.assess.mock.calls[0][3].assessedAt).toMatch(/T09:05:00\.000Z$/);

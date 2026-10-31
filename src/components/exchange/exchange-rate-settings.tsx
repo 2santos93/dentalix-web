@@ -17,7 +17,6 @@ import {
 } from '@/lib/exchange/exchange-settings-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { getRateBacklogDay, type RateBacklogDay } from '@/lib/payments/rate-backlog-api';
-import { cn } from '@/lib/utils';
 import { sedeCivilDate } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
@@ -28,10 +27,15 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { SectionError } from '@/components/errors/section-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Callout } from '@/components/ui/callout';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
+import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
+import { SectionHeader } from '@/components/ui/section-header';
+import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TodayRates } from './today-rates';
 
 export const exchangeRateCopy = {
   sourceHeading: 'De dónde sale la tasa',
@@ -52,10 +56,13 @@ export const exchangeRateCopy = {
   sourceSaved: 'Fuente de la tasa guardada.',
   sourceSaveError: 'No pudimos guardar la fuente de la tasa. Intenta de nuevo.',
   ratesHeading: 'Tasas manuales',
-  ratesHint: (base: string) =>
-    `Unidades de cada moneda por 1 ${base}, por día. Se usan desde el día en que la clínica pasó a manual; la de un día anterior sirve de respaldo a los abonos de ese día que sigan sin tasa. Una tasa se puede corregir hasta que algún abono la use.`,
-  ratesAutomaticNote:
-    'Con la fuente automática estas tasas no se usan. Puedes dejar la de hoy registrada antes de cambiar a manual.',
+  /** Una sola línea (critique-settings: dos párrafos se leían como añadido). */
+  ratesHint: {
+    MANUAL:
+      'Rigen desde que la clínica pasó a manual; la de un día anterior sirve de respaldo a los abonos de ese día sin tasa. Se corrigen hasta que un abono las use.',
+    AUTOMATIC:
+      'Con la fuente automática no se usan: puedes dejar registrada la de hoy antes de pasar a manual. Se corrigen hasta que un abono las use.',
+  } satisfies Record<ExchangeRateSource, string>,
   register: 'Registrar tasa',
   emptyTitle: 'Aún no hay tasas manuales',
   emptyDescription: 'Registra la tasa del día de cada moneda en la que cobra la clínica.',
@@ -63,16 +70,12 @@ export const exchangeRateCopy = {
   colCurrency: 'Moneda',
   colRate: (base: string) => `Tasa por 1 ${base}`,
   colAuthor: 'Registrada por',
-  colActions: 'Acciones',
   // DX-375: una tasa que ya congeló algún abono no se cambia.
   inUse: 'Usada en abonos',
   inUseHelp: 'Ya la usa al menos un abono: no se puede cambiar.',
   correct: 'Corregir',
-  /** Lo que completa «Corregir» para lectores de pantalla. */
-  correctContext: (currency: string, date: string) => ` la tasa de ${currency} del ${date}`,
-  /** Nombre accesible: empieza por el texto visible (WCAG 2.5.3). */
-  correctFor: (currency: string, date: string) =>
-    `${exchangeRateCopy.correct}${exchangeRateCopy.correctContext(currency, date)}`,
+  /** Nombre de la fila para su «⋯»: «Acciones de COP del 30/10/2026». */
+  rowLabel: (currency: string, date: string) => `${currency} del ${date}`,
   rateCorrected: (currency: string) => `Tasa de ${currency} corregida.`,
   unknownAuthor: 'Usuario no disponible',
   noFormat: '—',
@@ -174,6 +177,10 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
   const [correctOpen, setCorrectOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const fmt = readyFormat(useSedeFormat(token));
+  const timeZone = readyTimeZone(useSedeTimeZone(token));
+  const today = timeZone ? sedeToday(timeZone) : null;
+  // Sube cuando algo mueve la tasa de hoy (fuente, una tasa): la vuelve a pedir.
+  const [version, setVersion] = useState(0);
   const sourceHeadingId = useId();
   const ratesHeadingId = useId();
 
@@ -223,7 +230,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
   }
   if (!state) {
     return (
-      <div role="status" aria-label={copy.loading} className="flex max-w-3xl flex-col gap-4">
+      <div role="status" aria-label={copy.loading} className="flex flex-col gap-4">
         <div className="rounded-xl border border-border bg-surface p-6">
           <Skeleton className="h-4 w-48" />
           <Skeleton className="mt-4 h-4 w-72" />
@@ -239,132 +246,136 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
     setRateOpen(true);
   }
 
+  function openCorrect(rate: ManualExchangeRate) {
+    setNotice('');
+    setCorrecting((prev) => ({ rate, key: (prev?.key ?? 0) + 1 }));
+    setCorrectOpen(true);
+  }
+
+  // Con la fuente automática las tasas manuales no se usan: registrar una no
+  // es lo que se viene a hacer aquí, así que no lleva el acento.
+  const manual = state.source === 'MANUAL';
   const registerButton = (
-    <Button type="button" onClick={openRate} className="max-sm:min-h-11 max-sm:w-full">
+    <Button
+      type="button"
+      variant={manual ? 'default' : 'secondary'}
+      onClick={openRate}
+      className="max-sm:w-full"
+    >
       <Plus aria-hidden />
       {copy.register}
     </Button>
   );
 
+  const rateColumns: DataListColumn<ManualExchangeRate>[] = [
+    {
+      id: 'date',
+      header: copy.colDate,
+      mobile: 'primary',
+      cell: (r) => (fmt ? fmt.civilDate(r.date) : copy.noFormat),
+      cellClassName: 'whitespace-nowrap tabular-nums',
+    },
+    {
+      id: 'currency',
+      header: copy.colCurrency,
+      cell: (r) => (
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="t-id">{r.currency}</span>
+          {r.inUse ? (
+            <Badge variant="neutral">
+              {copy.inUse}
+              <span className="sr-only">: {copy.inUseHelp}</span>
+            </Badge>
+          ) : null}
+        </span>
+      ),
+      mobileCell: (r) => (r.inUse ? `${r.currency} · ${copy.inUse}` : r.currency),
+    },
+    {
+      id: 'rate',
+      header: copy.colRate(state.baseCurrency),
+      numeric: true,
+      mobile: 'trailing',
+      cell: (r) => rateText(r.rate, fmt),
+    },
+    {
+      id: 'author',
+      header: copy.colAuthor,
+      cell: (r) => <span className="text-muted">{r.createdBy.fullName ?? copy.unknownAuthor}</span>,
+      mobileCell: (r) => r.createdBy.fullName ?? copy.unknownAuthor,
+    },
+  ];
+
   return (
-    <div className="flex max-w-3xl flex-col gap-10">
+    <div className="flex flex-col gap-10">
+      <TodayRates
+        token={token}
+        baseCurrency={state.baseCurrency}
+        source={state.source}
+        today={today}
+        fmt={fmt}
+        version={version}
+      />
+
       <section aria-labelledby={sourceHeadingId} className="flex flex-col gap-3">
-        <h2 id={sourceHeadingId} className="text-lg font-semibold text-ink">
-          {copy.sourceHeading}
-        </h2>
-        <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-          <div className="flex min-w-0 items-start gap-3">
-            <ArrowLeftRight aria-hidden className="mt-0.5 size-5 shrink-0 text-muted" />
-            <div className="min-w-0">
-              <p data-testid="exchange-rate-source" className="font-medium text-ink">
+        <SectionHeader titleId={sourceHeadingId} title={copy.sourceHeading} />
+        {/* La fuente es un valor de política: fila con el valor y «Cambiar» (diálogo). */}
+        <SettingRows>
+          <SettingRow
+            label={
+              <span data-testid="exchange-rate-source">
                 {state.source === 'MANUAL'
                   ? copy.manualSince(state.manualSince && fmt ? fmt.civilDate(state.manualSince) : null)
                   : copy.sourceLabels[state.source]}
-              </p>
-              <p className="mt-1 text-sm text-muted">{copy.sourceHints[state.source]}</p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            className="shrink-0 max-sm:min-h-11 max-sm:w-full"
-            onClick={() => {
-              setNotice('');
-              setSourceKey((k) => (k ?? 0) + 1);
-              setSourceOpen(true);
-            }}
-          >
-            {copy.change}
-          </Button>
-        </div>
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+              </span>
+            }
+            description={copy.sourceHints[state.source]}
+            action={
+              <Button
+                type="button"
+                variant="secondary"
+                className="shrink-0 max-sm:w-full"
+                onClick={() => {
+                  setNotice('');
+                  setSourceKey((k) => (k ?? 0) + 1);
+                  setSourceOpen(true);
+                }}
+              >
+                {copy.change}
+              </Button>
+            }
+          />
+        </SettingRows>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
       </section>
 
       <section aria-labelledby={ratesHeadingId} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 flex-col gap-1">
-            <h2 id={ratesHeadingId} className="text-lg font-semibold text-ink">
-              {copy.ratesHeading}
-            </h2>
-            <p className="text-sm text-muted">{copy.ratesHint(state.baseCurrency)}</p>
-            {state.source === 'AUTOMATIC' ? <p className="text-sm text-muted">{copy.ratesAutomaticNote}</p> : null}
-          </div>
-          {state.rates.length > 0 ? registerButton : null}
-        </div>
-        {state.rates.length === 0 ? (
-          <EmptyState
-            icon={<ArrowLeftRight aria-hidden />}
-            title={copy.emptyTitle}
-            description={copy.emptyDescription}
-            actionClassName="w-full sm:w-auto"
-            action={registerButton}
-          />
-        ) : (
-          <Card className="overflow-hidden p-0">
-            <Table aria-label={copy.ratesHeading}>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>{copy.colDate}</TableHead>
-                  <TableHead>{copy.colCurrency}</TableHead>
-                  <TableHead className="text-right">{copy.colRate(state.baseCurrency)}</TableHead>
-                  <TableHead>{copy.colAuthor}</TableHead>
-                  <TableHead>
-                    <span className="sr-only">{copy.colActions}</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {state.rates.map((rate) => (
-                  <TableRow key={rate.id} className="sm:h-11">
-                    <TableCell className="whitespace-nowrap text-ink tabular-nums" data-label={copy.colDate}>
-                      {fmt ? fmt.civilDate(rate.date) : copy.noFormat}
-                    </TableCell>
-                    <TableCell className="font-medium text-ink max-sm:text-right" data-label={copy.colCurrency}>
-                      <Badge variant="muted">{rate.currency}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-ink tabular-nums" data-label={copy.colRate(state.baseCurrency)}>
-                      {rateText(rate.rate, fmt)}
-                    </TableCell>
-                    <TableCell className="text-muted max-sm:text-right" data-label={copy.colAuthor}>
-                      {rate.createdBy.fullName ?? copy.unknownAuthor}
-                    </TableCell>
-                    {/* Sin `data-label`: en la tarjeta móvil la acción se lee sola. */}
-                    <TableCell className="text-right">
-                      {rate.inUse ? (
-                        <Badge variant="muted" title={copy.inUseHelp}>
-                          {copy.inUse}
-                          <span className="sr-only">: {copy.inUseHelp}</span>
-                        </Badge>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="max-sm:min-h-11"
-                          onClick={() => {
-                            setNotice('');
-                            setCorrecting((prev) => ({
-                              rate,
-                              key: (prev?.key ?? 0) + 1,
-                            }));
-                            setCorrectOpen(true);
-                          }}
-                        >
-                          {copy.correct}
-                          <span className="sr-only">
-                            {copy.correctContext(rate.currency, sedeCivilDate(rate.date, fmt))}
-                          </span>
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        )}
+        <SectionHeader
+          titleId={ratesHeadingId}
+          title={copy.ratesHeading}
+          description={copy.ratesHint[state.source]}
+          actions={state.rates.length > 0 ? registerButton : null}
+        />
+        <DataList
+          label={copy.ratesHeading}
+          rows={state.rates}
+          columns={rateColumns}
+          getRowKey={(r) => r.id}
+          // Una tasa que ya usó algún abono no se toca: su «⋯» no ofrece nada.
+          rowActions={(r) => (r.inUse ? [] : [{ label: copy.correct, onSelect: () => openCorrect(r) }])}
+          getRowLabel={(r) => copy.rowLabel(r.currency, sedeCivilDate(r.date, fmt))}
+          empty={
+            <EmptyState
+              icon={<ArrowLeftRight aria-hidden />}
+              title={copy.emptyTitle}
+              description={copy.emptyDescription}
+              actionClassName="w-full sm:w-auto"
+              action={registerButton}
+            />
+          }
+        />
       </section>
 
       {sourceKey !== null ? (
@@ -376,6 +387,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           current={state.source}
           onSaved={(saved) => {
             setState((prev) => (prev ? { ...prev, ...saved } : prev));
+            setVersion((v) => v + 1);
             setNotice(copy.sourceSaved);
           }}
         />
@@ -391,6 +403,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           manualSince={state.manualSince}
           onSaved={(rate) => {
             setState((prev) => (prev ? { ...prev, rates: sortRates([rate, ...prev.rates]) } : prev));
+            setVersion((v) => v + 1);
             setNotice(copy.rateSaved(rate.currency));
           }}
         />
@@ -413,6 +426,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
                   }
                 : prev,
             );
+            setVersion((v) => v + 1);
             setNotice(copy.rateCorrected(saved.currency));
           }}
           onInUse={(id) =>
@@ -500,6 +514,7 @@ function CorrectRateModal({
       submitLabel={correctRateCopy.submit}
       submitting={submitting}
       error={formError}
+      touchTargets
     >
       <FormField
         htmlFor={inputId}
@@ -520,7 +535,7 @@ function CorrectRateModal({
           aria-required
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? fieldErrorId(inputId) : `${inputId}-hint`}
-          className="max-sm:min-h-11 tabular-nums"
+          className="tabular-nums"
         />
       </FormField>
     </FormModal>
@@ -576,38 +591,25 @@ function SourceModal({ open, onOpenChange, token, current, onSaved }: SourceModa
       submitLabel={copy.save}
       submitting={saving}
       error={error}
+      touchTargets
     >
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-sm font-medium text-ink">{copy.sourceLegend}</legend>
-        {(['AUTOMATIC', 'MANUAL'] as const).map((source) => {
-          const id = `${name}-${source}`;
-          return (
-            <label
-              key={source}
-              htmlFor={id}
-              className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-3 text-sm has-[:checked]:border-primary"
-            >
-              <input
-                id={id}
-                type="radio"
-                name={name}
-                value={source}
-                checked={draft === source}
-                onChange={() => setDraft(source)}
-                disabled={saving}
-                aria-describedby={`${id}-hint`}
-                className="mt-0.5 size-4 shrink-0 accent-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-              />
-              <span className="flex flex-col gap-0.5">
-                <span className="font-medium text-ink">{copy.sourceLabels[source]}</span>
-                <span id={`${id}-hint`} className="text-muted">
-                  {copy.sourceHints[source]}
-                </span>
-              </span>
-            </label>
-          );
-        })}
-      </fieldset>
+      <RadioGroup
+        id={name}
+        legend={copy.sourceLegend}
+        value={draft}
+        onValueChange={(v) => setDraft(v as ExchangeRateSource)}
+        disabled={saving}
+        optionsClassName="gap-2"
+      >
+        {(['AUTOMATIC', 'MANUAL'] as const).map((source) => (
+          <RadioCard
+            key={source}
+            value={source}
+            title={copy.sourceLabels[source]}
+            description={copy.sourceHints[source]}
+          />
+        ))}
+      </RadioGroup>
     </FormModal>
   );
 }
@@ -724,22 +726,21 @@ export function RateFormModal({
       submitLabel={rateFormCopy.submit}
       submitting={submitting}
       error={formError}
+      touchTargets
     >
       <FormField htmlFor={rateInputId('date')} label={rateFormCopy.date} error={errors.date}>
-        <Input
+        <DatePicker
           id={rateInputId('date')}
-          type="date"
-          value={dateValue}
+          value={dateValue === '' ? null : dateValue}
           min={DATE_MIN}
           max={today ?? undefined}
-          onChange={(e) => {
-            setDate(e.target.value);
+          onChange={(next) => {
+            setDate(next ?? '');
             clearError('date');
           }}
-          aria-required
+          required
           aria-invalid={errors.date ? true : undefined}
           aria-describedby={errors.date ? fieldErrorId(rateInputId('date')) : undefined}
-          className="max-sm:min-h-11"
         />
       </FormField>
       <FormField htmlFor={rateInputId('currency')} label={rateFormCopy.currency} error={errors.currency}>
@@ -756,7 +757,6 @@ export function RateFormModal({
           invalid={Boolean(errors.currency)}
           required
           ariaDescribedBy={errors.currency ? fieldErrorId(rateInputId('currency')) : undefined}
-          className="max-sm:min-h-11"
         />
       </FormField>
       <FormField
@@ -779,10 +779,10 @@ export function RateFormModal({
           aria-required
           aria-invalid={errors.rate ? true : undefined}
           aria-describedby={errors.rate ? fieldErrorId(rateInputId('rate')) : `${rateInputId('rate')}-hint`}
-          className="max-sm:min-h-11 tabular-nums"
+          className="tabular-nums"
         />
       </FormField>
-      {source === 'AUTOMATIC' ? <p className="text-sm text-muted">{rateFormCopy.automaticNote}</p> : null}
+      {source === 'AUTOMATIC' ? <p className="t-body text-muted">{rateFormCopy.automaticNote}</p> : null}
       {backupSince ? (
         <BackupRateNotice
           token={token}
@@ -860,23 +860,14 @@ function BackupRateNotice({
   }
 
   return (
-    <div
+    <Callout
+      tone={unused ? 'warning' : 'neutral'}
       role="status"
       data-testid="manual-rate-backup-notice"
-      className={cn(
-        'flex items-start gap-2 rounded-lg border px-3 py-2 text-sm text-ink',
-        unused ? 'border-warning/30 bg-warning/10' : 'border-border bg-surface-2',
-      )}
+      icon={unused ? TriangleAlert : Info}
+      title={copy.heading(sinceLabel)}
     >
-      {unused ? (
-        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-      ) : (
-        <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
-      )}
-      <div className="min-w-0">
-        <p className="font-medium">{copy.heading(sinceLabel)}</p>
-        <p>{text}</p>
-      </div>
-    </div>
+      <p>{text}</p>
+    </Callout>
   );
 }

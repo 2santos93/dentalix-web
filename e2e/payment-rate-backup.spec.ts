@@ -5,6 +5,7 @@ import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { axeViolations } from './support/axe';
 import { ageRateBacklog, E2E_DATABASE_URL, postponeRateRetry } from './support/db';
+import { fillDate } from './support/dates';
 import { expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
@@ -127,12 +128,12 @@ for (const viewport of VIEWPORTS) {
       // 3. Registrar la tasa de un día anterior: el formulario dice a qué abonos se aplicará.
       await page.getByRole('button', { name: 'Registrar tasa' }).first().click();
       const dialog = page.getByRole('dialog', { name: 'Registrar tasa' });
-      await dialog.getByLabel('Fecha').fill(sedeDay(-3));
+      await fillDate(dialog, 'Fecha', sedeDay(-3));
       await dialog.getByLabel('Moneda').selectOption('COP');
       const backupNotice = dialog.getByTestId('manual-rate-backup-notice');
       await expect(backupNotice).toContainText('anterior a «manual desde»');
       await expect(backupNotice).toContainText('así que ahora no se usará');
-      await dialog.getByLabel('Fecha').fill(day);
+      await fillDate(dialog, 'Fecha', day);
       await expect(backupNotice).toContainText('Servirá de respaldo al abono sin tasa de ese día que necesita la tasa de COP');
       await dialog.getByLabel(/^Tasa por 1/).fill('4000');
       expect(await axeViolations(page, dialog)).toEqual([]);
@@ -154,44 +155,33 @@ for (const viewport of VIEWPORTS) {
       await expect(dialog).toHaveCount(0);
       await expect(page.getByText('Tasa de COP registrada.')).toBeVisible();
 
-      // 4. El registro adelanta el reintento y el barrido real lo resuelve.
-      // Consultar con la sesión API independiente mantiene montada la UI y no
-      // interrumpe un refresh de cookie de un solo uso mediante otro reload.
+      // 4. El registro adelanta el reintento y el barrido lo resuelve: el aviso desaparece.
+      // Se espera a la primera lectura del aviso antes de recargar: recargar con
+      // el `/auth/refresh` de la carga aún en vuelo lo aborta después de que la
+      // API rotara la cookie, y el siguiente refresh (cookie vieja) da 401 y
+      // manda a /login, donde el sondeo esperaría para siempre.
+      const isBacklog = (r: { url(): string }) => new URL(r.url()).pathname.endsWith('/payments/rate-backlog');
+      await Promise.all([page.waitForResponse(isBacklog), page.goto(`${session.origin}/dashboard`)]);
       await expect
         .poll(
           async () => {
-            const res = await request.get(`${API_URL}/payments/rate-backlog`, {
-              headers: session.headers,
-              timeout: 10_000,
-            });
-            expect(res.status(), 'La sesión API del tenant debe seguir autenticada durante el barrido.').not.toBe(401);
-            expect(res.ok(), `Consultar abonos sin tasa del tenant falló: ${res.status()} ${await res.text()}`).toBeTruthy();
+            const [res] = await Promise.all([
+              page.waitForResponse(isBacklog),
+              page.reload(),
+            ]);
             return ((await res.json()) as { count: number }).count;
           },
           { timeout: 120_000, intervals: [5_000] },
         )
         .toBe(0);
-      // Una sola navegación, con su lectura autenticada terminada antes de la
-      // siguiente. HTML load por sí solo no garantiza el bootstrap de sesión.
-      const [dashboardBacklog] = await Promise.all([
-        page.waitForResponse((response) => {
-          const url = new URL(response.url());
-          return url.origin === new URL(session.origin).origin
-            && url.pathname === '/api/v1/payments/rate-backlog'
-            && response.request().method() === 'GET';
-        }, { timeout: 15_000 }).catch((error: Error) => {
-          throw new Error(`El panel no terminó su lectura autenticada de abonos sin tasa; página actual: ${new URL(page.url()).pathname}. ${error.message}`);
-        }),
-        page.goto(`${session.origin}/dashboard`),
-      ]);
-      expect(dashboardBacklog.ok(), `La lectura del panel debe estar autenticada: HTTP ${dashboardBacklog.status()}`).toBeTruthy();
-      expect(((await dashboardBacklog.json()) as { count: number }).count).toBe(0);
-      await expect(page).toHaveURL(`${session.origin}/dashboard`);
       await expect(page.getByRole('region', { name: NOTICE })).toHaveCount(0);
 
       // 5. La tasa ya la usa el abono: no se puede corregir.
       await page.goto(`${session.origin}/settings/tasa-de-cambio`);
-      await expect(page.getByRole('table', { name: 'Tasas manuales' })).toContainText('Usada en abonos');
+      // DataList: tabla desde 640 px, lista de tarjetas en el teléfono.
+      await expect(
+        page.getByRole(viewport.width < 640 ? 'list' : 'table', { name: 'Tasas manuales' }),
+      ).toContainText('Usada en abonos');
       if (QA_DIR) {
         await page.screenshot({ path: `${QA_DIR}/dx402-usada-${viewport.width}.png` });
       }

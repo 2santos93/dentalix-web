@@ -12,7 +12,7 @@ import { E2E_BROWSER_LOCALE } from './support/regional';
  *
  * Una clínica nueva por corrida (política de datos publicada) con recepción,
  * una odontóloga y una paciente con cita mañana. En serie:
- *   1. Recepción (1440) abre la ficha, pulsa «Enviar anamnesis» y copia el
+ *   1. Recepción (1440) abre la ficha, pulsa «Enviar anamnesis» (aviso → diálogo) y copia el
  *      enlace (con su `wa.me` prellenado).
  *   2. La paciente lo abre sin sesión a 390 px: no-referrer y no-store en la
  *      respuesta, solo su nombre de pila, autorización de datos de salud antes
@@ -101,15 +101,21 @@ test('recepción envía el enlace desde la ficha (1440)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/patients/${patientId}`);
+  // UX v2 · K3: sin anamnesis, la pestaña «Datos» abre con UN aviso y su
+  // «Enviar anamnesis», que abre el diálogo del enlace (el mismo que el menú «⋯»).
   const section = page.getByTestId('patient-anamnesis-section');
   await section.getByRole('button', { name: 'Enviar anamnesis' }).click();
-  const input = section.getByLabel('Enlace de anamnesis');
+  const dialog = page.getByRole('dialog', { name: 'Anamnesis por enlace' });
+  await dialog.getByRole('button', { name: 'Enviar anamnesis' }).click();
+  const input = dialog.getByLabel('Enlace de anamnesis');
   await expect(input).toHaveValue(/\/anamnesis\/[A-Za-z0-9_-]{43}$/);
   link = await input.inputValue();
-  const whatsapp = section.getByRole('link', { name: /Abrir WhatsApp/ });
+  const whatsapp = dialog.getByRole('link', { name: /Abrir WhatsApp/ });
   const href = await whatsapp.getAttribute('href');
   expect(href).toMatch(/^https:\/\/wa\.me\/573001234567\?text=/);
   expect(decodeURIComponent(href!)).not.toContain(lastName);
+  await dialog.getByRole('button', { name: 'Cerrar' }).click();
+  await expect(dialog).toBeHidden();
   await expect(section.getByText('Esperando al paciente')).toBeVisible();
 });
 
@@ -182,7 +188,7 @@ test('la odontóloga revisa a 1440, acepta y la alerta aparece en la ficha', asy
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, dentist.email, password);
   await page.goto(`${origin}/patients`);
-  const navEntry = page.getByRole('link', { name: 'Anamnesis por revisar · 1' }).first();
+  const navEntry = page.getByRole('link', { name: 'Anamnesis 1 · por revisar' }).first();
   await expect(navEntry).toBeVisible();
   await navEntry.click();
   await expect(page.getByRole('heading', { level: 1, name: 'Anamnesis por revisar' })).toBeVisible();

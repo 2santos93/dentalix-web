@@ -5,6 +5,7 @@ import { test, expect, type Page } from './support/test';
 import { loginAs } from './support/auth';
 import { tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { openSection } from './support/nav';
 
 /**
  * e2e (DX-014): «Reportes» → «Comparar sedes» contra la clínica DEMO sembrada
@@ -46,7 +47,7 @@ const origin = tenantOrigin(DEMO_SUBDOMAIN);
 
 async function openReports(page: Page): Promise<void> {
   await loginAs(page, origin, ADMIN_EMAIL, DEMO_PASSWORD);
-  await page.getByRole('link', { name: 'Reportes' }).filter({ visible: true }).first().click();
+  await openSection(page, 'Reportes');
   await expect(page).toHaveURL(`${origin}/reportes`);
   await expect(page.getByRole('heading', { level: 1, name: 'Reportes' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Comparar sedes', selected: true })).toBeVisible();
@@ -92,10 +93,13 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   // DX-305 (BE-045): la demo tiene un realizado «Sin atribuir» (Ricardo
   // Salcedo) y el mes anterior empieza antes de que esta base registrara la
   // sede de cada procedimiento: «Producción» y «% de cobro» no se comparan, y
-  // la pantalla lo dice en una línea.
-  await expect(page.getByRole('note')).toContainText('no se comparan donde dice «Sin comparar»');
-  await expect(table.getByRole('columnheader', { name: /^Producción/ }).getByTestId('unattributed-mark')).toBeVisible();
-  await expect(table.getByRole('columnheader', { name: /^Cobrado/ }).getByTestId('unattributed-mark')).toHaveCount(0);
+  // la pantalla lo dice en una línea plegada (sin asteriscos ni leyenda) y
+  // en «Cómo se calcula» de esas columnas; la celda dice «—» en muted.
+  const note = page.getByRole('note');
+  await note.getByRole('button', { name: /indicadores sin comparar · ¿por qué\?/ }).click();
+  await expect(note).toContainText('no se comparan donde dice «—»');
+  await expect(page.getByTestId('unattributed-mark')).toHaveCount(0);
+  await expect(page.getByText(/^Verde: mejora/)).toHaveCount(0);
   await expect(page.getByTestId('comparison-total').getByTestId('not-compared').first()).toBeVisible();
 
   // «Cómo se calcula» al enfocar.
@@ -161,10 +165,9 @@ test('DENTIST: «Reportes» solo con su producción, sin «Comparar sedes» (DX-
   await expect(page.getByRole('link', { name: 'Pacientes' }).filter({ visible: true }).first()).toBeVisible();
   // Aunque pida la pestaña por URL, la de la administración no está.
   await page.goto(`${origin}/reportes?tab=comparar-sedes`);
-  await expect(page.getByRole('tab', { name: 'Producción por procedimiento', selected: true })).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(page.getByRole('tab', { name: 'Comparar sedes' })).toHaveCount(0);
+  // Un solo informe: sin barra de pestañas (una pestaña sola promete secciones que no hay).
+  await expect(page.getByText('Solo tu producción', { exact: false })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('tab')).toHaveCount(0);
   await expect(page.getByRole('table', { name: 'Indicadores por sede y total de la clínica' })).toHaveCount(0);
 });
 

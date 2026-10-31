@@ -42,13 +42,16 @@ import {
 import { SectionError } from '@/components/errors/section-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
 export const cancellationPolicyCopy = {
   heading: 'Política de cancelación',
   support:
     'Cuántas horas de aviso pide cada sede. Una cancelación del paciente con menos aviso cuenta como tardía; las de la clínica nunca. Cada cambio guarda una versión nueva y la anterior queda en el historial.',
+  supportOne:
+    'Cuántas horas de aviso pide la sede. Con menos aviso, la cancelación del paciente cuenta como tardía; las de la clínica nunca. Cada cambio guarda una versión nueva.',
   loadError: 'No pudimos cargar las sedes.',
   policyLoadError: 'Política sin cargar',
   inactive: 'inactiva',
@@ -105,7 +108,17 @@ const copy = cancellationPolicyCopy;
  * sugerido opcional, texto para el paciente con contador e historial de
  * versiones (append-only).
  */
-export function CancellationPolicySettings({ token }: { token: string }) {
+export function CancellationPolicySettings({
+  token,
+  locationId,
+}: {
+  token: string;
+  /**
+   * B6: la ficha de una sede (`/settings/sedes/[id]`) pinta solo la suya, sin
+   * repetir su nombre. Sin `locationId`, todas las sedes (una fila por sede).
+   */
+  locationId?: string;
+}) {
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,24 +147,25 @@ export function CancellationPolicySettings({ token }: { token: string }) {
   }, [requestLocations, reloadKey]);
 
   return (
-    <section aria-labelledby="cancellation-policy-heading" className="mt-8 flex flex-col gap-3">
-      <div>
-        <h2 id="cancellation-policy-heading" className="text-lg font-semibold text-ink">
+    <section aria-labelledby="cancellation-policy-heading" className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 id="cancellation-policy-heading" className="t-title text-ink">
           {copy.heading}
         </h2>
-        <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
+        <p className="max-w-[68ch] text-sm text-muted">{locationId ? copy.supportOne : copy.support}</p>
       </div>
       <AsyncSection loading={loading} error={error} onRetry={() => {
           setLoading(true);
           setReloadKey((k) => k + 1);
         }}
       >
-        <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border bg-surface">
-          {locations.map((location) => (
-            <li key={location.id} className="px-4 py-3">
+        <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
+          {(locationId ? locations.filter((l) => l.id === locationId) : locations).map((location) => (
+            <li key={location.id} className="px-4 py-3 sm:px-6 sm:py-4">
               <LocationPolicyRow
                 token={token}
                 location={location}
+                showName={!locationId}
                 onRetryLocations={() => {
                   // Relee sin vaciar la lista (el modal abierto sigue abierto).
                   requestLocations.invalidate();
@@ -175,10 +189,12 @@ function feeText(version: CancellationPolicyVersion): string | null {
 function LocationPolicyRow({
   token,
   location,
+  showName,
   onRetryLocations,
 }: {
   token: string;
   location: ClinicLocation;
+  showName: boolean;
   onRetryLocations: () => void;
 }) {
   const [policy, setPolicy] = useState<CancellationPolicy | null>(null);
@@ -211,7 +227,7 @@ function LocationPolicyRow({
     <div className="flex flex-col gap-2 text-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="font-medium text-ink">{name}</span>
+          {showName ? <span className="font-medium text-ink">{name}</span> : null}
           {failed ? (
             <FieldError
               label={copy.policyLoadError}
@@ -222,7 +238,7 @@ function LocationPolicyRow({
               className="h-9"
             />
           ) : policy === null ? (
-            <span role="status" className="h-5 w-48 animate-pulse rounded bg-surface-2">
+            <span role="status" className="h-5 w-48 animate-pulse rounded bg-surface-sunken">
               <span className="sr-only">Cargando la política…</span>
             </span>
           ) : current ? (
@@ -266,7 +282,7 @@ function LocationPolicyRow({
       </div>
       {policy && policy.versions.length > 0 ? (
         <Disclosure summary={copy.history} meta={copy.historyMeta(policy.versions.length)}>
-          <ol className="flex flex-col divide-y divide-hairline" aria-label={`${copy.history} · ${location.name}`}>
+          <ol className="flex flex-col divide-y divide-border-subtle" aria-label={`${copy.history} · ${location.name}`}>
             {policy.versions.map((v) => (
               <li key={v.id} className="flex flex-col gap-0.5 px-2 py-2">
                 <span className="flex items-center gap-1.5 text-xs text-muted tabular-nums">
@@ -367,8 +383,8 @@ function ReminderPreviewDialog({
         ) : preview === null ? (
           <div role="status" className="flex flex-col gap-2">
             <span className="sr-only">{copy.previewLoading}</span>
-            <span className="h-5 w-64 max-w-full animate-pulse rounded bg-surface-2" />
-            <span className="h-64 w-full animate-pulse rounded bg-surface-2" />
+            <span className="h-5 w-64 max-w-full animate-pulse rounded bg-surface-sunken" />
+            <span className="h-64 w-full animate-pulse rounded bg-surface-sunken" />
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-2">
@@ -534,15 +550,15 @@ export function CancellationPolicyModal({
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={textId}>{copy.text}</Label>
-        <textarea
+        <Textarea
           id={textId}
           rows={4}
+          autoGrow
           maxLength={PATIENT_TEXT_MAX}
           value={patientText}
           disabled={submitting}
           aria-describedby={`${textId}-hint ${textId}-counter`}
           onChange={(e) => setPatientText(e.target.value)}
-          className={fieldClass}
         />
         <div className="flex items-start justify-between gap-3 text-xs text-muted">
           <p id={`${textId}-hint`}>{copy.textHint}</p>
@@ -551,23 +567,14 @@ export function CancellationPolicyModal({
           </p>
         </div>
       </div>
-      <div className="flex items-start gap-3">
-        <input
-          id={`${id}-reception`}
-          type="checkbox"
-          checked={receptionCanCharge}
-          disabled={submitting}
-          onChange={(e) => setReceptionCanCharge(e.target.checked)}
-          aria-describedby={`${id}-reception-hint`}
-          className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-        />
-        <div className="flex flex-col gap-0.5">
-          <Label htmlFor={`${id}-reception`}>{copy.receptionCanCharge}</Label>
-          <p id={`${id}-reception-hint`} className="text-xs text-muted">
-            {copy.receptionCanChargeHint}
-          </p>
-        </div>
-      </div>
+      <Checkbox
+        id={`${id}-reception`}
+        checked={receptionCanCharge}
+        disabled={submitting}
+        onChange={(e) => setReceptionCanCharge(e.target.checked)}
+        label={copy.receptionCanCharge}
+        description={copy.receptionCanChargeHint}
+      />
     </FormModal>
   );
 }

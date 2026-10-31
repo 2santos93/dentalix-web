@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -82,7 +83,9 @@ async function shoot(page: Page, name: string, width: number): Promise<void> {
 async function openAgenda(page: Page, view: 'Mes' | 'Día' | 'Semana', day: string): Promise<void> {
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: view, exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  // En el teléfono el Día abre en «Lista»; la prueba empieza por las columnas.
+  if (view === 'Día') await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+  await fillDate(page, 'Fecha', day);
 }
 
 test.beforeAll(async ({ request }) => {
@@ -152,7 +155,7 @@ test('la agenda (día, semana, mes y detalle) pinta la hora de la sede en 12 h, 
     // Semana: la cita en la columna de SU día y con su hora.
     await openAgenda(page, 'Semana', futureDay);
     const weekCard = page.getByTestId('week-grid-appointment').filter({ hasText: futurePatient });
-    await expect(weekCard).toHaveAccessibleName(new RegExp(`^Agend\\. · ${futurePatient} · ${range}`), { timeout: 15_000 });
+    await expect(weekCard).toHaveAccessibleName(new RegExp(`^${futurePatient} Agend\\. ${range}`), { timeout: 15_000 });
     await expect(page.locator(`[data-testid="week-grid-day-column"]`).filter({ has: weekCard })).toHaveCount(1);
     const columns = page.getByTestId('week-grid-day-column');
     const headers = page.getByTestId('week-day-header');

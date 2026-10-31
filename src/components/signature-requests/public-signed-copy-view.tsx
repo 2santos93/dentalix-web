@@ -93,7 +93,7 @@ export function PublicSignedCopyView({ token }: { token: string }) {
   const clinic = data?.clinic ?? null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
@@ -134,7 +134,7 @@ export function PublicSignedCopyView({ token }: { token: string }) {
                   className="size-10 shrink-0 rounded-lg object-contain"
                 />
               )}
-              <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight text-ink">
+              <h1 className="t-title min-w-0 break-words text-ink">
                 {clinic?.name ?? publicSignedCopyCopy.fallbackClinic}
               </h1>
             </header>
@@ -162,7 +162,7 @@ export function PublicSignedCopyView({ token }: { token: string }) {
             {state.kind === 'ready' && data.state === 'AVAILABLE' && (
               <section aria-labelledby="signed-copy-lead" className="flex flex-col gap-5">
                 <div className="rounded-xl border border-border bg-surface px-4 py-4">
-                  <p id="signed-copy-lead" className="text-base font-semibold text-ink">
+                  <p id="signed-copy-lead" className="t-title text-ink">
                     {data.message}
                   </p>
                   <p className="mt-1 text-sm text-muted">{publicSignedCopyCopy.onceHint}</p>

@@ -11,6 +11,7 @@ import { API_URL, tenantOrigin } from "./support/urls";
 import { loginAs, accessTokenOf } from "./support/auth";
 import { atSede, sedeDayFromToday } from "./support/clock";
 import { chooseAppointmentStatus } from "./support/appointment-status";
+import { fillDate, fillTime, readDate } from "./support/dates";
 import {
   meetsTouchTarget,
   waitForAnimationsSettled,
@@ -248,6 +249,10 @@ async function readableText(scope: Locator) {
         (e) =>
           e.checkVisibility() &&
           !e.closest(":disabled,[aria-disabled=true]") &&
+          // Una casilla (`Checkbox` UX v2) no tiene texto: su \`color\` no
+          // pinta nada (la caja la dibuja el primitivo, con borde
+          // \`border-input\` ≥ 3:1). Solo se mide el texto.
+          !e.matches('input[type="checkbox"],input[type="radio"]') &&
           (e.matches("input,select") ||
             [...e.childNodes].some(
               (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim(),
@@ -377,13 +382,11 @@ for (const width of [390, 1440])
       await expect(dialog.getByLabel("Motivo (opcional)")).toHaveValue(
         "Visita 2 · Corona",
       );
-      const earliest = await dialog
-        .getByLabel("Fecha", { exact: true })
-        .inputValue();
-      await expect(dialog.getByLabel("Fecha", { exact: true })).toHaveAttribute(
-        "min",
-        earliest,
-      );
+      // La fecha es un DatePicker (K4): sin `value`/`min` de un input nativo.
+      // Se lee el día que propone y se comprueba que es el mínimo del campo:
+      // en su calendario ese día se puede elegir y el anterior no.
+      const earliest = await readDate(dialog, "Fecha");
+      await expectMinimumDay(page, dialog, "Fecha", earliest);
       const openingResponse = page.waitForResponse(
         (r) => r.url().includes("/openings?") && r.request().method() === "GET",
       );
@@ -551,9 +554,10 @@ for (const width of [390, 1440])
       await form
         .getByLabel("Profesional", { exact: true })
         .selectOption(providerId);
-      await form.getByLabel("Fecha", { exact: true }).fill(day);
-      await form.getByLabel("Hora de inicio").fill("10:15");
-      await form.getByLabel("Hora de fin").fill("10:45");
+      // Fecha y horas son campos segmentados (DatePicker / TimeField de K4).
+      await fillDate(form, "Fecha", day);
+      await fillTime(form, "Hora de inicio", "10:15");
+      await fillTime(form, "Hora de fin", "10:45");
       const savedResponse = page.waitForResponse(
         (r) =>
           new URL(r.url()).pathname.endsWith("/appointments") &&
@@ -611,7 +615,7 @@ for (const width of [390, 1440])
       await page.goto(origin + "/agenda");
       await page.getByRole("button", { name: "Día", exact: true }).click();
       await page.getByRole("button", { name: "Lista", exact: true }).click();
-      await page.getByLabel("Fecha", { exact: true }).fill(day);
+      await fillDate(page, "Fecha", day);
       const status = page.getByRole("combobox", {
         name: /^Estado de la cita de 10:15–10:45/,
       });
@@ -633,6 +637,34 @@ for (const width of [390, 1440])
         fullPage: true,
       });
     });
+
+
+/**
+ * `iso` es el primer día que admite el DatePicker `label`: en su calendario
+ * ese día está disponible y el anterior deshabilitado (o, si es día 1, no se
+ * puede ir al mes anterior). Cierra el calendario con Escape.
+ */
+async function expectMinimumDay(page: Page, scope: Locator, label: string, iso: string) {
+  const field = scope.getByRole("group", { name: label, exact: true });
+  await field.getByRole("button", { name: /Calendario/ }).click();
+  const grid = page.getByRole("grid").last();
+  await expect(grid).toBeVisible();
+  const day = Number(iso.slice(8, 10));
+  const cell = (d: number) =>
+    grid
+      .locator('[role="button"]:not([data-outside-month])')
+      .filter({ hasText: new RegExp(`^${d}$`) });
+  await expect(cell(day)).not.toHaveAttribute("data-disabled", "true");
+  if (day > 1) {
+    await expect(cell(day - 1)).toHaveAttribute("data-disabled", "true");
+  } else {
+    const previousMonth = grid.locator("xpath=preceding-sibling::header[1]//button[1]");
+    await expect(previousMonth).toBeDisabled();
+  }
+  await page.keyboard.press("Escape");
+  await expect(grid).toBeHidden();
+  await expect(scope).toBeVisible();
+}
 
 test("lista: carga, error de red, reintento y vacío con backend real", async ({
   page,

@@ -1,27 +1,25 @@
 'use client';
 import * as React from 'react';
-import { History } from 'lucide-react';
+import { Download, History, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { RowActions, type RowAction } from '@/components/shared/row-actions';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Pagination } from '@/components/shared/pagination';
 import { notifyError } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatDateTime } from '@/lib/format/date';
-import {
-  STATUS_LABELS,
+import { 
   downloadErrorsCsv,
   isInProgress,
   errorsFileName,
   listImports,
   undoBalances,
   undoImport,
-  type ImportBatch,
+  type ImportBatch
 } from '@/lib/patient-imports/patient-imports-api';
 import { saveCsv } from '@/lib/files/save-csv';
-import { STATUS_VARIANT } from './import-progress';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeNumber } from '@/lib/format/sede-number';
 
@@ -48,7 +46,8 @@ export const historyCopy = {
     `Deshecho: ${created} pacientes retirados, ${filled} fichas revertidas${
       balances ? `, ${balances} saldos migrados retirados` : ''
     }`,
-  report: 'Informe',
+  report: 'Descargar informe de errores',
+  actionsFor: (name: string) => `Acciones de ${name}`,
   reportFor: (name: string) => `Descargar el informe de errores de ${name}`,
   reportError: 'No se pudo descargar el informe.',
   undo: 'Deshacer lote',
@@ -195,9 +194,46 @@ export function ImportHistory({
     }
   }
 
+  function batchActions(b: ImportBatch): RowAction[] {
+    return [
+      ...(b.reportAvailable && b.totals.errorRows + b.totals.duplicateRows > 0
+        ? [{ label: historyCopy.report, icon: <Download aria-hidden />, onSelect: () => void report(b) }]
+        : []),
+      ...(b.balances?.canUndo
+        ? [
+            {
+              label: historyCopy.undoBalances,
+              icon: <Undo2 aria-hidden />,
+              separatorBefore: true,
+              onSelect: () => {
+                setUndoError(null);
+                setUndoMode('balances');
+                setUndoing(b);
+              },
+            },
+          ]
+        : []),
+      ...(b.canUndo
+        ? [
+            {
+              label: historyCopy.undo,
+              icon: <Undo2 aria-hidden />,
+              destructive: true,
+              separatorBefore: !b.balances?.canUndo,
+              onSelect: () => {
+                setUndoError(null);
+                setUndoMode('batch');
+                setUndoing(b);
+              },
+            },
+          ]
+        : []),
+    ];
+  }
+
   return (
     <section aria-labelledby="import-history-title" className="flex flex-col gap-3">
-      <h2 id="import-history-title" className="text-lg font-semibold text-ink">
+      <h2 id="import-history-title" className="t-title text-ink">
         {historyCopy.title}
       </h2>
       <AsyncSection
@@ -210,18 +246,28 @@ export function ImportHistory({
         emptyIcon={<History aria-hidden />}
         skeleton={<TableSkeleton rows={3} />}
       >
-        <ul aria-label={historyCopy.listLabel} className="flex flex-col rounded-xl border border-border bg-surface text-sm">
+        <ul aria-label={historyCopy.listLabel} className="flex flex-col rounded-lg border border-border bg-surface text-sm">
           {items.map((b) => (
-            <li key={b.id} className="flex flex-col gap-2 border-b border-hairline p-4 last:border-0">
-              <div className="flex flex-wrap items-start justify-between gap-2">
+            <li key={b.id} className="flex flex-col gap-2 border-b border-border-subtle p-4 last:border-0">
+              <div className="flex items-start justify-between gap-2">
                 <span className="min-w-0 break-all font-medium text-ink">{b.fileName}</span>
-                <Badge variant={STATUS_VARIANT[b.status]}>{STATUS_LABELS[b.status]}</Badge>
+                <span className="flex shrink-0 items-center gap-1">
+                  <StatusBadge kind="patientImport" status={b.status} />
+                  {/* Informe y deshacer, en el «⋯» del lote (sin un hilo de botones por fila). */}
+                  {batchActions(b).length > 0 ? (
+                    <RowActions
+                      label={historyCopy.actionsFor(b.fileName)}
+                      actions={batchActions(b)}
+                      className="-my-1.5"
+                    />
+                  ) : null}
+                </span>
               </div>
               <p className="tabular-nums text-muted">
                 {historyCopy.meta(formatDateTime(b.confirmedAt ?? b.createdAt), b.createdBy.fullName)}
               </p>
               {b.balances && b.balances.progress.ambiguous > 0 ? (
-                <p className="text-warning">{historyCopy.ambiguous(b.balances.progress.ambiguous, n(b.balances.progress.ambiguous))}</p>
+                <p className="text-warning-text">{historyCopy.ambiguous(b.balances.progress.ambiguous, n(b.balances.progress.ambiguous))}</p>
               ) : null}
               <p className="tabular-nums text-ink">
                 {b.status === 'UNDONE'
@@ -238,49 +284,6 @@ export function ImportHistory({
                         n(b.totals.duplicateRows + b.totals.errorRows),
                       )}
               </p>
-              <div className="flex flex-wrap gap-2 sm:justify-end">
-                {b.reportAvailable && b.totals.errorRows + b.totals.duplicateRows > 0 ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    aria-label={historyCopy.reportFor(b.fileName)}
-                    onClick={() => void report(b)}
-                  >
-                    {historyCopy.report}
-                  </Button>
-                ) : null}
-                {b.balances?.canUndo ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    aria-label={historyCopy.undoBalancesFor(b.fileName)}
-                    onClick={() => {
-                      setUndoError(null);
-                      setUndoMode('balances');
-                      setUndoing(b);
-                    }}
-                  >
-                    {historyCopy.undoBalances}
-                  </Button>
-                ) : null}
-                {b.canUndo ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    aria-label={historyCopy.undoFor(b.fileName)}
-                    onClick={() => {
-                      setUndoError(null);
-                      setUndoMode('batch');
-                      setUndoing(b);
-                    }}
-                  >
-                    {historyCopy.undo}
-                  </Button>
-                ) : null}
-              </div>
             </li>
           ))}
         </ul>

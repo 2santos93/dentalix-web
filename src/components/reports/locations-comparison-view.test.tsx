@@ -173,14 +173,14 @@ describe('LocationsComparisonView (DX-014)', () => {
     const principal = screen.getAllByTestId('comparison-row')[0];
     const better = within(principal).getAllByText('+20 %')[0].parentElement!;
     expect(better).toHaveAttribute('data-trend', 'BETTER');
-    expect(better).toHaveClass('text-success');
+    expect(better).toHaveClass('text-success-text');
     expect(better.querySelector('svg')).not.toBeNull();
     expect(within(principal).getAllByText(/^Mejora: \+20 % frente a/)[0]).toHaveClass('sr-only');
     // Los porcentajes varían en puntos (8 % → 10 % = +2 p.p.), no en % relativo.
     expect(within(principal).queryByText('+25 %')).not.toBeInTheDocument();
     const worse = within(principal).getByText('+2 p.p.').parentElement!;
     expect(worse).toHaveAttribute('data-trend', 'WORSE');
-    expect(worse).toHaveClass('text-danger');
+    expect(worse).toHaveClass('text-danger-text');
     expect(worse.querySelector('svg')).not.toBeNull();
     expect(within(principal).getByText('Empeora: +2 p.p. frente a 8 %')).toBeInTheDocument();
     expect(within(screen.getByTestId('comparison-total')).getByText('+1 p.p.')).toBeInTheDocument();
@@ -240,8 +240,12 @@ describe('LocationsComparisonView (DX-014)', () => {
       expect(mockedGet).toHaveBeenLastCalledWith('t', { from: '2026-09-01', to: '2026-09-30', compare: 'previous_year' }),
     );
     await userEvent.selectOptions(screen.getByLabelText('Período'), 'custom');
-    expect(screen.getByLabelText('Desde')).toHaveValue('2026-09-01');
-    expect(screen.getByLabelText('Hasta')).toHaveValue('2026-09-30');
+    // «Fechas» es un DateRangePicker segmentado (dd/mm/aaaa): parte del período elegido.
+    const dates = screen.getByRole('group', { name: 'Fechas' });
+    const segments = (part: RegExp) =>
+      within(dates).getAllByRole('spinbutton', { name: part }).map((el) => el.textContent);
+    expect(segments(/Desde/)).toEqual(['01', '09', '2026']);
+    expect(segments(/Hasta/)).toEqual(['30', '09', '2026']);
   });
 
   it('un período personalizado inválido avisa junto a las fechas, sin pedir el reporte ni «Reintentar»', async () => {
@@ -249,7 +253,13 @@ describe('LocationsComparisonView (DX-014)', () => {
     await screen.findByRole('table');
     await userEvent.selectOptions(screen.getByLabelText('Período'), 'custom');
     mockedGet.mockClear();
-    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2024-01-01' } });
+    // «Desde» a 2024 (año del primer extremo): más de 366 días.
+    const dates = screen.getByRole('group', { name: 'Fechas' });
+    const year = within(dates)
+      .getAllByRole('spinbutton', { name: /Desde/ })
+      .find((el) => el.getAttribute('data-type') === 'year')!;
+    await userEvent.click(year);
+    await userEvent.keyboard('2024');
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'El período no es válido: «Desde» no puede ser posterior a «Hasta» y caben como mucho 366 días.',
     );
@@ -259,7 +269,7 @@ describe('LocationsComparisonView (DX-014)', () => {
     expect(mockedGet).not.toHaveBeenCalled();
   });
 
-  it('período comparado sin producción atribuida: aviso de una línea, «*» en Producción y % de cobro y «Sin comparar» (BE-045)', async () => {
+  it('período comparado sin producción atribuida: nota plegada de una línea, «—» muted y el porqué en «Cómo se calcula» (BE-045)', async () => {
     const unattributed = { ...m(12, 10), previousUnattributed: true as const };
     const flagged = row('Sede principal', 'l1', [['COP', unattributed]], m(10, 8, 2, 'WORSE'));
     mockedGet.mockResolvedValue(
@@ -271,21 +281,60 @@ describe('LocationsComparisonView (DX-014)', () => {
     );
     render(<LocationsComparisonView token="t" />);
     await screen.findByRole('table');
-    expect(screen.getByRole('note')).toHaveTextContent(
-      '«Producción» y «% de cobro» no se comparan donde dice «Sin comparar»: el período comparado tiene procedimientos realizados antes de registrar su sede («Sin atribuir») o cobros sin producción.',
+    // Una línea plegada; la explicación, al abrirla.
+    const note = screen.getByRole('note');
+    const toggle = within(note).getByRole('button', { name: '2 indicadores sin comparar · ¿por qué?' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(toggle);
+    expect(note).toHaveTextContent(
+      '«Producción» y «% de cobro» no se comparan donde dice «—»: el período comparado tiene procedimientos realizados antes de registrar su sede («Sin atribuir») o cobros sin producción.',
     );
-    const headers = within(table()).getAllByRole('columnheader');
-    const marked = headers.filter((h) => within(h).queryByTestId('unattributed-mark'));
-    expect(marked.map((h) => within(h).getAllByRole('button')[0].textContent?.replace('*', ''))).toEqual([
-      'Producción',
-      '% de cobro',
-    ]);
+    // Sin asteriscos ni leyenda: el porqué va en «Cómo se calcula» de esas dos columnas.
+    expect(screen.queryAllByTestId('unattributed-mark')).toHaveLength(0);
+    expect(screen.queryByText(/Verde: mejora/)).not.toBeInTheDocument();
+    const how = (column: string) =>
+      document.getElementById(
+        within(table()).getByRole('button', { name: `Cómo se calcula: ${column}` }).getAttribute('aria-describedby')!,
+      );
+    expect(how('Producción')).toHaveTextContent(/producción «Sin atribuir»/);
+    expect(how('% de cobro')).toHaveTextContent(/producción «Sin atribuir»/);
+    expect(how('Cobrado')).not.toHaveTextContent(/Sin atribuir/);
     const [production] = within(screen.getByTestId('comparison-total')).getAllByRole('cell');
-    expect(within(production).getByTestId('not-compared')).toHaveTextContent(
+    const notCompared = within(production).getByTestId('not-compared');
+    expect(notCompared).toHaveTextContent(
       'Sin comparar con 10,00 COP: el período comparado no tiene toda su producción atribuida a una sede.',
     );
+    expect(notCompared).toHaveClass('text-muted');
     // Sin flecha ni color de mejora en esa celda.
     expect(production.querySelector('[data-trend]')).toBeNull();
+  });
+
+  it('base baja o nueva: «base baja»/«nuevo» en muted en vez de un % gigante (deltaBase)', async () => {
+    const base = report();
+    mockedGet.mockResolvedValue({
+      ...base,
+      locations: [
+        {
+          ...base.locations[0],
+          metrics: {
+            ...base.locations[0].metrics,
+            completedAppointments: m(25, 2, 1150, 'BETTER'),
+            collected: [{ currency: 'COP', ...m(50, 0, null, 'BETTER') }],
+          },
+        },
+        base.locations[1],
+      ],
+    });
+    render(<LocationsComparisonView token="t" />);
+    await screen.findByRole('table');
+    const [first] = within(table()).getAllByTestId('comparison-row');
+    const cells = within(first).getAllByRole('cell');
+    const appointments = cells[3];
+    expect(appointments).toHaveTextContent('base baja');
+    expect(appointments).not.toHaveTextContent('1150');
+    expect(appointments.querySelector('[data-base="low"]')).toHaveClass('text-muted');
+    expect(within(appointments).getByText(/la base del período comparado es demasiado baja/)).toHaveClass('sr-only');
+    expect(cells[1]).toHaveTextContent('nuevo');
   });
 
   it('sin la bandera no hay aviso ni marca', async () => {

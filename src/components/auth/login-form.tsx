@@ -3,11 +3,12 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Clock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 import { ApiError, apiFetch } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
@@ -15,6 +16,8 @@ import { FORGOT_PASSWORD_PATH } from '@/lib/auth/password-reset-api';
 import { loginLockedMessage, waitClock } from '@/lib/auth/login-lockout';
 import { BREAK_GLASS_REQUIRED, MFA_COOLDOWN, MFA_NOT_ENROLLED } from '@/lib/auth/break-glass';
 import { BreakGlassStep } from './break-glass-step';
+import { AUTH_FORM_CLASS, AUTH_LINK_CLASS, AUTH_SUBMIT_CLASS } from './auth-layout';
+import { PasswordInput } from './password-input';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -165,7 +168,7 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
 
   if (breakGlassStep) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className={AUTH_FORM_CLASS}>
         <BreakGlassStep
           submitting={submitting}
           locked={locked}
@@ -178,7 +181,7 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
         />
         <div aria-live="polite" aria-atomic="true">
           {locked ? (
-            <p className="text-sm font-medium text-warning">{loginLockedMessage(remaining)}</p>
+            <p className="text-sm font-medium text-warning-text">{loginLockedMessage(remaining)}</p>
           ) : null}
         </div>
       </div>
@@ -188,15 +191,11 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
   const describedBy = error ? ERROR_ID : locked ? LOCK_ID : undefined;
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className={AUTH_FORM_CLASS}>
       {passwordReset ? (
-        <p
-          role="status"
-          className="flex items-start gap-1.5 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm font-medium text-success"
-        >
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>{copy.passwordResetDone}</span>
-        </p>
+        <Callout tone="success" role="status">
+          {copy.passwordResetDone}
+        </Callout>
       ) : null}
       <FormField htmlFor="login-email" label={copy.emailLabel}>
         <Input
@@ -214,35 +213,25 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
       </FormField>
 
       <FormField htmlFor="login-password" label={copy.passwordLabel}>
-        <div className="relative">
-          <Input
-            id="login-password"
-            name="password"
-            type={showPassword ? 'text' : 'password'}
-            autoComplete="current-password"
-            required
-            disabled={submitting}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={describedBy}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="pr-10"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            disabled={submitting}
-            aria-pressed={showPassword}
-            aria-label={showPassword ? copy.hidePassword : copy.showPassword}
-            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted transition-colors hover:text-ink disabled:pointer-events-none disabled:opacity-50"
-          >
-            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-          </button>
-        </div>
+        <PasswordInput
+          id="login-password"
+          name="password"
+          autoComplete="current-password"
+          required
+          disabled={submitting}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          visible={showPassword}
+          onVisibleChange={setShowPassword}
+          showLabel={copy.showPassword}
+          hideLabel={copy.hidePassword}
+        />
       </FormField>
       <Link
         href={FORGOT_PASSWORD_PATH}
-        className="-mt-2 self-end text-sm font-medium text-primary hover:underline"
+        className={`-mt-2 self-end ${AUTH_LINK_CLASS}`}
       >
         {copy.forgotPassword}
       </Link>
@@ -258,17 +247,17 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
           m:ss es solo visual). */}
       <div id={LOCK_ID} aria-live="polite" aria-atomic="true">
         {locked ? (
-          <p className="flex flex-wrap items-start gap-x-1.5 gap-y-1 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm font-medium text-warning">
-            <Clock className="mt-0.5 size-4 shrink-0" aria-hidden />
-            <span className="min-w-0 flex-1">{loginLockedMessage(remaining)}</span>
-            <span
-              aria-hidden
-              title={copy.lockClockLabel}
-              className="ml-auto tabular-nums"
-            >
-              {waitClock(remaining)}
-            </span>
-          </p>
+          // `role="none"`: la región viva es este contenedor; un `status`
+          // dentro anunciaría el aviso dos veces.
+          <Callout tone="warning" role="none" icon={Clock}>
+            {/* El primer `span` es el aviso (e2e/login-lockout lo lee así); el reloj, aparte. */}
+            <div className="flex flex-wrap items-start gap-x-1.5 gap-y-1">
+              <span className="min-w-0 flex-1">{loginLockedMessage(remaining)}</span>
+              <span aria-hidden title={copy.lockClockLabel} className="ml-auto tabular-nums">
+                {waitClock(remaining)}
+              </span>
+            </div>
+          </Callout>
         ) : lockEnded ? (
           <p className="text-sm text-muted">{copy.lockEnded}</p>
         ) : null}
@@ -278,7 +267,7 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
         type="submit"
         size="lg"
         disabled={submitting || locked}
-        className="mt-1 w-full"
+        className={AUTH_SUBMIT_CLASS}
       >
         {submitting ? (
           <>

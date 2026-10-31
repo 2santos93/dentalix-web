@@ -4,7 +4,7 @@ import { useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { ConditionSummaryText } from '@/components/clinical/condition-summary';
-import { cn } from '@/lib/utils';
+import { AnswerGroup, AnswerSection, UNANSWERED, type AnswerChoice } from '@/components/clinical/answer-group';
 import {
   type Condition, type ConditionStatus,
   CONDITION_STATUS_LABELS, CONDITION_UNANSWERED_LABEL, STANDARD_CONDITIONS,
@@ -16,10 +16,8 @@ const copy = {
   note: 'Nota',
 };
 
-/** Valor del radio «Sin responder»: la condición no va en la lista. */
-const UNANSWERED = '';
 type Choice = ConditionStatus | typeof UNANSWERED;
-const CHOICES: { value: Choice; label: string }[] = [
+const CHOICES: AnswerChoice<ConditionStatus>[] = [
   { value: UNANSWERED, label: CONDITION_UNANSWERED_LABEL },
   { value: 'SI', label: CONDITION_STATUS_LABELS.SI },
   { value: 'NO', label: CONDITION_STATUS_LABELS.NO },
@@ -35,7 +33,6 @@ const CHOICES: { value: Choice; label: string }[] = [
  */
 export function ConditionChecklist({ value, onChange }: { value: Condition[]; onChange: (n: Condition[]) => void }) {
   const ids = useId();
-  const hintId = `${ids}-hint`;
   const findRow = (codigo: string) => value.find((c) => c.codigo === codigo);
 
   const answer = (codigo: string, etiqueta: string, choice: Choice) => {
@@ -53,61 +50,38 @@ export function ConditionChecklist({ value, onChange }: { value: Condition[]; on
   };
 
   return (
-    <fieldset className="flex flex-col gap-3" aria-describedby={hintId}>
-      <legend className="t-label text-ink">{copy.legend}</legend>
-      <div id={hintId} className="flex flex-col gap-1 text-sm">
-        <p className="text-muted">{copy.hint}</p>
-        <p>
-          <ConditionSummaryText conditions={value} />
-        </p>
-      </div>
-      <ul className="flex flex-col gap-3">
-        {STANDARD_CONDITIONS.map(({ codigo, etiqueta }) => {
-          const row = findRow(codigo);
-          const selected: Choice = row?.estado ?? UNANSWERED;
-          const labelId = `${ids}-${codigo}-label`;
-          const noteId = `${ids}-${codigo}-note`;
-          return (
-            <li key={codigo} className="flex flex-col gap-2 rounded-lg border border-border p-3">
-              <span id={labelId} className="text-sm font-medium text-ink">{etiqueta}</span>
-              <div role="radiogroup" aria-labelledby={labelId} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {CHOICES.map((choice) => {
-                  const checked = selected === choice.value;
-                  return (
-                    <label
-                      key={choice.value || 'unanswered'}
-                      className={cn(
-                        'flex min-h-11 cursor-pointer items-center justify-center rounded-lg border px-2 text-center text-sm font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary',
-                        checked
-                          ? choice.value === UNANSWERED
-                            ? 'border-border bg-surface-2 text-muted'
-                            : 'border-primary bg-primary/10 text-primary'
-                          : 'border-border bg-surface text-ink hover:bg-surface-2',
-                      )}
-                    >
-                      <input
-                        type="radio"
-                        name={`${ids}-${codigo}`}
-                        value={choice.value}
-                        checked={checked}
-                        onChange={() => answer(codigo, etiqueta, choice.value)}
-                        className="sr-only"
-                      />
-                      {choice.label}
-                    </label>
-                  );
-                })}
-              </div>
-              {/* La nota va con una respuesta: sin ella no hay fila que guardar. */}
-              {row && (
-                <FormField htmlFor={noteId} label={`${copy.note} (${etiqueta})`}>
-                  <Input id={noteId} value={row.nota ?? ''} onChange={(e) => setNote(codigo, e.target.value)} />
-                </FormField>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </fieldset>
+    <AnswerSection
+      title={copy.legend}
+      description={
+        <>
+          <p>{copy.hint}</p>
+          <p className="text-ink">
+            <ConditionSummaryText conditions={value} />
+          </p>
+        </>
+      }
+    >
+      {STANDARD_CONDITIONS.map(({ codigo, etiqueta }) => {
+        const row = findRow(codigo);
+        const noteId = `${ids}-${codigo}-note`;
+        return (
+          <AnswerGroup
+            key={codigo}
+            id={`${ids}-${codigo}`}
+            legend={etiqueta}
+            value={row?.estado ?? UNANSWERED}
+            choices={CHOICES}
+            onChange={(v) => answer(codigo, etiqueta, v)}
+          >
+            {/* La nota va con una respuesta: sin ella no hay fila que guardar. */}
+            {row && (
+              <FormField htmlFor={noteId} label={`${copy.note} (${etiqueta})`}>
+                <Input id={noteId} value={row.nota ?? ''} onChange={(e) => setNote(codigo, e.target.value)} />
+              </FormField>
+            )}
+          </AnswerGroup>
+        );
+      })}
+    </AnswerSection>
   );
 }

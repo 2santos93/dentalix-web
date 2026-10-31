@@ -14,12 +14,10 @@ import {
 import { isPhoneRegion, PHONE_REGIONS, phoneRegionLabel, searchPhoneRegions, type PhoneRegionOption } from '@/lib/locations/phone-regions';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import {
-  browserCountry,
-  browserHourCycle,
-  browserLocale,
-  browserTimeZone,
   canonicalLocale,
   canonicalTimeZone,
+  HOUR_CYCLE_LABELS,
+  isHourCycle,
   REGIONAL_SETTINGS_FIELDS,
   validateRegionalSettings,
   type RegionalSettingsErrors,
@@ -31,13 +29,16 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { COMBOBOX_NONE, CountryCombobox, phoneRegionComboboxCopy } from '@/components/shared/country-combobox';
 import { Input } from '@/components/ui/input';
-import { RegionalSettingsFields, regionalFieldId, type RegionalSuggestions } from './regional-settings-fields';
+import { useRegionalDraft } from '@/lib/locations/use-regional-draft';
+import { timeZoneLabel, localeName } from '@/lib/locations/regional-options';
+import { Callout } from '@/components/ui/callout';
+import { RegionalSettingsFields, regionalFieldId } from './regional-settings-fields';
 
 export const locationFormCopy = {
   createTitle: 'Nueva sede',
   editTitle: 'Editar sede',
   createDescription:
-    'País, moneda, zona horaria, formato y reloj son obligatorios. La zona, el formato, el reloj y, si tu navegador lo indica, el país vienen sugeridos: revísalos.',
+    'País, moneda, zona horaria, formato y reloj son obligatorios. Te proponemos el país y la zona de tu navegador, y la moneda y el formato de ese país: revísalos.',
   editDescription:
     'Guardar confirma la moneda, la zona horaria, el formato y el reloj de la sede, aunque no cambies nada.',
   name: 'Nombre',
@@ -58,6 +59,14 @@ export const locationFormCopy = {
   confirmChange: 'Cambiar de todos modos',
   confirmFallback:
     'La sede ya tiene movimientos. Cambiar su moneda o su zona horaria no convierte nada de lo registrado: confirma el cambio para continuar.',
+  // R1: lo que pasa al guardar, antes de guardar (edición).
+  consequencesTitle: 'Qué cambia al guardar',
+  consequenceCurrency: (before: string, after: string) =>
+    `Moneda: lo ya registrado en ${before} (cobros con su tasa de cambio, gastos, presupuestos y listas de precios) se queda en ${before}; no se convierte. Lo nuevo se registrará en ${after}. La numeración de los recibos no cambia.`,
+  consequenceTimeZone: (after: string) =>
+    `Zona horaria: las citas no se mueven, conservan su hora exacta. El horario de la sede y de los profesionales se leerá en ${after}, y la caja y los informes contarán los días con esa zona, también los de lo ya registrado.`,
+  consequenceFormat: (after: string) =>
+    `Formato y reloj: solo cambia cómo se escriben fechas, números y horas (${after}). Ningún dato cambia.`,
 };
 
 const copy = locationFormCopy;
@@ -82,31 +91,6 @@ interface LocationFormModalProps {
   onSaved: (saved: ClinicLocation) => void;
 }
 
-/**
- * Lo que el navegador propone al abrir el modal (spec G1 R10, G1-B §9):
- * - alta: país (solo de una región explícita, DX-312 P1), zona, formato y reloj;
- * - sede por configurar: formato y reloj, solo los que están vacíos (el valor
- *   guardado se muestra siempre, nunca la sugerencia); el país de una sede
- *   que ya lo tiene nunca se sustituye por la sugerencia;
- * - sede configurada: nada.
- */
-function initialSuggestions(location: ClinicLocation | null): RegionalSuggestions {
-  if (!location) {
-    return {
-      country: browserCountry(),
-      timeZone: browserTimeZone(),
-      locale: browserLocale(),
-      hourCycle: browserHourCycle(),
-    };
-  }
-  return {
-    country: location.country ? null : browserCountry(),
-    timeZone: null,
-    locale: location.locale ? null : browserLocale(),
-    hourCycle: location.hourCycle ? null : browserHourCycle(),
-  };
-}
-
 /** La región que el país de la sede sugiere: la suya si es región de numeración (como la API). */
 function suggestedPhoneRegion(country: string): string | null {
   return isPhoneRegion(country) ? country : null;
@@ -129,17 +113,6 @@ export function phoneRegionFollowsCountry(location: ClinicLocation | null, count
 
 const formatPhoneRegion = (region: PhoneRegionOption) => phoneRegionLabel(region.code) ?? region.code;
 
-function initialRegional(location: ClinicLocation | null, suggested: RegionalSuggestions): RegionalSettingsValues {
-  return {
-    country: location?.country || suggested.country || '',
-    currency: location?.currency ?? '',
-    timeZone: location?.timeZone ?? suggested.timeZone ?? '',
-    locale: location?.locale ?? suggested.locale ?? '',
-    // Sin reloj del navegador, vacío y obligatorio: nunca se adivina.
-    hourCycle: location?.hourCycle ?? suggested.hourCycle ?? '',
-  };
-}
-
 /**
  * Alta y edición de una sede (G1, spec §6.2). El cuerpo lleva exactamente lo
  * que muestra el formulario. En edición, guardar marca la sede como revisada
@@ -155,8 +128,10 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
   const [name, setName] = useState(location?.name ?? '');
   const [address, setAddress] = useState(location?.address ?? '');
   const [phone, setPhone] = useState(location?.phone ?? '');
-  const [suggestions] = useState(() => initialSuggestions(location));
-  const [regional, setRegional] = useState<RegionalSettingsValues>(() => initialRegional(location, suggestions));
+  // R1: país y zona del navegador, moneda, formato y reloj del país (solo en
+  // el alta y en los campos vacíos de una sede por configurar).
+  const draft = useRegionalDraft(location);
+  const regional = draft.values;
   /** Prefijo elegido a mano; hasta que se toca, manda `phoneRegion` (abajo). */
   const [chosenPhoneRegion, setChosenPhoneRegion] = useState<string | null>(null);
   const [phoneRegionTouched, setPhoneRegionTouched] = useState(false);
@@ -187,7 +162,7 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
   }
 
   function changeRegional<F extends RegionalSettingsField>(field: F, value: RegionalSettingsValues[F]) {
-    setRegional((prev) => ({ ...prev, [field]: value }));
+    draft.change(field, value);
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   }
 
@@ -202,6 +177,30 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
       const zone = (value: string) => canonicalTimeZone(value) ?? value.trim();
       return zone(before) !== zone(regional.timeZone);
     });
+  }
+
+  /**
+   * Qué cambia al guardar (R1), antes de guardar: solo en la edición y solo
+   * para lo que cambia un valor guardado. La API vuelve a pedir confirmación
+   * (409) si la sede tiene historial y bloquea con la caja abierta.
+   */
+  function regionalConsequences(): string[] {
+    if (!location) return [];
+    const lines: string[] = [];
+    const moved = movedFields();
+    if (moved.includes('currency') && location.currency && regional.currency) {
+      lines.push(copy.consequenceCurrency(location.currency, regional.currency));
+    }
+    if (moved.includes('timeZone') && regional.timeZone.trim()) {
+      lines.push(copy.consequenceTimeZone(timeZoneLabel(canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim())));
+    }
+    const localeMoved = location.locale !== null && (canonicalLocale(regional.locale) ?? regional.locale.trim()) !== location.locale;
+    const clockMoved = location.hourCycle !== null && regional.hourCycle !== location.hourCycle;
+    if ((localeMoved || clockMoved) && regional.locale.trim()) {
+      const clock = isHourCycle(regional.hourCycle) ? HOUR_CYCLE_LABELS[regional.hourCycle] : '';
+      lines.push(copy.consequenceFormat([localeName(canonicalLocale(regional.locale) ?? regional.locale.trim()), clock].filter(Boolean).join(', ')));
+    }
+    return lines;
   }
 
   function focusField(field: ApiField) {
@@ -314,9 +313,11 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
     // Lo que se envía es lo que se ve: zona y formato quedan en su forma canónica.
     const timeZone = canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim();
     const locale = canonicalLocale(regional.locale) ?? regional.locale.trim();
-    setRegional((prev) => ({ ...prev, timeZone, locale }));
+    draft.normalize({ timeZone, locale });
     void save(false);
   }
+
+  const consequences = regionalConsequences();
 
   return (
     <>
@@ -401,8 +402,23 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
           onChange={changeRegional}
           errors={errors}
           token={token}
-          suggestions={suggestions}
+          sources={draft.sources}
+          proposals={draft.proposals}
+          onAcceptProposal={draft.accept}
         />
+        {consequences.length > 0 ? (
+          <Callout
+            tone={movedFields().length > 0 ? 'warning' : 'info'}
+            title={copy.consequencesTitle}
+            data-testid="regional-consequences"
+          >
+            <ul className="flex list-disc flex-col gap-1 pl-4">
+              {consequences.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </Callout>
+        ) : null}
       </FormModal>
       <ConfirmDialog
         open={confirmMessage !== null}

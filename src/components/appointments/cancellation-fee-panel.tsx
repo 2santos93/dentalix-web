@@ -186,7 +186,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       <section
         aria-labelledby={`fee-${appointmentId}`}
         data-testid="cancellation-fee-panel"
-        className="flex flex-col gap-2 border-t border-hairline pt-4 text-sm"
+        className="flex flex-col gap-2 border-t border-border-subtle pt-4 text-sm"
       >
         {heading}
         <SectionError
@@ -203,9 +203,9 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
   }
   if (view === null) {
     return (
-      <div role="status" className="border-t border-hairline pt-4">
+      <div role="status" className="border-t border-border-subtle pt-4">
         <span className="sr-only">{copy.loading}</span>
-        <span className="block h-5 w-56 animate-pulse rounded bg-surface-2" />
+        <span className="block h-5 w-56 animate-pulse rounded bg-surface-sunken" />
       </div>
     );
   }
@@ -218,7 +218,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
     <section
       aria-labelledby={`fee-${appointmentId}`}
       data-testid="cancellation-fee-panel"
-      className="flex flex-col gap-2 border-t border-hairline pt-4 text-sm"
+      className="flex flex-col gap-2 border-t border-border-subtle pt-4 text-sm"
     >
       {heading}
       {view.status === 'VOIDED' && fee ? (
@@ -239,13 +239,13 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
           <p className="tabular-nums text-ink">{copy.charged(money(fee.amount, fee.currency) ?? '')}</p>
           <p className="text-muted">{copy.chargedHint}</p>
           {fee.itemMismatch && fee.itemAmount !== null ? (
-            <p role="status" className="text-warning">
+            <p role="status" className="text-warning-text">
               {copy.mismatch(money(fee.itemAmount, fee.currency) ?? '', money(fee.amount, fee.currency) ?? '')}
             </p>
           ) : null}
           <Link
             href={`/patients/${view.patientId}?tab=account-statement`}
-            className="inline-flex min-h-11 items-center gap-1.5 self-start font-medium text-primary underline-offset-4 hover:underline sm:min-h-0"
+            className="inline-flex min-h-11 items-center gap-1.5 self-start font-medium text-primary-text underline-offset-4 hover:underline sm:min-h-0"
           >
             <Receipt aria-hidden className="size-4" />
             {copy.goToStatement}

@@ -214,9 +214,10 @@ test('a long number and an unreadable one fit the header at 390 px', async ({ pa
 test('the location phone shows the international format of its own prefix', async ({ page }) => {
   await loginAs(page, clinic.origin, clinic.email, password);
   await page.goto(`${clinic.origin}/settings/sedes`);
-  const section = page.getByRole('region', { name: 'Teléfono de la sede' });
-  const field = section.getByLabel(/^Teléfono/);
-  await expect(field).toHaveValue('+58 212 5551234', { timeout: 15_000 });
-  await expect(section.getByRole('button', { name: /^Guardar el teléfono de / })).toBeDisabled();
-  await shot(page, 'phone-international-location', field);
+  // B6: el teléfono se lee en la ficha de la sede y se cambia en «Editar sede».
+  await page.getByRole('link', { name: /^Abrir / }).first().click();
+  const section = page.getByRole('region', { name: 'Datos de la sede' });
+  const value = section.getByText('+58 212 5551234', { exact: true });
+  await expect(value).toBeVisible({ timeout: 15_000 });
+  await shot(page, 'phone-international-location', value);
 });

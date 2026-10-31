@@ -103,7 +103,7 @@ export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: Reg
         <h2 id="implant-card-items" className="t-label text-muted">
           {copy.itemsHeading}
         </h2>
-        <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border">
           {card.items.map((item) => {
             const size = formatImplantSize(item.diameterMm, item.lengthMm, fmt);
             return (
@@ -117,7 +117,7 @@ export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: Reg
                     {item.kindLabel} · {copy.tooth} <span className="tabular-nums">{item.toothNumber}</span>
                   </p>
                   {item.voided ? (
-                    <span className="rounded-full border border-danger px-2 text-xs font-semibold text-danger">
+                    <span className="rounded-full border border-danger px-2 text-xs font-semibold text-danger-text">
                       {copy.voided}
                     </span>
                   ) : null}

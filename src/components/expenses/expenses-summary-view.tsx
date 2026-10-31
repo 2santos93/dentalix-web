@@ -30,20 +30,18 @@ import { getActiveLocationId } from '@/lib/locations/location-store';
 import { notifyError } from '@/components/errors/notify';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
-import { toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { expensesCopy } from './expenses-view';
+import { ExpensesScope, expensesCopy } from './expenses-view';
+import { InlineError } from '@/components/errors/inline-error';
 import { expensesPanelProps, type ExpensesViewTabs } from './expenses-tabs';
 import { useExpenseLocations } from './use-expense-locations';
 
 export const expensesSummaryCopy = {
-  locationLabel: 'Sede',
-  locationAll: 'Todas las sedes',
   fromLabel: 'Desde',
   toLabel: 'Hasta',
   export: 'Exportar CSV',
@@ -67,7 +65,7 @@ export const expensesSummaryCopy = {
     `Ver gastos por categoría de ${month}, ${location}: ${amount}`,
   hideBreakdown: (month: string, location: string, amount: string) =>
     `Ocultar gastos por categoría de ${month}, ${location}: ${amount}`,
-  monthPlaceholder: 'AAAA-MM',
+  monthPlaceholder: 'Elige un mes',
   noExpenses: 'Sin gastos en el mes',
   currencyNote: 'Cada moneda va por separado: nunca se suman ni se convierten.',
   // Sin «Intenta de nuevo.»: AsyncSection → SectionError trae «Reintentar».
@@ -77,7 +75,7 @@ export const expensesSummaryCopy = {
   forbiddenTitle: 'Tu rol no tiene acceso al resumen de gastos.',
   forbiddenHint: 'Los gastos de la sede son para la administración de la clínica.',
   empty: 'No hay movimientos en este periodo',
-  emptyHint: 'No hay ingresos ni gastos en los meses elegidos. Prueba con otro periodo o con otra sede.',
+  emptyHint: 'No hay ingresos ni gastos en los meses elegidos. Prueba con otro periodo o con otra sede en el selector de sede.',
 };
 
 const rowKey = (row: ExpenseSummaryRow) => `${row.month}|${row.locationId}|${row.currency}`;
@@ -86,8 +84,9 @@ const rowKey = (row: ExpenseSummaryRow) => `${row.month}|${row.locationId}|${row
  * «Resumen» (DX-274, solo ADMIN): ingresos contra gastos por mes, sede y
  * moneda. Los gastos van por fecha de factura y los ingresos por el día civil
  * del abono en su sede; cada moneda en su fila, sin totales cruzados. El rango
- * se elige en meses y no pasa de 366 días: lo impide el selector y lo valida
- * la pantalla antes de pedir nada.
+ * se elige en meses y no pasa de 366 días: lo valida la pantalla antes de
+ * pedir nada. La sede la decide el selector global (como en «Gastos»): con
+ * «Todas las sedes» cada sede sale en su fila.
  */
 export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: ExpensesViewTabs }) {
   const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
@@ -100,7 +99,6 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
   const currentMonth = today?.slice(0, 7) ?? null;
   const [fromMonth, setFromMonth] = useState<string | null>(null);
   const [toMonth, setToMonth] = useState<string | null>(null);
-  const [locationId, setLocationId] = useState('ALL');
   const [data, setData] = useState<ExpenseSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -122,7 +120,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
     else if (daysInRange(days.from, days.to) > EXPENSE_SUMMARY_MAX_DAYS) rangeError = expensesSummaryCopy.rangeLength;
   }
   const query: ExpenseSummaryQuery | null =
-    days && !rangeError ? { ...days, ...(locationId !== 'ALL' ? { locationId } : {}) } : null;
+    days && !rangeError ? { ...days } : null;
   const queryKey = query ? JSON.stringify(query) : null;
 
   useEffect(() => {
@@ -194,51 +192,39 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
       reloadLocations();
     } else setReloadKey((key) => key + 1);
   }
-  const activeLocations = locations.filter((l) => l.isActive);
-  const showLocationFilter = activeLocationId === null && activeLocations.length > 1;
-  // Los meses que ofrecen los selectores caben siempre en 366 días.
-  const fromMin = effectiveTo ? shiftMonth(effectiveTo, 1 - EXPENSE_SUMMARY_MAX_MONTHS) : null;
-  const toMax = effectiveFrom ? shiftMonth(effectiveFrom, EXPENSE_SUMMARY_MAX_MONTHS - 1) : null;
+  // Los meses que ofrecen los selectores: de la sede si ya se sabe; si no, del
+  // reloj del navegador, solo para poder elegir un rango a mano (no se pide nada
+  // hasta que la persona lo elige).
+  const monthOptions = summaryMonthOptions(currentMonth ?? browserMonth(), [effectiveFrom, effectiveTo]);
 
   return (
     <>
-      <PageHeader title={expensesCopy.title} description={expensesCopy.description} />
+      <PageHeader
+        title={expensesCopy.title}
+        description={expensesCopy.description}
+        meta={
+          <ExpensesScope
+            locationName={activeLocationId ? (locations.find((l) => l.id === activeLocationId)?.name ?? null) : null}
+          />
+        }
+      />
       {tabs?.nav}
       <div className="flex flex-col gap-3" {...expensesPanelProps(tabs)}>
         {!forbidden ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              {showLocationFilter ? (
-                <select
-                  aria-label={expensesSummaryCopy.locationLabel}
-                  value={locationId}
-                  onChange={(e) => setLocationId(e.target.value)}
-                  className={cn(toolbarFieldClass, 'sm:w-48')}
-                >
-                  <option value="ALL">{expensesSummaryCopy.locationAll}</option>
-                  {activeLocations.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
-                <MonthField
-                  label={expensesSummaryCopy.fromLabel}
-                  value={effectiveFrom ?? ''}
-                  min={fromMin ?? undefined}
-                  max={effectiveTo ?? undefined}
-                  onCommit={setFromMonth}
-                />
-                <MonthField
-                  label={expensesSummaryCopy.toLabel}
-                  value={effectiveTo ?? ''}
-                  min={effectiveFrom ?? undefined}
-                  max={toMax ?? undefined}
-                  onCommit={setToMonth}
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
+              <MonthSelect
+                label={expensesSummaryCopy.fromLabel}
+                value={effectiveFrom}
+                options={monthOptions}
+                onCommit={setFromMonth}
+              />
+              <MonthSelect
+                label={expensesSummaryCopy.toLabel}
+                value={effectiveTo}
+                options={monthOptions}
+                onCommit={setToMonth}
+              />
             </div>
             <Button
               type="button"
@@ -253,14 +239,12 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
           </div>
         ) : null}
 
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
 
         {rangeError ? (
-          <p role="alert" className="text-sm text-danger">
-            {rangeError}
-          </p>
+          <InlineError>{rangeError}</InlineError>
         ) : null}
 
         {forbidden ? (
@@ -291,11 +275,15 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
             skeleton={<TableSkeleton rows={5} />}
           >
             <Card aria-busy={loading || undefined} className="overflow-hidden p-0">
-              <Table>
+              {/* Tabla de comparación (se lee por columnas): en el teléfono no se
+                  apila, se desplaza de lado con el mes fijo. */}
+              <Table aria-label={expensesSummaryCopy.tableLabel} stack={false}>
                 <caption className="sr-only">{expensesSummaryCopy.tableLabel}</caption>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead scope="col">{expensesSummaryCopy.colMonth}</TableHead>
+                    <TableHead scope="col" className={STICKY_FIRST}>
+                      {expensesSummaryCopy.colMonth}
+                    </TableHead>
                     <TableHead scope="col">{expensesSummaryCopy.colLocation}</TableHead>
                     <TableHead scope="col">{expensesSummaryCopy.colCurrency}</TableHead>
                     <TableHead scope="col" className="text-right">
@@ -319,17 +307,17 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                     return (
                       <Fragment key={key}>
                         <TableRow data-testid="summary-row">
-                          <TableCell data-label={expensesSummaryCopy.colMonth} className="font-medium">
+                          <TableCell className={cn('font-medium', STICKY_FIRST)}>
                             {month}
                           </TableCell>
-                          <TableCell data-label={expensesSummaryCopy.colLocation}>{row.locationName}</TableCell>
-                          <TableCell data-label={expensesSummaryCopy.colCurrency} className="tabular-nums">
+                          <TableCell>{row.locationName}</TableCell>
+                          <TableCell className="tabular-nums">
                             {row.currency}
                           </TableCell>
-                          <TableCell data-label={expensesSummaryCopy.colIncome} className="text-right tabular-nums">
+                          <TableCell className="text-right tabular-nums">
                             {sedeMoney(row.income, row.currency, fmt)}
                           </TableCell>
-                          <TableCell data-label={expensesSummaryCopy.colExpenses} className="text-right tabular-nums">
+                          <TableCell className="text-right tabular-nums">
                             {row.categories.length > 0 ? (
                               <button
                                 type="button"
@@ -341,7 +329,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                                     : expensesSummaryCopy.showBreakdown(month, row.locationName, expenses)
                                 }
                                 onClick={() => toggle(key)}
-                                className="inline-flex min-h-11 items-center gap-1 rounded-md px-1 tabular-nums hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-8"
+                                className="inline-flex min-h-11 items-center gap-1 rounded-md px-1 tabular-nums hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-8"
                               >
                                 {open ? (
                                   <ChevronDown aria-hidden className="size-4" />
@@ -355,15 +343,15 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                             )}
                           </TableCell>
                           <TableCell
-                            data-label={expensesSummaryCopy.colNet}
-                            className={cn('text-right font-medium tabular-nums', row.net < 0 && 'text-danger')}
+                           
+                            className={cn('text-right font-medium tabular-nums', row.net < 0 && 'text-danger-text')}
                           >
                             {sedeMoney(row.net, row.currency, fmt)}
                           </TableCell>
                         </TableRow>
                         {open ? (
-                          <TableRow className="bg-surface-2 hover:bg-surface-2">
-                            <TableCell id={panelId} colSpan={6} data-label={expensesSummaryCopy.breakdownLabel}>
+                          <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
+                            <TableCell id={panelId} colSpan={6}>
                               <ul
                                 aria-label={expensesSummaryCopy.breakdownLabel}
                                 className="flex flex-col gap-1 text-sm"
@@ -393,45 +381,62 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
   );
 }
 
-const MONTH_TEXT = /^\d{4}-\d{2}$/;
+/** La primera columna fija al desplazar la tabla de lado en el teléfono. */
+const STICKY_FIRST = 'max-sm:sticky max-sm:left-0 max-sm:z-[1] max-sm:bg-surface';
 
-interface MonthFieldProps {
+/** Meses que se ofrecen hacia atrás desde el en curso (cinco años). */
+const MONTHS_BACK = 59;
+
+function browserMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Los meses del selector, del más reciente al más antiguo: el siguiente al en
+ * curso (una sede adelantada ya puede estar en él), el en curso y los cinco
+ * años anteriores, más los ya elegidos si quedan fuera.
+ */
+function summaryMonthOptions(anchor: string, chosen: readonly (string | null)[]): string[] {
+  const months = new Set<string>();
+  for (let delta = 1; delta >= -MONTHS_BACK; delta -= 1) {
+    const month = shiftMonth(anchor, delta);
+    if (month) months.add(month);
+  }
+  for (const month of chosen) if (month) months.add(month);
+  return [...months].sort().reverse();
+}
+
+interface MonthSelectProps {
   label: string;
-  value: string;
-  min?: string;
-  max?: string;
+  value: string | null;
+  options: readonly string[];
   onCommit: (month: string) => void;
 }
 
 /**
- * Selector de mes. Donde no hay selector nativo (Safari de escritorio) es un
- * campo de texto: se guarda lo tecleado y solo se confirma un `AAAA-MM`
- * completo, para que «2026-1» a medio escribir no dispare el aviso de rango.
+ * Selector de mes con los nombres en el idioma del producto («Octubre de
+ * 2026»): el `<input type="month">` del navegador pinta el mes en SU idioma y en
+ * Safari de escritorio ni siquiera es un selector.
  */
-function MonthField({ label, value, min, max, onCommit }: MonthFieldProps) {
-  const [draft, setDraft] = useState(value);
-  const [synced, setSynced] = useState(value);
-  if (value !== synced) {
-    setSynced(value);
-    setDraft(value);
-  }
+function MonthSelect({ label, value, options, onCommit }: MonthSelectProps) {
   return (
-    <label className="flex min-w-0 items-center gap-2 text-sm text-muted">
-      <span className="shrink-0">{label}</span>
-      <Input
-        type="month"
-        inputMode="numeric"
-        pattern="\d{4}-\d{2}"
-        placeholder={expensesSummaryCopy.monthPlaceholder}
-        value={draft}
-        min={min}
-        max={max}
+    <label className="flex min-w-0 flex-col gap-1.5 text-sm text-muted sm:flex-row sm:items-center sm:gap-2">
+      <span className="t-label shrink-0 text-muted">{label}</span>
+      <NativeSelect
+        value={value ?? ''}
         onChange={(e) => {
-          setDraft(e.target.value);
-          if (MONTH_TEXT.test(e.target.value)) onCommit(e.target.value);
+          if (e.target.value) onCommit(e.target.value);
         }}
-        className="min-w-0 tabular-nums sm:w-40"
-      />
+        className="min-w-0 sm:w-48"
+      >
+        {value ? null : <option value="">{expensesSummaryCopy.monthPlaceholder}</option>}
+        {options.map((month) => (
+          <option key={month} value={month}>
+            {summaryMonthLabel(month)}
+          </option>
+        ))}
+      </NativeSelect>
     </label>
   );
 }

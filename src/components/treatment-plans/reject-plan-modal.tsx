@@ -11,8 +11,8 @@ import {
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
 
 // Mismo tope que `RejectTreatmentPlanDto.note` en la API.
 const NOTE_MAX = 500;
@@ -99,33 +99,31 @@ export function RejectPlanModal({
       error={error}
     >
       {subject ? (
-        <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-ink">{subject}</p>
+        <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm font-medium text-ink">{subject}</p>
       ) : null}
-      <fieldset className="flex flex-col gap-2" disabled={submitting}>
-        <legend className="mb-1 text-sm font-medium text-ink">{copy.reasonLegend}</legend>
-        {SELECTABLE_REJECTION_REASONS.map((value) => (
-          <label
+      <RadioGroup
+        id="rejection-reason"
+        legend={copy.reasonLegend}
+        value={reason ?? ''}
+        onValueChange={(value) => {
+          setReason(value as typeof reason);
+          setError(null);
+        }}
+        disabled={submitting}
+        optionsClassName="flex flex-col gap-2"
+      >
+        {SELECTABLE_REJECTION_REASONS.map((value, index) => (
+          <RadioCard
             key={value}
-            className="flex min-h-11 items-center gap-3 rounded-lg border border-border px-3 text-sm text-ink has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-          >
-            <input
-              type="radio"
-              name="rejection-reason"
-              value={value}
-              checked={reason === value}
-              onChange={() => {
-                setReason(value);
-                setError(null);
-              }}
-              className="size-4 accent-[var(--color-primary)]"
-            />
-            {REJECTION_REASON_LABELS[value]}
-          </label>
+            id={index === 0 ? 'rejection-reason' : undefined}
+            value={value}
+            title={REJECTION_REASON_LABELS[value]}
+          />
         ))}
-      </fieldset>
+      </RadioGroup>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={noteId}>{noteRequired ? copy.noteLabelRequired : copy.noteLabel}</Label>
-        <textarea
+        <Textarea
           id={noteId}
           rows={3}
           maxLength={NOTE_MAX}
@@ -135,9 +133,8 @@ export function RejectPlanModal({
           aria-invalid={error === copy.noteRequired || undefined}
           onChange={(e) => setNote(e.target.value)}
           aria-describedby={`${noteId}-hint`}
-          className={cn(fieldClass, 'h-auto', error === copy.noteRequired && 'border-danger')}
         />
-        <p id={`${noteId}-hint`} className="text-xs text-muted">
+        <p id={`${noteId}-hint`} className="t-caption text-muted">
           {copy.noteHint}
         </p>
       </div>

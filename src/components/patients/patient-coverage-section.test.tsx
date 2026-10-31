@@ -75,6 +75,17 @@ function coverage(over: Partial<PatientCoverage> = {}): PatientCoverage {
 const renderSection = (onChanged?: () => void) =>
   render(<PatientCoverageSection token="tok" patientId="p1" onChanged={onChanged} />);
 
+
+/** «Editar» y «Quitar» viven en el menú «⋯» de la fila (RowActions). */
+async function rowAction(
+  user: ReturnType<typeof setupUser>,
+  payerName: string,
+  action: 'Editar' | 'Quitar',
+) {
+  await user.click(await screen.findByRole('button', { name: `Acciones de la cobertura de ${payerName}` }));
+  await user.click(await screen.findByRole('menuitem', { name: action }));
+}
+
 describe('PatientCoverageSection (DX-153)', () => {
   beforeEach(() => {
     jest.resetAllMocks();
@@ -207,7 +218,7 @@ describe('PatientCoverageSection (DX-153)', () => {
     renderSection(onChanged);
     const user = setupUser();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar la cobertura de Colsanitas' }));
+    await rowAction(user, 'Colsanitas', 'Editar');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByLabelText('Principal'));
     await user.click(within(dialog).getByRole('button', { name: /guardar/i }));
@@ -229,11 +240,11 @@ describe('PatientCoverageSection (DX-153)', () => {
     renderSection();
     const user = setupUser();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar la cobertura de Sanitas' }));
+    await rowAction(user, 'Sanitas', 'Editar');
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /guardar/i }));
     expect(await screen.findByText('Cobertura guardada.')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Editar la cobertura de Sanitas' }));
+    await rowAction(user, 'Sanitas', 'Editar');
     expect(screen.queryByText('Cobertura guardada.')).not.toBeInTheDocument();
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /guardar/i }));
     expect(await screen.findByText('Cobertura guardada.')).toBeInTheDocument();
@@ -247,7 +258,7 @@ describe('PatientCoverageSection (DX-153)', () => {
     renderSection(onChanged);
     const user = setupUser();
 
-    await user.click(await screen.findByRole('button', { name: 'Quitar la cobertura de Sanitas' }));
+    await rowAction(user, 'Sanitas', 'Quitar');
     const confirm = await screen.findByRole('dialog');
     expect(mockedDelete).not.toHaveBeenCalled();
     await user.click(within(confirm).getByRole('button', { name: 'Quitar' }));
@@ -268,7 +279,7 @@ describe('PatientCoverageSection (DX-153)', () => {
     renderSection(onChanged);
     const user = setupUser();
 
-    await user.click(await screen.findByRole('button', { name: 'Quitar la cobertura de Sanitas' }));
+    await rowAction(user, 'Sanitas', 'Quitar');
     const confirm = await screen.findByRole('dialog');
     await user.click(within(confirm).getByRole('button', { name: 'Quitar' }));
 
@@ -325,13 +336,17 @@ describe('PatientCoverageSection (DX-153)', () => {
 
       const row = await screen.findByTestId('coverage-row');
       expect(within(row).getByTestId('coverage-verification')).toHaveTextContent('Verificada');
-      await user.click(screen.getByRole('button', { name: 'Editar la cobertura de Sanitas' }));
+      await rowAction(user, 'Sanitas', 'Editar');
       const dialog = await screen.findByRole('dialog');
-      const to = within(dialog).getByLabelText('Vigente hasta');
+      const to = within(dialog).getByRole('group', { name: 'Vigente hasta' });
+      // DatePicker: react-aria antepone «Fecha seleccionada: …»; la ayuda va al final.
       expect(to).toHaveAccessibleDescription(
-        'Déjala vacía si no tiene fecha de fin. Cambiar las fechas quita la verificación del administrador.',
+        /Déjala vacía si no tiene fecha de fin\. Cambiar las fechas quita la verificación del administrador\.$/,
       );
-      await user.clear(to);
+      for (const segment of within(to).getAllByRole('spinbutton')) {
+        await user.click(segment);
+        await user.keyboard('{Backspace}{Backspace}{Backspace}{Backspace}');
+      }
       await user.click(within(dialog).getByRole('button', { name: /guardar/i }));
 
       await waitFor(() =>

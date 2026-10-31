@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { PendingFollowUpView } from './pending-follow-up-view';
+import { FollowUpScopeMarker, PendingFollowUpView } from './pending-follow-up-view';
 import {
   listPendingFollowUp,
   rejectPlan,
@@ -91,12 +91,13 @@ describe('PendingFollowUpView (DX-040)', () => {
 
   it('alcance: «Todas las sedes» sin restricción, «Mis sedes» con claim acotado (DX-089)', async () => {
     mockedList.mockResolvedValue(page([item()]));
-    const { unmount } = render(<PendingFollowUpView token="tok" />);
+    // El alcance va en la cabecera de la página (UX v2), no dentro de la vista.
+    const { unmount } = render(<FollowUpScopeMarker token="tok" />);
     expect(await screen.findByText('Todas las sedes')).toBeInTheDocument();
     unmount();
     const b64 = (v: string) => btoa(v).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const restricted = `${b64('{"alg":"HS256"}')}.${b64(JSON.stringify({ sub: 'u1', loc: ['loc-1'] }))}.firma`;
-    render(<PendingFollowUpView token={restricted} />);
+    render(<FollowUpScopeMarker token={restricted} />);
     expect(await screen.findByText('Mis sedes')).toBeInTheDocument();
   });
 
@@ -147,7 +148,7 @@ describe('PendingFollowUpView (DX-040)', () => {
   it('dice si la lista es de toda la clínica o de la sede activa', async () => {
     mockedList.mockResolvedValue(page([item()]));
     mockedActive.mockReturnValue('loc-2');
-    render(<PendingFollowUpView token="tok" />);
+    render(<FollowUpScopeMarker token="tok" />);
     expect(await screen.findByText('Presentados en Sede Norte')).toBeInTheDocument();
   });
 
@@ -157,7 +158,9 @@ describe('PendingFollowUpView (DX-040)', () => {
     mockedReject.mockResolvedValue({ id: 'plan-a', status: 'REJECTED' } as never);
     render(<PendingFollowUpView token="tok" />);
     const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
-    await user.click(within(row).getByRole('button', { name: 'Marcar rechazado: Carolina Ruiz' }));
+    // «Marcar rechazado» vive en el «⋯» de la fila (UX v2).
+    await user.click(within(row).getByRole('button', { name: 'Acciones de Carolina Ruiz' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Marcar rechazado' }));
     const dialog = await screen.findByRole('dialog', { name: 'Marcar como rechazado' });
     expect(within(dialog).getByText('Opción A: implante · Carolina Ruiz')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('radio', { name: 'Quiere una segunda opinión' }));

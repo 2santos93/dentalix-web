@@ -1,17 +1,13 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { ResetPasswordForm } from '@/components/auth/reset-password-form';
-import { SplitAuthLayout } from '@/components/layouts/split-auth-layout';
-import { randomHeroImage } from '@/lib/auth/hero-images';
-import { fetchBranding } from '@/lib/branding';
-import { parseTenantFromHost } from '@/lib/tenant';
+import { AuthLayout } from '@/components/auth/auth-layout';
+import { authContext } from '@/components/auth/auth-clinic';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  defaultTitle: 'Dentalix',
-  subtitle: 'Restablecer contraseña',
-  heroCaption: 'Una contraseña nueva y listo',
+  task: 'Restablecer contraseña',
+  caption: 'Una contraseña nueva y listo',
 };
 
 // El token va en la URL: que no salga en el Referer hacia ningún otro sitio.
@@ -28,18 +24,11 @@ export default async function ResetPasswordPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const h = await headers();
-  const tenant = h.get('x-tenant') ?? parseTenantFromHost(h.get('host'));
-  const branding = await fetchBranding(tenant);
+  const { clinic } = await authContext();
 
   return (
-    <SplitAuthLayout
-      title={branding.name ?? copy.defaultTitle}
-      subtitle={copy.subtitle}
-      heroImage={randomHeroImage()}
-      heroCaption={copy.heroCaption}
-    >
+    <AuthLayout clinic={clinic} task={copy.task} caption={copy.caption}>
       <ResetPasswordForm resetToken={token} />
-    </SplitAuthLayout>
+    </AuthLayout>
   );
 }

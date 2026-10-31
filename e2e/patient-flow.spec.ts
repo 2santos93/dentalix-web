@@ -301,6 +301,8 @@ test('DX-242: axe Día/Semana/En clínica 390/1440 claro/oscuro', async ({page},
       await expectNoHorizontalScroll(page);
     };
     await page.getByRole('button', {name:'Día', exact:true}).click();
+    // K4: en el teléfono el Día abre en «Lista»; este axe recorre las columnas.
+    if (width === 390) await page.getByRole('button', {name:'Columnas', exact:true}).click();
     if (width === 390) await page.getByRole('group', {name:'Profesional visible'}).getByRole('button', {name:'Odontóloga Estados QA', exact:true}).click();
     await expect(page.getByRole('button', {name:/Estado 1 QA.*Detalle de la cita/})).toBeVisible();
     await page.getByRole('button', {name:/Estado 1 QA.*Detalle de la cita/}).scrollIntoViewIfNeeded();

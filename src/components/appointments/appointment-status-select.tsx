@@ -26,7 +26,7 @@ interface AppointmentStatusSelectProps {
 }
 
 /**
- * DX-295: control para cambiar el estado de una cita. Con el `<select>` nativo,
+ * DX-295: control para cambiar el estado de una cita. Con el select nativo,
  * ↓ (o una letra) sobre el control cerrado cambiaba la cita al momento, sin
  * confirmar. Aquí las flechas solo abren la lista y mueven la opción enfocada;
  * el estado se aplica con Enter o con un clic/toque en una opción, y Esc cierra

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
@@ -118,7 +119,7 @@ for (const viewport of VIEWPORTS) {
     await page.goto(`${origin}/agenda`);
     await page.getByRole('button', { name: /^Día$/ }).click();
     await page.getByRole('button', { name: 'Lista', exact: true }).click();
-    await page.getByLabel('Fecha', { exact: true }).fill(slot.day);
+    await fillDate(page, 'Fecha', slot.day);
     await page
       .getByRole('button', { name: new RegExp(`Detalle de la cita de ${slot.label}`) })
       .locator('visible=true')
@@ -162,7 +163,9 @@ for (const viewport of VIEWPORTS) {
 
     // --- 4. Cargar plantillas de ejemplo --------------------------------------
     await page.goto(`${origin}/settings/plantillas-de-evolucion`);
-    await page.getByRole('button', { name: 'Cargar plantillas de ejemplo' }).click();
+    // Con plantillas ya creadas, «Cargar plantillas de ejemplo» vive en el «⋯» de la barra.
+    await page.getByRole('button', { name: 'Más acciones de plantillas' }).click();
+    await page.getByRole('menuitem', { name: 'Cargar plantillas de ejemplo' }).click();
     // «Resina» ya existía: se cargan las otras 5 de ejemplo.
     await expect(page.getByText('6 plantillas')).toBeVisible({ timeout: 10_000 });
     await expectNoHorizontalScroll(page);

@@ -67,6 +67,13 @@ beforeEach(() => {
   mockedPlanBalance.mockReset();
 });
 
+
+/** UX v2: Recibo y Anular viven en el «⋯» de cada movimiento («Acciones de abono de …»). */
+async function rowMenu(user: ReturnType<typeof userEvent.setup>, row: HTMLElement): Promise<string[]> {
+  await user.click(within(row).getByRole('button', { name: /^acciones de abono de/i }));
+  return (await screen.findAllByRole('menuitem')).map((i) => i.textContent ?? '');
+}
+
 it('pide el estado de cuenta del paciente y pinta el resumen por moneda', async () => {
   mockedGet.mockResolvedValue(accountStatementFixture());
   render(<AccountStatementView token="tok" patientId="pat-1" />);
@@ -219,9 +226,10 @@ it('cada movimiento, también el anulado, abre su recibo de caja (DX-136)', asyn
   render(<AccountStatementView token="tok" patientId="pat-1" />);
 
   const table = await screen.findByRole('table', { name: /movimientos/i });
-  expect(within(table).getAllByRole('button', { name: /recibo del abono/i })).toHaveLength(3);
+  expect(within(table).getAllByRole('button', { name: /^acciones de abono de/i })).toHaveLength(3);
   const voidedRow = within(table).getAllByRole('row')[1];
-  await user.click(within(voidedRow).getByRole('button', { name: /recibo del abono/i }));
+  expect(await rowMenu(user, voidedRow)).toEqual(['Recibo']);
+  await user.click(screen.getByRole('menuitem', { name: 'Recibo' }));
 
   const dialog = await screen.findByRole('dialog', { name: /recibo de caja/i });
   expect(await within(dialog).findByTestId('receipt-voided')).toHaveTextContent('ANULADO');
@@ -230,15 +238,19 @@ it('cada movimiento, también el anulado, abre su recibo de caja (DX-136)', asyn
 
 describe('anular desde el estado de cuenta (DX-057)', () => {
   it('enseña «Anular» solo en movimientos con canVoid (nunca en uno ya anulado)', async () => {
+    const user = userEvent.setup();
     mockedGet.mockResolvedValue(accountStatementFixture());
     render(<AccountStatementView token="tok" patientId="pat-1" />);
 
     const table = await screen.findByRole('table', { name: /movimientos/i });
-    const buttons = within(table).getAllByRole('button', {
-      name: /anular abono/i,
-    });
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0].closest('tr')).toHaveTextContent('10/09/2026');
+    const rows = within(table).getAllByRole('row').slice(1);
+    const withVoid: string[] = [];
+    for (const row of rows) {
+      if ((await rowMenu(user, row)).includes('Anular')) withVoid.push(row.textContent ?? '');
+      await user.keyboard('{Escape}');
+    }
+    expect(withVoid).toHaveLength(1);
+    expect(withVoid[0]).toContain('10/09/2026');
   });
 
   it('anula con motivo y recarga el estado de cuenta', async () => {
@@ -248,7 +260,9 @@ describe('anular desde el estado de cuenta (DX-057)', () => {
     render(<AccountStatementView token="tok" patientId="pat-1" />);
 
     const table = await screen.findByRole('table', { name: /movimientos/i });
-    await user.click(within(table).getByRole('button', { name: /anular abono/i }));
+    const row = within(table).getByRole('row', { name: /10\/09\/2026/ });
+    await rowMenu(user, row);
+    await user.click(screen.getByRole('menuitem', { name: 'Anular' }));
     const dialog = await screen.findByRole('dialog', {
       name: /anular este abono/i,
     });
@@ -276,7 +290,9 @@ describe('anular una forma de pago de un cobro dividido (revisión DX-390)', () 
     });
     render(<AccountStatementView token="tok" patientId="pat-1" />);
     const table = await screen.findByRole('table', { name: /movimientos/i });
-    await user.click(within(table).getByRole('button', { name: /anular abono/i }));
+    const row = within(table).getByRole('row', { name: /10\/09\/2026/ });
+    await rowMenu(user, row);
+    await user.click(screen.getByRole('menuitem', { name: 'Anular' }));
     const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
     expect(dialog).toHaveTextContent(
       'Es una de las 3 formas de pago de un mismo cobro: se anulan todas y su recibo.',
@@ -507,6 +523,7 @@ describe('cobrado por ítem de cada plan (DX-051)', () => {
     allocated: 1200000,
     unallocated: 0,
     unconvertedPaymentsCount: 0,
+    rateProviderTimedOut: false,
     manualPaymentIds: [],
     items: [
       {

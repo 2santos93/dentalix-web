@@ -5,6 +5,7 @@ import { getAnamnesisInboxSummary } from '@/lib/anamnesis/anamnesis-api';
 import { AppShell } from './app-shell';
 import { getClosingQueueCount } from '@/lib/appointments/closing-queue-api';
 import { getInClinic } from '@/lib/appointments/patient-flow';
+import { BrandingProvider } from '@/components/brand/branding-context';
 
 jest.mock('../../lib/anamnesis/anamnesis-api', () => ({ getAnamnesisInboxSummary: jest.fn().mockResolvedValue({ submitted: 0 }) }));
 jest.mock('../../lib/appointments/closing-queue-api', () => ({
@@ -20,6 +21,7 @@ jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
   getInClinic: jest.fn(),
 }));
+// DX-439: el contador de «Pendiente de cerrar» (un fallo deja 0).
 jest.mock('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light', setTheme: jest.fn() }),
 }));
@@ -70,21 +72,21 @@ describe('AppShell', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Colapsar menú' }));
     snapshots.push({ html: view.container.innerHTML, selector: 'a[href="/anamnesis-por-revisar"]' });
     auditRenderedControls(snapshots);
-    expect(screen.getAllByRole('link', { name: 'Anamnesis por revisar · 12' })).toHaveLength(2);
+    expect(screen.getByRole('link', { name: 'Anamnesis 12 · por revisar' })).toHaveTextContent('12');
   });
 
   it('DX-439: el contador de cierre mantiene el límite de palabra en navegación expandida y rail', async () => {
     mockAccessToken = tokenForRole('ADMIN');
     jest.mocked(getClosingQueueCount).mockResolvedValue({ total: 12, outcome: 12, evolution: 0, treatment: 0 });
     const view = render(<AppShell><h1>Synthetic</h1></AppShell>);
-    await screen.findAllByRole('link', { name: 'Pendiente de cerrar · 12' });
-    const expandedText = screen.getAllByRole('link', { name: 'Pendiente de cerrar · 12' })[0].textContent;
+    await screen.findAllByRole('link', { name: 'Pendiente de cerrar 12' });
+    const expandedText = screen.getByRole('link', { name: 'Pendiente de cerrar 12' }).textContent;
     const snapshots = [{ html: view.container.innerHTML, selector: 'a[href="/agenda/pendiente-de-cerrar"]' }];
     await userEvent.click(screen.getByRole('button', { name: 'Colapsar menú' }));
     snapshots.push({ html: view.container.innerHTML, selector: 'a[href="/agenda/pendiente-de-cerrar"]' });
     auditRenderedControls(snapshots);
     expect(expandedText).toBe('Pendiente de cerrar 12');
-    expect(screen.getAllByRole('link', { name: 'Pendiente de cerrar · 12' })).toHaveLength(2);
+    expect(screen.getByRole('link', { name: 'Pendiente de cerrar 12' })).toHaveTextContent('12');
   });
 
   // La caja es dato financiero: PAYMENT_ROLES en la API (ADMIN + RECEPTION).
@@ -113,13 +115,13 @@ describe('AppShell', () => {
 
   // Cada entrada copia el `@Roles(...)` del endpoint de su pantalla (DX-070):
   // DASHBOARD_ROLES, CATALOG_READ_ROLES, INVENTORY_ROLES, STAFF_WRITE_ROLES,
-  // AUDIT_READ_ROLES (DX-009), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
+  // CLOSING_QUEUE_ROLES (DX-439), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
   // RECEIVABLES_ROLES (Cartera, DX-145) y REPORT_ROLES + PRODUCTION_REPORT_ROLES
   // (Reportes, DX-014 y DX-423).
   const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
     ADMIN: {
       visible: [
-        'Dashboard',
+        'Inicio',
         'Pacientes',
         'Agenda',
         'Caja',
@@ -129,22 +131,23 @@ describe('AppShell', () => {
         'Catálogo',
         'Inventario',
         'Personal',
-        'Auditoría',
         'Reportes',
+        'Pendiente de cerrar',
       ],
-      hidden: [],
+      // M2: la Auditoría vive en Ajustes → «Herramientas y registros», no en el shell.
+      hidden: ['Auditoría'],
     },
     DENTIST: {
-      visible: ['Pacientes', 'Agenda', 'Catálogo', 'Reportes'],
-      hidden: ['Dashboard', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Catálogo', 'Reportes', 'Pendiente de cerrar'],
+      hidden: ['Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
     },
     ASSISTANT: {
-      visible: ['Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
-      hidden: ['Dashboard', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
+      hidden: ['Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes', 'Pendiente de cerrar'],
     },
     RECEPTION: {
-      visible: ['Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos'],
-      hidden: ['Dashboard', 'Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos', 'Pendiente de cerrar'],
+      hidden: ['Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
     },
   };
   it.each(Object.keys(ROLE_NAV))('el menú de %s solo enseña lo que su rol puede abrir', async (role) => {
@@ -276,64 +279,258 @@ describe('AppShell', () => {
     expect(sidebar.queryByText('Dentalix')).not.toBeInTheDocument();
   });
 
-  // DX-365: a 390 px el scroller de la barra superior cortaba «Dashboard» en
-  // «Dashboar». La barra móvil se reorganiza: el título de la sección va en su
-  // propia fila y se trunca con elipsis (texto entero en el DOM y en `title`),
-  // y la navegación es una fila de iconos que no puede partir una palabra.
-  describe('DX-365: barra superior móvil', () => {
-    function renderAt(pathname: string, role = 'ADMIN') {
+  // A4: barra lateral agrupada (SPEC «Navegación»). Los títulos de grupo y
+  // las entradas por rol; un grupo sin entradas desaparece.
+  describe('A4: barra lateral agrupada', () => {
+    function sidebarFor(role: string) {
       mockAccessToken = tokenForRole(role);
-      mockPathname = pathname;
       render(
         <AppShell>
           <p>contenido</p>
         </AppShell>,
       );
-      return within(screen.getByRole('banner'));
+      return within(document.querySelector('aside > nav') as HTMLElement);
     }
-    afterEach(() => {
-      mockPathname = '/patients';
+    const groupsOf = (nav: ReturnType<typeof sidebarFor>) =>
+      nav.getAllByRole('group').map((g) => [
+        g.getAttribute('aria-label'),
+        within(g).getAllByRole('link').map((a) => a.getAttribute('href')),
+      ]);
+
+    it('ADMIN ve los cinco grupos en el orden de la SPEC, con Ajustes en Administración', async () => {
+      const nav = sidebarFor('ADMIN');
+      await nav.findByRole('link', { name: 'Inicio' });
+      expect(groupsOf(nav)).toEqual([
+        [null, ['/dashboard', '/agenda', '/patients']],
+        ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos', '/anamnesis-por-revisar']],
+        ['Finanzas', ['/caja', '/caja/cartera', '/caja/gastos', '/caja/descuentos', '/reportes']],
+        ['Clínica', ['/catalog', '/inventory']],
+        ['Administración', ['/staff', '/settings']],
+      ]);
+      // Títulos de grupo con el estilo overline; el primero no lleva.
+      expect(nav.getByText('Finanzas')).toHaveClass('t-overline');
     });
 
-    it.each([
-      ['/dashboard', 'Dashboard'],
-      ['/patients/p1', 'Pacientes'],
-      ['/caja/cartera', 'Cartera'],
-      ['/anamnesis-por-revisar', 'Anamnesis por revisar'],
-      ['/reportes', 'Reportes'],
-      ['/settings', 'Ajustes'],
-      ['/settings/plantillas-de-evolucion', 'Ajustes'],
-      ['/settings/auditoria', 'Auditoría'],
-      ['/settings/profile', 'Mi perfil'],
-    ])('en %s el título es «%s», truncable con elipsis y con `title`', async (pathname, title) => {
-      const banner = renderAt(pathname);
-      const heading = await banner.findByTestId('topbar-title');
-      expect(heading).toHaveTextContent(title);
-      expect(heading).toHaveAttribute('title', title);
-      // `truncate` = overflow hidden + text-overflow ellipsis + nowrap; con
-      // `min-w-0` el flex le deja encogerse por debajo de su texto.
-      expect(heading).toHaveClass('truncate', 'min-w-0');
-      // El texto entero se lee una sola vez: ni copia sr-only ni aria-label.
-      expect(heading).not.toHaveAttribute('aria-label');
-      expect(banner.getAllByText(title)).toHaveLength(1);
+    it('RECEPTION: sin Clínica; Administración solo con Ajustes', async () => {
+      const nav = sidebarFor('RECEPTION');
+      await nav.findByRole('link', { name: 'Caja' });
+      expect(groupsOf(nav)).toEqual([
+        [null, ['/dashboard', '/agenda', '/patients']],
+        ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos']],
+        ['Finanzas', ['/caja', '/caja/cartera']],
+        ['Administración', ['/settings']],
+      ]);
+      expect(nav.queryByText('Clínica')).not.toBeInTheDocument();
     });
 
-    it('el título sale del menú aunque el rol no tenga la entrada', async () => {
-      const banner = renderAt('/dashboard', 'DENTIST');
-      expect(await banner.findByTestId('topbar-title')).toHaveTextContent('Dashboard');
+    it('DENTIST: Finanzas solo con Reportes (DX-423: su producción)', async () => {
+      const nav = sidebarFor('DENTIST');
+      await nav.findByRole('link', { name: 'Catálogo' });
+      expect(groupsOf(nav).map(([label]) => label)).toEqual([null, 'Atención', 'Finanzas', 'Clínica', 'Administración']);
+      expect(groupsOf(nav).find(([label]) => label === 'Finanzas')).toEqual(['Finanzas', ['/reportes']]);
     });
 
-    it('la navegación móvil es de iconos con nombre accesible y `title`, sin texto que cortar', async () => {
-      const banner = renderAt('/caja/cartera');
-      const nav = within(banner.getByRole('navigation'));
-      const cartera = await nav.findByRole('link', { name: 'Cartera' });
-      expect(cartera).toHaveAttribute('aria-current', 'page');
-      for (const name of ['Dashboard', 'Pacientes', 'Cartera', 'Anamnesis por revisar']) {
-        const link = nav.getByRole('link', { name });
-        expect(link).toHaveAttribute('title', name);
-        expect(nav.queryByText(name)).not.toBeInTheDocument();
+    it('«Anamnesis» se lee corta pero conserva el nombre completo', async () => {
+      const nav = sidebarFor('ADMIN');
+      const link = await nav.findByRole('link', { name: 'Anamnesis por revisar' });
+      expect(link).toHaveTextContent(/^Anamnesis$/);
+      expect(link).toHaveAttribute('title', 'Anamnesis por revisar');
+    });
+
+    it('activo con los tokens v2 y el rol bajo el nombre en gris, no en acento', async () => {
+      mockPathname = '/caja';
+      try {
+        const nav = sidebarFor('ADMIN');
+        const caja = await nav.findByRole('link', { name: 'Caja' });
+        expect(caja).toHaveClass('bg-primary-subtle', 'text-primary-subtle-text', 'whitespace-nowrap');
+        expect(nav.getByRole('link', { name: 'Cartera' })).toHaveClass('hover:bg-surface-sunken');
+        expect(await screen.findByText('Administrador/a')).toHaveClass('text-muted');
+      } finally {
+        mockPathname = '/patients';
       }
     });
+  });
+
+  // A4: barra inferior del teléfono — 4 destinos según el rol + «Más».
+  describe('A4: barra inferior del teléfono', () => {
+    async function tabsFor(role: string) {
+      mockAccessToken = tokenForRole(role);
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      const bar = within(screen.getByTestId('bottom-tab-bar'));
+      await waitFor(() => expect(bar.getAllByRole('link')).toHaveLength(4));
+      return bar;
+    }
+
+    it.each([
+      ['ADMIN', ['Inicio', 'Agenda', 'Pacientes', 'Caja']],
+      ['RECEPTION', ['Inicio', 'Agenda', 'Pacientes', 'Caja']],
+      // I1: Inicio primero para todos; Anamnesis completa las cuatro.
+      ['DENTIST', ['Inicio', 'Agenda', 'Pacientes', 'Anamnesis por revisar']],
+      ['ASSISTANT', ['Inicio', 'Agenda', 'Pacientes', 'Anamnesis por revisar']],
+    ])('%s: %j y «Más»', async (role, names) => {
+      const bar = await tabsFor(role);
+      expect(bar.getAllByRole('link').map((a) => a.getAttribute('aria-label') ?? a.textContent)).toEqual(names);
+      expect(bar.getByRole('button', { name: 'Más' })).toBeInTheDocument();
+    });
+
+    it('si la sección actual vive en «Más», ninguna pestaña es la página y «Más» se marca', async () => {
+      mockPathname = '/caja/cartera';
+      try {
+        const bar = await tabsFor('RECEPTION');
+        bar.getAllByRole('link').forEach((a) => expect(a).not.toHaveAttribute('aria-current'));
+        expect(bar.getByRole('button', { name: 'Más' })).toHaveClass('text-primary-text');
+      } finally {
+        mockPathname = '/patients';
+      }
+    });
+
+    it('la pestaña de la sección actual es la página', async () => {
+      const bar = await tabsFor('RECEPTION');
+      expect(bar.getByRole('link', { name: 'Pacientes' })).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('«Más» abre la hoja con el resto, Ajustes, Mi perfil, tema y Cerrar sesión; atrás la cierra', async () => {
+      const user = userEvent.setup();
+      const bar = await tabsFor('ADMIN');
+      await user.click(bar.getByRole('button', { name: 'Más' }));
+      const sheet = within(await screen.findByTestId('more-sheet'));
+      for (const name of ['Pendiente de cerrar', 'Presupuestos', 'Anamnesis por revisar', 'Cartera', 'Reportes', 'Inventario', 'Personal', 'Ajustes', 'Mi perfil']) {
+        expect(sheet.getByRole('link', { name })).toBeInTheDocument();
+      }
+      // Lo que ya está en la barra no se repite.
+      expect(sheet.queryByRole('link', { name: 'Agenda' })).not.toBeInTheDocument();
+      expect(sheet.getByRole('switch', { name: 'Tema oscuro' })).toBeInTheDocument();
+      expect(sheet.getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument();
+      // Android «atrás»: la hoja apiló una entrada; el popstate la cierra.
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await waitFor(() => expect(screen.queryByTestId('more-sheet')).not.toBeInTheDocument());
+    });
+
+    it('la barra superior lleva la marca, la búsqueda y la cuenta, no el título', async () => {
+      mockAccessToken = tokenForRole('ADMIN');
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      const banner = within(screen.getByRole('banner'));
+      expect(banner.getByRole('button', { name: 'Buscar' })).toBeInTheDocument();
+      expect(banner.getByRole('button', { name: 'Cuenta' })).toBeInTheDocument();
+      // Sin marca de la clínica (sin provider), la de Dentalix.
+      expect(banner.getByText('Dentalix')).toBeInTheDocument();
+      expect(banner.queryByTestId('topbar-title')).not.toBeInTheDocument();
+    });
+  });
+
+  it('A4: con marca de la clínica, el shell enseña la clínica y no «Dentalix»', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
+    render(
+      <BrandingProvider value={{ name: 'Clínica Sonrisa Norte', logoUrl: null }}>
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>
+      </BrandingProvider>,
+    );
+    expect(within(screen.getByRole('banner')).getByText('Clínica Sonrisa Norte')).toBeInTheDocument();
+    expect(screen.queryByText('Dentalix')).not.toBeInTheDocument();
+  });
+
+  // A4: paleta de comandos.
+  describe('A4: paleta de comandos', () => {
+    it.each([
+      ['ADMIN', ['Inicio', 'Caja', 'Personal', 'Pendiente de cerrar', 'Ajustes'], [] as string[]],
+      ['RECEPTION', ['Inicio', 'Agenda', 'Caja', 'Presupuestos', 'Pendiente de cerrar', 'Ajustes'], ['Personal', 'Inventario', 'Auditoría']],
+    ])('%s: ⌘K la abre y «Ir a» solo lista lo que su rol puede abrir', async (role, visible, hidden) => {
+      const user = userEvent.setup();
+      mockAccessToken = tokenForRole(role);
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      expect(await screen.findAllByRole('link', { name: 'Caja' })).not.toHaveLength(0);
+      await user.keyboard('{Meta>}k{/Meta}');
+      const palette = within(await screen.findByTestId('command-palette'));
+      const input = palette.getByRole('combobox', { name: 'Buscar' });
+      expect(input).toHaveFocus();
+      const goTo = palette.getByRole('group', { name: 'Ir a' });
+      for (const name of visible) expect(within(goTo).getByRole('option', { name })).toBeInTheDocument();
+      for (const name of hidden) expect(within(goTo).queryByRole('option', { name })).not.toBeInTheDocument();
+      expect(palette.getByRole('option', { name: 'Nueva cita' })).toBeInTheDocument();
+      expect(palette.getByRole('option', { name: 'Nuevo paciente' })).toBeInTheDocument();
+    });
+
+    it('Ctrl+K también; las flechas mueven la opción activa y el texto filtra sin tildes', async () => {
+      const user = userEvent.setup();
+      mockAccessToken = tokenForRole('ADMIN');
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      await screen.findAllByRole('link', { name: 'Inicio' });
+      await user.keyboard('{Control>}k{/Control}');
+      const palette = within(await screen.findByTestId('command-palette'));
+      const input = palette.getByRole('combobox');
+      const options = palette.getAllByRole('option');
+      expect(input).toHaveAttribute('aria-activedescendant', options[0].id);
+      expect(options[0]).toHaveAttribute('aria-selected', 'true');
+      await user.keyboard('{ArrowDown}');
+      expect(input).toHaveAttribute('aria-activedescendant', options[1].id);
+      await user.keyboard('{ArrowUp}{ArrowUp}');
+      expect(input).toHaveAttribute('aria-activedescendant', options.at(-1)!.id);
+      await user.type(input, 'auditoria');
+      expect(palette.getByRole('option', { name: /Auditoría/ })).toBeInTheDocument();
+      expect(palette.queryByRole('option', { name: 'Caja' })).not.toBeInTheDocument();
+    });
+
+    it('el botón de búsqueda de la barra lateral la abre', async () => {
+      const user = userEvent.setup();
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      const aside = within(document.querySelector('aside') as HTMLElement);
+      await user.click(aside.getByRole('button', { name: 'Buscar' }));
+      expect(await screen.findByTestId('command-palette')).toBeInTheDocument();
+      // Esc la cierra aunque el foco esté en el combobox expandido.
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument());
+    });
+  });
+
+  it('DX-439: «Pendiente de cerrar» lleva su contador en la barra lateral, la hoja «Más» y la paleta', async () => {
+    const user = userEvent.setup();
+    mockAccessToken = tokenForRole('RECEPTION');
+    (getClosingQueueCount as jest.Mock).mockResolvedValueOnce({ total: 3 });
+    try {
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      const aside = within(document.querySelector('aside') as HTMLElement);
+      const link = await aside.findByRole('link', { name: 'Pendiente de cerrar 3' });
+      expect(link).toHaveAttribute('href', '/agenda/pendiente-de-cerrar');
+      expect(within(link).getByTestId('closing-queue-count')).toHaveTextContent('3');
+      // En el teléfono no es pestaña: va a «Más», con el mismo contador.
+      await user.click(within(screen.getByTestId('bottom-tab-bar')).getByRole('button', { name: 'Más' }));
+      const sheet = within(await screen.findByTestId('more-sheet'));
+      expect(sheet.getByRole('link', { name: 'Pendiente de cerrar 3' })).toBeInTheDocument();
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await waitFor(() => expect(screen.queryByTestId('more-sheet')).not.toBeInTheDocument());
+      await user.keyboard('{Control>}k{/Control}');
+      const palette = within(await screen.findByTestId('command-palette'));
+      await user.type(palette.getByRole('combobox'), 'cerrar');
+      expect(palette.getByRole('option', { name: 'Pendiente de cerrar' })).toBeInTheDocument();
+    } finally {
+      (getClosingQueueCount as jest.Mock).mockResolvedValue({ total: 0 });
+    }
   });
 
   it('DX-200: al odontólogo la Agenda le dice cuántos pacientes suyos esperan', async () => {

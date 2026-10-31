@@ -19,7 +19,11 @@ export function useHorizontalOverflow<T extends HTMLElement>(): [React.RefObject
     const el = ref.current;
     if (!el) return;
 
-    const measure = () => setOverflows(el.scrollWidth > el.clientWidth + 1);
+    // Sin margen: el navegador (y axe, `scrollable-region-focusable`) dan por
+    // desplazable un marco con 1 px de más, y ese píxel también hay que poder
+    // alcanzarlo con el teclado. Con `+ 1` el marco quedaba sin parada de
+    // tabulador justo en ese caso (estado de cuenta a 390 px, DX-051).
+    const measure = () => setOverflows(el.scrollWidth > el.clientWidth);
     measure();
 
     const observer = new ResizeObserver(measure);

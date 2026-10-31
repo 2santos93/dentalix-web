@@ -20,8 +20,12 @@ import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import { ArrowLeftRight, History, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -29,7 +33,9 @@ import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
 import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
-import { RowActions } from '@/components/shared/row-actions';
+import type { RowAction } from '@/components/shared/row-actions';
+import { InventoryScopeMarker } from '@/components/inventory/inventory-scope-marker';
+import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_VARIANT, signedQuantity } from '@/components/inventory/movement-format';
 import {
   Dialog,
   DialogContent,
@@ -38,14 +44,6 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { formatDateTime } from '@/lib/format/date';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 
 // Search box waits this long after the last keystroke before hitting the
 // server — same value/rationale as `AppointmentForm`'s
@@ -90,14 +88,13 @@ const copy = {
   searchPlaceholder: 'Buscar por nombre o SKU…',
   lowStockOnlyLabel: 'Solo bajo mínimo',
   colItem: 'Insumo',
+  colSku: 'SKU',
   colUnit: 'Unidad',
-  colStock: 'Stock',
-  colMinStock: 'Mínimo',
+  colStock: 'Stock / mínimo',
   colStatus: 'Estado',
-  colActions: 'Acciones',
-  actionsFor: (name: string) => `Acciones de ${name}`,
-  lowStock: 'Bajo stock',
-  ok: 'OK',
+  // «3 / 5»: lo que importa es la comparación, así que van juntos.
+  stockOfMin: (stock: string, min: number) => `${stock} / ${min}`,
+  stockAria: (stock: string, min: number) => `Stock ${stock}, mínimo ${min}`,
   unknownValue: '—',
 
   // Editar / eliminar insumo.
@@ -145,27 +142,15 @@ const copy = {
 
 const MOVEMENT_TYPE_OPTIONS: InventoryMovementType[] = ['IN', 'OUT', 'ADJUSTMENT'];
 
-const MOVEMENT_TYPE_LABELS: Record<InventoryMovementType, string> = {
-  IN: 'Entrada',
-  OUT: 'Salida',
-  ADJUSTMENT: 'Ajuste',
-};
+// Diálogo de lectura a pantalla completa en el teléfono (el historial puede ser
+// largo y una tarjeta flotante con 2rem de margen lo deja en medio scroll).
+const PHONE_FULLSCREEN =
+  'max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0';
 
-// Semantic Badge variants: IN is the happy "stock coming in" path (success),
-// OUT is a neutral fact (muted, not danger — leaving stock isn't a problem
-// by itself), ADJUSTMENT flags a manual correction worth a second look
-// (warning) — same "muted for neutral facts" convention as
-// `treatment-plans-tab.tsx`'s `PLAN_STATUS_BADGE_VARIANT`.
-const MOVEMENT_TYPE_BADGE_VARIANT: Record<InventoryMovementType, BadgeProps['variant']> = {
-  IN: 'success',
-  OUT: 'muted',
-  ADJUSTMENT: 'warning',
-};
-
-// Native <select> styled to match the Input atom (kept native for a11y/tests) —
-// same class/rationale as `catalog-view.tsx`'s `fieldClass`.
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+/** Stock con su unidad de lectura: `undefined` (la API no lo calculó) es «—», nunca 0. */
+function stockText(item: InventoryItem): string {
+  return item.stock === undefined ? copy.unknownValue : String(item.stock);
+}
 
 interface InventoryViewProps {
   token: string;
@@ -531,9 +516,88 @@ export function InventoryView({ token }: InventoryViewProps) {
     if (!next) setHistoryItem(null);
   }
 
+  // Teléfono: nombre y «3 / 5» en la línea 1; SKU · unidad · «Bajo stock» en la
+  // 2 (la unidad en la línea 1 recortaba el nombre a la mitad).
+  // Solo lo anómalo lleva chip: un «OK» verde en cada fila sana es ruido.
+  const columns: DataListColumn<InventoryItem>[] = [
+    { id: 'name', header: copy.colItem, mobile: 'primary', cell: (item) => item.name },
+    {
+      id: 'sku',
+      header: copy.colSku,
+      cell: (item) => (item.sku ? <span className="t-id text-muted">{item.sku}</span> : null),
+      mobileCell: (item) => (item.sku ? <span className="t-id">{item.sku}</span> : null),
+    },
+    { id: 'unit', header: copy.colUnit, cell: (item) => item.unit, cellClassName: 'text-muted' },
+    {
+      id: 'stock',
+      header: copy.colStock,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (item) => (
+        <span aria-label={copy.stockAria(stockText(item), item.minStock)}>
+          {copy.stockOfMin(stockText(item), item.minStock)}
+        </span>
+      ),
+    },
+    {
+      id: 'status',
+      header: copy.colStatus,
+      cell: (item) =>
+        item.lowStock === undefined ? (
+          <StatusBadge kind="inventoryStock" status="UNKNOWN" />
+        ) : item.lowStock ? (
+          <StatusBadge kind="inventoryStock" status="LOW" />
+        ) : null,
+      mobileCell: (item) => (item.lowStock ? <StatusBadge kind="inventoryStock" status="LOW" /> : null),
+    },
+  ];
+
+  function rowActions(item: InventoryItem): RowAction[] {
+    const updating = updatingId === item.id;
+    return [
+      { label: copy.movementButtonLabel, icon: <ArrowLeftRight />, disabled: updating, onSelect: () => openMovement(item) },
+      { label: copy.historyButtonLabel, icon: <History />, disabled: updating, onSelect: () => openHistory(item) },
+      { label: copy.editButtonLabel, icon: <Pencil />, disabled: updating, onSelect: () => openEdit(item) },
+      {
+        label: copy.deleteButtonLabel,
+        icon: <Trash2 />,
+        destructive: true,
+        separatorBefore: true,
+        disabled: updating,
+        onSelect: () => openDelete(item),
+      },
+    ];
+  }
+
+  const movementColumns: DataListColumn<InventoryMovement>[] = [
+    {
+      id: 'date',
+      header: copy.colMovementDate,
+      mobile: 'meta',
+      cell: (m) => <span className="tabular-nums">{formatDateTime(m.occurredAt)}</span>,
+    },
+    {
+      id: 'type',
+      header: copy.colMovementType,
+      mobile: 'primary',
+      cell: (m) => <Badge variant={MOVEMENT_TYPE_VARIANT[m.type]}>{MOVEMENT_TYPE_LABELS[m.type]}</Badge>,
+    },
+    { id: 'quantity', header: copy.colMovementQuantity, numeric: true, mobile: 'trailing', cell: (m) => signedQuantity(m) },
+    {
+      id: 'reason',
+      header: copy.colMovementReason,
+      cell: (m) => <span className="text-muted">{m.reason ?? copy.movementReasonFallback}</span>,
+      mobileCell: (m) => m.reason ?? null,
+    },
+  ];
+
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader
+        title={copy.title}
+        description={copy.description}
+        meta={<InventoryScopeMarker token={token} />}
+      />
 
       <FormModal
         open={showForm}
@@ -545,6 +609,7 @@ export function InventoryView({ token }: InventoryViewProps) {
         submitting={saving}
         error={formError}
         size="lg"
+        touchTargets
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField htmlFor="inventory-name" label={copy.nameLabel}>
@@ -591,12 +656,12 @@ export function InventoryView({ token }: InventoryViewProps) {
         </div>
 
         <FormField htmlFor="inventory-notes" label={copy.notesLabel}>
-          <textarea
+          <Textarea
             id="inventory-notes"
             rows={3}
+            autoGrow
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="flex w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
           />
         </FormField>
       </FormModal>
@@ -616,21 +681,15 @@ export function InventoryView({ token }: InventoryViewProps) {
             </Button>
           }
         >
-          {/* El conmutador se viste como los demás controles de la barra —misma
-              altura de 40px, mismo filete, mismo radio— porque estaba al lado de
-              ellos siendo una casilla del sistema suelta: desalineada con la fila
-              y con un blanco de 16px que en una tablet es un tiro al aire. La
-              casilla sigue siendo nativa (accesible y conocida), solo teñida con
-              el acento del tenant, y ahora el blanco es la etiqueta entera. */}
-          <label className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-surface px-3 text-sm text-ink transition-colors hover:bg-bg">
-            <input
-              type="checkbox"
-              checked={lowStockOnly}
-              onChange={(e) => setLowStockOnly(e.target.checked)}
-              className="size-4 shrink-0 accent-primary"
-            />
-            {copy.lowStockOnlyLabel}
-          </label>
+          {/* Filtro que se aplica al momento: un Switch, no una casilla suelta.
+              La fila entera (etiqueta incluida) es el blanco; a 40px se alinea
+              con el buscador. */}
+          <Switch
+            label={copy.lowStockOnlyLabel}
+            checked={lowStockOnly}
+            onChange={(e) => setLowStockOnly(e.target.checked)}
+            className="items-center sm:h-10 sm:py-0"
+          />
         </ListToolbar>
 
         {!loading && !loadError ? (
@@ -650,83 +709,15 @@ export function InventoryView({ token }: InventoryViewProps) {
           emptyDescription={hasActiveFilters ? copy.emptyFilteredHint : copy.emptyHint}
           skeleton={<TableSkeleton rows={4} />}
         >
-          <Card className="overflow-hidden p-0">
-            <Table aria-label={copy.tableLabel}>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>{copy.colItem}</TableHead>
-                  <TableHead>{copy.colUnit}</TableHead>
-                  <TableHead>{copy.colStock}</TableHead>
-                  <TableHead>{copy.colMinStock}</TableHead>
-                  <TableHead>{copy.colStatus}</TableHead>
-                  <TableHead className="w-px text-right">
-                    <span className="sr-only">{copy.colActions}</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => {
-                  const updating = updatingId === item.id;
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell data-label={copy.colItem}>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-ink">{item.name}</span>
-                          {item.sku ? (
-                            <span className="text-xs text-muted">{item.sku}</span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell data-label={copy.colUnit}>{item.unit}</TableCell>
-                      <TableCell className="tabular-nums" data-label={copy.colStock}>
-                        {item.stock === undefined ? copy.unknownValue : item.stock}
-                      </TableCell>
-                      <TableCell className="tabular-nums" data-label={copy.colMinStock}>{item.minStock}</TableCell>
-                      <TableCell data-label={copy.colStatus}>
-                        {item.lowStock === undefined ? (
-                          <Badge variant="muted">{copy.unknownValue}</Badge>
-                        ) : item.lowStock ? (
-                          <Badge variant="danger">{copy.lowStock}</Badge>
-                        ) : (
-                          <Badge variant="success">{copy.ok}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right" data-label={copy.colActions}>
-                        <RowActions
-                          label={copy.actionsFor(item.name)}
-                          busy={updating}
-                          actions={[
-                            {
-                              label: copy.movementButtonLabel,
-                              icon: <ArrowLeftRight />,
-                              onSelect: () => openMovement(item),
-                            },
-                            {
-                              label: copy.historyButtonLabel,
-                              icon: <History />,
-                              onSelect: () => openHistory(item),
-                            },
-                            {
-                              label: copy.editButtonLabel,
-                              icon: <Pencil />,
-                              onSelect: () => openEdit(item),
-                            },
-                            {
-                              label: copy.deleteButtonLabel,
-                              icon: <Trash2 />,
-                              destructive: true,
-                              separatorBefore: true,
-                              onSelect: () => openDelete(item),
-                            },
-                          ]}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </Card>
+          <DataList
+            label={copy.tableLabel}
+            rows={items}
+            columns={columns}
+            getRowKey={(item) => item.id}
+            getRowHref={(item) => `/inventory/${item.id}`}
+            rowActions={rowActions}
+            getRowLabel={(item) => item.name}
+          />
         </AsyncSection>
 
         <Pagination
@@ -747,20 +738,20 @@ export function InventoryView({ token }: InventoryViewProps) {
         submitLabel={copy.movementSubmit}
         submitting={movementSubmitting}
         error={movementError}
+        touchTargets
       >
         <FormField htmlFor="movement-type" label={copy.movementTypeLabel}>
-          <select
+          <NativeSelect
             id="movement-type"
             value={movementType}
             onChange={(e) => setMovementType(e.target.value as InventoryMovementType)}
-            className={fieldClass}
           >
             {MOVEMENT_TYPE_OPTIONS.map((type) => (
               <option key={type} value={type}>
                 {MOVEMENT_TYPE_LABELS[type]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         <FormField htmlFor="movement-quantity" label={copy.movementQuantityLabel}>
           <Input
@@ -784,7 +775,7 @@ export function InventoryView({ token }: InventoryViewProps) {
       </FormModal>
 
       <Dialog open={historyItem !== null} onOpenChange={handleHistoryOpenChange}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className={`max-w-2xl content-start ${PHONE_FULLSCREEN}`}>
           <DialogHeader>
             <DialogTitle>{historyItem ? copy.historyTitle(historyItem.name) : copy.historyTitle('')}</DialogTitle>
             <DialogDescription>{copy.historyDescription}</DialogDescription>
@@ -799,32 +790,12 @@ export function InventoryView({ token }: InventoryViewProps) {
             emptyTitle={copy.emptyHistory}
             skeleton={<TableSkeleton rows={3} />}
           >
-            <Table aria-label={copy.historyTableLabel}>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>{copy.colMovementDate}</TableHead>
-                  <TableHead>{copy.colMovementType}</TableHead>
-                  <TableHead>{copy.colMovementQuantity}</TableHead>
-                  <TableHead>{copy.colMovementReason}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {historyMovements.map((movement) => (
-                  <TableRow key={movement.id}>
-                    <TableCell>{formatDateTime(movement.occurredAt)}</TableCell>
-                    <TableCell>
-                      <Badge variant={MOVEMENT_TYPE_BADGE_VARIANT[movement.type]}>
-                        {MOVEMENT_TYPE_LABELS[movement.type]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="tabular-nums">{movement.quantity}</TableCell>
-                    <TableCell className="text-muted">
-                      {movement.reason ?? copy.movementReasonFallback}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataList
+              label={copy.historyTableLabel}
+              rows={historyMovements}
+              columns={movementColumns}
+              getRowKey={(movement) => movement.id}
+            />
           </AsyncSection>
         </DialogContent>
       </Dialog>

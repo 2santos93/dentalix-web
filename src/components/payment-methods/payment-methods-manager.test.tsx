@@ -96,14 +96,17 @@ describe('PaymentMethodsManager (DX-377)', () => {
     mockedUpdate.mockResolvedValue({ ...cash, active: false });
     render(<PaymentMethodsManager token="tok" allowed />);
     await screen.findByRole('table', { name: 'Medios de pago' });
-    await user.click(screen.getAllByRole('button', { name: 'Desactivar «Efectivo»' })[0]);
+    // B7: Editar / Desactivar viven en el «⋯» de la fila.
+    await user.click(screen.getByRole('button', { name: 'Acciones de Efectivo' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Desactivar' }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'pm-cash', { active: false }));
   });
   it('un medio inicial no cambia de tipo base: el selector está desactivado y explica por qué', async () => {
     const user = setupUser();
     render(<PaymentMethodsManager token="tok" allowed />);
     await screen.findByRole('table', { name: 'Medios de pago' });
-    await user.click(screen.getAllByRole('button', { name: 'Editar «Efectivo»' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Acciones de Efectivo' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
     const dialog = await screen.findByRole('dialog');
     const kind = within(dialog).getByLabelText('Tipo base');
     expect(kind).toBeDisabled();
@@ -141,16 +144,13 @@ describe('PaymentMethodsManager (DX-377)', () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
-  it('DX-395: a 390 px «Nuevo medio», «Editar», «Desactivar» y el modal miden al menos 44 px', async () => {
+  it('DX-395: a 390 px «Nuevo medio» y el modal miden al menos 44 px', async () => {
     const user = setupUser();
     render(<PaymentMethodsManager token="tok" allowed />);
     await screen.findByRole('table', { name: 'Medios de pago' });
-    // jsdom no mide: se comprueba la altura táctil por debajo de sm.
-    for (const name of ['Nuevo medio', 'Editar «Efectivo»', 'Desactivar «Efectivo»']) {
-      for (const button of screen.getAllByRole('button', { name })) {
-        expect(button.className).toContain('max-sm:h-11');
-      }
-    }
+    // jsdom no mide: se comprueba la altura táctil por debajo de sm. Editar y
+    // Desactivar viven en el «⋯» (DataList: 44 px en la tarjeta del teléfono).
+    expect(screen.getByRole('button', { name: 'Nuevo medio' }).className).toContain('max-sm:h-11');
     await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog.className).toContain('max-sm:[&_select]:h-11');

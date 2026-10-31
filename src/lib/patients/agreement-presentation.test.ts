@@ -27,15 +27,15 @@ describe('agreement-presentation (DX-105)', () => {
     });
     expect(agreementStatusBadge({ status: 'EXPIRED' })).toEqual({
       label: 'Vencido',
-      variant: 'warning',
+      variant: 'danger',
     });
     expect(agreementStatusBadge({ status: 'NOT_STARTED' })).toEqual({
       label: 'Pendiente de inicio',
-      variant: 'secondary',
+      variant: 'warning',
     });
     expect(agreementStatusBadge({ status: 'INACTIVE' })).toEqual({
       label: 'Convenio inactivo',
-      variant: 'muted',
+      variant: 'neutral',
     });
   });
 

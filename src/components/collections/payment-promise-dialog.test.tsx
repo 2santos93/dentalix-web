@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PaymentPromiseDialog } from './payment-promise-dialog';
 import { createPaymentPromise } from '@/lib/collections/collections-api';
@@ -34,6 +34,14 @@ function inDays(n: number): string {
   return todayLocal(d);
 }
 
+/** «Pagará hasta el» es un `DatePicker` (segmentos dd/mm/aaaa, sin locale de sede → «es»). */
+async function typeDate(iso: string) {
+  const [y, m, d] = iso.split('-');
+  const group = screen.getByRole('group', { name: 'Pagará hasta el' });
+  await userEvent.click(within(group).getAllByRole('spinbutton')[0]);
+  await userEvent.keyboard(`${d}${m}${y}`);
+}
+
 describe('PaymentPromiseDialog (DX-150)', () => {
   beforeEach(() => mockedCreate.mockReset());
 
@@ -52,7 +60,7 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     const due = inDays(3);
     await userEvent.type(screen.getByLabelText('Importe'), '150.50');
     await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'USD');
-    await userEvent.type(screen.getByLabelText('Pagará hasta el'), due);
+    await typeDate(due);
     expect(await screen.findByText(/^Se guardará: 150,50\sUS\$$/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
@@ -63,7 +71,7 @@ describe('PaymentPromiseDialog (DX-150)', () => {
   it('DX-241: un importe ambiguo bloquea el envío con el motivo junto al campo', async () => {
     setup();
     await userEvent.type(screen.getByLabelText('Importe'), '1.50.0');
-    await userEvent.type(screen.getByLabelText('Pagará hasta el'), inDays(1));
+    await typeDate(inDays(1));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     const input = screen.getByLabelText('Importe');
     expect(input).toHaveAttribute('aria-invalid', 'true');
@@ -77,7 +85,7 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     mockedCreate.mockResolvedValue({ id: 'pp1' } as never);
     setup();
     await userEvent.type(screen.getByLabelText('Importe'), '150.000,50');
-    await userEvent.type(screen.getByLabelText('Pagará hasta el'), inDays(1));
+    await typeDate(inDays(1));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', expect.objectContaining({ amount: 150000.5, currency: 'COP' })),
@@ -87,7 +95,7 @@ describe('PaymentPromiseDialog (DX-150)', () => {
   it('no admite una fecha pasada', async () => {
     setup();
     await userEvent.type(screen.getByLabelText('Importe'), '200000');
-    await userEvent.type(screen.getByLabelText('Pagará hasta el'), inDays(-1));
+    await typeDate(inDays(-1));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     expect(await screen.findByText('La fecha no puede ser anterior a hoy.')).toBeInTheDocument();
   });
@@ -98,7 +106,7 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     const due = inDays(7);
     await userEvent.type(screen.getByLabelText('Importe'), '200.000');
     await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'COP');
-    await userEvent.type(screen.getByLabelText('Pagará hasta el'), due);
+    await typeDate(due);
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', {
@@ -117,7 +125,7 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     );
     setup();
     await userEvent.type(screen.getByLabelText('Importe'), '1000');
-    await userEvent.type(screen.getByLabelText('Pagará hasta el'), inDays(1));
+    await typeDate(inDays(1));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('ya tiene un compromiso de pago abierto');
   });

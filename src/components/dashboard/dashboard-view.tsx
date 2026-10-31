@@ -1,457 +1,187 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { STATUS_LABELS } from '@/components/appointments/appointment-display';
-import { ApiError } from '@/lib/api/client';
-import { apiErrorMessage } from '@/lib/api/error-message';
-import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
-import { addOneDayIso } from '@/lib/dashboard/date-range';
-import { presetRange } from '@/lib/payments/cash-period';
-import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import { listStaff } from '@/lib/appointments/staff-api';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
+import { sedeZoneNoteCopy, useDashboardCurrency, useSedeZoneNote } from '@/lib/locations/sede-regional-summary';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { PageHeader } from '@/components/shared/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { RegionalReviewNotice } from '@/components/locations/regional-review-notice';
 import { RateBacklogNotice } from '@/components/payments/rate-backlog-notice';
-import { useLocationsState } from '@/lib/locations/use-locations-state';
-import { activeSedeCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
-import { formatCurrency } from '@/lib/format/currency';
-import { listStaff } from '@/lib/appointments/staff-api';
-import { zoneCityLabel } from '@/lib/format/date';
-import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
-import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import { FormField } from '@/components/shared/form-field';
-import { EmptyState } from '@/components/shared/empty-state';
-import { CurrencySelect } from '@/components/shared/currency-select';
-import { SectionError } from '@/components/errors/section-error';
-import { InlineError } from '@/components/errors/inline-error';
+import { AgingSection } from './aging-section';
+import { LowStockSection } from './dashboard-sections';
+import { canSeeBlock, INICIO_DESCRIPTION, INICIO_DESCRIPTION_FALLBACK } from './inicio-roles';
+import { MyProductionSection } from './my-production-section';
+import { PendingSection } from './pending-section';
+import { PeriodResultsSection } from './period-results-section';
+import { TodaySection } from './today-section';
 
-// Copy as constants (i18n-ready, es-first) — matches
-// treatment-plans-tab.tsx / agenda-view.tsx convention until next-intl
-// wiring lands.
-const copy = {
-  fromLabel: 'Desde',
-  toLabel: 'Hasta',
-  currencyLabel: 'Moneda',
-  currencyPlaceholder: 'Elige una moneda',
-  // GLOBAL-G1 §5: en «Todas las sedes» con monedas distintas no hay una
-  // moneda que suponer; se pide en el selector.
-  chooseCurrency: 'Tus sedes usan monedas distintas: elige en «Moneda» en cuál ver los ingresos.',
-  loading: 'Cargando panel…',
-  forbidden: 'No tienes acceso a este panel.',
-  genericError: 'No pudimos cargar el panel.',
-  rangeInvalid: 'La fecha "Hasta" debe ser igual o posterior a la fecha "Desde".',
-  // DX-097: los días del período son los del calendario de la sede.
-  zoneNote: (timeZone: string) => `Días en hora de ${zoneCityLabel(timeZone)}.`,
-  incomesHeading: 'Ingresos del período',
-  incomesCount: (count: number) => `${count} ${count === 1 ? 'abono' : 'abonos'}`,
-  byCurrencyHeading: 'Desglose por moneda',
-  lowStockHeading: 'Bajo stock',
-  lowStockCount: (count: number) => `${count} ${count === 1 ? 'ítem' : 'ítems'}`,
-  emptyLowStockTitle: 'No hay ítems en bajo stock.',
-  emptyLowStockDescription: 'Todo el inventario está por encima de su mínimo.',
-  colItem: 'Ítem',
-  colStock: 'Stock',
-  colMinStock: 'Mínimo',
-  colUnit: 'Unidad',
-  upcomingHeading: 'Próximas citas',
-  emptyUpcomingTitle: 'No hay citas próximas.',
-  emptyUpcomingDescription: 'Las próximas citas agendadas aparecerán aquí.',
-  patientCountHeading: '# Pacientes',
+export const dashboardCopy = {
+  title: 'Inicio',
+  allSedes: 'Todas las sedes',
+  allSedesLower: 'todas las sedes',
+  scopeLabel: 'Alcance',
+  loading: 'Cargando Inicio…',
 };
-
-type AppointmentStatus = Dashboard['upcomingAppointments'][number]['status'];
-
-// Same semantic-token convention as `treatment-plans-tab.tsx`'s
-// `ITEM_STATUS_BADGE_VARIANT` / `day-agenda.tsx`'s `STATUS_BADGE_CLASSES`:
-// nothing-has-happened-yet statuses are neutral, CONFIRMED maps to the
-// brand/primary token, COMPLETED to success, CANCELLED to danger, NO_SHOW to
-// warning (attention-worthy but not an error).
-const STATUS_BADGE_VARIANT: Record<AppointmentStatus, BadgeProps['variant']> = {
-  SCHEDULED: 'muted',
-  CONFIRMED: 'default',
-  COMPLETED: 'success',
-  CANCELLED: 'danger',
-  NO_SHOW: 'warning',
-  ARRIVED: 'outline',
-  IN_CHAIR: 'default',
-  READY_FOR_CHECKOUT: 'success',
-};
+const copy = dashboardCopy;
 
 interface DashboardViewProps {
   token: string;
 }
 
 /**
- * `'use client'` view for the `/dashboard` page — owner/admin-only read-only
- * summary. Owns its own from/to/currency controls (defaulting to the
- * current month..today and to the currency of the active location, or the
- * clinic's common one on «Todas las sedes»; never a fixed currency) and re-fetches `getDashboard` whenever any of
- * them change, mirroring `AgendaView`'s selector-driven refetch shape (day +
- * provider there, date range + currency here). Unlike `AgendaView` /
- * `TreatmentPlansTab` there is no "refresh in place while keeping stale data
- * mounted" state here — every filter change is a genuinely new query (a
- * different period/currency), so it's rendered as a fresh loading skeleton,
- * not a background refresh over the previous period's numbers.
+ * «Inicio» v2 (I1): el día de la clínica para los CUATRO roles. Lo de hoy (las
+ * citas del día con sus alertas), lo que espera una acción (cada fila abre
+ * donde se resuelve) y, solo para quien puede verlo, el período: resultados y
+ * cartera para ADMIN, la producción propia para el odontólogo, lo que hay que
+ * reponer para la asistente. Cada bloque pide su endpoint con su propio ciclo
+ * de carga y error, y solo si el rol lo puede leer (`inicio-roles.ts`): un rol
+ * sin permiso no dispara un 403, ni siquiera de fondo.
  *
- * The "Moneda" control is a `CurrencySelect` (reference-data currencies)
- * instead of a free-text input — that input could produce an invalid ISO 4217
- * code and crash `Intl.NumberFormat` with a `RangeError` (all money now
- * renders through the crash-safe `formatCurrency`). "Desde"/"Hasta" also get a
- * client-side range guard (IMP-11): if `from > to` the request is never fired
- * and a friendly message is shown instead, mirroring `appointment-form.tsx`'s
- * `validationEndAfterStart`.
+ * El día es el de la sede (DX-097): la zona viene de la API; sin zona
+ * utilizable, `SedeConfigError` y nada más (nunca otra zona).
  */
 export function DashboardView({ token }: DashboardViewProps) {
-  // DX-097: por defecto, del 1 del mes a hoy EN LA SEDE (su zona IANA, de la
-  // API), no en el navegador. Hasta saber la zona no hay período ni consulta;
-  // sin zona de la sede, `SedeConfigError` (nunca otra zona).
+  const role = getTokenRole(token);
+  const userId = getTokenUserId(token);
   const zone = useSedeTimeZone(token);
   const timeZone = readyTimeZone(zone);
-  // DX-378: la hora de las próximas citas, con el reloj de la sede (como la agenda y «En clínica»).
   const fmt = readyFormat(useSedeFormat(token));
-  const defaults = useMemo(
-    () =>
-      timeZone
-        ? { from: presetRange('month', timeZone).from, to: presetRange('today', timeZone).to }
-        : null,
-    [timeZone],
-  );
-  const [fromInput, setFrom] = useState<string | null>(null);
-  const [toInput, setTo] = useState<string | null>(null);
-  const from = fromInput ?? defaults?.from ?? '';
-  const to = toInput ?? defaults?.to ?? '';
-  // GLOBAL-G1: la moneda del panel es la de la sede activa (en «Todas», la
-  // común de la clínica) hasta que se elija otra. Sin ella no hay consulta:
-  // una sede sin moneda muestra `SedeConfigError`; monedas distintas, el
-  // selector vacío para elegir.
   const locations = useLocationsState(token);
-  const sedeCurrency =
-    locations.status === 'ready' ? activeSedeCurrency(locations.locations, locations.activeLocationId) : null;
-  const [currencyChoice, setCurrency] = useState('');
-  const currency = currencyChoice || sedeCurrency?.currency || '';
-  // Sin moneda por un dato que falta (lista sin cargar, sede sin configurar) es
-  // un error con reintento; con monedas distintas, solo hay que elegir.
-  const currencyUnknown =
-    locations.status === 'error' ||
-    (locations.status === 'ready' &&
-      sedeCurrency?.currency === null &&
-      (sedeCurrency.scope === 'sede' || hasActiveLocationWithoutCurrency(locations.locations)));
+  // R1: la nota de zona y la moneda del período salen de los helpers comunes
+  // (`sede-regional-summary.ts`), no de reglas locales de Inicio.
+  const zoneNote = useSedeZoneNote(token);
+  const currency = useDashboardCurrency(token);
 
-  const [data, setData] = useState<Dashboard | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  // El nombre del paciente viene joinado en cada cita
-  // (`patientFirstName`/`patientLastName`). Antes se resolvía con un mapa
-  // armado desde `GET /patients?pageSize=100`, que la API acota en 100: a
-  // partir del paciente 101 la tarjeta mostraba el UUID crudo.
-  // `staffNames` sí se mantiene: el endpoint de personal no está acotado así.
+  // Nombres del personal para la columna «Profesional» (best-effort: sin ellos
+  // la fila no lo nombra, nunca enseña un UUID).
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
-
   useEffect(() => {
-    if (!token) return;
+    if (role === 'DENTIST') return;
     let cancelled = false;
-    async function load() {
-      try {
-        const data = await listStaff(token);
-        if (cancelled) return;
-        setStaffNames(Object.fromEntries(data.map((s) => [s.userId, s.fullName])));
-      } catch {
-        /* best-effort, see comment above */
-      }
-    }
-    void load();
+    listStaff(token)
+      .then((data) => {
+        if (!cancelled) setStaffNames(Object.fromEntries(data.map((s) => [s.userId, s.fullName])));
+      })
+      .catch(() => {
+        /* best-effort */
+      });
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, role]);
 
-  // IMP-11: client-side range guard — if the user picks a "Desde" after
-  // "Hasta", show a friendly message (mirrors `appointment-form.tsx`'s
-  // `validationEndAfterStart`) instead of firing a request the backend would
-  // just reject/return nothing useful for.
-  const rangeInvalid = from !== '' && to !== '' && from > to;
+  const ready = locations.status === 'ready' ? locations : null;
+  const activeLocationId = ready?.activeLocationId ?? null;
+  const activeSede = ready && activeLocationId ? ready.locations.find((l) => l.id === activeLocationId) : undefined;
+  const scopeName = activeSede?.name ?? copy.allSedes;
+  const scopeKey = activeLocationId ?? 'all';
 
-  useEffect(() => {
-    if (!token || !from || !to || !currency) return;
-    // `rangeInvalid` is derived straight from `from`/`to` at render time (see
-    // above), so the guard message below already renders ahead of
-    // `loading`/`error`/`data` in the JSX regardless of what they hold here —
-    // no need to reset them, which would just be a same-render synchronous
-    // `setState` this effect doesn't otherwise need.
-    if (rangeInvalid) return;
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      try {
-        // `to` is the user's inclusive selection (what the "Hasta" input
-        // shows); the backend's incomes/payments-totals query is half-open
-        // `[from, to)`, so extend it by one day here — sending the raw value
-        // would silently exclude payments made on the selected end date itself.
-        const result = await getDashboard(token, { from, to: addOneDayIso(to), currency });
-        if (cancelled) return;
-        setData(result);
-        setError(null);
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 403) {
-          setError(copy.forbidden);
-        } else {
-          setError(apiErrorMessage(err, copy.genericError));
-        }
-        setData(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, from, to, currency, reloadKey, rangeInvalid]);
-
-  return (
-    <div className="flex flex-col gap-6">
-      {/* Aviso D5 (G1 §7): solo ADMIN, hasta confirmar cada sede activa. */}
-      <RegionalReviewNotice token={token} />
-      {/* DX-380: solo ADMIN, mientras haya abonos sin tasa de más de 24 h. */}
-      <RateBacklogNotice token={token} />
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-4 p-4">
-          <FormField htmlFor="dashboard-from" label={copy.fromLabel}>
-            <Input
-              id="dashboard-from"
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-auto"
-            />
-          </FormField>
-          <FormField htmlFor="dashboard-to" label={copy.toLabel}>
-            <Input
-              id="dashboard-to"
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-auto"
-            />
-          </FormField>
-          <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-44">
-            <CurrencySelect
-              id="dashboard-currency"
-              token={token}
-              value={currency}
-              onChange={setCurrency}
-              placeholder={currency ? undefined : copy.currencyPlaceholder}
-            />
-          </FormField>
-          {timeZone ? (
-            <p className="basis-full text-sm text-muted" data-testid="dashboard-zone-note" title={timeZone}>
-              {copy.zoneNote(timeZone)}
-            </p>
+  const description = role ? INICIO_DESCRIPTION[role] : INICIO_DESCRIPTION_FALLBACK;
+  const note = zoneNote.status === 'ready' ? zoneNote : null;
+  const meta = (
+    <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted" data-testid="dashboard-scope">
+      <span className="font-medium text-ink">{scopeName}</span>
+      {note ? (
+        <>
+          <span aria-hidden>·</span>
+          <span data-testid="dashboard-zone-note">{note.text}</span>
+          {/* Solo ADMIN puede cambiar la zona de una sede: para el resto es texto. */}
+          {role === 'ADMIN' ? (
+            <Link
+              href={note.settingsHref}
+              className="rounded-sm text-primary-text hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center"
+            >
+              {sedeZoneNoteCopy.change}
+            </Link>
           ) : null}
-        </CardContent>
-      </Card>
-
-      {rangeInvalid ? (
-        <InlineError>{copy.rangeInvalid}</InlineError>
-      ) : zone.status === 'error' && (!from || !to) ? (
-        <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
-      ) : !currency && currencyUnknown ? (
-        <SedeConfigError kind="currency" onRetry={locations.retry} />
-      ) : !currency && sedeCurrency?.scope === 'clinic' ? (
-        <p role="status" className="text-sm text-muted">
-          {copy.chooseCurrency}
-        </p>
-      ) : loading ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Skeleton className="h-40" role="status" aria-label={copy.loading} />
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-        </div>
-      ) : error ? (
-        <SectionError
-          description={error}
-          onRetry={() => setReloadKey((k) => k + 1)}
-        />
-      ) : data ? (
-        <div className="grid items-start gap-4 lg:grid-cols-3">
-          {/* Left rail: the period's headline figures, read as a clinical
-              summary strip rather than billboard hero cards. */}
-          <div className="flex flex-col gap-4">
-            <IncomesCard incomes={data.incomes} />
-            <PatientCountCard patientCount={data.patientCount} />
-          </div>
-          {/* Content column: the record-like sections that carry real rows. */}
-          <div className="flex flex-col gap-4 lg:col-span-2">
-            <UpcomingAppointmentsCard
-              upcomingAppointments={data.upcomingAppointments}
-              staffNames={staffNames}
-              timeOf={(start) => (fmt && timeZone ? fmt.time(new Date(start), timeZone) : NO_SEDE_FORMAT)}
-            />
-            <LowStockCard lowStockItems={data.lowStockItems} />
-          </div>
-        </div>
+        </>
       ) : null}
-    </div>
+    </p>
   );
-}
 
-function IncomesCard({ incomes }: { incomes: Dashboard['incomes'] }) {
-  const byCurrencyEntries = Object.entries(incomes.byCurrency);
+  const header = <PageHeader title={copy.title} description={description} meta={meta} />;
+
+  if (zone.status === 'error') {
+    return (
+      <>
+        {header}
+        <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
+      </>
+    );
+  }
+  if (!timeZone || !role) {
+    return (
+      <>
+        {header}
+        <div role="status" aria-label={copy.loading} className="flex flex-col gap-4">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+        </div>
+      </>
+    );
+  }
+
+  const today = sedeToday(timeZone);
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{copy.incomesHeading}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1">
-        <p className="text-2xl font-semibold tracking-tight text-ink tabular-nums">
-          {formatCurrency(incomes.totalConverted, incomes.currency)}
-        </p>
-        <p className="text-sm text-muted">{copy.incomesCount(incomes.count)}</p>
-        {byCurrencyEntries.length > 0 && (
-          <div className="mt-3 flex flex-col gap-1.5 border-t border-hairline pt-3">
-            <p className="t-label uppercase text-muted">{copy.byCurrencyHeading}</p>
-            <ul className="flex flex-col gap-1">
-              {byCurrencyEntries.map(([cur, amount]) => (
-                <li key={cur} className="flex items-center justify-between text-sm text-ink">
-                  <span className="text-muted">{cur}</span>
-                  <span className="font-medium tabular-nums">{formatCurrency(amount, cur)}</span>
-                </li>
-              ))}
-            </ul>
+    <>
+      {header}
+      <div className="flex flex-col gap-10">
+        {/* Avisos D5 (G1 §7) y DX-380: se pintan solos y solo para ADMIN. */}
+        <RegionalReviewNotice token={token} />
+        <RateBacklogNotice token={token} />
+
+        {/* Hoy (8) + Pendientes (4) desde xl; una columna debajo, Hoy primero. */}
+        <div className="grid items-start gap-10 xl:grid-cols-12 xl:gap-6">
+          <div className="min-w-0 xl:col-span-8">
+            <TodaySection
+              token={token}
+              role={role}
+              userId={userId}
+              timeZone={timeZone}
+              today={today}
+              scopeLabel={activeSede?.name ?? copy.allSedesLower}
+              scopeKey={scopeKey}
+              fmt={fmt}
+              staffNames={staffNames}
+            />
           </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function LowStockCard({ lowStockItems }: { lowStockItems: Dashboard['lowStockItems'] }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{copy.lowStockHeading}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <p className="text-sm font-medium text-muted">{copy.lowStockCount(lowStockItems.count)}</p>
-        {lowStockItems.items.length === 0 ? (
-          <EmptyState
-            role="status"
-            title={copy.emptyLowStockTitle}
-            description={copy.emptyLowStockDescription}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <caption className="sr-only">{copy.lowStockHeading}</caption>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>{copy.colItem}</TableHead>
-                  <TableHead>{copy.colStock}</TableHead>
-                  <TableHead>{copy.colMinStock}</TableHead>
-                  <TableHead>{copy.colUnit}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lowStockItems.items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell className="tabular-nums">{item.stock}</TableCell>
-                    <TableCell className="tabular-nums">{item.minStock}</TableCell>
-                    <TableCell className="text-muted">{item.unit}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="min-w-0 xl:col-span-4">
+            <PendingSection
+              token={token}
+              role={role}
+              activeLocationId={activeLocationId}
+              timeZone={timeZone}
+              fmt={fmt}
+            />
           </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+        </div>
 
-function UpcomingAppointmentsCard({
-  upcomingAppointments,
-  staffNames,
-  timeOf,
-}: {
-  upcomingAppointments: Dashboard['upcomingAppointments'];
-  staffNames: Record<string, string>;
-  /** DX-378: la hora con el reloj de la sede. */
-  timeOf: (start: string) => string;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <Link href="/agenda" className="hover:text-primary hover:underline">
-            {copy.upcomingHeading}
-          </Link>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {upcomingAppointments.length === 0 ? (
-          <EmptyState
-            role="status"
-            title={copy.emptyUpcomingTitle}
-            description={copy.emptyUpcomingDescription}
-          />
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {upcomingAppointments.map((appointment) => {
-              // Nombre joinado en la cita; cae al id crudo solo si la API no
-              // pudo resolverlo (misma convención que `patientLabel` de la agenda).
-              const patientLabel =
-                [appointment.patientFirstName, appointment.patientLastName]
-                  .filter(Boolean)
-                  .join(' ')
-                  .trim() || appointment.patientId;
-              const providerLabel = staffNames[appointment.providerId] ?? appointment.providerId;
-              return (
-                <li
-                  key={appointment.id}
-                  className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-ink">{timeOf(appointment.start)}</span>
-                    <span className="text-xs text-muted">
-                      {patientLabel} · {providerLabel}
-                    </span>
-                  </div>
-                  <Badge variant={STATUS_BADGE_VARIANT[appointment.status]}>
-                    {STATUS_LABELS[appointment.status]}
-                  </Badge>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function PatientCountCard({ patientCount }: { patientCount: number }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <Link href="/patients" className="hover:text-primary hover:underline">
-            {copy.patientCountHeading}
-          </Link>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-semibold tracking-tight text-ink tabular-nums">{patientCount}</p>
-        <p className="mt-1 text-sm text-muted">registrados en la clínica</p>
-      </CardContent>
-    </Card>
+        {canSeeBlock('periodResults', role) ? (
+          currency.status === 'error' ? (
+            <SedeConfigError kind="currency" onRetry={currency.retry} />
+          ) : (
+            <PeriodResultsSection
+              key={scopeKey}
+              token={token}
+              timeZone={timeZone}
+              scopeKey={scopeKey}
+              currency={currency.status === 'ready' ? currency : null}
+              fmt={fmt}
+            />
+          )
+        ) : null}
+        {canSeeBlock('aging', role) ? <AgingSection token={token} scopeKey={scopeKey} fmt={fmt} /> : null}
+        {canSeeBlock('myProduction', role) ? (
+          <MyProductionSection token={token} timeZone={timeZone} scopeKey={scopeKey} fmt={fmt} />
+        ) : null}
+        {canSeeBlock('lowStockList', role) ? <LowStockSection token={token} scopeKey={scopeKey} fmt={fmt} /> : null}
+      </div>
+    </>
   );
 }

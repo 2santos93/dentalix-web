@@ -32,18 +32,18 @@ export const AUDIT_ACTION_OPTIONS = Object.keys(AUDIT_ACTION_LABELS) as AuditAct
  * dato, rojo solo para el login fallido (lo único que es una alerta).
  */
 export const AUDIT_ACTION_VARIANT: Record<AuditAction, NonNullable<BadgeProps['variant']>> = {
-  VIEW: 'muted',
+  VIEW: 'neutral',
   CREATE: 'success',
   UPDATE: 'warning',
   DELETE: 'warning',
   SIGN: 'success',
   VOID: 'warning',
-  LOGIN: 'muted',
+  LOGIN: 'neutral',
   LOGIN_FAILED: 'danger',
   PASSWORD_RESET: 'warning',
-  EXPORT: 'muted',
-  PRINT: 'muted',
-  SEND: 'muted',
+  EXPORT: 'neutral',
+  PRINT: 'neutral',
+  SEND: 'neutral',
   PASSWORD_CHANGE: 'warning',
 };
 

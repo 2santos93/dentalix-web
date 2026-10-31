@@ -93,6 +93,15 @@ function complete(overrides: Partial<SignatureRequest> = {}): SignatureRequest {
   });
 }
 
+const TITLE = 'Consentimiento informado — Exodoncia';
+
+/** B7: las acciones de cada envío viven en el «⋯» de su fila (RowActions). */
+async function openRowMenu(user: ReturnType<typeof setupUser>, scope: HTMLElement | null = null) {
+  const q = scope ? within(scope) : screen;
+  await user.click(await q.findByRole('button', { name: `Acciones de ${TITLE}` }));
+  return screen.findByRole('menu');
+}
+
 describe('PatientSignatureRequestsSection (DX-243)', () => {
   beforeEach(() => {
     mockedList.mockReset();
@@ -139,13 +148,16 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
         consentId: 'pc-2',
       }),
     ]);
+    const user = setupUser();
     render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
     const list = await screen.findByRole('list', { name: 'Consentimientos enviados a firmar' });
     const [sent, locked, signed, complete] = within(list).getAllByRole('listitem', { name: '' }).filter((li) => li.parentElement === list);
     // 14:00 UTC = 10:00 a. m. en Caracas.
     await waitFor(() => expect(sent).toHaveTextContent(/Enviado el .*10:00.*a\. m\..* a la\*\*\*@example\.com por Recepción Demo/));
     expect(within(sent).getByText('Enviado')).toBeInTheDocument();
-    expect(within(sent).getByRole('button', { name: /anular enlace/i })).toBeInTheDocument();
+    const menu = await openRowMenu(user, sent);
+    expect(within(menu).getByRole('menuitem', { name: /anular enlace/i })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
     expect(locked).toHaveTextContent('Bloqueado');
     expect(locked).toHaveTextContent(/tras 5 códigos incorrectos/);
     // Firmó la responsable: estado y evidencia lo dicen con su nombre.
@@ -156,7 +168,8 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
     // A recepción no la manda a una tabla que no ve: firmará el profesional elegido.
     expect(signed).toHaveTextContent('Falta la firma de Dra. Laura Gómez como profesional: la hará en la app.');
     expect(signed).not.toHaveTextContent(/pestaña/);
-    expect(within(signed).queryByRole('button', { name: /anular/i })).not.toBeInTheDocument();
+    // Firmado: nada que anular ni descargar todavía, así que no hay «⋯».
+    expect(within(signed).queryByRole('button', { name: /^Acciones de/ })).not.toBeInTheDocument();
     expect(complete).toHaveTextContent('Completo');
     expect(complete).toHaveTextContent(/el profesional firmó/);
   });
@@ -186,14 +199,14 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
     mockedRevoke.mockRejectedValueOnce(new ApiError(409, 'Esta solicitud ya está firmada o anulada: no hay nada que anular.'));
     mockedRevoke.mockResolvedValueOnce(request({ status: 'REVOKED', revokedAt: '2026-10-30T15:00:00.000Z' }));
     render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
-    await user.click(await screen.findByRole('button', { name: /anular enlace/i }));
+    await user.click(within(await openRowMenu(user)).getByRole('menuitem', { name: /anular enlace/i }));
     // Cancelar no anula nada.
     let dialog = await screen.findByRole('dialog', { name: '¿Anular el enlace?' });
     expect(dialog).toHaveTextContent('Consentimiento informado — Exodoncia');
     await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
     expect(mockedRevoke).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: /anular enlace/i }));
+    await user.click(within(await openRowMenu(user)).getByRole('menuitem', { name: /anular enlace/i }));
     dialog = await screen.findByRole('dialog', { name: '¿Anular el enlace?' });
     await user.click(within(dialog).getByRole('button', { name: 'Anular enlace' }));
     expect(await within(dialog).findByText(/no hay nada que anular/)).toBeInTheDocument();
@@ -237,10 +250,10 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
       mockedUrl.mockResolvedValue({ url: 'https://files/x.pdf', expiresAt: '2026-10-30T16:05:00.000Z', disposition: 'attachment' });
       const user = setupUser();
       render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
-      const button = await screen.findByRole('button', { name: /Descargar PDF/ });
-      expect(button).toHaveAccessibleName('Descargar PDF de Consentimiento informado — Exodoncia');
-      expect(screen.getByText('PDF firmado archivado en Documentos del paciente.')).toBeInTheDocument();
-      await user.click(button);
+      expect(await screen.findByText('PDF firmado archivado en Documentos del paciente.')).toBeInTheDocument();
+      // El «⋯» nombra la fila; la opción, la acción.
+      const menu = await openRowMenu(user);
+      await user.click(within(menu).getByRole('menuitem', { name: 'Descargar PDF' }));
       await waitFor(() => expect(mockedDownload).toHaveBeenCalledWith('https://files/x.pdf'));
       expect(mockedUrl).toHaveBeenCalledWith('tok', 'p1', 'doc-1', 'attachment');
     });
@@ -250,14 +263,15 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
       mockedUrl.mockRejectedValue(new Error('red'));
       const user = setupUser();
       render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
-      await user.click(await screen.findByRole('button', { name: /Descargar PDF/ }));
+      await user.click(within(await openRowMenu(user)).getByRole('menuitem', { name: 'Descargar PDF' }));
       await waitFor(() =>
         expect(toast.error).toHaveBeenCalledWith(
           'No pudimos descargar el PDF firmado. Intenta de nuevo.',
           expect.anything(),
         ),
       );
-      expect(screen.getByRole('button', { name: /Descargar PDF/ })).toBeEnabled();
+      const again = await openRowMenu(user);
+      expect(within(again).getByRole('menuitem', { name: 'Descargar PDF' })).not.toHaveAttribute('aria-disabled', 'true');
       expect(mockedDownload).not.toHaveBeenCalled();
     });
 
@@ -278,9 +292,7 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
       const user = setupUser();
       render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
       expect(await screen.findByText(/Copia enviada al paciente el 30\/10\/2026/)).toBeInTheDocument();
-      const button = screen.getByRole('button', { name: /Reenviar copia/ });
-      expect(button).toHaveAccessibleName('Reenviar copia de Consentimiento informado — Exodoncia');
-      await user.click(button);
+      await user.click(within(await openRowMenu(user)).getByRole('menuitem', { name: 'Reenviar copia' }));
       expect(mockedResend).toHaveBeenCalledWith('tok', 'p1', 'pc-1');
       await waitFor(() =>
         expect(toast.success).toHaveBeenCalledWith(
@@ -299,16 +311,17 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
       const user = setupUser();
       render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
       expect(await screen.findByText('Aún no se ha enviado la copia al paciente.')).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: /Reenviar copia/ }));
+      await user.click(within(await openRowMenu(user)).getByRole('menuitem', { name: 'Reenviar copia' }));
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('correo'), expect.anything()));
-      expect(screen.getByRole('button', { name: /Reenviar copia/ })).toBeEnabled();
+      const again = await openRowMenu(user);
+      expect(within(again).getByRole('menuitem', { name: 'Reenviar copia' })).not.toHaveAttribute('aria-disabled', 'true');
     });
 
     it('DX-443: sin el PDF listo no ofrece reenviar la copia', async () => {
       mockedList.mockResolvedValue([complete({ signedPdfStatus: 'PENDING' })]);
       render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
       await screen.findByText('Generando el PDF firmado: aparecerá aquí y en Documentos del paciente.');
-      expect(screen.queryByRole('button', { name: /Reenviar copia/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Acciones de/ })).toBeNull();
     });
 
     it('generándose: lo dice y no ofrece descargar todavía', async () => {
@@ -317,7 +330,7 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
       expect(
         await screen.findByText('Generando el PDF firmado: aparecerá aquí y en Documentos del paciente.'),
       ).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Descargar PDF/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Acciones de/ })).toBeNull();
     });
 
     it('si la generación falló, lo muestra y «Reintentar PDF» lo vuelve a encolar', async () => {

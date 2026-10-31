@@ -9,6 +9,7 @@ import {
   type PrivacyPolicyVersion,
 } from '@/lib/data-consents/data-consents-api';
 import { formatDate } from '@/lib/format/date';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -59,7 +60,7 @@ export function ConsentScopeFields({
           role="region"
           aria-label={copy.policyRegion}
           tabIndex={0}
-          className="max-h-48 overflow-y-auto whitespace-pre-line rounded-lg border border-border bg-surface-2 p-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="max-h-48 overflow-y-auto whitespace-pre-line rounded-lg border border-border bg-surface-sunken p-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
         >
           {policy.policyText}
         </div>
@@ -73,28 +74,25 @@ export function ConsentScopeFields({
         {scopes.map((scope) => {
           const id = `${idPrefix}-${scope}`;
           return (
-            <div
-              key={scope}
-              className="flex items-start gap-3 rounded-lg border border-border bg-surface p-3"
-            >
-              <input
+            <div key={scope} className="rounded-lg border border-border bg-surface px-3 py-1">
+              <Checkbox
                 id={id}
-                type="checkbox"
                 name={`consent-${scope}`}
                 checked={value[scope]}
                 onChange={(e) => onChange({ ...value, [scope]: e.target.checked })}
-                className="mt-1 size-4 shrink-0 accent-primary"
+                label={
+                  <>
+                    {SCOPE_LABELS[scope]}
+                    <span className="ml-2 t-caption font-normal">({copy.optional})</span>
+                  </>
+                }
+                description={
+                  <span className="flex flex-col gap-1">
+                    <span className="whitespace-pre-line text-ink">{scopeText(policy, scope)}</span>
+                    {scope === 'SENSITIVE_HEALTH' ? <span>{copy.sensitiveNote}</span> : null}
+                  </span>
+                }
               />
-              <label htmlFor={id} className="flex min-w-0 flex-col gap-1 text-sm text-ink">
-                <span className="font-medium">
-                  {SCOPE_LABELS[scope]}
-                  <span className="ml-2 text-xs font-normal text-muted">({copy.optional})</span>
-                </span>
-                <span className="whitespace-pre-line">{scopeText(policy, scope)}</span>
-                {scope === 'SENSITIVE_HEALTH' ? (
-                  <span className="text-xs text-muted">{copy.sensitiveNote}</span>
-                ) : null}
-              </label>
             </div>
           );
         })}

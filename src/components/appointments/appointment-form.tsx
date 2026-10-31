@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PatientMedicalAlertsNotice } from '@/components/clinical/appointment-medical-alerts';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -27,10 +27,18 @@ import {
 import { sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
-import { civilWeekday } from '@/lib/time/civil-day';
+import { civilWeekday, isCivilDay } from '@/lib/time/civil-day';
 import { wallInstant } from '@/lib/time/wall-clock';
 import { UserPlus, Loader2, Search, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
+import { TimeField } from '@/components/ui/date-field';
+import { fieldLabelId } from '@/components/shared/form-field';
 import {
   Dialog,
   DialogContent,
@@ -41,14 +49,22 @@ import {
 import { PatientForm } from '@/components/patients/patient-form';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { ApiError } from '@/lib/api/api-error';
 import { useProviderDay } from '@/components/appointments/use-provider-day';
 import { fitsRanges } from '@/lib/locations/provider-schedule';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { endSentence } from '@/lib/format/text';
+import { controlHeight, fieldClass } from '@/lib/ui/field-class';
+import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
 const copy = {
+  // DX-446: hueco reservado (409 RESERVED_SLOT) y «Agendar igualmente».
+  overrideReasonLabel: 'Motivo para agendar igualmente',
+  overrideReasonHint: 'Queda registrado con tu nombre. No escribas datos clínicos.',
+  overrideSubmit: 'Agendar igualmente',
+  overrideReasonLength: 'Escribe un motivo de entre 5 y 300 caracteres.',
   wantsEarlierLabel: 'Adelantar si hay hueco',
   wantsEarlierHint:
     'El paciente quiere venir antes: saldrá como candidato cuando se libere un hueco en un día anterior.',
@@ -208,7 +224,10 @@ export function AppointmentForm({
   const [typesReloadKey, setTypesReloadKey] = useState(0);
   const [appointmentTypeId, setAppointmentTypeId] = useState('');
 
-  const [date, setDate] = useState(defaultDate ?? '');
+  // Lo escrito en el campo (puede ir a medias: «0002-11-01» mientras se teclea
+  // el año) y el día civil que vale para todo lo demás.
+  const [dateDraft, setDate] = useState(defaultDate ?? '');
+  const date = dateDraft !== '' && isCivilDay(dateDraft) ? dateDraft : '';
   const [startTime, setStartTime] = useState(defaultStartTime ?? '');
   const [endTime, setEndTime] = useState(defaultEndTime ?? '');
   const [reason, setReason] = useState(defaultReason ?? '');
@@ -222,6 +241,23 @@ export function AppointmentForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const providerDay = useProviderDay(token, providerId, date, locationId);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // DX-446: la cita que chocó con un hueco reservado, si quien agenda puede
+  // saltárselo con motivo.
+  const [overridable, setOverridable] = useState<CreateAppointmentInput | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideError, setOverrideError] = useState<string | null>(null);
+  const overrideInputRef = useRef<HTMLInputElement>(null);
+  // Si cambia la cita (paciente, profesional, tipo, día u horas), «Agendar
+  // igualmente» ya no vale: reintentaría la cita ANTERIOR. El panel solo se
+  // ofrece para la cita que chocó; si no, hay que volver a enviar.
+  const slotKey = [patientId, providerId, appointmentTypeId, date, startTime, endTime, locationId ?? ''].join('|');
+  const [overridableKey, setOverridableKey] = useState<string | null>(null);
+  const overrideFor = overridable !== null && overridableKey === slotKey ? overridable : null;
+  // Al aparecer el motivo, el foco va a él (teclado y lector de pantalla).
+  const showOverride = overrideFor !== null;
+  useEffect(() => {
+    if (showOverride) overrideInputRef.current?.focus();
+  }, [showOverride]);
   const [submitting, setSubmitting] = useState(false);
   const [showPatientDialog, setShowPatientDialog] = useState(false);
   // DX-378: la fecha y las horas son las del reloj de la sede de la cita (la
@@ -378,6 +414,8 @@ export function AppointmentForm({
     e.preventDefault();
     setValidationError(null);
     setSaveError(null);
+    setOverridable(null);
+    setOverrideError(null);
 
     if (!patientId || !providerId || !date || !startTime || !endTime) {
       setValidationError(copy.validationMissingFields);
@@ -427,11 +465,39 @@ export function AppointmentForm({
         ...(reason.trim() ? { reason: reason.trim() } : {}),
         ...(wantsEarlier ? { wantsEarlier: true } : {}),
       };
+      await save(input);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function save(input: CreateAppointmentInput) {
+    try {
       const created = await (locationId ? createAppointment(token,input,locationId) : createAppointment(token,input));
       resetForm();
+      setOverridable(null);
+      setOverrideReason('');
       onCreated(created);
     } catch (err) {
       setSaveError(apiErrorMessage(err, copy.genericSaveError));
+      const canRetry = err instanceof ApiError && err.code === 'RESERVED_SLOT' && err.canOverride === true;
+      setOverridable(canRetry ? { ...input, overrideReason: undefined } : null);
+      setOverridableKey(canRetry ? slotKey : null);
+    }
+  }
+
+  /** DX-446: reintenta la misma cita con el motivo (5–300 caracteres). */
+  async function handleOverride() {
+    if (!overrideFor) return;
+    const reasonText = overrideReason.trim();
+    if (reasonText.length < 5 || reasonText.length > 300) {
+      setOverrideError(copy.overrideReasonLength);
+      return;
+    }
+    setOverrideError(null);
+    setSubmitting(true);
+    try {
+      await save({ ...overrideFor, overrideReason: reasonText });
     } finally {
       setSubmitting(false);
     }
@@ -492,7 +558,7 @@ export function AppointmentForm({
               className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2"
             >
               <div className="flex min-w-0 items-center gap-2">
-                <Check className="size-4 shrink-0 text-primary" />
+                <Check className="size-4 shrink-0 text-primary-text" />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-ink">
                     {fullPatientName(selectedPatient)}
@@ -523,7 +589,7 @@ export function AppointmentForm({
                 placeholder={copy.patientSearchPlaceholder}
                 value={patientQuery}
                 onChange={(e) => setPatientQuery(e.target.value)}
-                className="flex h-10 w-full rounded-lg border border-border bg-surface pl-9 pr-9 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+                className={cn(fieldClass, controlHeight, 'pl-9 pr-9')}
               />
               {patientsLoading && (
                 <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted" />
@@ -547,7 +613,7 @@ export function AppointmentForm({
               >
                 <span
                   aria-hidden
-                  className="flex size-9 items-center justify-center rounded-full bg-bg text-muted"
+                  className="flex size-9 items-center justify-center rounded-full bg-surface-sunken text-muted"
                 >
                   <Search className="size-4" />
                 </span>
@@ -577,7 +643,7 @@ export function AppointmentForm({
                       role="option"
                       aria-selected={false}
                       onClick={() => handlePatientSelect(p)}
-                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                     >
                       <span className="truncate text-sm text-ink">{fullPatientName(p)}</span>
                       <span className="shrink-0 text-xs text-muted">{patientDocLabel(p)}</span>
@@ -601,13 +667,12 @@ export function AppointmentForm({
             className="h-10 w-full"
           />
         ) : (
-          <select
+          <NativeSelect
             id="appointment-provider"
             required
             disabled={staffLoading}
             value={providerId}
             onChange={(e) => setProviderId(e.target.value)}
-            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="" disabled>
               {staffLoading ? copy.providerLoading : copy.providerPlaceholder}
@@ -617,7 +682,7 @@ export function AppointmentForm({
                 {s.fullName}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         )}
       </div>
 
@@ -632,12 +697,11 @@ export function AppointmentForm({
             className="h-10 w-full"
           />
         ) : (
-          <select
+          <NativeSelect
             id="appointment-type"
             value={appointmentTypeId}
             onChange={(e) => handleTypeChange(e.target.value)}
             aria-describedby="appointment-type-hint"
-            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
             <option value="">{copy.typeNone}</option>
             {types.map((t) => (
@@ -645,7 +709,7 @@ export function AppointmentForm({
                 {copy.typeOption(t.name, t.durationMinutes)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         )}
         <p id="appointment-type-hint" className="text-xs text-muted">
           {copy.typeHint}
@@ -654,7 +718,7 @@ export function AppointmentForm({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="flex flex-col gap-1">
-          <label htmlFor="appointment-date" className="text-sm font-medium text-ink">
+          <label id={fieldLabelId('appointment-date')} htmlFor="appointment-date" className="text-sm font-medium text-ink">
             {copy.dateLabel}
           </label>
           {sede.status === 'error' ? (
@@ -667,18 +731,16 @@ export function AppointmentForm({
               onRetry={sede.retry}
             />
           ) : (
-            <input
+            <DatePicker
               id="appointment-date"
-              type="date"
               required
               disabled={!clock}
-              // No se puede agendar en el pasado: el date picker no ofrece días
+              // No se puede agendar en el pasado: el calendario no ofrece días
               // anteriores a hoy en la sede. "Hoy a una hora ya pasada" lo cubre
               // la validación del instante en handleSubmit (y el backend con un 400).
               min={today && minimumDate && minimumDate > today ? minimumDate : today}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+              value={dateDraft || null}
+              onChange={(next) => setDate(next ?? '')}
             />
           )}
           {/* Pista del horario del día elegido: que se VEA por qué una hora no
@@ -693,29 +755,25 @@ export function AppointmentForm({
           )}
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="appointment-start-time" className="text-sm font-medium text-ink">
+          <label id={fieldLabelId('appointment-start-time')} htmlFor="appointment-start-time" className="text-sm font-medium text-ink">
             {copy.startTimeLabel}
           </label>
-          <input
+          <TimeField
             id="appointment-start-time"
-            type="time"
             required
-            value={startTime}
-            onChange={(e) => handleStartTimeChange(e.target.value)}
-            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+            value={startTime || null}
+            onChange={(next) => handleStartTimeChange(next ?? '')}
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="appointment-end-time" className="text-sm font-medium text-ink">
+          <label id={fieldLabelId('appointment-end-time')} htmlFor="appointment-end-time" className="text-sm font-medium text-ink">
             {copy.endTimeLabel}
           </label>
-          <input
+          <TimeField
             id="appointment-end-time"
-            type="time"
             required
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+            value={endTime || null}
+            onChange={(next) => setEndTime(next ?? '')}
           />
         </div>
       </div>
@@ -724,34 +782,22 @@ export function AppointmentForm({
         <label htmlFor="appointment-reason" className="text-sm font-medium text-ink">
           {copy.reasonLabel}
         </label>
-        <input
+        <Input
           id="appointment-reason"
           type="text"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
 
       {canMarkWantsEarlier ? (
-        <div className="flex items-start gap-3">
-          <input
-            id="appointment-wants-earlier"
-            type="checkbox"
-            checked={wantsEarlier}
-            onChange={(e) => setWantsEarlier(e.target.checked)}
-            aria-describedby="appointment-wants-earlier-hint"
-            className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-          />
-          <div className="flex flex-col gap-0.5">
-            <label htmlFor="appointment-wants-earlier" className="text-sm font-medium text-ink">
-              {copy.wantsEarlierLabel}
-            </label>
-            <p id="appointment-wants-earlier-hint" className="text-xs text-muted">
-              {copy.wantsEarlierHint}
-            </p>
-          </div>
-        </div>
+        <Checkbox
+          id="appointment-wants-earlier"
+          checked={wantsEarlier}
+          onChange={(e) => setWantsEarlier(e.target.checked)}
+          label={copy.wantsEarlierLabel}
+          description={copy.wantsEarlierHint}
+        />
       ) : null}
 
       {(() => {
@@ -763,18 +809,36 @@ export function AppointmentForm({
         const name = staff.find((s) => s.userId === providerId)?.fullName ?? '';
         const ranges = sedeMinuteRanges(providerDay.ranges ?? [], clock.fmt);
         return (
-          <p
-            role="status"
-            data-testid="provider-off-schedule"
-            className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
-          >
+          <Callout tone="warning" role="status" data-testid="provider-off-schedule">
             {copy.providerOffSchedule(name, ranges)}{' '}
             {providerDay.strict ? copy.providerOffScheduleStrict : copy.providerOffScheduleAllowed}
-          </p>
+          </Callout>
         );
       })()}
       {validationError && <InlineError>{validationError}</InlineError>}
       {saveError && <InlineError>{saveError}</InlineError>}
+      {overrideFor && (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken p-3">
+          <Label htmlFor="appointment-override-reason">{copy.overrideReasonLabel}</Label>
+          <Input
+            ref={overrideInputRef}
+            id="appointment-override-reason"
+            type="text"
+            maxLength={300}
+            value={overrideReason}
+            aria-invalid={overrideError ? true : undefined}
+            aria-describedby={overrideError ? 'appointment-override-error' : 'appointment-override-hint'}
+            onChange={(e) => setOverrideReason(e.target.value)}
+          />
+          <p id="appointment-override-hint" className="text-xs text-muted">
+            {copy.overrideReasonHint}
+          </p>
+          {overrideError && <InlineError id="appointment-override-error">{overrideError}</InlineError>}
+          <Button type="button" variant="secondary" className="self-start" loading={submitting} onClick={() => void handleOverride()}>
+            {copy.overrideSubmit}
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="submit" loading={submitting}>

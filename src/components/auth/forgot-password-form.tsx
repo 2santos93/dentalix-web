@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
+import { AUTH_FORM_CLASS, AUTH_LINK_CLASS, AUTH_SUBMIT_CLASS } from './auth-layout';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -62,16 +63,16 @@ export function ForgotPasswordForm() {
     return (
       <div role="status" className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <MailCheck className="size-5 shrink-0 text-success" aria-hidden />
-          <h2 className="text-lg font-semibold text-ink">{copy.sentTitle}</h2>
+          <MailCheck className="size-5 shrink-0 text-success-text" aria-hidden />
+          <h2 className="t-title text-ink">{copy.sentTitle}</h2>
         </div>
         <p className="text-sm text-muted">{sentMessage}</p>
         <p className="text-sm text-muted">{copy.sentHint}</p>
-        <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/login" className="text-sm font-medium text-primary hover:underline">
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <Link href="/login" className={AUTH_LINK_CLASS}>
             {copy.backToLogin}
           </Link>
-          <Button type="button" variant="outline" onClick={() => setSentMessage(null)}>
+          <Button type="button" variant="secondary" onClick={() => setSentMessage(null)}>
             {copy.sendAgain}
           </Button>
         </div>
@@ -80,7 +81,7 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className={AUTH_FORM_CLASS}>
       <p className="text-sm text-muted">{copy.intro}</p>
       <FormField htmlFor="forgot-password-email" label={copy.emailLabel}>
         <Input
@@ -105,7 +106,7 @@ export function ForgotPasswordForm() {
         </InlineError>
       ) : null}
 
-      <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">
+      <Button type="submit" size="lg" disabled={submitting} className={AUTH_SUBMIT_CLASS}>
         {submitting ? (
           <>
             <Loader2 className="animate-spin" /> {copy.submitting}
@@ -114,7 +115,7 @@ export function ForgotPasswordForm() {
           copy.submit
         )}
       </Button>
-      <Link href="/login" className="self-center text-sm font-medium text-primary hover:underline">
+      <Link href="/login" className={`self-center ${AUTH_LINK_CLASS}`}>
         {copy.backToLogin}
       </Link>
     </form>

@@ -16,8 +16,9 @@ import { InlineError } from '@/components/errors/inline-error';
 import { CatalogPicker } from '@/components/odontogram/catalog-picker';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
@@ -274,52 +275,42 @@ export function ToothRecordPanel({
         <legend className="t-label text-muted">{copy.surfacesLegend}</legend>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           {SURFACE_ORDER.map((surface) => (
-            <label
+            <Checkbox
               key={surface}
-              htmlFor={`trp-surface-${surface}`}
-              className="flex items-center gap-1.5 text-sm text-ink"
-            >
-              <input
-                id={`trp-surface-${surface}`}
-                type="checkbox"
-                checked={surfaces[surface]}
-                disabled={wholeTooth}
-                onChange={(e) => handleSurfaceChange(surface, e.target.checked)}
-              />
-              {SURFACE_LABELS[surface]}
-            </label>
-          ))}
-          <label htmlFor="trp-whole-tooth" className="flex items-center gap-1.5 text-sm font-medium text-ink">
-            <input
-              id="trp-whole-tooth"
-              type="checkbox"
-              checked={wholeTooth}
-              onChange={(e) => handleWholeToothChange(e.target.checked)}
+              id={`trp-surface-${surface}`}
+              label={SURFACE_LABELS[surface]}
+              checked={surfaces[surface]}
+              disabled={wholeTooth}
+              onChange={(e) => handleSurfaceChange(surface, e.target.checked)}
             />
-            {copy.wholeTooth}
-          </label>
+          ))}
+          <Checkbox
+            id="trp-whole-tooth"
+            label={copy.wholeTooth}
+            checked={wholeTooth}
+            onChange={(e) => handleWholeToothChange(e.target.checked)}
+          />
         </div>
       </fieldset>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="trp-status">{copy.statusLabel}</Label>
-        <select
+        <NativeSelect
           id="trp-status"
           value={status}
           onChange={(e) => {
             startNewEntry();
             setStatus(e.target.value as 'PLANNED' | 'COMPLETED');
           }}
-          className={cn(fieldClass, 'h-10')}
         >
           <option value="COMPLETED">{copy.statusCompleted}</option>
           <option value="PLANNED">{copy.statusPlanned}</option>
-        </select>
+        </NativeSelect>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="trp-origin">{copy.originLabel}</Label>
-        <select
+        <NativeSelect
           id="trp-origin"
           value={origin}
           aria-describedby="trp-origin-hint"
@@ -327,14 +318,13 @@ export function ToothRecordPanel({
             startNewEntry();
             setOrigin(e.target.value as ToothRecordOrigin);
           }}
-          className={cn(fieldClass, 'h-10')}
         >
           {ORIGIN_ORDER.map((o) => (
             <option key={o} value={o}>
               {ORIGIN_LABELS[o]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <p id="trp-origin-hint" className="text-xs text-muted">
           {copy.originHint}
         </p>
@@ -342,7 +332,7 @@ export function ToothRecordPanel({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="trp-notes">{copy.notesLabel}</Label>
-        <textarea
+        <Textarea
           id="trp-notes"
           rows={2}
           value={notes}
@@ -350,7 +340,6 @@ export function ToothRecordPanel({
             startNewEntry();
             setNotes(e.target.value);
           }}
-          className={fieldClass}
         />
       </div>
 
@@ -366,7 +355,7 @@ export function ToothRecordPanel({
             contenido puede no llegar a anunciarse (misma estrategia que
             documenta `odontogram-tab.tsx` para sus avisos). Sin contenido, un
             `<p>` vacío no genera línea, así que tampoco mueve el layout. */}
-        <p role="status" aria-live="polite" className="text-sm font-medium text-primary">
+        <p role="status" aria-live="polite" className="text-sm font-medium text-primary-text">
           {savedSummary}
         </p>
       </div>

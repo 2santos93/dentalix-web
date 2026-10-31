@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
@@ -16,6 +16,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { Avatar } from '@/components/ui/avatar';
+import { initials } from '@/lib/format/initials';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
 // responder en milisegundos; si la red está caída no se deja al usuario
@@ -40,6 +42,30 @@ async function revokeSession(): Promise<void> {
   }
 }
 
+/**
+ * Cerrar sesión (compartido por el menú de cuenta y la hoja «Más» del
+ * móvil): revoca primero el refresh token en la API (DX-061, FE-003) —en un
+ * ordenador compartido de recepción, un refresh copiado antes del logout no
+ * debe seguir sirviendo— y solo después limpia el store y va a /login, pase
+ * lo que pase con la llamada.
+ */
+export function useLogout(): { loggingOut: boolean; logout: () => Promise<void> } {
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logoutRef = useRef(false);
+  const doLogout = useCallback(async () => {
+    if (logoutRef.current) return;
+    logoutRef.current = true;
+    setLoggingOut(true);
+    // La cookie es HttpOnly: desde aquí no se sabe si existe, así que siempre
+    // se pide el logout (sin cookie, la API responde 204 igual).
+    await revokeSession();
+    useAuthStore.getState().clear();
+    router.push('/login');
+  }, [router]);
+  return { loggingOut, logout: doLogout };
+}
+
 const copy = {
   account: 'Cuenta',
   profile: 'Mi perfil',
@@ -57,15 +83,6 @@ const ROLE_LABEL: Record<ClinicRole, string> = {
   ASSISTANT: 'Asistente',
   RECEPTION: 'Recepción',
 };
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join('');
-}
 
 /**
  * Clases de los ítems del menú de cuenta. Bajo `md` llegan a 44 px de alto
@@ -98,7 +115,7 @@ function ThemeItem() {
       }}
       className={cn(
         'flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-ink outline-none transition-colors',
-        'data-[highlighted]:bg-surface-2 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'data-[highlighted]:bg-surface-sunken data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         ITEM,
       )}
     >
@@ -107,13 +124,14 @@ function ThemeItem() {
       <span
         aria-hidden
         className={cn(
-          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors',
-          isDark ? 'bg-primary' : 'bg-bg',
+          // Apagado: pista `border-input` (≥ 3:1), como el Switch de la UI.
+          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+          isDark ? 'bg-primary' : 'bg-border-input',
         )}
       >
         <span
           className={cn(
-            'inline-block h-5 w-5 rounded-full bg-surface shadow transition-transform',
+            'inline-block h-5 w-5 rounded-full bg-surface transition-transform',
             isDark ? 'translate-x-5' : 'translate-x-0.5',
           )}
         />
@@ -147,13 +165,12 @@ export function UserMenu({
 }: {
   variant?: 'card' | 'compact' | 'rail';
 }) {
-  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
+  const { loggingOut, logout: handleLogout } = useLogout();
   const [name, setName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [role, setRole] = useState<ClinicRole | null>(null);
   const [open, setOpen] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -175,40 +192,13 @@ export function UserMenu({
 
   if (!accessToken) return null;
 
-  // Cerrar sesión revoca primero el refresh token en la API (DX-061, FE-003):
-  // en un ordenador compartido de recepción, un refresh copiado antes del
-  // logout no debe seguir sirviendo. Solo después se limpia el store y se
-  // redirige, pase lo que pase con la llamada.
-  async function handleLogout() {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    // La cookie es HttpOnly: desde aquí no se sabe si existe, así que siempre
-    // se pide el logout (sin cookie, la API responde 204 igual).
-    await revokeSession();
-    useAuthStore.getState().clear();
-    router.push('/login');
-  }
-
   const roleLabel = role ? (ROLE_LABEL[role] ?? role) : null;
 
-  const avatar = (size: string) =>
-    avatarUrl ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={avatarUrl} alt="" className={cn('shrink-0 rounded-full object-cover', size)} />
-    ) : (
-      <span
-        aria-hidden
-        className={cn(
-          // Iniciales en tinta, no en el acento: sobre su propio tinte (y más aún
-          // con el tinte de la tarjeta abierta o en hover) el acento no llega a
-          // 4,5:1 (axe, DX-282), y con el color de otra clínica, menos.
-          'flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-ink',
-          size,
-        )}
-      >
-        {name ? initials(name) : '·'}
-      </span>
-    );
+  // Neutro (superficie activa + tinta), nunca el acento: con el color de otra
+  // clínica o sobre el tinte del hover, el acento no llega a 4,5:1 (DX-282).
+  const avatar = (size: string) => (
+    <Avatar size="sm" className={size} initials={name ? initials(name) : '·'} src={avatarUrl} />
+  );
 
   const menu = (
     <DropdownMenuContent
@@ -293,7 +283,7 @@ export function UserMenu({
           type="button"
           className={cn(
             'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-            open ? 'border-primary bg-primary/5' : 'border-border hover:bg-bg',
+            open ? 'border-primary-border bg-primary-subtle' : 'border-border hover:bg-surface-sunken',
           )}
         >
           {avatar('size-9')}
@@ -301,7 +291,7 @@ export function UserMenu({
             <span className="block truncate text-sm font-semibold text-ink">
               {name ?? copy.account}
             </span>
-            {roleLabel && <span className="block truncate text-xs text-primary">{roleLabel}</span>}
+            {roleLabel && <span className="block truncate text-xs text-muted">{roleLabel}</span>}
           </span>
           <ChevronUp
             aria-hidden

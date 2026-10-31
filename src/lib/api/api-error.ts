@@ -7,6 +7,13 @@
  * lee `status`, `messages` y `retryAfterSeconds`. La regla `no-restricted-syntax`
  * de `eslint.config.mjs` impide leer `.message` de un error fuera de ese helper.
  */
+/** El paciente que nombra un 409 `PATIENT_DUPLICATE` (DX-470). */
+export interface ExistingPatientRef {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 export class ApiError extends Error {
   /**
    * Los mensajes que dio el servidor, tal cual: uno, varios (el array de
@@ -42,6 +49,21 @@ export class ApiError extends Error {
    * 409 de referencia repetida (DX-390): el motivo se pide en esa línea.
    */
   public readonly line: number | null;
+  /**
+   * DX-446: en el 409 `RESERVED_SLOT` (hueco reservado), si quien agenda puede
+   * reintentar con motivo («Agendar igualmente»). `null` si no viene.
+   */
+  public readonly canOverride: boolean | null;
+  /**
+   * DX-470: en el 409 `PATIENT_DUPLICATE` del alta mínima de «Atender sin
+   * cita», el paciente que ya tiene ese documento (se ofrece usarlo).
+   */
+  public readonly existingPatientId: string | null;
+  /**
+   * DX-470 (QA): ese mismo paciente con su nombre, cuando la API lo manda
+   * (quien llama puede verlo): el mostrador ve a quién va a atender.
+   */
+  public readonly existingPatient: ExistingPatientRef | null;
 
   constructor(
     public readonly status: number,
@@ -54,6 +76,9 @@ export class ApiError extends Error {
       locationId?: string | null;
       holidayId?: string | null;
       line?: number | null;
+      canOverride?: boolean | null;
+      existingPatientId?: string | null;
+      existingPatient?: ExistingPatientRef | null;
     } = {},
   ) {
     super(message);
@@ -65,6 +90,9 @@ export class ApiError extends Error {
     this.locationId = details.locationId ?? null;
     this.holidayId = details.holidayId ?? null;
     this.line = details.line ?? null;
+    this.canOverride = details.canOverride ?? null;
+    this.existingPatientId = details.existingPatientId ?? null;
+    this.existingPatient = details.existingPatient ?? null;
   }
 }
 

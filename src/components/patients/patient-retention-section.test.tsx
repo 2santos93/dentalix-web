@@ -1,8 +1,16 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { PatientRetentionSection, formatCivilDate } from './patient-retention-section';
+import { useState } from 'react';
+import {
+  PatientRetentionDialogs,
+  PatientRetentionSection,
+  formatCivilDate,
+  retentionChip,
+  type RetentionDialog,
+} from './patient-retention-section';
 import {
   archivePatient,
+  getPatientLivePublicLinks,
   partiallySuppressPatient,
   setRetentionExtension,
   type Patient,
@@ -12,6 +20,7 @@ import { ApiError } from '@/lib/api/api-error';
 jest.mock('../../lib/patients/patients-api', () => ({
   ...jest.requireActual('../../lib/patients/patients-api'),
   archivePatient: jest.fn(),
+  getPatientLivePublicLinks: jest.fn(),
   setRetentionExtension: jest.fn(),
   partiallySuppressPatient: jest.fn(),
 }));
@@ -53,43 +62,94 @@ function patient(overrides: Partial<Patient> = {}): Patient {
   };
 }
 
-function renderSection(
-  p: Patient,
-  { isAdmin = true }: { isAdmin?: boolean } = {},
-) {
+function renderSection(p: Patient) {
+  render(<PatientRetentionSection patient={p} />);
+}
+
+/**
+ * Los modales viven fuera de la sección (los abre el menú «⋯» de la
+ * cabecera): el arnés hace de cabecera con un botón por acción.
+ */
+function renderDialogs(p: Patient) {
   const onUpdated = jest.fn();
   const onArchived = jest.fn();
-  render(
-    <PatientRetentionSection
-      patient={p}
-      token="tok"
-      isAdmin={isAdmin}
-      onUpdated={onUpdated}
-      onArchived={onArchived}
-    />,
-  );
+  function Harness() {
+    const [dialog, setDialog] = useState<RetentionDialog | null>(null);
+    return (
+      <>
+        <button type="button" onClick={() => setDialog('retention')}>
+          Cambiar retención
+        </button>
+        <button type="button" onClick={() => setDialog('suppress')}>
+          Supresión parcial
+        </button>
+        <button type="button" onClick={() => setDialog('archive')}>
+          Archivar paciente
+        </button>
+        <PatientRetentionDialogs
+          patient={p}
+          token="tok"
+          dialog={dialog}
+          onDialogChange={setDialog}
+          onUpdated={onUpdated}
+          onArchived={onArchived}
+        />
+      </>
+    );
+  }
+  render(<Harness />);
   return { onUpdated, onArchived };
 }
 
-beforeEach(() => jest.resetAllMocks());
+const mockedCount = getPatientLivePublicLinks as jest.MockedFunction<
+  typeof getPatientLivePublicLinks
+>;
+const NO_LINKS = {
+  slotOffers: 0,
+  consentSignatures: 0,
+  budgetSignatures: 0,
+  signedPdfCopies: 0,
+  anamnesis: 0,
+  total: 0,
+};
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  mockedCount.mockResolvedValue(NO_LINKS);
+});
 
 test('formatCivilDate no pasa por la zona del navegador', () => {
   expect(formatCivilDate('2039-02-28')).toBe('28/02/2039');
   expect(formatCivilDate('2026-10-16T23:30:00.000Z')).toBe('16/10/2026');
 });
 
-test('muestra el badge con la fecha hasta la que se conserva', () => {
-  renderSection(patient(), { isAdmin: false });
-  expect(screen.getByText('Historia en retención legal hasta 28/02/2039')).toBeInTheDocument();
-  // Sin ADMIN, sin controles.
-  expect(screen.queryByRole('button', { name: /archivar/i })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /cambiar retención/i })).not.toBeInTheDocument();
+test('muestra la fecha hasta la que se conserva, sin controles en la sección', () => {
+  renderSection(patient());
+  expect(
+    screen.getByRole('region', { name: 'Retención legal de la historia clínica' }),
+  ).toHaveTextContent('Historia en retención legal hasta 28/02/2039');
+  // Los controles viven en el menú «⋯» de la cabecera.
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
+
+test('chip de la cabecera: corto y neutro, con la frase del plazo de ayuda', () => {
+  expect(retentionChip(patient())).toEqual({
+    text: 'Retención hasta 28/02/2039',
+    hint: 'Se conserva 15 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
+  });
+  expect(retentionChip(patient({ retentionExtended: 'PERMANENT', retentionUntil: null }))?.text).toBe(
+    'Retención permanente',
+  );
+  expect(
+    retentionChip(patient({ retentionUntil: '2020-01-01', underRetention: false })),
+  ).toEqual({ text: 'Retención vencida el 01/01/2020', hint: null });
+  expect(
+    retentionChip(patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false })),
+  ).toBeNull();
 });
 
 test('plazo doble: el aviso cita 30 años, no 15', () => {
-  renderSection(patient({ retentionExtended: 'DOUBLE', retentionUntil: '2054-02-28' }), {
-    isAdmin: false,
-  });
+  renderSection(patient({ retentionExtended: 'DOUBLE', retentionUntil: '2054-02-28' }));
   expect(screen.getByText('Historia en retención legal hasta 28/02/2054')).toBeInTheDocument();
   expect(screen.getByText(/Plazo doble: se conserva 30 años/)).toBeInTheDocument();
   expect(screen.queryByText(/15 años/)).not.toBeInTheDocument();
@@ -97,13 +157,7 @@ test('plazo doble: el aviso cita 30 años, no 15', () => {
 
 test('retención permanente, vencida y sin atenciones', () => {
   const { unmount } = render(
-    <PatientRetentionSection
-      patient={patient({ retentionExtended: 'PERMANENT', retentionUntil: null })}
-      token="tok"
-      isAdmin={false}
-      onUpdated={jest.fn()}
-      onArchived={jest.fn()}
-    />,
+    <PatientRetentionSection patient={patient({ retentionExtended: 'PERMANENT', retentionUntil: null })} />,
   );
   expect(screen.getByText('Historia en retención legal permanente')).toBeInTheDocument();
   expect(
@@ -111,24 +165,21 @@ test('retención permanente, vencida y sin atenciones', () => {
   ).toBeInTheDocument();
   expect(screen.queryByText(/15 años/)).not.toBeInTheDocument();
   unmount();
-  renderSection(patient({ retentionUntil: '2020-01-01', underRetention: false }), {
-    isAdmin: false,
-  });
+  renderSection(patient({ retentionUntil: '2020-01-01', underRetention: false }));
   expect(screen.getByText('Retención legal vencida el 01/01/2020')).toBeInTheDocument();
 });
 
-test('sin atenciones clínicas: no hay retención ni botón de supresión', () => {
+test('sin atenciones clínicas: lo dice', () => {
   renderSection(
     patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false }),
   );
   expect(screen.getByText('Sin atenciones clínicas: sin retención legal')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Supresión parcial' })).not.toBeInTheDocument();
 });
 
 test('archivar con la HC en retención: el 409 se muestra en español en el modal', async () => {
   const user = userEvent.setup();
   mockedArchive.mockRejectedValue(new ApiError(409, RETENTION_MESSAGE));
-  const { onArchived } = renderSection(patient());
+  const { onArchived } = renderDialogs(patient());
   await user.click(screen.getByRole('button', { name: /archivar paciente/i }));
   const dialog = await screen.findByRole('dialog');
   await user.click(within(dialog).getByRole('button', { name: 'Archivar' }));
@@ -142,7 +193,7 @@ test('archivar con citas abiertas: el 409 de la API se muestra en el modal', asy
   const message =
     'Este paciente tiene 1 cita programada o confirmada: cancélala o márcala como atendida o no asistida antes de archivarlo.';
   mockedArchive.mockRejectedValue(new ApiError(409, message));
-  const { onArchived } = renderSection(
+  const { onArchived } = renderDialogs(
     patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false }),
   );
   await user.click(screen.getByRole('button', { name: /archivar paciente/i }));
@@ -155,11 +206,28 @@ test('archivar con citas abiertas: el 409 de la API se muestra en el modal', asy
 test('archivar sin retención cierra el modal y avisa al padre', async () => {
   const user = userEvent.setup();
   mockedArchive.mockResolvedValue(undefined);
-  const { onArchived } = renderSection(
+  const { onArchived } = renderDialogs(
     patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false }),
   );
   await user.click(screen.getByRole('button', { name: /archivar paciente/i }));
   await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Archivar' }));
+  await waitFor(() => expect(onArchived).toHaveBeenCalled());
+});
+
+test('DX-461: el diálogo de archivar avisa de los enlaces enviados que se anularán', async () => {
+  const user = userEvent.setup();
+  mockedCount.mockResolvedValue({ ...NO_LINKS, slotOffers: 1, consentSignatures: 2, total: 3 });
+  mockedArchive.mockResolvedValue(undefined);
+  const { onArchived } = renderDialogs(
+    patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false }),
+  );
+  // Solo se cuentan al abrir el diálogo.
+  expect(mockedCount).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: /archivar paciente/i }));
+  const dialog = await screen.findByRole('dialog');
+  expect(await within(dialog).findByText('Se anularán 3 enlaces enviados')).toBeInTheDocument();
+  expect(mockedCount).toHaveBeenCalledWith('tok', 'p1');
+  await user.click(within(dialog).getByRole('button', { name: 'Archivar' }));
   await waitFor(() => expect(onArchived).toHaveBeenCalled());
 });
 
@@ -168,7 +236,7 @@ test('cambiar la retención exige motivo y envía el valor elegido', async () =>
   const updated = patient({ retentionExtended: 'PERMANENT', retentionUntil: null });
   let resolve: (p: Patient) => void = () => undefined;
   mockedSetRetention.mockReturnValue(new Promise((r) => (resolve = r)));
-  const { onUpdated } = renderSection(patient());
+  const { onUpdated } = renderDialogs(patient());
   await user.click(screen.getByRole('button', { name: 'Cambiar retención' }));
   const dialog = await screen.findByRole('dialog');
   await user.selectOptions(within(dialog).getByLabelText('Plazo'), 'PERMANENT');
@@ -195,7 +263,7 @@ test('cambiar la retención exige motivo y envía el valor elegido', async () =>
 test('supresión parcial: error de la API visible y el modal sigue abierto', async () => {
   const user = userEvent.setup();
   mockedSuppress.mockRejectedValue(new ApiError(403, 'Forbidden'));
-  renderSection(patient());
+  renderDialogs(patient());
   await user.click(screen.getByRole('button', { name: 'Supresión parcial' }));
   const dialog = await screen.findByRole('dialog');
   await user.type(within(dialog).getByLabelText('Motivo'), 'Reclamo del titular Ley 1581');

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProductionByProcedureView } from './production-by-procedure-view';
 import {
@@ -387,10 +387,13 @@ describe('ProductionByProcedureView (DX-423)', () => {
     render(<ProductionByProcedureView token="t" />);
     await screen.findByRole('table');
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Período' }), 'custom');
-    const from = screen.getByLabelText('Desde');
+    // «Desde» es un DatePicker segmentado: se escribe el año (2020) en su segmento.
+    const [fromGroup] = screen.getAllByRole('group', { name: 'Desde' });
+    const year = within(fromGroup).getAllByRole('spinbutton').find((el) => el.getAttribute('data-type') === 'year')!;
     mockedGet.mockClear();
-    fireEvent.change(from, { target: { value: '2020-01-01' } });
+    await userEvent.click(year);
+    await userEvent.keyboard('2020');
     expect(await screen.findByText(/caben como mucho 24 meses/)).toBeInTheDocument();
-    expect(mockedGet).not.toHaveBeenCalledWith('t', expect.objectContaining({ from: '2020-01-01' }));
+    expect(mockedGet).not.toHaveBeenCalledWith('t', expect.objectContaining({ from: expect.stringMatching(/^2020-/) }));
   });
 });

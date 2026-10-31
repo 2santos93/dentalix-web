@@ -119,3 +119,24 @@ test('DX-395: en móvil la «X» mide 44×44 y la cabecera deja su hueco para qu
   // la cabecera reserva 32 px más.
   expect(screen.getByTestId('header').className).toContain('max-sm:pr-8');
 });
+
+describe('DialogContent fullScreenOnMobile', () => {
+  it('pone la hoja a pantalla completa bajo sm solo cuando se pide', () => {
+    const { rerender } = render(
+      <Dialog open>
+        <DialogContent aria-describedby={undefined} fullScreenOnMobile>
+          <DialogTitle>Firmar</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    expect(screen.getByRole('dialog')).toHaveClass('max-sm:h-dvh', 'max-sm:w-full', 'max-sm:rounded-none');
+    rerender(
+      <Dialog open>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>Firmar</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    expect(screen.getByRole('dialog')).not.toHaveClass('max-sm:h-dvh');
+  });
+});

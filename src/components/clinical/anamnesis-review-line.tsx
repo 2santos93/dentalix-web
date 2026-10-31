@@ -107,10 +107,10 @@ export function AnamnesisReviewLine({
           aria-hidden
           className={cn(
             'mt-0.5 size-4 shrink-0',
-            status === 'CURRENT' ? 'text-success' : 'text-warning',
+            status === 'CURRENT' ? 'text-success-text' : 'text-warning-text',
           )}
         />
-        <p className={status === 'CURRENT' ? 'text-muted' : 'text-warning'}>
+        <p className={status === 'CURRENT' ? 'text-muted' : 'text-warning-text'}>
           <span className="font-medium">{text}</span>
           {status !== 'MISSING' ? (
             <span className="text-muted">

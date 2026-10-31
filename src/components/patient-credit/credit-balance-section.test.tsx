@@ -77,14 +77,23 @@ beforeEach(() => {
   });
 });
 
-it('muestra una fila por plan con saldo a favor y sus dos acciones', () => {
+it('muestra una fila por plan con saldo a favor y sus dos acciones en el «⋯»', async () => {
+  const user = userEvent.setup();
   renderSection(copCredit());
-  const row = screen.getByTestId('credit-row');
-  expect(row).toHaveTextContent('Plan cancelled');
-  expect(row).toHaveTextContent(/a favor/);
-  expect(within(row).getByRole('button', { name: /Aplicar a otro plan/ })).toBeInTheDocument();
-  expect(within(row).getByRole('button', { name: /Devolver/ })).toBeInTheDocument();
+  const row = screen.getByRole('row', { name: /Plan cancelled/ });
+  expect(within(row).getByTestId('credit-row')).toHaveTextContent(/a favor/);
+  await user.click(within(row).getByRole('button', { name: 'Acciones de Plan cancelled' }));
+  const menu = await screen.findByRole('menu');
+  expect(within(menu).getByRole('menuitem', { name: /Aplicar a otro plan/ })).toBeInTheDocument();
+  expect(within(menu).getByRole('menuitem', { name: /Devolver/ })).toBeInTheDocument();
 });
+
+/** B7: las acciones de la fila viven en su «⋯» (RowActions). */
+async function chooseAction(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
+  await user.click(screen.getByRole('button', { name: /^Acciones de/ }));
+  await user.click(await screen.findByRole('menuitem', { name }));
+  return screen.findByRole('dialog');
+}
 
 it('sin permiso (DENTIST/ASSISTANT) no pinta las acciones; sin saldo a favor, nada', () => {
   const { unmount } = render(
@@ -97,7 +106,7 @@ it('sin permiso (DENTIST/ASSISTANT) no pinta las acciones; sin saldo a favor, na
       onRefunded={jest.fn()}
     />,
   );
-  expect(screen.queryByRole('button', { name: /Devolver/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /^Acciones de/ })).not.toBeInTheDocument();
   unmount();
   const statement = copCredit();
   renderSection({ ...statement, plans: [statement.plans[0]] });
@@ -108,8 +117,7 @@ it('aplicar a otro plan: vista previa del saldo resultante y envío con Idempote
   const user = userEvent.setup();
   mockedTransfer.mockResolvedValue({} as never);
   const { onTransferred } = renderSection(copCredit());
-  await user.click(screen.getByRole('button', { name: /Aplicar a otro plan/ }));
-  const dialog = screen.getByRole('dialog');
+  const dialog = await chooseAction(user, /Aplicar a otro plan/);
   await user.type(within(dialog).getByLabelText('Importe a aplicar'), '200000');
   const preview = within(dialog).getByRole('region', { name: 'Vista previa' });
   expect(preview).toHaveTextContent(/Saldo a favor que queda.*100\.000/);
@@ -127,8 +135,7 @@ it('aplicar a otro plan: vista previa del saldo resultante y envío con Idempote
 it('aplicar más que el saldo a favor: error en el campo, sin llamar a la API', async () => {
   const user = userEvent.setup();
   renderSection(copCredit());
-  await user.click(screen.getByRole('button', { name: /Aplicar a otro plan/ }));
-  const dialog = screen.getByRole('dialog');
+  const dialog = await chooseAction(user, /Aplicar a otro plan/);
   await user.type(within(dialog).getByLabelText('Importe a aplicar'), '300001');
   await user.click(within(dialog).getByRole('button', { name: 'Aplicar al plan' }));
   expect(await within(dialog).findByText(/No puede superar el saldo a favor/)).toBeInTheDocument();
@@ -140,8 +147,7 @@ it('devolver: motivo obligatorio y abonos de referencia; el comprobante vuelve a
   const refund = { id: 'r-1', number: 'DEV-NOR-000001' };
   mockedRefund.mockResolvedValue(refund as never);
   const { onRefunded } = renderSection(copCredit());
-  await user.click(screen.getByRole('button', { name: /Devolver/ }));
-  const dialog = screen.getByRole('dialog');
+  const dialog = await chooseAction(user, /Devolver/);
   await user.type(within(dialog).getByLabelText('Importe a devolver'), '50000');
   await user.click(within(dialog).getByRole('button', { name: 'Devolver' }));
   expect(await within(dialog).findByText(/Escribe el motivo/)).toBeInTheDocument();
@@ -173,8 +179,7 @@ it('devolver: motivo obligatorio y abonos de referencia; el comprobante vuelve a
 it('devolver sin abonos marcados: aviso y sin llamar a la API', async () => {
   const user = userEvent.setup();
   renderSection(copCredit());
-  await user.click(screen.getByRole('button', { name: /Devolver/ }));
-  const dialog = screen.getByRole('dialog');
+  const dialog = await chooseAction(user, /Devolver/);
   await user.click(within(dialog).getByRole('checkbox'));
   await user.type(within(dialog).getByLabelText('Importe a devolver'), '1000');
   fireEvent.change(within(dialog).getByLabelText('Motivo'), { target: { value: 'Motivo' } });
@@ -186,8 +191,7 @@ it('devolver sin abonos marcados: aviso y sin llamar a la API', async () => {
 it('aplicar a otro plan: una nota de menos de 3 caracteres se avisa sin llamar a la API', async () => {
   const user = userEvent.setup();
   renderSection(copCredit());
-  await user.click(screen.getByRole('button', { name: /Aplicar a otro plan/ }));
-  const dialog = screen.getByRole('dialog');
+  const dialog = await chooseAction(user, /Aplicar a otro plan/);
   await user.type(within(dialog).getByLabelText('Importe a aplicar'), '1000');
   fireEvent.change(within(dialog).getByLabelText('Nota (opcional)'), { target: { value: 'ok' } });
   await user.click(within(dialog).getByRole('button', { name: 'Aplicar al plan' }));
@@ -204,8 +208,7 @@ it('devolver con más de 20 abonos vivos: ninguno marcado de entrada y tope de 2
     amount: 1000,
   }));
   renderSection({ ...statement, movements: many });
-  await user.click(screen.getByRole('button', { name: /Devolver/ }));
-  const dialog = screen.getByRole('dialog');
+  const dialog = await chooseAction(user, /Devolver/);
   const boxes = within(dialog).getAllByRole('checkbox');
   expect(boxes).toHaveLength(21);
   expect(boxes.filter((b) => (b as HTMLInputElement).checked)).toHaveLength(0);
@@ -221,8 +224,7 @@ it('D1: con varias sedes y «Todas las sedes», no deja devolver en efectivo y e
   window.localStorage.clear();
   const user = userEvent.setup();
   renderSection(copCredit());
-  await user.click(screen.getByRole('button', { name: /Devolver/ }));
-  const dialog = screen.getByRole('dialog');
+  const dialog = await chooseAction(user, /Devolver/);
   expect(await within(dialog).findByTestId('refund-cash-location')).toHaveTextContent(
     /Elige la sede de la caja/,
   );
@@ -239,7 +241,7 @@ it('D1: con una sede activa, el efectivo nombra la caja de esa sede', async () =
   window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
   const user = userEvent.setup();
   renderSection(copCredit());
-  await user.click(screen.getByRole('button', { name: /Devolver/ }));
+  await chooseAction(user, /Devolver/);
   expect(await screen.findByTestId('refund-cash-location')).toHaveTextContent(
     'El efectivo sale de tu caja en Sede Norte.',
   );

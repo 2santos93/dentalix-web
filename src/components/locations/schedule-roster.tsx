@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 const copy = {
   prevWeek: 'Semana anterior',
@@ -111,7 +112,7 @@ export function ScheduleRoster({ token, today }: ScheduleRosterProps) {
         <div className="flex flex-col gap-3 lg:gap-0 lg:overflow-hidden lg:rounded-xl lg:border lg:border-border lg:bg-surface">
           <div
             aria-hidden
-            className="hidden border-b border-border bg-surface-2 lg:grid lg:grid-cols-[11rem_repeat(7,minmax(0,1fr))]"
+            className="hidden border-b border-border bg-surface-sunken lg:grid lg:grid-cols-[11rem_repeat(7,minmax(0,1fr))]"
           >
             <span className="px-3 py-2.5 text-xs font-medium text-muted">{copy.provider}</span>
             {dates.map((d) => (
@@ -130,9 +131,9 @@ export function ScheduleRoster({ token, today }: ScheduleRosterProps) {
             <section
               key={p.providerId}
               aria-label={p.fullName}
-              className="overflow-hidden rounded-xl border border-border bg-surface lg:grid lg:grid-cols-[11rem_repeat(7,minmax(0,1fr))] lg:rounded-none lg:border-0 lg:border-b lg:border-hairline lg:last:border-b-0"
+              className="overflow-hidden rounded-xl border border-border bg-surface lg:grid lg:grid-cols-[11rem_repeat(7,minmax(0,1fr))] lg:rounded-none lg:border-0 lg:border-b lg:border-border-subtle lg:last:border-b-0"
             >
-              <h4 className="border-b border-hairline bg-surface-2 px-4 py-2.5 text-sm font-semibold text-ink lg:border-b-0 lg:bg-transparent lg:px-3 lg:py-3">
+              <h4 className="border-b border-border-subtle bg-surface-sunken px-4 py-2.5 text-sm font-semibold text-ink lg:border-b-0 lg:bg-transparent lg:px-3 lg:py-3">
                 {p.fullName}
               </h4>
               {dates.map((date) => {
@@ -144,8 +145,8 @@ export function ScheduleRoster({ token, today }: ScheduleRosterProps) {
                     role="group"
                     aria-label={dayLong(date)}
                     className={cn(
-                      'flex items-start justify-between gap-3 border-b border-hairline px-4 py-2 last:border-b-0 lg:flex-col lg:justify-start lg:gap-1 lg:border-b-0 lg:border-l lg:border-border lg:px-3 lg:py-3',
-                      date === today && 'bg-primary/5',
+                      'flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-2 last:border-b-0 lg:flex-col lg:justify-start lg:gap-1 lg:border-b-0 lg:border-l lg:border-border lg:px-3 lg:py-3',
+                      date === today && 'bg-primary-subtle',
                     )}
                   >
                     <span className="shrink-0 text-sm tabular-nums text-muted first-letter:uppercase lg:sr-only">
@@ -163,15 +164,15 @@ export function ScheduleRoster({ token, today }: ScheduleRosterProps) {
                             <span
                               className={cn(
                                 'text-xs tabular-nums',
-                                e.kind === 'override-off' ? 'text-warning' : 'text-ink',
+                                e.kind === 'override-off' ? 'text-warning-text' : 'text-ink',
                               )}
                             >
                               {e.text}
                             </span>
                             {e.override ? (
-                              <span className="mt-0.5 rounded-full bg-warning/10 px-1.5 text-[0.6875rem] font-medium text-warning">
+                              <Badge variant="warning" className="mt-0.5">
                                 {copy.override}
-                              </span>
+                              </Badge>
                             ) : null}
                           </span>
                         ),

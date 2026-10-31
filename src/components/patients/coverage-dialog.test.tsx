@@ -8,6 +8,7 @@ import {
 import { createPayer, type Payer } from '@/lib/payers/payers-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { typeDate } from './date-test-utils';
 
 jest.mock('../../lib/patients/coverages-api', () => ({
   ...jest.requireActual('../../lib/patients/coverages-api'),
@@ -113,8 +114,8 @@ describe('CoverageDialog (DX-153)', () => {
     setup();
     const user = setupUser();
     await user.selectOptions(screen.getByLabelText('Pagador'), 'pay-1');
-    await user.type(screen.getByLabelText('Vigente desde'), '2026-06-01');
-    await user.type(screen.getByLabelText('Vigente hasta'), '2026-05-01');
+    await typeDate(user, screen.getByRole('group', { name: 'Vigente desde' }), '2026-06-01');
+    await typeDate(user, screen.getByRole('group', { name: 'Vigente hasta' }), '2026-05-01');
     await user.click(screen.getByRole('button', { name: 'Añadir' }));
     expect(
       await screen.findByText('La fecha de fin no puede ser anterior a la de inicio.'),
@@ -318,23 +319,19 @@ describe('CoverageDialog (DX-153)', () => {
 
       it('quien no es ADMIN ve que cambiar las fechas quita la verificación', () => {
         setup({ coverage: verified, payers: [external] });
-        expect(screen.getByLabelText('Vigente hasta')).toHaveAccessibleDescription(
-          'Déjala vacía si no tiene fecha de fin. Cambiar las fechas quita la verificación del administrador.',
+        expect(screen.getByRole('group', { name: 'Vigente hasta' })).toHaveAccessibleDescription(
+          /Déjala vacía si no tiene fecha de fin\. Cambiar las fechas quita la verificación del administrador\.$/,
         );
       });
 
       it('el ADMIN solo ve la ayuda de siempre', () => {
         setup({ coverage: verified, payers: [external], editorIsAdmin: true });
-        expect(screen.getByLabelText('Vigente hasta')).toHaveAccessibleDescription(
-          'Déjala vacía si no tiene fecha de fin.',
-        );
+        expect(screen.getByRole('group', { name: 'Vigente hasta' })).toHaveAccessibleDescription(/(?:^|\s)Déjala vacía si no tiene fecha de fin\.$/);
       });
 
       it('sin verificar no avisa', () => {
         setup({ coverage: { ...verified, verifiedAt: null, verifiedById: null }, payers: [external] });
-        expect(screen.getByLabelText('Vigente hasta')).toHaveAccessibleDescription(
-          'Déjala vacía si no tiene fecha de fin.',
-        );
+        expect(screen.getByRole('group', { name: 'Vigente hasta' })).toHaveAccessibleDescription(/(?:^|\s)Déjala vacía si no tiene fecha de fin\.$/);
       });
     });
   });

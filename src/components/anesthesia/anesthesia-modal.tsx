@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Info, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, ShieldAlert } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ApiError } from '@/lib/api/client';
 import {
@@ -30,11 +30,14 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
+import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { TimeField } from '@/components/ui/date-field';
 import {
   AnesthesiaDoseBar,
   AnesthesiaDoseBarError,
@@ -156,20 +159,17 @@ function AlertLines({ alerts }: { alerts: DoseAlert[] }) {
         .filter((a) => !BAR_ALERT_CODES.has(a.code))
         .map((alert, index) => {
           const blocking = alert.severity === 'BLOCKING';
-          const Icon = blocking ? ShieldAlert : Info;
+          const Icon = blocking ? ShieldAlert : AlertTriangle;
           return (
-            <li
-              key={`${alert.code}-${index}`}
-              className={cn(
-                'flex items-start gap-2 rounded-md border p-3 text-sm text-ink',
-                blocking ? 'border-danger/40 bg-danger/5' : 'border-warning/40 bg-warning/5',
-              )}
-            >
-              <Icon aria-hidden className={cn('mt-0.5 size-4 shrink-0', blocking ? 'text-danger' : 'text-warning')} />
-              <span className="flex min-w-0 flex-col gap-0.5 break-words">
-                <span>{alert.message}</span>
-                <span className="text-xs text-muted">{anesthesiaCopy.alertSource(alert.source)}</span>
-              </span>
+            // Callout del tono, pero sin rol propio (`none`): cada línea no se
+            // anuncia por su cuenta; la confirmación de abajo sí lo pide.
+            <li key={`${alert.code}-${index}`}>
+              <Callout tone={blocking ? 'danger' : 'warning'} role="none" icon={Icon} className="px-3 py-2">
+                <span className="flex min-w-0 flex-col gap-0.5 break-words">
+                  <span>{alert.message}</span>
+                  <span className="t-caption">{anesthesiaCopy.alertSource(alert.source)}</span>
+                </span>
+              </Callout>
             </li>
           );
         })}
@@ -365,14 +365,14 @@ export function AnesthesiaModal({
   function renderRecorded(entry: EntryAnesthesia) {
     return (
       <section aria-labelledby={`${id}-recorded`} className="flex flex-col gap-2">
-        <h3 id={`${id}-recorded`} className="text-sm font-medium text-ink">
+        <h3 id={`${id}-recorded`} className="t-label text-ink">
           {anesthesiaCopy.recordedHeading}
         </h3>
         {entry.records.length === 0 ? (
           <p className="text-sm text-muted">{anesthesiaCopy.noneRecorded}</p>
         ) : (
           <>
-            <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border">
+            <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border">
               {entry.records.map((r) => (
                 <li key={r.id} className="flex flex-col gap-0.5 px-3 py-2 text-sm">
                   <span className="font-medium text-ink">{r.anestheticName}</span>
@@ -380,7 +380,7 @@ export function AnesthesiaModal({
                     {anesthesiaCopy.line(r)} · {TECHNIQUE_LABELS[r.technique]}
                     {r.site ? ` · ${r.site}` : ''}
                   </span>
-                  <span className="text-xs tabular-nums text-muted">
+                  <span className="t-caption tabular-nums">
                     {sedeTime(r.administeredAt, clock)}
                     {r.lot ? ` · Lote ${r.lot}` : ''}
                   </span>
@@ -452,18 +452,17 @@ export function AnesthesiaModal({
 
   function renderForm() {
     return (
-      <fieldset className="flex flex-col gap-3 border-t border-hairline pt-3">
+      <fieldset className="flex flex-col gap-3 border-t border-border-subtle pt-3">
         <legend className="sr-only">{anesthesiaCopy.newHeading}</legend>
-        <h3 className="text-sm font-medium text-ink">{anesthesiaCopy.newHeading}</h3>
+        <h3 className="t-label text-ink">{anesthesiaCopy.newHeading}</h3>
         <FormField htmlFor={`${id}-anesthetic`} label={anesthesiaCopy.anesthetic} error={errors.anesthetic}>
-          <select
+          <NativeSelect
             id={`${id}-anesthetic`}
             value={anestheticId}
             onChange={(e) => {
               setAnestheticId(e.target.value);
               setConfirmed(false);
             }}
-            className={`${fieldClass} h-11 sm:h-10`}
             {...fieldProps('anesthetic', `${id}-anesthetic`)}
           >
             <option value="">{anesthesiaCopy.chooseAnesthetic}</option>
@@ -475,7 +474,7 @@ export function AnesthesiaModal({
                 </option>
               );
             })}
-          </select>
+          </NativeSelect>
         </FormField>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField
@@ -495,18 +494,17 @@ export function AnesthesiaModal({
             />
           </FormField>
           <FormField htmlFor={`${id}-technique`} label={anesthesiaCopy.technique}>
-            <select
+            <NativeSelect
               id={`${id}-technique`}
               value={technique}
               onChange={(e) => setTechnique(e.target.value as AnesthesiaTechnique)}
-              className={`${fieldClass} h-11 sm:h-10`}
             >
               {TECHNIQUES.map((t) => (
                 <option key={t} value={t}>
                   {TECHNIQUE_LABELS[t]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
           <FormField htmlFor={`${id}-site`} label={anesthesiaCopy.site}>
             <Input
@@ -528,13 +526,7 @@ export function AnesthesiaModal({
           </FormField>
           {clock ? (
             <FormField htmlFor={`${id}-time`} label={anesthesiaCopy.time}>
-              <Input
-                id={`${id}-time`}
-                type="time"
-                className="h-11 tabular-nums sm:h-10"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-              />
+              <TimeField id={`${id}-time`} value={time || null} onChange={(v) => setTime(v ?? '')} />
             </FormField>
           ) : null}
           <FormField
@@ -581,36 +573,30 @@ export function AnesthesiaModal({
         <AnesthesiaDoseBar summary={summary} window={window} clock={clock} id={`${id}-bar`} />
         <AlertLines alerts={summary.alerts} />
         {blocking ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-danger/40 p-3">
-            <p className="text-sm font-medium text-ink">{anesthesiaCopy.blockingTitle}</p>
-            <label className="flex min-h-11 items-start gap-3 text-sm text-ink">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-                checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
-                aria-invalid={errors.confirm ? true : undefined}
-              />
-              <span>{anesthesiaCopy.confirm}</span>
-            </label>
-            {errors.confirm ? (
-              <p role="alert" className="text-sm text-danger">
-                {errors.confirm}
-              </p>
-            ) : null}
+          <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+            <p className="t-label flex items-center gap-2 text-ink">
+              <ShieldAlert aria-hidden className="size-4 shrink-0 text-danger-text" />
+              {anesthesiaCopy.blockingTitle}
+            </p>
+            <Checkbox
+              label={anesthesiaCopy.confirm}
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+              error={errors.confirm}
+            />
             <FormField
               htmlFor={`${id}-reason`}
               label={anesthesiaCopy.reasonLabel}
               hint={anesthesiaCopy.reasonHint}
               error={errors.reason}
             >
-              <textarea
+              <Textarea
                 id={`${id}-reason`}
                 rows={2}
                 maxLength={OVERRIDE_REASON_MAX}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className={cn(fieldClass, 'h-auto')}
+                className="min-h-0"
                 {...fieldProps('reason', `${id}-reason`)}
               />
             </FormField>

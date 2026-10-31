@@ -61,3 +61,14 @@ export async function chooseCountry(scope: Page | Locator, code: string): Promis
   await scope.getByRole('option', { name, exact: true }).click();
   await expect(field).toHaveValue(name);
 }
+
+/**
+ * Elige una zona o un formato regional en su combobox (R1): escribe el id IANA
+ * o la etiqueta BCP 47 (la búsqueda pone el valor exacto primero) y pulsa
+ * Intro. El campo muestra después su nombre legible, no el código.
+ */
+export async function pickRegional(field: Locator, code: string): Promise<void> {
+  await field.clear();
+  await field.fill(code);
+  await field.press('Enter');
+}

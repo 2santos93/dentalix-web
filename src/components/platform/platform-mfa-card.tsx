@@ -1,7 +1,6 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { CheckCircle2, ShieldCheck } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatDate, formatDateTime } from '@/lib/format/date';
 import { normalizeTotpCode } from '@/lib/auth/break-glass';
@@ -15,8 +14,9 @@ import {
 } from '@/lib/platform/platform-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Callout } from '@/components/ui/callout';
+import { SectionHeader } from '@/components/ui/section-header';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
@@ -106,39 +106,41 @@ export function PlatformMfaCard({ token }: { token: string }) {
     return <Skeleton className="h-24 w-full" aria-label={copy.title} />;
   }
 
+  const cooldownUntil =
+    status.enabled &&
+    status.breakGlassAvailableAt &&
+    new Date(status.breakGlassAvailableAt).getTime() > Date.now()
+      ? status.breakGlassAvailableAt
+      : null;
+
+  // Sección plana (sin tarjeta): con la verificación sin activar, «Activar»
+  // es la acción primaria de toda la página.
   return (
-    <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-      <div className="flex min-w-0 items-start gap-3">
-        <ShieldCheck
-          aria-hidden
-          className={status.enabled ? 'mt-0.5 size-5 shrink-0 text-success' : 'mt-0.5 size-5 shrink-0 text-warning'}
-        />
-        <div className="min-w-0">
-          <h2 className="font-medium text-ink">{copy.title}</h2>
-          <p className="mt-0.5 text-sm text-muted">
-            {status.enabled && status.enabledAt
-              ? copy.onDescription(formatDate(status.enabledAt))
-              : copy.offDescription}
-          </p>
-          {status.enabled &&
-          status.breakGlassAvailableAt &&
-          new Date(status.breakGlassAvailableAt).getTime() > Date.now() ? (
-            <p className="mt-1 text-sm text-warning">
-              {copy.pendingCooldown(formatDateTime(status.breakGlassAvailableAt))}
-            </p>
-          ) : null}
-          {justEnabled ? (
-            <p role="status" className="mt-2 flex items-center gap-1.5 text-sm font-medium text-success">
-              <CheckCircle2 className="size-4" aria-hidden /> {copy.done}
-            </p>
-          ) : null}
-        </div>
-      </div>
-      {status.enabled ? null : (
-        <Button type="button" onClick={() => void handleStart()} loading={starting} className="w-full sm:w-auto">
-          {starting ? copy.starting : copy.activate}
-        </Button>
-      )}
+    <section aria-labelledby="platform-mfa-title" className="flex flex-col gap-3">
+      <SectionHeader
+        titleId="platform-mfa-title"
+        title={copy.title}
+        description={
+          status.enabled && status.enabledAt
+            ? copy.onDescription(formatDate(status.enabledAt))
+            : copy.offDescription
+        }
+        actions={
+          status.enabled ? null : (
+            <Button type="button" onClick={() => void handleStart()} loading={starting} className="max-sm:w-full">
+              {starting ? copy.starting : copy.activate}
+            </Button>
+          )
+        }
+      />
+      {cooldownUntil ? (
+        <Callout tone="warning">{copy.pendingCooldown(formatDateTime(cooldownUntil))}</Callout>
+      ) : null}
+      {justEnabled ? (
+        <Callout tone="success" role="status">
+          {copy.done}
+        </Callout>
+      ) : null}
       {enrollment ? (
         <EnrollMfaModal
           token={token}
@@ -151,7 +153,7 @@ export function PlatformMfaCard({ token }: { token: string }) {
           }}
         />
       ) : null}
-    </Card>
+    </section>
   );
 }
 
@@ -202,17 +204,17 @@ function EnrollMfaModal({
       error={error}
     >
       <div className="flex flex-col gap-1.5">
-        <p className="text-sm font-medium text-ink">{copy.secretLabel}</p>
+        <p className="t-label text-ink">{copy.secretLabel}</p>
         <code
           data-testid="mfa-secret"
-          className="block select-all break-all rounded-lg border border-border bg-surface-2 px-3 py-2 font-mono text-sm tracking-wider text-ink"
+          className="block select-all break-all rounded-lg border border-border bg-surface-sunken px-3 py-2 font-mono text-sm tracking-wider text-ink"
         >
           {groupSecret(enrollment.secret)}
         </code>
         <p className="text-xs text-muted">{copy.secretHint}</p>
         <a
           href={enrollment.otpauthUri}
-          className="self-start text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="inline-flex min-h-11 items-center self-start text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-0"
         >
           {copy.openInApp}
         </a>

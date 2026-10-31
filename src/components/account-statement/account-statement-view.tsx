@@ -24,20 +24,17 @@ import {
   statementCopy,
   voidedDetail,
 } from '@/lib/account-statement/presentation';
-import {
-  INSTALLMENT_STATUS_BADGE_VARIANT,
-  INSTALLMENT_STATUS_LABELS,
-} from '@/lib/payment-plans/installment-status';
-import { PLAN_STATUS_BADGE_VARIANT, PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import { planQuotePrintHref } from '@/lib/treatment-plans/plan-quote-api';
-import { PAYMENT_METHOD_BADGE_VARIANT } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate } from '@/lib/format/date';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DataList } from '@/components/ui/data-list';
+import { SectionHeader } from '@/components/ui/section-header';
 import {
   Table,
   TableBody,
@@ -110,10 +107,9 @@ const copy = {
   colAmount: 'Monto',
   colActions: 'Acciones',
   voidAction: 'Anular',
-  voidActionLabel: (amount: string, date: string) => `Anular abono de ${amount} del ${date}`,
   receiptAction: 'Recibo',
-  receiptActionLabel: (amount: string, date: string) =>
-    `Recibo del abono de ${amount} del ${date}`,
+  // El «⋯» de cada movimiento: «Acciones de abono de 150.000,00 COP del 15/10/2026».
+  rowLabel: (amount: string, date: string) => `abono de ${amount} del ${date}`,
   colDue: 'Vencimiento',
   colInstallment: 'Cuota',
   colOutstanding: 'Pendiente',
@@ -214,6 +210,10 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // Cobrar no depende de que haya movimientos (un paciente nuevo con su primer
   // plan aceptado todavía no tiene ninguno); sí de poder ver el estado.
   const showCharge = canCharge && !forbidden;
+  // UX v2 (critique-core §12): «Registrar abono» es la primaria solo cuando
+  // hay algo que cobrar; sin saldo pendiente queda secundaria (un anticipo es
+  // posible, pero no es la acción que la pantalla propone).
+  const owes = data?.summary.some((row) => row.balance > 0) ?? false;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-4">
@@ -233,7 +233,12 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
           <div className="flex flex-col gap-2 sm:shrink-0 sm:flex-row sm:flex-wrap sm:justify-end">
             {showCharge ? (
               <>
-                <Button type="button" className="w-full sm:w-auto" onClick={() => openCharge('payment')}>
+                <Button
+                  type="button"
+                  variant={owes ? 'default' : 'secondary'}
+                  className="w-full sm:w-auto"
+                  onClick={() => openCharge('payment')}
+                >
                   <HandCoins aria-hidden />
                   {copy.recordPayment}
                 </Button>
@@ -300,10 +305,10 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
 
       {/* Avisos de la última anulación y del último cobro: fuera de
           AsyncSection para que la recarga no los borre. */}
-      <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={voiding.notice ? 'text-sm text-success-text' : 'sr-only'}>
         {voiding.notice}
       </p>
-      <p role="status" className={chargeNotice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={chargeNotice ? 'text-sm text-success-text' : 'sr-only'}>
         {chargeNotice}
       </p>
 
@@ -402,62 +407,31 @@ function StatementBody({
 
       {statement.openingBalances.length > 0 ? (
         <SubSection title={statementCopy.openingHeading}>
-          <Card className="overflow-hidden p-0 shadow-none">
-            <Table aria-label={statementCopy.openingTable}>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col">{statementCopy.colConcept}</TableHead>
-                  <TableHead scope="col">{statementCopy.colAsOf}</TableHead>
-                  <TableHead scope="col" className="text-right">
-                    {copy.colAmount}
-                  </TableHead>
-                  <TableHead scope="col" className="text-right">
-                    {statementCopy.colOpeningPaid}
-                  </TableHead>
-                  <TableHead scope="col" className="text-right">
-                    {statementCopy.colOpeningPending}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {statement.openingBalances.map((o) => (
-                  <TableRow key={o.id}>
-                    <TableCell
-                      className="font-medium break-words"
-                      data-label={statementCopy.colConcept}
-                    >
-                      {o.concept}
-                    </TableCell>
-                    <TableCell className="tabular-nums" data-label={statementCopy.colAsOf}>
-                      {openingAsOfLabel(o)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>
-                      {formatCurrency(o.amount, o.currency)}
-                    </TableCell>
-                    <TableCell
-                      className="text-right tabular-nums"
-                      data-label={statementCopy.colOpeningPaid}
-                    >
-                      {formatCurrency(o.paid, o.currency)}
-                    </TableCell>
-                    <TableCell
-                      className="text-right font-medium tabular-nums"
-                      data-label={statementCopy.colOpeningPending}
-                    >
-                      {formatCurrency(o.pending, o.currency)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-          <p className="max-w-prose text-xs text-muted">{openingNoteFor(statement.openingBalances)}</p>
+          <DataList
+            label={statementCopy.openingTable}
+            phone="scroll"
+            rows={statement.openingBalances}
+            getRowKey={(o) => o.id}
+            columns={[
+              { id: 'concept', header: statementCopy.colConcept, cell: (o) => <span className="break-words">{o.concept}</span> },
+              { id: 'asOf', header: statementCopy.colAsOf, cell: (o) => <span className="tabular-nums">{openingAsOfLabel(o)}</span> },
+              { id: 'amount', header: copy.colAmount, numeric: true, cell: (o) => formatCurrency(o.amount, o.currency) },
+              { id: 'paid', header: statementCopy.colOpeningPaid, numeric: true, cell: (o) => formatCurrency(o.paid, o.currency) },
+              {
+                id: 'pending',
+                header: statementCopy.colOpeningPending,
+                numeric: true,
+                cell: (o) => <span className="font-medium">{formatCurrency(o.pending, o.currency)}</span>,
+              },
+            ]}
+          />
+          <p className="t-caption max-w-prose text-muted">{openingNoteFor(statement.openingBalances)}</p>
         </SubSection>
       ) : null}
 
       {statement.plans.length > 0 ? (
         <SubSection title={copy.plansHeading}>
-          <Card className="overflow-hidden p-0 shadow-none">
+          <Card className="overflow-hidden p-0">
             <Table aria-label={copy.plansTable}>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -498,166 +472,150 @@ function StatementBody({
 
       {statement.installments.length > 0 ? (
         <SubSection title={copy.installmentsHeading}>
-          <Card className="overflow-hidden p-0 shadow-none">
-            <Table aria-label={copy.installmentsTable}>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead scope="col">{copy.colDue}</TableHead>
-                  <TableHead scope="col">{copy.colInstallment}</TableHead>
-                  <TableHead scope="col">{copy.colPlan}</TableHead>
-                  <TableHead scope="col" className="text-right">
-                    {copy.colAmount}
-                  </TableHead>
-                  <TableHead scope="col" className="text-right">
-                    {copy.colOutstanding}
-                  </TableHead>
-                  <TableHead scope="col">{copy.colStatus}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {statement.installments.map((inst) => (
-                  <TableRow key={`${inst.paymentPlanId}-${inst.kind}-${inst.sequence ?? 0}`}>
-                    <TableCell className="tabular-nums" data-label={copy.colDue}>
-                      {formatCivilDate(inst.dueDate)}
-                    </TableCell>
-                    <TableCell className="tabular-nums" data-label={copy.colInstallment}>
-                      {installmentLabel(inst)}
-                    </TableCell>
-                    <TableCell className="text-muted" data-label={copy.colPlan}>
-                      {planName(inst.treatmentPlanId)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>
-                      {formatCurrency(inst.amount, inst.currency)}
-                    </TableCell>
-                    <TableCell
-                      className="text-right font-medium tabular-nums"
-                      data-label={copy.colOutstanding}
-                    >
-                      {formatCurrency(inst.outstanding, inst.currency)}
-                    </TableCell>
-                    <TableCell data-label={copy.colStatus}>
-                      <Badge
-                        variant={INSTALLMENT_STATUS_BADGE_VARIANT[inst.status]}
-                        data-testid="installment-status"
-                      >
-                        {INSTALLMENT_STATUS_LABELS[inst.status]}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          {/* Tabla de comparación (se lee columna abajo): en el teléfono
+              sigue siendo tabla, con desplazamiento lateral. */}
+          <DataList
+            label={copy.installmentsTable}
+            phone="scroll"
+            rows={statement.installments}
+            getRowKey={(inst) => `${inst.paymentPlanId}-${inst.kind}-${inst.sequence ?? 0}`}
+            columns={[
+              { id: 'due', header: copy.colDue, cell: (inst) => <span className="tabular-nums">{formatCivilDate(inst.dueDate)}</span> },
+              {
+                id: 'installment',
+                header: copy.colInstallment,
+                cellClassName: 'whitespace-nowrap',
+                cell: (inst) => <span className="tabular-nums">{installmentLabel(inst)}</span>,
+              },
+              {
+                id: 'plan',
+                header: copy.colPlan,
+                cellClassName: 'whitespace-nowrap',
+                cell: (inst) => <span className="text-muted">{planName(inst.treatmentPlanId)}</span>,
+              },
+              { id: 'amount', header: copy.colAmount, numeric: true, cell: (inst) => formatCurrency(inst.amount, inst.currency) },
+              {
+                id: 'outstanding',
+                header: copy.colOutstanding,
+                numeric: true,
+                cell: (inst) => <span className="font-medium">{formatCurrency(inst.outstanding, inst.currency)}</span>,
+              },
+              {
+                id: 'status',
+                header: copy.colStatus,
+                cell: (inst) => <StatusBadge kind="installment" status={inst.status} data-testid="installment-status" />,
+              },
+            ]}
+          />
         </SubSection>
       ) : null}
 
       <SubSection title={copy.movementsHeading}>
         {statement.movements.length > 0 ? (
-          <Card className="overflow-hidden p-0 shadow-none">
-            <Table aria-label={copy.movementsTable}>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead scope="col">{copy.colDate}</TableHead>
-                  <TableHead scope="col">{copy.colDestination}</TableHead>
-                  <TableHead scope="col">{copy.colMethod}</TableHead>
-                  <TableHead scope="col">{copy.colLocation}</TableHead>
-                  <TableHead scope="col" className="text-right">
-                    {copy.colAmount}
-                  </TableHead>
-                  <TableHead scope="col">
-                    <span className="sr-only">{copy.colActions}</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {statement.movements.map((m) => (
-                  <TableRow key={m.id} className={cn(m.voided && 'text-muted')}>
-                    <TableCell className="tabular-nums" data-label={copy.colDate}>
-                      {formatCivilDate(m.paidOn)}
-                    </TableCell>
-                    <TableCell className="text-muted" data-label={copy.colDestination}>
-                      {movementDestination(m, planName, statement.openingBalances)}
-                      <VoidedDetail movement={m} />
-                    </TableCell>
-                    <TableCell data-label={copy.colMethod}>
-                      {/* DX-395: el medio de la clínica (no el método antiguo) y la referencia. */}
-                      {m.method ? (
-                        <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[m.method]}>
-                          {movementMediumName(m)}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted">{methodLabel(null)}</span>
-                      )}
-                      {movementReferenceLabel(m) ? (
-                        <span className="mt-1 block font-mono text-xs text-muted">
-                          <span className="sr-only"> · </span>
-                          {movementReferenceLabel(m)}
-                        </span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell data-label={copy.colLocation}>{m.location.name}</TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>
-                      <span className="inline-flex flex-wrap items-center justify-end gap-2">
-                        {m.voided ? <Badge variant="muted">{statementCopy.voided}</Badge> : null}
-                        <span
-                          className={cn(
-                            'font-medium',
-                            m.voided ? 'text-muted line-through' : 'text-ink',
-                          )}
-                        >
-                          {formatCurrency(m.amount, m.currency)}
-                        </span>
+          // Tabla desde \`sm\`; en el teléfono, tarjeta de dos líneas (fecha +
+          // monto / destino · medio · sede). Recibo y Anular en el «⋯».
+          <DataList
+            label={copy.movementsTable}
+            rows={statement.movements}
+            getRowKey={(m) => m.id}
+            getRowLabel={(m) => copy.rowLabel(formatCurrency(m.amount, m.currency), formatCivilDate(m.paidOn))}
+            columns={[
+              {
+                id: 'date',
+                header: copy.colDate,
+                mobile: 'primary',
+                cell: (m) => <span className={cn('tabular-nums', m.voided && 'text-muted')}>{formatCivilDate(m.paidOn)}</span>,
+              },
+              {
+                id: 'destination',
+                header: copy.colDestination,
+                cell: (m) => (
+                  <span className="text-muted">
+                    {movementDestination(m, planName, statement.openingBalances)}
+                    <VoidedDetail movement={m} />
+                  </span>
+                ),
+                mobileCell: (m) =>
+                  [movementDestination(m, planName, statement.openingBalances), voidedDetail(m)]
+                    .filter(Boolean)
+                    .join(' · '),
+              },
+              {
+                id: 'method',
+                header: copy.colMethod,
+                cell: (m) => (
+                  <>
+                    {/* DX-395: el medio de la clínica (no el método antiguo) y la referencia. */}
+                    {m.method ? (
+                      <StatusBadge kind="paymentMethod" status={m.method}>
+                        {movementMediumName(m)}
+                      </StatusBadge>
+                    ) : (
+                      <span className="text-muted">{methodLabel(null)}</span>
+                    )}
+                    {movementReferenceLabel(m) ? (
+                      <span className="t-caption mt-1 block font-mono text-muted">
+                        <span className="sr-only"> · </span>
+                        {movementReferenceLabel(m)}
                       </span>
-                    </TableCell>
-                    <TableCell className="text-right" data-label={copy.colActions}>
-                      <span className="inline-flex flex-wrap items-center justify-end gap-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          aria-label={copy.receiptActionLabel(
-                            formatCurrency(m.amount, m.currency),
-                            formatCivilDate(m.paidOn),
-                          )}
-                          onClick={() => onReceipt(m.id)}
-                        >
-                          {copy.receiptAction}
-                        </Button>
-                        {m.canVoid ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            aria-label={copy.voidActionLabel(
-                              formatCurrency(m.amount, m.currency),
-                              formatCivilDate(m.paidOn),
-                            )}
-                            onClick={() =>
-                              onVoid({
-                                id: m.id,
-                                amount: m.amount,
-                                currency: m.currency,
-                                paidOn: m.paidOn,
-                                splitLines: m.splitLines,
-                              })
-                            }
-                          >
-                            {copy.voidAction}
-                          </Button>
-                        ) : null}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+                    ) : null}
+                  </>
+                ),
+                mobileCell: (m) =>
+                  [m.method ? movementMediumName(m) : methodLabel(null), movementReferenceLabel(m)]
+                    .filter(Boolean)
+                    .join(' · '),
+              },
+              { id: 'location', header: copy.colLocation, cell: (m) => m.location.name },
+              {
+                id: 'amount',
+                header: copy.colAmount,
+                numeric: true,
+                mobile: 'trailing',
+                cell: (m) => (
+                  <span className="inline-flex flex-wrap items-center justify-end gap-2">
+                    {m.voided ? <Badge variant="neutral">{statementCopy.voided}</Badge> : null}
+                    <span className={cn('font-medium', m.voided ? 'text-muted line-through' : 'text-ink')}>
+                      {formatCurrency(m.amount, m.currency)}
+                    </span>
+                  </span>
+                ),
+                // En el teléfono el «Anulado» lo dice la línea 2 («Anulado por …»);
+                // en la 1 recortaba la fecha.
+                mobileCell: (m) => (
+                  <span className={cn('font-medium', m.voided ? 'text-muted line-through' : 'text-ink')}>
+                    {formatCurrency(m.amount, m.currency)}
+                  </span>
+                ),
+              },
+            ]}
+            rowActions={(m) => [
+              { label: copy.receiptAction, onSelect: () => onReceipt(m.id) },
+              ...(m.canVoid
+                ? [
+                    {
+                      label: copy.voidAction,
+                      destructive: true,
+                      separatorBefore: true,
+                      onSelect: () =>
+                        onVoid({
+                          id: m.id,
+                          amount: m.amount,
+                          currency: m.currency,
+                          paidOn: m.paidOn,
+                          splitLines: m.splitLines,
+                        }),
+                    },
+                  ]
+                : []),
+            ]}
+          />
         ) : (
           <p className="text-sm text-muted">{copy.movementsEmpty}</p>
         )}
       </SubSection>
 
-      <p className="max-w-[68ch] text-xs text-muted">{statementCopy.footnote}</p>
+      <p className="t-caption max-w-[68ch] text-muted">{statementCopy.footnote}</p>
     </div>
   );
 }
@@ -704,11 +662,9 @@ function PlanRows({
         </TableCell>
         <TableCell data-label={copy.colStatus}>
           <span className="inline-flex flex-wrap items-center gap-2">
-            <Badge variant={PLAN_STATUS_BADGE_VARIANT[plan.status]}>
-              {PLAN_STATUS_LABELS[plan.status]}
-            </Badge>
+            <StatusBadge kind="treatmentPlan" status={plan.status} />
             {!plan.countsTowardsBalance ? (
-              <span className="text-xs text-muted">{statementCopy.notCounted}</span>
+              <span className="t-caption text-muted">{statementCopy.notCounted}</span>
             ) : null}
           </span>
         </TableCell>
@@ -718,7 +674,7 @@ function PlanRows({
         <TableCell className="text-right tabular-nums" data-label={copy.colPaid}>
           {formatCurrency(plan.paid, plan.currency)}
           {plan.paidOtherCurrencies.map((o) => (
-            <span key={o.currency} className="block text-xs text-muted">
+            <span key={o.currency} className="t-caption block text-muted">
               + {formatCurrency(o.amount, o.currency)}
             </span>
           ))}
@@ -754,7 +710,7 @@ function PlanRows({
             href={quoteHref}
             target="_blank"
             rel="noopener"
-            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
+            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
           >
             <FileText aria-hidden className="size-4" />
             {copy.quoteLink}
@@ -762,7 +718,7 @@ function PlanRows({
           </a>
         </TableCell>
       </TableRow>
-      <TableRow id={detailId} hidden={!open} className="bg-bg/40 hover:bg-bg/40">
+      <TableRow id={detailId} hidden={!open} className="bg-canvas hover:bg-canvas">
         {/* `max-sm:block`: sin `data-label`, la celda no lleva etiqueta en
             móvil; el detalle ocupa la tarjeta entera. */}
         <TableCell colSpan={PLAN_COLUMNS} className="max-sm:block max-sm:py-2">
@@ -779,16 +735,14 @@ function PlanRows({
  */
 function VoidedDetail({ movement }: { movement: AccountStatementMovement }) {
   const detail = voidedDetail(movement);
-  return detail ? <p className="mt-0.5 max-w-[40ch] text-xs text-muted">{detail}</p> : null;
+  return detail ? <span className="t-caption mt-0.5 block max-w-[40ch] text-muted">{detail}</span> : null;
 }
 
 function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
   const id = React.useId();
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3">
-      <h3 id={id} className="text-base font-semibold text-ink">
-        {title}
-      </h3>
+      <SectionHeader as="h3" titleId={id} title={title} />
       {children}
     </section>
   );
@@ -809,12 +763,12 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
       aria-label={copy.summaryLabel(row.currency)}
       className="overflow-hidden rounded-xl border border-border bg-surface"
     >
-      <div className="flex items-baseline justify-between gap-4 border-b border-hairline px-4 py-3 sm:px-6">
+      <div className="flex items-baseline justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-6">
         <p className="t-label text-muted">
           {row.currency}
         </p>
         {row.nextInstallment ? (
-          <p className="text-right text-xs text-muted">
+          <p className="t-caption text-right text-muted">
             <span>{copy.nextInstallment}</span>{' '}
             <span className="font-medium text-ink tabular-nums">
               {copy.nextInstallmentValue(
@@ -835,18 +789,18 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
         <Figure label={copy.balance} testId="balance" emphasis>
           {formatCurrency(Math.abs(row.balance), row.currency)}
           {inFavor ? (
-            <span className="ml-1 text-xs font-normal text-success">{statementCopy.inFavor}</span>
+            <span className="t-caption ml-1 font-normal text-success-text">{statementCopy.inFavor}</span>
           ) : null}
         </Figure>
         <Figure
           label={copy.overdue}
           testId="overdue"
-          className={hasOverdue ? 'bg-danger/5 text-danger' : undefined}
+          className={hasOverdue ? 'bg-danger-subtle text-danger-text' : undefined}
         >
           {hasOverdue ? (
             <>
               {formatCurrency(row.overdueAmount, row.currency)}
-              <span className="block text-xs font-normal">
+              <span className="t-caption block font-normal">
                 {statementCopy.overdueCount(row.overdueCount)}
               </span>
             </>
@@ -858,7 +812,7 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
       {row.openingPending > 0 ? (
         <p
           data-testid="opening"
-          className="border-t border-hairline px-4 py-2 text-xs text-muted sm:px-6"
+          className="t-caption border-t border-border-subtle px-4 py-2 text-muted sm:px-6"
         >
           {statementCopy.openingIncluded}{' '}
           <span className="font-medium tabular-nums text-ink">
@@ -886,7 +840,7 @@ function Figure({
   return (
     <div
       className={cn(
-        'border-hairline px-4 py-3 sm:px-6',
+        'border-border-subtle px-4 py-3 sm:px-6',
         // Filetes de la rejilla: 2 columnas hasta `lg` (con el raíl, una
         // tablet no tiene ancho para cuatro importes), 4 desde ahí.
         'max-lg:odd:border-r max-lg:[&:nth-child(n+3)]:border-t lg:[&:not(:first-child)]:border-l',

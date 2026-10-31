@@ -12,8 +12,7 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   title: 'Añadir adenda',
@@ -117,8 +116,9 @@ export function ClinicalEntryAddendumModal({
         />
       </FormField>
       <FormField htmlFor="addendum-text" label={copy.textLabel} error={textError}>
-        <textarea
+        <Textarea
           id="addendum-text"
+          autoGrow
           name="text"
           rows={4}
           aria-required="true"
@@ -127,7 +127,6 @@ export function ClinicalEntryAddendumModal({
           aria-invalid={textError ? true : undefined}
           aria-describedby={textError ? fieldErrorId('addendum-text') : undefined}
           onChange={(e) => setText(e.target.value)}
-          className={cn(fieldClass, 'h-auto')}
         />
       </FormField>
     </FormModal>

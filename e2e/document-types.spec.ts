@@ -5,6 +5,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
+import { dataList, dataListRows, rowAction } from './support/data-list';
 
 /**
  * e2e (DX-327): tipos de documento genéricos, nombre libre del paciente y
@@ -109,9 +110,10 @@ async function payOnce(request: APIRequestContext, patientId: string, amount: nu
 /** Abre el estado de cuenta del paciente y el recibo del abono de `amount`. */
 async function openReceipt(page: Page, patientId: string, amount: number): Promise<Locator> {
   await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
-  const table = page.locator('#tabpanel-account-statement').getByRole('table', { name: /movimientos/i });
+  // UX v2: «Recibo» vive en el «⋯» del movimiento (tabla o tarjeta).
+  const table = dataList(page.locator('#tabpanel-account-statement'), /movimientos/i);
   await expect(table).toBeVisible({ timeout: 15_000 });
-  await table.getByRole('row').filter({ hasText: figure(amount) }).getByRole('button', { name: /Recibo del abono/ }).click();
+  await rowAction(page, dataListRows(table).filter({ hasText: figure(amount) }), 'Recibo');
   const dialog = page.getByRole('dialog', { name: 'Recibo de caja' });
   await expect(dialog.getByTestId('receipt-document')).toBeVisible({ timeout: 15_000 });
   return dialog;
@@ -212,7 +214,7 @@ test('a national number with a letter prefix is saved and shown as typed', async
   await shoot(page, 'patient-create', type);
 
   await page.getByRole('button', { name: /Autorización de datos/ }).click();
-  await page.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: 'Crear paciente' }).click();
   await expect(page).toHaveURL(/\/patients\/[0-9a-f-]{36}$/, { timeout: 15_000 });
   await expect(identity(page)).toContainText(`ID local ${docNumber}`);
   await expect(dataValue(page, 'Número de documento')).toHaveText(docNumber);
@@ -326,7 +328,10 @@ test('ADMIN sets a local name in Ajustes and it shows in the create form, the re
   await expect(page.getByText('Nombres guardados.')).toBeVisible();
   await page.reload();
   await expect(national).toHaveValue('Documento A', { timeout: 15_000 });
-  await national.fill('Documento A');
+  // Sin cambios no hay «Guardar» (barra de cambios, B6). Volver a guardar el
+  // mismo nombre (con un espacio de más, que se normaliza) sigue valiendo.
+  await expect(page.getByRole('button', { name: 'Guardar' })).toHaveCount(0);
+  await national.fill('Documento  A');
   await page.getByRole('button', { name: 'Guardar' }).click();
   await expect(page.getByText('Nombres guardados.')).toBeVisible();
   await shoot(page, 'document-type-names', page.getByText('Nombres guardados.'));

@@ -76,7 +76,7 @@ export function PaymentRatePreview({
       data-testid="rp-rate-preview"
       aria-label={copy.title(planCurrency)}
       aria-live="polite"
-      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink"
+      className="rounded-lg border border-border bg-surface-sunken px-3 py-2 text-sm text-ink"
     >
       <p className="t-label text-muted">{copy.title(planCurrency)}</p>
       <PreviewBody
@@ -115,10 +115,10 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
     return (
       <div className="mt-1 space-y-1">
         <p className="flex items-start gap-2">
-          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
           <span>{copy.unavailable(sedeCivilDate(date, fmt))}</span>
         </p>
-        <Button type="button" variant="outline" size="sm" onClick={state.retry} className="max-sm:min-h-11">
+        <Button type="button" variant="secondary" size="sm" onClick={state.retry}>
           {copy.retry}
         </Button>
       </div>
@@ -131,7 +131,7 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
     const missing = ratePerBase(state.rates, paymentCurrency) === null ? paymentCurrency : planCurrency;
     return (
       <p className="mt-1 flex items-start gap-2">
-        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
         <span>{copy.missing(missing, sedeCivilDate(date, fmt))}</span>
       </p>
     );
@@ -174,7 +174,7 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
       {planBalance === 'error' ? <p className="text-muted">{copy.pendingUnavailable}</p> : null}
       {typeof planBalance === 'object' && planBalance.paymentsWithoutRate > 0 ? (
         <p className="mt-1 flex items-start gap-2">
-          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
           <span>{copy.pendingWithoutRate(planBalance.paymentsWithoutRate)}</span>
         </p>
       ) : null}

@@ -49,7 +49,7 @@ export function SectionError({
     >
       <span
         aria-hidden="true"
-        className="mb-1 flex size-10 items-center justify-center rounded-full bg-danger/10 text-danger"
+        className="mb-1 flex size-10 items-center justify-center rounded-full bg-danger-subtle text-danger-text"
       >
         <CloudOff className="size-5" />
       </span>

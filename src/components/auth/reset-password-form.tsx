@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -18,6 +18,8 @@ import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { AUTH_FORM_CLASS, AUTH_LINK_CLASS, AUTH_SUBMIT_CLASS } from './auth-layout';
+import { PasswordInput } from './password-input';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -62,6 +64,7 @@ const INVALID_COPY: Record<
 };
 
 const ERROR_ID = 'reset-password-error';
+const HINT_ID = 'reset-password-hint';
 const MIN = 8;
 const MAX = 200;
 
@@ -156,15 +159,12 @@ export function ResetPasswordForm({ resetToken }: { resetToken: string }) {
     const { title, message } = INVALID_COPY[status];
     return (
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-ink">{title}</h2>
+        <h2 className="t-title text-ink">{title}</h2>
         <p className="text-sm text-muted">{message}</p>
-        <Button asChild size="lg" className="mt-1 w-full">
+        <Button asChild size="lg" className={AUTH_SUBMIT_CLASS}>
           <Link href={FORGOT_PASSWORD_PATH}>{copy.requestNew}</Link>
         </Button>
-        <Link
-          href="/login"
-          className="self-center text-sm font-medium text-primary hover:underline"
-        >
+        <Link href="/login" className={`self-center ${AUTH_LINK_CLASS}`}>
           {copy.backToLogin}
         </Link>
       </div>
@@ -172,36 +172,31 @@ export function ResetPasswordForm({ resetToken }: { resetToken: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className={AUTH_FORM_CLASS}>
       <p className="text-sm text-muted">{copy.intro}</p>
-      <FormField htmlFor="reset-password-new" label={copy.passwordLabel} hint={copy.passwordHint}>
-        <div className="relative">
-          <Input
-            id="reset-password-new"
-            name="password"
-            type={showPassword ? 'text' : 'password'}
-            autoComplete="new-password"
-            required
-            minLength={MIN}
-            maxLength={MAX}
-            disabled={submitting}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? ERROR_ID : undefined}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="pr-10"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            disabled={submitting}
-            aria-pressed={showPassword}
-            aria-label={showPassword ? copy.hidePassword : copy.showPassword}
-            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted transition-colors hover:text-ink disabled:pointer-events-none disabled:opacity-50"
-          >
-            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-          </button>
-        </div>
+      <FormField
+        htmlFor="reset-password-new"
+        label={copy.passwordLabel}
+        hint={copy.passwordHint}
+        hintId={HINT_ID}
+      >
+        <PasswordInput
+          id="reset-password-new"
+          name="password"
+          autoComplete="new-password"
+          required
+          minLength={MIN}
+          maxLength={MAX}
+          disabled={submitting}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? ERROR_ID : HINT_ID}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          visible={showPassword}
+          onVisibleChange={setShowPassword}
+          showLabel={copy.showPassword}
+          hideLabel={copy.hidePassword}
+        />
       </FormField>
 
       <FormField htmlFor="reset-password-confirm" label={copy.confirmLabel}>
@@ -226,7 +221,7 @@ export function ResetPasswordForm({ resetToken }: { resetToken: string }) {
         </InlineError>
       ) : null}
 
-      <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">
+      <Button type="submit" size="lg" disabled={submitting} className={AUTH_SUBMIT_CLASS}>
         {submitting ? (
           <>
             <Loader2 className="animate-spin" /> {copy.submitting}

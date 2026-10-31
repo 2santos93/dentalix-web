@@ -107,7 +107,14 @@ test('DX346: success badges and covered items meet AA on cash shifts, plan and s
       }
       const texts = surface === 'cash' ? ['Abierta'] : surface === 'plan' ? ['Realizado', 'Cubierto'] : ['Realizado', 'Efectivo', 'Cubierto'];
       for (const text of texts) {
-        const badge = scope.getByText(text, { exact: true }).locator('visible=true').first();
+        // En el teléfono los movimientos son tarjetas de DataList (B): el medio de
+        // pago va como texto en la línea 2 («Plan … · Efectivo · Sede …»), no
+        // como chip; se mide esa línea, que también debe llegar a AA.
+        const phoneMethod = surface === 'statement' && text === 'Efectivo' && width < 640;
+        const badge = (phoneMethod
+          ? scope.getByRole('list', { name: 'Movimientos (abonos)' }).getByText(/(^| · )Efectivo( · |$)/)
+          : scope.getByText(text, { exact: true })
+        ).locator('visible=true').first();
         await expect(badge).toBeVisible({ timeout: 15_000 });
         await badge.scrollIntoViewIfNeeded();
         await page.evaluate(() => document.getAnimations().forEach((a) => { if (a.effect?.getComputedTiming().iterations !== Infinity) a.finish(); }));

@@ -125,7 +125,7 @@ export function ProductionItemsDialog({
                   <ScrollFrame label={productionItemsCopy.tableLabel} className="rounded-lg border border-border">
                     <table className="w-full min-w-[40rem] text-sm">
                       <caption className="sr-only">{productionItemsCopy.tableLabel}</caption>
-                      <thead className="bg-surface-2">
+                      <thead className="bg-surface-sunken">
                         <tr>
                           {[
                             productionItemsCopy.date,
@@ -143,7 +143,7 @@ export function ProductionItemsDialog({
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-hairline">
+                      <tbody className="divide-y divide-border-subtle">
                         {data.items.map((item) => (
                           <tr key={item.id} data-testid="production-item" className="h-11">
                             <td className="whitespace-nowrap px-3 py-2 tabular-nums text-ink">
@@ -153,7 +153,7 @@ export function ProductionItemsDialog({
                               {item.patientId && item.patientName ? (
                                 <Link
                                   href={`/patients/${item.patientId}`}
-                                  className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                                  className="font-medium text-primary-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
                                 >
                                   {item.patientName}
                                 </Link>

@@ -7,6 +7,7 @@ import { atSede, sedeDayFromToday } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 import { chooseAppointmentStatus } from './support/appointment-status';
+import { fillDate } from './support/dates';
 
 /**
  * e2e DX-435: oferta de hueco por enlace — el primero que acepta se queda la
@@ -115,7 +116,7 @@ test('cancelar → ofertar a 2 → el primero acepta desde el móvil → agenda 
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(SLOT_DAY);
+  await fillDate(page, 'Fecha', SLOT_DAY);
   await expect(page.getByTestId('day-column').first()).toBeVisible({ timeout: 15_000 });
 
   await column(page, dentist.fullName)

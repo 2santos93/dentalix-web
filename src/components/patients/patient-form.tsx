@@ -2,7 +2,6 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createPatient,
@@ -17,8 +16,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
-import { cn } from '@/lib/utils';
-import { fieldClass } from '@/lib/ui/field-class';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { DateField } from '@/components/ui/date-field';
 import { DOC_TYPES, docTypeOptionLabel, normalizeDocTypeLabel } from '@/lib/patients/doc-type';
 import { isEmailAddress } from '@/lib/format/email';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
@@ -266,7 +266,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
           label={copy.docType}
           error={fieldErrors.docType}
         >
-          <select
+          <NativeSelect
             ref={docTypeRef}
             id="patient-doc-type"
             name="docType"
@@ -277,7 +277,6 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
               clearFieldError('docType');
             }}
             {...invalidProps('docType', fieldErrors)}
-            className={cn(fieldClass, 'h-10')}
           >
             <option value="">{copy.docTypePlaceholder}</option>
             {DOC_TYPES.map((t) => (
@@ -285,7 +284,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
                 {docTypeOptionLabel(t, docTypeNames)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         <FormField htmlFor="patient-doc-number" label={copy.docNumberLabel}>
           <Input
@@ -311,29 +310,28 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
 
       <div className="grid gap-5 sm:grid-cols-2">
         <FormField htmlFor="patient-birth-date" label={copy.birthDateLabel}>
-          <Input
+          <DateField
             id="patient-birth-date"
             name="birthDate"
-            type="date"
-            value={birthDate}
-            onChange={(e) => setBirthDate(e.target.value)}
+            value={birthDate || null}
+            onChange={(value) => setBirthDate(value ?? '')}
+            showAge
           />
         </FormField>
         <FormField htmlFor="patient-sex" label={copy.sexLabel}>
-          <select
+          <NativeSelect
             id="patient-sex"
             name="sex"
             required
             value={sex}
             onChange={(e) => setSex(e.target.value as Sex)}
-            className={cn(fieldClass, 'h-10')}
           >
             {sexOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
       </div>
 
@@ -378,7 +376,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
 
       <div className="grid gap-5 sm:grid-cols-2">
         <FormField htmlFor="patient-country" label={copy.countryLabel}>
-          <select
+          <NativeSelect
             id="patient-country"
             name="countryCode"
             value={countryCode}
@@ -386,7 +384,6 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
               setCountryCode(e.target.value);
               setCity(null);
             }}
-            className={cn(fieldClass, 'h-10')}
           >
             <option value="">—</option>
             {countries.map((c) => (
@@ -394,7 +391,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
                 {c.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         <FormField htmlFor="patient-city" label={copy.cityLabel}>
           <CityCombobox
@@ -408,27 +405,21 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
       </div>
 
       <FormField htmlFor="patient-notes" label={copy.notesLabel}>
-        <textarea
+        <Textarea
           id="patient-notes"
           name="notes"
           rows={3}
+          autoGrow
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className={fieldClass}
         />
       </FormField>
 
       {error ? <InlineError>{error}</InlineError> : null}
 
       <div className="flex justify-end">
-        <Button type="submit" disabled={submitting}>
-          {submitting ? (
-            <>
-              <Loader2 className="animate-spin" /> {copy.submitting}
-            </>
-          ) : (
-            copy.submit
-          )}
+        <Button type="submit" loading={submitting}>
+          {submitting ? copy.submitting : copy.submit}
         </Button>
       </div>
     </form>

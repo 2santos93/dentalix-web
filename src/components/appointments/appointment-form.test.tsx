@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppointmentForm } from './appointment-form';
 import { createAppointment } from '@/lib/appointments/appointments-api';
@@ -11,6 +11,13 @@ import { getPatientMedicalAlerts } from '@/lib/clinical/medical-alerts';
 import { listLocations } from '@/lib/locations/locations-api';
 import { caracasSede, utcSede } from '@/lib/test/sede-clock';
 import { wallInstant } from '@/lib/time/wall-clock';
+import { ApiError } from '@/lib/api/api-error';
+import { dateGroup, readTime, typeDate, typeTime } from './date-segments-for-tests';
+
+// Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
+// pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
+// (mismo arreglo que perio-exam-editor). No cambia ninguna aserción.
+configure({ asyncUtilTimeout: 5_000 });
 
 // PatientForm (rendered inside the "Crear paciente" dialog) calls
 // useRouter() — mock it the same way patient-form.test.tsx does, since it's
@@ -77,6 +84,7 @@ const endodoncia = {
   durationMinutes: 90,
   color: '#7C3AED',
   active: true,
+  isUrgent: false,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -191,7 +199,9 @@ async function renderFormAndWaitForLoad() {
   // The initial (empty-query) patient load settles.
   await waitFor(() => expect(mockedListPatients).toHaveBeenCalled());
   // DX-378: la fecha se habilita con el reloj de la sede.
-  await waitFor(() => expect(screen.getByLabelText(/^fecha$/i)).toBeEnabled());
+  await waitFor(() =>
+    expect(dateGroup(/^fecha$/i).querySelector('[role="spinbutton"]')).not.toHaveAttribute('aria-disabled', 'true'),
+  );
 }
 
 // Picks María López (pat-1) by typing her exact document number, which
@@ -206,9 +216,9 @@ async function selectMariaByDoc(user: ReturnType<typeof userEvent.setup>) {
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await selectMariaByDoc(user);
   await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
-  await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
-  await user.type(screen.getByLabelText(/hora de inicio/i), '09:00');
-  await user.type(screen.getByLabelText(/hora de fin/i), '09:30');
+  await typeDate(user, /^fecha$/i, FUTURE_DATE);
+  await typeTime(user, /hora de inicio/i, '09:00');
+  await typeTime(user, /hora de fin/i, '09:30');
 }
 
 // Solo se falsea `Date`: los temporizadores siguen reales para que RTL y
@@ -271,17 +281,15 @@ describe('AppointmentForm', () => {
       await renderFormAndWaitForLoad();
       await selectMariaByDoc(user);
       await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
-      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
-      await user.type(screen.getByLabelText(/hora de inicio/i), '09:00');
+      await typeDate(user, /^fecha$/i, FUTURE_DATE);
+      await typeTime(user, /hora de inicio/i, '09:00');
       await screen.findByRole('option', { name: 'Endodoncia · 90 min' });
       await user.selectOptions(screen.getByLabelText(/tipo de cita/i), 'type-endo');
 
-      expect(screen.getByLabelText(/hora de fin/i)).toHaveValue('10:30');
+      expect(readTime(/hora de fin/i)).toBe('10:30');
       // Cambiar la hora de inicio arrastra la de fin con la duración del tipo.
-      const start = screen.getByLabelText(/hora de inicio/i);
-      await user.clear(start);
-      await user.type(start, '11:00');
-      expect(screen.getByLabelText(/hora de fin/i)).toHaveValue('12:30');
+      await typeTime(user, /hora de inicio/i, '11:00');
+      expect(readTime(/hora de fin/i)).toBe('12:30');
 
       await user.click(screen.getByRole('button', { name: /agendar/i }));
       await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalledTimes(1));
@@ -309,9 +317,9 @@ describe('AppointmentForm', () => {
     render(<AppointmentForm token="tok" onCreated={jest.fn()} />);
     expect(screen.getByLabelText(/^paciente$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/profesional/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^fecha$/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/hora de inicio/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/hora de fin/i)).toBeInTheDocument();
+    expect(dateGroup(/^fecha$/i)).toBeInTheDocument();
+    expect(dateGroup(/hora de inicio/i)).toBeInTheDocument();
+    expect(dateGroup(/hora de fin/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/motivo/i)).toBeInTheDocument();
     await waitFor(() => expect(mockedListStaff).toHaveBeenCalled());
   });
@@ -439,9 +447,9 @@ describe('AppointmentForm', () => {
     await renderFormAndWaitForLoad();
     await selectMariaByDoc(user);
     await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
-    await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
-    await user.type(screen.getByLabelText(/hora de inicio/i), '09:30');
-    await user.type(screen.getByLabelText(/hora de fin/i), '09:00');
+    await typeDate(user, /^fecha$/i, FUTURE_DATE);
+    await typeTime(user, /hora de inicio/i, '09:30');
+    await typeTime(user, /hora de fin/i, '09:00');
 
     await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
 
@@ -465,7 +473,7 @@ describe('AppointmentForm', () => {
       const user = userEvent.setup();
       await renderFormAndWaitForLoad();
 
-      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
+      await typeDate(user, /^fecha$/i, FUTURE_DATE);
 
       expect(await screen.findByText(/horario de ese día: 09:00–13:00/i)).toBeInTheDocument();
     });
@@ -477,9 +485,9 @@ describe('AppointmentForm', () => {
 
       await selectMariaByDoc(user);
       await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
-      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
-      await user.type(screen.getByLabelText(/hora de inicio/i), '20:00');
-      await user.type(screen.getByLabelText(/hora de fin/i), '20:30');
+      await typeDate(user, /^fecha$/i, FUTURE_DATE);
+      await typeTime(user, /hora de inicio/i, '20:00');
+      await typeTime(user, /hora de fin/i, '20:30');
 
       await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
 
@@ -497,9 +505,9 @@ describe('AppointmentForm', () => {
 
       await selectMariaByDoc(user);
       await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
-      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
-      await user.type(screen.getByLabelText(/hora de inicio/i), '10:00');
-      await user.type(screen.getByLabelText(/hora de fin/i), '10:30');
+      await typeDate(user, /^fecha$/i, FUTURE_DATE);
+      await typeTime(user, /hora de inicio/i, '10:00');
+      await typeTime(user, /hora de fin/i, '10:30');
 
       await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
 
@@ -516,7 +524,7 @@ describe('AppointmentForm', () => {
       const user = userEvent.setup();
       await renderFormAndWaitForLoad();
 
-      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
+      await typeDate(user, /^fecha$/i, FUTURE_DATE);
 
       expect(await screen.findByText(/la sede no atiende ese día/i)).toBeInTheDocument();
     });
@@ -533,15 +541,13 @@ describe('AppointmentForm', () => {
     });
 
     it('el date picker no ofrece días anteriores a hoy (min = hoy local)', async () => {
+      const user = userEvent.setup();
       await renderFormAndWaitForLoad();
-      const today = new Date();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-
-      expect(screen.getByLabelText(/^fecha$/i)).toHaveAttribute(
-        'min',
-        `${today.getFullYear()}-${mm}-${dd}`,
-      );
+      // Reloj fijo: hoy es 15/06/2026. En el calendario, el 14 no se puede elegir.
+      await user.click(within(dateGroup(/^fecha$/i)).getByRole('button', { name: /calendario/i }));
+      const grid = await screen.findByRole('grid');
+      expect(within(grid).getByRole('button', { name: /14 de junio de 2026/ })).toHaveAttribute('aria-disabled', 'true');
+      expect(within(grid).getByRole('button', { name: /15 de junio de 2026/ })).not.toHaveAttribute('aria-disabled');
     });
 
     // El caso que el `min` del date input NO puede cubrir (el día es válido, la
@@ -558,9 +564,9 @@ describe('AppointmentForm', () => {
 
       await selectMariaByDoc(user);
       await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
-      await user.type(screen.getByLabelText(/^fecha$/i), pastDate);
-      await user.type(screen.getByLabelText(/hora de inicio/i), pastTime);
-      await user.type(screen.getByLabelText(/hora de fin/i), '23:59');
+      await typeDate(user, /^fecha$/i, pastDate);
+      await typeTime(user, /hora de inicio/i, pastTime);
+      await typeTime(user, /hora de fin/i, '23:59');
 
       await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
 
@@ -587,6 +593,61 @@ describe('AppointmentForm', () => {
     expect(new Date(input.start).getTime()).toBeLessThan(new Date(input.end ?? '').getTime());
     expect(input.start).toBe(new Date(`${FUTURE_DATE}T09:00:00`).toISOString());
     expect(input.end).toBe(new Date(`${FUTURE_DATE}T09:30:00`).toISOString());
+  });
+
+  describe('hueco reservado (DX-446)', () => {
+    const reservedMessage =
+      'Ese horario está reservado para urgencias (Consulta de urgencia). Elige otro hueco o usa un tipo permitido.';
+    const reservedError = (canOverride: boolean) =>
+      new ApiError(409, reservedMessage, { messages: [reservedMessage], code: 'RESERVED_SLOT', canOverride });
+
+    it('sin permiso: el 409 se lee en el formulario y no ofrece agendar igualmente', async () => {
+      const user = userEvent.setup();
+      mockedCreateAppointment.mockRejectedValue(reservedError(false));
+      await renderFormAndWaitForLoad();
+      await fillValidForm(user);
+      await user.click(screen.getByRole('button', { name: /^agendar cita$/i }));
+
+      expect(await screen.findByText(reservedMessage)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /agendar igualmente/i })).not.toBeInTheDocument();
+    });
+
+    it('con permiso: pide el motivo y reintenta con `overrideReason`', async () => {
+      const user = userEvent.setup();
+      mockedCreateAppointment
+        .mockRejectedValueOnce(reservedError(true))
+        .mockResolvedValueOnce(createdAppointment);
+      await renderFormAndWaitForLoad();
+      await fillValidForm(user);
+      await user.click(screen.getByRole('button', { name: /^agendar cita$/i }));
+
+      const force = await screen.findByRole('button', { name: /agendar igualmente/i });
+      await user.click(force);
+      expect(await screen.findByText(/entre 5 y 300 caracteres/i)).toBeInTheDocument();
+      expect(mockedCreateAppointment).toHaveBeenCalledTimes(1);
+
+      await user.type(screen.getByLabelText(/motivo para agendar igualmente/i), 'Dolor agudo');
+      await user.click(force);
+      await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalledTimes(2));
+      expect(mockedCreateAppointment.mock.calls[1][1]).toMatchObject({
+        patientId: 'pat-1',
+        overrideReason: 'Dolor agudo',
+      });
+    });
+
+    it('el motivo recibe el foco y, si cambia la hora, ya no ofrece agendar igualmente la cita anterior', async () => {
+      const user = userEvent.setup();
+      mockedCreateAppointment.mockRejectedValueOnce(reservedError(true));
+      await renderFormAndWaitForLoad();
+      await fillValidForm(user);
+      await user.click(screen.getByRole('button', { name: /^agendar cita$/i }));
+
+      await screen.findByRole('button', { name: /agendar igualmente/i });
+      expect(screen.getByLabelText(/motivo para agendar igualmente/i)).toHaveFocus();
+
+      await typeTime(user, /hora de fin/i, '10:00');
+      expect(screen.queryByRole('button', { name: /agendar igualmente/i })).not.toBeInTheDocument();
+    });
   });
 
   it('calls onCreated with the created appointment on success', async () => {
@@ -677,8 +738,8 @@ describe('AppointmentForm', () => {
       />,
     );
     await waitFor(() => expect(mockedListStaff).toHaveBeenCalled());
-    expect(screen.getByLabelText(/hora de inicio/i)).toHaveValue('09:00');
-    expect(screen.getByLabelText(/hora de fin/i)).toHaveValue('09:30');
+    expect(readTime(/hora de inicio/i)).toBe('09:00');
+    expect(readTime(/hora de fin/i)).toBe('09:30');
   });
 
   describe('inline "Crear paciente" dialog', () => {
@@ -824,8 +885,7 @@ describe('AppointmentForm', () => {
       ).toBeInTheDocument();
 
       mockRosterDay([{ startMinute: 8 * 60, endMinute: 13 * 60 }]);
-      await user.clear(screen.getByLabelText(/^fecha$/i));
-      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
+      await typeDate(user, /^fecha$/i, FUTURE_DATE);
       await waitFor(() =>
         expect(screen.queryByText(/no atiende en esta sede ese día/)).not.toBeInTheDocument(),
       );

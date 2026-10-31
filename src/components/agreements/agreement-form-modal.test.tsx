@@ -83,6 +83,20 @@ function setup(agreement: Agreement | null = null, overrides: { payers?: Payer[]
   return { onSaved, onOpenChange, dialog: screen.getByRole('dialog') };
 }
 
+/** Escribe un día (dd/mm/aaaa, el orden de «es») en el `DatePicker` de esa etiqueta. */
+async function typeDate(user: ReturnType<typeof setupUser>, scope: HTMLElement, label: string, ddmmyyyy: string) {
+  const group = within(scope).getByRole('group', { name: label });
+  await user.click(within(group).getAllByRole('spinbutton')[0]);
+  await user.keyboard(ddmmyyyy);
+}
+
+/** El día ISO que muestra el `DatePicker` de esa etiqueta. */
+function readDate(scope: HTMLElement, label: string): string {
+  const group = within(scope).getByRole('group', { name: label });
+  const part = (type: string) => group.querySelector(`[data-type="${type}"]`)?.getAttribute('aria-valuenow') ?? '';
+  return `${part('year')}-${part('month').padStart(2, '0')}-${part('day').padStart(2, '0')}`;
+}
+
 describe('AgreementFormModal (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -147,8 +161,8 @@ describe('AgreementFormModal (DX-105)', () => {
     await user.selectOptions(within(dialog).getByLabelText('Categoría 1'), 'Preventiva');
     await user.type(within(dialog).getByLabelText('Porcentaje 1'), '20');
     await user.selectOptions(within(dialog).getByLabelText('Sede'), 'loc-1');
-    await user.type(within(dialog).getByLabelText('Vigente desde'), '2026-01-01');
-    await user.type(within(dialog).getByLabelText('Vigente hasta'), '2026-12-31');
+    await typeDate(user, dialog, 'Vigente desde', '01012026');
+    await typeDate(user, dialog, 'Vigente hasta', '31122026');
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', {
@@ -210,8 +224,8 @@ describe('AgreementFormModal (DX-105)', () => {
     await user.type(within(dialog).getByLabelText('Nombre'), 'Convenio Sanitas');
     await user.selectOptions(within(dialog).getByLabelText('Pagador'), 'payer-1');
     await user.type(within(dialog).getByLabelText('Descuento general (%)'), '10');
-    await user.type(within(dialog).getByLabelText('Vigente desde'), '2026-06-01');
-    await user.type(within(dialog).getByLabelText('Vigente hasta'), '2026-01-01');
+    await typeDate(user, dialog, 'Vigente desde', '01062026');
+    await typeDate(user, dialog, 'Vigente hasta', '01012026');
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));
     expect(
       await within(dialog).findByText('La fecha de fin no puede ser anterior a la de inicio.'),
@@ -227,7 +241,7 @@ describe('AgreementFormModal (DX-105)', () => {
     expect(within(dialog).getByLabelText('Descuento general (%)')).toHaveValue('15');
     expect(within(dialog).getByLabelText('Categoría 1')).toHaveValue('Preventiva');
     expect(within(dialog).getByLabelText('Porcentaje 1')).toHaveValue('20');
-    expect(within(dialog).getByLabelText('Vigente desde')).toHaveValue('2026-01-01');
+    expect(readDate(dialog, 'Vigente desde')).toBe('2026-01-01');
     const active = within(dialog).getByRole('checkbox', { name: 'Convenio activo' });
     expect(active).toBeChecked();
 

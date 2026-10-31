@@ -55,6 +55,17 @@ function page(items = [expenseFixture()], overrides: Partial<ExpensePage> = {}):
   return { items, total: items.length, page: 1, pageSize: 20, ...overrides };
 }
 
+/** La primera fila de datos de la tabla de gastos (tras la cabecera). */
+async function findRow(): Promise<HTMLElement> {
+  const table = await screen.findByRole('table', { name: /^Gastos del periodo/ });
+  let row: HTMLElement | undefined;
+  await waitFor(() => {
+    row = within(table).getAllByRole('row')[1];
+    expect(row).toBeDefined();
+  });
+  return row!;
+}
+
 function lastQuery() {
   return mockedList.mock.calls[mockedList.mock.calls.length - 1][1];
 }
@@ -87,7 +98,7 @@ describe('ExpensesView (DX-274)', () => {
       expenseLocations.map((location) => ({ ...location, locale: 'en-US', hourCycle: 'h12' as const })),
     );
     render(<ExpensesView token="tok" />);
-    const row = await screen.findByTestId('expense-row');
+    const row = await findRow();
     expect(await within(row).findByText('10/20/2026')).toBeInTheDocument();
     // El código de la moneda, nunca «$» (producto bimonetario).
     expect(within(row).getByText(/^COP\s150,000\.00$/)).toBeInTheDocument();
@@ -98,51 +109,72 @@ describe('ExpensesView (DX-274)', () => {
       page([expenseFixture({ status: 'PARTIAL', overdue: true, paidAmount: 50_000, pendingAmount: 100_000 })]),
     );
     render(<ExpensesView token="tok" />);
-    const row = await screen.findByTestId('expense-row');
+    const row = await findRow();
     expect(lastQuery()).toEqual({ from: '2026-10-01', to: '2026-10-24', page: 1 });
     expect(within(row).getByText('20/10/2026')).toBeInTheDocument();
-    expect(within(row).getByRole('button', { name: 'Ver el gasto de Laboratorio del 20/10/2026' })).toBeInTheDocument();
+    // Toda la fila abre el detalle: el botón de la celda principal se estira sobre ella.
+    expect(within(row).getByRole('button', { name: /^Laboratorio/ })).toBeInTheDocument();
     expect(within(row).getByText('Lab Dental SAS')).toBeInTheDocument();
     expect(await within(row).findByText('Sede principal')).toBeInTheDocument();
-    expect(within(row).getByText('Parcial')).toBeInTheDocument();
-    expect(within(row).getByText('Vencido')).toBeInTheDocument();
+    // Un solo chip compuesto, en peligro: el vencimiento es lo urgente.
+    expect(within(row).getByText('Parcial · vencido')).toHaveAttribute('data-overdue', 'true');
     expect(screen.getByText('1 gasto')).toHaveAttribute('aria-live', 'polite');
   });
 
   it('los filtros viajan a la API y vuelven a la página 1', async () => {
     const user = setupUser();
     render(<ExpensesView token="tok" />);
-    await screen.findByTestId('expense-row');
-    await user.selectOptions(await screen.findByRole('combobox', { name: 'Sede' }), 'loc-2');
+    await findRow();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Estado' }), 'OPEN');
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Categoría' }), 'Seguros');
-    await user.click(screen.getByRole('checkbox', { name: 'Vencidos' }));
     await user.type(screen.getByRole('searchbox', { name: 'Buscar por proveedor o descripción' }), 'lab');
     await waitFor(() =>
       expect(lastQuery()).toEqual({
         from: '2026-10-01',
         to: '2026-10-24',
-        locationId: 'loc-2',
         category: 'Seguros',
         status: 'OPEN',
-        overdue: true,
         query: 'lab',
         page: 1,
       }),
     );
   });
 
-  it('con una sede activa no ofrece el filtro de sede y lo dice en la cabecera', async () => {
+  it('«Vencidos» es una opción del estado: pide los vencidos, sin otro estado', async () => {
+    const user = setupUser();
+    render(<ExpensesView token="tok" />);
+    await findRow();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Estado' }), 'Vencidos');
+    await waitFor(() => expect(lastQuery()).toEqual({ from: '2026-10-01', to: '2026-10-24', overdue: true, page: 1 }));
+    expect(screen.queryByRole('checkbox', { name: 'Vencidos' })).not.toBeInTheDocument();
+  });
+
+  it('el periodo es un solo campo «Desde – Hasta» (sin fechas nativas)', async () => {
+    const { container } = render(<ExpensesView token="tok" />);
+    await findRow();
+    expect(screen.getByRole('group', { name: 'Periodo de la factura' })).toBeInTheDocument();
+    expect(container.querySelector('input[type="date"]')).toBeNull();
+  });
+
+  it('sin selector de sede propio: la sede la decide el selector global', async () => {
+    render(<ExpensesView token="tok" />);
+    await findRow();
+    expect(screen.queryByRole('combobox', { name: 'Sede' })).not.toBeInTheDocument();
+    expect(screen.getByText('Toda la clínica')).toBeInTheDocument();
+  });
+
+  it('con una sede activa lo dice en la cabecera y no repite la columna «Sede»', async () => {
     mockedActive.mockReturnValue('loc-2');
     render(<ExpensesView token="tok" />);
     expect(await screen.findByText('Gastos de Sede norte')).toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'Sede' })).not.toBeInTheDocument();
+    await findRow();
+    expect(screen.queryByRole('columnheader', { name: 'Sede' })).not.toBeInTheDocument();
   });
 
   it('exporta el CSV con BOM y el nombre del periodo; si falla, toast con reintento', async () => {
     const user = setupUser();
     render(<ExpensesView token="tok" />);
-    await screen.findByTestId('expense-row');
+    await findRow();
     await user.click(screen.getByRole('button', { name: 'Exportar CSV' }));
     await waitFor(() => expect(saveCsv).toHaveBeenCalledWith('csv', 'gastos-2026-10-01-2026-10-24.csv', { bom: true }));
     expect(mockedCsv).toHaveBeenCalledWith('tok', { from: '2026-10-01', to: '2026-10-24' });
@@ -167,7 +199,7 @@ describe('ExpensesView (DX-274)', () => {
     render(<ExpensesView token="tok" />);
     expect(await screen.findByText('No pudimos cargar los gastos.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
-    expect(await screen.findByTestId('expense-row')).toBeInTheDocument();
+    expect(await findRow()).toBeInTheDocument();
   });
 
   it('403: solo el aviso, sin filtros ni acciones', async () => {
@@ -180,7 +212,7 @@ describe('ExpensesView (DX-274)', () => {
   it('«Nuevo gasto» abre el modal de alta', async () => {
     const user = setupUser();
     render(<ExpensesView token="tok" />);
-    await screen.findByTestId('expense-row');
+    await findRow();
     await user.click(screen.getByRole('button', { name: 'Nuevo gasto' }));
     expect(await screen.findByRole('dialog', { name: 'Nuevo gasto' })).toBeInTheDocument();
   });
@@ -212,17 +244,15 @@ describe('ExpensesView (DX-274)', () => {
     await waitFor(() => expect(within(select).getByRole('option', { name: 'Categoría retirada' })).toBeInTheDocument());
   });
 
-  it('un gasto de una sede inactiva dice su sede, pero el filtro solo ofrece las activas', async () => {
+  it('un gasto de una sede inactiva dice su sede', async () => {
     mockRequestLocations.mockResolvedValue([
       ...expenseLocations,
       { ...expenseLocations[1], id: 'loc-3', name: 'Sede cerrada', isActive: false },
     ]);
     mockedList.mockResolvedValue(page([expenseFixture({ locationId: 'loc-3' })]));
     render(<ExpensesView token="tok" />);
-    const row = await screen.findByTestId('expense-row');
+    const row = await findRow();
     expect(await within(row).findByText('Sede cerrada')).toBeInTheDocument();
-    const filter = screen.getByRole('combobox', { name: 'Sede' });
-    expect(within(filter).queryByRole('option', { name: 'Sede cerrada' })).not.toBeInTheDocument();
   });
 
   async function voidFromDetail(user: ReturnType<typeof setupUser>) {
@@ -230,7 +260,7 @@ describe('ExpensesView (DX-274)', () => {
     jest.mocked(voidExpense).mockResolvedValue(
       expenseDetailFixture({ status: 'VOIDED', voidedAt: '2026-10-24T10:00:00.000Z', voidReason: 'Duplicado sí' }),
     );
-    const trigger = within(await screen.findByTestId('expense-row')).getByRole('button', { name: /Ver el gasto/ });
+    const trigger = within(await findRow()).getByRole('button', { name: /^Laboratorio/ });
     await user.click(trigger);
     await user.click(await screen.findByRole('button', { name: 'Anular gasto' }));
     const modal = await screen.findByRole('dialog', { name: '¿Anular este gasto?' });
@@ -243,7 +273,7 @@ describe('ExpensesView (DX-274)', () => {
   it('tras un cambio en el detalle la lista se recarga sin quitar las filas y el foco vuelve a la fila', async () => {
     const user = setupUser();
     render(<ExpensesView token="tok" />);
-    await screen.findByTestId('expense-row');
+    await findRow();
     let finish: (value: ExpensePage) => void = () => undefined;
     mockedList.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
     const trigger = await voidFromDetail(user);
@@ -259,7 +289,7 @@ describe('ExpensesView (DX-274)', () => {
   it('si la fila ya no está al cerrar el detalle, el foco va a «Nuevo gasto»', async () => {
     const user = setupUser();
     render(<ExpensesView token="tok" />);
-    await screen.findByTestId('expense-row');
+    await findRow();
     mockedList.mockResolvedValue(page([expenseFixture({ id: 'exp-2' })]));
     await voidFromDetail(user);
     await user.keyboard('{Escape}');

@@ -84,9 +84,8 @@ for (const scrollbar of ['native', 'classic'] as const) {
         });
         const links = nav.getByRole('link');
         await expect(links).toHaveCount(15);
-        await expect(nav.getByRole('link', { name: /^Pendiente de cerrar(?: · \d+)?$/ }))
-          .toHaveAttribute('href', '/agenda/pendiente-de-cerrar');
-        await expect(nav.getByRole('link', { name: 'Anamnesis por revisar · 12', exact: true })).toBeVisible();
+        await expect(nav.getByRole('link', { name: 'Anamnesis 12 · por revisar', exact: true })).toBeVisible();
+        await expect(nav.locator('a[href="/agenda/pendiente-de-cerrar"]')).toHaveCount(1);
         await links.first().focus();
         const initialScroll = await nav.evaluate((el) => el.scrollTop);
         for (let index = 1; index < await links.count(); index++) {

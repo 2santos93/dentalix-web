@@ -13,6 +13,8 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { SectionHeader } from '@/components/ui/section-header';
 import { PrescriptionTemplateFormModal } from './prescription-template-form-modal';
 
 const copy = {
@@ -29,15 +31,14 @@ const copy = {
   colName: 'Nombre',
   colMedications: 'Medicamentos',
   colUpdated: 'Actualizada',
-  colActions: 'Acciones',
   edit: 'Editar',
-  remove: 'Retirar',
-  actionFor: (action: string, name: string) => `${action} «${name}»`,
-  removeTitle: '¿Retirar la plantilla?',
+  remove: 'Eliminar',
+  rowLabel: (name: string) => `«${name}»`,
+  removeTitle: '¿Eliminar la plantilla?',
   removeBody: (name: string) =>
     `«${name}» dejará de ofrecerse al emitir. Las recetas ya emitidas no cambian.`,
-  removeConfirm: 'Retirar',
-  removeError: 'No pudimos retirar la plantilla.',
+  removeConfirm: 'Eliminar',
+  removeError: 'No pudimos eliminar la plantilla.',
 };
 
 interface PrescriptionTemplatesManagerProps {
@@ -48,7 +49,7 @@ interface PrescriptionTemplatesManagerProps {
 
 /**
  * Gestión de plantillas de receta (DX-013) en /settings/recetas, en el mismo
- * patrón que las de consentimiento: crear y editar en modal, y retirar (borrado
+ * patrón que las de consentimiento: crear y editar en modal, y eliminar (borrado
  * blando) con confirmación.
  */
 export function PrescriptionTemplatesManager({ token, allowed }: PrescriptionTemplatesManagerProps) {
@@ -131,48 +132,42 @@ export function PrescriptionTemplatesManager({ token, allowed }: PrescriptionTem
     return t.items.map((i) => [i.activeIngredient, i.concentration].filter(Boolean).join(' ')).join(' · ');
   }
 
-  function actions(t: PrescriptionTemplate) {
-    return (
-      <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => openModal(t)}
-          aria-label={copy.actionFor(copy.edit, t.name)}
-        >
-          {copy.edit}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setRemoving(t)}
-          aria-label={copy.actionFor(copy.remove, t.name)}
-        >
-          {copy.remove}
-        </Button>
-      </div>
-    );
-  }
+  const columns: DataListColumn<PrescriptionTemplate>[] = [
+    { id: 'name', header: copy.colName, mobile: 'primary', cell: (t) => t.name },
+    {
+      id: 'medications',
+      header: copy.colMedications,
+      cell: (t) => <span className="text-muted">{medications(t)}</span>,
+      mobileCell: (t) => medications(t) || null,
+    },
+    {
+      id: 'updated',
+      header: copy.colUpdated,
+      mobile: 'hidden',
+      cell: (t) => <span className="t-data text-muted">{formatDateTime(t.updatedAt)}</span>,
+    },
+  ];
 
   return (
-    <section aria-labelledby="rx-templates-heading" className="flex flex-col gap-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 id="rx-templates-heading" className="text-lg font-semibold text-ink">
-            {copy.heading}
-          </h2>
-          <p className="text-sm text-muted">{copy.support}</p>
-          <p className="text-sm text-muted" aria-live="polite">
-            {loading || error ? '' : copy.count(templates.length)}
-          </p>
-        </div>
-        <Button type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
-          <Plus aria-hidden />
-          {copy.newTemplate}
-        </Button>
-      </div>
+    <section aria-labelledby="rx-templates-heading" className="flex max-w-[720px] flex-col gap-3">
+      <SectionHeader
+        titleId="rx-templates-heading"
+        title={copy.heading}
+        description={
+          <>
+            {copy.support}
+            <span className="block" aria-live="polite">
+              {loading || error ? '' : copy.count(templates.length)}
+            </span>
+          </>
+        }
+        actions={
+          <Button type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
+            <Plus aria-hidden />
+            {copy.newTemplate}
+          </Button>
+        }
+      />
 
       <AsyncSection
         loading={loading}
@@ -186,50 +181,18 @@ export function PrescriptionTemplatesManager({ token, allowed }: PrescriptionTem
         emptyDescription={copy.emptyHint}
         emptyIcon={<FileText aria-hidden />}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colName}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colMedications}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colUpdated}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {templates.map((t) => (
-              <tr key={t.id} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-3 font-medium">{t.name}</td>
-                <td className="px-4 py-3 text-muted">{medications(t)}</td>
-                <td className="px-4 py-3 tabular-nums text-muted">{formatDateTime(t.updatedAt)}</td>
-                <td className="px-4 py-3">{actions(t)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {templates.map((t) => (
-            <li
-              key={t.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <p className="font-medium">{t.name}</p>
-              <p className="text-muted">{medications(t)}</p>
-              {actions(t)}
-            </li>
-          ))}
-        </ul>
+        <DataList
+          label={copy.tableLabel}
+          rows={templates}
+          columns={columns}
+          getRowKey={(t) => t.id}
+          onRowClick={(t) => openModal(t)}
+          getRowLabel={(t) => copy.rowLabel(t.name)}
+          rowActions={(t) => [
+            { label: copy.edit, onSelect: () => openModal(t) },
+            { label: copy.remove, onSelect: () => setRemoving(t), destructive: true, separatorBefore: true },
+          ]}
+        />
       </AsyncSection>
 
       <PrescriptionTemplateFormModal

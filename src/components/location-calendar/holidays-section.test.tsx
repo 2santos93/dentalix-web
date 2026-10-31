@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { typeDate } from '@/components/appointments/date-segments-for-tests';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { HolidaysSection, holidaysCopy } from './holidays-section';
 import { holidayFormCopy } from './holiday-form-modal';
@@ -156,7 +157,7 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     const user = setupUser();
     renderSection([mayo]);
     await user.click(screen.getByRole('button', { name: copy.add }));
-    await user.type(screen.getByLabelText(holidayFormCopy.date), '2027-12-24');
+    await typeDate(user, holidayFormCopy.date, '2027-12-24');
     await user.type(screen.getByLabelText(holidayFormCopy.name), 'Nochebuena');
     await user.click(screen.getByRole('button', { name: holidayFormCopy.create }));
 
@@ -178,7 +179,7 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     const user = setupUser();
     renderSection([mayo]);
     await user.click(screen.getByRole('button', { name: copy.add }));
-    await user.type(screen.getByLabelText(holidayFormCopy.date), '2027-05-03');
+    await typeDate(user, holidayFormCopy.date, '2027-05-03');
     await user.type(screen.getByLabelText(holidayFormCopy.name), 'Otro');
     await user.click(screen.getByRole('button', { name: holidayFormCopy.create }));
     const dialog = screen.getByRole('dialog');
@@ -405,7 +406,8 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
       const status = () => document.querySelector('section p[role="status"]') as HTMLElement;
       await waitFor(() => expect(status()).toHaveTextContent('Importado 1 festivo'));
       await user.click(screen.getByRole('button', { name: copy.add }));
-      await user.type(await screen.findByLabelText('Fecha'), '2027-05-03');
+      await screen.findByRole('group', { name: 'Fecha' });
+      await typeDate(user, 'Fecha', '2027-05-03');
       await user.type(screen.getByLabelText('Nombre'), 'Cierre por obras');
       await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Añadir festivo' }));
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

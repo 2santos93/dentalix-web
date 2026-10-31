@@ -1,7 +1,5 @@
 'use client';
-import * as React from 'react';
-import { useRef, type KeyboardEvent } from 'react';
-import { cn } from '@/lib/utils';
+import { TabBar } from '@/components/ui/tabs';
 
 export type CashTabKey = 'abonos' | 'turnos';
 
@@ -34,62 +32,18 @@ interface CashTabsProps {
  * Enter/Espacio (o el clic) eligen; cada panel carga datos al montarse.
  */
 export function CashTabs({ active, onChange }: CashTabsProps) {
-  const refs = useRef<Record<CashTabKey, HTMLButtonElement | null>>({ abonos: null, turnos: null });
-
-  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    const last = TABS.length - 1;
-    const next =
-      event.key === 'ArrowRight'
-        ? index === last
-          ? 0
-          : index + 1
-        : event.key === 'ArrowLeft'
-          ? index === 0
-            ? last
-            : index - 1
-          : event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? last
-              : null;
-    if (next === null) return;
-    event.preventDefault();
-    refs.current[TABS[next].key]?.focus();
-  }
-
   return (
-    <div
-      role="tablist"
+    <TabBar
       aria-label={copy.tablist}
-      className="mb-6 flex gap-1 overflow-x-auto border-b border-border"
-    >
-      {TABS.map((tab, index) => {
-        const selected = tab.key === active;
-        return (
-          <button
-            key={tab.key}
-            ref={(el) => {
-              refs.current[tab.key] = el;
-            }}
-            type="button"
-            role="tab"
-            id={cashTabId(tab.key)}
-            aria-selected={selected}
-            aria-controls={cashPanelId(tab.key)}
-            tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(tab.key)}
-            onKeyDown={(e) => onKeyDown(e, index)}
-            className={cn(
-              '-mb-px min-h-11 whitespace-nowrap border-b-2 px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-              selected
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted hover:text-ink',
-            )}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+      value={active}
+      onValueChange={onChange}
+      className="mb-6"
+      items={TABS.map((tab) => ({
+        value: tab.key,
+        label: tab.label,
+        id: cashTabId(tab.key),
+        controls: cashPanelId(tab.key),
+      }))}
+    />
   );
 }

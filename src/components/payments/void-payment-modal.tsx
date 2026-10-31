@@ -3,9 +3,9 @@ import * as React from 'react';
 import { useId, useState } from 'react';
 import { FormModal } from '@/components/shared/form-modal';
 import { Label } from '@/components/ui/label';
+import { Callout } from '@/components/ui/callout';
 import { InlineError } from '@/components/errors/inline-error';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 // Mismos límites que `VoidPaymentDto.reason` en la API (tras recortar).
 export const VOID_REASON_MIN = 3;
@@ -90,18 +90,18 @@ export function VoidPaymentModal({
       destructive
     >
       {subject ? (
-        <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-ink tabular-nums">
+        <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm font-medium text-ink tabular-nums">
           {subject}
         </p>
       ) : null}
       {splitLines && splitLines > 1 ? (
-        <p role="note" className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink">
+        <Callout tone="warning" role="note">
           {copy.splitNotice(splitLines)}
-        </p>
+        </Callout>
       ) : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={fieldId}>{copy.reasonLabel}</Label>
-        <textarea
+        <Textarea
           id={fieldId}
           name="reason"
           rows={3}
@@ -114,19 +114,18 @@ export function VoidPaymentModal({
           }}
           aria-invalid={validationError ? true : undefined}
           aria-describedby={validationError ? errorId : hintId}
-          className={cn(fieldClass, validationError && 'border-danger')}
         />
         <div className="flex items-start justify-between gap-3">
           {validationError ? (
-            <InlineError id={errorId} className="text-xs">
+            <InlineError id={errorId}>
               {validationError}
             </InlineError>
           ) : (
-            <p id={hintId} className="text-xs text-muted">
+            <p id={hintId} className="t-caption text-muted">
               {copy.reasonHint}
             </p>
           )}
-          <span className="shrink-0 text-xs text-muted tabular-nums" aria-hidden="true">
+          <span className="t-caption shrink-0 text-muted tabular-nums" aria-hidden="true">
             {copy.counter(reason.length)}
           </span>
         </div>

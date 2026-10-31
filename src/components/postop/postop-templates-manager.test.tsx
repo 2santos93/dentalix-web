@@ -98,8 +98,6 @@ describe('PostOpTemplatesManager', () => {
     expect(row).toHaveTextContent('2 procedimientos · 1 tipo de cita');
     expect(row).toHaveTextContent('Activa');
     expect(screen.getByText('1 plantilla')).toBeInTheDocument();
-    // En móvil, la misma lista en tarjetas.
-    expect(screen.getByRole('list', { name: 'Indicaciones postoperatorias' })).toHaveTextContent('EXO');
   });
 
   it('error con reintento que vuelve a pedir la lista; vacío ofrece «Cargar ejemplos»', async () => {
@@ -153,7 +151,8 @@ describe('PostOpTemplatesManager', () => {
     mockedUpdate.mockResolvedValue({ ...exo, title: 'Tras una exodoncia', version: 2 });
     renderManager();
     const table = await screen.findByRole('table');
-    await user.click(within(table).getByRole('button', { name: 'Editar «Después de una exodoncia»' }));
+    await user.click(within(table).getByRole('button', { name: 'Acciones de «Después de una exodoncia»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
     const dialog = await screen.findByRole('dialog', { name: 'Editar indicaciones' });
     const title = within(dialog).getByLabelText('Título');
     await user.clear(title);
@@ -174,13 +173,13 @@ describe('PostOpTemplatesManager', () => {
     mockedUpdate.mockRejectedValueOnce(new Error('red'));
     renderManager();
     const table = await screen.findByRole('table');
-    await user.click(
-      within(table).getByRole('button', { name: 'Desactivar «Después de una exodoncia»' }),
-    );
+    await user.click(within(table).getByRole('button', { name: 'Acciones de «Después de una exodoncia»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Desactivar' }));
     expect(mockedUpdate).toHaveBeenCalledWith('tok', 'tpl-1', { active: false });
     await waitFor(() => expect(within(table).getByText('Inactiva')).toBeInTheDocument());
 
-    await user.click(within(table).getByRole('button', { name: 'Activar «Después de una exodoncia»' }));
+    await user.click(within(table).getByRole('button', { name: 'Acciones de «Después de una exodoncia»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Activar' }));
     await waitFor(() =>
       expect(notifyError).toHaveBeenCalledWith(
         'No pudimos cambiar el estado de «Después de una exodoncia».',

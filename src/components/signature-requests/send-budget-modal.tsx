@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Callout } from '@/components/ui/callout';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InlineError } from '@/components/errors/inline-error';
@@ -135,34 +136,32 @@ export function SendBudgetModal({
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
             {error ? <InlineError variant="summary">{error}</InlineError> : null}
-            <section
-              aria-label={copy.recipientHeading}
-              className="flex flex-col gap-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
-            >
-              <p className="flex items-center gap-2 font-medium text-ink">
-                <Mail aria-hidden className="size-4 text-muted" />
-                {copy.channel}
-              </p>
+            {/* B7: destino en una franja hundida; si no se puede enviar, el motivo es un aviso (Callout). */}
+            <section aria-label={copy.recipientHeading} className="text-sm">
               {recipient?.allowed && recipient.destinationMasked && recipient.signerName ? (
-                <>
+                <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface-sunken px-3 py-2">
+                  <p className="flex items-center gap-2 font-medium text-ink">
+                    <Mail aria-hidden className="size-4 text-muted" />
+                    {copy.channel}
+                  </p>
                   <p className="break-words text-ink">
                     {recipient.signerType === 'GUARDIAN'
                       ? copy.toGuardian(recipient.destinationMasked, recipient.signerName)
                       : copy.toPatient(recipient.destinationMasked, recipient.signerName)}
                   </p>
-                  <p className="text-xs text-muted">{copy.expiry}</p>
-                </>
+                  <p className="t-caption">{copy.expiry}</p>
+                </div>
               ) : (
-                <p role="alert" className="text-warning">
+                <Callout tone="warning" role="alert" icon={Mail} title={copy.channel}>
                   {copy.sendBlocked(recipient?.reason ?? '')}
-                </p>
+                </Callout>
               )}
             </section>
             <p className="text-sm text-muted">{copy.changes}</p>
             {replacesPending ? (
-              <p role="status" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+              <Callout tone="warning" role="status" className="py-2">
                 {copy.resend}
-              </p>
+              </Callout>
             ) : null}
             <DialogFooter>
               <DialogClose asChild>

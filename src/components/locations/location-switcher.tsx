@@ -10,6 +10,7 @@ import {
 } from '@/lib/locations/location-store';
 import { cn } from '@/lib/utils';
 import { ChevronDown, MapPin } from 'lucide-react';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const copy = {
   label: 'Sede',
@@ -17,12 +18,22 @@ const copy = {
   // DX-089: un miembro acotado a varias sedes ve la vista conjunta de LAS SUYAS,
   // no la de la clínica entera.
   mine: 'Mis sedes',
+  // Rótulos cortos del botón del teléfono (el nombre entero va en el nombre accesible).
+  allShort: 'Todas',
+  mineShort: 'Mías',
 };
 
-// `appearance-none` + chevron propio: el select nativo pinta su flecha con el
-// estilo del sistema, que no cuadra con el resto de controles (ui/select).
-const fieldClass =
-  'h-9 appearance-none rounded-lg border border-border bg-surface pl-8 pr-8 text-sm text-ink transition-colors hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg';
+/**
+ * Rótulo corto de una sede para el botón del teléfono: sin el genérico «Sede»
+ * delante («Sede Norte» → «Norte») y solo la primera palabra; el CSS lo
+ * recorta si aun así no cabe. Nunca vacío: si todo era genérico, el nombre.
+ */
+export function shortSedeLabel(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const meaningful = words.filter((w) => !/^(sede|sucursal|cl[ií]nica)$/i.test(w));
+  return (meaningful[0] ?? words[0] ?? name).replace(/[,.;:]$/, '');
+}
+
 
 /**
  * Selector de sede. Se muestra en cuanto la clínica tiene AL MENOS UNA sede.
@@ -37,7 +48,12 @@ const fieldClass =
  * - `variant="block"`: fila a lo ancho para el pie del sidebar (desktop), justo
  *   encima de la tarjeta de cuenta.
  * - `variant="rail"`: botón cuadrado de icono para el sidebar colapsado.
- * - `variant="inline"`: compacto, para el topbar móvil (donde no hay sidebar).
+ * - `variant="inline"`: en línea, con el nombre entero hasta 12rem.
+ * - `variant="compact"`: selector con nombre, hasta 8.5rem.
+ * - `variant="phone"`: barra superior del teléfono (K2): pastilla de 44px con
+ *   el pin y un rótulo corto («Norte», «Todas»); nombre accesible «Sede: …»
+ *   con el nombre entero. Abre el mismo desplegable nativo. Deja el ancho a la
+ *   marca de la clínica, que antes se cortaba junto al selector.
  *
  * Con sedes acotadas (claim `loc` del token, DX-089) solo se ofrecen las
  * permitidas y nunca «Todas las sedes»: con varias, la opción vacía pasa a ser
@@ -51,7 +67,7 @@ const fieldClass =
 export function LocationSwitcher({
   variant = 'inline',
 }: {
-  variant?: 'inline' | 'block' | 'rail';
+  variant?: 'inline' | 'block' | 'rail' | 'compact' | 'phone';
 }) {
   const token = useAuthStore((s) => s.accessToken);
   const requestLocations = useSessionLocations(token);
@@ -160,57 +176,79 @@ export function LocationSwitcher({
     </>
   );
 
+  // Un solo select invisible para el raíl y el teléfono: cubre el botón entero
+  // y abre el desplegable del sistema. El foco lo pinta el botón que lo lleva.
+  const overlaySelect = (name: string) => (
+    <NativeSelect
+      aria-label={name}
+      value={active ?? ''}
+      onChange={(e) => handleChange(e.target.value)}
+      className="absolute inset-0 opacity-0"
+      selectClassName="h-full pointer-coarse:h-full focus-visible:outline-none"
+    >
+      {options}
+    </NativeSelect>
+  );
+
+  if (variant === 'phone') {
+    const activeName = locations.find((l) => l.id === active)?.name;
+    const fullName = activeName ?? emptyLabel ?? copy.all;
+    const short = activeName
+      ? shortSedeLabel(activeName)
+      : emptyLabel === copy.mine
+        ? copy.mineShort
+        : copy.allShort;
+    return (
+      <span
+        title={`${copy.label}: ${fullName}`}
+        className="relative inline-flex h-11 max-w-[6.5rem] shrink-0 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
+      >
+        <MapPin aria-hidden className="size-4 shrink-0" />
+        <span aria-hidden className="min-w-0 truncate text-[0.8125rem] font-medium text-ink">
+          {short}
+        </span>
+        <ChevronDown aria-hidden className="size-3.5 shrink-0" />
+        {/* El select nativo, invisible, cubre la pastilla entera: el
+            desplegable es el del sistema, como en el raíl. */}
+        {overlaySelect(`${copy.label}: ${fullName}`)}
+      </span>
+    );
+  }
+
   if (variant === 'rail') {
     const activeName = locations.find((l) => l.id === active)?.name ?? emptyLabel ?? copy.all;
     return (
       <label
         title={`${copy.label}: ${activeName}`}
-        className="relative flex size-10 items-center justify-center rounded-lg border border-border bg-surface text-muted transition-colors hover:bg-bg hover:text-ink focus-within:ring-2 focus-within:ring-primary"
+        className="relative flex size-10 items-center justify-center rounded-lg border border-border bg-surface text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
       >
         <span className="sr-only">{copy.label}</span>
         <MapPin aria-hidden className="size-4" />
         {/* El select nativo, invisible, cubre el icono entero: se ve un botón
             pero el desplegable sigue siendo el del sistema — sin popover propio
             que posicionar ni estado que mantener. */}
-        <select
-          aria-label={copy.label}
-          value={active ?? ''}
-          onChange={(e) => handleChange(e.target.value)}
-          className="absolute inset-0 cursor-pointer appearance-none opacity-0 focus:outline-none"
-        >
-          {options}
-        </select>
+        {overlaySelect(copy.label)}
       </label>
     );
   }
 
   return (
-    <label
-      className={cn(
-        'relative flex items-center',
-        variant === 'block' ? 'w-full' : 'inline-flex',
-      )}
-    >
+    <label className={cn('relative flex items-center', variant === 'block' ? 'w-full' : 'inline-flex')}>
       <span className="sr-only">{copy.label}</span>
-      <MapPin
-        aria-hidden
-        className="pointer-events-none absolute left-2.5 size-4 text-muted"
-      />
-      <select
+      <NativeSelect
         aria-label={copy.label}
         value={active ?? ''}
         onChange={(e) => handleChange(e.target.value)}
         className={cn(
-          fieldClass,
-          variant === 'block' ? 'h-10 w-full' : 'max-w-[12rem]',
+          variant === 'block' && 'w-full',
+          variant === 'inline' && 'w-auto max-w-[12rem]',
+          variant === 'compact' && 'w-auto max-w-[8.5rem]',
         )}
+        selectClassName="pl-8"
       >
         {options}
-      </select>
-      <ChevronDown
-        aria-hidden
-        className="pointer-events-none absolute right-2.5 size-4 text-muted"
-      />
+      </NativeSelect>
+      <MapPin aria-hidden className="pointer-events-none absolute left-2.5 size-4 text-muted" />
     </label>
   );
 }

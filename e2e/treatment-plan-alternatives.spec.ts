@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { openSection } from './support/nav';
 
 /**
  * e2e (DX-040): alternativas de plan (A/B), presentar, rechazar y
@@ -219,14 +220,21 @@ for (const viewport of [
     ]);
 
     await webLogin(page, origin, RECEPTION_EMAIL);
-    // Desde el menú (en móvil, la barra superior también lo lleva).
-    await page.getByRole('link', { name: 'Presupuestos' }).first().click();
+    // Desde el menú: barra lateral en escritorio; en el teléfono la barra
+    // inferior de recepción es Inicio, Agenda, Pacientes y Caja (I1), así que
+    // Presupuestos está en la hoja «Más».
+    await openSection(page, 'Presupuestos');
     await expect(page).toHaveURL(/\/presupuestos$/);
     await expect(page.getByRole('heading', { name: 'Presupuestos por seguir' })).toBeVisible();
 
-    const table = page.getByRole('table', { name: 'Presupuestos presentados sin aceptar' });
+    // UX v2 (`DataList`): tabla desde 640 px, tarjetas compactas en el teléfono.
+    const phone = viewport.width < 640;
+    const table = phone
+      ? page.getByRole('list', { name: 'Presupuestos presentados sin aceptar' })
+      : page.getByRole('table', { name: 'Presupuestos presentados sin aceptar' });
+    const rowRole = phone ? 'listitem' : 'row';
     // El grupo A/B de la demo: dos filas del mismo paciente.
-    const demoRows = table.getByRole('row').filter({ hasText: DEMO_OPTIONS_PATIENT });
+    const demoRows = table.getByRole(rowRole).filter({ hasText: DEMO_OPTIONS_PATIENT });
     await expect(demoRows).toHaveCount(2, { timeout: 15_000 });
     await expect(demoRows.filter({ hasText: 'Opción A: implante' })).toContainText(/hace [89] días/);
     await expect(
@@ -235,7 +243,7 @@ for (const viewport of [
       }),
     ).toHaveAttribute('href', /^https:\/\/wa\.me\/573195550110\?text=Hola%20Carolina/);
 
-    const row = table.getByRole('row').filter({ hasText: data.fullName });
+    const row = table.getByRole(rowRole).filter({ hasText: data.fullName });
     await expect(row).toContainText(figure(IMPLANT));
     await expect(row).toContainText('hace 12 días');
     await expect(row.getByRole('link', { name: `WhatsApp a ${data.fullName}` })).toHaveAttribute(
@@ -245,7 +253,9 @@ for (const viewport of [
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
 
     // Marcar rechazado (modal con motivo): sale de la lista.
-    await row.getByRole('button', { name: `Marcar rechazado: ${data.fullName}` }).click();
+    // «Marcar rechazado» vive en el «⋯» de la fila.
+    await row.getByRole('button', { name: `Acciones de ${data.fullName}` }).click();
+    await page.getByRole('menuitem', { name: 'Marcar rechazado' }).click();
     const dialog = page.getByRole('dialog', { name: 'Marcar como rechazado' });
     await dialog.getByRole('button', { name: 'Marcar rechazado' }).click();
     await expect(dialog.getByText('Elige el motivo del rechazo.')).toBeVisible();
@@ -259,7 +269,7 @@ for (const viewport of [
     await dialog.getByRole('button', { name: 'Marcar rechazado' }).click();
     await expect(dialog).toBeHidden({ timeout: 10_000 });
     await expect(page.getByText('Presupuesto marcado como rechazado.')).toBeVisible();
-    await expect(table.getByRole('row').filter({ hasText: data.fullName })).toHaveCount(0);
+    await expect(table.getByRole(rowRole).filter({ hasText: data.fullName })).toHaveCount(0);
   });
 }
 

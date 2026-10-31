@@ -86,6 +86,7 @@ export function PriceListItemPriceModal({
       submitLabel={copy.save}
       submitting={submitting}
       error={error}
+      touchTargets
     >
       <FormField htmlFor="price-list-item-price" label={copy.price} hint={copy.hint} error={priceError}>
         <MoneyInput

@@ -1,7 +1,8 @@
 import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { SETTINGS_SECTIONS } from './settings-sections';
 import { render, screen, within } from '@testing-library/react';
-import { SettingsIndex } from './settings-index';
+import { SettingsIndex, splitSettingsColumns } from './settings-index';
+import { visibleSettingsSections } from './settings-sections';
 
 function tokenForRole(role: string): string {
   const part = (value: string) =>
@@ -10,18 +11,23 @@ function tokenForRole(role: string): string {
 }
 
 describe('SettingsIndex (DX-282)', () => {
-  it('ADMIN: cinco secciones y las 23 pantallas como enlaces', () => {
+  it('ADMIN: siete secciones y las 25 pantallas como enlaces', () => {
     render(<SettingsIndex token={tokenForRole('ADMIN')} />);
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     expect(headings).toEqual([
+      'Tu cuenta',
       'Clínica y sedes',
       'Agenda',
       'Cobro',
       'Historia clínica',
       'Datos y seguridad',
+      'Herramientas y registros',
     ]);
-    expect(screen.getAllByRole('link')).toHaveLength(23);
+    expect(screen.getAllByRole('link')).toHaveLength(25);
+    expect(
+      within(screen.getByRole('list', { name: 'Tu cuenta' })).getByRole('link', { name: /^Mi perfil Tu nombre/ }),
+    ).toHaveAttribute('href', '/settings/profile');
 
     // Cada sección es una lista con nombre: el lector de pantalla dice dónde está.
     const agenda = screen.getByRole('list', { name: 'Agenda' });
@@ -45,7 +51,7 @@ describe('SettingsIndex (DX-282)', () => {
     render(<SettingsIndex token={tokenForRole(role)} />);
 
     const links = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
-    expect(links).toEqual(['/settings/sedes', '/settings/horarios', '/settings/privacidad']);
+    expect(links).toEqual(['/settings/profile', '/settings/sedes', '/settings/horarios', '/settings/privacidad']);
     expect(screen.queryByRole('heading', { name: 'Cobro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Historia clínica' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Consentimientos/ })).not.toBeInTheDocument();
@@ -60,11 +66,23 @@ describe('SettingsIndex (DX-282)', () => {
     }
   });
 
-  it('las 23 entradas reales pasan axe con su CSS a ancho móvil y escritorio', () => {
+  it('las entradas reales pasan axe con su CSS a ancho móvil y escritorio', () => {
     const view = render(<SettingsIndex token={tokenForRole('ADMIN')} />);
     auditRenderedControls([390, 1440].flatMap(width => ['light', 'dark'].map(theme => ({
       html: `<div class="${theme}" style="width:${width}px">${view.container.innerHTML}</div>`, selector: 'a',
       viewport: { width, height: 900 },
     }))));
+  });
+});
+
+describe('splitSettingsColumns', () => {
+  it('reparte los grupos de ADMIN en dos columnas de alto parecido sin cambiar el orden', () => {
+    const sections = visibleSettingsSections('ADMIN');
+    const [left, right] = splitSettingsColumns(sections);
+    expect([...left, ...right]).toEqual(sections);
+    const rows = (column: typeof sections) => column.reduce((n, s) => n + s.entries.length + 1.5, 0);
+    expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(8);
+    expect(left.length).toBeGreaterThan(0);
+    expect(right.length).toBeGreaterThan(0);
   });
 });

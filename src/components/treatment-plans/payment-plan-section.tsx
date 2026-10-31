@@ -8,9 +8,9 @@ import {
   type InstallmentStatus,
   type PaymentPlan,
 } from '@/lib/payment-plans/payment-plan-api';
-import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatePaymentPlanModal } from '@/components/payment-plans/create-payment-plan-modal';
@@ -22,10 +22,6 @@ import { formatCivilDate } from '@/lib/format/date';
 // would make an inline `Intl.NumberFormat` throw during render and take this
 // whole subtree down (~8 money cells here). See `formatCurrency`'s own doc.
 import { formatCurrency } from '@/lib/format/currency';
-import {
-  INSTALLMENT_STATUS_BADGE_VARIANT,
-  INSTALLMENT_STATUS_LABELS,
-} from '@/lib/payment-plans/installment-status';
 
 const copy = {
   heading: 'Plan de pagos',
@@ -133,11 +129,12 @@ export function PaymentPlanSection({
   return (
     <section className="flex flex-col gap-4" aria-labelledby="payment-plan-heading">
       <div className="flex items-center justify-between gap-2">
-        <h3 id="payment-plan-heading" className="text-base font-semibold text-ink">
+        <h3 id="payment-plan-heading" className="t-title text-ink">
           {copy.heading}
         </h3>
         {plan ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => setShowCancel(true)}>
+          // Abre su confirmación: destructiva en forma «ghost» (DESIGN.md).
+          <Button type="button" variant="destructive-ghost" size="sm" onClick={() => setShowCancel(true)}>
             {copy.cancelPlan}
           </Button>
         ) : null}
@@ -154,14 +151,21 @@ export function PaymentPlanSection({
           }}
         />
       ) : !plan ? (
-        <div className="flex flex-col items-start gap-3">
-          <EmptyState
-            role="status"
-            title={copy.emptyTitle}
-            description={canCreate ? copy.emptyDescription : copy.notBillableDescription}
-          />
-          {canCreate && <Button type="button" onClick={() => setShowCreate(true)}>{copy.createCta}</Button>}
-        </div>
+        // Vacío de sección: una línea, sin caja (la caja grande es para una
+        // pestaña entera vacía). La primaria de la pestaña es «Agregar ítem».
+        <EmptyState
+          size="inline"
+          role="status"
+          title={copy.emptyTitle}
+          description={canCreate ? copy.emptyDescription : copy.notBillableDescription}
+          action={
+            canCreate ? (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setShowCreate(true)}>
+                {copy.createCta}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <>
           <PaymentPlanSummary plan={plan} currency={planCurrency} />
@@ -194,37 +198,32 @@ export function PaymentPlanSection({
   );
 }
 
+/**
+ * Las cifras del financiamiento como pares etiqueta/valor (`DescriptionList`),
+ * no como tres tarjetas de número grande: DESIGN.md prohíbe la plantilla de
+ * métrica-héroe como estructura.
+ */
 function PaymentPlanSummary({ plan, currency }: { plan: PaymentPlan; currency: string }) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <SummaryTile label={copy.totalToFinance} value={formatCurrency(plan.totalToFinance, currency)} />
-        <SummaryTile label={copy.paid} value={formatCurrency(plan.paidTotal, currency)} />
-        <SummaryTile label={copy.remaining} value={formatCurrency(plan.remaining, currency)} />
-      </div>
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-        <span className="text-muted">
-          {copy.nextDue}:{' '}
-          <span className="font-medium text-ink">
-            {plan.nextDue ? `${formatCivilDate(plan.nextDue.dueDate)} · ${formatCurrency(plan.nextDue.amount, currency)}` : copy.none}
-          </span>
-        </span>
-        {plan.overdueCount > 0 ? (
-          <span className="font-medium text-danger">
-            {copy.overdue}: {plan.overdueCount} · {formatCurrency(plan.overdueAmount, currency)}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function SummaryTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-ink tabular-nums">{value}</p>
-    </div>
+    <DescriptionList columns={3}>
+      <DescriptionItem label={copy.totalToFinance} numeric>
+        {formatCurrency(plan.totalToFinance, currency)}
+      </DescriptionItem>
+      <DescriptionItem label={copy.paid} numeric>
+        {formatCurrency(plan.paidTotal, currency)}
+      </DescriptionItem>
+      <DescriptionItem label={copy.remaining} numeric valueClassName="font-semibold">
+        {formatCurrency(plan.remaining, currency)}
+      </DescriptionItem>
+      <DescriptionItem label={copy.nextDue} numeric>
+        {plan.nextDue ? `${formatCivilDate(plan.nextDue.dueDate)} · ${formatCurrency(plan.nextDue.amount, currency)}` : copy.none}
+      </DescriptionItem>
+      {plan.overdueCount > 0 ? (
+        <DescriptionItem label={copy.overdue} numeric valueClassName="font-medium text-danger-text">
+          {plan.overdueCount} · {formatCurrency(plan.overdueAmount, currency)}
+        </DescriptionItem>
+      ) : null}
+    </DescriptionList>
   );
 }
 
@@ -264,64 +263,39 @@ function buildRows(plan: PaymentPlan): Row[] {
   return rows;
 }
 
+/**
+ * El calendario como `DataList` (tabla desde \`sm\`, tarjeta compacta en el
+ * teléfono: cuota + cubierto/monto / vencimiento · estado). Ningún importe se
+ * esconde en el teléfono.
+ */
 function InstallmentsTable({ plan, currency }: { plan: PaymentPlan; currency: string }) {
-  const rows = buildRows(plan);
-  return (
-    <>
-      {/* Desktop table */}
-      <div className="hidden md:block">
-        <Table>
-          <caption className="sr-only">{copy.tableCaption}</caption>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>{copy.colSeq}</TableHead>
-              <TableHead>{copy.colDue}</TableHead>
-              <TableHead className="text-right">{copy.colAmount}</TableHead>
-              <TableHead className="text-right">{copy.colCovered}</TableHead>
-              <TableHead>{copy.colStatus}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r) => (
-              <TableRow key={r.key}>
-                <TableCell className="font-medium tabular-nums">{r.label}</TableCell>
-                <TableCell className="tabular-nums">{formatCivilDate(r.dueDate)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatCurrency(r.amount, currency)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatCurrency(r.covered, currency)}</TableCell>
-                <TableCell>
-                  <Badge variant={INSTALLMENT_STATUS_BADGE_VARIANT[r.status]}>
-                    {INSTALLMENT_STATUS_LABELS[r.status]}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Mobile cards */}
-      <ul className="flex flex-col gap-3 md:hidden">
-        {rows.map((r) => (
-          <li key={r.key}>
-            <Card className="p-4">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-ink tabular-nums">{copy.colSeq === '#' ? `#${r.label}` : r.label}</span>
-                <Badge variant={INSTALLMENT_STATUS_BADGE_VARIANT[r.status]}>
-                  {INSTALLMENT_STATUS_LABELS[r.status]}
-                </Badge>
-              </div>
-              <p className="mt-1 text-sm text-muted tabular-nums">{formatCivilDate(r.dueDate)}</p>
-              <p className="mt-1 font-medium text-ink tabular-nums">
-                <span className="sr-only">Cubierto: </span>
-                {formatCurrency(r.covered, currency)}
-                {' / '}
-                <span className="sr-only">Monto: </span>
-                {formatCurrency(r.amount, currency)}
-              </p>
-            </Card>
-          </li>
-        ))}
-      </ul>
-    </>
-  );
+  const columns: DataListColumn<Row>[] = [
+    {
+      id: 'seq',
+      header: copy.colSeq,
+      mobile: 'primary',
+      cell: (r) => <span className="font-medium tabular-nums">{r.label}</span>,
+      mobileCell: (r) => (r.key === 'down' ? r.label : `#${r.label}`),
+    },
+    { id: 'due', header: copy.colDue, cell: (r) => <span className="tabular-nums">{formatCivilDate(r.dueDate)}</span> },
+    { id: 'amount', header: copy.colAmount, numeric: true, cell: (r) => formatCurrency(r.amount, currency), mobile: 'hidden' },
+    {
+      id: 'covered',
+      header: copy.colCovered,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (r) => formatCurrency(r.covered, currency),
+      mobileCell: (r) => (
+        <>
+          <span className="sr-only">{copy.colCovered}: </span>
+          {formatCurrency(r.covered, currency)}
+          {' / '}
+          <span className="sr-only">{copy.colAmount}: </span>
+          {formatCurrency(r.amount, currency)}
+        </>
+      ),
+    },
+    { id: 'status', header: copy.colStatus, cell: (r) => <StatusBadge kind="installment" status={r.status} /> },
+  ];
+  return <DataList label={copy.tableCaption} rows={buildRows(plan)} columns={columns} getRowKey={(r) => r.key} />;
 }

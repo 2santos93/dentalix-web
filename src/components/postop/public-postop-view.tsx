@@ -6,6 +6,7 @@ import { getPublicPostOp, markPublicPostOpOpened, type PublicPostOp } from '@/li
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
+import { ClinicBrand } from '@/components/brand/clinic-brand';
 
 const copy = {
   loading: 'Cargando tus indicaciones…',
@@ -73,7 +74,7 @@ export function PublicPostOpView({ linkToken }: { linkToken: string }) {
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
@@ -104,20 +105,7 @@ export function PublicPostOpView({ linkToken }: { linkToken: string }) {
 
         {state.kind === 'ready' && (
           <>
-            <header className="flex items-center gap-3">
-              {clinic?.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element -- logo de la clínica en un host arbitrario; next/image exigiría whitelistear cada dominio
-                <img
-                  src={clinic.logoUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="size-10 shrink-0 rounded-lg object-contain"
-                />
-              )}
-              <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight text-ink">
-                {clinic?.name ?? copy.fallbackClinic}
-              </h1>
-            </header>
+            <ClinicBrand variant="public" name={clinic?.name ?? copy.fallbackClinic} logoUrl={clinic?.logoUrl} />
 
             <article
               aria-labelledby="postop-title"
@@ -136,7 +124,7 @@ export function PublicPostOpView({ linkToken }: { linkToken: string }) {
                 {copy.callLead}
                 <a
                   href={telHref(state.data.locationPhone)}
-                  className="inline-flex min-h-11 items-center gap-2 self-start text-base font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="inline-flex min-h-11 items-center gap-2 self-start text-base font-semibold text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                 >
                   <Phone aria-hidden className="size-5" />
                   <span className="tabular-nums">{state.data.locationPhone}</span>

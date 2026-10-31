@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
+import { fillDate, fillTime } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -89,7 +90,9 @@ function endoCard(page: Page): Locator {
 async function openDay(page: Page) {
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  // En el teléfono el Día abre en «Lista»; estas pruebas son de las columnas.
+  await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+  await fillDate(page, 'Fecha', day);
   await expect(page.getByTestId('day-column')).toHaveCount(2, { timeout: 15_000 });
 }
 
@@ -119,9 +122,10 @@ test('ADMIN crea el tipo «Endodoncia 90 min» y una cita con ese tipo: la hora 
   await form.getByLabel('Paciente', { exact: true }).fill(patientDoc);
   await expect(form.getByRole('button', { name: 'Cambiar' })).toBeVisible({ timeout: 10_000 });
   await expect(form.getByLabel('Profesional', { exact: true })).toHaveValue(/.+/);
-  await form.getByLabel('Hora de inicio').fill('09:00');
+  await fillTime(form, 'Hora de inicio', '09:00');
   await form.getByLabel(/Tipo de cita/).selectOption({ label: `${typeName} · 90 min` });
-  await expect(form.getByLabel('Hora de fin')).toHaveValue('10:30');
+  // La hora de fin sale sola del tipo (segmentos: 10:30, o 10:30 a. m. con reloj de 12 h).
+  await expect(form.getByRole('group', { name: 'Hora de fin', exact: true })).toContainText('10:30');
   await form.getByRole('button', { name: 'Agendar cita' }).click();
   await expect(form).toBeHidden({ timeout: 10_000 });
 
@@ -145,7 +149,7 @@ test('«Mover a…» con teclado: a otro profesional; si choca, 409 en el modal 
   await dialog.getByLabel('Profesional').focus();
   await dialog.getByLabel('Profesional').selectOption({ label: dentist.fullName });
   // Primero contra el hueco ocupado de Luis (11:00): rechazo por solape.
-  await dialog.getByLabel('Hora de inicio').fill('11:00');
+  await fillTime(dialog, 'Hora de inicio', '11:00');
   await page.keyboard.press('Enter');
   await expect(dialog.getByText('El profesional ya tiene una cita en ese horario')).toBeVisible({
     timeout: 10_000,
@@ -153,8 +157,9 @@ test('«Mover a…» con teclado: a otro profesional; si choca, 409 en el modal 
   await expect(column(page, admin.fullName).getByTestId('day-column-appointment')).toHaveCount(1);
 
   // Luego a un hueco libre (09:00, misma hora): se mueve a la columna de Luis.
-  await dialog.getByLabel('Hora de inicio').fill('09:00');
-  await dialog.getByLabel('Hora de inicio').press('Enter');
+  await fillTime(dialog, 'Hora de inicio', '09:00');
+  // Enter desde la hora (último segmento escrito) envía, como en un campo de texto.
+  await page.keyboard.press('Enter');
   await expect(dialog).toBeHidden({ timeout: 10_000 });
   await expect(column(page, dentist.fullName).getByTestId('day-column-appointment')).toHaveCount(2);
   await expect(column(page, admin.fullName).getByText('Sin citas hoy')).toBeVisible();
@@ -213,7 +218,9 @@ test('móvil (390 px): una sola columna con selector deslizable, «Mover a…» 
   await loginAs(page, origin, admin.email, password);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(day);
+  // En el teléfono el Día abre en «Lista»; estas pruebas son de las columnas.
+  await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+  await fillDate(page, 'Fecha', day);
 
   const picker = page.getByRole('group', { name: 'Profesional visible' });
   await expect(picker).toBeVisible({ timeout: 15_000 });

@@ -1,4 +1,5 @@
 import { test, expect } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { AxeResults } from 'axe-core';
@@ -80,6 +81,8 @@ async function patientWithAppointment(
 async function configurePolicy(page: import('@playwright/test').Page, hours: string, version: number) {
   await loginAs(page, origin, admin.email, password);
   await page.goto(`${origin}/settings/sedes`);
+  // B6: la política vive en la ficha de la sede.
+  await page.getByRole('link', { name: 'Abrir Sede principal' }).click();
   const section = page.getByRole('region', { name: 'Política de cancelación' });
   await expect(section).toBeVisible({ timeout: 15_000 });
   await section.getByRole('button', { name: /la política de Sede principal/ }).click();
@@ -115,7 +118,7 @@ async function cancelLateAndSeeBadge(
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   const listToggle = page.getByRole('button', { name: 'Lista', exact: true });
   if (await listToggle.isVisible()) await listToggle.click();
-  await page.getByLabel('Fecha', { exact: true }).fill(sedeDate(start));
+  await fillDate(page, 'Fecha', sedeDate(start));
   const end = new Date(start.getTime() + 30 * 60_000);
   const select = page
     .getByRole('combobox', { name: new RegExp(`^Estado de la cita de ${sedeTime(start)}–${sedeTime(end)}`) })
@@ -201,6 +204,7 @@ test('axe: diálogo de cancelar, insignia y modal de la política, a 390 y 1440 
 
       await loginAs(page, origin, admin.email, password);
       await page.goto(`${origin}/settings/sedes`);
+      await page.getByRole('link', { name: 'Abrir Sede principal' }).click({ timeout: 15_000 });
       const section = page.getByRole('region', { name: 'Política de cancelación' });
       await section.getByRole('button', { name: /la política de Sede principal/ }).click({ timeout: 15_000 });
       await expect(page.getByRole('dialog')).toBeVisible();
@@ -215,7 +219,7 @@ test('axe: diálogo de cancelar, insignia y modal de la política, a 390 y 1440 
       await page.getByRole('button', { name: 'Día', exact: true }).click();
       const listToggle = page.getByRole('button', { name: 'Lista', exact: true });
       if (await listToggle.isVisible()) await listToggle.click();
-      await page.getByLabel('Fecha', { exact: true }).fill(sedeDate(start));
+      await fillDate(page, 'Fecha', sedeDate(start));
       const status = page
         .getByRole('combobox', { name: new RegExp(`^Estado de la cita de ${sedeTime(start)}–${sedeTime(end)}`) })
         .first();

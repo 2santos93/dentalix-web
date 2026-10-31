@@ -6,6 +6,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageExchangeRates, type ExchangeRateSettings } from '@/lib/exchange/exchange-settings-api';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { Callout } from '@/components/ui/callout';
 import { useExchangeRateSettings, type ExchangeRateSettingsState } from './use-exchange-rate-settings';
 
 export type PaymentWithoutRate = components['schemas']['PaymentWithoutRateDto'];
@@ -38,7 +39,7 @@ export const withoutRateCopy = {
 };
 
 const linkClass =
-  'inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:min-h-0';
+  'inline-flex min-h-11 items-center font-medium text-primary-text underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas sm:min-h-0';
 
 /**
  * De dónde sale la tasa del día de cada abono: manual desde `manualSince`
@@ -72,28 +73,21 @@ export function WithoutRateNotice({ token, payments }: { token: string; payments
   const settings = useExchangeRateSettings(token, canRegister && payments.length > 0);
   if (payments.length === 0) return null;
   return (
-    <div
-      role="status"
-      className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-ink"
-    >
-      <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{withoutRateCopy.title(payments.length)}</p>
-        <p>{withoutRateCopy.body}</p>
-        <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
-          {payments.map((p) => (
-            <li key={p.paymentId}>
-              {withoutRateCopy.item(sedeMoney(p.amount, p.currency, fmt), sedeCivilDate(p.paidOn, fmt))}
-            </li>
-          ))}
-        </ul>
-        {canRegister ? (
-          <AdminAction settings={settings} payments={payments} />
-        ) : (
-          <p className="mt-1">{withoutRateCopy.otherRoles}</p>
-        )}
-      </div>
-    </div>
+    <Callout tone="warning" role="status" icon={TriangleAlert} title={withoutRateCopy.title(payments.length)}>
+      <p>{withoutRateCopy.body}</p>
+      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
+        {payments.map((p) => (
+          <li key={p.paymentId}>
+            {withoutRateCopy.item(sedeMoney(p.amount, p.currency, fmt), sedeCivilDate(p.paidOn, fmt))}
+          </li>
+        ))}
+      </ul>
+      {canRegister ? (
+        <AdminAction settings={settings} payments={payments} />
+      ) : (
+        <p className="mt-1">{withoutRateCopy.otherRoles}</p>
+      )}
+    </Callout>
   );
 }
 
@@ -123,8 +117,8 @@ function AdminAction({ settings, payments }: { settings: ExchangeRateSettingsSta
           <Link href={EXCHANGE_RATE_SETTINGS_HREF} className={linkClass}>
             {withoutRateCopy.adminLink}
           </Link>
-          {days.manual ? <span className="block text-xs">{withoutRateCopy.adminHint}</span> : null}
-          {days.backup ? <span className="block text-xs">{withoutRateCopy.backupHint}</span> : null}
+          {days.manual ? <span className="t-caption block">{withoutRateCopy.adminHint}</span> : null}
+          {days.backup ? <span className="t-caption block">{withoutRateCopy.backupHint}</span> : null}
         </p>
       ) : null}
       {automatic ? (
@@ -132,7 +126,7 @@ function AdminAction({ settings, payments }: { settings: ExchangeRateSettingsSta
           <Link href={EXCHANGE_RATE_SETTINGS_HREF} className={linkClass}>
             {withoutRateCopy.switchToManualLink}
           </Link>
-          <span className="block text-xs">{withoutRateCopy.switchToManualHint}</span>
+          <span className="t-caption block">{withoutRateCopy.switchToManualHint}</span>
         </p>
       ) : null}
     </>

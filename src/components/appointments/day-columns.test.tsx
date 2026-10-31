@@ -383,7 +383,7 @@ describe('DayColumns · chip «Saldo vencido» (DX-150)', () => {
     const chips = screen.getAllByTestId('overdue-chip');
     expect(chips).toHaveLength(1);
     expect(chips[0]).toHaveTextContent('Saldo vencido · 40 días');
-    expect(screen.getByRole('button', { name: /Saldo vencido · 40 días · Detalle de la cita · Dra\. Ana Ríos$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /09:00–10:30 · María López · Endodoncia · Agendada · Saldo vencido · 40 días.*Detalle de la cita · Dra\. Ana Ríos$/ })).toBeInTheDocument();
   });
 });
 
@@ -486,7 +486,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     // Misma fila que la hora: no añade altura a la tarjeta de 30 min.
     expect(time.parentElement).toContainElement(chip);
     expect(time.parentElement).toHaveClass('shrink-0');
-    expect(within(card).getByText('María López')).toHaveClass('shrink-0');
+    expect(within(card).getByText('María López')).toHaveClass('truncate');
   });
 
   it('el nombre accesible de la tarjeta dice «Adelantar si hay hueco» (el aria-label tapa el chip)', () => {

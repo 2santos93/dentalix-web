@@ -278,7 +278,7 @@ it('DX-378: el día, la fila y la hora de cada cita salen del reloj de la sede (
   expect(monday).toContainElement(card);
   expect(tuesday).not.toContainElement(card);
   expect(card.parentElement).toHaveStyle({ top: `${((22 * 60 + 30) / SLOT_MINUTES) * ROW_HEIGHT_PX}px` });
-  expect(card).toHaveAccessibleName(/^Agend\. · pat-1 · 10:30 p\. m\. – 11:00 p\. m\./);
+  expect(card).toHaveAccessibleName(/^pat-1 Agend\. 10:30 p\. m\. – 11:00 p\. m\./);
   expect(screen.getByText('9:00 a. m.')).toBeInTheDocument();
 });
 

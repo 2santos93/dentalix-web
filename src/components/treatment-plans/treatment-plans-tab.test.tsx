@@ -334,9 +334,28 @@ function emptyBalance(): PlanBalance {
 async function openPaymentsTable(
   user: ReturnType<typeof userEvent.setup>,
 ): Promise<HTMLElement> {
-  const trigger = await screen.findByRole("button", { name: /abonos y saldo/i });
+  const trigger = await screen.findByRole("button", { name: /abonos registrados/i });
   if (trigger.getAttribute("aria-expanded") === "false") await user.click(trigger);
   return screen.findByRole("table", { name: /abonos del plan de tratamiento/i });
+}
+
+
+/** El día ISO del `DatePicker` del abono (su `<input type="hidden">`). */
+function paymentDateValue(): string | undefined {
+  return document.querySelector<HTMLInputElement>('input[name="tp-payment-date"]')?.value;
+}
+
+/**
+ * UX v2: Recibo, Imputación y Anular viven en el «⋯» de la fila del abono
+ * (`RowActions`). Abre el menú de `row` y elige `item`.
+ */
+async function pickRowAction(
+  user: ReturnType<typeof userEvent.setup>,
+  row: HTMLElement,
+  item: string | RegExp,
+): Promise<void> {
+  await user.click(within(row).getByRole('button', { name: /^Acciones de abono/ }));
+  await user.click(await screen.findByRole('menuitem', { name: item }));
 }
 
 const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
@@ -788,7 +807,7 @@ describe('TreatmentPlansTab', () => {
     const row = within(paymentsTable)
       .getByText(sedeCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
-    await user.click(within(row).getByRole('button', { name: /anular/i }));
+    await pickRowAction(user, row, /^anular$/i);
 
     const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
     expect(confirm).toHaveTextContent(/quién lo anuló, cuándo y por qué/i);
@@ -863,7 +882,7 @@ describe('TreatmentPlansTab', () => {
 
       // La sede del fixture está en Bogotá: el día es el 15, aunque en UTC ya
       // sea el 16.
-      expect(screen.getByLabelText<HTMLInputElement>(/^fecha$/i).value).toBe('2026-10-15');
+      expect(paymentDateValue()).toBe('2026-10-15');
     } finally {
       jest.useRealTimers();
     }
@@ -884,8 +903,9 @@ describe('TreatmentPlansTab', () => {
 
     const currencySelect = screen.getByLabelText<HTMLSelectElement>(/^moneda$/i);
     expect(currencySelect.value).toBe(plan1.currency);
-    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
-    expect(dateInput.value).not.toBe('');
+    // `DatePicker` (segmentos): el día ISO viaja en su campo oculto.
+    expect(screen.getByRole('group', { name: /^fecha$/i })).toBeInTheDocument();
+    expect(paymentDateValue()).not.toBe('');
 
     // Picking a different currency from the select (Task 11: CurrencySelect
     // replaces the old free-text input) must be what's submitted — wait for
@@ -982,13 +1002,12 @@ describe('TreatmentPlansTab', () => {
     const row = within(paymentsTable)
       .getByText(sedeCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
-    const voidButton = within(row).getByRole('button', { name: /anular/i });
 
     const updatedBalance = { ...balance1, paid: 0, balance: balance1.billable, paymentsCount: 0 };
     mockedGetPlanBalance.mockResolvedValueOnce(updatedBalance);
     mockedListPayments.mockResolvedValueOnce([]);
 
-    await user.click(voidButton);
+    await pickRowAction(user, row, /^anular$/i);
     // La fila ya no anula directamente: abre la confirmación.
     const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
     expect(mockedVoidPayment).not.toHaveBeenCalled();
@@ -1020,7 +1039,7 @@ describe('TreatmentPlansTab', () => {
     const row = within(paymentsTable)
       .getByText(sedeCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
-    await user.click(within(row).getByRole('button', { name: /^recibo$/i }));
+    await pickRowAction(user, row, /^recibo$/i);
 
     const dialog = await screen.findByRole('dialog', { name: /recibo de caja/i });
     expect(await within(dialog).findByTestId('receipt-document')).toHaveTextContent('N.º PRI-000001');
@@ -1030,7 +1049,7 @@ describe('TreatmentPlansTab', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  // Error-states ladder (Task 8): each `text-danger` site classified by what
+  // Error-states ladder (Task 8): each `text-danger-text` site classified by what
   // the user can still do — see task-8-report.md for the full table.
   describe('DX-109: planes no cobrables o cerrados', () => {
     it('un plan rechazado deshabilita «Registrar abono» con el motivo, no ofrece plan de cuotas y congela los ítems', async () => {
@@ -1407,7 +1426,7 @@ describe('TreatmentPlansTab', () => {
       );
       const dialog = await screen.findByRole('dialog', { name: 'Atribuir el procedimiento' });
       expect(within(dialog).getByRole('combobox', { name: 'Sede donde se realizó' })).toBeInTheDocument();
-      expect(within(dialog).getByLabelText('Fecha en que se realizó')).toBeInTheDocument();
+      expect(within(dialog).getByRole('group', { name: 'Fecha en que se realizó' })).toBeInTheDocument();
     });
 
     it('volver de «Realizado» a aceptado no pide profesional', async () => {
@@ -1683,7 +1702,7 @@ describe('TreatmentPlansTab', () => {
         .getByText(sedeCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
-      await user.click(within(row).getByRole('button', { name: /anular/i }));
+      await pickRowAction(user, row, /^anular$/i);
       const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
       // paste, no type: teclear tecla a tecla roza el timeout de 5 s aquí.
       await user.click(within(confirm).getByLabelText(/motivo de la anulación/i));
@@ -1715,7 +1734,7 @@ describe('TreatmentPlansTab', () => {
         .getByText(sedeCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
-      await user.click(within(row).getByRole('button', { name: /anular/i }));
+      await pickRowAction(user, row, /^anular$/i);
       const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
       // paste, no type: teclear tecla a tecla roza el timeout de 5 s aquí.
       await user.click(within(confirm).getByLabelText(/motivo de la anulación/i));
@@ -1743,7 +1762,7 @@ describe('TreatmentPlansTab', () => {
         .getByText(sedeCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
-      await user.click(within(row).getByRole('button', { name: /anular/i }));
+      await pickRowAction(user, row, /^anular$/i);
       const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
       // paste, no type: teclear tecla a tecla roza el timeout de 5 s aquí.
       await user.click(within(confirm).getByLabelText(/motivo de la anulación/i));
@@ -2679,8 +2698,8 @@ describe('TreatmentPlansTab', () => {
       expect(within(pinned).getByText('Fijada a mano')).toBeInTheDocument();
       const auto = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
       expect(within(auto).queryByText('Fijada a mano')).not.toBeInTheDocument();
-      // También en la tarjeta móvil del abono, solo una vez.
-      expect(screen.getAllByText('Fijada a mano')).toHaveLength(2);
+      // Una sola vez: `DataList` monta tabla O tarjetas, nunca las dos.
+      expect(screen.getAllByText('Fijada a mano')).toHaveLength(1);
     });
 
     describe('las mutaciones de ítems releen el saldo por ítem (I-1)', () => {
@@ -2768,16 +2787,18 @@ describe('TreatmentPlansTab', () => {
       const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
       const payments = await openPaymentsTable(user);
       const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
-      // El nombre dice de qué abono es: con varios, «Imputación» a secas no distingue.
-      expect(within(row).getByRole('button', { name: 'Imputación del abono PRI-000001' })).toBeInTheDocument();
-      // Tabla de escritorio y tarjeta móvil.
-      expect(screen.getAllByRole('button', { name: /^Imputación/ })).toHaveLength(2);
+      // El «⋯» dice de qué abono es: con varios, «Acciones» a secas no distingue.
+      await user.click(within(row).getByRole('button', { name: 'Acciones de abono PRI-000001' }));
+      expect(await screen.findByRole('menuitem', { name: 'Imputación' })).toBeInTheDocument();
+      await user.keyboard('{Escape}');
       unmount();
 
       const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u-r', tenantId: 't1', role: 'RECEPTION' }))}.s`;
       render(<TreatmentPlansTab patientId="pat-1" token={receptionToken} />);
-      await openPaymentsTable(user);
-      expect(screen.queryByRole('button', { name: /^Imputación/ })).not.toBeInTheDocument();
+      const receptionPayments = await openPaymentsTable(user);
+      await user.click(within(receptionPayments).getAllByRole('button', { name: /^Acciones de abono/ })[0]);
+      expect(await screen.findByRole('menuitem', { name: 'Recibo' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Imputación' })).not.toBeInTheDocument();
     });
 
     it('no Imputación action on a cancelled plan: its payments are not allocated', async () => {
@@ -2787,8 +2808,10 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
-      await openPaymentsTable(user);
-      expect(screen.queryByRole('button', { name: /^Imputación/ })).not.toBeInTheDocument();
+      const cancelledPayments = await openPaymentsTable(user);
+      await user.click(within(cancelledPayments).getAllByRole('button', { name: /^Acciones de abono/ })[0]);
+      expect(await screen.findByRole('menuitem', { name: 'Recibo' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Imputación' })).not.toBeInTheDocument();
     });
 
     it('saving the allocation closes the modal and refreshes balance and payments', async () => {
@@ -2832,8 +2855,8 @@ describe('TreatmentPlansTab', () => {
       );
       const payments = await openPaymentsTable(user);
       const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
-      const trigger = within(row).getByRole('button', { name: /^Imputación/ });
-      await user.click(trigger);
+      const trigger = within(row).getByRole('button', { name: /^Acciones de abono/ });
+      await pickRowAction(user, row, 'Imputación');
 
       const modal = await screen.findByRole('dialog', { name: 'Imputar abono' });
       expect(jest.mocked(getPaymentAllocations)).toHaveBeenCalledWith(adminToken, 'pay-1');
@@ -2848,7 +2871,7 @@ describe('TreatmentPlansTab', () => {
       await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Imputar abono' })).not.toBeInTheDocument());
       await waitFor(() => expect(mockedGetPlanBalance.mock.calls.length).toBe(balanceCalls + 1));
       expect(mockedListPayments.mock.calls.length).toBe(paymentsCalls + 1);
-      // El foco vuelve al botón que abrió el modal (sigue en la fila).
+      // El foco vuelve al «⋯» de la fila que abrió el modal (sigue en pantalla).
       await waitFor(() => expect(trigger).toHaveFocus());
     });
 
@@ -2859,7 +2882,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
       const payments = await openPaymentsTable(user);
       const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
-      await user.click(within(row).getByRole('button', { name: /^Imputación/ }));
+      await pickRowAction(user, row, 'Imputación');
       const modal = await screen.findByRole('dialog', { name: 'Imputar abono' });
       expect(await within(modal).findByText('Abono no encontrado.')).toBeInTheDocument();
 
@@ -2867,7 +2890,7 @@ describe('TreatmentPlansTab', () => {
       row.remove();
       await user.keyboard('{Escape}');
       await waitFor(() =>
-        expect(screen.getByRole('button', { name: /abonos y saldo/i })).toHaveFocus(),
+        expect(screen.getByRole('button', { name: /abonos registrados/i })).toHaveFocus(),
       );
     });
   });

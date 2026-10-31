@@ -19,15 +19,6 @@ jest.mock('../../../../components/locations/regional-review-notice', () => ({
   ),
 }));
 jest.mock('../../../../lib/auth/token-role', () => ({ getTokenRole: jest.fn() }));
-jest.mock('../../../../components/locations/location-health-registration-settings', () => ({
-  LocationHealthRegistrationSettings: () => <section aria-label="Nº de registro sanitario" />,
-}));
-jest.mock('../../../../components/locations/location-phone-settings', () => ({
-  LocationPhoneSettings: () => null,
-}));
-jest.mock('../../../../components/locations/cancellation-policy-settings', () => ({
-  CancellationPolicySettings: () => <section aria-label="Política de cancelación" />,
-}));
 const mockedRole = getTokenRole as jest.MockedFunction<typeof getTokenRole>;
 
 describe('Ajustes → Sedes (DX-279, DX-319)', () => {
@@ -54,33 +45,22 @@ describe('Ajustes → Sedes (DX-279, DX-319)', () => {
     expect(screen.getByRole('region', { name: 'Sedes' })).toHaveAttribute('data-can-edit', 'false');
   });
 
-  it('a ADMIN le anuncia la política de cancelación y se la muestra', () => {
+  it('B6: es la lista; el registro sanitario y la política viven en la ficha de cada sede', () => {
     mockedRole.mockReturnValue('ADMIN');
     render(<LocationSettingsPage />);
-    expect(
-      screen.getByText(/Moneda, zona horaria y formato de cada sede, sus datos legales y su política de cancelación\./),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Política de cancelación' })).toBeInTheDocument();
+    expect(screen.getByText(/Ábrela para sus datos legales y su política de cancelación\./)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Nº de registro sanitario' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Política de cancelación' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/REPS|Resumen Digital/)).not.toBeInTheDocument();
   });
-
-  it.each(['ADMIN', 'RECEPTION'] as const)(
-    'a %s le muestra el nº de registro sanitario y ya no habla del REPS (DX-319)',
-    (role) => {
-      mockedRole.mockReturnValue(role);
-      render(<LocationSettingsPage />);
-      expect(screen.getByRole('region', { name: 'Nº de registro sanitario' })).toBeInTheDocument();
-      expect(screen.queryByText(/REPS|Resumen Digital/)).not.toBeInTheDocument();
-    },
-  );
 
   it.each(['RECEPTION', 'DENTIST', 'ASSISTANT'] as const)(
     'a %s no le promete la política que no ve (QA D4)',
     (role) => {
       mockedRole.mockReturnValue(role);
       render(<LocationSettingsPage />);
-      expect(screen.getByText(/^Moneda, zona horaria y formato de cada sede y sus datos legales\./)).toBeInTheDocument();
+      expect(screen.getByText(/Ábrela para sus datos legales\.$/)).toBeInTheDocument();
       expect(screen.queryByText(/política de cancelación/)).not.toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: 'Política de cancelación' })).not.toBeInTheDocument();
     },
   );
 });

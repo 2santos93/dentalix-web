@@ -4,14 +4,13 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageExchangeRates } from '@/lib/exchange/exchange-settings-api';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { ExchangeRateSettingsView } from '@/components/exchange/exchange-rate-settings';
 
 const copy = {
   title: 'Tasa de cambio',
   description:
-    'De dónde sale la tasa con la que se convierten los abonos en otra moneda, en todas las sedes de la clínica.',
+    'De dónde sale la tasa con la que se convierten los abonos en otra moneda.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -39,9 +38,8 @@ export default function ExchangeRateSettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic">
       <ExchangeRateSettingsView token={accessToken} allowed={canManageExchangeRates(getTokenRole(accessToken))} />
-    </>
+    </SettingsPage>
   );
 }

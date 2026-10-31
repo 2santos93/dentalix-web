@@ -1,4 +1,5 @@
 import { test, expect } from './support/test';
+import { fillDate, fillTime, readDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
@@ -93,12 +94,12 @@ for (const browserClock of ['23:30', '06:00']) {
     await page.getByLabel('Sexo').selectOption('F');
 
     const createPatientError = page.locator('p[role="alert"]');
-    // El alta de paciente es un WIZARD de 5 pasos y el submit ("Guardar") vive en
+    // El alta de paciente es un WIZARD de 5 pasos; «Crear paciente» está en todos (solo el 1.º es obligatorio) y vive en
     // el último; con nombre, apellido y tipo de documento se puede saltar directo al final (ver
     // `goToStep` en patient-create-wizard.tsx). Antes esto pulsaba un botón "Crear
     // paciente" que ya no existe, y el spec se colgaba 30s en el click.
     await page.getByRole('button', { name: /Autorización de datos/ }).click();
-    await page.getByRole('button', { name: 'Guardar' }).click();
+    await page.getByRole('button', { name: 'Crear paciente' }).click();
 
     // El wizard redirige al DETALLE del paciente recién creado
     // (patient-create-wizard.tsx: `router.push(`/patients/${created.id}`)`), no a
@@ -114,7 +115,7 @@ for (const browserClock of ['23:30', '06:00']) {
 
     // --- Go to the agenda ---
     await page.goto(`${origin}/agenda`);
-    await expect(page.getByRole('heading', { name: 'Agenda' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible();
 
     // La agenda arranca en vista MES (agenda-view.tsx: useState<ViewMode>('month')),
     // así que hay que pasar a "Día" para que se renderice `DayAgenda` — es la vista
@@ -124,7 +125,7 @@ for (const browserClock of ['23:30', '06:00']) {
     // presentación en «Lista» (la tabla con el estado editable por fila).
     await page.getByRole('button', { name: 'Lista', exact: true }).click();
     // La agenda abre en el "hoy" del navegador; se salta al día ancla.
-    await page.getByLabel('Fecha', { exact: true }).fill(anchorDay);
+    await fillDate(page, 'Fecha', anchorDay);
 
     // Brand-new clinic/provider/day -> nothing scheduled yet.
     await expect(page.getByRole('status').filter({ hasText: 'No hay citas para este día.' })).toBeVisible({
@@ -151,9 +152,9 @@ for (const browserClock of ['23:30', '06:00']) {
     await expect(appointmentForm.getByText(`${patientFirstName} ${patientLastName}`)).toBeVisible();
     await appointmentForm.getByLabel('Profesional', { exact: true }).selectOption({ label: fullName });
     // El formulario hereda el día que se está viendo (`defaultDate`): el ancla.
-    await expect(appointmentForm.getByLabel('Fecha', { exact: true })).toHaveValue(anchorDay);
-    await appointmentForm.getByLabel('Hora de inicio').fill(startTime);
-    await appointmentForm.getByLabel('Hora de fin').fill(endTime);
+    await expect.poll(() => readDate(appointmentForm, 'Fecha')).toBe(anchorDay);
+    await fillTime(appointmentForm, 'Hora de inicio', startTime);
+    await fillTime(appointmentForm, 'Hora de fin', endTime);
     await appointmentForm.getByLabel('Motivo (opcional)').fill(appointmentReason);
 
     const saveError = appointmentForm.locator('p[role="alert"]');
@@ -193,13 +194,13 @@ for (const browserClock of ['23:30', '06:00']) {
     // under); jumping back to the anchor day shows the appointment again.
     await page.reload();
 
-    await expect(page.getByRole('heading', { name: 'Agenda' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible();
 
     // `viewMode` no se persiste: el reload vuelve a la vista MES por defecto, y
     // el día vuelve a ser el "hoy" del navegador.
     await page.getByRole('button', { name: 'Día', exact: true }).click();
     await page.getByRole('button', { name: 'Lista', exact: true }).click();
-    await page.getByLabel('Fecha', { exact: true }).fill(anchorDay);
+    await fillDate(page, 'Fecha', anchorDay);
 
     const appointmentRowAfterReload = page.locator('table tr', { hasText: appointmentReason });
     await expect(appointmentRowAfterReload).toBeVisible({ timeout: 10_000 });

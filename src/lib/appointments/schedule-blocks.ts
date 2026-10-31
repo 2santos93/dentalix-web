@@ -1,4 +1,5 @@
 import { wallInstant, wallMinuteOfDay } from '@/lib/time/wall-clock';
+import { minutesToTime } from '@/lib/locations/schedule-api';
 
 /**
  * Bloqueos de agenda en la web (DX-122): etiquetas, qué columna pinta cada
@@ -8,7 +9,15 @@ import { wallInstant, wallMinuteOfDay } from '@/lib/time/wall-clock';
  * suyo en su sede o, sin sede, en todas; uno sin profesional es de toda la sede.
  */
 
-export type ScheduleBlockKind = 'VACATION' | 'MEETING' | 'LUNCH' | 'OTHER';
+export type ScheduleBlockKind = 'VACATION' | 'MEETING' | 'LUNCH' | 'OTHER' | 'RESERVED';
+
+/** DX-446: un tipo de cita para el que está reservado un hueco. */
+export interface ReservedTypeLike {
+  id: string;
+  name: string;
+  color: string;
+  isUrgent: boolean;
+}
 
 /** Lo que la pintura necesita de un bloqueo (el DTO de la API lo cumple). */
 export interface ScheduleBlockLike {
@@ -20,6 +29,12 @@ export interface ScheduleBlockLike {
   kind: ScheduleBlockKind;
   allowsBooking: boolean;
   note: string | null;
+  /** DX-446: tipos permitidos de un `RESERVED` (los trae el listado). */
+  reservedForTypes?: ReservedTypeLike[];
+  /** DX-446: «Liberar a partir de», minutos de pared de la sede. */
+  releaseAtMinute?: number | null;
+  /** DX-446: ya pasó la liberación (reloj del servidor). */
+  released?: boolean;
 }
 
 export const SCHEDULE_BLOCK_KIND_LABELS: Record<ScheduleBlockKind, string> = {
@@ -27,9 +42,10 @@ export const SCHEDULE_BLOCK_KIND_LABELS: Record<ScheduleBlockKind, string> = {
   MEETING: 'Reunión',
   LUNCH: 'Almuerzo',
   OTHER: 'Bloqueo',
+  RESERVED: 'Reservado',
 };
 
-export const SCHEDULE_BLOCK_KINDS: ScheduleBlockKind[] = ['VACATION', 'MEETING', 'LUNCH', 'OTHER'];
+export const SCHEDULE_BLOCK_KINDS: ScheduleBlockKind[] = ['VACATION', 'MEETING', 'LUNCH', 'OTHER', 'RESERVED'];
 
 /**
  * ¿Se pinta en la columna de `providerId`? `activeLocationId` null = vista
@@ -70,11 +86,42 @@ export function blockBandForDay(
   return end > start ? { start, end } : null;
 }
 
-/** «Vacaciones: Congreso · Dra. Ana» / «Almuerzo · se puede agendar». */
-export function blockLabel(block: ScheduleBlockLike, providerName?: string): string {
+/**
+ * DX-446: lo que dice un hueco reservado: «Urgencias» si todos sus tipos son
+ * de urgencia; si no, sus nombres.
+ */
+function reservedTypesLabel(types: readonly ReservedTypeLike[]): string {
+  if (types.length > 0 && types.every((t) => t.isUrgent)) return 'Urgencias';
+  return types.map((t) => t.name).join(', ') || SCHEDULE_BLOCK_KIND_LABELS.RESERVED;
+}
+
+/** DX-446: el color de un hueco reservado (el de su primer tipo), o null. */
+export function reservedBlockColor(block: ScheduleBlockLike): string | null {
+  if (block.kind !== 'RESERVED') return null;
+  return block.reservedForTypes?.[0]?.color ?? null;
+}
+
+/**
+ * «Vacaciones: Congreso · Dra. Ana» / «Almuerzo · se puede agendar».
+ * DX-446: «Urgencias · reservado» o, ya liberado, «Urgencias · Libre desde
+ * 11:00» (`formatMinute` pinta la hora con el reloj de la sede).
+ */
+export function blockLabel(
+  block: ScheduleBlockLike,
+  providerName?: string,
+  formatMinute: (minute: number) => string = minutesToTime,
+): string {
+  const who = block.providerId === null ? 'toda la sede' : providerName;
+  if (block.kind === 'RESERVED') {
+    const head = block.note || reservedTypesLabel(block.reservedForTypes ?? []);
+    const state =
+      block.released && block.releaseAtMinute != null
+        ? `Libre desde ${formatMinute(block.releaseAtMinute)}`
+        : 'reservado';
+    return [head, who, state].filter(Boolean).join(' · ');
+  }
   const kind = SCHEDULE_BLOCK_KIND_LABELS[block.kind];
   const head = block.note ? `${kind}: ${block.note}` : kind;
-  const who = block.providerId === null ? 'toda la sede' : providerName;
   return [head, who, block.allowsBooking ? 'se puede agendar' : null]
     .filter(Boolean)
     .join(' · ');

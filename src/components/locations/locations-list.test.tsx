@@ -1,7 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { LocationsList } from './locations-list';
 import { LocationSwitcher } from './location-switcher';
-import { LocationPhoneSettings } from './location-phone-settings';
 import {
   createLocation,
   listLocations,
@@ -13,6 +12,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { clinicLocation } from '@/lib/test/locations';
 import { tokenFor } from '@/lib/test/prescriptions';
 import { setupUser } from '@/lib/test/user';
+import { chooseRegionalOption } from '@/lib/test/country';
 import { browserCountry, browserHourCycle } from '@/lib/locations/regional-settings';
 import { chooseCountry } from '@/lib/test/country';
 
@@ -70,9 +70,24 @@ describe('LocationsList (G1, spec §6.3)', () => {
     expect(screen.getByText('Sede Sin Lista').closest('li')).toHaveTextContent('ZZ');
     expect(row).toHaveTextContent('España');
     expect(row).toHaveTextContent('EUR');
-    expect(row).toHaveTextContent('Europe/Madrid');
-    expect(row).toHaveTextContent('es-ES');
-    expect(row).toHaveTextContent('Activa');
+    // B6: nombres legibles, no los códigos IANA/BCP 47.
+    expect(row).toHaveTextContent('Madrid');
+    expect(row).not.toHaveTextContent('Europe/Madrid');
+    expect(row).toHaveTextContent('Español (España)');
+    expect(row).not.toHaveTextContent('es-ES');
+    // Solo la excepción lleva chip: una sede activa no dice «Activa».
+    expect(row).not.toHaveTextContent('Activa');
+  });
+
+  it('B6: el nombre abre la ficha de la sede; una inactiva lo dice', async () => {
+    const sur = clinicLocation({ id: 'loc 2', name: 'Sede Sur', isActive: false });
+    mockedList.mockResolvedValue([norte, sur]);
+    render(<LocationsList token={RECEPTIONIST} canEdit={false} />);
+    expect(await screen.findByRole('link', { name: 'Abrir Sede Norte' })).toHaveAttribute('href', '/settings/sedes/norte');
+    expect(screen.getByRole('link', { name: 'Abrir Sede Sur' })).toHaveAttribute('href', '/settings/sedes/loc%202');
+    expect(screen.getByText('Sede Sur').closest('li')).toHaveTextContent('Inactiva');
+    // El calendario está en la ficha, no en la lista.
+    expect(screen.queryByRole('link', { name: /^Calendario/ })).not.toBeInTheDocument();
   });
 
   it('lists the clock of each location; a location without one is «Por configurar»', async () => {
@@ -109,42 +124,6 @@ describe('LocationsList (G1, spec §6.3)', () => {
     expect(screen.getByRole('button', { name: 'Editar Sede Norte' })).toBeInTheDocument();
   });
 
-  it('the Sedes list links «Calendario Sede Norte» to /settings/calendario?sede=<id> for ADMIN only', async () => {
-    const otra = clinicLocation({ id: 'loc 2', name: 'Sede Sur', isActive: false });
-    mockedList.mockResolvedValue([norte, otra]);
-    const { unmount } = render(<LocationsList token={RECEPTIONIST} canEdit={false} />);
-    await screen.findByText('Sede Norte');
-    expect(screen.queryByRole('link', { name: /^Calendario/ })).not.toBeInTheDocument();
-    unmount();
-
-    render(<LocationsList token={ADMIN} canEdit />);
-    await screen.findByText('Sede Norte');
-    expect(screen.getByRole('link', { name: 'Calendario Sede Norte' })).toHaveAttribute(
-      'href',
-      '/settings/calendario?sede=norte',
-    );
-    // El id va codificado; una sede inactiva también tiene su calendario.
-    expect(screen.getByRole('link', { name: 'Calendario Sede Sur' })).toHaveAttribute(
-      'href',
-      '/settings/calendario?sede=loc%202',
-    );
-    expect(screen.getByRole('link', { name: 'Calendario Sede Norte' })).toHaveTextContent('Calendario');
-  });
-
-  it('the «Calendario» link follows canManageLocationCalendar (the token role), not canEdit', async () => {
-    mockedList.mockResolvedValue([norte]);
-    const { unmount } = render(<LocationsList token={RECEPTIONIST} canEdit />);
-    await screen.findByText('Sede Norte');
-    expect(screen.getByRole('button', { name: 'Editar Sede Norte' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Calendario Sede Norte' })).not.toBeInTheDocument();
-    unmount();
-
-    render(<LocationsList token={ADMIN} canEdit={false} />);
-    await screen.findByText('Sede Norte');
-    expect(screen.queryByRole('button', { name: 'Editar Sede Norte' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Calendario Sede Norte' })).toBeInTheDocument();
-  });
-
   it('a location with null regional fields is listed «Por configurar» and the modal completes it', async () => {
     mockedList.mockResolvedValue([legacy]);
     const completed = { ...legacy, currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' as const, regionalSettingsReviewedAt: '2026-10-27T10:00:00.000Z' };
@@ -153,15 +132,14 @@ describe('LocationsList (G1, spec §6.3)', () => {
     render(<LocationsList token={ADMIN} canEdit />);
     const row = (await screen.findByText('Sede Antigua')).closest('li')!;
     expect(within(row).getAllByText('Por configurar').length).toBeGreaterThan(0);
-    expect(row).not.toHaveTextContent(/COP|America\/Bogota|es-CO/);
+    expect(row).not.toHaveTextContent(/COP|America\/Bogota|es-CO|Bogotá/);
 
     await user.click(within(row).getByRole('button', { name: 'Revisar Sede Antigua' }));
     const dialog = await screen.findByRole('dialog', { name: 'Editar sede' });
     await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
-    await user.type(within(dialog).getByLabelText('Zona horaria'), 'Asia/Tokyo');
-    await user.clear(within(dialog).getByLabelText('Formato regional'));
-    await user.type(within(dialog).getByLabelText('Formato regional'), 'ja-JP');
+    await chooseRegionalOption(user, within(dialog).getByLabelText('Zona horaria'), 'Asia/Tokyo');
+    await chooseRegionalOption(user, within(dialog).getByLabelText('Formato regional'), 'ja-JP');
     await user.click(within(dialog).getByRole('radio', { name: '24 h' }));
     await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
 
@@ -176,7 +154,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const updated = screen.getByText('Sede Antigua').closest('li')!;
     expect(updated).not.toHaveTextContent('Por configurar');
-    expect(updated).toHaveTextContent('Asia/Tokyo');
+    expect(updated).toHaveTextContent('(UTC+9) Tokyo — Japón');
   });
 
   it('after save the switcher lists the new location without reload', async () => {
@@ -242,35 +220,5 @@ describe('LocationsList (G1, spec §6.3)', () => {
     const row = (await screen.findByText('Sede ICU')).closest('li')!;
     expect(within(row).getByText('Por configurar')).toBeInTheDocument();
     expect(within(row).getByText('Marte/Olimpo (no válido)')).toBeInTheDocument();
-  });
-
-  it('the other cards of the page read the same session list: a new location shows there without reload', async () => {
-    const tokyo = clinicLocation({ id: 'tokyo', name: 'Sede Tokio', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP' });
-    mockedList.mockResolvedValueOnce([norte]).mockResolvedValue([norte, tokyo]);
-    jest.mocked(createLocation).mockResolvedValue(tokyo);
-    const user = setupUser();
-    render(
-      <SessionLocationsProvider token={ADMIN}>
-        <LocationsList token={ADMIN} canEdit />
-        <LocationPhoneSettings token={ADMIN} canEdit />
-      </SessionLocationsProvider>,
-    );
-    const phones = await screen.findByRole('region', { name: 'Teléfono de la sede' });
-    await within(phones).findByRole('button', { name: 'Guardar el teléfono de Sede Norte' });
-    // Una sola lectura para las dos tarjetas.
-    expect(mockedList).toHaveBeenCalledTimes(1);
-
-    await user.click(screen.getByRole('button', { name: 'Nueva sede' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Nueva sede' });
-    await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
-    await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Tokio');
-    await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
-    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
-    await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
-
-    expect(
-      await within(phones).findByRole('button', { name: 'Guardar el teléfono de Sede Tokio' }),
-    ).toBeInTheDocument();
-    expect(mockedList).toHaveBeenCalledTimes(2);
   });
 });

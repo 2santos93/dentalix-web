@@ -1,12 +1,12 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createScheduleBlock,
   listAffectedAppointments,
   type AffectedAppointmentsPage,
-  type ScheduleBlock,
+  type SavedScheduleBlock,
 } from '@/lib/appointments/schedule-blocks-api';
 import {
   SCHEDULE_BLOCK_KINDS,
@@ -25,6 +25,15 @@ import { SEDE_TIME_ZONE_ERROR } from '@/lib/locations/use-sede-time-zone';
 import { timeToMinutes } from '@/lib/locations/schedule-api';
 import { addCivilDays, wallDay, wallInstant } from '@/lib/time/wall-clock';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
+import { listAppointmentTypes, type AppointmentType } from '@/lib/appointments/appointment-types-api';
+import { FieldError } from '@/components/errors/field-error';
+import { Checkbox } from '@/components/ui/checkbox';
+import { TimeField } from '@/components/ui/date-field';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
+import { Badge } from '@/components/ui/badge';
+import { isCivilDay } from '@/lib/time/civil-day';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -61,10 +70,22 @@ const copy = {
   affectedMore: (n: number) => (n === 1 ? 'y 1 cita más.' : `y ${n} citas más.`),
   back: 'Volver y cambiar el bloqueo',
   genericError: 'No pudimos crear el bloqueo. Intenta de nuevo.',
+  // DX-446: hueco reservado para ciertos tipos de cita.
+  reservedKind: 'Reservado para…',
+  reservedTypes: 'Tipos de cita permitidos',
+  reservedTypesHint: 'Solo estos tipos se pueden agendar en el hueco (marca al menos uno).',
+  urgentBadge: 'Urgencia',
+  typesLoading: 'Cargando tipos de cita…',
+  typesError: 'Tipos no disponibles',
+  typesEmpty: 'No hay tipos de cita activos. Créalos en Ajustes → Tipos de cita.',
+  releaseAt: 'Liberar a partir de (opcional)',
+  releaseHint:
+    'Desde esa hora de la sede, el día del hueco, se puede agendar cualquier tipo de cita. Vacío: no se libera.',
+  reservedNeedsType: 'Marca al menos un tipo de cita para el hueco reservado.',
+  reservedNeedsLocation: 'Un hueco reservado es de una sede: elige la sede.',
+  reservedOneDay: 'Un hueco reservado tiene que caber en un solo día.',
+  releaseBeforeStart: '«Liberar a partir de» tiene que ser antes de la hora de inicio.',
 };
-
-const selectClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 type Scope = 'provider' | 'location';
 
@@ -101,7 +122,7 @@ interface ScheduleBlockDialogProps {
    * demás), así que ni elige profesional ni puede bloquear la sede.
    */
   ownProviderId?: string | null;
-  onCreated: (block: ScheduleBlock) => void;
+  onCreated: (block: SavedScheduleBlock) => void;
 }
 
 /**
@@ -147,6 +168,38 @@ export function ScheduleBlockDialog({
   const [allowsBooking, setAllowsBooking] = useState(false);
   const [allowsTouched, setAllowsTouched] = useState(false);
   const [note, setNote] = useState('');
+  // DX-446: tipos permitidos y liberación de un hueco reservado.
+  const [types, setTypes] = useState<AppointmentType[] | null>(null);
+  const [typesError, setTypesError] = useState(false);
+  const [typesReload, setTypesReload] = useState(0);
+  const [reservedTypeIds, setReservedTypeIds] = useState<string[]>([]);
+  const [releaseAt, setReleaseAt] = useState('');
+  const reserved = kind === 'RESERVED';
+
+  useEffect(() => {
+    if (!reserved || types !== null) return;
+    let cancelled = false;
+    listAppointmentTypes(token)
+      .then((list) => {
+        if (cancelled) return;
+        // Urgencias primero y ya marcadas: es para lo que se reserva casi siempre.
+        const sorted = [...list].sort((a, b) => Number(b.isUrgent) - Number(a.isUrgent));
+        setTypes(sorted);
+        setReservedTypeIds((current) =>
+          current.length > 0 ? current : sorted.filter((t) => t.isUrgent).map((t) => t.id),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setTypesError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reserved, types, token, typesReload]);
+
+  function toggleType(id: string, checked: boolean) {
+    setReservedTypeIds((current) => (checked ? [...current, id] : current.filter((t) => t !== id)));
+  }
   const [affected, setAffected] = useState<AffectedAppointmentsPage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -159,6 +212,15 @@ export function ScheduleBlockDialog({
     // vacaciones son días enteros y no. Solo mientras la persona no lo toque.
     setWholeDays(next === 'VACATION');
     if (!allowsTouched) setAllowsBooking(next === 'LUNCH');
+    if (next === 'RESERVED') {
+      // Un reservado es por horas, de una sede y no deja agendar libremente.
+      setAllowsBooking(false);
+      setFromTime('15:00');
+      setToTime('15:30');
+      if (!providerLocationId) {
+        setProviderLocationId(locations.find((l) => l.id === activeLocationId)?.id ?? locations[0]?.id ?? '');
+      }
+    }
     setAffected(null);
   }
 
@@ -168,7 +230,7 @@ export function ScheduleBlockDialog({
   const blockClock = blockLocationId ? clock.of(blockLocationId) : clock;
 
   function range(timeZone: string): { start: string; end: string } | null {
-    if (!fromDate || !toDate) return null;
+    if (!isCivilDay(fromDate) || !isCivilDay(toDate)) return null;
     const start = sedeInstant(fromDate, wholeDays ? '00:00' : fromTime, timeZone);
     const end = wholeDays
       ? sedeInstant(addCivilDays(toDate, 1), '00:00', timeZone)
@@ -199,6 +261,26 @@ export function ScheduleBlockDialog({
       setError(copy.backwards);
       return;
     }
+    const releaseAtMinute = reserved && releaseAt ? timeToMinutes(releaseAt) : null;
+    if (reserved) {
+      if (!blockLocationId) {
+        setError(copy.reservedNeedsLocation);
+        return;
+      }
+      if (fromDate !== toDate) {
+        setError(copy.reservedOneDay);
+        return;
+      }
+      if (reservedTypeIds.length === 0) {
+        setError(copy.reservedNeedsType);
+        return;
+      }
+      const startMinute = timeToMinutes(fromTime);
+      if (releaseAtMinute !== null && startMinute !== null && releaseAtMinute >= startMinute) {
+        setError(copy.releaseBeforeStart);
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       // Primer envío: ¿hay citas dentro? Se enseñan y se pide confirmación.
@@ -213,8 +295,9 @@ export function ScheduleBlockDialog({
         ...target,
         ...r,
         kind,
-        allowsBooking,
+        allowsBooking: reserved ? false : allowsBooking,
         note: note.trim() || undefined,
+        ...(reserved ? { reservedForTypeIds: reservedTypeIds, releaseAtMinute } : {}),
         confirmAffected: affected !== null && affected.total > 0,
       });
       onCreated(block);
@@ -252,7 +335,7 @@ export function ScheduleBlockDialog({
       size="lg"
     >
       {confirming ? (
-        <ul aria-label={copy.affectedList} className="flex flex-col divide-y divide-hairline rounded-lg border border-border">
+        <ul aria-label={copy.affectedList} className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border">
           {affectedList.map((a) => (
             <li key={a.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
               <span className="font-medium text-ink">{patientName(a)}</span>
@@ -273,35 +356,27 @@ export function ScheduleBlockDialog({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {!ownOnly && (
-            <fieldset className="sm:col-span-2">
-              <legend className="mb-1.5 text-xs font-semibold tracking-wide text-ink">{copy.scope}</legend>
-              <div className="flex flex-wrap gap-x-5 gap-y-2">
-                {(['provider', 'location'] as Scope[]).map((s) => (
-                  <label key={s} className="flex items-center gap-2 text-sm text-ink">
-                    <input
-                      type="radio"
-                      name="block-scope"
-                      value={s}
-                      checked={scope === s}
-                      onChange={() => {
-                        setScope(s);
-                        setAffected(null);
-                      }}
-                      className="size-4 accent-[var(--color-primary)]"
-                    />
-                    {s === 'provider' ? copy.scopeProvider : copy.scopeLocation}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <RadioGroup
+              id="block-scope"
+              legend={copy.scope}
+              value={scope}
+              onValueChange={(next) => {
+                setScope(next as Scope);
+                setAffected(null);
+              }}
+              className="sm:col-span-2"
+              optionsClassName="flex-row flex-wrap gap-x-5"
+            >
+              <RadioOption id="block-scope" value="provider" label={copy.scopeProvider} />
+              <RadioOption value="location" label={copy.scopeLocation} />
+            </RadioGroup>
           )}
 
           {scope === 'provider' ? (
             <>
               <FormField htmlFor="block-provider" label={copy.provider}>
-                <select
+                <NativeSelect
                   id="block-provider"
-                  className={selectClass}
                   value={providerId}
                   disabled={ownOnly}
                   onChange={(e) => setProviderId(e.target.value)}
@@ -311,30 +386,28 @@ export function ScheduleBlockDialog({
                       {s.fullName}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </FormField>
               <FormField htmlFor="block-provider-location" label={copy.location}>
-                <select
+                <NativeSelect
                   id="block-provider-location"
-                  className={selectClass}
                   value={providerLocationId}
                   onChange={(e) => setProviderLocationId(e.target.value)}
                 >
-                  {!restricted && <option value="">{copy.allLocations}</option>}
+                  {!restricted && !reserved && <option value="">{copy.allLocations}</option>}
                   {locations.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
                 {restricted && <p className="mt-1 text-xs text-muted">{copy.restrictedHint}</p>}
               </FormField>
             </>
           ) : (
             <FormField htmlFor="block-location" label={copy.location} className="sm:col-span-2">
-              <select
+              <NativeSelect
                 id="block-location"
-                className={selectClass}
                 value={locationId}
                 onChange={(e) => setLocationId(e.target.value)}
               >
@@ -343,88 +416,139 @@ export function ScheduleBlockDialog({
                     {l.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FormField>
           )}
 
           <FormField htmlFor="block-kind" label={copy.kind}>
-            <select
+            <NativeSelect
               id="block-kind"
-              className={selectClass}
               value={kind}
               onChange={(e) => changeKind(e.target.value as ScheduleBlockKind)}
             >
               {SCHEDULE_BLOCK_KINDS.map((k) => (
                 <option key={k} value={k}>
-                  {SCHEDULE_BLOCK_KIND_LABELS[k]}
+                  {k === 'RESERVED' ? copy.reservedKind : SCHEDULE_BLOCK_KIND_LABELS[k]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
-          <label className="flex items-center gap-2 self-end pb-2 text-sm text-ink">
-            <input
-              type="checkbox"
+          {reserved ? (
+            <span aria-hidden="true" />
+          ) : (
+            <Checkbox
               checked={wholeDays}
               onChange={(e) => setWholeDays(e.target.checked)}
-              className="size-4 accent-[var(--color-primary)]"
+              label={copy.wholeDays}
+              className="self-end"
             />
-            {copy.wholeDays}
-          </label>
+          )}
 
           <FormField htmlFor="block-from-date" label={copy.fromDate}>
-            <Input
+            <DatePicker
               id="block-from-date"
-              type="date"
-              value={fromDate}
-              onChange={(e) => {
-                setFromDate(e.target.value);
-                if (e.target.value > toDate) setToDate(e.target.value);
+              value={fromDate || null}
+              onChange={(next) => {
+                setFromDate(next ?? '');
+                if (next && isCivilDay(next) && next > toDate) setToDate(next);
               }}
             />
           </FormField>
           <FormField htmlFor="block-to-date" label={copy.toDate}>
-            <Input
+            <DatePicker
               id="block-to-date"
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              value={toDate || null}
+              min={isCivilDay(fromDate) ? fromDate : undefined}
+              onChange={(next) => setToDate(next ?? '')}
             />
           </FormField>
           {!wholeDays && (
             <>
               <FormField htmlFor="block-from-time" label={copy.fromTime}>
-                <Input
+                <TimeField
                   id="block-from-time"
-                  type="time"
-                  step={300}
-                  value={fromTime}
-                  onChange={(e) => setFromTime(e.target.value)}
+                  value={fromTime || null}
+                  onChange={(next) => setFromTime(next ?? '')}
                 />
               </FormField>
               <FormField htmlFor="block-to-time" label={copy.toTime}>
-                <Input
+                <TimeField
                   id="block-to-time"
-                  type="time"
-                  step={300}
-                  value={toTime}
-                  onChange={(e) => setToTime(e.target.value)}
+                  value={toTime || null}
+                  onChange={(next) => setToTime(next ?? '')}
                 />
               </FormField>
             </>
           )}
 
-          <label className="flex items-center gap-2 text-sm text-ink sm:col-span-2">
-            <input
-              type="checkbox"
+          {reserved ? (
+            <>
+              <fieldset className="sm:col-span-2" aria-describedby="block-reserved-types-hint">
+                <legend className="mb-1.5 text-sm font-medium text-ink">{copy.reservedTypes}</legend>
+                <p id="block-reserved-types-hint" className="mb-2 text-xs text-muted">
+                  {copy.reservedTypesHint}
+                </p>
+                {typesError ? (
+                  <FieldError
+                    label={copy.typesError}
+                    className="h-10"
+                    onRetry={() => {
+                      setTypesError(false);
+                      setTypes(null);
+                      setTypesReload((k) => k + 1);
+                    }}
+                  />
+                ) : types === null ? (
+                  <p className="text-sm text-muted" aria-live="polite">
+                    {copy.typesLoading}
+                  </p>
+                ) : types.length === 0 ? (
+                  <p className="text-sm text-muted">{copy.typesEmpty}</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {types.map((t) => (
+                      <li key={t.id}>
+                        <Checkbox
+                          checked={reservedTypeIds.includes(t.id)}
+                          onChange={(e) => toggleType(t.id, e.target.checked)}
+                          label={
+                            <span className="flex min-w-0 flex-wrap items-center gap-2">
+                              <span aria-hidden="true" className="size-3 shrink-0 rounded-sm" style={{ backgroundColor: t.color }} />
+                              <span className="min-w-0 break-words">{t.name}</span>
+                              {t.isUrgent ? (
+                                <Badge variant="danger">{copy.urgentBadge}</Badge>
+                              ) : null}
+                            </span>
+                          }
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </fieldset>
+              <FormField htmlFor="block-release-at" label={copy.releaseAt} className="sm:col-span-2">
+                <TimeField
+                  id="block-release-at"
+                  value={releaseAt || null}
+                  aria-describedby="block-release-hint"
+                  onChange={(value) => setReleaseAt(value ?? '')}
+                />
+                <p id="block-release-hint" className="mt-1 text-xs text-muted">
+                  {copy.releaseHint}
+                </p>
+              </FormField>
+            </>
+          ) : (
+            <Checkbox
               checked={allowsBooking}
               onChange={(e) => {
                 setAllowsBooking(e.target.checked);
                 setAllowsTouched(true);
               }}
-              className="size-4 accent-[var(--color-primary)]"
+              label={copy.allowsBooking}
+              className="sm:col-span-2"
             />
-            {copy.allowsBooking}
-          </label>
+          )}
 
           <FormField htmlFor="block-note" label={copy.note} className="sm:col-span-2">
             <Input

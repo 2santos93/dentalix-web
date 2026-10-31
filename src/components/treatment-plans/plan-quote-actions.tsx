@@ -60,7 +60,7 @@ export function PlanQuoteActions({ token, patientId, plan, role, onAccepted }: P
     <div className="flex flex-col gap-3">
       {acceptance ? (
         <div role="status" className="flex items-start gap-2 text-sm">
-          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
+          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success-text" />
           <p>
             <span className="font-medium text-ink tabular-nums">
               {(acceptance.remote ? copy.acceptedRemotely : copy.acceptedBy)(
@@ -76,7 +76,7 @@ export function PlanQuoteActions({ token, patientId, plan, role, onAccepted }: P
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         {canPrintPlanQuote(role) ? (
-          <Button asChild variant="outline">
+          <Button asChild variant="secondary">
             <Link href={planQuotePrintHref(patientId, plan.id)} target="_blank" rel="noopener">
               <Printer aria-hidden />
               {copy.print}

@@ -1,6 +1,9 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { setupUser } from '@/lib/test/user';
+import { setActiveLocationId } from '@/lib/locations/location-store';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 import { InventoryView } from './inventory-view';
 import {
   listInventoryItems,
@@ -20,6 +23,9 @@ jest.mock('../../lib/inventory/inventory-api', () => ({
   recordInventoryMovement: jest.fn(),
   listInventoryMovements: jest.fn(),
 }));
+
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
 const mockedList = listInventoryItems as jest.MockedFunction<typeof listInventoryItems>;
 const mockedCreate = createInventoryItem as jest.MockedFunction<typeof createInventoryItem>;
@@ -54,6 +60,69 @@ beforeEach(() => {
   mockedDelete.mockReset();
   mockedRecord.mockReset();
   mockedListMovements.mockReset();
+  mockedLocations
+    .mockReset()
+    .mockResolvedValue([clinicLocation({ id: 'sede-norte', name: 'Sede Norte' }), clinicLocation({ id: 'sede-sur', name: 'Sede Sur' })]);
+  setActiveLocationId(null);
+});
+
+function mockPhone() {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: true,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  return () => {
+    window.matchMedia = original;
+  };
+}
+
+describe('alcance de sede', () => {
+  it('en «Todas las sedes» dice que el stock es de cada sede, sin sumar', async () => {
+    mockedList.mockResolvedValue(page([guantes]));
+    render(<InventoryView token="tok" />);
+    expect(
+      await screen.findByText('Todas las sedes · cada insumo con el stock de su sede, sin sumar'),
+    ).toBeInTheDocument();
+  });
+
+  it('con una sede activa la nombra', async () => {
+    setActiveLocationId('sede-sur');
+    mockedList.mockResolvedValue(page([guantes]));
+    render(<InventoryView token="tok" />);
+    expect(await screen.findByText('Sede Sur · stock de esta sede')).toBeInTheDocument();
+  });
+});
+
+it('cada fila abre la ficha del insumo', async () => {
+  mockedList.mockResolvedValue(page([guantes]));
+  render(<InventoryView token="tok" />);
+  const table = await screen.findByRole('table', { name: /inventario/i });
+  expect(within(table).getByRole('link', { name: 'Guantes de nitrilo' })).toHaveAttribute('href', '/inventory/i1');
+});
+
+it('en el teléfono cada insumo es una tarjeta compacta, sin filas «ACCIONES»', async () => {
+  const restore = mockPhone();
+  try {
+    mockedList.mockResolvedValue(page([guantes, gasa]));
+    render(<InventoryView token="tok" />);
+    const list = await screen.findByRole('list', { name: /inventario/i });
+    const card = within(list).getByRole('link', { name: /guantes de nitrilo/i });
+    expect(card).toHaveAttribute('href', '/inventory/i1');
+    expect(card).toHaveTextContent('2 / 5');
+    expect(card).toHaveTextContent('GUA-N · caja');
+    expect(card).toHaveTextContent('Bajo stock');
+    expect(within(list).queryByText(/^acciones$/i)).not.toBeInTheDocument();
+    expect(within(list).getByRole('button', { name: 'Acciones de Guantes de nitrilo' })).toBeInTheDocument();
+  } finally {
+    restore();
+  }
 });
 
 it('muestra los insumos con su stock y marca los que están bajo el mínimo', async () => {
@@ -62,12 +131,17 @@ it('muestra los insumos con su stock y marca los que están bajo el mínimo', as
 
   const table = await screen.findByRole('table', { name: /inventario/i });
   const lowRow = within(table).getByRole('row', { name: /guantes de nitrilo/i });
-  expect(within(lowRow).getByText('2')).toBeInTheDocument();
+  // Stock y mínimo juntos («2 / 5»), a la derecha y tabulares.
+  const lowStock = within(lowRow).getByText('2 / 5');
+  expect(lowStock).toHaveAccessibleName('Stock 2, mínimo 5');
+  expect(lowStock.closest('td')).toHaveClass('text-right', 'tabular-nums');
   expect(within(lowRow).getByText(/bajo stock/i)).toBeInTheDocument();
 
   const okRow = within(table).getByRole('row', { name: /gasa estéril/i });
-  expect(within(okRow).getByText('40')).toBeInTheDocument();
+  expect(within(okRow).getByText('40 / 10')).toBeInTheDocument();
   expect(within(okRow).queryByText(/bajo stock/i)).not.toBeInTheDocument();
+  // Solo lo anómalo lleva chip: nada de «OK» verde en cada fila sana.
+  expect(within(okRow).queryByText(/^ok$/i)).not.toBeInTheDocument();
 });
 
 it('muestra un guion cuando stock/lowStock no vienen del API (sin ocultar que faltan)', async () => {
@@ -76,8 +150,9 @@ it('muestra un guion cuando stock/lowStock no vienen del API (sin ocultar que fa
 
   const table = await screen.findByRole('table', { name: /inventario/i });
   const row = within(table).getByRole('row', { name: /algodón/i });
-  // One "—" for the missing stock cell, one for the neutral status badge.
-  expect(within(row).getAllByText('—')).toHaveLength(2);
+  // «— / 3» para el stock que falta y el «—» neutro del estado.
+  expect(within(row).getByText('— / 3')).toBeInTheDocument();
+  expect(within(row).getByText('—')).toBeInTheDocument();
   expect(within(row).queryByText(/^ok$/i)).not.toBeInTheDocument();
   expect(within(row).queryByText(/bajo stock/i)).not.toBeInTheDocument();
 });

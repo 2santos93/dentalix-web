@@ -183,8 +183,8 @@ export function MedicalAlertIndicator({
           "relative inline-flex shrink-0 items-center justify-center rounded-full border after:absolute after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           size === 'compact' ? 'size-5 after:-inset-[13px]' : 'size-7 after:-inset-[9px]',
           severity === 'critical'
-            ? 'border-danger/40 bg-surface text-danger'
-            : 'border-warning/40 bg-surface text-warning',
+            ? 'border-danger/40 bg-surface text-danger-text'
+            : 'border-warning/40 bg-surface text-warning-text',
           className,
         )}
       >
@@ -217,14 +217,14 @@ export function MedicalAlertIndicator({
               className="fixed z-50 flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-left text-sm text-ink shadow-overlay"
             >
               {flags.requiresPremedication ? (
-                <p className="flex items-center gap-1.5 font-semibold text-danger">
+                <p className="flex items-center gap-1.5 font-semibold text-danger-text">
                   <Pill aria-hidden className="size-4 shrink-0" />
                   {PREMEDICATION_LABEL}
                 </p>
               ) : null}
               {lines.length > 0 ? (
                 <div className="flex flex-col gap-1">
-                  <p className="flex items-center gap-1.5 font-semibold text-danger">
+                  <p className="flex items-center gap-1.5 font-semibold text-danger-text">
                     <TriangleAlert aria-hidden className="size-4 shrink-0" />
                     {MEDICAL_ALERTS_TITLE}
                   </p>
@@ -236,7 +236,7 @@ export function MedicalAlertIndicator({
                 </div>
               ) : null}
               {note ? (
-                <p className="flex items-start gap-1.5 text-warning">
+                <p className="flex items-start gap-1.5 text-warning-text">
                   <NoteIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
                   <span>
                     <span className="sr-only">{copy.anamnesisTitle}: </span>

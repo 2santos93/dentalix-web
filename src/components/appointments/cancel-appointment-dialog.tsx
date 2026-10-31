@@ -1,7 +1,6 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   updateAppointment,
@@ -32,8 +31,10 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Callout } from '@/components/ui/callout';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
 
 export const cancelAppointmentCopy = {
   title: (patient: string) => `Cancelar la cita de ${patient}`,
@@ -188,52 +189,25 @@ export function CancelAppointmentDialog({
       error={error}
       onCloseAutoFocus={onCloseAutoFocus}
     >
-      <fieldset
-        role="radiogroup"
-        className="flex flex-col gap-2"
-        aria-invalid={errors.origin ? true : undefined}
-        aria-describedby={errors.origin ? fieldErrorId(originName) : undefined}
+      <RadioGroup
+        id={originName}
+        legend={copy.origin}
+        value={byKind ?? ''}
+        onValueChange={(kind) => chooseOrigin(kind as StaffCancellationKind)}
+        error={errors.origin}
+        disabled={submitting}
+        optionsClassName="gap-2"
       >
-        <legend className="mb-1.5 text-sm font-medium text-ink">{copy.origin}</legend>
-        {STAFF_CANCELLATION_KINDS.map((kind) => {
-          const optionId = `${originName}-${kind}`;
-          return (
-            <label
-              key={kind}
-              htmlFor={optionId}
-              className={cn(
-                'flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 transition-colors hover:bg-bg',
-                byKind === kind && 'border-primary',
-              )}
-            >
-              <input
-                id={optionId}
-                type="radio"
-                name={originName}
-                value={kind}
-                checked={byKind === kind}
-                disabled={submitting}
-                onChange={() => chooseOrigin(kind)}
-                aria-describedby={
-                  errors.origin ? `${optionId}-hint ${fieldErrorId(originName)}` : `${optionId}-hint`
-                }
-                className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-              />
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-sm font-medium text-ink">{CANCELLATION_KIND_LABELS[kind]}</span>
-                <span id={`${optionId}-hint`} className="text-xs text-muted">
-                  {CANCELLATION_KIND_HINTS[kind]}
-                </span>
-              </span>
-            </label>
-          );
-        })}
-        {errors.origin ? (
-          <InlineError id={fieldErrorId(originName)} className="text-xs">
-            {errors.origin}
-          </InlineError>
-        ) : null}
-      </fieldset>
+        {STAFF_CANCELLATION_KINDS.map((kind) => (
+          <RadioCard
+            key={kind}
+            id={`${originName}-${kind}`}
+            value={kind}
+            title={CANCELLATION_KIND_LABELS[kind]}
+            description={CANCELLATION_KIND_HINTS[kind]}
+          />
+        ))}
+      </RadioGroup>
 
       <NoticeLine
         byKind={byKind}
@@ -248,9 +222,8 @@ export function CancelAppointmentDialog({
       />
 
       <FormField htmlFor={reasonId} label={copy.reason} error={errors.reason}>
-        <select
+        <NativeSelect
           id={reasonId}
-          className={cn(fieldClass, 'h-10', errors.reason && 'border-danger')}
           value={reasonCode}
           disabled={submitting}
           aria-invalid={errors.reason ? true : undefined}
@@ -266,20 +239,20 @@ export function CancelAppointmentDialog({
               {CANCELLATION_REASON_LABELS[code]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={detailId}>{copy.detail}</Label>
-        <textarea
+        <Textarea
           id={detailId}
           rows={2}
+          autoGrow
           maxLength={CANCEL_REASON_TEXT_MAX}
           value={detail}
           disabled={submitting}
           aria-describedby={`${detailId}-hint ${counterId}`}
           onChange={(e) => setDetail(e.target.value)}
-          className={fieldClass}
         />
         <div className="flex items-start justify-between gap-3 text-xs text-muted">
           <p id={`${detailId}-hint`}>{copy.detailHint}</p>
@@ -292,9 +265,10 @@ export function CancelAppointmentDialog({
       {fromCompleted ? (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={exitId}>{copy.exitReason}</Label>
-          <textarea
+          <Textarea
             id={exitId}
             rows={2}
+            autoGrow
             maxLength={STATUS_REASON_MAX}
             value={exitReason}
             disabled={submitting}
@@ -304,7 +278,6 @@ export function CancelAppointmentDialog({
               setExitReason(e.target.value);
               setErrors((x) => ({ ...x, exit: undefined }));
             }}
-            className={fieldClass}
           />
           <div id={`${exitId}-hint`}>
             {errors.exit ? (
@@ -350,14 +323,9 @@ function NoticeLine({
   }
   if (warning) {
     return (
-      <p
-        role="alert"
-        data-testid="late-cancellation-warning"
-        className="flex items-start gap-2 rounded-lg bg-warning/15 px-3 py-2 text-sm font-medium text-ink"
-      >
-        <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-        <span>{warning}</span>
-      </p>
+      <Callout tone="warning" role="alert" data-testid="late-cancellation-warning">
+        {warning}
+      </Callout>
     );
   }
   if (byKind === null) return null;

@@ -26,7 +26,7 @@ export function Toaster() {
       // Sustituirlo por el mismo `AlertCircle` que usan `FieldError` e
       // `InlineError` cierra la familia.
       icons={{
-        error: <AlertCircle aria-hidden="true" className="size-4 shrink-0 text-danger" />,
+        error: <AlertCircle aria-hidden="true" className="size-4 shrink-0 text-danger-text" />,
       }}
       // Los tokens de la app, no los de sonner, para que el toast pertenezca
       // al mismo sistema visual que el resto (radio 12px = card).

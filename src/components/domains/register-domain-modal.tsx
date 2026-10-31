@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 const copy = {
   title: 'Añadir dominio propio',
   description:
-    'Después publicarás un registro TXT en el DNS de ese dominio para demostrar que es tuyo. Tienes 72 horas para verificarlo.',
+    'Después publicarás un registro TXT en el DNS de ese dominio para demostrar que es tuyo. Tienes 72 horas para verificarlo, y solo abre Dentalix mientras ese registro siga publicado.',
   host: 'Dominio',
   hostPlaceholder: 'citas.miclinica.com',
   hostHint: 'Un dominio que controlas, sin https:// ni rutas.',

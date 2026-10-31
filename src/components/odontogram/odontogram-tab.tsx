@@ -32,13 +32,13 @@ import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catal
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { formatCivilDate } from '@/lib/format/date';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Callout } from '@/components/ui/callout';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { DatePicker } from '@/components/ui/date-picker';
 import { FormModal } from '@/components/shared/form-modal';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
-import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready) — matches page.tsx's convention until
 // next-intl wiring lands.
@@ -50,7 +50,8 @@ const copy = {
   catalogGenericError: 'No pudimos cargar el catálogo.',
   selectToothPrompt: 'Selecciona un diente para ver su historial y registrar un hallazgo o procedimiento.',
   emptyChartPrompt:
-    'Aún no hay registros: la carta está sana. Selecciona un diente para registrar el primer hallazgo o procedimiento.',
+    // Sin registros ≠ boca sana: la carta no puede afirmar un diagnóstico.
+    'Aún no hay registros en la carta. Selecciona un diente para registrar el primer hallazgo o procedimiento.',
   toothHeading: (fdi: string) => `Diente ${fdi}`,
   historyHeading: 'Historial',
   viewInPlan: 'Ver en el plan',
@@ -170,6 +171,22 @@ export function OdontogramTab({
   // aviso «Carta al…» y el historial siguen a lo que se ve, nunca a lo pedido.
   const [asOf, setAsOf] = useState<string | null>(null);
   const [shownAsOf, setShownAsOf] = useState<string | null>(null);
+  // Lo que se ve en el campo mientras se teclea. El DatePicker emite el día en
+  // cuanto el año tiene una cifra («0002-10-05»): pedir la carta de cada año
+  // intermedio dispararía recargas (y un fallo borraría lo que se escribe), así
+  // que solo se pide con un año completo. Si `asOf` cambia desde fuera (volver
+  // a hoy, fallo de carga), el borrador lo sigue.
+  const [asOfDraft, setAsOfDraft] = useState<string | null>(null);
+  const [draftSource, setDraftSource] = useState<string | null>(null);
+  if (draftSource !== asOf) {
+    setDraftSource(asOf);
+    setAsOfDraft(asOf);
+  }
+  function handleAsOfChange(next: string | null) {
+    setAsOfDraft(next);
+    if (next === null) setAsOf(null);
+    else if (Number(next.slice(0, 4)) >= 1900) setAsOf(next);
+  }
   // Al fallar un cambio de fecha el selector vuelve a la que se ve, sin
   // recargarla (ya está en pantalla).
   const skipNextLoad = useRef(false);
@@ -368,41 +385,21 @@ export function OdontogramTab({
               <span id="odo-dentition-switch" className="t-label text-muted">
                 {copy.dentitionSwitch}
               </span>
-              <div
-                role="radiogroup"
+              <SegmentedControl
+                // Elegir abre la confirmación: las flechas solo mueven el foco.
+                activation="manual"
                 aria-labelledby="odo-dentition-switch"
-                className="inline-flex rounded-lg border border-border bg-surface p-0.5"
-              >
-                {DENTITION_ORDER.map((option) => {
-                  const checked = overall === option;
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      role="radio"
-                      aria-checked={checked}
-                      disabled={readOnly}
-                      onClick={() => {
-                        if (!checked) {
-                          setPresetError(null);
-                          setPreset(option);
-                        }
-                      }}
-                      className={cn(
-                        'h-9 rounded-md px-3 text-sm font-medium transition-colors',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                        'disabled:cursor-not-allowed disabled:opacity-60',
-                        checked ? 'bg-primary text-primary-foreground' : 'text-ink hover:bg-surface-2',
-                      )}
-                    >
-                      {DENTITION_LABELS[option]}
-                    </button>
-                  );
-                })}
-              </div>
+                value={overall}
+                disabled={readOnly}
+                onValueChange={(option) => {
+                  setPresetError(null);
+                  setPreset(option);
+                }}
+                options={DENTITION_ORDER.map((option) => ({ value: option, label: DENTITION_LABELS[option] }))}
+              />
             </div>
             {!readOnly ? (
-              <Button type="button" variant="outline" onClick={() => openDentitionDialog(selectedTooth)}>
+              <Button type="button" variant="secondary" onClick={() => openDentitionDialog(selectedTooth)}>
                 {copy.changeDentition}
               </Button>
             ) : null}
@@ -411,17 +408,16 @@ export function OdontogramTab({
             ) : null}
           </div>
           <div className="flex flex-wrap items-end gap-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="odo-as-of">{copy.asOfLabel}</Label>
-              <Input
-                id="odo-as-of"
-                type="date"
-                max={todayLocal()}
-                value={asOf ?? ''}
-                onChange={(e) => setAsOf(e.target.value === '' ? null : e.target.value)}
-                className="w-44"
-              />
-            </div>
+            {/* Fecha médico-legal: segmentos en el formato de la sede, nunca el
+                `type=date` del navegador (mm/dd/yyyy en un Chrome en inglés). */}
+            <DatePicker
+              id="odo-as-of"
+              label={copy.asOfLabel}
+              max={todayLocal()}
+              value={asOfDraft}
+              onChange={handleAsOfChange}
+              className="w-48"
+            />
             {readOnly ? (
               <Button type="button" variant="ghost" onClick={() => setAsOf(null)}>
                 {copy.backToToday}
@@ -431,12 +427,9 @@ export function OdontogramTab({
         </div>
 
         {shownAsOf ? (
-          <p
-            role="status"
-            className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
-          >
+          <Callout tone="warning" role="status">
             {copy.asOfNotice(formatCivilDate(`${shownAsOf}T00:00:00.000Z`))}
-          </p>
+          </Callout>
         ) : null}
 
         {/* The chart and its key read as one object: the field, then its
@@ -468,7 +461,7 @@ export function OdontogramTab({
                 type="button"
                 aria-label={copy.notDrawnTooth(fdi)}
                 onClick={() => handleSelectTooth(fdi)}
-                className="rounded px-1 font-medium tabular-nums text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded px-1 font-medium tabular-nums text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-0 sm:min-w-0"
               >
                 {fdi}
               </button>
@@ -491,7 +484,7 @@ export function OdontogramTab({
                 <Link
                   href={planHref(selectedTooth)}
                   aria-label={copy.viewInPlanFor(selectedTooth)}
-                  className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-0"
                 >
                   {copy.viewInPlan}
                 </Link>
@@ -500,7 +493,7 @@ export function OdontogramTab({
                 <Link
                   href={implantHref(selectedTooth)}
                   aria-label={copy.registerImplantFor(selectedTooth)}
-                  className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-0"
                 >
                   {copy.registerImplant}
                 </Link>
@@ -509,7 +502,7 @@ export function OdontogramTab({
                 <Link
                   href={documentsHref(selectedTooth)}
                   aria-label={copy.toothDocumentsFor(selectedTooth)}
-                  className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-0"
                 >
                   {copy.toothDocuments}
                 </Link>
@@ -544,11 +537,11 @@ export function OdontogramTab({
                     onRecordAdded={handleChartChanged}
                   />
                 ) : (
-                  <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-4 text-sm text-muted">
+                  <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-4 text-sm text-muted">
                     <p role="status">
                       {copy.doesNotFit(selectedTooth, selectedPosition ?? '', dentitionOf(selectedPosition ?? ''))}
                     </p>
-                    <Button type="button" variant="outline" onClick={() => openDentitionDialog(selectedTooth)}>
+                    <Button type="button" variant="secondary" onClick={() => openDentitionDialog(selectedTooth)}>
                       {copy.changeDentition}
                     </Button>
                   </div>
@@ -560,7 +553,7 @@ export function OdontogramTab({
       ) : (
         <p
           role="status"
-          className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted"
+          className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted"
         >
           {isEmpty && !readOnly ? copy.emptyChartPrompt : copy.selectToothPrompt}
         </p>

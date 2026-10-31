@@ -12,7 +12,9 @@ import { API_URL } from './support/urls';
  *   - el badge «Historia en retención legal hasta DD/MM/AAAA» con la fecha que
  *     calcula la API;
  *   - «Archivar paciente» responde 409 y el modal lo dice en español;
- *   - el paciente sin atenciones se archiva y la app vuelve al listado.
+ *   - el paciente sin atenciones se archiva y la app vuelve al listado;
+ *   - DX-461: antes, el diálogo avisa «Se anulará 1 enlace enviado» (su
+ *     anamnesis) y, archivado, el enlace público responde 410.
  * En escritorio (1440px) y móvil (390px, sin scroll horizontal).
  */
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
@@ -34,6 +36,12 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
 function ddmmyyyy(isoDate: string): string {
   const [y, m, d] = isoDate.split('-');
   return `${d}/${m}/${y}`;
+}
+
+/** «Archivar paciente» está en el menú «⋯» («Más acciones») de la cabecera de la ficha. */
+async function openArchive(page: Page) {
+  await page.getByRole('button', { name: 'Más acciones' }).click();
+  await page.getByRole('menuitem', { name: 'Archivar paciente' }).click();
 }
 
 for (const viewport of VIEWPORTS) {
@@ -87,7 +95,8 @@ for (const viewport of VIEWPORTS) {
     });
     await expectNoHorizontalScroll(page);
 
-    await section.getByRole('button', { name: 'Archivar paciente' }).click();
+    // Las acciones de ADMIN viven en el menú «⋯» de la cabecera (UX v2 · K3).
+    await openArchive(page);
     const dialog = page.getByRole('dialog', { name: 'Archivar paciente' });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Archivar' }).click();
@@ -98,18 +107,41 @@ for (const viewport of VIEWPORTS) {
     await dialog.getByRole('button', { name: 'Cancelar' }).click();
     await expect(dialog).toBeHidden();
 
+    // DX-461: con un enlace enviado (la anamnesis), el diálogo avisa de que
+    // se anulará; al archivar, la ruta pública ya no lo acepta.
+    // El enlace de anamnesis exige la política de datos publicada.
+    await post('/privacy-policies', {
+      policyText: 'Política de tratamiento de datos de la clínica.',
+      generalText: 'Autorizo el tratamiento de mis datos personales.',
+      sensitiveHealthText:
+        'Autorizo el tratamiento de mis datos sensibles de salud (historia clínica). No está obligado a autorizarlo. Finalidad: la atención odontológica.',
+      marketingText: 'Autorizo recibir comunicaciones comerciales.',
+    });
+    const sent = await post<{ url: string }>(`/patients/${free.id}/medical-history/requests`, {});
+    const anamnesisToken = new URL(sent.url).pathname.split('/').pop() ?? '';
+
     // Sin atenciones clínicas: se archiva como siempre y vuelve al listado.
     await page.goto(`${origin}/patients/${free.id}`);
     await expect(
       section.getByText('Sin atenciones clínicas: sin retención legal'),
     ).toBeVisible({ timeout: 15_000 });
-    await section.getByRole('button', { name: 'Archivar paciente' }).click();
-    await page
-      .getByRole('dialog', { name: 'Archivar paciente' })
-      .getByRole('button', { name: 'Archivar' })
-      .click();
+    await openArchive(page);
+    const archiveDialog = page.getByRole('dialog', { name: 'Archivar paciente' });
+    await expect(archiveDialog.getByText('Se anulará 1 enlace enviado')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(archiveDialog.getByText('1 cuestionario de salud')).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await archiveDialog.screenshot({
+      path: test.info().outputPath(`dx461-archivar-${viewport.width}.png`),
+    });
+    await archiveDialog.getByRole('button', { name: 'Archivar' }).click();
     await expect(page).toHaveURL(/\/patients$/, { timeout: 10_000 });
     const gone = await page.request.get(`${API_URL}/patients/${free.id}`, { headers });
     expect(gone.status()).toBe(404);
+    const link = await page.request.get(`${API_URL}/public/medical-history/${anamnesisToken}`, {
+      headers: { 'X-Tenant-Host': headers['X-Tenant-Host'] },
+    });
+    expect(link.status()).toBe(410);
   });
 }

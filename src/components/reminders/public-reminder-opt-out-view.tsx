@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { PublicNotice, publicBrandStyle } from '@/components/shared/public-page';
+import { ClinicBrand } from '@/components/brand/clinic-brand';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy.
 const copy = {
@@ -83,7 +84,7 @@ export function PublicReminderOptOutView({ optOutToken }: { optOutToken: string 
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
@@ -110,20 +111,7 @@ export function PublicReminderOptOutView({ optOutToken }: { optOutToken: string 
 
         {state.kind === 'ready' && (
           <>
-            <header className="flex items-center gap-3">
-              {clinic?.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element -- logo de la clínica en un host arbitrario; next/image exigiría whitelistear cada dominio
-                <img
-                  src={clinic.logoUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="size-10 shrink-0 rounded-lg object-contain"
-                />
-              )}
-              <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight text-ink">
-                {clinic?.name ?? copy.fallbackClinic}
-              </h1>
-            </header>
+            <ClinicBrand variant="public" name={clinic?.name ?? copy.fallbackClinic} logoUrl={clinic?.logoUrl} />
 
             {state.data.status === 'OPTED_OUT' ? (
               <div role="status">
@@ -136,7 +124,7 @@ export function PublicReminderOptOutView({ optOutToken }: { optOutToken: string 
             ) : (
               <section aria-labelledby="opt-out-question" className="flex flex-col gap-5">
                 <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-4">
-                  <p id="opt-out-question" className="text-base font-semibold text-ink">
+                  <p id="opt-out-question" className="t-title text-ink">
                     {copy.question(state.data.patientFirstName)}
                   </p>
                   <p className="text-sm text-muted">{copy.explanation}</p>

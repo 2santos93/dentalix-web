@@ -15,6 +15,7 @@ import { sedeTime, type SedeClock } from '@/lib/locations/sede-clock';
 import { wallDay } from '@/lib/time/wall-clock';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Callout } from '@/components/ui/callout';
 
 export const doseBarCopy = {
   // DX-418: el acumulado es del paciente en una ventana móvil de 24 h (todas
@@ -121,7 +122,7 @@ function EpinephrineMeter({ epinephrine }: { epinephrine: EpinephrineSummary }) 
   return (
     <div className="flex min-w-0 flex-col gap-1" data-epinephrine-level={level}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-        <span className="text-xs font-medium text-ink">{doseBarCopy.epinephrineLabel}</span>
+        <span className="t-caption text-ink">{doseBarCopy.epinephrineLabel}</span>
         <span className="text-xs tabular-nums text-ink">{doseBarCopy.epinephrineValue(epinephrine)}</span>
       </div>
       <div
@@ -131,23 +132,20 @@ function EpinephrineMeter({ epinephrine }: { epinephrine: EpinephrineSummary }) 
         aria-valuemax={100}
         aria-valuenow={Math.min(percent, 100)}
         aria-valuetext={doseBarCopy.epinephrineValue(epinephrine)}
-        className="h-2 w-full overflow-hidden rounded-full bg-surface-2"
+        className="h-2 w-full overflow-hidden rounded-full bg-surface-sunken"
       >
         <div className={cn('h-full rounded-full', toneClass(level))} style={{ width: `${Math.min(percent, 100)}%` }} />
       </div>
       <p className="text-xs text-muted">{doseBarCopy.epinephrineScope(epinephrine.cardiac)}</p>
       {message ? (
-        <p
+        <Callout
+          tone={level === 'EXCEEDED' ? 'danger' : 'warning'}
           role={level === 'EXCEEDED' ? 'alert' : 'status'}
-          className={cn('flex items-start gap-2 text-sm', level === 'EXCEEDED' ? 'text-danger' : 'text-warning')}
+          icon={level === 'EXCEEDED' ? ShieldAlert : AlertTriangle}
+          className="px-3 py-2"
         >
-          {level === 'EXCEEDED' ? (
-            <ShieldAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-          ) : (
-            <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
-          )}
-          <span>{message}</span>
-        </p>
+          {message}
+        </Callout>
       ) : null}
     </div>
   );
@@ -155,7 +153,7 @@ function EpinephrineMeter({ epinephrine }: { epinephrine: EpinephrineSummary }) 
 
 function BarTitle({ id }: { id?: string }) {
   return (
-    <h3 id={id} className="text-sm font-medium text-ink">
+    <h3 id={id} className="t-label text-ink">
       {doseBarCopy.label}
     </h3>
   );
@@ -224,7 +222,7 @@ export function AnesthesiaDoseBar({ summary, window, clock = null, id }: Anesthe
               aria-valuemax={100}
               aria-valuenow={Math.min(percent, 100)}
               aria-valuetext={doseBarCopy.ofMax(percent)}
-              className="h-2 w-full overflow-hidden rounded-full bg-surface-2"
+              className="h-2 w-full overflow-hidden rounded-full bg-surface-sunken"
             >
               <div
                 className={cn(
@@ -284,16 +282,16 @@ export function AnesthesiaDoseBar({ summary, window, clock = null, id }: Anesthe
         </ul>
       ) : null}
       {message ? (
-        <p
+        // Callout del tono (DESIGN.md → Callout); el rol no cambia: bloqueo
+        // anuncia (alert), aviso y falta de peso informan (status).
+        <Callout
+          tone={tone === 'danger' ? 'danger' : tone === 'warning' ? 'warning' : 'neutral'}
           role={level === 'EXCEEDED' ? 'alert' : 'status'}
-          className={cn(
-            'flex items-start gap-2 text-sm',
-            tone === 'danger' ? 'text-danger' : tone === 'warning' ? 'text-warning' : 'text-ink',
-          )}
+          icon={Icon}
+          className="px-3 py-2"
         >
-          <Icon aria-hidden className="mt-0.5 size-4 shrink-0" />
-          <span>{message}</span>
-        </p>
+          {message}
+        </Callout>
       ) : null}
     </BarFrame>
   );
@@ -329,7 +327,7 @@ export function AnesthesiaDoseBarError({
   return (
     <BarFrame id={id}>
       <BarTitle id={id} />
-      <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger">
+      <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger-text">
         <ShieldAlert aria-hidden className="size-4 shrink-0" />
         <span className="min-w-0 flex-1 break-words">{message}</span>
         <Button type="button" variant="secondary" size="sm" onClick={onRetry}>

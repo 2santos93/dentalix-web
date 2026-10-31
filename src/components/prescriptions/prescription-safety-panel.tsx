@@ -4,8 +4,10 @@ import { useId } from 'react';
 import { Info, ShieldAlert } from 'lucide-react';
 import { SectionError } from '@/components/errors/section-error';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Callout } from '@/components/ui/callout';
+import { Checkbox } from '@/components/ui/checkbox';
+import { SectionHeader } from '@/components/ui/section-header';
+import { Textarea } from '@/components/ui/textarea';
 import type { PrescriptionSafetyPreview, SafetyAlert } from '@/lib/prescriptions/prescriptions-api';
 
 export const safetyCopy = {
@@ -44,29 +46,22 @@ interface PrescriptionSafetyPanelProps {
 }
 
 function AlertList({ alerts, tone }: { alerts: SafetyAlert[]; tone: 'blocking' | 'info' }) {
-  const Icon = tone === 'blocking' ? ShieldAlert : Info;
   return (
     <ul className="flex flex-col gap-2">
       {alerts.map((alert, i) => (
-        <li
-          key={`${alert.code}-${alert.activeIngredient ?? ''}-${i}`}
-          className={cn(
-            'flex items-start gap-2 rounded-md border p-3 text-sm text-ink',
-            tone === 'blocking'
-              ? 'border-danger/40 bg-danger/5'
-              : 'border-warning/40 bg-warning/5',
-          )}
-        >
-          <Icon
-            aria-hidden
-            className={cn('mt-0.5 size-4 shrink-0', tone === 'blocking' ? 'text-danger' : 'text-warning')}
-          />
-          <div className="min-w-0 flex-1">
+        <li key={`${alert.code}-${alert.activeIngredient ?? ''}-${i}`}>
+          {/* `note`: la región viva del panel ya anuncia los avisos; cada
+              tarjeta no debe volver a hacerlo. */}
+          <Callout
+            role="note"
+            tone={tone === 'blocking' ? 'danger' : 'warning'}
+            icon={tone === 'blocking' ? ShieldAlert : Info}
+          >
             <p className="break-words">{alert.message}</p>
-            <p className="mt-1 break-words text-xs text-ink">
-              {alert.source} · <span className="font-mono">{alert.code}</span>
+            <p className="t-caption mt-1 break-words text-ink">
+              {alert.source} · <span className="t-id">{alert.code}</span>
             </p>
-          </div>
+          </Callout>
         </li>
       ))}
     </ul>
@@ -110,12 +105,7 @@ export function PrescriptionSafetyPanel({
       aria-labelledby={titleId}
       className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-surface p-4"
     >
-      <div className="flex flex-col gap-1">
-        <h3 id={titleId} className="text-sm font-semibold text-ink">
-          {safetyCopy.title}
-        </h3>
-        <p className="text-xs text-muted">{safetyCopy.disclaimer}</p>
-      </div>
+      <SectionHeader as="h3" titleId={titleId} title={safetyCopy.title} description={safetyCopy.disclaimer} />
 
       <p role="status" aria-label="Resultado de seguridad" aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement}
@@ -146,17 +136,14 @@ export function PrescriptionSafetyPanel({
 
       {blocking.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <h4 className="text-sm font-semibold text-danger">{safetyCopy.blocking(blocking.length)}</h4>
+          <h4 className="t-label font-semibold text-danger-text">{safetyCopy.blocking(blocking.length)}</h4>
           <AlertList alerts={blocking} tone="blocking" />
-          <label className="flex items-start gap-2 text-sm text-ink">
-            <input
-              type="checkbox"
-              className="mt-0.5 size-4 shrink-0 accent-[var(--color-danger)]"
-              checked={confirmed}
-              onChange={(e) => onConfirmedChange(e.target.checked)}
-            />
-            <span>{safetyCopy.confirm}</span>
-          </label>
+          <Checkbox
+            id="rx-safety-confirm"
+            label={safetyCopy.confirm}
+            checked={confirmed}
+            onChange={(e) => onConfirmedChange(e.target.checked)}
+          />
           <FormField
             htmlFor="rx-safety-reason"
             label={safetyCopy.reasonLabel}
@@ -164,15 +151,15 @@ export function PrescriptionSafetyPanel({
             hintId="rx-safety-reason-hint"
             error={reasonError}
           >
-            <textarea
+            <Textarea
               id="rx-safety-reason"
               rows={2}
+              autoGrow
               value={reason}
               maxLength={SAFETY_REASON_MAX}
               aria-invalid={reasonError ? true : undefined}
               aria-describedby={reasonError ? fieldErrorId('rx-safety-reason') : 'rx-safety-reason-hint'}
               onChange={(e) => onReasonChange(e.target.value)}
-              className={cn(fieldClass, 'h-auto font-[inherit]')}
             />
           </FormField>
         </div>
@@ -180,7 +167,7 @@ export function PrescriptionSafetyPanel({
 
       {info.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <h4 className="text-sm font-semibold text-ink">{safetyCopy.info(info.length)}</h4>
+          <h4 className="t-label font-semibold text-ink">{safetyCopy.info(info.length)}</h4>
           <AlertList alerts={info} tone="info" />
         </div>
       ) : null}

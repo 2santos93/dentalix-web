@@ -151,8 +151,21 @@ async function uploadBigDirectly(
 }
 
 /** Fila de la tabla de documentos con ese nombre (en escritorio o tarjeta en móvil). */
+/**
+ * La fila de un documento: `DataList` pinta una tabla desde `sm` y una lista de
+ * tarjetas en el teléfono (la cola de subida es otra lista, con otro nombre).
+ */
 function documentRow(panel: Locator, name: string): Locator {
-  return panel.getByRole('row').filter({ hasText: name });
+  return panel
+    .getByRole('row')
+    .or(panel.getByRole('list', { name: 'Documentos', exact: true }).getByRole('listitem'))
+    .filter({ hasText: name });
+}
+
+/** Las acciones de un documento viven en el «⋯» de su fila (RowActions). */
+async function documentAction(panel: Locator, name: string, action: string): Promise<void> {
+  await panel.getByRole('button', { name: `Acciones de ${name}`, exact: true }).click();
+  await panel.page().getByRole('menuitem', { name: action, exact: true }).click();
 }
 
 test('subir, filtrar, ver, descargar y anular documentos; acceso desde el diente (1440 y 390)', async ({
@@ -294,25 +307,29 @@ test('subir, filtrar, ver, descargar y anular documentos; acceso desde el diente
   // --- 4b. Descarga con el nombre original ---
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    panel.getByRole('button', { name: 'Descargar remision.pdf' }).click(),
+    documentAction(panel, 'remision.pdf', 'Descargar'),
   ]);
   expect(download.suggestedFilename()).toBe('remision.pdf');
 
   // --- 4c. Anular con motivo ---
-  await panel.getByRole('button', { name: 'Anular radiografia.png' }).click();
+  await documentAction(panel, 'radiografia.png', 'Anular');
   const voidDialog = page.getByRole('dialog', { name: 'Anular documento' });
   await voidDialog.getByLabel('Motivo de la anulación').fill('Foto de otro paciente');
   await voidDialog.getByRole('button', { name: 'Anular documento' }).click();
   await expect(voidDialog).toBeHidden();
   const voidedRow = documentRow(panel, 'radiografia.png');
-  await expect(voidedRow).toHaveAttribute('data-status', 'VOIDED');
+  await expect(voidedRow.locator('[data-document-status]')).toHaveAttribute('data-document-status', 'VOIDED');
   await expect(voidedRow.getByText('Anulado', { exact: true })).toBeVisible();
   await expect(voidedRow).toContainText('Motivo: Foto de otro paciente');
   await expect(voidedRow.locator('span:not(.sr-only)', { hasText: /^radiografia\.png$/ })).toHaveCSS(
     'text-decoration-line',
     'line-through',
   );
-  await expect(panel.getByRole('button', { name: 'Anular radiografia.png' })).toHaveCount(0);
+  // Anulado: su «⋯» ya no ofrece «Anular».
+  await panel.getByRole('button', { name: 'Acciones de radiografia.png', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Descargar', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Anular', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await voidedRow.scrollIntoViewIfNeeded();
   await shoot(page, 'documentos-anulado-1440');
 
@@ -373,7 +390,7 @@ test('subir, filtrar, ver, descargar y anular documentos; acceso desde el diente
   await expectNoHorizontalScroll(page);
   await page.keyboard.press('Escape');
 
-  await panel.getByRole('button', { name: 'Anular periapical-36.png' }).click();
+  await documentAction(panel, 'periapical-36.png', 'Anular');
   await expect(voidDialog).toBeVisible();
   await expectNoHorizontalScroll(page);
   await shoot(page, 'documentos-anular-390');

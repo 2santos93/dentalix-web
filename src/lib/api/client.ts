@@ -5,7 +5,7 @@ import {
   setActiveLocationId,
 } from '@/lib/locations/location-store';
 import { apiBaseUrl } from './api-base';
-import { ApiError, NetworkError } from './api-error';
+import { ApiError, NetworkError, type ExistingPatientRef } from './api-error';
 import { parseRetryAfter } from './error-message';
 
 export { ApiError, NetworkError };
@@ -280,6 +280,9 @@ export function apiErrorFromBody(
   let locationId: string | null = null;
   let holidayId: string | null = null;
   let line: number | null = null;
+  let canOverride: boolean | null = null;
+  let existingPatientId: string | null = null;
+  let existingPatient: ExistingPatientRef | null = null;
   if (body && typeof body === 'object') {
     const data = body as {
       message?: unknown;
@@ -288,6 +291,9 @@ export function apiErrorFromBody(
       locationId?: unknown;
       holidayId?: unknown;
       line?: unknown;
+      canOverride?: unknown;
+      existingPatientId?: unknown;
+      existingPatient?: unknown;
     };
     const raw = data.message;
     if (typeof raw === 'string' && raw) messages = [raw];
@@ -297,6 +303,11 @@ export function apiErrorFromBody(
     if (typeof data.locationId === 'string' && data.locationId) locationId = data.locationId;
     if (typeof data.holidayId === 'string' && data.holidayId) holidayId = data.holidayId;
     if (typeof data.line === 'number' && Number.isInteger(data.line) && data.line >= 0) line = data.line;
+    if (typeof data.canOverride === 'boolean') canOverride = data.canOverride;
+    if (typeof data.existingPatientId === 'string' && data.existingPatientId) {
+      existingPatientId = data.existingPatientId;
+    }
+    existingPatient = parseExistingPatient(data.existingPatient);
   }
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
@@ -307,7 +318,18 @@ export function apiErrorFromBody(
     locationId,
     holidayId,
     line,
+    canOverride,
+    existingPatientId,
+    existingPatient,
   });
+}
+
+function parseExistingPatient(value: unknown): ExistingPatientRef | null {
+  if (!value || typeof value !== 'object') return null;
+  const { id, firstName, lastName } = value as Record<string, unknown>;
+  return typeof id === 'string' && id && typeof firstName === 'string' && typeof lastName === 'string'
+    ? { id, firstName, lastName }
+    : null;
 }
 
 /**
@@ -417,6 +439,44 @@ export async function apiFetch<T>(path: string, opts: ApiOptions = {}): Promise<
 export async function apiFetchText(path: string, opts: ApiOptions = {}): Promise<string> {
   const res = await doFetch(path, opts);
   return res.text();
+}
+
+/**
+ * El nombre de fichero de una cabecera `Content-Disposition`: `filename*`
+ * (UTF-8, RFC 5987) si viene y se puede leer; si no, `filename`. `null` si no
+ * hay ninguno.
+ */
+export function fileNameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const extended = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (extended) {
+    try {
+      return decodeURIComponent(extended[1].trim());
+    } catch {
+      return null;
+    }
+  }
+  const plain = /filename="([^"]+)"/i.exec(header);
+  return plain ? plain[1] : null;
+}
+
+export interface ApiBlob {
+  blob: Blob;
+  /** El que propone la API en `Content-Disposition`, o `null`. */
+  fileName: string | null;
+}
+
+/**
+ * Como `apiFetch`, pero devuelve el cuerpo como `Blob` y el nombre del
+ * fichero: para las descargas binarias (el PDF de la agenda de contingencia,
+ * DX-339). Mismos refresh, cabeceras y errores (`ApiError` en español).
+ */
+export async function apiFetchBlob(path: string, opts: ApiOptions = {}): Promise<ApiBlob> {
+  const res = await doFetch(path, opts);
+  return {
+    blob: await res.blob(),
+    fileName: fileNameFromDisposition(res.headers?.get('Content-Disposition') ?? null),
+  };
 }
 
 /**

@@ -3,6 +3,8 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '.
 import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { waitForAnimationsSettled } from './support/touch-targets';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (DX-395): medio y referencia en el estado de cuenta, filtro de Caja por
@@ -95,6 +97,8 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
 
 /** Cada control visible de `scope` (botones, entradas y selectores) mide ≥ 44 px de alto. */
 async function expectTouchTargets(scope: Locator): Promise<void> {
+  // En reposo: la entrada de un diálogo (o de la tarjeta) escala los controles.
+  await waitForAnimationsSettled(scope);
   const controls = scope.locator('button, select, input:not([type=checkbox]):not([type=radio])');
   const count = await controls.count();
   expect(count).toBeGreaterThan(0);
@@ -207,7 +211,7 @@ for (const viewport of [
     await expect(dialog).toBeHidden({ timeout: 10_000 });
 
     // --- Estado de cuenta: el medio de la clínica y la referencia.
-    const movements = panel.getByRole('table', { name: /movimientos/i });
+    const movements = dataList(panel, /movimientos/i);
     await expect(movements).toContainText(`${MOBILE} · Ref. ${reference}`, { timeout: 15_000 });
     await expect(movements).toContainText(`${MOBILE} · Ref. ${dashed}`);
     await expect(movements).not.toContainText('Transferencia');
@@ -227,7 +231,7 @@ for (const viewport of [
     const medium = page.getByRole('combobox', { name: 'Medio de pago' });
     await expect(medium.getByRole('option', { name: MOBILE })).toBeAttached({ timeout: 15_000 });
     await medium.selectOption({ label: MOBILE });
-    const rows = page.getByRole('table', { name: /abonos del período/i }).getByRole('row');
+    const rows = dataListRows(dataList(page, /abonos del período/i));
     await expect(page.getByText(`Ref. ${reference}`).first()).toBeVisible({ timeout: 15_000 });
     await expect(rows.filter({ hasText: 'Efectivo' })).toHaveCount(0);
     if (mobile) {

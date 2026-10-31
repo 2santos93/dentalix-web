@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { expectTouchTarget } from './support/touch-targets';
 
 /**
  * e2e (DX-390): cobro dividido en varias formas de pago con un solo recibo.
@@ -120,13 +121,8 @@ for (const viewport of [
     // «Añadir otra forma de pago»: el resto por «Pago móvil» en dólares.
     const add = dialog.getByRole('button', { name: 'Añadir otra forma de pago' });
     if (viewport.width === 390) {
-      // La caja transformada durante dlg-content-in aún mide menos de 44 px.
-      // Esperar su estado final real; no terminar ni desactivar la animación.
-      await dialog.evaluate(async element => {
-        await Promise.all(element.getAnimations().map(animation => animation.finished));
-      });
-      const box = await add.boundingBox();
-      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+      // Medido con el diálogo en reposo (su entrada escala el contenido).
+      await expectTouchTarget(add, { scope: dialog, label: 'Añadir otra forma de pago' });
     }
     await add.click();
     const second = dialog.getByTestId('split-line-2');

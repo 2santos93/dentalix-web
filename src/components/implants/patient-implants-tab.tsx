@@ -16,9 +16,11 @@ import {
 } from '@/lib/implants/implants-api';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
+import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RowActions } from '@/components/shared/row-actions';
 import { cn } from '@/lib/utils';
 import { RegisterImplantModal } from './register-implant-modal';
 import { VoidImplantModal } from './void-implant-modal';
@@ -48,7 +50,8 @@ const copy = {
   card: 'Tarjeta de implante',
   cardHint: (date: string) => `de la intervención del ${date} (se abre en otra pestaña)`,
   void: 'Anular',
-  voidHint: (kind: string, tooth: string) => `${kind.toLowerCase()} del diente ${tooth}`,
+  rowLabel: (kind: string, tooth: string) => `${kind.toLowerCase()} del diente ${tooth}`,
+  actionsOf: (label: string) => `Acciones de ${label}`,
 };
 
 interface PatientImplantsTabProps {
@@ -154,7 +157,7 @@ export function PatientImplantsTab({
       <li
         key={implant.id}
         data-status={voided ? 'VOIDED' : 'ACTIVE'}
-        className="flex flex-col gap-3 border-b border-hairline px-4 py-3 [overflow-wrap:anywhere] last:border-0 sm:flex-row sm:items-start sm:justify-between"
+        className="flex flex-col gap-3 border-b border-border-subtle px-4 py-3 [overflow-wrap:anywhere] last:border-0 sm:flex-row sm:items-start sm:justify-between"
       >
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -162,11 +165,11 @@ export function PatientImplantsTab({
               {kind} · {implant.manufacturer}
               {implant.system ? ` ${implant.system}` : ''}
             </span>
-            {voided ? <Badge variant="danger">{copy.voided}</Badge> : null}
+            {voided ? <StatusBadge kind="clinicalRecord" status="VOIDED" /> : null}
           </div>
           <dl
             className={cn(
-              'flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums',
+              't-id flex flex-wrap gap-x-4 gap-y-1 text-sm',
               voided ? 'text-muted line-through' : 'text-ink',
             )}
           >
@@ -180,16 +183,16 @@ export function PatientImplantsTab({
             </div>
             {size ? <dd>{size}</dd> : null}
           </dl>
-          <p className="text-sm text-muted tabular-nums">
+          <p className="t-data text-sm text-muted">
             {copy.placedBy(placed, implant.professionalName)}
           </p>
           {implant.cardDeliveredAt && !voided ? (
-            <p className="text-xs text-muted">
+            <p className="t-caption text-muted">
               {copy.delivered(formatDateTime(implant.cardDeliveredAt))}
             </p>
           ) : null}
           {voided ? (
-            <p className="text-xs text-ink">
+            <p className="t-caption text-ink">
               {copy.voidedDetail(
                 formatDateTime(implant.voidedAt),
                 implant.voidedByName ?? copy.unknownUser,
@@ -198,25 +201,21 @@ export function PatientImplantsTab({
             </p>
           ) : null}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button asChild variant="secondary" size="sm" className="w-full sm:w-auto">
+        <div className="flex items-center gap-2 sm:justify-end">
+          <Button asChild variant="secondary" size="sm" className="flex-1 sm:flex-none">
             <a href={implantCardPrintHref(patientId, implant.placedOn)} target="_blank" rel="noopener">
               <CreditCard aria-hidden />
               {copy.card}
               <span className="sr-only"> {copy.cardHint(placed)}</span>
             </a>
           </Button>
+          {/* Sin «Editar» ni «Borrar»: el registro es inmutable; solo se anula. */}
           {canVoidImplant(implant, { role, userId }) ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-full sm:w-auto"
-              onClick={() => setVoiding(implant)}
-            >
-              {copy.void}
-              <span className="sr-only"> · {copy.voidHint(kind, implant.toothNumber)}</span>
-            </Button>
+            <RowActions
+              label={copy.actionsOf(copy.rowLabel(kind, implant.toothNumber))}
+              actions={[{ label: copy.void, onSelect: () => setVoiding(implant), destructive: true }]}
+              className="pointer-coarse:size-11"
+            />
           ) : null}
         </div>
       </li>
@@ -225,18 +224,18 @@ export function PatientImplantsTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-ink">{copy.heading}</h2>
-          <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
-        </div>
-        {canRegister ? (
-          <Button type="button" onClick={openRegister} className="w-full sm:w-auto">
-            <Plus aria-hidden />
-            {copy.register}
-          </Button>
-        ) : null}
-      </div>
+      <SectionHeader
+        title={copy.heading}
+        description={<span className="block max-w-[68ch]">{copy.support}</span>}
+        actions={
+          canRegister ? (
+            <Button type="button" onClick={openRegister} className="w-full sm:w-auto">
+              <Plus aria-hidden />
+              {copy.register}
+            </Button>
+          ) : null
+        }
+      />
 
       {sedeFormat.status === 'error' ? (
         <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} locationId={sedeFormat.locationId} />
@@ -261,7 +260,7 @@ export function PatientImplantsTab({
             >
               <h3
                 id={`implants-tooth-${group.toothNumber}`}
-                className="t-label text-muted tabular-nums"
+                className="t-label t-data text-muted"
               >
                 {copy.toothHeading(group.toothNumber)}
               </h3>

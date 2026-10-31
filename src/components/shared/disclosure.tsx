@@ -50,7 +50,7 @@ export function Disclosure({
         aria-expanded={open}
         aria-controls={regionId}
         onClick={() => setOpen((o) => !o)}
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
       >
         <span className="flex min-w-0 items-center gap-2">
           <ChevronDown

@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { CalendarClock, Lock, Plus } from 'lucide-react';
+import { CalendarClock, Eye, EyeOff, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   deleteAppointmentType,
@@ -16,6 +16,8 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { notifyError } from '@/components/errors/notify';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import type { RowAction } from '@/components/shared/row-actions';
 import { AppointmentTypeFormModal } from './appointment-type-form-modal';
 
 const copy = {
@@ -31,21 +33,20 @@ const copy = {
   colName: 'Tipo',
   colDuration: 'Duración',
   colStatus: 'Estado',
-  colActions: 'Acciones',
   minutes: (n: number) => `${n} min`,
   active: 'Activo',
   inactive: 'Inactivo',
+  urgent: 'Urgencia',
   edit: 'Editar',
   deactivate: 'Desactivar',
   activate: 'Activar',
-  remove: 'Retirar',
-  actionFor: (action: string, name: string) => `${action} «${name}»`,
+  remove: 'Eliminar',
   toggleError: (name: string) => `No pudimos cambiar el estado de «${name}».`,
-  removeTitle: (name: string) => `¿Retirar «${name}»?`,
+  removeTitle: (name: string) => `¿Eliminar «${name}»?`,
   removeDescription:
     'Deja de aparecer aquí y al agendar. Las citas que ya lo usan lo conservan, con su color.',
-  removeConfirm: 'Retirar tipo',
-  removeError: 'No pudimos retirar el tipo de cita.',
+  removeConfirm: 'Eliminar tipo',
+  removeError: 'No pudimos eliminar el tipo de cita.',
 };
 
 interface AppointmentTypesManagerProps {
@@ -63,19 +64,19 @@ function TypeSwatch({ type }: { type: AppointmentType }) {
     <span className="flex min-w-0 items-center gap-2">
       <span
         aria-hidden
-        className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border text-[10px] font-bold"
+        className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border text-xs font-semibold"
         style={style}
       >
         Aa
       </span>
-      <span className="truncate font-medium">{type.name}</span>
+      <span className="min-w-0 break-words font-medium">{type.name}</span>
     </span>
   );
 }
 
 /**
  * Gestión de tipos de cita en /settings/tipos-de-cita (DX-121). Crear, editar,
- * desactivar (sale del selector al agendar) y retirar (borrado lógico). Nada de
+ * desactivar (sale del selector al agendar) y eliminar (borrado lógico). Nada de
  * esto cambia las citas ya agendadas.
  */
 export function AppointmentTypesManager({ token, allowed }: AppointmentTypesManagerProps) {
@@ -165,57 +166,59 @@ export function AppointmentTypesManager({ token, allowed }: AppointmentTypesMana
     }
   }
 
-  function actions(type: AppointmentType) {
-    const toggleLabel = type.active ? copy.deactivate : copy.activate;
+  function rowActions(type: AppointmentType): RowAction[] {
+    return [
+      { label: copy.edit, icon: <Pencil />, onSelect: () => openModal(type) },
+      {
+        label: type.active ? copy.deactivate : copy.activate,
+        icon: type.active ? <EyeOff /> : <Eye />,
+        // Mientras se cambia, no se vuelve a pedir.
+        disabled: pendingId === type.id,
+        onSelect: () => void toggleActive(type),
+      },
+      {
+        label: copy.remove,
+        icon: <Trash2 />,
+        destructive: true,
+        separatorBefore: true,
+        onSelect: () => {
+          setRemoveError(null);
+          setRemoving(type);
+        },
+      },
+    ];
+  }
+
+  /** «Activo» es lo normal: texto discreto. Solo lo que se sale (inactivo, urgencia) lleva chip. */
+  function status(type: AppointmentType) {
     return (
-      <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => openModal(type)}
-          aria-label={copy.actionFor(copy.edit, type.name)}
-        >
-          {copy.edit}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          loading={pendingId === type.id}
-          onClick={() => void toggleActive(type)}
-          aria-label={copy.actionFor(toggleLabel, type.name)}
-        >
-          {toggleLabel}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setRemoveError(null);
-            setRemoving(type);
-          }}
-          aria-label={copy.actionFor(copy.remove, type.name)}
-        >
-          {copy.remove}
-        </Button>
-      </div>
+      <span className="inline-flex flex-wrap items-center gap-1">
+        {type.active ? (
+          <span className="text-muted">{copy.active}</span>
+        ) : (
+          <Badge variant="neutral">{copy.inactive}</Badge>
+        )}
+        {type.isUrgent ? <Badge variant="danger">{copy.urgent}</Badge> : null}
+      </span>
     );
   }
 
-  function status(type: AppointmentType) {
-    return (
-      <Badge variant={type.active ? 'success' : 'muted'}>
-        {type.active ? copy.active : copy.inactive}
-      </Badge>
-    );
-  }
+  const columns: DataListColumn<AppointmentType>[] = [
+    { id: 'name', header: copy.colName, mobile: 'primary', cell: (t) => <TypeSwatch type={t} /> },
+    {
+      id: 'duration',
+      header: copy.colDuration,
+      numeric: true,
+      mobile: 'meta',
+      cell: (t) => copy.minutes(t.durationMinutes),
+    },
+    { id: 'status', header: copy.colStatus, mobile: 'trailing', cell: status },
+  ];
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted" aria-live="polite">
+        <p className="text-sm text-muted tabular-nums" aria-live="polite">
           {loading || error ? '' : copy.count(types.length)}
         </p>
         <Button type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
@@ -233,55 +236,15 @@ export function AppointmentTypesManager({ token, allowed }: AppointmentTypesMana
         emptyDescription={copy.emptyHint}
         emptyIcon={<CalendarClock aria-hidden />}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colName}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                {copy.colDuration}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {types.map((t) => (
-              <tr key={t.id} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-3">
-                  <TypeSwatch type={t} />
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">{copy.minutes(t.durationMinutes)}</td>
-                <td className="px-4 py-3">{status(t)}</td>
-                <td className="px-4 py-3">{actions(t)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {types.map((t) => (
-            <li
-              key={t.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <TypeSwatch type={t} />
-                {status(t)}
-              </div>
-              <p className="text-xs tabular-nums text-muted">{copy.minutes(t.durationMinutes)}</p>
-              {actions(t)}
-            </li>
-          ))}
-        </ul>
+        <DataList
+          label={copy.tableLabel}
+          rows={types}
+          columns={columns}
+          getRowKey={(t) => t.id}
+          onRowClick={(t) => openModal(t)}
+          rowActions={rowActions}
+          getRowLabel={(t) => t.name}
+        />
       </AsyncSection>
 
       <AppointmentTypeFormModal

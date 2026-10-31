@@ -1,10 +1,10 @@
 'use client';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import { attendanceBadgeText } from '@/lib/cancellations/cancellation';
 import { overdueChipText } from '@/lib/collections/presentation';
 import { CoverageMarker } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
-import { attendanceBadgeText } from '@/lib/cancellations/cancellation';
 import { medicalAlertSeverity, medicalAlertSummary } from '@/lib/clinical/medical-alerts';
 import { coverageChipText } from '@/lib/patients/coverage-presentation';
 import * as React from 'react';
@@ -35,6 +35,7 @@ import {
   blockBandForDay,
   blockLabel,
   blockShownInColumn,
+  reservedBlockColor,
   type ScheduleBlockLike,
 } from '@/lib/appointments/schedule-blocks';
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
@@ -45,9 +46,11 @@ import {
   patientLabel,
 } from '@/components/appointments/appointment-display';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { cn } from '@/lib/utils';
+import { statusTone, TONE_CLASSES } from '@/lib/status/tones';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -341,28 +344,14 @@ export function DayColumns({
   return (
     <div className="flex flex-col gap-3">
       {/* Móvil: una columna; el selector se desliza en horizontal. */}
-      <div
-        role="group"
+      <SegmentedControl
+        semantics="toggle"
+        className="sm:hidden"
         aria-label={copy.providerPicker}
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:hidden"
-      >
-        {providers.map((p) => (
-          <button
-            key={p.userId}
-            type="button"
-            aria-pressed={p.userId === active}
-            onClick={() => setActiveProviderId(p.userId)}
-            className={cn(
-              'h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-              p.userId === active
-                ? 'border-primary bg-primary/10 text-ink'
-                : 'border-border bg-surface text-muted hover:text-ink',
-            )}
-          >
-            {p.fullName}
-          </button>
-        ))}
-      </div>
+        value={active ?? ''}
+        onValueChange={setActiveProviderId}
+        options={providers.map((p) => ({ value: p.userId, label: p.fullName }))}
+      />
 
       <div
         role="region"
@@ -370,7 +359,7 @@ export function DayColumns({
         tabIndex={scrolls ? 0 : undefined}
         className={cn(
           'rounded-lg border border-border bg-surface',
-          scrolls && 'overflow-x-auto scroll-x-shadows focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+          scrolls && 'overflow-x-auto scroll-x-shadows focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
         )}
       >
         <div
@@ -384,7 +373,7 @@ export function DayColumns({
           style={{ '--cols': providers.length, '--hours': fmt.hourCycle === 'h12' ? '5.5rem' : '3.5rem' } as React.CSSProperties}
         >
           {/* Cabecera: nombre y nº de citas por columna. */}
-          <div className="sticky left-0 z-10 border-b border-border bg-surface-2" />
+          <div className="sticky left-0 z-10 border-b border-border bg-surface-sunken" />
           {providers.map((p) => {
             const count = appointments.filter((a) => a.providerId === p.userId).length;
             return (
@@ -392,7 +381,7 @@ export function DayColumns({
                 key={p.userId}
                 data-testid="day-column-header"
                 className={cn(
-                  'min-w-0 border-b border-l border-border bg-surface-2 px-3 py-2',
+                  'min-w-0 border-b border-l border-border bg-surface-sunken px-3 py-2',
                   p.userId !== active && 'hidden sm:block',
                 )}
               >
@@ -480,7 +469,7 @@ export function DayColumns({
                     data-testid="closed-band"
                     aria-hidden
                     title={copy.closedHours}
-                    className="pointer-events-none absolute inset-x-0 bg-surface-2/80 [background-image:repeating-linear-gradient(135deg,transparent_0_6px,var(--color-border)_6px_7px)]"
+                    className="pointer-events-none absolute inset-x-0 bg-surface-sunken/80 [background-image:repeating-linear-gradient(135deg,transparent_0_6px,var(--color-border)_6px_7px)]"
                     style={{
                       top: offsetFromMinute(band.start, span),
                       height: (band.end - band.start) * PX_PER_MINUTE,
@@ -505,22 +494,36 @@ export function DayColumns({
                 {columnBlocks.map((block) => {
                     const band = blockBandForDay(block, date, span, timeZone);
                     if (!band) return null;
-                    const label = blockLabel(block);
+                    const label = blockLabel(block, undefined, (m) => sedeMinute(m, fmt));
+                    // DX-446: un hueco reservado lleva el color de su tipo; liberado, apenas un tinte.
+                    const reservedColor = reservedBlockColor(block);
                     const aria = copy.blockAria(label, sedeMinuteRanges([{ startMinute: band.start, endMinute: band.end }], fmt));
                     return (
                       <div
                         key={block.id}
                         data-testid="schedule-block"
                         data-block-id={block.id}
+                        data-block-kind={block.kind}
                         role="note"
                         aria-label={aria}
                         className={cn(
-                          'pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]',
-                          block.allowsBooking ? 'bg-warning/5' : 'bg-warning/10',
+                          'pointer-events-none absolute inset-x-0 border-y border-dashed',
+                          // DX-446: el hueco reservado lleva el color de su tipo (inline,
+                          // abajo); el bloqueo normal, el rayado de aviso sobre warning-subtle.
+                          reservedColor
+                            ? // Sin franja lateral gruesa (DESIGN): el color del tipo va en el borde y el fondo.
+                              'border-x'
+                            : 'border-warning/50 bg-warning-subtle [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]',
                         )}
                         style={{
                           top: offsetFromMinute(band.start, span),
                           height: (band.end - band.start) * PX_PER_MINUTE,
+                          ...(reservedColor
+                            ? {
+                                borderColor: `color-mix(in oklab, ${reservedColor} 55%, transparent)`,
+                                backgroundColor: `color-mix(in oklab, ${reservedColor} ${block.released ? 4 : 12}%, transparent)`,
+                              }
+                            : {}),
                         }}
                       >
                         {onSelectBlock && canSelectBlock(block) ? (
@@ -528,7 +531,7 @@ export function DayColumns({
                             type="button"
                             aria-label={copy.blockRemove(label)}
                             onClick={() => onSelectBlock(block)}
-                            className="pointer-events-auto m-1 max-w-[calc(100%-0.5rem)] truncate rounded bg-surface/90 px-1.5 py-0.5 text-left text-xs font-medium text-ink shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            className="pointer-events-auto m-1 max-w-[calc(100%-0.5rem)] truncate rounded bg-surface/90 px-1.5 py-0.5 text-left text-xs font-medium text-ink shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                           >
                             {label}
                           </button>
@@ -552,7 +555,7 @@ export function DayColumns({
                       data-testid="free-gap"
                       aria-label={copy.freeGapFor(range, p.fullName)}
                       onClick={() => onFillOpening?.(p.userId, { start: gap.start, end: gap.end })}
-                      className="absolute inset-x-1 z-[1] flex h-6 items-center justify-center gap-1 rounded-md border border-dashed border-border bg-surface/80 px-2 text-xs font-medium text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="absolute inset-x-1 z-[1] flex h-6 items-center justify-center gap-1 rounded-md border border-dashed border-border bg-surface/80 px-2 text-xs font-medium text-muted transition-colors hover:border-primary hover:text-primary-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                       // Centrado en el hueco: no tapa «Sin citas hoy» de arriba.
                       style={{ top: top + Math.max(0, (height - 24) / 2) }}
                     >
@@ -605,8 +608,8 @@ export function DayColumns({
                         // Sin overflow-hidden aquí: lo lleva el contenido de
                         // dentro. Así la zona táctil de 44 px del icono de
                         // alerta (DX-247) no se recorta en las citas de 15 min.
-                        'group absolute rounded-md border text-left shadow-sm',
-                        !colors && 'border-border bg-surface-2 text-ink',
+                        'group absolute rounded-md border text-left',
+                        !colors && 'border-border bg-surface-sunken text-ink',
                         canMove && 'cursor-grab active:cursor-grabbing',
                         (dragging || pendingId === a.id) && 'opacity-50',
                         inactive && 'opacity-60',
@@ -623,7 +626,7 @@ export function DayColumns({
                         <button
                           type="button"
                           aria-label={[
-                            // Keep the visible card words together before supplementary context.
+                            // Visible card words first; append supporting context after them.
                             range,
                             wantsEarlier ? WANTS_EARLIER_LABEL : null,
                             patient,
@@ -658,8 +661,20 @@ export function DayColumns({
                           >
                             {patient}
                           </span>{' '}
-                          <span className="w-full truncate text-xs">
-                            {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
+                          {/* El fondo es el color del tipo; el estado, su punto de
+                              tono (nunca el acento) + la etiqueta. */}
+                          <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
+                            <span
+                              aria-hidden
+                              data-testid="day-column-status-dot"
+                              className={cn(
+                                'size-2 shrink-0 rounded-full ring-1 ring-surface',
+                                TONE_CLASSES[statusTone('appointment', a.status)].dot,
+                              )}
+                            />
+                            <span className="min-w-0 truncate">
+                              {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
+                            </span>
                           </span>{' '}
                           <OverdueChip balance={a.balance} compact />{' '}
                           {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
@@ -691,7 +706,7 @@ export function DayColumns({
                             // la rodea tiene su propio botón.
                             onFillOpening?.(p.userId, { start: a.start, end: a.end }, a.locationId)
                           }
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary-text shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
                           <UserPlus className="size-4" aria-hidden />
                         </button>
@@ -702,7 +717,7 @@ export function DayColumns({
                           aria-label={copy.moveToFor(patient)}
                           title={copy.moveTo}
                           onClick={() => onMoveRequest(a)}
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface/90 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
                           <MoveRight className="size-4" aria-hidden />
                         </button>
@@ -715,7 +730,7 @@ export function DayColumns({
                   <div
                     data-testid="drag-preview"
                     aria-hidden
-                    className="pointer-events-none absolute inset-x-1 rounded-md border-2 border-dashed border-primary bg-primary/10 px-2 py-1 text-xs font-medium text-ink"
+                    className="pointer-events-none absolute inset-x-1 rounded-md border-2 border-dashed border-primary bg-primary-subtle px-2 py-1 text-xs font-medium text-ink"
                     style={{
                       top: offsetFromMinute(dragTarget.minute, span),
                       height: Math.max(durationMinutes(drag.appointment) * PX_PER_MINUTE, 24),
@@ -734,7 +749,7 @@ export function DayColumns({
         <p className="flex items-center gap-2 text-xs text-muted">
           <span
             aria-hidden
-            className="inline-block size-3 rounded-sm border border-dashed border-warning/50 bg-warning/10"
+            className="inline-block size-3 rounded-sm border border-dashed border-warning/50 bg-warning-subtle"
           />
           {copy.blockLegend}
         </p>
@@ -754,7 +769,7 @@ export function DayColumns({
         <p className="flex items-center gap-2 text-xs text-muted">
           <span
             aria-hidden
-            className="inline-block size-3 rounded-sm border border-border bg-surface-2 [background-image:repeating-linear-gradient(135deg,transparent_0_3px,var(--color-border)_3px_4px)]"
+            className="inline-block size-3 rounded-sm border border-border bg-surface-sunken [background-image:repeating-linear-gradient(135deg,transparent_0_3px,var(--color-border)_3px_4px)]"
           />
           {copy.closedHours}
         </p>

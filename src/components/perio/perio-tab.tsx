@@ -2,19 +2,18 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Activity, Plus } from 'lucide-react';
-import {
-  PERIO_STATUS_LABELS,
+import { 
   listPerioExams,
   type PerioExamDetail,
   type PerioExamSummary,
-  perioErrorMessage,
+  perioErrorMessage
 } from '@/lib/perio/perio-api';
 import { formatCivilDate } from '@/lib/format/date';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { perioPercent } from '@/lib/perio/perio-percent';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { AsyncSection } from '@/components/shared/async-section';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NewPerioExamModal } from './new-perio-exam-modal';
@@ -128,9 +127,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
 
   function statusBadge(exam: PerioExamSummary) {
     return (
-      <Badge variant={exam.status === 'FINAL' ? 'success' : 'warning'}>
-        {PERIO_STATUS_LABELS[exam.status]}
-      </Badge>
+      <StatusBadge kind="perioExam" status={exam.status} />
     );
   }
 
@@ -188,7 +185,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
           className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
         >
           <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
+            <tr className="border-b border-border bg-surface-sunken text-left">
               <th scope="col" className="px-4 py-3 font-medium text-muted">
                 {copy.colDate}
               </th>
@@ -214,7 +211,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
           </thead>
           <tbody>
             {exams.map((exam) => (
-              <tr key={exam.id} className="border-b border-hairline last:border-0">
+              <tr key={exam.id} className="border-b border-border-subtle last:border-0">
                 <td className="px-4 py-3 tabular-nums">{formatCivilDate(exam.examDate)}</td>
                 <td className="px-4 py-3">{exam.providerName}</td>
                 <td className="px-4 py-3">{statusBadge(exam)}</td>

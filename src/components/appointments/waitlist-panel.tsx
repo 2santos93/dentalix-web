@@ -1,4 +1,5 @@
 'use client';
+import { Textarea } from '@/components/ui/textarea';
 import * as React from 'react';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -22,7 +23,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/shared/empty-state';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
@@ -149,12 +149,12 @@ export function WaitlistPanel({
           id={titleId}
           ref={titleRef}
           tabIndex={-1}
-          className="t-title rounded text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="t-title rounded text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
         >
           {waitlistCopy.title}
         </h2>
         {!loading && !error ? (
-          <span className="text-xs tabular-nums text-muted">{waitlistCopy.count(total)}</span>
+          <span className="t-caption tabular-nums text-muted">{waitlistCopy.count(total)}</span>
         ) : null}
       </header>
 
@@ -173,10 +173,15 @@ export function WaitlistPanel({
           className="py-10"
         />
       ) : entries.length === 0 ? (
-        <EmptyState role="status" title={waitlistCopy.empty} description={waitlistCopy.emptyHint} />
+        // Una línea, no una caja vacía: comparte columna con «En clínica».
+        <p role="status" className="text-sm text-muted">
+          <span className="font-medium text-ink">{waitlistCopy.empty}</span>
+          {'. '}
+          <span>{waitlistCopy.emptyHint}</span>
+        </p>
       ) : (
         <>
-          <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+          <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
             {entries.map((entry) => {
               const name = waitlistPatientName(entry);
               return (
@@ -200,7 +205,7 @@ export function WaitlistPanel({
                       <a
                         href={`tel:${entry.patientPhone}`}
                         aria-label={waitlistCopy.call(entry.patientPhone)}
-                        className="inline-flex items-center gap-1 self-start rounded text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        className="inline-flex items-center gap-1 self-start rounded text-primary-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                       >
                         <Phone className="size-3.5" aria-hidden />
                         <span className="tabular-nums">{entry.patientPhone}</span>
@@ -275,14 +280,13 @@ export function WaitlistPanel({
         onCloseAutoFocus={focusAfterClose}
       >
         <FormField htmlFor="waitlist-dismiss-reason" label={waitlistCopy.reason}>
-          <textarea
+          <Textarea
             id="waitlist-dismiss-reason"
             maxLength={200}
             rows={3}
             value={reason}
             placeholder={waitlistCopy.reasonPlaceholder}
             onChange={(e) => setReason(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />
         </FormField>
       </FormModal>

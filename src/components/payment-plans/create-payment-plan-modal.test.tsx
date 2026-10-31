@@ -39,7 +39,8 @@ it('propone 12 cuotas mensuales desde hoy, sin pie y el total facturable del pla
   expect(within(dialog).getByLabelText('Periodicidad')).toHaveValue('MONTHLY');
   expect(within(dialog).getByLabelText('Pie (opcional)')).toHaveValue('0');
   expect(within(dialog).getByLabelText('Total a financiar')).toHaveValue('1200000');
-  expect((within(dialog).getByLabelText('Fecha de inicio') as HTMLInputElement).value).toMatch(
+  // `DatePicker` (UX v2): el día ISO viaja en su campo oculto.
+  expect(dialog.querySelector<HTMLInputElement>('input[name="pp-start"]')?.value).toMatch(
     /^\d{4}-\d{2}-\d{2}$/,
   );
   expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Cuota: 100.000,00 COP');
@@ -54,8 +55,9 @@ it('crea el plan de cuotas con los datos del formulario y avisa', async () => {
   await user.clear(within(dialog).getByLabelText('N.º de cuotas'));
   await user.type(within(dialog).getByLabelText('N.º de cuotas'), '6');
   await user.selectOptions(within(dialog).getByLabelText('Periodicidad'), 'BIWEEKLY');
-  await user.clear(within(dialog).getByLabelText('Fecha de inicio'));
-  await user.type(within(dialog).getByLabelText('Fecha de inicio'), '2026-11-01');
+  const [startDay] = within(within(dialog).getByRole('group', { name: 'Fecha de inicio' })).getAllByRole('spinbutton');
+  await user.click(startDay);
+  await user.keyboard('01112026');
   await user.clear(within(dialog).getByLabelText('Pie (opcional)'));
   await user.type(within(dialog).getByLabelText('Pie (opcional)'), '200000');
   await user.click(within(dialog).getByRole('button', { name: 'Crear' }));

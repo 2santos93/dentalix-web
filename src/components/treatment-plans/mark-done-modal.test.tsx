@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MarkDoneModal } from './mark-done-modal';
 import { listStaff } from '@/lib/appointments/staff-api';
@@ -265,9 +265,17 @@ describe('MarkDoneModal (DX-050)', () => {
       await user.click(screen.getByRole('button', { name: 'Guardar' }));
       expect(await screen.findByText('Indica la fecha en que se realizó (no puede ser futura).')).toBeInTheDocument();
 
-      const date = screen.getByLabelText('Fecha en que se realizó');
-      expect(date).toHaveAttribute('max', '2026-10-24');
-      fireEvent.change(date, { target: { value: '2026-09-14' } });
+      // `DatePicker` por segmentos (dd/mm/aaaa): el tope es hoy en la sede
+      // (24/10): un día futuro no se guarda.
+      const date = screen.getByRole('group', { name: 'Fecha en que se realizó' });
+      const [day] = within(date).getAllByRole('spinbutton');
+      await user.click(day);
+      await user.keyboard('25102026');
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      expect(await screen.findByText('Indica la fecha en que se realizó (no puede ser futura).')).toBeInTheDocument();
+      expect(mockedUpdate).not.toHaveBeenCalled();
+      await user.click(day);
+      await user.keyboard('14092026');
       await user.click(screen.getByRole('button', { name: 'Guardar' }));
       await waitFor(() =>
         expect(mockedUpdate).toHaveBeenCalledWith('tok', 'plan-1', 'item-1', {

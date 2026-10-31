@@ -3,15 +3,14 @@ import * as React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Save, Trash2 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
-import {
-  PERIO_STATUS_LABELS,
+import { 
   deletePerioExam,
   finalizePerioExam,
   getPerioExam,
   savePerioMeasures,
   type PerioExamDetail,
   type PerioSite,
-  perioErrorMessage,
+  perioErrorMessage
 } from '@/lib/perio/perio-api';
 import {
   EMPTY_SITE,
@@ -28,9 +27,10 @@ import {
 } from '@/lib/perio/perio-grid';
 import { formatCivilDate } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineError } from '@/components/errors/inline-error';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PerioChart } from './perio-chart';
@@ -362,9 +362,7 @@ export function PerioExamEditor({
                   <h2 className="text-lg font-semibold text-ink">
                     {copy.heading(formatCivilDate(exam.examDate))}
                   </h2>
-                  <Badge variant={exam.status === 'FINAL' ? 'success' : 'warning'}>
-                    {PERIO_STATUS_LABELS[exam.status]}
-                  </Badge>
+                  <StatusBadge kind="perioExam" status={exam.status} />
                 </div>
                 <p className="text-sm text-muted">{copy.by(exam.providerName)}</p>
                 {exam.notes ? <p className="max-w-[68ch] text-sm text-ink">{exam.notes}</p> : null}
@@ -399,7 +397,7 @@ export function PerioExamEditor({
                       setConfirmDelete(true);
                     }}
                     disabled={busy}
-                    className="w-full text-danger sm:w-auto"
+                    className="w-full text-danger-text sm:w-auto"
                   >
                     <Trash2 aria-hidden />
                     {copy.deleteDraft}
@@ -411,7 +409,7 @@ export function PerioExamEditor({
             {readOnly ? (
               <p
                 role="status"
-                className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm text-ink"
+                className="rounded-lg border border-border bg-surface-sunken px-4 py-3 text-sm text-ink"
               >
                 {copy.readOnly}
               </p>
@@ -421,28 +419,24 @@ export function PerioExamEditor({
 
             <div aria-live="polite" className="text-sm">
               {dirty ? (
-                <p className="font-medium text-warning">{copy.unsaved}</p>
+                <p className="font-medium text-warning-text">{copy.unsaved}</p>
               ) : savedNotice ? (
-                <p className="text-success">{copy.saved}</p>
+                <p className="text-success-text">{copy.saved}</p>
               ) : null}
             </div>
             {actionError ? <InlineError variant="summary">{actionError}</InlineError> : null}
             {notice ? (
-              <p role="status" className="text-sm font-medium text-warning">
+              <p role="status" className="text-sm font-medium text-warning-text">
                 {notice}
               </p>
             ) : null}
 
             {previous ? (
-              <label className="flex items-center gap-2 text-sm text-ink">
-                <input
-                  type="checkbox"
-                  checked={comparing}
-                  onChange={(e) => setComparing(e.target.checked)}
-                  className="size-4 accent-[var(--color-primary)]"
-                />
-                {copy.compare(formatCivilDate(previous.examDate))}
-              </label>
+              <Checkbox
+                label={copy.compare(formatCivilDate(previous.examDate))}
+                checked={comparing}
+                onChange={(e) => setComparing(e.target.checked)}
+              />
             ) : (
               <p className="text-sm text-muted">{copy.noPrevious}</p>
             )}
@@ -577,8 +571,8 @@ function IndicesPanel({
                     better === null
                       ? 'text-xs text-muted'
                       : better
-                        ? 'text-xs text-success'
-                        : 'text-xs text-danger'
+                        ? 'text-xs text-success-text'
+                        : 'text-xs text-danger-text'
                   }
                 >
                   {copy.indicesPrevious}: {formatIndex(before, fmt, row.percent)}

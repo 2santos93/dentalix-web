@@ -1,4 +1,5 @@
 import { test, expect } from './support/test';
+import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import type { Locator, Page } from '@playwright/test';
@@ -121,7 +122,7 @@ async function openAppointment(page: Page, start: Date) {
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   const listToggle = page.getByRole('button', { name: 'Lista', exact: true });
   if (await listToggle.isVisible()) await listToggle.click();
-  await page.getByLabel('Fecha', { exact: true }).fill(sedeDate(start));
+  await fillDate(page, 'Fecha', sedeDate(start));
   const end = new Date(start.getTime() + 30 * 60_000);
   // A 1440 es la fila de la tabla; a 390, la tarjeta: el botón visible.
   const detail = page

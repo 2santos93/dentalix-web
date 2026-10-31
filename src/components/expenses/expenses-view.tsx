@@ -16,7 +16,6 @@ import {
 } from '@/lib/expenses/expenses-api';
 import { EXPENSE_STATUS_FILTERS, expensesCsvFileName } from '@/lib/expenses/presentation';
 import { saveCsv } from '@/lib/files/save-csv';
-import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
@@ -27,13 +26,13 @@ import { FieldError } from '@/components/errors/field-error';
 import { notifyError } from '@/components/errors/notify';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
-import { ListToolbar, ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
+import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { PageHeader } from '@/components/shared/page-header';
 import { Pagination } from '@/components/shared/pagination';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { DateRangePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
 import { ExpenseCategoriesModal } from './expense-categories-modal';
 import { ExpenseDetailModal } from './expense-detail-modal';
@@ -51,8 +50,7 @@ export const expensesCopy = {
   scopeLocation: (name: string) => `Gastos de ${name}`,
   searchLabel: 'Buscar por proveedor o descripción',
   searchPlaceholder: 'Proveedor o descripción',
-  locationLabel: 'Sede',
-  locationAll: 'Todas las sedes',
+  periodLabel: 'Periodo de la factura',
   fromLabel: 'Desde',
   toLabel: 'Hasta',
   categoryLabel: 'Categoría',
@@ -60,7 +58,8 @@ export const expensesCopy = {
   // Escalón 2 (FieldError): ≤4 palabras, el filtro da el contexto.
   categoriesError: 'Categorías no disponibles',
   statusLabel: 'Estado',
-  overdueLabel: 'Vencidos',
+  // «Vencidos» es una opción más del estado: por pagar y con el vencimiento pasado.
+  overdueOption: 'Vencidos',
   create: 'Nuevo gasto',
   export: 'Exportar CSV',
   exporting: 'Exportando…',
@@ -69,7 +68,6 @@ export const expensesCopy = {
   countNoun: 'gasto',
   countNounPlural: 'gastos',
   tableLabel: 'Gastos del periodo, del más reciente al más antiguo',
-  listLabel: 'Gastos',
   colDate: 'Fecha',
   colCategory: 'Categoría',
   colSupplier: 'Proveedor',
@@ -78,7 +76,7 @@ export const expensesCopy = {
   colPaid: 'Pagado',
   colStatus: 'Estado',
   noSupplier: '—',
-  open: (category: string, day: string) => `Ver el gasto de ${category} del ${day}`,
+  paidOn: (amount: string) => `Pagado ${amount}`,
   // Sin «Intenta de nuevo.»: AsyncSection → SectionError trae «Reintentar».
   loadError: 'No pudimos cargar los gastos.',
   badRequest: 'Algún filtro no es válido: «Desde» no puede ser posterior a «Hasta».',
@@ -90,11 +88,25 @@ export const expensesCopy = {
 
 const SEARCH_DEBOUNCE_MS = 300;
 
+type StatusChoice = ExpenseStatusFilter | 'ALL' | 'OVERDUE';
+
+/** Los estados del filtro, con «Vencidos» tras «Por pagar» (era una casilla aparte). */
+const STATUS_CHOICES: readonly { value: StatusChoice; label: string }[] = [
+  ...EXPENSE_STATUS_FILTERS.slice(0, 2),
+  { value: 'OVERDUE', label: expensesCopy.overdueOption },
+  ...EXPENSE_STATUS_FILTERS.slice(2),
+];
+
 /**
- * «Gastos» (DX-274, solo ADMIN): la lista de gastos de la sede activa (o de la
- * elegida, en «Todas las sedes») por fecha de factura, con el mes en curso por
- * defecto. Filtros en la barra con «Nuevo gasto» a la derecha; en escritorio
- * una tabla y bajo `sm` una tarjeta por gasto. Cada gasto abre su detalle.
+ * «Gastos» (DX-274, solo ADMIN): la lista de gastos de la sede activa (todas,
+ * con «Todas las sedes» en el selector global) por fecha de factura, con el
+ * mes en curso por defecto. Una sola barra: búsqueda, periodo, categoría y
+ * estado, con «Nuevo gasto» a la derecha; el CSV va junto al recuento, porque
+ * exporta lo que la lista enseña. `DataList`: tabla desde `sm`, tarjeta
+ * compacta en el teléfono. Cada gasto abre su detalle.
+ *
+ * Sin selector de sede propio: el global ya acota la petición (`X-Location-Id`)
+ * y dos selectores de sede en la misma pantalla no decían cuál mandaba.
  */
 export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesViewTabs }) {
   const isAdmin = canManageExpenses(getTokenRole(token));
@@ -107,10 +119,8 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
   const { today, error: scheduleError, retry: retrySchedule } = useExpenseToday(token, reference?.id);
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
-  const [locationId, setLocationId] = useState('ALL');
   const [category, setCategory] = useState('ALL');
-  const [status, setStatus] = useState<ExpenseStatusFilter | 'ALL'>('ALL');
-  const [overdue, setOverdue] = useState(false);
+  const [status, setStatus] = useState<StatusChoice>('ALL');
   const [searchText, setSearchText] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -150,10 +160,8 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
       ? {
           from: effectiveFrom,
           to: effectiveTo,
-          ...(locationId !== 'ALL' ? { locationId } : {}),
           ...(category !== 'ALL' ? { category } : {}),
-          ...(status !== 'ALL' ? { status } : {}),
-          ...(overdue ? { overdue: true } : {}),
+          ...(status === 'OVERDUE' ? { overdue: true } : status !== 'ALL' ? { status } : {}),
           ...(search ? { query: search } : {}),
         }
       : null;
@@ -215,8 +223,10 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
     setFormOpen(true);
   }
 
-  function openDetail(id: string, trigger: HTMLElement) {
-    detailTriggerRef.current = trigger;
+  function openDetail(id: string) {
+    // El control que abrió el detalle (la fila o la tarjeta) recibe el foco al cerrar.
+    const trigger = document.activeElement;
+    detailTriggerRef.current = trigger instanceof HTMLElement && trigger !== document.body ? trigger : null;
     setDetailId(id);
   }
 
@@ -247,13 +257,80 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
   const showLoading = !zoneError && ((loading && data === null) || !filters);
   const refreshing = loading && data !== null;
   const { locations } = sedes;
-  const activeLocations = locations.filter((l) => l.isActive);
   const activeLocation = locations.find((l) => l.id === activeLocationId) ?? null;
   const locationName = (id: string) => locations.find((l) => l.id === id)?.name ?? '—';
-  const showLocationFilter = activeLocationId === null && activeLocations.length > 1;
+  // Con una sede activa la columna «Sede» repetiría la misma en cada fila.
+  const showLocation = activeLocationId === null;
   // Las categorías de la página también, para encontrar las de una retirada.
   const categoryNames = [
     ...new Set([...(categories.categories ?? []).map((c) => c.name), ...items.map((e) => e.category)]),
+  ];
+
+  const columns: DataListColumn<Expense>[] = [
+    {
+      id: 'category',
+      header: expensesCopy.colCategory,
+      mobile: 'primary',
+      cell: (expense) => (
+        <span className="flex flex-col">
+          <span>{expense.category}</span>
+          {expense.description ? (
+            <span className="max-w-[28ch] truncate text-xs font-normal text-muted">{expense.description}</span>
+          ) : null}
+        </span>
+      ),
+      mobileCell: (expense) => expense.category,
+    },
+    {
+      id: 'date',
+      header: expensesCopy.colDate,
+      cell: (expense) => <span className="tabular-nums">{sedeCivilDate(expense.invoiceDate, fmt)}</span>,
+    },
+    {
+      id: 'supplier',
+      header: expensesCopy.colSupplier,
+      cell: (expense) => <span className="[overflow-wrap:anywhere]">{expense.supplier ?? expensesCopy.noSupplier}</span>,
+      mobileCell: (expense) => expense.supplier,
+    },
+    ...(showLocation
+      ? [
+          {
+            id: 'location',
+            header: expensesCopy.colLocation,
+            showFrom: 'lg',
+            cell: (expense) => locationName(expense.locationId),
+          } satisfies DataListColumn<Expense>,
+        ]
+      : []),
+    {
+      id: 'amount',
+      header: expensesCopy.colAmount,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (expense) => (
+        <span className={cn(expense.status === 'VOIDED' && 'text-muted line-through')}>
+          {sedeMoney(expense.amount, expense.currency, fmt)}
+        </span>
+      ),
+    },
+    {
+      id: 'paid',
+      header: expensesCopy.colPaid,
+      numeric: true,
+      // Pagado 0 no es un dato: en gris, para que la columna se lea por lo que sí se pagó.
+      cell: (expense) => (
+        <span className={cn(expense.paidAmount === 0 && 'text-muted')}>
+          {sedeMoney(expense.paidAmount, expense.currency, fmt)}
+        </span>
+      ),
+      mobileCell: (expense) =>
+        expense.paidAmount > 0 ? expensesCopy.paidOn(sedeMoney(expense.paidAmount, expense.currency, fmt)) : null,
+    },
+    {
+      id: 'status',
+      header: expensesCopy.colStatus,
+      cell: (expense) => <ExpenseStatusBadges expense={expense} />,
+    },
   ];
 
   return (
@@ -261,12 +338,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
       <PageHeader
         title={expensesCopy.title}
         description={expensesCopy.description}
-        meta={
-          <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-muted">
-            <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
-            <span>{activeLocation ? expensesCopy.scopeLocation(activeLocation.name) : expensesCopy.scopeAll}</span>
-          </p>
-        }
+        meta={<ExpensesScope locationName={activeLocation?.name ?? null} />}
       />
 
       {tabs?.nav}
@@ -278,106 +350,65 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
             value={searchText}
             onChange={setSearchText}
             action={
-              <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void exportCsv()}
-                  disabled={exporting || !filters || showLoading || Boolean(loadError)}
-                >
-                  <Download aria-hidden />
-                  {exporting ? expensesCopy.exporting : expensesCopy.export}
-                </Button>
-                <Button ref={createButtonRef} type="button" onClick={openCreate} className="max-sm:mt-2">
-                  <Plus aria-hidden />
-                  {expensesCopy.create}
-                </Button>
-              </>
+              <Button ref={createButtonRef} type="button" onClick={openCreate}>
+                <Plus aria-hidden />
+                {expensesCopy.create}
+              </Button>
             }
           >
-            {showLocationFilter ? (
-              <select
-                aria-label={expensesCopy.locationLabel}
-                value={locationId}
-                onChange={(e) => resetPage(setLocationId)(e.target.value)}
-                className={cn(toolbarFieldClass, 'sm:w-48')}
+            <DateRangePicker
+              aria-label={expensesCopy.periodLabel}
+              value={effectiveFrom && effectiveTo ? { from: effectiveFrom, to: effectiveTo } : null}
+              onChange={(range) => {
+                if (!range) return;
+                setFrom(range.from);
+                setTo(range.to);
+                setPage(1);
+              }}
+              presets
+              startLabel={expensesCopy.fromLabel}
+              endLabel={expensesCopy.toLabel}
+              className="sm:w-64"
+            />
+            <div className="grid grid-cols-2 gap-3 sm:flex">
+              {categories.failed ? (
+                <FieldError
+                  label={expensesCopy.categoriesError}
+                  onRetry={categories.reload}
+                  className="h-10 w-full sm:w-48"
+                />
+              ) : (
+                <NativeSelect
+                  aria-label={expensesCopy.categoryLabel}
+                  value={category}
+                  onChange={(e) => resetPage(setCategory)(e.target.value)}
+                  className="min-w-0 sm:w-48"
+                >
+                  <option value="ALL">{expensesCopy.categoryAll}</option>
+                  {categoryNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              )}
+              <NativeSelect
+                aria-label={expensesCopy.statusLabel}
+                value={status}
+                onChange={(e) => resetPage(setStatus)(e.target.value as StatusChoice)}
+                className="min-w-0 sm:w-44"
               >
-                <option value="ALL">{expensesCopy.locationAll}</option>
-                {activeLocations.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
+                {STATUS_CHOICES.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
                   </option>
                 ))}
-              </select>
-            ) : null}
-            <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
-              <label className="flex min-w-0 items-center gap-2 text-sm text-muted">
-                <span className="shrink-0">{expensesCopy.fromLabel}</span>
-                <Input
-                  type="date"
-                  value={effectiveFrom ?? ''}
-                  max={effectiveTo ?? undefined}
-                  onChange={(e) => e.target.value && resetPage(setFrom)(e.target.value)}
-                  className="min-w-0 tabular-nums sm:w-40"
-                />
-              </label>
-              <label className="flex min-w-0 items-center gap-2 text-sm text-muted">
-                <span className="shrink-0">{expensesCopy.toLabel}</span>
-                <Input
-                  type="date"
-                  value={effectiveTo ?? ''}
-                  min={effectiveFrom ?? undefined}
-                  onChange={(e) => e.target.value && resetPage(setTo)(e.target.value)}
-                  className="min-w-0 tabular-nums sm:w-40"
-                />
-              </label>
+              </NativeSelect>
             </div>
-            {categories.failed ? (
-              <FieldError
-                label={expensesCopy.categoriesError}
-                onRetry={categories.reload}
-                className="h-10 w-full sm:w-52"
-              />
-            ) : (
-              <select
-                aria-label={expensesCopy.categoryLabel}
-                value={category}
-                onChange={(e) => resetPage(setCategory)(e.target.value)}
-                className={cn(toolbarFieldClass, 'sm:w-52')}
-              >
-                <option value="ALL">{expensesCopy.categoryAll}</option>
-                {categoryNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <select
-              aria-label={expensesCopy.statusLabel}
-              value={status}
-              onChange={(e) => resetPage(setStatus)(e.target.value as ExpenseStatusFilter | 'ALL')}
-              className={cn(toolbarFieldClass, 'sm:w-44')}
-            >
-              {EXPENSE_STATUS_FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-            <label className="flex min-h-11 items-center gap-2 text-sm text-ink sm:min-h-10">
-              <input
-                type="checkbox"
-                checked={overdue}
-                onChange={(e) => resetPage(setOverdue)(e.target.checked)}
-                className="size-4 shrink-0 accent-[var(--color-primary)]"
-              />
-              {expensesCopy.overdueLabel}
-            </label>
           </ListToolbar>
         ) : null}
 
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
 
@@ -391,7 +422,22 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
         ) : (
           <>
             {!showLoading && !loadError && data ? (
-              <ResultCount total={data.total} noun={expensesCopy.countNoun} nounPlural={expensesCopy.countNounPlural} />
+              <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <ResultCount total={data.total} noun={expensesCopy.countNoun} nounPlural={expensesCopy.countNounPlural} />
+                {data.total > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void exportCsv()}
+                    disabled={exporting || !filters}
+                    className="-mr-2"
+                  >
+                    <Download aria-hidden />
+                    {exporting ? expensesCopy.exporting : expensesCopy.export}
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
 
             {sedeFormat.status === 'error' ? (
@@ -415,64 +461,15 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
               emptyDescription={expensesCopy.emptyHint}
               skeleton={<TableSkeleton rows={5} />}
             >
-              {/* Escritorio: una tabla. */}
-              <Card aria-busy={refreshing || undefined} className="overflow-hidden p-0 max-md:hidden">
-                <Table aria-label={expensesCopy.tableLabel}>
-                  <caption className="sr-only">{expensesCopy.tableLabel}</caption>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead scope="col">{expensesCopy.colDate}</TableHead>
-                      <TableHead scope="col">{expensesCopy.colCategory}</TableHead>
-                      <TableHead scope="col">{expensesCopy.colSupplier}</TableHead>
-                      <TableHead scope="col">{expensesCopy.colLocation}</TableHead>
-                      <TableHead scope="col" className="text-right">
-                        {expensesCopy.colAmount}
-                      </TableHead>
-                      <TableHead scope="col" className="text-right">
-                        {expensesCopy.colPaid}
-                      </TableHead>
-                      <TableHead scope="col">{expensesCopy.colStatus}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((expense) => (
-                      <TableRow key={expense.id} data-testid="expense-row">
-                        <TableCell className="tabular-nums">{sedeCivilDate(expense.invoiceDate, fmt)}</TableCell>
-                        <TableCell>
-                          <OpenExpenseButton expense={expense} onOpen={openDetail} fmt={fmt} />
-                          {expense.description ? (
-                            <span className="block max-w-[28ch] truncate text-xs text-muted">{expense.description}</span>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="[overflow-wrap:anywhere]">
-                          {expense.supplier ?? expensesCopy.noSupplier}
-                        </TableCell>
-                        <TableCell>{locationName(expense.locationId)}</TableCell>
-                        <TableCell
-                          className={cn('text-right tabular-nums', expense.status === 'VOIDED' && 'text-muted line-through')}
-                        >
-                          {sedeMoney(expense.amount, expense.currency, fmt)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {sedeMoney(expense.paidAmount, expense.currency, fmt)}
-                        </TableCell>
-                        <TableCell>
-                          <ExpenseStatusBadges expense={expense} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
-
-              {/* Móvil y tablet estrecha: una tarjeta por gasto, sin scroll lateral. */}
-              <ul aria-label={expensesCopy.listLabel} aria-busy={refreshing || undefined} className="flex flex-col gap-3 md:hidden">
-                {items.map((expense) => (
-                  <li key={expense.id}>
-                    <ExpenseCard expense={expense} locationName={locationName(expense.locationId)} onOpen={openDetail} fmt={fmt} />
-                  </li>
-                ))}
-              </ul>
+              <div aria-busy={refreshing || undefined}>
+                <DataList
+                  label={expensesCopy.tableLabel}
+                  rows={items}
+                  columns={columns}
+                  getRowKey={(expense) => expense.id}
+                  onRowClick={(expense) => openDetail(expense.id)}
+                />
+              </div>
             </AsyncSection>
 
             {!loadError ? (
@@ -529,65 +526,16 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
   );
 }
 
-type OpenExpense = (id: string, trigger: HTMLElement) => void;
-
-function OpenExpenseButton({
-  expense,
-  onOpen,
-  fmt,
-}: {
-  expense: Expense;
-  onOpen: OpenExpense;
-  fmt: RegionalFormat | null;
-}) {
+/**
+ * El alcance de la pantalla, en la cabecera: la sede del selector global o
+ * toda la clínica. Es lo único que acota los gastos (no hay otro selector de
+ * sede en la página).
+ */
+export function ExpensesScope({ locationName }: { locationName: string | null }) {
   return (
-    <button
-      type="button"
-      onClick={(e) => onOpen(expense.id, e.currentTarget)}
-      aria-label={expensesCopy.open(expense.category, sedeCivilDate(expense.invoiceDate, fmt))}
-      className="text-left font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-    >
-      {expense.category}
-    </button>
-  );
-}
-
-function ExpenseCard({
-  expense,
-  locationName,
-  onOpen,
-  fmt,
-}: {
-  expense: Expense;
-  locationName: string;
-  onOpen: OpenExpense;
-  fmt: RegionalFormat | null;
-}) {
-  return (
-    <Card className="flex flex-col gap-2 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <OpenExpenseButton expense={expense} onOpen={onOpen} fmt={fmt} />
-          <span className="text-xs text-muted [overflow-wrap:anywhere]">
-            {[expense.supplier, locationName].filter(Boolean).join(' · ')}
-          </span>
-        </div>
-        <span
-          className={cn(
-            'shrink-0 text-right font-medium tabular-nums text-ink',
-            expense.status === 'VOIDED' && 'text-muted line-through',
-          )}
-        >
-          {sedeMoney(expense.amount, expense.currency, fmt)}
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted tabular-nums">
-        <span>
-          {sedeCivilDate(expense.invoiceDate, fmt)} · {expensesCopy.colPaid}{' '}
-          {sedeMoney(expense.paidAmount, expense.currency, fmt)}
-        </span>
-        <ExpenseStatusBadges expense={expense} />
-      </div>
-    </Card>
+    <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-sunken px-3 py-1.5 text-sm text-muted">
+      <Building2 aria-hidden className="size-4 shrink-0" />
+      <span>{locationName ? expensesCopy.scopeLocation(locationName) : expensesCopy.scopeAll}</span>
+    </p>
   );
 }

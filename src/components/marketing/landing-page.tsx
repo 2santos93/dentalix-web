@@ -9,12 +9,15 @@ import {
   Grid3x3,
   Palette,
   ShieldCheck,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { Logo } from '@/components/ui/logo';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app until
-// next-intl wiring lands.
+// next-intl wiring lands. Solo afirmaciones que el producto cumple hoy: sin
+// testimonios, precios, cifras de clientes ni un país concreto.
 const copy = {
   brand: 'Dentalix',
   login: 'Iniciar sesión',
@@ -23,8 +26,7 @@ const copy = {
   heroTitle: 'El software que mantiene tu clínica dental al día.',
   heroSubtitle:
     'Pacientes, historia clínica, odontograma interactivo y agenda — en una plataforma segura, multi-clínica y con tu propia marca.',
-  heroNote: 'White-label por clínica · multi-moneda · listo en minutos.',
-  heroImageAlt: 'Consultorio odontológico moderno',
+  heroNote: 'Con la marca de tu clínica · varias monedas · listo en minutos.',
   featuresTitle: 'Todo el núcleo clínico, en un solo lugar',
   featuresSubtitle:
     'Las herramientas del día a día de tu consultorio, diseñadas para el trabajo real de la clínica.',
@@ -34,7 +36,13 @@ const copy = {
   footerTagline: 'Tu clínica, siempre al día.',
 };
 
-const FEATURES = [
+interface Point {
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+}
+
+const FEATURES: readonly Point[] = [
   {
     icon: Grid3x3,
     title: 'Odontograma interactivo',
@@ -48,59 +56,69 @@ const FEATURES = [
   {
     icon: CalendarDays,
     title: 'Agenda por profesional',
-    desc: 'Citas por doctor y por rango, con estados y control de choques de horario. Tu día, claro de un vistazo.',
+    desc: 'Citas por profesional y por rango, con estados y control de choques de horario. Tu día, claro de un vistazo.',
   },
   {
     icon: Coins,
     title: 'Multi-moneda',
     desc: 'Cada pago guarda su moneda y la tasa del día. Mira tus ventas del mes en la moneda que elijas, convertidas por fecha.',
   },
-] as const;
+];
 
-const DIFFERENTIATORS = [
+const DIFFERENTIATORS: readonly Point[] = [
   {
     icon: Palette,
-    title: 'White-label',
-    desc: 'Tu logo, tu color y tu subdominio. La plataforma se ve como tu marca, no como la nuestra.',
+    title: 'Con tu marca',
+    desc: 'Tu logo, tu color y tu propia dirección web. La plataforma se ve como tu clínica, no como la nuestra.',
   },
   {
     icon: Building2,
     title: 'Multi-clínica seguro',
-    desc: 'Aislamiento total entre clínicas a nivel de base de datos (RLS). Un mismo equipo, varias sedes, sin cruces.',
+    desc: 'Cada clínica aislada de las demás en la propia base de datos. Un mismo equipo, varias sedes, sin cruces.',
   },
   {
     icon: ShieldCheck,
     title: 'Seguridad y trazabilidad',
     desc: 'Registro de auditoría de accesos y cambios, historia clínica inmutable, consentimientos versionados y conexión cifrada.',
   },
-] as const;
+];
 
 /**
- * Landing pública de Dentalix (apex host). Reutiliza los tokens del design
- * system, el `ThemeToggle` y el `Button`; responsive y AA en light/dark. La
- * decisión de mostrarla (vs. redirigir a /login en hosts de tenant) vive en
- * el server component de la raíz.
+ * Lista de puntos con regla fina encima de cada uno — no tarjetas iguales de
+ * icono + título + texto (DESIGN.md → Don'ts). El icono va en tinta apagada:
+ * el acento queda para la acción principal.
+ */
+function PointList({ points, columns }: { points: readonly Point[]; columns: string }) {
+  return (
+    <ul className={`grid gap-x-8 gap-y-8 ${columns}`}>
+      {points.map(({ icon: Icon, title, desc }) => (
+        <li key={title} className="flex flex-col border-t border-border pt-5">
+          <Icon aria-hidden className="mb-3 size-5 text-muted" />
+          <h3 className="t-title text-ink">{title}</h3>
+          <p className="mt-1 text-muted">{desc}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Landing pública de Dentalix (apex host). Tipográfica y plana, en los tokens
+ * del design system: sin fotografía, sin bloques de acento, una acción
+ * principal por pantalla. La decisión de mostrarla (vs. redirigir a /login en
+ * hosts de tenant) vive en el server component de la raíz.
  */
 export function LandingPage() {
   const year = new Date().getFullYear();
 
   return (
-    <div className="flex min-h-screen flex-col bg-bg text-ink">
-      {/* Nav */}
-      <header className="sticky top-0 z-10 border-b border-border/60 bg-bg/80 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-          <span className="flex items-center gap-2 text-base font-semibold">
-            <span
-              aria-hidden
-              className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-base"
-            >
-              🦷
-            </span>
-            {copy.brand}
-          </span>
+    <div className="flex min-h-dvh flex-col bg-canvas text-ink">
+      <header className="sticky top-0 z-10 border-b border-border-subtle bg-canvas">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+          <Logo size={28} withWordmark className="text-base" />
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Button asChild variant="secondary" size="sm">
+            <Button asChild variant="secondary">
               <Link href="/login">{copy.login}</Link>
             </Button>
           </div>
@@ -108,132 +126,90 @@ export function LandingPage() {
       </header>
 
       <main className="flex-1">
-        {/* Hero */}
-        <section className="mx-auto grid w-full max-w-6xl items-center gap-12 px-6 py-16 md:py-24 lg:grid-cols-2">
-          <div className="flex flex-col items-start">
-            <span className="mb-4 inline-flex items-center rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-primary">
-              {copy.heroEyebrow}
-            </span>
-            <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
+        {/* Hero: tipográfico, una sola columna a la medida de lectura. */}
+        <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 md:py-24">
+          <div className="flex max-w-3xl flex-col items-start">
+            <p className="t-label mb-4 text-muted">{copy.heroEyebrow}</p>
+            <h1 className="t-display text-ink sm:text-4xl sm:leading-tight lg:text-5xl">
               {copy.heroTitle}
             </h1>
             <p className="mt-6 max-w-xl text-lg text-muted">{copy.heroSubtitle}</p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
               <Button asChild size="lg">
                 <Link href="/register">
                   {copy.register}
-                  <ArrowRight />
+                  <ArrowRight aria-hidden />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="secondary">
                 <Link href="/login">{copy.login}</Link>
               </Button>
             </div>
-            <p className="mt-5 text-sm text-muted">{copy.heroNote}</p>
-          </div>
-
-          {/* Imagen con degradado de marca (oculta en móvil pequeño). */}
-          <div className="relative hidden aspect-[4/3] overflow-hidden rounded-2xl border border-border shadow-sm md:block">
-            {/* eslint-disable-next-line @next/next/no-img-element -- static asset, object-cover fill; next/image adds no value here */}
-            <img
-              src="/auth/hero-4.jpg"
-              alt={copy.heroImageAlt}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div
-              aria-hidden
-              className="absolute inset-0 bg-gradient-to-tr from-primary/40 via-accent/10 to-transparent"
-            />
+            <p className="t-caption mt-5">{copy.heroNote}</p>
           </div>
         </section>
 
-        {/* Features */}
-        <section className="mx-auto w-full max-w-6xl px-6 py-16 md:py-20">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              {copy.featuresTitle}
-            </h2>
-            <p className="mt-4 text-muted">{copy.featuresSubtitle}</p>
-          </div>
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {FEATURES.map(({ icon: Icon, title, desc }) => (
-              <div
-                key={title}
-                className="flex flex-col rounded-xl border border-border bg-surface p-6"
-              >
-                <span
-                  aria-hidden
-                  className="mb-4 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary"
-                >
-                  <Icon className="size-5" />
-                </span>
-                <h3 className="text-base font-semibold">{title}</h3>
-                <p className="mt-2 text-sm text-muted">{desc}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Por qué Dentalix */}
-        <section className="border-y border-border bg-surface">
-          <div className="mx-auto w-full max-w-6xl px-6 py-16 md:py-20">
-            <h2 className="text-center text-3xl font-semibold tracking-tight sm:text-4xl">
-              {copy.whyTitle}
-            </h2>
-            <div className="mt-12 grid gap-8 md:grid-cols-3">
-              {DIFFERENTIATORS.map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex flex-col items-start">
-                  <span
-                    aria-hidden
-                    className="mb-4 flex size-11 items-center justify-center rounded-xl bg-accent/10 text-accent"
-                  >
-                    <Icon className="size-5" />
-                  </span>
-                  <h3 className="text-lg font-semibold">{title}</h3>
-                  <p className="mt-2 text-sm text-muted">{desc}</p>
-                </div>
-              ))}
+        <section className="border-t border-border-subtle">
+          <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 md:py-20">
+            <div className="max-w-2xl">
+              <h2 className="t-display text-ink">{copy.featuresTitle}</h2>
+              <p className="mt-2 text-muted">{copy.featuresSubtitle}</p>
+            </div>
+            <div className="mt-10">
+              <PointList points={FEATURES} columns="sm:grid-cols-2 lg:grid-cols-4" />
             </div>
           </div>
         </section>
 
-        {/* CTA de cierre */}
-        <section className="mx-auto w-full max-w-6xl px-6 py-16 md:py-24">
-          <div className="flex flex-col items-center rounded-3xl bg-primary px-6 py-14 text-center text-primary-foreground">
-            <h2 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
-              {copy.ctaTitle}
-            </h2>
-            <p className="mt-4 max-w-xl text-primary-foreground/80">{copy.ctaSubtitle}</p>
-            <Button asChild size="lg" variant="secondary" className="mt-8">
+        <section className="border-t border-border-subtle bg-surface">
+          <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 md:py-20">
+            <h2 className="t-display text-ink">{copy.whyTitle}</h2>
+            <div className="mt-10">
+              <PointList points={DIFFERENTIATORS} columns="md:grid-cols-3" />
+            </div>
+          </div>
+        </section>
+
+        {/* Cierre: en su propia pantalla, la única acción principal a la vista. */}
+        <section className="border-t border-border-subtle">
+          <div className="mx-auto flex w-full max-w-6xl flex-col items-start gap-6 px-4 py-16 sm:px-6 md:flex-row md:items-end md:justify-between md:py-24">
+            <div className="max-w-2xl">
+              <h2 className="t-display text-ink">{copy.ctaTitle}</h2>
+              <p className="mt-2 text-muted">{copy.ctaSubtitle}</p>
+            </div>
+            <Button asChild size="lg" className="w-full sm:w-auto">
               <Link href="/register">
                 {copy.register}
-                <ArrowRight />
+                <ArrowRight aria-hidden />
               </Link>
             </Button>
           </div>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
-          <div className="flex items-center gap-2 text-sm text-muted">
-            <span aria-hidden className="text-base">
-              🦷
-            </span>
+      <footer className="border-t border-border-subtle">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row sm:px-6">
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted">
+            <Logo size={20} decorative />
             <span className="font-semibold text-ink">{copy.brand}</span>
             <span>· {copy.footerTagline}</span>
           </div>
           <div className="flex items-center gap-6 text-sm">
-            <Link href="/login" className="text-muted hover:text-ink">
+            <Link
+              href="/login"
+              className="inline-flex min-h-10 items-center text-muted hover:text-ink pointer-coarse:min-h-11"
+            >
               {copy.login}
             </Link>
-            <Link href="/register" className="font-medium text-primary hover:underline">
+            <Link
+              href="/register"
+              className="inline-flex min-h-10 items-center font-medium text-primary-text hover:underline pointer-coarse:min-h-11"
+            >
               {copy.register}
             </Link>
           </div>
         </div>
-        <p className="pb-6 text-center text-xs text-muted">
+        <p className="t-caption pb-6 text-center">
           © {year} {copy.brand}
         </p>
       </footer>

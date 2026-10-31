@@ -1,4 +1,4 @@
-import type { BadgeProps } from '@/components/ui/badge';
+import { statusLabels } from '@/lib/status/tones';
 import type { PaymentMethod } from './payments-api';
 
 /**
@@ -13,18 +13,5 @@ export const PAYMENT_METHOD_OPTIONS: readonly PaymentMethod[] = [
   'OTHER',
 ];
 
-export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  CASH: 'Efectivo',
-  CARD: 'Tarjeta',
-  TRANSFER: 'Transferencia',
-  OTHER: 'Otro',
-};
-
-// Tokens semánticos: efectivo es el camino feliz del "dinero en mano"
-// (success); el resto son distinciones neutras, no estados.
-export const PAYMENT_METHOD_BADGE_VARIANT: Record<PaymentMethod, BadgeProps['variant']> = {
-  CASH: 'success',
-  CARD: 'default',
-  TRANSFER: 'muted',
-  OTHER: 'muted',
-};
+/** Etiquetas; el chip es `StatusBadge kind="paymentMethod"` (neutro: un método no es un estado). */
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = statusLabels('paymentMethod');

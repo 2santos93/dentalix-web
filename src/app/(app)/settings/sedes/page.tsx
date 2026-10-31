@@ -3,21 +3,17 @@ import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { LocationsList } from '@/components/locations/locations-list';
 import { RegionalReviewNotice } from '@/components/locations/regional-review-notice';
-import { LocationHealthRegistrationSettings } from '@/components/locations/location-health-registration-settings';
-import { LocationPhoneSettings } from '@/components/locations/location-phone-settings';
-import { CancellationPolicySettings } from '@/components/locations/cancellation-policy-settings';
 
 const copy = {
   title: 'Sedes',
   // DX-279: la política de cancelación solo la ve ADMIN; al resto no se le anuncia.
   description: (isAdmin: boolean) =>
     isAdmin
-      ? 'Moneda, zona horaria y formato de cada sede, sus datos legales y su política de cancelación.'
-      : 'Moneda, zona horaria y formato de cada sede y sus datos legales.',
+      ? 'Cada sede con su moneda, zona horaria y formato. Ábrela para sus datos legales y su política de cancelación.'
+      : 'Cada sede con su moneda, zona horaria y formato. Ábrela para sus datos legales.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -31,10 +27,12 @@ export default function LocationSettingsPage() {
 }
 
 /**
- * Las sedes (G1: alta y edición con moneda, zona y formato; DX-319: nº de
- * registro sanitario; DX-222: teléfono). Todos los roles las leen; solo ADMIN
- * las cambia. `?sede=<id>` abre el modal de esa sede (enlace «Configurar
- * sede» de `SedeConfigError`).
+ * Las sedes (G1: alta y edición con moneda, zona y formato). B6: esta página es
+ * la LISTA; cada sede abre su ficha (`/settings/sedes/[id]`) con su registro
+ * sanitario, su política de cancelación y su calendario — antes eran cuatro
+ * secciones que repetían todas las sedes. Todos los roles las leen; solo ADMIN
+ * las cambia. `?sede=<id>` abre el modal de esa sede (enlace «Configurar sede»
+ * de `SedeConfigError`).
  */
 function LocationSettingsRoute() {
   const router = useRouter();
@@ -58,30 +56,17 @@ function LocationSettingsRoute() {
   const isAdmin = getTokenRole(accessToken) === 'ADMIN';
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description(isAdmin)} />
-      <div className="flex flex-col gap-10">
-        {/* Aviso D5 (solo ADMIN) pegado a la lista que lo resuelve. */}
-        <div className="flex flex-col gap-4">
-          <RegionalReviewNotice token={accessToken} showReviewLink={false} />
-          <LocationsList
-            token={accessToken}
-            canEdit={isAdmin}
-            initialEditId={editId}
-            onInitialEditConsumed={() => router.replace('/settings/sedes')}
-          />
-        </div>
-        <LocationHealthRegistrationSettings
+    <SettingsPage title={copy.title} description={copy.description(isAdmin)} scope="sede" width="wide">
+      {/* Aviso D5 (solo ADMIN) pegado a la lista que lo resuelve. */}
+      <div className="flex flex-col gap-4">
+        <RegionalReviewNotice token={accessToken} showReviewLink={false} />
+        <LocationsList
           token={accessToken}
           canEdit={isAdmin}
+          initialEditId={editId}
+          onInitialEditConsumed={() => router.replace('/settings/sedes')}
         />
-        <LocationPhoneSettings
-          token={accessToken}
-          canEdit={isAdmin}
-        />
-        {/* DX-279: solo ADMIN (la API responde 403 al resto). */}
-        {isAdmin ? <CancellationPolicySettings token={accessToken} /> : null}
       </div>
-    </>
+    </SettingsPage>
   );
 }

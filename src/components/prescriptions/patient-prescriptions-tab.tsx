@@ -14,7 +14,10 @@ import {
 import { formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { NewPrescriptionModal } from './new-prescription-modal';
@@ -35,7 +38,7 @@ const copy = {
   colMedications: 'Medicamentos',
   colProfessional: 'Profesional',
   colStatus: 'Estado',
-  colActions: 'Acciones',
+  colDocument: 'Documento',
   issued: 'Emitida',
   voided: 'Anulada',
   allergyConfirmed: 'Alergia confirmada',
@@ -45,7 +48,7 @@ const copy = {
   print: 'Ver e imprimir',
   printHint: (when: string) => `receta del ${when} (se abre en otra pestaña)`,
   void: 'Anular',
-  voidHint: (when: string) => `receta del ${when}`,
+  rowLabel: (when: string) => `receta del ${when}`,
   medication: (rx: Prescription['items'][number]) =>
     `${rx.activeIngredient} ${rx.concentration} · ${rx.totalQuantity} ${rx.quantityUnit}`,
 };
@@ -117,9 +120,7 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
   function status(rx: Prescription) {
     return (
       <div className="flex flex-wrap gap-1">
-        <Badge variant={rx.status === 'VOIDED' ? 'danger' : 'success'}>
-          {rx.status === 'VOIDED' ? copy.voided : copy.issued}
-        </Badge>
+        <StatusBadge kind="prescription" status={rx.status} />
         {rx.allergyOverride ? <Badge variant="warning">{copy.allergyConfirmed}</Badge> : null}
       </div>
     );
@@ -127,16 +128,18 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
 
   function medications(rx: Prescription) {
     const voided = rx.status === 'VOIDED';
+    // `data-status`: la fila de la tabla no admite atributos propios; el e2e
+    // localiza la receta anulada por aquí.
     return (
-      <>
+      <div data-status={rx.status} className="min-w-0">
         <ul className={cn('flex flex-col gap-0.5', voided && 'text-muted line-through')}>
           {rx.items.map((item) => (
             <li key={item.id}>{copy.medication(item)}</li>
           ))}
         </ul>
         {(rx.safetyAlerts?.length || rx.allergyMatches.length || rx.safetyOverrideReason || rx.patientWeightKg !== null) ? (
-          <details className="mt-2 min-w-0 text-xs text-ink [overflow-wrap:anywhere]">
-            <summary className="cursor-pointer font-medium">Detalles de seguridad</summary>
+          <details className="t-caption mt-2 min-w-0 text-ink [overflow-wrap:anywhere]">
+            <summary className="flex min-h-11 cursor-pointer items-center font-medium sm:min-h-0">Detalles de seguridad</summary>
             {rx.patientWeightKg !== null ? <p>Peso: {rx.patientWeightKg} kg</p> : null}
             {rx.safetyRulesVersion ? <p>Reglas: {rx.safetyRulesVersion}</p> : null}
             {rx.safetyAlerts?.map((alert, i) => (
@@ -149,7 +152,7 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
           </details>
         ) : null}
         {voided ? (
-          <p className="mt-1 text-xs text-ink">
+          <p className="t-caption mt-1 text-ink">
             {copy.voidedDetail(
               formatDateTime(rx.voidedAt),
               rx.voidedByName ?? copy.unknownUser,
@@ -157,51 +160,76 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
             )}
           </p>
         ) : null}
-      </>
-    );
-  }
-
-  function actions(rx: Prescription) {
-    const when = formatDateTime(rx.issuedAt);
-    return (
-      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <Button asChild variant="secondary" size="sm" className="w-full sm:w-auto">
-          <a href={prescriptionPrintHref(patientId, rx.id)} target="_blank" rel="noopener">
-            <Printer aria-hidden />
-            {copy.print}
-            <span className="sr-only"> · {copy.printHint(when)}</span>
-          </a>
-        </Button>
-        {canVoidPrescription(rx, { role, userId }) ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full sm:w-auto"
-            onClick={() => setVoiding(rx)}
-          >
-            {copy.void}
-            <span className="sr-only"> · {copy.voidHint(when)}</span>
-          </Button>
-        ) : null}
       </div>
     );
   }
+
+  function printLink(rx: Prescription) {
+    return (
+      <Button asChild variant="secondary" size="sm">
+        <a href={prescriptionPrintHref(patientId, rx.id)} target="_blank" rel="noopener">
+          <Printer aria-hidden />
+          {copy.print}
+          <span className="sr-only"> · {copy.printHint(formatDateTime(rx.issuedAt))}</span>
+        </a>
+      </Button>
+    );
+  }
+
+  const columns: DataListColumn<Prescription>[] = [
+    {
+      id: 'issued',
+      header: copy.colIssued,
+      mobile: 'primary',
+      cell: (rx) => <span className="t-data">{formatDateTime(rx.issuedAt)}</span>,
+      cellClassName: 'align-top whitespace-nowrap',
+    },
+    {
+      id: 'medications',
+      header: copy.colMedications,
+      // En la tarjeta del teléfono, en su propia línea: es lo que se viene a leer.
+      mobileCell: (rx) => <span className="block text-ink">{medications(rx)}</span>,
+      cell: medications,
+      cellClassName: 'align-top',
+    },
+    {
+      id: 'professional',
+      header: copy.colProfessional,
+      cell: (rx) => <span className="text-muted">{rx.professionalName}</span>,
+      mobileCell: (rx) => rx.professionalName,
+      cellClassName: 'align-top',
+    },
+    {
+      id: 'status',
+      header: copy.colStatus,
+      mobile: 'trailing',
+      cell: status,
+      cellClassName: 'align-top',
+    },
+    {
+      id: 'document',
+      header: <span className="sr-only">{copy.colDocument}</span>,
+      mobileCell: (rx) => <span className="mt-2 block">{printLink(rx)}</span>,
+      cell: printLink,
+      align: 'end',
+      cellClassName: 'align-top',
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-ink">{copy.heading}</h2>
-          <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
-        </div>
-        {canIssue ? (
-          <Button type="button" onClick={openNew} className="w-full sm:w-auto">
-            <Plus aria-hidden />
-            {copy.newPrescription}
-          </Button>
-        ) : null}
-      </div>
+      <SectionHeader
+        title={copy.heading}
+        description={<span className="block max-w-[68ch]">{copy.support}</span>}
+        actions={
+          canIssue ? (
+            <Button type="button" onClick={openNew} className="w-full sm:w-auto">
+              <Plus aria-hidden />
+              {copy.newPrescription}
+            </Button>
+          ) : null
+        }
+      />
 
       <AsyncSection
         loading={loading}
@@ -213,63 +241,19 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
         emptyIcon={<Pill aria-hidden />}
         skeleton={<TabSkeleton />}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colIssued}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colMedications}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colProfessional}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {prescriptions.map((rx) => (
-              <tr
-                key={rx.id}
-                data-status={rx.status}
-                className="border-b border-hairline align-top last:border-0"
-              >
-                <td className="px-4 py-3 tabular-nums">{formatDateTime(rx.issuedAt)}</td>
-                <td className="px-4 py-3">{medications(rx)}</td>
-                <td className="px-4 py-3 text-muted">{rx.professionalName}</td>
-                <td className="px-4 py-3">{status(rx)}</td>
-                <td className="px-4 py-3">{actions(rx)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {prescriptions.map((rx) => (
-            <li
-              key={rx.id}
-              data-status={rx.status}
-              className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="tabular-nums text-muted">{formatDateTime(rx.issuedAt)}</p>
-                {status(rx)}
-              </div>
-              {medications(rx)}
-              <p className="text-muted">{rx.professionalName}</p>
-              {actions(rx)}
-            </li>
-          ))}
-        </ul>
+        {/* Sin «Editar» ni «Borrar»: la receta emitida es inmutable; solo se anula. */}
+        <DataList
+          label={copy.tableLabel}
+          rows={prescriptions}
+          columns={columns}
+          getRowKey={(rx) => rx.id}
+          getRowLabel={(rx) => copy.rowLabel(formatDateTime(rx.issuedAt))}
+          rowActions={(rx) =>
+            canVoidPrescription(rx, { role, userId })
+              ? [{ label: copy.void, onSelect: () => setVoiding(rx), destructive: true }]
+              : []
+          }
+        />
       </AsyncSection>
 
       {canIssue ? (

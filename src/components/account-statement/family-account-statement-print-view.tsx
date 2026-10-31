@@ -77,7 +77,7 @@ export function FamilyAccountStatementPrintView({
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=account-statement`;
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-surface-2 print:bg-white">
+    <div className="flex min-h-full flex-1 flex-col bg-surface-sunken print:bg-white">
       {data ? <title>{copy.documentTitle(`${data.payer.firstName} ${data.payer.lastName}`)}</title> : null}
       <div
         role="toolbar"
@@ -97,7 +97,7 @@ export function FamilyAccountStatementPrintView({
       </div>
       <main className="flex-1 sm:px-4 sm:py-8 print:p-0">
         {data ? (
-          <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
+          <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
             <FamilyAccountStatementDocument statement={data} />
           </div>
         ) : forbidden ? (

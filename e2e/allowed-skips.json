@@ -38,7 +38,7 @@
     },
     {
       "file": "e2e/medical-alerts.spec.ts",
-      "title": "DX-264 Mes: tres alertas, +1 más, teclado y toque a 390/1440 claro y oscuro",
+      "title": "DX-264 Mes: solo la marca de la alerta crítica, +1 más y el panel del día a 1440; puntos y lista del día a 390 (claro y oscuro)",
       "annotation": "Requiere la BD e2e aislada para fechar la anamnesis",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se puede fechar la anamnesis en el pasado."

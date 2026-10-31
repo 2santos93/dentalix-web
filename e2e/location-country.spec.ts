@@ -5,7 +5,7 @@ import { apiLogin, apiPost, registerClinicViaApi, type ApiSession } from './supp
 import { loginAs, waitForHydratedForm } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
 import { registrationTokenFor } from './support/mail';
-import { chooseCountry, E2E_BROWSER_LOCALE, type RegionalSettings } from './support/regional';
+import { chooseCountry, E2E_BROWSER_LOCALE, pickRegional, type RegionalSettings } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -122,17 +122,20 @@ test('registering a clinic in a country outside the old pair', async ({ page, re
 
   await page.goto(`${regOrigin}/register`);
   await waitForHydratedForm(page);
+  // Paso 1 (la clínica y su sede).
   await page.getByLabel('Nombre de la clínica').fill(`Clínica Caracas ${suffix}`);
-  await page.getByLabel('Subdominio').fill(sub);
+  await page.getByLabel('Dirección web').fill(sub);
+  await searchCountry(page, 'venez', 'Venezuela');
+  await page.getByLabel('Moneda', { exact: true }).selectOption(VENEZUELA.currency);
+  await pickRegional(page.getByLabel('Zona horaria', { exact: true }), VENEZUELA.timeZone);
+  await pickRegional(page.getByLabel('Formato regional', { exact: true }), VENEZUELA.locale);
+  await page.getByRole('radio', { name: '12 h', exact: true }).check();
+  await shoot(page, 'register-country', page.getByRole('group', { name: 'Tu sede' }));
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  // Paso 2 (la cuenta).
   await page.getByLabel('Nombre completo').fill('Andrés Registro');
   await page.getByLabel('Correo electrónico').fill(email);
   await page.getByLabel('Contraseña', { exact: true }).fill(password);
-  await searchCountry(page, 'venez', 'Venezuela');
-  await page.getByLabel('Moneda', { exact: true }).selectOption(VENEZUELA.currency);
-  await page.getByLabel('Zona horaria', { exact: true }).fill(VENEZUELA.timeZone);
-  await page.getByLabel('Formato regional', { exact: true }).fill(VENEZUELA.locale);
-  await page.getByRole('radio', { name: '12 h', exact: true }).check();
-  await shoot(page, 'register-country', page.getByRole('group', { name: 'Tu sede' }));
 
   const sent = page.waitForRequest(
     (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/auth/register'),
@@ -163,8 +166,14 @@ test('registering a clinic in a country outside the old pair', async ({ page, re
   await shoot(page, 'locations-list', page.getByRole('region', { name: 'Sedes de la clínica' }));
 });
 
+// R1: el país se propone primero por la ZONA del navegador si es de un solo
+// país (la de la suite, America/Bogota, propondría Colombia) y, si no, por la
+// región explícita del idioma (DX-312 P1). Estas dos pruebas miran la regla del
+// idioma, así que abren el navegador en una zona que no es de ningún país.
+const NO_COUNTRY_ZONE = 'Etc/UTC';
+
 test.describe('a browser in es-VE', () => {
-  test.use({ locale: 'es-VE' });
+  test.use({ locale: 'es-VE', timezoneId: NO_COUNTRY_ZONE });
 
   test('a browser in es-VE suggests Venezuela with its mark', async ({ page }) => {
     await page.goto(`${tenantOrigin(`pais-ve-${suffix}`)}/register`);
@@ -179,17 +188,29 @@ test.describe('a browser in es-VE', () => {
   });
 });
 
-test('the suite browser suggests no country', async ({ page }) => {
-  await page.goto(`${tenantOrigin(`pais-es-${suffix}`)}/register`);
-  await waitForHydratedForm(page);
-  expect(await page.evaluate(() => [...navigator.languages])).toEqual([E2E_BROWSER_LOCALE]);
-  await expect(countryField(page)).toHaveValue('');
-  await expect(countryField(page)).not.toHaveAccessibleDescription(new RegExp(SUGGESTED));
+test.describe('the suite language in a zone of no country', () => {
+  test.use({ timezoneId: NO_COUNTRY_ZONE });
 
-  await loginAs(page, origin, adminEmail, password);
-  const dialog = await openNewLocation(page);
-  await expect(countryField(dialog)).toHaveValue('');
-  await expect(countryField(dialog)).not.toHaveAccessibleDescription(new RegExp(SUGGESTED));
+  test('the suite browser suggests no country', async ({ page }) => {
+    await page.goto(`${tenantOrigin(`pais-es-${suffix}`)}/register`);
+    await waitForHydratedForm(page);
+    expect(await page.evaluate(() => [...navigator.languages])).toEqual([E2E_BROWSER_LOCALE]);
+    await expect(countryField(page)).toHaveValue('');
+    await expect(countryField(page)).not.toHaveAccessibleDescription(new RegExp(SUGGESTED));
+
+    await loginAs(page, origin, adminEmail, password);
+    const dialog = await openNewLocation(page);
+    await expect(countryField(dialog)).toHaveValue('');
+    await expect(countryField(dialog)).not.toHaveAccessibleDescription(new RegExp(SUGGESTED));
+  });
+});
+
+test('the suite browser, in a zone of a single country, suggests that country', async ({ page }) => {
+  // America/Bogota (playwright.config.ts) es solo de Colombia: R1 lo propone, marcado y editable.
+  await page.goto(`${tenantOrigin(`pais-zona-${suffix}`)}/register`);
+  await waitForHydratedForm(page);
+  await expect(countryField(page)).toHaveValue('Colombia');
+  await expect(countryField(page)).toHaveAccessibleDescription(new RegExp(`^${SUGGESTED}`));
 });
 
 test("a location's phone hint names its default prefix", async ({ page, request }) => {
@@ -232,8 +253,8 @@ test('an admin finds a country by searching and saves the location', async ({ pa
   await list.getByRole('option', { name: 'Côte d’Ivoire', exact: true }).click();
   await expect(field).toHaveValue('Côte d’Ivoire');
   await dialog.getByLabel('Moneda', { exact: true }).selectOption('XOF');
-  await dialog.getByLabel('Zona horaria', { exact: true }).fill('Africa/Abidjan');
-  await dialog.getByLabel('Formato regional', { exact: true }).fill('fr-CI');
+  await pickRegional(dialog.getByLabel('Zona horaria', { exact: true }), 'Africa/Abidjan');
+  await pickRegional(dialog.getByLabel('Formato regional', { exact: true }), 'fr-CI');
   await dialog.getByRole('radio', { name: '24 h', exact: true }).check();
   const created = page.waitForRequest(
     (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/locations'),
@@ -244,12 +265,17 @@ test('an admin finds a country by searching and saves the location', async ({ pa
   await expect(locationRow(page, 'Sede Abiyán')).toContainText('Côte d’Ivoire');
 });
 
-test('the picker lists every country', async ({ page }) => {
-  await loginAs(page, origin, adminEmail, password);
-  const dialog = await openNewLocation(page);
-  const field = countryField(dialog);
-  await expect(field).toHaveValue('');
-  await field.click();
-  await expect(field).toHaveAttribute('aria-expanded', 'true');
-  await expect(dialog.getByRole('listbox', { name: 'Países' }).getByRole('option')).toHaveCount(250);
+// Sin país propuesto (zona sin país, ver arriba): la lista entera, sin filtrar.
+test.describe('the picker in a zone of no country', () => {
+  test.use({ timezoneId: NO_COUNTRY_ZONE });
+
+  test('the picker lists every country', async ({ page }) => {
+    await loginAs(page, origin, adminEmail, password);
+    const dialog = await openNewLocation(page);
+    const field = countryField(dialog);
+    await expect(field).toHaveValue('');
+    await field.click();
+    await expect(field).toHaveAttribute('aria-expanded', 'true');
+    await expect(dialog.getByRole('listbox', { name: 'Países' }).getByRole('option')).toHaveCount(250);
+  });
 });

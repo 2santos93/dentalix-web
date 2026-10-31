@@ -11,8 +11,10 @@ import {
 } from '@/lib/postop/postop-api';
 import { formatDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
+import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const copy = {
@@ -25,7 +27,7 @@ const copy = {
   colInstructions: 'Indicaciones',
   colChannel: 'Canal',
   colBy: 'Entregó',
-  colActions: 'Acciones',
+  colDocument: 'Documento',
   version: (code: string, version: number) => `${code} · v${version}`,
   channel: {
     PRINT: 'Impresa',
@@ -97,7 +99,7 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
 
   function printLink(delivery: PostOpDeliverySummary) {
     return (
-      <Button asChild variant="secondary" size="sm" className="min-h-11 w-full sm:w-auto md:min-h-0">
+      <Button asChild variant="secondary" size="sm" className="w-full sm:w-auto">
         <a href={postOpPrintHref(patientId, delivery.id)} target="_blank" rel="noopener">
           <Printer aria-hidden />
           {copy.print}
@@ -107,86 +109,80 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
     );
   }
 
+  const version = (d: PostOpDeliverySummary) => copy.version(d.templateCode, d.templateVersion);
+
+  const columns: DataListColumn<PostOpDeliverySummary>[] = [
+    {
+      id: 'date',
+      header: copy.colDate,
+      mobile: 'trailing',
+      cell: (d) => <span className="t-data">{formatDate(d.deliveredAt)}</span>,
+    },
+    {
+      id: 'instructions',
+      header: copy.colInstructions,
+      mobile: 'primary',
+      cell: (d) => (
+        <span className="flex min-w-0 flex-col">
+          <span className="break-words font-medium">{d.templateTitle}</span>
+          <span className="t-caption t-data text-muted">{version(d)}</span>
+        </span>
+      ),
+      mobileCell: (d) => d.templateTitle,
+    },
+    {
+      id: 'channel',
+      header: copy.colChannel,
+      cell: (d) => (
+        <span className="flex flex-wrap items-center gap-2">
+          <span>{copy.channel[d.channel]}</span>
+          <OpenedBadge at={d.firstOpenedAt} />
+        </span>
+      ),
+      // En la tarjeta, la versión va con el canal (en la tabla, bajo el título).
+      mobileCell: (d) => (
+        <>
+          <span>{version(d)}</span> · {copy.channel[d.channel]} <OpenedBadge at={d.firstOpenedAt} />
+        </>
+      ),
+    },
+    {
+      id: 'by',
+      header: copy.colBy,
+      cell: (d) => <span className="text-muted">{d.deliveredByName}</span>,
+      mobileCell: (d) => d.deliveredByName,
+    },
+    {
+      id: 'document',
+      header: <span className="sr-only">{copy.colDocument}</span>,
+      align: 'end',
+      cell: printLink,
+      mobileCell: (d) => <span className="mt-2 block">{printLink(d)}</span>,
+    },
+  ];
+
   return (
     <AsyncSection
       loading={loading}
       error={error}
       onRetry={() => setReloadKey((k) => k + 1)}
-      isEmpty={deliveries.length === 0}
-      emptyTitle={copy.empty}
-      emptyDescription={copy.emptyHint}
-      emptyIcon={<ClipboardList aria-hidden />}
       skeleton={<ListSkeleton />}
     >
-      <table
-        aria-label={copy.tableLabel}
-        className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-      >
-        <thead>
-          <tr className="border-b border-border bg-surface-2 text-left">
-            <th scope="col" className="px-4 py-3 font-medium text-muted">
-              {copy.colDate}
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium text-muted">
-              {copy.colInstructions}
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium text-muted">
-              {copy.colChannel}
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium text-muted">
-              {copy.colBy}
-            </th>
-            <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-              <span className="sr-only">{copy.colActions}</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {deliveries.map((delivery) => (
-            <tr key={delivery.id} className="border-b border-hairline last:border-0">
-              <td className="px-4 py-3 tabular-nums">{formatDate(delivery.deliveredAt)}</td>
-              <td className="px-4 py-3">
-                <span className="font-medium">{delivery.templateTitle}</span>
-                <span className="block text-xs text-muted tabular-nums">
-                  {copy.version(delivery.templateCode, delivery.templateVersion)}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span>{copy.channel[delivery.channel]}</span>
-                  <OpenedBadge at={delivery.firstOpenedAt} />
-                </div>
-              </td>
-              <td className="px-4 py-3 text-muted">{delivery.deliveredByName}</td>
-              <td className="px-4 py-3 text-right">{printLink(delivery)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-        {deliveries.map((delivery) => (
-          <li
-            key={delivery.id}
-            className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="break-words font-medium">{delivery.templateTitle}</p>
-                <p className="text-xs text-muted tabular-nums">
-                  {copy.version(delivery.templateCode, delivery.templateVersion)}
-                </p>
-              </div>
-              <OpenedBadge at={delivery.firstOpenedAt} />
-            </div>
-            <p className="text-muted">
-              <span className="tabular-nums">{formatDate(delivery.deliveredAt)}</span> ·{' '}
-              {copy.channel[delivery.channel]} · {delivery.deliveredByName}
-            </p>
-            {printLink(delivery)}
-          </li>
-        ))}
-      </ul>
+      {/* Vacío compacto: es un bloque dentro de la historia clínica, no la página. */}
+      <DataList
+        label={copy.tableLabel}
+        rows={deliveries}
+        columns={columns}
+        getRowKey={(d) => d.id}
+        empty={
+          <EmptyState
+            size="inline"
+            title={copy.empty}
+            description={copy.emptyHint}
+            icon={<ClipboardList aria-hidden />}
+          />
+        }
+      />
     </AsyncSection>
   );
 }

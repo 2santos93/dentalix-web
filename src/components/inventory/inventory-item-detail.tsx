@@ -13,32 +13,36 @@ import {
   type InventoryMovement,
   type InventoryMovementType,
 } from '@/lib/inventory/inventory-api';
+import { Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { SectionHeader } from '@/components/ui/section-header';
+import { DescriptionList, DescriptionItem } from '@/components/ui/description-list';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { FormField } from '@/components/shared/form-field';
+import { FormModal } from '@/components/shared/form-modal';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { PageHeader } from '@/components/shared/page-header';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { formatDate } from '@/lib/format/date';
+import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_VARIANT, signedQuantity } from '@/components/inventory/movement-format';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
+  title: 'Detalle del insumo',
+  back: 'Inventario',
   loading: 'Cargando insumo…',
   // Sin "Intenta de nuevo." — `SectionError` trae su propio botón.
   genericLoadError: 'No pudimos cargar el insumo.',
   forbidden: 'No tienes permiso para ver el inventario.',
   stockLabel: 'Stock actual',
-  lowStockBadge: 'Stock bajo',
   minStockLabel: 'Stock mínimo',
   unitLabel: 'Unidad',
   skuLabel: 'SKU',
@@ -46,21 +50,18 @@ const copy = {
   fallback: '—',
   editCta: 'Editar',
   deleteCta: 'Eliminar',
-  cancel: 'Cancelar',
   save: 'Guardar',
-  saving: 'Guardando…',
   nameLabel: 'Nombre',
   genericUpdateError: 'No pudimos actualizar el insumo. Intenta de nuevo.',
-  deleteConfirmPrompt: '¿Eliminar este insumo?',
+  editTitle: 'Editar insumo',
+  deleteTitle: 'Eliminar insumo',
+  deleteDescription: (name: string) =>
+    `${name} dejará de aparecer en el inventario. Sus movimientos quedan registrados.`,
   deleteConfirmYes: 'Sí, eliminar',
-  deleting: 'Eliminando…',
   genericDeleteError: 'No pudimos eliminar el insumo. Intenta de nuevo.',
   // Movement form
   movementHeading: 'Registrar movimiento',
   typeLabel: 'Tipo',
-  typeIn: 'Entrada',
-  typeOut: 'Salida',
-  typeAdjustment: 'Ajuste',
   quantityLabel: 'Cantidad',
   reasonLabel: 'Motivo (opcional)',
   record: 'Registrar',
@@ -78,25 +79,22 @@ const copy = {
   colReason: 'Motivo',
 };
 
-const MOVEMENT_TYPE_LABEL: Record<InventoryMovementType, string> = {
-  IN: copy.typeIn,
-  OUT: copy.typeOut,
-  ADJUSTMENT: copy.typeAdjustment,
-};
-
-const MOVEMENT_TYPE_VARIANT: Record<InventoryMovementType, 'success' | 'danger' | 'warning'> = {
-  IN: 'success',
-  OUT: 'danger',
-  ADJUSTMENT: 'warning',
-};
-
-/** Cantidad con signo para el ledger: IN suma, OUT resta, ADJUSTMENT lleva su propio signo. */
-function signedQuantity(m: InventoryMovement): string {
-  if (m.type === 'IN') return `+${m.quantity}`;
-  if (m.type === 'OUT') return `-${m.quantity}`;
-  // ADJUSTMENT: el backend guarda la cantidad con su propio signo → tal cual.
-  return `${m.quantity}`;
-}
+const LEDGER_COLUMNS: DataListColumn<InventoryMovement>[] = [
+  { id: 'date', header: copy.colDate, cell: (m) => <span className="tabular-nums">{formatDate(m.occurredAt)}</span> },
+  {
+    id: 'type',
+    header: copy.colType,
+    mobile: 'primary',
+    cell: (m) => <Badge variant={MOVEMENT_TYPE_VARIANT[m.type]}>{MOVEMENT_TYPE_LABELS[m.type]}</Badge>,
+  },
+  { id: 'quantity', header: copy.colQuantity, numeric: true, mobile: 'trailing', cell: (m) => signedQuantity(m) },
+  {
+    id: 'reason',
+    header: copy.colReason,
+    cell: (m) => <span className="text-muted">{m.reason ?? copy.fallback}</span>,
+    mobileCell: (m) => m.reason ?? null,
+  },
+];
 
 interface InventoryItemDetailProps {
   token: string;
@@ -136,7 +134,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  // Delete
+  // Delete (ConfirmDialog)
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -259,24 +257,37 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
     }
   }
 
+  const back = { href: '/inventory', label: copy.back };
+
   if (loading) {
     return (
-      <p role="status" className="text-sm text-muted">
-        {copy.loading}
-      </p>
+      <>
+        <PageHeader title={copy.title} back={back} />
+        <p role="status" className="text-sm text-muted">
+          {copy.loading}
+        </p>
+      </>
     );
   }
 
   if (forbidden) {
     return (
-      <p role="status" className="text-sm text-muted">
-        {copy.forbidden}
-      </p>
+      <>
+        <PageHeader title={copy.title} back={back} />
+        <p role="status" className="text-sm text-muted">
+          {copy.forbidden}
+        </p>
+      </>
     );
   }
 
   if (loadError) {
-    return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
+    return (
+      <>
+        <PageHeader title={copy.title} back={back} />
+        <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />
+      </>
+    );
   }
 
   if (!item) return null;
@@ -288,197 +299,171 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
   );
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Cabecera */}
-      <Card>
-        <CardContent className="flex flex-wrap items-start justify-between gap-4 p-6">
-          <div className="flex flex-col gap-2">
-            <h2 className="text-xl font-semibold tracking-tight text-ink">{item.name}</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted">{copy.stockLabel}:</span>
-              <span className="text-2xl font-semibold tabular-nums text-ink">{item.stock}</span>
-              <span className="text-sm text-muted">{item.unit}</span>
-              {item.lowStock && <Badge variant="warning">{copy.lowStockBadge}</Badge>}
-            </div>
-            <dl className="mt-1 grid gap-x-8 gap-y-1 text-sm sm:grid-cols-2">
-              <div className="flex gap-2">
-                <dt className="text-muted">{copy.minStockLabel}:</dt>
-                <dd className="text-ink">{item.minStock}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="text-muted">{copy.skuLabel}:</dt>
-                <dd className="text-ink">{item.sku ?? copy.fallback}</dd>
-              </div>
-              {item.notes ? (
-                <div className="flex gap-2 sm:col-span-2">
-                  <dt className="text-muted">{copy.notesLabel}:</dt>
-                  <dd className="text-ink">{item.notes}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            {confirmingDelete ? (
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <span className="text-xs text-muted">{copy.deleteConfirmPrompt}</span>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  disabled={deleting}
-                  onClick={handleDelete}
-                >
-                  {deleting ? copy.deleting : copy.deleteConfirmYes}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={deleting}
-                  onClick={() => {
-                    setConfirmingDelete(false);
-                    setDeleteError(null);
-                  }}
-                >
-                  {copy.cancel}
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={openEdit}>
-                  {copy.editCta}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setConfirmingDelete(true)}
-                >
-                  {copy.deleteCta}
-                </Button>
-              </div>
-            )}
-            {deleteError && <InlineError>{deleteError}</InlineError>}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Editar item */}
-      {showEdit && (
-        <Card className="max-w-2xl">
-          <CardContent className="p-6">
-            <form onSubmit={handleEditSubmit} aria-label={copy.editCta} className="flex flex-col gap-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField htmlFor="edit-name" label={copy.nameLabel}>
-                  <Input id="edit-name" type="text" required value={eName} onChange={(e) => setEName(e.target.value)} />
-                </FormField>
-                <FormField htmlFor="edit-unit" label={copy.unitLabel}>
-                  <Input id="edit-unit" type="text" required value={eUnit} onChange={(e) => setEUnit(e.target.value)} />
-                </FormField>
-                <FormField htmlFor="edit-sku" label={copy.skuLabel}>
-                  <Input id="edit-sku" type="text" value={eSku} onChange={(e) => setESku(e.target.value)} />
-                </FormField>
-                <FormField htmlFor="edit-min" label={copy.minStockLabel}>
-                  <Input id="edit-min" type="number" step="0.001" min={0} value={eMinStock} onChange={(e) => setEMinStock(e.target.value)} />
-                </FormField>
-              </div>
-              <FormField htmlFor="edit-notes" label={copy.notesLabel}>
-                <Input id="edit-notes" type="text" value={eNotes} onChange={(e) => setENotes(e.target.value)} />
-              </FormField>
-              {editError && <InlineError>{editError}</InlineError>}
-              <div className="flex items-center gap-2">
-                <Button type="submit" disabled={saving}>
-                  {saving ? copy.saving : copy.save}
-                </Button>
-                <Button type="button" variant="outline" disabled={saving} onClick={() => setShowEdit(false)}>
-                  {copy.cancel}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Registrar movimiento */}
-      <Card className="max-w-2xl">
-        <CardContent className="p-6">
-          <h3 className="mb-4 text-base font-semibold text-ink">{copy.movementHeading}</h3>
-          <form onSubmit={handleRecord} aria-label={copy.movementHeading} className="flex flex-col gap-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <FormField htmlFor="movement-type" label={copy.typeLabel}>
-                <select
-                  id="movement-type"
-                  value={mType}
-                  onChange={(e) => setMType(e.target.value as InventoryMovementType)}
-                  className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                >
-                  <option value="IN">{copy.typeIn}</option>
-                  <option value="OUT">{copy.typeOut}</option>
-                  <option value="ADJUSTMENT">{copy.typeAdjustment}</option>
-                </select>
-              </FormField>
-              <FormField htmlFor="movement-qty" label={copy.quantityLabel}>
-                <Input
-                  id="movement-qty"
-                  type="number"
-                  step="0.001"
-                  value={mQty}
-                  onChange={(e) => setMQty(e.target.value)}
-                />
-              </FormField>
-              <FormField htmlFor="movement-reason" label={copy.reasonLabel}>
-                <Input
-                  id="movement-reason"
-                  type="text"
-                  value={mReason}
-                  onChange={(e) => setMReason(e.target.value)}
-                />
-              </FormField>
-            </div>
-            {moveError && <InlineError>{moveError}</InlineError>}
-            <Button type="submit" disabled={recording} className="self-start">
-              {recording ? copy.recording : copy.record}
+    <>
+      {/* La acción primaria de la ficha es «Registrar» (el gesto frecuente);
+          editar y eliminar son secundarias de la cabecera. */}
+      <PageHeader
+        title={item.name}
+        back={back}
+        actions={
+          <>
+            <Button type="button" variant="secondary" onClick={openEdit}>
+              <Pencil /> {copy.editCta}
             </Button>
-          </form>
-        </CardContent>
-      </Card>
+            <Button
+              type="button"
+              variant="destructive-ghost"
+              onClick={() => {
+                setDeleteError(null);
+                setConfirmingDelete(true);
+              }}
+            >
+              <Trash2 /> {copy.deleteCta}
+            </Button>
+          </>
+        }
+      />
 
-      {/* Ledger */}
-      <div className="flex flex-col gap-3">
-        <h3 className="text-base font-semibold text-ink">{copy.ledgerHeading}</h3>
-        {movements.length === 0 ? (
-          <p role="status" className="text-sm text-muted">
-            {copy.ledgerEmpty}
-          </p>
-        ) : (
-          <Card className="overflow-hidden p-0">
-            <Table aria-label={copy.ledgerHeading}>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>{copy.colDate}</TableHead>
-                  <TableHead>{copy.colType}</TableHead>
-                  <TableHead>{copy.colQuantity}</TableHead>
-                  <TableHead>{copy.colReason}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movements.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell>{formatDate(m.occurredAt)}</TableCell>
-                    <TableCell>
-                      <Badge variant={MOVEMENT_TYPE_VARIANT[m.type]}>
-                        {MOVEMENT_TYPE_LABEL[m.type]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="tabular-nums">{signedQuantity(m)}</TableCell>
-                    <TableCell>{m.reason ?? copy.fallback}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+      <div className="flex flex-col gap-8">
+        <DescriptionList columns={3}>
+          <DescriptionItem label={copy.stockLabel} numeric>
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <span>
+                {item.stock ?? copy.fallback} <span className="text-muted">{item.unit}</span>
+              </span>
+              {item.lowStock ? (
+<StatusBadge kind="inventoryStock" status="LOW" />
+              ) : null}
+            </span>
+          </DescriptionItem>
+          <DescriptionItem label={copy.minStockLabel} numeric>
+            {item.minStock} <span className="text-muted">{item.unit}</span>
+          </DescriptionItem>
+          <DescriptionItem label={copy.skuLabel}>
+            {item.sku ? <span className="t-id">{item.sku}</span> : copy.fallback}
+          </DescriptionItem>
+          {item.notes ? (
+            <DescriptionItem label={copy.notesLabel} wide>
+              {item.notes}
+            </DescriptionItem>
+          ) : null}
+        </DescriptionList>
+
+        <section className="flex max-w-2xl flex-col gap-3" aria-labelledby="inventory-movement-heading">
+          <SectionHeader title={copy.movementHeading} titleId="inventory-movement-heading" />
+          <Card className="p-4 sm:p-6">
+            <form onSubmit={handleRecord} aria-label={copy.movementHeading} className="flex flex-col gap-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <FormField htmlFor="movement-type" label={copy.typeLabel}>
+                  <NativeSelect
+                    id="movement-type"
+                    value={mType}
+                    onChange={(e) => setMType(e.target.value as InventoryMovementType)}
+                  >
+                    <option value="IN">{MOVEMENT_TYPE_LABELS.IN}</option>
+                    <option value="OUT">{MOVEMENT_TYPE_LABELS.OUT}</option>
+                    <option value="ADJUSTMENT">{MOVEMENT_TYPE_LABELS.ADJUSTMENT}</option>
+                  </NativeSelect>
+                </FormField>
+                <FormField htmlFor="movement-qty" label={copy.quantityLabel}>
+                  <Input
+                    id="movement-qty"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.001"
+                    value={mQty}
+                    onChange={(e) => setMQty(e.target.value)}
+                  />
+                </FormField>
+                <FormField htmlFor="movement-reason" label={copy.reasonLabel}>
+                  <Input
+                    id="movement-reason"
+                    type="text"
+                    value={mReason}
+                    onChange={(e) => setMReason(e.target.value)}
+                  />
+                </FormField>
+              </div>
+              {moveError && <InlineError>{moveError}</InlineError>}
+              <Button type="submit" disabled={recording} className="max-sm:w-full sm:self-start">
+                {recording ? copy.recording : copy.record}
+              </Button>
+            </form>
           </Card>
-        )}
+        </section>
+
+        <section className="flex flex-col gap-3" aria-labelledby="inventory-ledger-heading">
+          <SectionHeader title={copy.ledgerHeading} titleId="inventory-ledger-heading" />
+          {movements.length === 0 ? (
+            <p role="status" className="text-sm text-muted">
+              {copy.ledgerEmpty}
+            </p>
+          ) : (
+            <DataList
+              label={copy.ledgerHeading}
+              rows={movements}
+              columns={LEDGER_COLUMNS}
+              getRowKey={(m) => m.id}
+            />
+          )}
+        </section>
       </div>
-    </div>
+
+      <FormModal
+        open={showEdit}
+        onOpenChange={(next) => {
+          if (!saving) setShowEdit(next);
+        }}
+        title={copy.editTitle}
+        onSubmit={handleEditSubmit}
+        submitLabel={copy.save}
+        submitting={saving}
+        error={editError}
+        size="lg"
+        touchTargets
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor="edit-name" label={copy.nameLabel}>
+            <Input id="edit-name" type="text" required value={eName} onChange={(e) => setEName(e.target.value)} />
+          </FormField>
+          <FormField htmlFor="edit-unit" label={copy.unitLabel}>
+            <Input id="edit-unit" type="text" required value={eUnit} onChange={(e) => setEUnit(e.target.value)} />
+          </FormField>
+          <FormField htmlFor="edit-sku" label={copy.skuLabel}>
+            <Input id="edit-sku" type="text" value={eSku} onChange={(e) => setESku(e.target.value)} />
+          </FormField>
+          <FormField htmlFor="edit-min" label={copy.minStockLabel}>
+            <Input
+              id="edit-min"
+              type="number"
+              inputMode="decimal"
+              step="0.001"
+              min={0}
+              value={eMinStock}
+              onChange={(e) => setEMinStock(e.target.value)}
+            />
+          </FormField>
+        </div>
+        <FormField htmlFor="edit-notes" label={copy.notesLabel}>
+          <Textarea id="edit-notes" rows={3} autoGrow value={eNotes} onChange={(e) => setENotes(e.target.value)} />
+        </FormField>
+      </FormModal>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={(next) => {
+          if (!next && !deleting) {
+            setConfirmingDelete(false);
+            setDeleteError(null);
+          }
+        }}
+        title={copy.deleteTitle}
+        description={copy.deleteDescription(item.name)}
+        confirmLabel={copy.deleteConfirmYes}
+        confirming={deleting}
+        error={deleteError}
+        onConfirm={handleDelete}
+      />
+    </>
   );
 }

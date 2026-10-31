@@ -1,6 +1,7 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { statusLabels } from '@/lib/status/tones';
 
 type Schemas = components['schemas'];
 
@@ -24,16 +25,11 @@ export function latestBudgetRequest(requests: readonly SignatureRequest[], planI
   return requests.find((r) => r.type === 'BUDGET' && r.treatmentPlanId === planId) ?? null;
 }
 
-/** Estados de la ficha (DX-243): Enviado · Abierto · Bloqueado · Firmado por paciente · Completo. */
-export const SIGNATURE_STATUS_LABELS: Record<SignatureRequestStatus, string> = {
-  SENT: 'Enviado',
-  OPENED: 'Abierto',
-  LOCKED: 'Bloqueado',
-  EXPIRED: 'Caducado',
-  REVOKED: 'Anulado',
-  SIGNED_BY_PATIENT: 'Firmado por paciente',
-  COMPLETE: 'Completo',
-};
+/**
+ * Estados de la ficha (DX-243): Enviado · Abierto · Bloqueado · Firmado por
+ * paciente · Completo. Etiqueta y tono salen del mapa único (`tones.ts`).
+ */
+export const SIGNATURE_STATUS_LABELS: Record<SignatureRequestStatus, string> = statusLabels('signatureRequest');
 
 /**
  * La etiqueta del estado con quien firmó: si fue el responsable de un menor,

@@ -7,6 +7,8 @@ import { PAYMENT_REFERENCE_DUPLICATE, type ClinicPaymentMethod } from '@/lib/pay
 import type { RecordPaymentInput } from '@/lib/payments/payments-api';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Callout } from '@/components/ui/callout';
 import { FieldError } from '@/components/errors/field-error';
 import { usePaymentMethods, type PaymentMethodsState } from './use-payment-methods';
 
@@ -31,9 +33,6 @@ export const paymentMethodFieldsCopy = {
     'Esta referencia ya se usó con este medio de pago en otro abono reciente. Revisa el pago o confirma con un motivo.',
 };
 const copy = paymentMethodFieldsCopy;
-
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 /**
  * DX-395: los separadores que la API quita al comparar la referencia
@@ -264,7 +263,7 @@ export function PaymentMethodSelect({
           className="h-10 w-full max-sm:h-11"
         />
       ) : (
-        <select
+        <NativeSelect
           id={id}
           ref={selectRef}
           value={fields.paymentMethodId}
@@ -272,7 +271,6 @@ export function PaymentMethodSelect({
           onChange={(e) => fields.selectMethod(e.target.value)}
           aria-invalid={methodError ? true : undefined}
           aria-describedby={methodError ? fieldErrorId(id) : undefined}
-          className={fieldClass}
         >
           <option value="">{methods.status === 'loading' ? copy.methodsLoading : copy.methodNone}</option>
           {methods.methods.map((m) => (
@@ -280,7 +278,7 @@ export function PaymentMethodSelect({
               {m.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       )}
     </FormField>
   );
@@ -342,28 +340,30 @@ export function PaymentReferenceFields({
         </FormField>
       ) : null}
       {duplicate ? (
-        <div role="alert" className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3">
-          <p className="text-sm text-ink">{duplicate}</p>
-          <FormField
-            htmlFor={reasonId}
-            label={copy.duplicateReason}
-            hint={copy.duplicateReasonHint}
-            hintId={reasonHintId}
-            error={duplicateReasonError}
-          >
-            <Input
-              id={reasonId}
-              ref={reasonRef}
-              value={fields.duplicateReason}
-              maxLength={300}
-              disabled={disabled}
-              onChange={(e) => fields.setDuplicateReason(e.target.value)}
-              aria-required
-              aria-invalid={duplicateReasonError ? true : undefined}
-              aria-describedby={duplicateReasonError ? fieldErrorId(reasonId) : reasonHintId}
-            />
-          </FormField>
-        </div>
+        <Callout tone="warning" role="alert">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-ink">{duplicate}</p>
+            <FormField
+              htmlFor={reasonId}
+              label={copy.duplicateReason}
+              hint={copy.duplicateReasonHint}
+              hintId={reasonHintId}
+              error={duplicateReasonError}
+            >
+              <Input
+                id={reasonId}
+                ref={reasonRef}
+                value={fields.duplicateReason}
+                maxLength={300}
+                disabled={disabled}
+                onChange={(e) => fields.setDuplicateReason(e.target.value)}
+                aria-required
+                aria-invalid={duplicateReasonError ? true : undefined}
+                aria-describedby={duplicateReasonError ? fieldErrorId(reasonId) : reasonHintId}
+              />
+            </FormField>
+          </div>
+        </Callout>
       ) : null}
     </>
   );

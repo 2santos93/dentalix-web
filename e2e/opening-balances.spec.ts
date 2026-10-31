@@ -165,7 +165,8 @@ for (const viewport of [
       .getByRole('listitem')
       .filter({ hasText: `pacientes-saldos-${viewport.name}.csv` })
       .first();
-    await row.getByRole('button', { name: /Deshacer el lote/ }).click();
+    await row.getByRole('button', { name: /^Acciones de/ }).click();
+    await page.getByRole('menuitem', { name: 'Deshacer lote', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: 'Deshacer lote' }).click();
     await expect(dialog).toBeHidden();

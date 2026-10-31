@@ -86,7 +86,7 @@ export function PatientOptOutWarnings({
       >
         <TriangleAlert
           aria-hidden
-          className="mt-0.5 size-4 shrink-0 text-warning"
+          className="mt-0.5 size-4 shrink-0 text-warning-text"
         />
         {copy.title}
       </h4>

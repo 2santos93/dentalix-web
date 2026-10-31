@@ -3,14 +3,23 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/auth/auth-store";
 import { UnscheduledPlansView } from "@/components/treatment-plans/unscheduled-plans-view";
-import * as Tabs from "@radix-ui/react-tabs";
-import { PendingFollowUpView } from "@/components/treatment-plans/pending-follow-up-view";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  FollowUpScopeMarker,
+  PendingFollowUpView,
+} from "@/components/treatment-plans/pending-follow-up-view";
+import { PageHeader } from "@/components/shared/page-header";
 
-// «Presupuestos por seguir» (DX-040). Mismo guard de sesión que la caja: la
-// vista pinta su cabecera, y un rol sin acceso que llegue por URL ve el aviso
-// de la propia vista (la API responde 403).
+// «Presupuestos por seguir» (DX-040). Mismo guard de sesión que la caja. La
+// cabecera (título + una línea + alcance) va PRIMERO y las pestañas debajo
+// (UX v2: antes las pestañas iban encima del H1). Un rol sin acceso que llegue
+// por URL ve el aviso de la propia vista (la API responde 403).
 const copy = {
   checkingSession: "Verificando sesión…",
+  title: "Presupuestos por seguir",
+  description:
+    "Presupuestos que esperan la respuesta del paciente o su cita: llámalo o escríbele antes de que se enfríen.",
+  tabsLabel: "Seguimiento de presupuestos",
 };
 
 export default function PresupuestosPage() {
@@ -39,34 +48,24 @@ export default function PresupuestosPage() {
   }
 
   return (
-    <Tabs.Root
-      value={tab}
-      onValueChange={setTab}
-      className="flex flex-col gap-6"
-    >
-      <Tabs.List
-        aria-label="Seguimiento de presupuestos"
-        className="flex h-auto flex-wrap gap-2 border-b border-border pb-3"
-      >
-        <Tabs.Trigger
-          value="presented"
-          className="min-h-11 rounded-lg px-4 py-2 text-sm font-medium text-muted data-[state=active]:bg-surface-2 data-[state=active]:text-ink"
-        >
-          Presentado sin aceptar
-        </Tabs.Trigger>
-        <Tabs.Trigger
-          value="accepted"
-          className="min-h-11 rounded-lg px-4 py-2 text-sm font-medium text-muted data-[state=active]:bg-surface-2 data-[state=active]:text-ink"
-        >
-          Aceptado sin agendar
-        </Tabs.Trigger>
-      </Tabs.List>
-      <Tabs.Content value="presented">
-        <PendingFollowUpView token={accessToken} />
-      </Tabs.Content>
-      <Tabs.Content value="accepted">
-        <UnscheduledPlansView token={accessToken} />
-      </Tabs.Content>
-    </Tabs.Root>
+    <>
+      <PageHeader
+        title={copy.title}
+        description={copy.description}
+        meta={<FollowUpScopeMarker token={accessToken} />}
+      />
+      <Tabs value={tab} onValueChange={setTab} className="flex flex-col">
+        <TabsList aria-label={copy.tabsLabel}>
+          <TabsTrigger value="presented">Presentado sin aceptar</TabsTrigger>
+          <TabsTrigger value="accepted">Aceptado sin agendar</TabsTrigger>
+        </TabsList>
+        <TabsContent value="presented">
+          <PendingFollowUpView token={accessToken} />
+        </TabsContent>
+        <TabsContent value="accepted">
+          <UnscheduledPlansView token={accessToken} />
+        </TabsContent>
+      </Tabs>
+    </>
   );
 }

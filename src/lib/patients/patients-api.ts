@@ -218,6 +218,21 @@ export async function archivePatient(token: string, id: string): Promise<void> {
   await apiFetchOrNull<null>(`/patients/${id}`, { method: 'DELETE', token });
 }
 
+/** DX-461: enlaces públicos vivos del paciente, por tipo y en total. */
+export type LivePublicLinks = components['schemas']['LivePublicLinksDto'];
+
+/**
+ * `GET /patients/:id/live-public-links` — cuántos enlaces enviados (oferta de
+ * hueco, firma y presupuesto a distancia, copia del PDF, anamnesis) anularía
+ * archivar al paciente (solo ADMIN, DX-461).
+ */
+export async function getPatientLivePublicLinks(
+  token: string,
+  id: string,
+): Promise<LivePublicLinks> {
+  return apiFetch<LivePublicLinks>(`/patients/${id}/live-public-links`, { token });
+}
+
 /** `PATCH /patients/:id/retention` — retención extendida (solo ADMIN). */
 export async function setRetentionExtension(
   token: string,

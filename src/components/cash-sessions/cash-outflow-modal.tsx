@@ -142,6 +142,7 @@ export function CashOutflowModal({
       submitting={submitting}
       submitDisabled={upload.busy}
       error={error}
+      touchTargets
       size="lg"
     >
       <ExpenseCategoryField

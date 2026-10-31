@@ -7,7 +7,7 @@ import { SettingsIndex } from '@/components/settings/settings-index';
 
 const copy = {
   title: 'Ajustes',
-  description: 'Cómo funciona la clínica: sedes, agenda, cobro, historia clínica y datos.',
+  description: 'Tu cuenta y cómo funciona la clínica: sedes, agenda, cobro, historia clínica, datos y registros.',
   checkingSession: 'Verificando sesión…',
 };
 

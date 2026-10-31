@@ -1,0 +1,7 @@
+{
+  "src/components/anamnesis/public-anamnesis-view.tsx": {
+    "checkbox": 2,
+    "radio": 1,
+    "select": 1
+  }
+}

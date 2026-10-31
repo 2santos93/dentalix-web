@@ -4,6 +4,8 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AnswerSection } from '@/components/clinical/answer-group';
 import { type Medication } from '@/lib/clinical/clinical-types';
 
 const copy = {
@@ -16,12 +18,13 @@ const newRow = (): Medication => ({ nombre: '', esAlerta: false });
 export function MedicationListEditor({ value, onChange }: { value: Medication[]; onChange: (n: Medication[]) => void }) {
   const update = (i: number, patch: Partial<Medication>) => onChange(value.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
-    <fieldset className="flex flex-col gap-3">
-      <legend className="t-label text-ink">{copy.legend}</legend>
-      {value.length === 0 && <p className="text-sm text-muted">{copy.empty}</p>}
-      <ul className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
+      <AnswerSection
+        title={copy.legend}
+        description={value.length === 0 ? <p>{copy.empty}</p> : undefined}
+      >
         {value.map((row, i) => (
-          <li key={i} className="rounded-lg border border-border p-3 flex flex-col gap-3">
+          <li key={i} className="flex flex-col gap-3 border-b border-border-subtle py-3 last:border-b-0">
             <div className="grid gap-3 sm:grid-cols-2">
               <FormField htmlFor={`mn-${i}`} label={copy.name}>
                 <Input id={`mn-${i}`} value={row.nombre} onChange={(e) => update(i, { nombre: e.target.value })} />
@@ -38,21 +41,18 @@ export function MedicationListEditor({ value, onChange }: { value: Medication[];
                 <Input id={`mm-${i}`} value={row.motivo ?? ''} onChange={(e) => update(i, { motivo: e.target.value })} />
               </FormField>
             </div>
-            <label className="flex items-center gap-2 text-sm text-ink">
-              <input type="checkbox" aria-label={copy.isAlert} checked={row.esAlerta}
-                onChange={(e) => update(i, { esAlerta: e.target.checked })} />
-              {copy.isAlert}
-            </label>
-            <Button type="button" variant="outline" size="sm" className="self-start"
+            <Checkbox label={copy.isAlert} checked={row.esAlerta}
+              onChange={(e) => update(i, { esAlerta: e.target.checked })} />
+            <Button type="button" variant="destructive-ghost" size="sm" className="self-start"
               onClick={() => onChange(value.filter((_, j) => j !== i))}>
               <Trash2 /> {copy.remove}
             </Button>
           </li>
         ))}
-      </ul>
-      <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => onChange([...value, newRow()])}>
+      </AnswerSection>
+      <Button type="button" variant="secondary" size="sm" className="self-start" onClick={() => onChange([...value, newRow()])}>
         <Plus /> {copy.add}
       </Button>
-    </fieldset>
+    </div>
   );
 }

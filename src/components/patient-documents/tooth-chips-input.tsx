@@ -94,7 +94,7 @@ export function ToothChipsInput({
         {value.map((tooth) => (
           <span
             key={tooth}
-            className="inline-flex items-center gap-1 rounded-full border border-border bg-bg pl-2.5 text-sm tabular-nums text-ink"
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-canvas pl-2.5 text-sm tabular-nums text-ink"
           >
             {tooth}
             <button
@@ -102,7 +102,7 @@ export function ToothChipsInput({
               disabled={disabled}
               aria-label={copy.remove(tooth)}
               onClick={() => onChange(value.filter((t) => t !== tooth))}
-              className="inline-flex size-11 items-center sm:size-8 justify-center rounded-full text-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex size-11 items-center sm:size-8 justify-center rounded-full text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
             >
               <X className="size-3.5" aria-hidden />
             </button>
@@ -129,7 +129,7 @@ export function ToothChipsInput({
           className={cn(fieldClass, 'h-11 w-24 min-w-0 flex-1 tabular-nums sm:h-10 sm:flex-none')}
         />
       </div>
-      <p id={hintId} className={cn('text-xs', error ? 'text-danger' : 'text-muted')} role={error ? 'alert' : undefined}>
+      <p id={hintId} className={cn('text-xs', error ? 'text-danger-text' : 'text-muted')} role={error ? 'alert' : undefined}>
         {error ?? copy.hint}
       </p>
     </div>

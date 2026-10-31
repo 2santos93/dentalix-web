@@ -4,8 +4,10 @@ import type { Patient } from '@/lib/patients/patients-api';
 import { displayPhone } from '@/lib/phone/display-phone';
 import { ageFrom } from '@/lib/patients/age';
 import { formatCivilDate } from '@/lib/format/date';
-import { Card, CardContent } from '@/components/ui/card';
 import { docTypeOptionLabel, type ClinicDocumentTypeNames } from '@/lib/patients/doc-type';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
+import { SectionHeader } from '@/components/ui/section-header';
+import { DATA_SECTION_CLASS } from './data-section';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 const copy = {
@@ -17,7 +19,7 @@ const copy = {
   docTypeLabel: 'Nombre del documento',
   docNumber: 'Número de documento',
   birthDate: 'Fecha de nacimiento',
-  sex: 'Sexo',
+  sexLabel: 'Sexo',
   phone: 'Teléfono',
   email: 'Correo electrónico',
   address: 'Dirección',
@@ -36,7 +38,15 @@ const copy = {
   consentPendingImported: 'Pendiente · importado sin autorización: pídela en su próxima visita',
   origin: 'Origen de la ficha',
   originImported: 'Importado desde archivo',
-  consentVersion: (v: string) => `v${v}`,
+  // La API puede traer la versión ya con su «v» («v1»): sin quitarla salía «vv1».
+  consentVersion: (v: string) => `v${v.replace(/^v/i, '')}`,
+  // El código del DTO no se enseña («Sexo: M»): mismas etiquetas que el formulario.
+  sex: {
+    M: 'Masculino',
+    F: 'Femenino',
+    OTHER: 'Otro',
+    UNSPECIFIED: 'Sin especificar',
+  } as Record<string, string>,
   fallback: '—',
   years: (n: number) => `${n} años`,
 };
@@ -50,6 +60,8 @@ interface Field {
    * Se sigue mostrando cuando el bloque sí se renderiza.
    */
   alwaysShown?: boolean;
+  /** Ocupa toda la fila (textos largos: el consentimiento importado). */
+  wide?: boolean;
 }
 
 /** Un bloque con sus campos; se omite entero si ninguno tiene dato. */
@@ -57,16 +69,18 @@ function Block({ title, fields }: { title: string; fields: Field[] }) {
   const withValue = fields.filter((f) => !f.alwaysShown && f.value);
   if (withValue.length === 0) return null;
   return (
-    <section className="flex flex-col gap-2 border-t border-border pt-4 first:border-0 first:pt-0">
-      <h3 className="text-sm font-medium text-muted">{title}</h3>
-      <dl className="grid gap-3 sm:grid-cols-2">
+    // Cada bloque es una sección plana con título de verdad (`t-title`, tinta):
+    // antes el título era 14px gris, igual que las etiquetas de debajo, y la
+    // ficha perdía su columna vertebral tipográfica (critique-core §7).
+    <section aria-label={title} className={DATA_SECTION_CLASS}>
+      <SectionHeader as="h2" title={title} />
+      <DescriptionList columns={3}>
         {fields.map((f) => (
-          <div key={f.label} className="min-w-0">
-            <dt className="text-sm text-muted">{f.label}</dt>
-            <dd className="break-words text-ink">{f.value ?? copy.fallback}</dd>
-          </div>
+          <DescriptionItem key={f.label} label={f.label} wide={f.wide}>
+            {f.value ?? copy.fallback}
+          </DescriptionItem>
         ))}
-      </dl>
+      </DescriptionList>
     </section>
   );
 }
@@ -101,8 +115,9 @@ export function PatientDataPanel({ patient, docTypeNames = {} }: PatientDataPane
       : copy.consentPending;
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4 p-6">
+    // Fragmento, no tarjeta: los bloques son hermanos de las demás secciones
+    // de la pestaña («Comunicaciones», «Cobertura»…) y comparten su ritmo.
+    <>
         <Block
           title={copy.identification}
           fields={[
@@ -113,7 +128,7 @@ export function PatientDataPanel({ patient, docTypeNames = {} }: PatientDataPane
             ...(patient.docTypeLabel ? [{ label: copy.docTypeLabel, value: patient.docTypeLabel }] : []),
             { label: copy.docNumber, value: patient.docNumber },
             { label: copy.birthDate, value: birth },
-            { label: copy.sex, value: patient.sex },
+            { label: copy.sexLabel, value: patient.sex ? (copy.sex[patient.sex] ?? patient.sex) : null },
           ]}
         />
         <Block
@@ -142,11 +157,10 @@ export function PatientDataPanel({ patient, docTypeNames = {} }: PatientDataPane
             { label: copy.maritalStatus, value: patient.maritalStatus ?? null },
             { label: copy.physician, value: patient.physicianName ?? null },
             { label: copy.physicianPhone, value: patient.physicianPhone ?? null },
-            { label: copy.consent, value: consent, alwaysShown: true },
+            { label: copy.consent, value: consent, alwaysShown: true, wide: !patient.dataConsentAccepted && !!patient.importBatchId },
             ...(patient.importBatchId ? [{ label: copy.origin, value: copy.originImported }] : []),
           ]}
         />
-      </CardContent>
-    </Card>
+    </>
   );
 }

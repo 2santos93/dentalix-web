@@ -2,6 +2,7 @@ import * as React from 'react';
 import { SIGNER_TYPE_LABELS, type PatientConsentDocument } from '@/lib/consents/consents-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { formatDateTime } from '@/lib/format/date';
+import { ClinicLogo } from '@/components/brand/clinic-brand';
 
 const copy = {
   patient: 'Paciente',
@@ -60,15 +61,7 @@ export function ConsentDocument({ consent }: ConsentDocumentProps) {
         className="flex flex-col gap-4 border-b border-[#d1d5db] pb-4 sm:flex-row sm:items-start sm:justify-between"
       >
         <div className="flex items-center gap-3">
-          {clinic.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- logo del tenant con host arbitrario, para imprimir; next/image no aporta nada aquí
-            <img
-              src={clinic.logoUrl}
-              alt={clinic.name}
-              referrerPolicy="no-referrer"
-              className="h-12 w-auto max-w-[160px] object-contain"
-            />
-          ) : null}
+          {clinic.logoUrl ? <ClinicLogo src={clinic.logoUrl} alt={clinic.name} variant="paper" /> : null}
           <div>
             <p className="text-base font-semibold">{clinic.name}</p>
             <h1 className="text-xl font-semibold tracking-tight">{consent.title}</h1>

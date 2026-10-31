@@ -48,7 +48,7 @@ const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
  * hacen fallar el test. Cualquier otra violación seria o crítica sí.
  */
 const PREEXISTING_CONTRAST: { matches: (node: { html: string; target: unknown[] }) => boolean; why: string }[] = [
-  // Badge tintado (`bg-success/15 text-success`, etc.): 4.08–4.09:1 en claro,
+  // Badge tintado (`bg-success-subtle text-success-text`, etc.): 4.08–4.09:1 en claro,
   // como «Abierta» en la lista de turnos de la Caja.
   { matches: (n) => /class="[^"]*\bbg-(success|warning|danger)\/15\b/.test(n.html), why: 'Badge tintado del sistema' },
   // (El Button `destructive` en oscuro, 2.69:1 con texto blanco, se corrigió
@@ -177,7 +177,7 @@ for (const viewport of [
     // La búsqueda lo deja solo; sale «Pendiente».
     await page.getByLabel('Buscar por proveedor o descripción').fill(supplier);
     await expect(page.getByText('1 gasto', { exact: true })).toBeVisible({ timeout: 15_000 });
-    const listing = narrow ? page.getByRole('list', { name: 'Gastos' }) : page.getByRole('table', { name: /^Gastos del periodo/ });
+    const listing = page.getByRole(narrow ? 'list' : 'table', { name: /^Gastos del periodo/ });
     await expect(listing).toContainText(supplier);
     await expect(listing).toContainText('Pendiente');
     await expect(listing).toContainText('150.000,00');
@@ -197,7 +197,7 @@ for (const viewport of [
     await expect(page.getByText('Gastos exportados.')).toBeVisible();
 
     // El detalle.
-    await listing.getByRole('button', { name: /^Ver el gasto de Laboratorio del / }).click();
+    await listing.getByRole('button', { name: /^Laboratorio/ }).click();
     const detail = page.getByRole('dialog', { name: `Laboratorio · ${supplier}` });
     await expect(detail.getByRole('heading', { name: 'Pagos' })).toBeVisible({ timeout: 15_000 });
     await expect(detail.getByText('Aún no tiene pagos.')).toBeVisible();

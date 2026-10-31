@@ -35,6 +35,11 @@ const schedule = {
   ranges: [{ weekday: 1, startMinute: 8 * 60, endMinute: 12 * 60 }],
 };
 
+/** Abre el sábado: un cambio, para que aparezca la barra de guardado. */
+async function makeDirty(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('switch', { name: 'Abierto Sábado' }));
+}
+
 beforeEach(() => {
   mockedGet.mockReset();
   mockedReplace.mockReset();
@@ -79,6 +84,7 @@ describe('BusinessHoursForm', () => {
     render(<BusinessHoursForm token="tok" />);
     const form = await screen.findByRole('form', { name: 'Guardar horario' });
 
+    await makeDirty(user);
     await user.click(screen.getByRole('button', { name: 'Guardar horario' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('La sede ya cambió su horario');
@@ -97,6 +103,7 @@ describe('BusinessHoursForm', () => {
     render(<BusinessHoursForm token="tok" />);
     await screen.findByRole('form', { name: 'Guardar horario' });
 
+    await makeDirty(user);
     await user.click(screen.getByRole('button', { name: 'Guardar horario' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -115,12 +122,22 @@ describe('BusinessHoursForm', () => {
 
     // La zona se muestra (es la de la sede) pero no se edita aquí.
     expect(screen.queryByLabelText('Zona horaria')).not.toBeInTheDocument();
-    expect(form).toHaveTextContent('Zona horaria: Asia/Tokyo · Se cambia en Ajustes → Sedes');
+    // B6: el nombre legible de la zona, no el código IANA.
+    expect(form).toHaveTextContent('Zona horaria: (UTC+9) Tokyo — Japón · Se cambia en Ajustes → Sedes');
     expect(screen.getByRole('link', { name: 'Ajustes → Sedes' })).toHaveAttribute('href', '/settings/sedes');
 
+    // Sin cambios no hay «Guardar»: la barra aparece al cambiar algo.
+    expect(screen.queryByRole('button', { name: 'Guardar horario' })).not.toBeInTheDocument();
+    await makeDirty(user);
+    // Abrir y volver a cerrar deja la semana como estaba: la barra se va.
+    await user.click(screen.getByRole('switch', { name: 'Abierto Sábado' }));
+    expect(screen.queryByRole('button', { name: 'Guardar horario' })).not.toBeInTheDocument();
+    await makeDirty(user);
     await user.click(screen.getByRole('button', { name: 'Guardar horario' }));
     await waitFor(() => expect(mockedReplace).toHaveBeenCalledTimes(1));
-    expect(mockedReplace.mock.calls[0][1]).toEqual({ ranges: schedule.ranges });
+    expect(mockedReplace.mock.calls[0][1]).toEqual({
+      ranges: [...schedule.ranges, { weekday: 6, startMinute: 9 * 60, endMinute: 13 * 60 }],
+    });
     expect(mockedReplace.mock.calls[0][1]).not.toHaveProperty('timezone');
   });
 
@@ -129,7 +146,7 @@ describe('BusinessHoursForm', () => {
 
     render(<BusinessHoursForm token={tokenFor('RECEPTIONIST')} />);
     const form = await screen.findByRole('form', { name: 'Guardar horario' });
-    await waitFor(() => expect(form).toHaveTextContent('Zona horaria: Pacific/Auckland'));
+    await waitFor(() => expect(form).toHaveTextContent('Zona horaria: (UTC+13) Auckland — Nueva Zelanda'));
     expect(form).not.toHaveTextContent('America/Bogota');
     expect(screen.queryByRole('link', { name: 'Ajustes → Sedes' })).not.toBeInTheDocument();
   });
@@ -153,5 +170,30 @@ describe('BusinessHoursForm', () => {
     const form = await screen.findByRole('form', { name: 'Guardar horario' });
     expect(form).toHaveTextContent('Zona horaria: …');
     expect(form).not.toHaveTextContent(/por configurar/i);
+  });
+
+  it('B6: una fila por día, en el orden del formato de la sede, con un interruptor «Abierto» de nombre fijo', async () => {
+    mockedGet.mockResolvedValue(schedule);
+    render(<BusinessHoursForm token={tokenFor('ADMIN')} />);
+    const week = await screen.findByRole('list', { name: 'Horario de la semana' });
+    const days = within(week).getAllByRole('listitem').map((li) => li.querySelector('span')?.textContent);
+    // Sin proveedor el formato es «es» (sin región): lunes primero, como Calendario.
+    expect(days).toEqual(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']);
+    expect(screen.getByRole('switch', { name: 'Abierto Lunes' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Abierto Domingo' })).not.toBeChecked();
+    expect(screen.getByRole('group', { name: 'Lunes, tramo 1: desde' })).toBeInTheDocument();
+    expect(document.querySelector('input[type="time"]')).toBeNull();
+  });
+
+  it('B6: «Descartar» devuelve la semana guardada', async () => {
+    mockedGet.mockResolvedValue(schedule);
+    const user = userEvent.setup();
+    render(<BusinessHoursForm token={tokenFor('ADMIN')} />);
+    await screen.findByRole('form', { name: 'Guardar horario' });
+    await user.click(screen.getByRole('switch', { name: 'Abierto Lunes' }));
+    expect(screen.getByRole('switch', { name: 'Abierto Lunes' })).not.toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Descartar' }));
+    expect(screen.getByRole('switch', { name: 'Abierto Lunes' })).toBeChecked();
+    expect(screen.queryByRole('region', { name: 'Cambios sin guardar' })).not.toBeInTheDocument();
   });
 });

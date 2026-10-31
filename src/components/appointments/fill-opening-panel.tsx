@@ -29,6 +29,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet,
@@ -411,7 +412,7 @@ export function FillOpeningPanel({
                 </p>
               </div>
               {canAct && !acceptedBy ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2">
                   {linkOpen ? (
                     <>
                       <span className="text-xs tabular-nums text-muted" aria-live="polite">
@@ -432,7 +433,7 @@ export function FillOpeningPanel({
                   )}
                 </div>
               ) : null}
-              <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+              <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
                 {items.map((c) => (
                   <CandidateRow
                     key={keyOf(c)}
@@ -560,13 +561,12 @@ function CandidateRow({
       <div className="flex flex-wrap items-start justify-between gap-2">
         {selectable ? (
           <label htmlFor={selectId} className="flex min-h-6 min-w-0 cursor-pointer items-start gap-2">
-            <input
+            <Checkbox
               id={selectId}
-              type="checkbox"
               checked={selected}
               onChange={onToggleSelected}
               aria-label={fillOpeningCopy.select(name)}
-              className="mt-0.5 size-4 shrink-0 accent-primary"
+              className="mt-0.5"
             />
             <span className="min-w-0 break-words text-sm font-semibold text-ink">{name}</span>
           </label>
@@ -602,7 +602,7 @@ function CandidateRow({
           <p className="text-muted">{fillOpeningCopy.linkNoChannel}</p>
         ) : null}
         {c.whatsappBlocked ? (
-          <p className="text-warning">
+          <p className="text-warning-text">
             {c.whatsappBlockedReason === 'NO_OPT_IN'
               ? fillOpeningCopy.whatsappNoOptIn
               : fillOpeningCopy.whatsappBlocked}
@@ -677,7 +677,7 @@ function CandidateRow({
               id={outcomeGroupId}
               role="group"
               aria-label={fillOpeningCopy.outcomeLegend(name)}
-              className="flex flex-wrap gap-2 rounded-lg bg-surface-2 p-2"
+              className="flex flex-wrap gap-2 rounded-lg bg-surface-sunken p-2"
             >
               {(Object.keys(fillOpeningCopy.outcomes) as OfferOutcome[]).map((outcome) => (
                 <Button

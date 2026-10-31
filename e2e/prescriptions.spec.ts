@@ -135,16 +135,17 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
   await printPage.close();
 
   // --- 3. Anular con motivo ---
-  await table.getByRole('button', { name: /^Anular/ }).click();
+  await table.getByRole('button', { name: /^Acciones de receta del/ }).click();
+  await page.getByRole('menuitem', { name: 'Anular' }).click();
   const voidDialog = page.getByRole('dialog', { name: 'Anular receta' });
   await voidDialog.getByLabel('Motivo de la anulación').fill('Cambio a clindamicina');
   await voidDialog.getByRole('button', { name: 'Anular receta' }).click();
   await expect(voidDialog).toBeHidden();
-  const row = table.locator('tr[data-status="VOIDED"]');
+  const row = table.getByRole('row').filter({ has: page.locator('[data-status="VOIDED"]') });
   await expect(row).toContainText('Anulada');
   await expect(row).toContainText('Motivo: Cambio a clindamicina');
   await expect(row.locator('ul.line-through')).toBeVisible();
-  await expect(table.getByRole('button', { name: /^Anular/ })).toHaveCount(0);
+  await expect(table.getByRole('button', { name: /^Acciones de receta del/ })).toHaveCount(0);
 
   // --- 4. Móvil 390px: tarjetas y sin scroll horizontal de página ---
   await page.setViewportSize({ width: 390, height: 844 });

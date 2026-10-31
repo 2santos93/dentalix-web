@@ -25,31 +25,24 @@ import {
   type CashRange,
 } from '@/lib/payments/cash-period';
 import {
-  PAYMENT_METHOD_BADGE_VARIANT,
   PAYMENT_METHOD_LABELS,
 } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDate, zoneCityLabel } from '@/lib/format/date';
+import { formatCivilDate, formatDate } from '@/lib/format/date';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { DateRangePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
-import { ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
+import { ResultCount } from '@/components/shared/list-toolbar';
 import { InlineError } from '@/components/errors/inline-error';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { useVoidPayment, voidPaymentSubject } from '@/components/payments/use-void-payment';
@@ -70,8 +63,7 @@ const copy = {
     month: 'Este mes',
     custom: 'Personalizado',
   } satisfies Record<CashPreset | 'custom', string>,
-  fromLabel: 'Desde',
-  toLabel: 'Hasta',
+  customLabel: 'Período personalizado',
   invalidRangeOrder: 'La fecha final no puede ser anterior a la inicial.',
   invalidRangeLength: `El período no puede superar ${MAX_RANGE_DAYS} días. Acórtalo e intenta de nuevo.`,
   invalidRangeEmpty: 'Elige las dos fechas del período.',
@@ -105,9 +97,9 @@ const copy = {
   colAmount: 'Monto',
   colActions: 'Acciones',
   voidAction: 'Anular',
-  voidActionLabel: (patient: string) => `Anular abono de ${patient}`,
   receiptAction: 'Recibo',
-  receiptActionLabel: (patient: string) => `Recibo del abono de ${patient}`,
+  // El «⋯» de cada fila: «Acciones de abono de Ana Gómez».
+  rowLabel: (patient: string) => `abono de ${patient}`,
   planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
   // DX-262: abono contra el saldo migrado (sin plan).
   openingLabel: (concept: string) => (concept ? `Saldo migrado · ${concept}` : 'Saldo migrado'),
@@ -123,7 +115,9 @@ const copy = {
   // la fecha de pago; cuando difieren, la fila lo dice.
   registeredToday: 'Registrado hoy',
   // DX-097: los días son los del calendario de la sede, no los del navegador.
-  periodNote: (days: string, timeZone: string) => `${days} · días en hora de ${zoneCityLabel(timeZone)}`,
+  // UX v2: sin nombrar una ciudad (con varias sedes en zonas distintas
+  // engañaba); la zona exacta queda en el \`title\`.
+  periodNote: (days: string) => `${days} · días según la hora de la sede`,
   periodDays: (from: string, to: string) => (from === to ? from : `del ${from} al ${to}`),
   registeredOn: (date: string) => `Registrado el ${date}`,
   empty: 'No hay abonos en este período.',
@@ -164,7 +158,7 @@ interface CashRegisterViewProps {
  *
  * La barra no usa `ListToolbar` porque aquí no hay buscador —la API filtra por
  * período y método, no por texto— pero repite su gramática: misma fila, mismos
- * 40px y el mismo `toolbarFieldClass` en los controles.
+ * 40px y los mismos controles (`NativeSelect`, `DateRangePicker`).
  *
  * Los totales llegan del servidor ya agregados sobre el período ENTERO (no la
  * página visible) y sin convertir: un total por moneda, que es lo que se cuenta
@@ -316,6 +310,86 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // pinta (ni conteo, ni resumen, ni tabla, ni páginas) para que nadie lo lea
   // como la respuesta a las fechas que tiene delante.
   const showResults = customError === null && !forbidden;
+  // Con «Todas las sedes» la sede de cada abono importa; con una sede concreta
+  // sería la misma en todas las filas.
+  const showLocation = !data?.scope.location;
+
+  const columns: DataListColumn<CashPayment>[] = [
+    {
+      id: 'date',
+      header: copy.colDate,
+      cell: (payment) => (
+        <span className="tabular-nums">
+          {formatCivilDate(payment.paidOn)}
+          <RegisteredNote payment={payment} />
+        </span>
+      ),
+      mobileCell: (payment) => formatCivilDate(payment.paidOn),
+    },
+    {
+      id: 'patient',
+      header: copy.colPatient,
+      mobile: 'primary',
+      cell: (payment) => (
+        <Link
+          href={`/patients/${payment.patient.id}`}
+          className="relative z-10 font-medium text-ink underline-offset-4 hover:text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+        >
+          {payment.patient.fullName}
+        </Link>
+      ),
+    },
+    {
+      id: 'target',
+      header: copy.colPlan,
+      cell: (payment) => <span className="text-muted">{targetLabel(payment)}</span>,
+      mobileCell: targetLabel,
+    },
+    {
+      id: 'method',
+      header: copy.colMethod,
+      cell: (payment) => (
+        <>
+          {payment.method ? (
+            <StatusBadge kind="paymentMethod" status={payment.method}>
+              {payment.paymentMethod?.name ?? PAYMENT_METHOD_LABELS[payment.method]}
+            </StatusBadge>
+          ) : (
+            <span className="text-muted">{copy.methodNone}</span>
+          )}
+          {payment.reference ? (
+            <span className="t-caption mt-1 block font-mono text-muted">{copy.referenceLabel(payment.reference)}</span>
+          ) : null}
+        </>
+      ),
+      // En el teléfono, el medio y su referencia (la que se busca al cuadrar).
+      mobileCell: (payment) =>
+        [
+          payment.method ? (payment.paymentMethod?.name ?? PAYMENT_METHOD_LABELS[payment.method]) : null,
+          payment.reference ? copy.referenceLabel(payment.reference) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || null,
+    },
+    ...(showLocation
+      ? [
+          {
+            id: 'location',
+            header: copy.colLocation,
+            cell: (payment: CashPayment) => payment.location.name,
+          },
+        ]
+      : []),
+    {
+      id: 'amount',
+      header: copy.colAmount,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (payment) => (
+        <span className="font-medium text-ink">{formatCurrency(payment.amount, payment.currency)}</span>
+      ),
+    },
+  ];
 
   return (
     <>
@@ -347,56 +421,24 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           : {})}
       >
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <div
-            role="group"
+          <SegmentedControl
+            semantics="toggle"
+            fullWidthOnMobile
             aria-label={copy.periodLabel}
-            className="flex h-10 shrink-0 overflow-x-auto rounded-lg border border-border bg-surface p-0.5"
-          >
-            {PERIOD_CHOICES.map((choice) => (
-              <button
-                key={choice}
-                type="button"
-                aria-pressed={period === choice}
-                onClick={() => choosePeriod(choice)}
-                className={cn(
-                  'flex-1 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                  period === choice
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted hover:bg-surface-2 hover:text-ink',
-                )}
-              >
-                {copy.presets[choice]}
-              </button>
-            ))}
-          </div>
+            value={period}
+            onValueChange={choosePeriod}
+            options={PERIOD_CHOICES.map((choice) => ({ value: choice, label: copy.presets[choice] }))}
+          />
 
           {period === 'custom' ? (
-            <div className="flex min-w-0 gap-3">
-              <label className="flex min-w-0 flex-1 items-center gap-2 text-sm text-muted">
-                <span className="shrink-0">{copy.fromLabel}</span>
-                <Input
-                  type="date"
-                  value={customRange.from}
-                  max={customRange.to || undefined}
-                  onChange={(e) => changeCustom({ from: e.target.value })}
-                  aria-invalid={customError !== null}
-                  aria-describedby={customError ? rangeErrorId : undefined}
-                  className="tabular-nums sm:w-40"
-                />
-              </label>
-              <label className="flex min-w-0 flex-1 items-center gap-2 text-sm text-muted">
-                <span className="shrink-0">{copy.toLabel}</span>
-                <Input
-                  type="date"
-                  value={customRange.to}
-                  min={customRange.from || undefined}
-                  onChange={(e) => changeCustom({ to: e.target.value })}
-                  aria-invalid={customError !== null}
-                  aria-describedby={customError ? rangeErrorId : undefined}
-                  className="tabular-nums sm:w-40"
-                />
-              </label>
-            </div>
+            <DateRangePicker
+              label={copy.customLabel}
+              className="min-w-0 sm:w-72"
+              value={customRange.from || customRange.to ? customRange : null}
+              onChange={(next) => changeCustom(next ?? { from: '', to: '' })}
+              isInvalid={customError !== null}
+              aria-describedby={customError ? rangeErrorId : undefined}
+            />
           ) : null}
 
           {mediums.status === 'error' ? (
@@ -406,12 +448,13 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
               className="h-10 max-sm:h-11 sm:w-56"
             />
           ) : (
-            <select
+            <NativeSelect
               aria-label={copy.mediumLabel}
               value={medium}
               disabled={mediums.status === 'loading'}
               onChange={(e) => changeMedium(e.target.value)}
-              className={cn(toolbarFieldClass, 'max-sm:h-11 sm:w-56')}
+              className="sm:w-56"
+              selectClassName="max-sm:h-11"
             >
               <option value={ALL_MEDIUMS}>
                 {mediums.status === 'loading' ? copy.mediumsLoading : copy.mediumAll}
@@ -421,7 +464,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                   {mediumOptionLabel(m)}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           )}
 
           {/* La acción del listado cierra la barra, a la derecha (DESIGN.md). */}
@@ -441,20 +484,17 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
 
         {range && timeZone && customError === null ? (
           <p className="text-sm text-muted tabular-nums" data-testid="cash-period-note" title={timeZone}>
-            {copy.periodNote(
-              copy.periodDays(formatCivilDate(range.from), formatCivilDate(range.to)),
-              timeZone,
-            )}
+            {copy.periodNote(copy.periodDays(formatCivilDate(range.from), formatCivilDate(range.to)))}
           </p>
         ) : null}
 
-        <p role="status" className={exportNotice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={exportNotice ? 'text-sm text-success-text' : 'sr-only'}>
           {exportNotice}
         </p>
 
         {/* Aviso de la última anulación: fuera de AsyncSection para que la
             recarga no lo borre. */}
-        <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={voiding.notice ? 'text-sm text-success-text' : 'sr-only'}>
           {voiding.notice}
         </p>
 
@@ -490,103 +530,38 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
             >
               {data ? <CashSummary summary={data.summary} /> : null}
 
-              <Card className="overflow-hidden p-0">
-                <Table aria-label={copy.tableLabel}>
-                  <caption className="sr-only">{copy.tableLabel}</caption>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead scope="col">{copy.colDate}</TableHead>
-                      <TableHead scope="col">{copy.colPatient}</TableHead>
-                      <TableHead scope="col">{copy.colPlan}</TableHead>
-                      <TableHead scope="col">{copy.colMethod}</TableHead>
-                      <TableHead scope="col">{copy.colLocation}</TableHead>
-                      <TableHead scope="col" className="text-right">
-                        {copy.colAmount}
-                      </TableHead>
-                      <TableHead scope="col">
-                        <span className="sr-only">{copy.colActions}</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((payment) => (
-                      <TableRow key={payment.id}>
-                        <TableCell className="tabular-nums" data-label={copy.colDate}>
-                          {formatCivilDate(payment.paidOn)}
-                          <RegisteredNote payment={payment} />
-                        </TableCell>
-                        <TableCell data-label={copy.colPatient}>
-                          <Link
-                            href={`/patients/${payment.patient.id}`}
-                            className="font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                          >
-                            {payment.patient.fullName}
-                          </Link>
-                        </TableCell>
-                        <TableCell className="text-muted" data-label={copy.colPlan}>
-                          {payment.treatmentPlan
-                            ? copy.planLabel(payment.treatmentPlan.createdAt)
-                            : copy.openingLabel(payment.openingBalance?.concept ?? '')}
-                        </TableCell>
-                        <TableCell data-label={copy.colMethod}>
-                          {payment.method ? (
-                            <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
-                              {payment.paymentMethod?.name ?? PAYMENT_METHOD_LABELS[payment.method]}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted">{copy.methodNone}</span>
-                          )}
-                          {payment.reference ? (
-                            <span className="mt-1 block font-mono text-xs text-muted">
-                              {copy.referenceLabel(payment.reference)}
-                            </span>
-                          ) : null}
-                        </TableCell>
-                        <TableCell data-label={copy.colLocation}>{payment.location.name}</TableCell>
-                        <TableCell
-                          className="text-right font-medium tabular-nums text-ink"
-                          data-label={copy.colAmount}
-                        >
-                          {formatCurrency(payment.amount, payment.currency)}
-                        </TableCell>
-                        <TableCell className="text-right" data-label={copy.colActions}>
-                          <span className="inline-flex flex-wrap items-center justify-end gap-3">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              aria-label={copy.receiptActionLabel(payment.patient.fullName)}
-                              onClick={() => setReceiptPaymentId(payment.id)}
-                            >
-                              {copy.receiptAction}
-                            </Button>
-                            {payment.canVoid ? (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                aria-label={copy.voidActionLabel(payment.patient.fullName)}
-                                onClick={() =>
-                                  voiding.request({
-                                    id: payment.id,
-                                    amount: payment.amount,
-                                    currency: payment.currency,
-                                    paidOn: payment.paidOn,
-                                    patientName: payment.patient.fullName,
-                                    splitLines: payment.splitLines,
-                                  })
-                                }
-                              >
-                                {copy.voidAction}
-                              </Button>
-                            ) : null}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
+              {/* Tabla desde \`sm\`; en el teléfono, tarjeta de dos líneas
+                  (paciente + monto / fecha · método · destino · sede). Recibo
+                  y Anular van en el «⋯»: antes eran dos botones con borde por
+                  fila y «Anular» pesaba lo mismo que «Recibo». */}
+              <DataList
+                label={copy.tableLabel}
+                rows={items}
+                columns={columns}
+                getRowKey={(payment) => payment.id}
+                getRowLabel={(payment) => copy.rowLabel(payment.patient.fullName)}
+                rowActions={(payment) => [
+                  { label: copy.receiptAction, onSelect: () => setReceiptPaymentId(payment.id) },
+                  ...(payment.canVoid
+                    ? [
+                        {
+                          label: copy.voidAction,
+                          destructive: true,
+                          separatorBefore: true,
+                          onSelect: () =>
+                            voiding.request({
+                              id: payment.id,
+                              amount: payment.amount,
+                              currency: payment.currency,
+                              paidOn: payment.paidOn,
+                              patientName: payment.patient.fullName,
+                              splitLines: payment.splitLines,
+                            }),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
             </AsyncSection>
 
             {!loadError ? (
@@ -629,6 +604,13 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   );
 }
 
+/** A qué fue el abono: un plan o un saldo migrado (QA D2). */
+function targetLabel(payment: CashPayment): string {
+  return payment.treatmentPlan
+    ? copy.planLabel(payment.treatmentPlan.createdAt)
+    : copy.openingLabel(payment.openingBalance?.concept ?? '');
+}
+
 /** Nombre del medio en el filtro; el desactivado lo dice (DX-395). */
 function mediumOptionLabel(medium: ClinicPaymentMethod): string {
   return medium.active ? medium.name : copy.mediumInactive(medium.name);
@@ -643,7 +625,7 @@ function mediumOptionLabel(medium: ClinicPaymentMethod): string {
 function RegisteredNote({ payment }: { payment: CashPayment }) {
   if (payment.registeredOn === payment.paidOn) return null;
   return (
-    <span className="block text-xs font-normal text-muted">
+    <span className="t-caption block font-normal text-muted">
       {payment.registeredToday
         ? copy.registeredToday
         : copy.registeredOn(formatCivilDate(`${payment.registeredOn}T00:00:00.000Z`))}
@@ -667,8 +649,8 @@ function ScopeMarker({
   restricted?: boolean;
 }) {
   return (
-    <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-muted">
-      <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
+    <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-sunken px-3 py-1.5 text-sm text-muted">
+      <Building2 aria-hidden className="size-4 shrink-0 text-muted" />
       <span>{location ? copy.scopeLocation(location.name) : restricted ? copy.scopeMine : copy.scopeAll}</span>
     </p>
   );
@@ -684,13 +666,12 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
   const headingId = React.useId();
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
-      <div className="flex items-baseline justify-between gap-4 border-b border-hairline px-4 py-3 sm:px-6">
+      <div className="flex items-baseline justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-6">
         <h2 id={headingId} className="t-title text-ink">
           {copy.summaryTitle}
         </h2>
-        <span className="text-sm text-muted tabular-nums">{copy.paymentsCount(summary.count)}</span>
       </div>
-      <div className="grid gap-0 sm:grid-cols-2 sm:divide-x sm:divide-hairline">
+      <div className="grid gap-0 sm:grid-cols-2 sm:divide-x sm:divide-border-subtle">
         <SummaryList label={copy.byCurrency}>
           {summary.byCurrency.map((row) => (
             <SummaryRow
@@ -701,7 +682,7 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
             />
           ))}
         </SummaryList>
-        <SummaryList label={copy.byMethod} className="max-sm:border-t max-sm:border-hairline">
+        <SummaryList label={copy.byMethod} className="max-sm:border-t max-sm:border-border-subtle">
           {/* DX-377: por medio de pago de la clínica y moneda. */}
           {summary.byPaymentMethod.map((row) => (
             <SummaryRow
@@ -732,7 +713,7 @@ function SummaryList({
       <p id={labelId} className="t-label text-muted">
         {label}
       </p>
-      <ul aria-labelledby={labelId} className="mt-1 divide-y divide-hairline">
+      <ul aria-labelledby={labelId} className="mt-1 divide-y divide-border-subtle">
         {children}
       </ul>
     </div>
@@ -744,7 +725,7 @@ function SummaryRow({ label, meta, value }: { label: string; meta: string; value
     <li className="flex items-baseline justify-between gap-4 py-2">
       <span className="min-w-0">
         <span className="font-medium text-ink">{label}</span>{' '}
-        <span className="text-xs text-muted tabular-nums">{meta}</span>
+        <span className="t-caption text-muted tabular-nums">{meta}</span>
       </span>
       <span className="shrink-0 font-medium tabular-nums text-ink">{value}</span>
     </li>

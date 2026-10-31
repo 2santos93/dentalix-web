@@ -7,8 +7,9 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { InlineError } from '@/components/errors/inline-error';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
+import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/format/currency';
@@ -16,7 +17,6 @@ import { formatCivilDate } from '@/lib/format/date';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { allocationCopy } from '@/lib/payments/allocation-copy';
 import type { PaymentAllocations, ReplacePaymentAllocationsInput } from '@/lib/payments/payment-allocations-api';
-import { ITEM_STATUS_BADGE_VARIANT, ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { PLAN_STATUS_LABELS, isPlanBillable } from '@/lib/treatment-plans/plan-status';
 import { cn } from '@/lib/utils';
 import { usePaymentAllocations } from './use-payment-allocations';
@@ -260,51 +260,29 @@ export function ReallocatePaymentModal({
                     {data.manual ? <p>{copy.noItemsPinned}</p> : null}
                   </div>
                 ) : (
-                  <fieldset className="flex min-w-0 flex-col gap-2" disabled={saving}>
-                    <legend className="t-label mb-1 text-muted">{copy.modeLegend}</legend>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {(
-                        [
-                          ['AUTO', copy.modeAuto, copy.modeAutoHelp],
-                          ['MANUAL', copy.modeManual, copy.modeManualHelp],
-                        ] as const
-                      ).map(([value, label, help]) => {
-                        const id = `${baseId}-mode-${value}`;
-                        return (
-                          <label
-                            key={value}
-                            htmlFor={id}
-                            className={cn(
-                              'flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 transition-colors hover:bg-surface-2',
-                              'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary',
-                              mode === value && 'border-primary',
-                            )}
-                          >
-                            <input
-                              id={id}
-                              type="radio"
-                              name={`${baseId}-mode`}
-                              value={value}
-                              checked={mode === value}
-                              onChange={() => setMode(value)}
-                              // Nombre = solo la etiqueta; la explicación, como descripción.
-                              aria-labelledby={`${id}-label`}
-                              aria-describedby={`${id}-help`}
-                              className="mt-1 accent-[var(--color-primary)] focus-visible:outline-none"
-                            />
-                            <span className="flex flex-col gap-0.5">
-                              <span id={`${id}-label`} className="text-sm font-medium text-ink">
-                                {label}
-                              </span>
-                              <span id={`${id}-help`} className="text-xs text-muted">
-                                {help}
-                              </span>
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
+                  <RadioGroup
+                    id={`${baseId}-mode`}
+                    legend={copy.modeLegend}
+                    value={mode}
+                    onValueChange={(value) => setMode(value as typeof mode)}
+                    disabled={saving}
+                    optionsClassName="grid gap-2 sm:grid-cols-2"
+                  >
+                    {(
+                      [
+                        ['AUTO', copy.modeAuto, copy.modeAutoHelp],
+                        ['MANUAL', copy.modeManual, copy.modeManualHelp],
+                      ] as const
+                    ).map(([value, label, help], index) => (
+                      <RadioCard
+                        key={value}
+                        id={index === 0 ? `${baseId}-mode` : `${baseId}-mode-${value}`}
+                        value={value}
+                        title={label}
+                        description={help}
+                      />
+                    ))}
+                  </RadioGroup>
                 )}
 
                 {!noItems && mode === 'MANUAL' ? (
@@ -340,9 +318,7 @@ export function ReallocatePaymentModal({
                                   {item.toothNumber || <span className="text-muted">{allocationCopy.noTooth}</span>}
                                 </TableCell>
                                 <TableCell data-label={allocationCopy.colStatus}>
-                                  <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
-                                    {ITEM_STATUS_LABELS[item.status]}
-                                  </Badge>
+                                  <StatusBadge kind="treatmentPlanItem" status={item.status} />
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums" data-label={copy.colFree}>
                                   {formatCurrency(item.free, data.planCurrency)}
@@ -363,11 +339,11 @@ export function ReallocatePaymentModal({
                                     }
                                   />
                                   {fieldError ? (
-                                    <InlineError id={fieldErrorId(fieldId)} className="text-xs">
+                                    <InlineError id={fieldErrorId(fieldId)}>
                                       {fieldError}
                                     </InlineError>
                                   ) : overItem ? (
-                                    <p id={overItemId} className="text-xs text-danger tabular-nums">
+                                    <p id={overItemId} className="t-caption text-danger-text tabular-nums">
                                       {copy.overItem(formatCurrency(item.free, data.planCurrency))}
                                     </p>
                                   ) : null}
@@ -381,7 +357,7 @@ export function ReallocatePaymentModal({
 
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div
-                        className={cn('flex flex-col gap-0.5 text-sm tabular-nums', over ? 'text-danger' : 'text-ink')}
+                        className={cn('flex flex-col gap-0.5 text-sm tabular-nums', over ? 'text-danger-text' : 'text-ink')}
                       >
                         <p className="font-medium">
                           {copy.footer(

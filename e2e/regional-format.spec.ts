@@ -4,9 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { apiLogin, apiPost, createLocationViaApi, registerClinicViaApi, type ApiSession } from './support/api';
 import { fillRegistrationLocation, loginAs, waitForHydratedForm } from './support/auth';
+import { dataList, dataListRows } from './support/data-list';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { registrationTokenFor } from './support/mail';
-import type { RegionalSettings } from './support/regional';
+import { pickRegional, type RegionalSettings } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 import { regionalFormat, type HourCycle } from '../src/lib/format/regional-format';
 
@@ -112,7 +113,13 @@ function fromNow(days: number, extraMinutes = 0): Date {
   return new Date(Math.ceil(t / (5 * MIN)) * 5 * MIN);
 }
 
-async function scenario(request: APIRequestContext, sede: 'A' | 'B', settings: Sede, slot: number): Promise<Scenario> {
+async function scenario(
+  request: APIRequestContext,
+  sede: 'A' | 'B',
+  settings: Sede,
+  slot: number,
+  taken: readonly Date[] = [],
+): Promise<Scenario> {
   const s = at(sede);
   const patient = await apiPost<{ id: string }>(request, s, '/patients', {
     firstName: `Paciente${sede}`,
@@ -144,10 +151,19 @@ async function scenario(request: APIRequestContext, sede: 'A' | 'B', settings: S
     planItemIds: [item.id],
   });
   const now = new Date();
-  const arrivedStart = new Date(
-    Math.max(zonedMidnight(now, settings.timeZone) + slot * 6 * MIN, now.getTime() - (10 + slot * 6) * MIN),
-  );
+  const midnight = zonedMidnight(now, settings.timeZone);
+  const arrivedStart = new Date(Math.max(midnight + slot * 6 * MIN, now.getTime() - (10 + slot * 6) * MIN));
   arrivedStart.setUTCSeconds(0, 0);
+  // Las dos sedes comparten profesional y la BD prohíbe solaparle citas: si el
+  // día de esta sede acaba de empezar (el tope de medianoche la empuja), su
+  // ventana de 5 min puede caer encima de la de la otra sede. Se mueve justo
+  // detrás de la ocupada, o justo delante si así ya no cabe antes de ahora.
+  for (const other of taken) {
+    if (Math.abs(arrivedStart.getTime() - other.getTime()) >= 6 * MIN) continue;
+    const after = other.getTime() + 6 * MIN;
+    const before = other.getTime() - 6 * MIN;
+    arrivedStart.setTime(after < now.getTime() - MIN ? after : Math.max(before, midnight));
+  }
   expect(arrivedStart.getTime(), `ya no queda margen hoy en ${settings.timeZone}: vuelve a lanzar el spec`).toBeLessThan(
     now.getTime() - MIN,
   );
@@ -275,7 +291,7 @@ test('panel «En clínica»: 12 h en A, 24 h en B, y la reserva en otra cita con
   test.skip(!process.env.E2E_DATABASE_URL, DB_SKIP);
   test.setTimeout(150_000);
   scenarios.A = await scenario(request, 'A', SEDE_A, 0);
-  scenarios.B = await scenario(request, 'B', SEDE_B, 1);
+  scenarios.B = await scenario(request, 'B', SEDE_B, 1, [scenarios.A.arrivedStart]);
   const cases = [
     { sede: 'A', settings: SEDE_A, s: scenarios.A, order: (w: ReturnType<typeof wall>) => `${w.month}/${w.day}/${w.year}` },
     { sede: 'B', settings: SEDE_B, s: scenarios.B, order: (w: ReturnType<typeof wall>) => `${w.year}/${w.month}/${w.day}` },
@@ -350,7 +366,8 @@ test('en A: los recuentos de la importación y el tamaño de un documento con lo
       await expect(queued.getByText('Subido')).toBeVisible({ timeout: 30_000 });
       await page.reload();
     }
-    const row = panel.getByRole('row').filter({ hasText: name }).first();
+    // DataList: fila de tabla a 1440, tarjeta (listitem) a 390.
+    const row = dataListRows(dataList(panel, /^Documentos$/)).filter({ hasText: name }).first();
     await expect(row).toContainText('1.5 KB', { timeout: 15_000 });
     await row.scrollIntoViewIfNeeded();
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
@@ -369,12 +386,15 @@ test('modal de sede: reloj bajo la vista previa; A pasa a 24 h y el panel lo pin
     await page.getByRole('button', { name: 'Nueva sede' }).click();
     const create = page.getByRole('dialog', { name: 'Nueva sede' });
     await expect(create).toBeVisible();
-    await create.getByLabel('Zona horaria', { exact: true }).fill('Europe/Berlin');
-    await create.getByLabel('Formato regional', { exact: true }).fill('de-DE');
+    await pickRegional(create.getByLabel('Zona horaria', { exact: true }), 'Europe/Berlin');
+    await pickRegional(create.getByLabel('Formato regional', { exact: true }), 'de-DE');
     await create.getByRole('radio', { name: '12 h', exact: true }).check();
     // M7, en Chromium: un número de-DE exacto y la hora de 12 h del ejemplo.
     await expect(create.getByText(/^Vista previa: 12\.345,67 · \d{2}\.\d{2}\.\d{4}/)).toBeVisible();
-    await expect(create.locator('[id$="-hourCycle-example"]')).toHaveText(/^(1[0-2]|[1-9]):[0-5]\d\s[ap]\.\s?m\.$/);
+    // El ejemplo es la descripción de la opción «12 h» (RadioCard de P2: `<id>-description`).
+    const twelve = create.getByRole('radio', { name: '12 h', exact: true });
+    const twelveExample = create.locator(`[id="${await twelve.getAttribute('id')}-description"]`);
+    await expect(twelveExample).toHaveText(/^(1[0-2]|[1-9]):[0-5]\d\s[ap]\.\s?m\.$/);
     // Grid: formato → vista previa → Reloj, cada uno a lo ancho, sin media fila vacía a 2 columnas.
     const preview = create.getByText(/^Vista previa:/);
     const clock = create.getByRole('radiogroup', { name: 'Reloj' });
@@ -422,54 +442,65 @@ test('modal de sede: reloj bajo la vista previa; A pasa a 24 h y el panel lo pin
   expect(a.hourCycle).toBe('h23');
 });
 
-for (const viewport of VIEWPORTS) {
-  test(`${viewport.name} px: registro por la UI con el reloj que sugiere el navegador`, async ({ page, request }) => {
-    test.setTimeout(90_000);
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    const tag = `${suffix}${viewport.width}`;
-    const email = `registro.g1b.${tag}@example.com`;
-    const sub = `g1b-registro-${tag}`;
-    const regOrigin = tenantOrigin(sub);
+// R1: con una zona de un solo país (la de la suite, America/Bogota → Colombia)
+// el registro propone el país y su formato (es-CO) y el reloj sale de ese
+// formato, no del navegador. Esta prueba mira el reloj del NAVEGADOR, así que
+// abre el registro en una zona que no es de ningún país.
+test.describe('registro con el reloj del navegador', () => {
+  test.use({ timezoneId: 'Etc/UTC' });
 
-    await page.goto(`${regOrigin}/register`);
-    await waitForHydratedForm(page);
-    const browserCycle = await page.evaluate(() => {
-      const hc = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
-      return hc === 'h11' || hc === 'h12' ? 'h12' : hc === 'h23' || hc === 'h24' ? 'h23' : null;
+  for (const viewport of VIEWPORTS) {
+    test(`${viewport.name} px: registro por la UI con el reloj que sugiere el navegador`, async ({ page, request }) => {
+      test.setTimeout(90_000);
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const tag = `${suffix}${viewport.width}`;
+      const email = `registro.g1b.${tag}@example.com`;
+      const sub = `g1b-registro-${tag}`;
+      const regOrigin = tenantOrigin(sub);
+
+      await page.goto(`${regOrigin}/register`);
+      await waitForHydratedForm(page);
+      const browserCycle = await page.evaluate(() => {
+        const hc = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
+        return hc === 'h11' || hc === 'h12' ? 'h12' : hc === 'h23' || hc === 'h24' ? 'h23' : null;
+      });
+      expect(browserCycle, 'el navegador de la prueba declara un reloj').not.toBeNull();
+      const label = browserCycle === 'h12' ? '12 h' : '24 h';
+      const clock = page.getByRole('radiogroup', { name: 'Reloj' });
+      await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
+      await expect(clock).toContainText('Sugerido por tu navegador.');
+
+      // Paso 1 (la clínica y su sede).
+      await page.getByLabel('Nombre de la clínica').fill(`Clínica Registro ${tag}`);
+      await page.getByLabel('Dirección web').fill(sub);
+      // Sin `hourCycle`: se queda el que sugirió el navegador.
+      await fillRegistrationLocation(page, { country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES' });
+      await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
+      if (viewport.width === 390) await expectNoHorizontalScroll(page);
+      await clock.scrollIntoViewIfNeeded();
+      await shoot(page, 'registro-reloj', viewport.width);
+      await page.getByRole('button', { name: 'Continuar' }).click();
+      // Paso 2 (la cuenta).
+      await page.getByLabel('Nombre completo').fill('Lucía Registro');
+      await page.getByLabel('Correo electrónico').fill(email);
+      await page.getByLabel('Contraseña', { exact: true }).fill(password);
+
+      const sent = page.waitForRequest(
+        (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/auth/register'),
+      );
+      await page.getByRole('button', { name: 'Crear cuenta' }).click();
+      expect((await sent).postDataJSON()).toMatchObject({ locationHourCycle: browserCycle });
+      await expect(page.getByRole('heading', { name: 'Revisa tu correo' })).toBeVisible({ timeout: 10_000 });
+
+      const token = await registrationTokenFor(email);
+      const verify = await request.post(`${API_URL}/auth/register/verify`, { data: { token, password } });
+      expect(verify.ok(), await verify.text()).toBeTruthy();
+      const [location] = await locationsOf(request, await apiLogin(request, regOrigin, email, password));
+      expect(location.hourCycle).toBe(browserCycle);
+      expect(location.regionalSettingsReviewedAt, 'la sede elegida en el registro nace revisada').not.toBeNull();
     });
-    expect(browserCycle, 'el navegador de la prueba declara un reloj').not.toBeNull();
-    const label = browserCycle === 'h12' ? '12 h' : '24 h';
-    const clock = page.getByRole('radiogroup', { name: 'Reloj' });
-    await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
-    await expect(clock).toContainText('Sugerido por tu navegador.');
-
-    await page.getByLabel('Nombre de la clínica').fill(`Clínica Registro ${tag}`);
-    await page.getByLabel('Subdominio').fill(sub);
-    await page.getByLabel('Nombre completo').fill('Lucía Registro');
-    await page.getByLabel('Correo electrónico').fill(email);
-    await page.getByLabel('Contraseña', { exact: true }).fill(password);
-    // Sin `hourCycle`: se queda el que sugirió el navegador.
-    await fillRegistrationLocation(page, { country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES' });
-    await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
-    if (viewport.width === 390) await expectNoHorizontalScroll(page);
-    await clock.scrollIntoViewIfNeeded();
-    await shoot(page, 'registro-reloj', viewport.width);
-
-    const sent = page.waitForRequest(
-      (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/auth/register'),
-    );
-    await page.getByRole('button', { name: 'Crear cuenta' }).click();
-    expect((await sent).postDataJSON()).toMatchObject({ locationHourCycle: browserCycle });
-    await expect(page.getByRole('heading', { name: 'Revisa tu correo' })).toBeVisible({ timeout: 10_000 });
-
-    const token = await registrationTokenFor(email);
-    const verify = await request.post(`${API_URL}/auth/register/verify`, { data: { token, password } });
-    expect(verify.ok(), await verify.text()).toBeTruthy();
-    const [location] = await locationsOf(request, await apiLogin(request, regOrigin, email, password));
-    expect(location.hourCycle).toBe(browserCycle);
-    expect(location.regionalSettingsReviewedAt, 'la sede elegida en el registro nace revisada').not.toBeNull();
-  });
-}
+  }
+});
 
 test('una sede con el reloj en NULL: el aviso de formato de sede en la importación y el 409 de la API en el panel, nunca otro reloj', async ({
   page,

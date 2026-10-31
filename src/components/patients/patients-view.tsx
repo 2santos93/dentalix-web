@@ -8,11 +8,12 @@ import { listPayers, type Payer } from '@/lib/payers/payers-api';
 import { PatientsTable } from '@/components/patients/patients-table';
 import { PageHeader } from '@/components/shared/page-header';
 import { Pagination } from '@/components/shared/pagination';
-import { ListToolbar, ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
+import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 import { SectionError } from '@/components/errors/section-error';
 import { FieldError } from '@/components/errors/field-error';
-import { cn } from '@/lib/utils';
+import { useSedeClock } from '@/lib/locations/sede-clock';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 
 // Corto para no notarse al teclear, largo para no lanzar una petición por
@@ -28,12 +29,17 @@ const copy = {
     'La ficha de paciente es compartida: ves todos los pacientes de la clínica, no solo los de la sede activa.',
   newPatient: 'Nuevo paciente',
   searchLabel: 'Buscar por nombre, apellido o documento',
-  searchPlaceholder: 'Buscar…',
+  // La búsqueda de la API mira nombre, apellido y documento —no el teléfono—:
+  // el placeholder no promete lo que no hace (informe K2). Corto para caber
+  // entero en los 288px del buscador; la lupa ya dice «buscar».
+  searchPlaceholder: 'Nombre o documento',
   countNoun: 'paciente',
   countNounPlural: 'pacientes',
   genericError: 'No pudimos cargar los pacientes.',
-  payerFilterLabel: 'Filtrar por pagador',
-  allPayers: 'Todos los pagadores',
+  // Filtra por la cobertura del paciente (DX-153): «Cobertura: Sura EPS» se
+  // entiende; «Todos los pagadores» suelto no decía qué filtraba.
+  payerFilterLabel: 'Cobertura',
+  allPayers: 'Todas',
   payersError: 'No cargaron los pagadores',
 };
 
@@ -72,6 +78,10 @@ export function PatientsView({ token }: PatientsViewProps) {
   const [payers, setPayers] = useState<Payer[]>([]);
   const [payersFailed, setPayersFailed] = useState(false);
   const [payersRetry, setPayersRetry] = useState(0);
+  // «Última atención» se pinta con la fecha de la sede (DX-378). Las sedes ya
+  // las leyó el shell: la sesión las cachea, no es otra petición.
+  const sedeClock = useSedeClock(token);
+  const clock = sedeClock.status === 'ready' ? sedeClock.clock : null;
 
   // El catálogo de pagadores es una opción de un control: si falla, el listado
   // sigue funcionando y el fallo se dice junto al select (escalón 2).
@@ -173,22 +183,33 @@ export function PatientsView({ token }: PatientsViewProps) {
               className="sm:w-56"
             />
           ) : (
-            <select
-              aria-label={copy.payerFilterLabel}
-              value={payerId}
-              onChange={(e) => {
-                setPayerId(e.target.value);
-                setPage(1);
-              }}
-              className={cn(toolbarFieldClass, 'sm:w-56')}
-            >
-              <option value="">{copy.allPayers}</option>
-              {payers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            // Etiqueta visible DENTRO del control («Cobertura  Todas ▾»): ocupa
+            // lo mismo que el select y dice qué filtra. Es un <label> de
+            // verdad, así que también es el nombre accesible.
+            <div className="relative sm:w-60">
+              <label
+                htmlFor="patients-payer-filter"
+                className="pointer-events-none absolute top-1/2 left-3 z-[1] -translate-y-1/2 text-sm text-muted"
+              >
+                {copy.payerFilterLabel}
+              </label>
+              <NativeSelect
+                id="patients-payer-filter"
+                value={payerId}
+                onChange={(e) => {
+                  setPayerId(e.target.value);
+                  setPage(1);
+                }}
+                selectClassName="pl-[5.75rem]"
+              >
+                <option value="">{copy.allPayers}</option>
+                {payers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
           )}
         </ListToolbar>
 
@@ -216,6 +237,7 @@ export function PatientsView({ token }: PatientsViewProps) {
               loading={loading}
               filtered={search !== '' || payerId !== ''}
               payerOnly={search === '' && payerId !== ''}
+              clock={clock}
             />
             <Pagination
               page={page}

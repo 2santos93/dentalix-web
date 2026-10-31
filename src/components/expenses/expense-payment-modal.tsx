@@ -114,6 +114,7 @@ export function ExpensePaymentModal({
       submitting={submitting}
       submitDisabled={!today}
       error={error}
+      touchTargets
       onCloseAutoFocus={onCloseAutoFocus}
     >
       {configured.error ? <SectionError description={configured.error} onRetry={configured.retry} /> : null}

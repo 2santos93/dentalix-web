@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientCreateWizard } from './patient-create-wizard';
 import { createPatient, type Patient } from '@/lib/patients/patients-api';
@@ -73,6 +73,27 @@ describe('PatientCreateWizard', () => {
     });
   });
 
+  it('crea el paciente desde el paso 1: los pasos clínicos y la autorización son opcionales', async () => {
+    const user = userEvent.setup();
+    mockedCreatePatient.mockResolvedValue(CREATED);
+    render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
+    expect(screen.getByRole('button', { name: /\(opcional\)\s*Antecedentes/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^1\s*Datos$/ })).toBeInTheDocument();
+    // Sin datos, «Crear paciente» marca lo que falta y no envía.
+    await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+    expect(mockedCreatePatient).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^nombre$/i)).toHaveFocus();
+    await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
+    await user.type(screen.getByLabelText(/apellido/i), 'García');
+    await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
+    await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+    expect(mockedCreatePatient).toHaveBeenCalledTimes(1);
+    const input = mockedCreatePatient.mock.calls[0][1];
+    expect(input).toMatchObject({ firstName: 'Ana', lastName: 'García', docType: 'NATIONAL_ID' });
+    expect(input).not.toHaveProperty('medicalHistory');
+    expect(input).not.toHaveProperty('dataConsents');
+  });
+
   it('renders the wizard steps and the basic-info fields on step 1', () => {
     render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
     expect(screen.getByText('Datos')).toBeInTheDocument();
@@ -119,7 +140,7 @@ describe('PatientCreateWizard', () => {
 
     await user.click(await screen.findByRole('checkbox', { name: /datos personales/i }));
     await user.click(screen.getByRole('checkbox', { name: /datos sensibles de salud/i }));
-    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await user.click(screen.getByRole('button', { name: /crear paciente/i }));
 
     expect(mockedCreatePatient).toHaveBeenCalledTimes(1);
     const [, input] = mockedCreatePatient.mock.calls[0];
@@ -205,6 +226,24 @@ describe('PatientCreateWizard', () => {
       ]);
     });
 
+    it('la fecha de nacimiento se escribe dd/mm/aaaa (locale de la sede), muestra la edad y se envía como día civil', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue(CREATED);
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+      await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
+      await user.type(screen.getByLabelText(/apellido/i), 'García');
+      await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
+      const birth = screen.getByRole('group', { name: 'Fecha de nacimiento (opcional)' });
+      const segments = within(birth).getAllByRole('spinbutton');
+      expect(segments.map((segment) => segment.getAttribute('data-type'))).toEqual(['day', 'month', 'year']);
+      await user.click(segments[0]);
+      await user.keyboard('05041990');
+      expect(screen.getByTestId('date-field-age')).toHaveTextContent(/^\d+ años$/);
+      await goToStep(user, 1);
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+      expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ birthDate: '1990-04-05T00:00:00.000Z' });
+    });
+
     it('creates with the chosen generic type', async () => {
       const user = userEvent.setup();
       mockedCreatePatient.mockResolvedValue(CREATED);
@@ -213,7 +252,7 @@ describe('PatientCreateWizard', () => {
       await user.type(screen.getByLabelText(/apellido/i), 'García');
       await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'RESIDENCE_PERMIT');
       await goToStep(user, 1);
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ docType: 'RESIDENCE_PERMIT' });
     });
 
@@ -249,7 +288,7 @@ describe('PatientCreateWizard', () => {
       expect(screen.getByText('Si lo escribes, se muestra en lugar del tipo en fichas y documentos.')).toBeInTheDocument();
       await user.type(screen.getByLabelText('Nombre del documento (opcional)'), '  ID   local ');
       await goToStep(user, 1);
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ docTypeLabel: 'ID local' });
       unmount();
 
@@ -259,7 +298,7 @@ describe('PatientCreateWizard', () => {
       await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
       await user.type(screen.getByLabelText('Nombre del documento (opcional)'), '   ');
       await goToStep(user, 1);
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       expect(mockedCreatePatient.mock.calls[1][1]).not.toHaveProperty('docTypeLabel');
     });
 
@@ -290,7 +329,7 @@ describe('PatientCreateWizard', () => {
       fireEvent.change(label, { target: { value: '\u{1D49C}'.repeat(40) } });
       expect(label).not.toHaveAttribute('aria-invalid');
       await goToStep(user, 1);
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ docTypeLabel: '\u{1D49C}'.repeat(40) });
     });
 
@@ -320,7 +359,7 @@ describe('PatientCreateWizard', () => {
         await user.type(email, 'ana@x.co');
         expect(email).not.toHaveAttribute('aria-invalid');
         await goToStep(user, 1);
-        await user.click(screen.getByRole('button', { name: /guardar/i }));
+        await user.click(screen.getByRole('button', { name: /crear paciente/i }));
         expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ email: 'ana@x.co' });
       },
     );
@@ -345,7 +384,7 @@ describe('PatientCreateWizard', () => {
       fireEvent.change(label, { target: { value: 'ID local' } });
       expect(label).not.toHaveAttribute('aria-invalid');
       await goToStep(user, 1);
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ docTypeLabel: 'ID local' });
     });
 
@@ -358,7 +397,7 @@ describe('PatientCreateWizard', () => {
       await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
       await user.type(screen.getByLabelText(/número de documento/i), 'V-12.345.678');
       await goToStep(user, 1);
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({
         docType: 'NATIONAL_ID',
@@ -386,7 +425,7 @@ describe('PatientCreateWizard', () => {
       render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
       await fillBasicsAndGoToConsent(user);
       await screen.findAllByRole('checkbox');
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       const [, input] = mockedCreatePatient.mock.calls[0];
       expect(input).not.toHaveProperty('dataConsents');
       expect(input).not.toHaveProperty('dataConsentAccepted');
@@ -400,7 +439,7 @@ describe('PatientCreateWizard', () => {
       await user.click(
         await screen.findByRole('checkbox', { name: /comunicaciones comerciales/i }),
       );
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       expect(mockedCreatePatient.mock.calls[0][1].dataConsents).toEqual({
         policyVersionId: 'pol-1',
         decisions: [{ scope: 'MARKETING', granted: true }],
@@ -415,7 +454,7 @@ describe('PatientCreateWizard', () => {
       await fillBasicsAndGoToConsent(user);
       expect(await screen.findByText(/aún no ha publicado su política/i)).toBeInTheDocument();
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       expect(mockedCreatePatient.mock.calls[0][1]).not.toHaveProperty('dataConsents');
     });
 
@@ -457,7 +496,7 @@ describe('PatientCreateWizard', () => {
       expect(screen.queryByText(/resumen de la historia clínica/i)).not.toBeInTheDocument();
       expect(screen.getByText(/la completará el equipo clínico/i)).toBeInTheDocument();
       await user.click(await screen.findByRole('checkbox', { name: /datos personales/i }));
-      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
 
       expect(mockedCreatePatient).toHaveBeenCalledTimes(1);
       const [, input] = mockedCreatePatient.mock.calls[0];

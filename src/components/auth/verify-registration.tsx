@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
+import { AUTH_FORM_CLASS, AUTH_SUBMIT_CLASS } from './auth-layout';
 
 type RegisterVerified = components['schemas']['RegisterVerifiedDto'];
 
@@ -67,10 +68,10 @@ export function VerifyRegistration({ verifyToken }: { verifyToken: string }) {
   if (loginHref) {
     return (
       <div role="status" className="flex flex-col gap-3">
-        <CheckCircle2 className="size-8 text-success" aria-hidden="true" />
-        <h2 className="text-lg font-semibold text-ink">{copy.doneTitle}</h2>
+        <CheckCircle2 className="size-8 text-success-text" aria-hidden="true" />
+        <h2 className="t-title text-ink">{copy.doneTitle}</h2>
         <p className="text-sm text-muted">{copy.doneBody}</p>
-        <Button asChild size="lg" className="mt-1 w-full">
+        <Button asChild size="lg" className={AUTH_SUBMIT_CLASS}>
           <a href={loginHref}>{copy.login}</a>
         </Button>
       </div>
@@ -78,7 +79,7 @@ export function VerifyRegistration({ verifyToken }: { verifyToken: string }) {
   }
 
   return (
-    <form onSubmit={handleConfirm} className="flex flex-col gap-4" noValidate>
+    <form onSubmit={handleConfirm} className={AUTH_FORM_CLASS} noValidate>
       <p className="text-sm text-muted">{copy.intro}</p>
       <FormField htmlFor="verify-registration-password" label={copy.passwordLabel}>
         <Input
@@ -99,7 +100,7 @@ export function VerifyRegistration({ verifyToken }: { verifyToken: string }) {
           {error}
         </InlineError>
       ) : null}
-      <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+      <Button type="submit" size="lg" className={AUTH_SUBMIT_CLASS} disabled={submitting}>
         {submitting ? (
           <>
             <Loader2 className="animate-spin" /> {copy.submitting}
@@ -108,7 +109,7 @@ export function VerifyRegistration({ verifyToken }: { verifyToken: string }) {
           copy.submit
         )}
       </Button>
-      <p className="text-xs text-muted">{copy.notYou}</p>
+      <p className="t-caption">{copy.notYou}</p>
     </form>
   );
 }

@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Lock, Wallet } from 'lucide-react';
+import { Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -11,6 +11,7 @@ import {
   getCurrentCashSession,
   listCashSessions,
   type CashSessionDetail,
+  type CashSessionSummary,
   type CashSessionPage,
   type CashSessionStatus,
   type CurrentCashSession,
@@ -18,8 +19,7 @@ import {
 import {
   differenceText,
   moneyList,
-  sessionStatusLabel,
-  sessionStatusVariant,
+  sessionStatusKey,
 } from '@/lib/cash-sessions/presentation';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { onLocationChange } from '@/lib/locations/location-store';
@@ -33,20 +33,15 @@ import { PageHeader } from '@/components/shared/page-header';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Pagination } from '@/components/shared/pagination';
-import { ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
+import { ResultCount } from '@/components/shared/list-toolbar';
 import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Callout } from '@/components/ui/callout';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { NativeSelect } from '@/components/ui/native-select';
+import { SectionHeader } from '@/components/ui/section-header';
 import type { CashViewTabs } from '@/components/payments/cash-register-view';
 import { OpenCashSessionModal } from './open-cash-session-modal';
 import { CloseCashSessionModal } from './close-cash-session-modal';
@@ -89,13 +84,9 @@ const copy = {
   colStatus: 'Estado',
   colFloat: 'Fondo',
   colDifference: 'Diferencia',
-  colActions: 'Acciones',
-  view: 'Ver',
-  viewLabel: (when: string) => `Ver el turno del ${when}`,
-  viewLabelNoZone: (sede: string) => `Ver el turno de ${sede} (hora por configurar)`,
-  print: 'Informe',
-  printLabel: (when: string) => `Informe de cierre del turno del ${when}`,
-  printLabelNoZone: (sede: string) => `Informe de cierre del turno de ${sede} (hora por configurar)`,
+  rowLabel: (when: string) => `turno del ${when}`,
+  rowLabelNoZone: (sede: string) => `turno de ${sede} (hora por configurar)`,
+  print: 'Informe de cierre',
   empty: 'Aún no hay turnos de caja.',
   emptyHint: 'Cuando alguien abra una caja aparecerá aquí, con su cierre.',
   listError: 'No pudimos cargar los turnos.',
@@ -241,7 +232,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
         className="flex flex-col gap-8"
         {...(tabs ? { role: 'tabpanel', id: tabs.panelId, 'aria-labelledby': tabs.tabId } : {})}
       >
-        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
 
@@ -275,27 +266,27 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
         ) : null}
 
         <section aria-labelledby="cash-shifts-title" className="flex flex-col gap-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 id="cash-shifts-title" className="t-title text-ink">
-                {copy.listTitle}
-              </h2>
-              <p className="text-sm text-muted">{isAdmin ? copy.scopeAdmin : copy.scopeOwn}</p>
-            </div>
-            <select
-              aria-label={copy.statusLabel}
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value as CashSessionStatus | 'ALL');
-                setPage(1);
-              }}
-              className={cn(toolbarFieldClass, 'sm:w-52')}
-            >
-              <option value="ALL">{copy.statusAll}</option>
-              <option value="OPEN">{copy.statusOpen}</option>
-              <option value="CLOSED">{copy.statusClosed}</option>
-            </select>
-          </div>
+          <SectionHeader
+            titleId="cash-shifts-title"
+            title={copy.listTitle}
+            description={isAdmin ? copy.scopeAdmin : copy.scopeOwn}
+            actions={
+              <NativeSelect
+                aria-label={copy.statusLabel}
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value as CashSessionStatus | 'ALL');
+                  setPage(1);
+                }}
+                className="w-full sm:w-52"
+              >
+                <option value="ALL">{copy.statusAll}</option>
+                <option value="OPEN">{copy.statusOpen}</option>
+                <option value="CLOSED">{copy.statusClosed}</option>
+              </NativeSelect>
+            }
+            className="[&>div:last-child]:max-sm:w-full"
+          />
 
           {!listLoading && !listError && list ? (
             <ResultCount total={list.total} noun={copy.countNoun} nounPlural={copy.countNounPlural} />
@@ -311,80 +302,28 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
             emptyIcon={<Wallet aria-hidden />}
             skeleton={<TableSkeleton rows={3} />}
           >
-            <Card className="overflow-hidden p-0">
-              <Table aria-label={copy.tableLabel}>
-                <caption className="sr-only">{copy.tableLabel}</caption>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead scope="col">{copy.colOpened}</TableHead>
-                    <TableHead scope="col">{copy.colLocation}</TableHead>
-                    <TableHead scope="col">{copy.colOpenedBy}</TableHead>
-                    <TableHead scope="col">{copy.colStatus}</TableHead>
-                    <TableHead scope="col" className="text-right">
-                      {copy.colFloat}
-                    </TableHead>
-                    <TableHead scope="col" className="text-right">
-                      {copy.colDifference}
-                    </TableHead>
-                    <TableHead scope="col">
-                      <span className="sr-only">{copy.colActions}</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(list?.items ?? []).map((item) => {
-                    const when = openedAtIn(item.openedAt, item.location.id);
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell className="tabular-nums" data-label={copy.colOpened}>
-                          {when ?? <NoZoneLabel />}
-                        </TableCell>
-                        <TableCell data-label={copy.colLocation}>{item.location.name}</TableCell>
-                        <TableCell data-label={copy.colOpenedBy}>{item.openedBy.fullName ?? '—'}</TableCell>
-                        <TableCell data-label={copy.colStatus}>
-                          <Badge variant={sessionStatusVariant(item)}>{sessionStatusLabel(item)}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums" data-label={copy.colFloat}>
-                          {moneyList(item.floats)}
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            'text-right font-medium tabular-nums',
-                            item.differences.some((d) => d.amount !== 0) ? 'text-danger' : 'text-ink',
-                          )}
-                          data-label={copy.colDifference}
-                        >
-                          {item.status === 'CLOSED' ? differenceText(item.differences) : '—'}
-                        </TableCell>
-                        <TableCell className="text-right" data-label={copy.colActions}>
-                          <span className="inline-flex flex-wrap items-center justify-end gap-3">
-                            <Button asChild variant="outline" size="sm">
-                              <Link
-                                href={cashSessionHref(item.id)}
-                                aria-label={when ? copy.viewLabel(when) : copy.viewLabelNoZone(item.location.name)}
-                              >
-                                {copy.view}
-                              </Link>
-                            </Button>
-                            {item.status === 'CLOSED' ? (
-                              <Button asChild variant="outline" size="sm">
-                                <Link
-                                  href={cashSessionReportHref(item.id)}
-                                  target="_blank"
-                                  aria-label={when ? copy.printLabel(when) : copy.printLabelNoZone(item.location.name)}
-                                >
-                                  {copy.print}
-                                </Link>
-                              </Button>
-                            ) : null}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </Card>
+            <DataList
+              label={copy.tableLabel}
+              rows={list?.items ?? []}
+              columns={shiftColumns(openedAtIn)}
+              getRowKey={(item) => item.id}
+              getRowHref={(item) => cashSessionHref(item.id)}
+              getRowLabel={(item) => {
+                const when = openedAtIn(item.openedAt, item.location.id);
+                return when ? copy.rowLabel(when) : copy.rowLabelNoZone(item.location.name);
+              }}
+              rowActions={(item) =>
+                item.status === 'CLOSED'
+                  ? [
+                      {
+                        label: copy.print,
+                        icon: <Printer aria-hidden />,
+                        onSelect: () => window.open(cashSessionReportHref(item.id), '_blank', 'noopener'),
+                      },
+                    ]
+                  : []
+              }
+            />
           </AsyncSection>
 
           {!listError && list ? (
@@ -445,6 +384,61 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
   );
 }
 
+/**
+ * Columnas de la lista de turnos. En el teléfono: apertura y diferencia en la
+ * línea 1; sede, quien abrió, estado y fondo en la 2. Toda la fila abre el
+ * turno; el informe de un cierre va en «⋯».
+ */
+function shiftColumns(
+  openedAtIn: (instant: string, locationId: string) => string | null,
+): DataListColumn<CashSessionSummary>[] {
+  return [
+    {
+      id: 'opened',
+      header: copy.colOpened,
+      mobile: 'primary',
+      cell: (item) => {
+        const when = openedAtIn(item.openedAt, item.location.id);
+        return when ? <span className="tabular-nums">{when}</span> : <NoZoneLabel />;
+      },
+      mobileCell: (item) => openedAtIn(item.openedAt, item.location.id) ?? copy.noZone,
+    },
+    { id: 'location', header: copy.colLocation, cell: (item) => item.location.name },
+    { id: 'openedBy', header: copy.colOpenedBy, cell: (item) => item.openedBy.fullName ?? '—', mobileCell: (item) => item.openedBy.fullName },
+    {
+      id: 'status',
+      header: copy.colStatus,
+      cell: (item) => <StatusBadge kind="cashSession" status={sessionStatusKey(item)} />,
+    },
+    { id: 'float', header: copy.colFloat, numeric: true, cell: (item) => moneyList(item.floats) },
+    {
+      id: 'difference',
+      header: copy.colDifference,
+      numeric: true,
+      mobile: 'trailing',
+      cell: (item) =>
+        item.status === 'CLOSED' ? (
+          <span
+            className={cn(
+              'font-medium',
+              item.differences.some((d) => d.amount !== 0) ? 'text-danger-text' : 'text-ink',
+            )}
+          >
+            {differenceText(item.differences)}
+          </span>
+        ) : (
+          <span className="text-muted">—</span>
+        ),
+      mobileCell: (item) =>
+        item.status === 'CLOSED' ? (
+          <span className={cn(item.differences.some((d) => d.amount !== 0) && 'text-danger-text')}>
+            {differenceText(item.differences)}
+          </span>
+        ) : null,
+    },
+  ];
+}
+
 /** «Por configurar» con su explicación: la hora de una caja de una sede sin zona. */
 function NoZoneLabel() {
   return (
@@ -480,7 +474,7 @@ function CurrentSessionCard({
   const headingId = React.useId();
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
-      <div className="flex flex-col gap-3 border-b border-hairline px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+      <div className="flex flex-col gap-3 border-b border-border-subtle px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
         <div className="min-w-0">
           <h2 id={headingId} className="t-title text-ink">
             {copy.currentTitle(sedeName || '…')}
@@ -496,18 +490,18 @@ function CurrentSessionCard({
           {session ? (
             <p className="text-sm text-muted tabular-nums">{copy.outflowsCount(session.outflows.length)}</p>
           ) : null}
-          {current.settings.requireOpenSession ? (
-            <p className="mt-1 text-sm text-warning">{copy.requireOpen}</p>
+          {current.settings.requireOpenSession && session ? (
+            <p className="text-sm text-muted">{copy.requireOpen}</p>
           ) : null}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-row sm:shrink-0">
           {session ? (
             <>
-              <Button asChild variant="outline">
+              <Button asChild variant="ghost">
                 <Link href={cashSessionHref(session.id)}>{copy.viewShift}</Link>
               </Button>
               {currencyMissing ? null : (
-                <Button type="button" variant="outline" onClick={onOutflow}>
+                <Button type="button" variant="secondary" onClick={onOutflow}>
                   {copy.outflow}
                 </Button>
               )}
@@ -522,6 +516,11 @@ function CurrentSessionCard({
           )}
         </div>
       </div>
+      {current.settings.requireOpenSession && !session ? (
+        <div className="px-4 pt-3 sm:px-6">
+          <Callout tone="warning">{copy.requireOpen}</Callout>
+        </div>
+      ) : null}
       {currencyMissing ? (
         <div className="px-4 pt-3 sm:px-6">
           <SedeConfigError kind="currency" onRetry={onRetryLocations} locationId={current.locationId} />
@@ -535,7 +534,7 @@ function CurrentSessionCard({
         ) : (
           <>
             <p className="t-label text-muted">{copy.expectedTitle}</p>
-            <ul className="mt-1 divide-y divide-hairline">
+            <ul className="mt-1 divide-y divide-border-subtle">
               {session.expected.map((line) => (
                 <li
                   key={`${line.currency}-${line.method}`}
@@ -545,7 +544,7 @@ function CurrentSessionCard({
                     {PAYMENT_METHOD_LABELS[line.method]}{' '}
                     <span className="text-xs text-muted">{line.currency}</span>
                   </span>
-                  <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger' : 'text-ink')}>
+                  <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger-text' : 'text-ink')}>
                     {formatCurrency(line.expected, line.currency)}
                   </span>
                 </li>

@@ -125,8 +125,8 @@ describe('CashSessionReport (DX-027)', () => {
       const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
       const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
       expect(within(cashRow).getAllByRole('cell')[5]).toHaveTextContent(/-20\.?000,00/);
-      expect(within(cashRow).getAllByRole('cell')[5]).toHaveClass('text-danger');
-      expect(within(cardRow).getAllByRole('cell')[5]).not.toHaveClass('text-danger');
+      expect(within(cashRow).getAllByRole('cell')[5]).toHaveClass('text-danger-text');
+      expect(within(cardRow).getAllByRole('cell')[5]).not.toHaveClass('text-danger-text');
     });
 
     it('la anulación de una salida de una caja cerrada es un ajuste «Anulación de salida» con su gasto', () => {

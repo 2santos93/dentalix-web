@@ -99,4 +99,48 @@ describe('Table apilada en móvil', () => {
       expect(screen.queryByRole('region')).not.toBeInTheDocument();
     });
   });
+
+  it('stack={false} (tabla de comparación) no se apila: la cabecera se ve en el teléfono', () => {
+    render(
+      <Table aria-label="Caja" stack={false}>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Paciente</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell>Ana</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    );
+    const table = screen.getByRole('table', { name: 'Caja' });
+    expect(table).not.toHaveClass('max-sm:block');
+    expect(table.querySelector('thead')).not.toHaveClass('max-sm:sr-only');
+    expect(screen.getByText('Ana')).not.toHaveClass('max-sm:flex');
+  });
+});
+
+describe('Cabeceras en tipo frase (DESIGN.md → Typography)', () => {
+  it('la cabecera y la etiqueta apilada usan Label muted, sin mayúsculas espaciadas', () => {
+    render(
+      <Table aria-label="t">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Paciente</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell data-label="Paciente">Ana</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    );
+    const th = screen.getByRole('columnheader', { name: 'Paciente' });
+    expect(th).toHaveClass('t-label', 'text-muted');
+    expect(th.className).not.toMatch(/uppercase|tracking-wide/);
+    expect(screen.getByRole('cell').className).not.toMatch(/uppercase|tracking-wide/);
+  });
 });

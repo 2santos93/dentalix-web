@@ -1,10 +1,9 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { MapPin, Armchair, CalendarClock } from 'lucide-react';
+import { MapPin, Armchair, CalendarClock, Maximize2 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
-  PUNCTUALITY_CLASSES,
   inClinicCount,
   inClinicFormat,
   punctualityLabel,
@@ -34,6 +33,10 @@ import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { cn } from '@/lib/utils';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { SectionHeader } from '@/components/ui/section-header';
+import { Badge } from '@/components/ui/badge';
+import { triageLabels } from '@/lib/appointments/walk-in';
 
 export const inClinicCopy = {
   title: 'En clínica',
@@ -41,8 +44,11 @@ export const inClinicCopy = {
   loading: 'Cargando quién está en la clínica…',
   emptyTitle: 'Nadie en espera',
   emptyHint: 'Cuando recepción marque «Llegó» en la agenda, el paciente aparece aquí.',
-  noLocationTitle: 'Elige una sede',
-  noLocationHint: 'El panel es por sede: elige una arriba para ver quién está en la clínica.',
+  noLocation: 'Elige una sede para ver quién está en la clínica.',
+  chooseLocation: 'Elegir sede',
+  noLocationTitle: 'Este panel es por sede',
+  noLocationHint: 'Elige qué sede quieres ver.',
+  openFullscreen: 'Abrir a pantalla completa',
   retry: 'Reintentar',
   refreshHint: 'Se actualiza solo cada 45 segundos.',
   count: (n: number) => (n === 1 ? '1 paciente' : `${n} pacientes`),
@@ -62,7 +68,14 @@ export const inClinicCopy = {
     readyForCheckout: (m: number) => `Por cobrar ${m} min`,
   },
   appointmentAt: (time: string) => `Cita ${time}`,
+  // DX-470: urgencia sin cita y su triaje de recepción.
+  urgent: 'Urgencia',
+  walkIn: 'Sin cita',
+  overbooked: 'Sobrecupo',
+  triage: (patient: string) => `Señales de triaje de ${patient}`,
   arrivedAt: (time: string, punctuality: string) => `Llegó ${time} · ${punctuality}`,
+  // Sin cita no hay hora con la que comparar: solo la llegada.
+  arrivedAtWalkIn: (time: string) => `Llegó ${time}`,
 };
 
 type GroupKey = keyof typeof inClinicCopy.groups;
@@ -80,6 +93,29 @@ interface InClinicPanelProps {
   className?: string;
   /** false en su propia ruta, donde el título lo pone la cabecera de la página. */
   showTitle?: boolean;
+  /**
+   * «Elegir sede» del estado sin sede. Por defecto enfoca (y abre) el selector
+   * de sede visible de la app; quien pinta el panel en una hoja la cierra antes.
+   */
+  onChooseLocation?: () => void;
+}
+
+/**
+ * Enfoca el selector de sede global visible (barra lateral en escritorio,
+ * barra superior en el teléfono) y abre su lista si el navegador lo permite.
+ * El panel no duplica el selector: hay UNA sede activa en la app.
+ */
+export function focusLocationSwitcher(): void {
+  const select = Array.from(document.querySelectorAll<HTMLSelectElement>('select[aria-label="Sede"]')).find(
+    (el) => el.getClientRects().length > 0,
+  );
+  if (!select) return;
+  select.focus();
+  try {
+    select.showPicker?.();
+  } catch {
+    // Sin gesto del usuario o sin soporte: queda enfocado, que basta.
+  }
 }
 
 /**
@@ -95,6 +131,7 @@ export function InClinicPanel({
   runner,
   className,
   showTitle = true,
+  onChooseLocation = focusLocationSwitcher,
 }: InClinicPanelProps) {
   const titleId = useId();
   const { view, loading, error, localeMissing, noLocation, reload } = state;
@@ -163,34 +200,65 @@ export function InClinicPanel({
   }, [view, runner.pendingId, focusCompletion]);
 
 
+  // Región viva siempre montada: el sondeo anuncia el total cuando cambia.
+  const countNode = (
+    <span data-testid="in-clinic-count" aria-live="polite" aria-atomic="true" className="t-caption tabular-nums">
+      {total !== null ? inClinicCopy.count(total) : ''}
+    </span>
+  );
+  const heading = mine ? inClinicCopy.titleMine : inClinicCopy.title;
+  const header = showTitle ? (
+    <SectionHeader
+      titleId={titleId}
+      title={heading}
+      description={countNode}
+      className="flex-row items-start justify-between gap-2 sm:flex-row"
+      actions={
+        <Button asChild variant="ghost" size="icon-sm" className="-mr-1 text-muted hover:text-ink">
+          <Link href="/agenda/en-clinica" aria-label={inClinicCopy.openFullscreen} title={inClinicCopy.openFullscreen}>
+            <Maximize2 aria-hidden />
+          </Link>
+        </Button>
+      }
+    />
+  ) : (
+    <header className="flex items-baseline justify-between gap-2">
+      <h2 id={titleId} className="sr-only">
+        {heading}
+      </h2>
+      {countNode}
+    </header>
+  );
+
   return (
     <section ref={panelRef} aria-labelledby={titleId} className={cn('flex min-w-0 flex-col gap-3', className)}>
-      <header className="flex items-baseline justify-between gap-2">
-        <h2
-          id={titleId}
-          className={cn('text-lg font-semibold tracking-tight text-ink', !showTitle && 'sr-only')}
-        >
-          {mine ? inClinicCopy.titleMine : inClinicCopy.title}
-        </h2>
-        {/* Región viva siempre montada: el sondeo anuncia el total cuando cambia. */}
-        <span
-          data-testid="in-clinic-count"
-          aria-live="polite"
-          aria-atomic="true"
-          className="text-xs font-medium tabular-nums text-muted"
-        >
-          {total !== null ? inClinicCopy.count(total) : ''}
-        </span>
-      </header>
+      {header}
 
-      {showTitle && <Link href="/agenda/en-clinica" className="w-fit text-sm font-medium text-primary underline underline-offset-4">Abrir a pantalla completa</Link>}
-
-      {noLocation ? (
-        <EmptyState
-          icon={<MapPin aria-hidden />}
-          title={inClinicCopy.noLocationTitle}
-          description={inClinicCopy.noLocationHint}
-        />
+      {noLocation && !showTitle ? (
+        // A pantalla completa el panel ES la página: el estado sin sede trae la
+        // acción dentro, sin decir dónde vive el selector (critique-ops §2).
+        <div data-testid="in-clinic-no-location">
+          <EmptyState
+            role="status"
+            icon={<MapPin aria-hidden />}
+            title={inClinicCopy.noLocationTitle}
+            description={inClinicCopy.noLocationHint}
+            action={
+              <Button type="button" variant="secondary" onClick={onChooseLocation}>
+                {inClinicCopy.chooseLocation}
+              </Button>
+            }
+          />
+        </div>
+      ) : noLocation ? (
+        // Una línea y la acción, no una caja vacía: el panel es por sede.
+        <p className="text-sm text-muted" data-testid="in-clinic-no-location">
+          <MapPin aria-hidden className="mr-1.5 inline size-4 -translate-y-px align-middle" />
+          {inClinicCopy.noLocation}{' '}
+          <Button type="button" variant="link" size="sm" className="h-auto p-0 align-baseline" onClick={onChooseLocation}>
+            {inClinicCopy.chooseLocation}
+          </Button>
+        </p>
       ) : view === null && error && localeMissing ? (
         // 409 LOCATION_LOCALE_REQUIRED: falta un dato de la sede, no es un fallo de carga (G1-B §10).
         <SedeConfigError kind="locale" description={error} onRetry={reload} locationId={localeMissing.locationId} />
@@ -213,7 +281,18 @@ export function InClinicPanel({
         <SedeConfigError kind="locale" onRetry={reload} locationId={view.locationId} />
       ) : (
         <div className="flex flex-col gap-4">
-          {inClinicCount(view) === 0 && <EmptyState role="status" icon={<Armchair aria-hidden />} title={inClinicCopy.emptyTitle} description={inClinicCopy.emptyHint} />}
+          {inClinicCount(view) === 0 ? (
+            showTitle ? (
+              // En la columna de la agenda, una línea; a pantalla completa, el estado vacío entero.
+              <p role="status" className="text-sm text-muted">
+                <span className="font-medium text-ink">{inClinicCopy.emptyTitle}</span>
+                {'. '}
+                <span>{inClinicCopy.emptyHint}</span>
+              </p>
+            ) : (
+              <EmptyState role="status" icon={<Armchair aria-hidden />} title={inClinicCopy.emptyTitle} description={inClinicCopy.emptyHint} />
+            )
+          ) : null}
           {GROUPS.map((group) => (
             <InClinicGroup
               key={group}
@@ -281,8 +360,8 @@ function InClinicGroup({
                 key={item.appointmentId}
                 data-testid="in-clinic-item"
                 data-appointment-id={item.appointmentId}
-                data-punctuality={item.punctuality}
-                className="flex flex-col gap-2 border-b border-hairline py-3 last:border-0"
+                data-punctuality={item.walkIn ? undefined : item.punctuality}
+                className="flex flex-col gap-2 border-b border-border-subtle py-3 last:border-0"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -297,21 +376,25 @@ function InClinicGroup({
                     </p>
                     {item.arrivedAt ? (
                       <p className="text-xs tabular-nums text-muted">
-                        {inClinicCopy.arrivedAt(
-                          timeInZone(item.arrivedAt, tz, fmt),
-                          punctualityLabel(item.punctuality),
-                        )}
+                        {item.walkIn
+                          ? inClinicCopy.arrivedAtWalkIn(timeInZone(item.arrivedAt, tz, fmt))
+                          : inClinicCopy.arrivedAt(
+                              timeInZone(item.arrivedAt, tz, fmt),
+                              punctualityLabel(item.punctuality),
+                            )}
                       </p>
                     ) : null}
+                    <TriageSummary item={item} patientName={name} />
                   </div>
-                  <span
-                    className={cn(
-                      'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums',
-                      PUNCTUALITY_CLASSES[item.punctuality],
-                    )}
-                  >
-                    {inClinicCopy.minutes[group](item.minutesInStatus)}
-                  </span>
+                  {item.walkIn ? (
+                    <Badge variant="neutral" className="tabular-nums">
+                      {inClinicCopy.minutes[group](item.minutesInStatus)}
+                    </Badge>
+                  ) : (
+                    <StatusBadge kind="punctuality" status={item.punctuality} className="tabular-nums">
+                      {inClinicCopy.minutes[group](item.minutesInStatus)}
+                    </StatusBadge>
+                  )}
                 </div>
                 <ReservedElsewhereNotice item={item} runner={runner} onRetry={onRetry} />
                 <PatientFlowActions
@@ -328,6 +411,45 @@ function InClinicGroup({
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * DX-470: insignia «Urgencia» (tipo de cita urgente), «Sin cita» y
+ * «Sobrecupo», con las señales de triaje y la nota de recepción. Nada si la
+ * cita no es urgente ni tiene triaje.
+ */
+function TriageSummary({ item, patientName }: { item: InClinicItem; patientName: string }) {
+  const labels = triageLabels(item.triageFlags);
+  if (!item.urgent && !item.walkIn && labels.length === 0 && !item.triageNote) return null;
+  return (
+    <div className="mt-1 flex min-w-0 flex-col gap-1" data-testid="in-clinic-triage">
+      <ul className="flex flex-wrap gap-1" aria-label={inClinicCopy.triage(patientName)}>
+        {item.urgent ? (
+          <li>
+            <Badge variant="danger" dot>
+              {inClinicCopy.urgent}
+            </Badge>
+          </li>
+        ) : null}
+        {item.walkIn ? (
+          <li>
+            <Badge variant="neutral">{inClinicCopy.walkIn}</Badge>
+          </li>
+        ) : null}
+        {item.overbooked ? (
+          <li>
+            <Badge variant="warning">{inClinicCopy.overbooked}</Badge>
+          </li>
+        ) : null}
+        {labels.map((label) => (
+          <li key={label}>
+            <Badge variant="info">{label}</Badge>
+          </li>
+        ))}
+      </ul>
+      {item.triageNote ? <p className="text-xs break-words text-ink">{item.triageNote}</p> : null}
+    </div>
   );
 }
 
@@ -356,7 +478,7 @@ function ReservedElsewhereNotice({
       role="group"
       aria-label={reservationCopy.noticeTitle}
       data-testid="reserved-elsewhere"
-      className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-ink"
+      className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning-subtle px-3 py-2 text-ink"
     >
       {reserved.map((r) => {
         const label = reservedItemLabel(r);
@@ -366,7 +488,7 @@ function ReservedElsewhereNotice({
         return (
           <div key={r.planItemId} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2">
-              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
               <div className="min-w-0">
                 <p className="text-sm font-medium break-words">{label}</p>
                 <p className="text-xs break-words">{reservedElsewhereMessage(r)}</p>

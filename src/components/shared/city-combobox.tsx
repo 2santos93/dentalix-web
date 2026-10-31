@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import { searchCities, type City } from '@/lib/reference/cities-api';
 import { FieldError } from '@/components/errors/field-error';
 import { cn } from '@/lib/utils';
+import { controlHeight, fieldClass } from '@/lib/ui/field-class';
 
 const copy = {
   // Escalón 2 (FieldError): ≤4 palabras, el `<label>` del campo da el contexto.
   loadError: 'Ciudades no disponibles',
 };
 
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+const cityFieldClass = `${fieldClass} ${controlHeight}`;
 
 export interface CitySelection {
   id: number;
@@ -183,7 +183,7 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
           // effect reloads with empty q); don't blank the results here.
           if (value !== null) onChange(null);
         }}
-        className={fieldClass}
+        className={cityFieldClass}
       />
       {open && results.length > 0 && (
         <ul

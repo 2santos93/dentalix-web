@@ -26,7 +26,7 @@ describe('LandingPage', () => {
     // Features y diferenciadores (títulos = headings)
     expect(screen.getByRole('heading', { name: /odontograma interactivo/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /historia clínica confiable/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /^white-label$/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^con tu marca$/i })).toBeInTheDocument();
   });
 
   it('describe sus garantías sin nombrar leyes ni prometer que las cumple (DX-369)', () => {

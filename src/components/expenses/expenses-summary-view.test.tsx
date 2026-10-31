@@ -156,7 +156,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
     expect(rows).toHaveLength(2);
     expect(within(rows[0]).getByText('COP')).toBeInTheDocument();
     expect(within(rows[1]).getByText('USD')).toBeInTheDocument();
-    expect(within(rows[1]).getByText(/150,00/)).toHaveClass('text-danger');
+    expect(within(rows[1]).getByText(/150,00/)).toHaveClass('text-danger-text');
     // Ningún importe es la suma de las dos monedas (5.000.100 / 1.349.850 / …).
     expect(screen.queryByText(/5\.000\.100|1\.349\.850|3\.500\.250/)).not.toBeInTheDocument();
     expect(screen.getByText(/nunca se suman ni se convierten/)).toBeInTheDocument();
@@ -191,14 +191,13 @@ describe('ExpensesSummaryView (DX-274)', () => {
     expect(jest.mocked(notifyError).mock.calls[0][0]).toBe('No pudimos exportar el resumen.');
   });
 
-  it('un rango de más de 366 días se avisa y no se pide; los selectores lo acotan a 12 meses', async () => {
+  it('un rango de más de 366 días se avisa y no se pide', async () => {
     render(<ExpensesSummaryView token="t" />);
     await screen.findByTestId('summary-row');
 
     const from = screen.getByLabelText('Desde');
-    const to = screen.getByLabelText('Hasta');
-    expect(from).toHaveAttribute('min', '2025-11');
-    expect(to).toHaveAttribute('max', '2027-04');
+    // Los meses salen con su nombre en el idioma del producto, no del navegador.
+    expect(within(from).getByRole('option', { name: 'Octubre de 2026' })).toBeInTheDocument();
 
     mockedSummary.mockClear();
     fireEvent.change(from, { target: { value: '2024-01' } });
@@ -214,35 +213,18 @@ describe('ExpensesSummaryView (DX-274)', () => {
     expect(await screen.findByText('El periodo no puede superar 366 días')).toBeInTheDocument();
   });
 
-  it('con más de una sede activa filtra por sede', async () => {
-    const user = setupUser();
+  it('sin selector de sede propio: la sede la decide el selector global', async () => {
     render(<ExpensesSummaryView token="t" />);
     await screen.findByTestId('summary-row');
-
-    await user.selectOptions(screen.getByLabelText('Sede'), 'loc-2');
-
-    await waitFor(() =>
-      expect(mockedSummary).toHaveBeenLastCalledWith('t', {
-        from: '2026-05-01',
-        to: '2026-10-31',
-        locationId: 'loc-2',
-      }),
-    );
+    expect(screen.queryByLabelText('Sede')).not.toBeInTheDocument();
+    expect(screen.getByText('Toda la clínica')).toBeInTheDocument();
   });
 
-  it('un mes incompleto no dispara el aviso ni una petición', async () => {
+  it('cambiar de mes pide el nuevo periodo', async () => {
     render(<ExpensesSummaryView token="t" />);
     await screen.findByTestId('summary-row');
     mockedSummary.mockClear();
-
-    const from = screen.getByLabelText('Desde');
-    expect(from).toHaveAttribute('placeholder', 'AAAA-MM');
-    fireEvent.change(from, { target: { value: '' } });
-
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(mockedSummary).not.toHaveBeenCalled();
-
-    fireEvent.change(from, { target: { value: '2026-08' } });
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-08' } });
     await waitFor(() => expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-08-01', to: '2026-10-31' }));
   });
 

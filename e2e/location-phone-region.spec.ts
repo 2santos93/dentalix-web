@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
-import { chooseCountry, E2E_REGION, type RegionalSettings } from './support/regional';
+import { chooseCountry, E2E_REGION, pickRegional, type RegionalSettings } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 import { phoneRegionLabel } from '../src/lib/locations/phone-regions';
 
@@ -190,8 +190,8 @@ test('creating a location suggests the prefix of its country and saves it', asyn
   await expect(prefix).toHaveValue('Venezuela (+58)');
   await expect(prefix).toHaveAccessibleDescription(new RegExp(`^${SUGGESTED.replace('.', '\\.')}`));
   await dialog.getByLabel('Moneda', { exact: true }).selectOption(VENEZUELA.currency);
-  await dialog.getByLabel('Zona horaria', { exact: true }).fill(VENEZUELA.timeZone);
-  await dialog.getByLabel('Formato regional', { exact: true }).fill(VENEZUELA.locale);
+  await pickRegional(dialog.getByLabel('Zona horaria', { exact: true }), VENEZUELA.timeZone);
+  await pickRegional(dialog.getByLabel('Formato regional', { exact: true }), VENEZUELA.locale);
   await dialog.getByRole('radio', { name: '12 h', exact: true }).check();
   await shot(page, 'phone-region-suggested', prefix);
 

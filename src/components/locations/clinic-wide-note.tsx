@@ -42,10 +42,10 @@ export function ClinicWideNote({ children }: { children: React.ReactNode }) {
   if (!hasActiveLocation) return null;
 
   return (
-    <p className="mt-3 flex max-w-[68ch] items-start gap-2.5 rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted">
+    <p className="mt-3 flex max-w-[68ch] items-start gap-2.5 rounded-lg bg-surface-sunken px-3 py-2 text-sm text-muted">
       {/* `mt-0.5` centra el icono en la PRIMERA línea de texto y no en la caja:
           con dos líneas, centrarlo en la caja lo deja flotando entre ambas. */}
-      <Building2 aria-hidden className="mt-0.5 size-4 shrink-0 text-muted/80" />
+      <Building2 aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
       <span>{children}</span>
     </p>
   );

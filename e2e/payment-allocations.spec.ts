@@ -153,12 +153,14 @@ async function openPlan(page: Page, origin: string, patientId: string): Promise<
 }
 
 async function openPayments(panel: Locator) {
-  const fold = panel.getByRole('button', { name: /^Abonos y saldo\s+\d+ abonos?$/ });
+  const fold = panel.getByRole('button', { name: /^Abonos registrados\s+\d+ abonos?$/ });
   if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
 }
 
 async function openAllocation(page: Page, panel: Locator): Promise<Locator> {
-  await panel.getByRole('button', { name: 'Imputación' }).locator('visible=true').first().click();
+  // UX v2: Recibo, Imputación y Anular viven en el «⋯» de la fila del abono.
+  await panel.getByRole('button', { name: /^Acciones de abono/ }).first().click();
+  await page.getByRole('menuitem', { name: 'Imputación' }).click();
   const dialog = page.getByRole('dialog', { name: 'Imputar abono' });
   await expect(dialog.getByText(`Disponible para imputar: ${money(180)}`)).toBeVisible({ timeout: 15_000 });
   return dialog;
@@ -187,6 +189,7 @@ async function receptionSees(browser: Browser, origin: string, viewport: { width
     }
     // Solo lectura: recepción no imputa ni ve el plan clínico.
     await expect(page.getByRole('button', { name: 'Imputación' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Imputación' })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Plan de tratamiento' })).toHaveCount(0);
     await expectNoHorizontalScroll(page);
   } finally {
@@ -271,7 +274,8 @@ for (const viewport of [
     await receptionSees(browser, origin, viewport, data, receptionEmail);
 
     // Anular el abono libera todo lo imputado.
-    await panel.getByRole('button', { name: 'Anular' }).locator('visible=true').first().click();
+    await panel.getByRole('button', { name: /^Acciones de abono/ }).first().click();
+    await page.getByRole('menuitem', { name: 'Anular' }).click();
     const voidDialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
     await voidDialog.getByLabel('Motivo de la anulación').fill('Cobro registrado dos veces');
     await voidDialog.getByRole('button', { name: 'Anular abono' }).click();
@@ -467,7 +471,8 @@ test('DX-051 axe: ítems del plan, «Ver por ítem» y el modal «Imputar abono�
       // DX-375: el abono sin tasa lo dice el aviso «sin tasa» junto al saldo.
       await expect(other.getByText('1 abono sin tasa')).toBeVisible();
       await openPayments(other);
-      await other.getByRole('button', { name: 'Imputación' }).locator('visible=true').first().click();
+      await other.getByRole('button', { name: /^Acciones de abono/ }).first().click();
+      await page.getByRole('menuitem', { name: 'Imputación' }).click();
       dialog = page.getByRole('dialog', { name: 'Imputar abono' });
       await expect(
         dialog.getByText('No hay tasa de cambio para la fecha de este abono: todavía no se puede imputar.'),

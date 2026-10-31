@@ -2,8 +2,16 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { RegisterForm } from './register-form';
 import { apiFetch, ApiError } from '../../lib/api/client';
 import { setupUser } from '@/lib/test/user';
-import { browserCountry, browserHourCycle, browserLocale } from '@/lib/locations/regional-settings';
+import { browserCountry, browserHourCycle, browserLocale, browserTimeZone } from '@/lib/locations/regional-settings';
 import { chooseCountry } from '@/lib/test/country';
+import { localeLabel, timeZoneLabel } from '@/lib/locations/regional-options';
+
+/** Elige en un combobox de zona o formato con eventos sueltos: escribe y pulsa Intro (la coincidencia exacta va primero). */
+function pickRegional(label: string, code: string) {
+  const input = screen.getByLabelText(label);
+  fireEvent.change(input, { target: { value: code } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+}
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -20,6 +28,7 @@ jest.mock('../../lib/locations/regional-settings', () => ({
   browserCountry: jest.fn(),
   browserLocale: jest.fn(),
   browserHourCycle: jest.fn(),
+  browserTimeZone: jest.fn(),
 }));
 
 const mockedFetch = jest.mocked(apiFetch);
@@ -36,23 +45,41 @@ function mockApi(register: () => Promise<unknown>) {
 
 const registerCalls = () => mockedFetch.mock.calls.filter(([path]) => path === '/auth/register');
 
-async function fillRequiredFields() {
+/** Paso 1 (la clínica): nombre, dirección web y la sede; no avanza. */
+async function fillClinicStep() {
   fireEvent.change(screen.getByLabelText(/nombre de la clínica/i), {
     target: { value: 'Clínica Uno' },
   });
-  fireEvent.change(screen.getByLabelText(/subdominio/i), { target: { value: 'clinica-uno' } });
-  fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Ruiz' } });
-  fireEvent.change(screen.getByLabelText(/correo/i), {
-    target: { value: 'ana@example.com' },
-  });
-  fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'secret123' } });
+  fireEvent.change(screen.getByLabelText('Dirección web'), { target: { value: 'clinica-uno' } });
   await screen.findByRole('option', { name: 'Euro (€)' });
   // El país se elige en el combobox: se escribe el código y se elige la opción.
   fireEvent.change(screen.getByLabelText('País'), { target: { value: 'ES' } });
   fireEvent.click(screen.getByRole('option', { name: 'España' }));
   fireEvent.change(screen.getByLabelText('Moneda'), { target: { value: 'EUR' } });
-  fireEvent.change(screen.getByLabelText('Zona horaria'), { target: { value: 'Europe/Madrid' } });
-  fireEvent.change(screen.getByLabelText('Formato regional'), { target: { value: 'es-ES' } });
+  pickRegional('Zona horaria', 'Europe/Madrid');
+  pickRegional('Formato regional', 'es-ES');
+}
+
+/** «Continuar» al paso 2 (la cuenta). */
+async function continueToAccount() {
+  fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await screen.findByLabelText(/nombre completo/i);
+}
+
+/** Paso 2 (la cuenta): nombre, correo y contraseña. */
+function fillAccountStep() {
+  fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Ruiz' } });
+  fireEvent.change(screen.getByLabelText(/correo/i), {
+    target: { value: 'ana@example.com' },
+  });
+  fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: 'secret123' } });
+}
+
+/** Los dos pasos completos, listos para «Crear cuenta». */
+async function fillRequiredFields() {
+  await fillClinicStep();
+  await continueToAccount();
+  fillAccountStep();
 }
 
 beforeEach(() => {
@@ -61,16 +88,25 @@ beforeEach(() => {
   jest.mocked(browserCountry).mockReturnValue(null);
   jest.mocked(browserLocale).mockReturnValue('en-US');
   jest.mocked(browserHourCycle).mockReturnValue('h12');
+  // Un navegador en UTC: ninguna zona de país, así que tampoco un país sugerido por la zona (R1).
+  jest.mocked(browserTimeZone).mockReturnValue('UTC');
 });
 
 describe('RegisterForm', () => {
-  it('shows the error message when the API call fails', async () => {
+  it('a 409 sends you back to step 1, next to the address, with its message and focus', async () => {
     mockApi(() => Promise.reject(new ApiError(409, 'Subdominio ya existe')));
     render(<RegisterForm tenant={null} />);
     await fillRequiredFields();
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Subdominio ya existe');
+    const address = screen.getByLabelText('Dirección web');
+    expect(address).toHaveAccessibleDescription('Subdominio ya existe');
+    expect(address).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => expect(address).toHaveFocus());
+    // Lo escrito en el paso 1 sigue ahí.
+    expect(address).toHaveValue('clinica-uno');
+    expect(screen.getByLabelText(/nombre de la clínica/i)).toHaveValue('Clínica Uno');
   });
 
   // Revisión M-2: el 403 por origen no permitido no manda a «pedir acceso a un
@@ -85,8 +121,8 @@ describe('RegisterForm', () => {
     expect(alert).not.toHaveTextContent(/administrador|untrusted/i);
   });
 
-  it('keeps aria-describedby resolving to the error banner on all five fields', async () => {
-    mockApi(() => Promise.reject(new ApiError(409, 'Subdominio ya existe')));
+  it('keeps aria-describedby resolving to the error banner on the three account fields', async () => {
+    mockApi(() => Promise.reject(new ApiError(500, 'Internal server error')));
     render(<RegisterForm tenant={null} />);
     await fillRequiredFields();
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
@@ -94,17 +130,12 @@ describe('RegisterForm', () => {
     const alert = await screen.findByRole('alert');
     const errorId = alert.getAttribute('id');
     expect(errorId).toBeTruthy();
-    expect(screen.getByLabelText(/nombre de la clínica/i)).toHaveAttribute(
-      'aria-describedby',
-      errorId,
-    );
-    expect(screen.getByLabelText(/subdominio/i)).toHaveAttribute('aria-describedby', errorId);
     expect(screen.getByLabelText(/nombre completo/i)).toHaveAttribute(
       'aria-describedby',
       errorId,
     );
     expect(screen.getByLabelText(/correo/i)).toHaveAttribute('aria-describedby', errorId);
-    expect(screen.getByLabelText(/contraseña/i)).toHaveAttribute('aria-describedby', errorId);
+    expect(screen.getByLabelText('Contraseña')).toHaveAttribute('aria-describedby', errorId);
   });
 
   // DX-029: la respuesta del registro es la misma exista o no el correo.
@@ -119,13 +150,14 @@ describe('RegisterForm', () => {
     expect(screen.queryByRole('button', { name: /crear cuenta/i })).not.toBeInTheDocument();
   });
 
-  it('un 409 sin mensaje propio habla solo del subdominio (nunca del correo)', async () => {
+  it('un 409 sin mensaje propio habla solo de la dirección (nunca del correo)', async () => {
     mockApi(() => Promise.reject(new ApiError(409, 'Conflict')));
     render(<RegisterForm tenant={null} />);
     await fillRequiredFields();
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
 
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Esa dirección web ya está en uso. Elige otra.');
     expect(alert).not.toHaveTextContent(/correo/i);
   });
 
@@ -144,6 +176,9 @@ describe('RegisterForm', () => {
   });
 
   it('register form does not submit without the five fields and the body equals what is shown', async () => {
+    jest.mocked(browserTimeZone).mockReturnValue(null);
+    jest.mocked(browserLocale).mockReturnValue(null);
+    jest.mocked(browserHourCycle).mockReturnValue(null);
     jest.mocked(browserHourCycle).mockReturnValue(null);
     mockApi(() => Promise.resolve({ message: 'genérico' }));
     const user = setupUser();
@@ -151,15 +186,14 @@ describe('RegisterForm', () => {
     const group = screen.getByRole('group', { name: 'Tu sede' });
     await within(group).findByRole('option', { name: 'Euro (€)' });
     fireEvent.change(screen.getByLabelText(/nombre de la clínica/i), { target: { value: 'Clínica Uno' } });
-    fireEvent.change(screen.getByLabelText(/subdominio/i), { target: { value: 'clinica-uno' } });
-    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Ruiz' } });
-    fireEvent.change(screen.getByLabelText(/correo/i), { target: { value: 'ana@example.com' } });
-    fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'secret123' } });
+    fireEvent.change(screen.getByLabelText('Dirección web'), { target: { value: 'clinica-uno' } });
     // Sin las sugerencias del navegador, los cinco campos quedan vacíos.
-    await user.clear(within(group).getByLabelText('Zona horaria'));
-    await user.clear(within(group).getByLabelText('Formato regional'));
+    expect(within(group).getByLabelText('Zona horaria')).toHaveValue('');
+    expect(within(group).getByLabelText('Formato regional')).toHaveValue('');
 
-    await user.click(screen.getByRole('button', { name: /crear cuenta/i }));
+    // «Continuar» no avanza sin la sede: cada campo dice qué falta.
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.queryByLabelText(/nombre completo/i)).not.toBeInTheDocument();
     expect(registerCalls()).toHaveLength(0);
     expect(within(group).getByLabelText('País')).toHaveAccessibleDescription('Elige el país de la sede.');
     expect(within(group).getByLabelText('Moneda')).toHaveAccessibleDescription('Elige la moneda de la sede.');
@@ -177,8 +211,13 @@ describe('RegisterForm', () => {
     await chooseCountry(user, within(group).getByLabelText('País'), 'ES');
     await user.selectOptions(within(group).getByLabelText('Moneda'), 'JPY');
     await user.type(within(group).getByLabelText('Zona horaria'), 'Asia/Tokyo');
+    await user.keyboard('{Enter}');
+    await user.clear(within(group).getByLabelText('Formato regional'));
     await user.type(within(group).getByLabelText('Formato regional'), 'ja-jp');
+    await user.keyboard('{Enter}');
     await user.click(within(group).getByRole('radio', { name: '24 h' }));
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    fillAccountStep();
     await user.click(screen.getByRole('button', { name: /crear cuenta/i }));
 
     await waitFor(() => expect(registerCalls()).toHaveLength(1));
@@ -207,12 +246,16 @@ describe('RegisterForm', () => {
     const clock = within(group).getByRole('radiogroup', { name: 'Reloj' });
     await waitFor(() => expect(within(clock).getByRole('radio', { name: '12 h' })).toBeChecked());
     expect(clock).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
-    expect(within(group).getByLabelText('Formato regional')).toHaveValue('en-US');
-    await fillRequiredFields();
-    fireEvent.change(screen.getByLabelText('Formato regional'), { target: { value: 'en-US' } });
+    expect(within(group).getByLabelText('Formato regional')).toHaveValue(localeLabel('en-US'));
+    await fillClinicStep();
+    pickRegional('Formato regional', 'en-US');
+    // Al elegir España el reloj pasó al suyo (24 h); el formato elegido a mano no lo cambia: se envía lo que se ve.
+    expect(within(clock).getByRole('radio', { name: '24 h' })).toBeChecked();
+    await continueToAccount();
+    fillAccountStep();
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
     await waitFor(() => expect(registerCalls()).toHaveLength(1));
-    expect(registerCalls()[0][1]?.body).toMatchObject({ locationLocale: 'en-US', locationHourCycle: 'h12' });
+    expect(registerCalls()[0][1]?.body).toMatchObject({ locationLocale: 'en-US', locationHourCycle: 'h23' });
     await screen.findByRole('heading', { name: 'Revisa tu correo' });
   });
 
@@ -225,22 +268,28 @@ describe('RegisterForm', () => {
     render(<RegisterForm tenant={null} />);
     await fillRequiredFields();
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
-    const clock = screen.getByRole('radiogroup', { name: 'Reloj' });
+    // Vuelve al paso 1, donde vive el reloj.
+    const clock = await screen.findByRole('radiogroup', { name: 'Reloj' });
     await waitFor(() =>
       expect(clock).toHaveAccessibleDescription('El reloj «h11» no es válido: elige 12 h o 24 h.'),
     );
   });
 
-  it('the typed format is shown in canonical form when it is sent', async () => {
+  it('the chosen format is sent canonical and shown by its name', async () => {
     // La API tarda: mientras, el campo ya muestra lo que se envió.
     let resolve: (value: unknown) => void = () => {};
     mockApi(() => new Promise((r) => (resolve = r)));
     render(<RegisterForm tenant={null} />);
-    await fillRequiredFields();
-    fireEvent.change(screen.getByLabelText('Formato regional'), { target: { value: 'es-es' } });
+    await fillClinicStep();
+    pickRegional('Formato regional', 'es-es');
+    // Al avanzar, el formato queda en su forma canónica; al volver se ve por su nombre.
+    await continueToAccount();
+    fireEvent.click(screen.getByRole('button', { name: 'Atrás' }));
+    expect(await screen.findByLabelText('Formato regional')).toHaveValue(localeLabel('es-ES'));
+    await continueToAccount();
+    fillAccountStep();
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
     await waitFor(() => expect(registerCalls()).toHaveLength(1));
-    expect(screen.getByLabelText('Formato regional')).toHaveValue('es-ES');
     expect(registerCalls()[0][1]?.body).toMatchObject({ locationLocale: 'es-ES' });
     resolve({ message: 'genérico' });
     await screen.findByRole('heading', { name: 'Revisa tu correo' });
@@ -250,12 +299,12 @@ describe('RegisterForm', () => {
     mockApi(() => Promise.resolve({ message: 'genérico' }));
     render(<RegisterForm tenant={null} />);
     const group = screen.getByRole('group', { name: 'Tu sede' });
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    await waitFor(() => expect(within(group).getByLabelText('Zona horaria')).toHaveValue(zone));
+    const zone = 'UTC';
+    await waitFor(() => expect(within(group).getByLabelText('Zona horaria')).toHaveValue(timeZoneLabel(zone)));
     expect(within(group).getByLabelText('Zona horaria')).toHaveAccessibleDescription(
       /Sugerido por tu navegador\./,
     );
-    expect(within(group).getByLabelText('Formato regional')).toHaveValue('en-US');
+    expect(within(group).getByLabelText('Formato regional')).toHaveValue(localeLabel('en-US'));
     await within(group).findByRole('option', { name: 'Euro (€)' });
   });
 
@@ -268,19 +317,22 @@ describe('RegisterForm', () => {
     const country = within(group).getByLabelText('País');
     await waitFor(() => expect(country).toHaveValue('Venezuela'));
     expect(country).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
-    // La moneda nunca se deduce del país.
-    expect(within(group).getByLabelText('Moneda')).toHaveValue('');
-    await chooseCountry(user, country, 'PE');
-    expect(country).toHaveValue('Perú');
+    // R1: la moneda del país se propone, marcada; elegir otro país la vuelve a proponer.
+    expect(within(group).getByLabelText('Moneda')).toHaveAccessibleDescription(
+      expect.stringContaining('Sugerido por el país.'),
+    );
+    await chooseCountry(user, country, 'ES');
+    expect(country).toHaveValue('España');
     expect(country).not.toHaveAccessibleDescription(expect.stringContaining('Sugerido'));
+    await waitFor(() => expect(within(group).getByLabelText('Moneda')).toHaveValue('EUR'));
   });
 
-  it('the location intro says which fields may come suggested, the country included', () => {
+  it('the location intro says what is proposed and from where', () => {
     mockApi(() => Promise.resolve({ message: 'genérico' }));
     render(<RegisterForm tenant={null} />);
     expect(
       screen.getByText(
-        'La primera sede de tu clínica. La zona, el formato, el reloj y, si tu navegador lo indica, el país vienen sugeridos: revísalos. Podrás cambiarlos y añadir más sedes en Ajustes → Sedes.',
+        'La primera sede de tu clínica. Te proponemos el país y la zona de tu navegador, y la moneda y el formato de ese país: revísalos. Podrás cambiarlos y añadir más sedes en Ajustes → Sedes.',
       ),
     ).toBeInTheDocument();
   });
@@ -296,11 +348,12 @@ describe('RegisterForm', () => {
     render(<RegisterForm tenant={null} />);
     await fillRequiredFields();
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
-    const currency = screen.getByLabelText('Moneda');
+    // Vuelve al paso 1, junto a la moneda.
+    const currency = await screen.findByLabelText('Moneda');
     await waitFor(() =>
       expect(currency).toHaveAccessibleDescription('La moneda XYZ no está en la lista de monedas admitidas.'),
     );
-    expect(currency).toHaveFocus();
+    await waitFor(() => expect(currency).toHaveFocus());
     expect(screen.queryByText('No pudimos crear la cuenta. Intenta de nuevo.')).not.toBeInTheDocument();
   });
 
@@ -325,17 +378,82 @@ describe('RegisterForm', () => {
     expect(registerCalls()[0][1]?.body).toMatchObject({ locationCurrency: 'EUR' });
   });
 
-  it('the typed zone is sent and shown in its canonical casing', async () => {
+  it('the chosen zone is sent in its canonical casing and shown by its name', async () => {
     let resolve: (value: unknown) => void = () => {};
     mockApi(() => new Promise((r) => (resolve = r)));
     render(<RegisterForm tenant={null} />);
-    await fillRequiredFields();
-    fireEvent.change(screen.getByLabelText('Zona horaria'), { target: { value: 'europe/madrid' } });
+    await fillClinicStep();
+    pickRegional('Zona horaria', 'europe/madrid');
+    await continueToAccount();
+    fireEvent.click(screen.getByRole('button', { name: 'Atrás' }));
+    expect(await screen.findByLabelText('Zona horaria')).toHaveValue(timeZoneLabel('Europe/Madrid'));
+    await continueToAccount();
+    fillAccountStep();
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
     await waitFor(() => expect(registerCalls()).toHaveLength(1));
-    expect(screen.getByLabelText('Zona horaria')).toHaveValue('Europe/Madrid');
     expect(registerCalls()[0][1]?.body).toMatchObject({ locationTimeZone: 'Europe/Madrid' });
     resolve({ message: 'genérico' });
     await screen.findByRole('heading', { name: 'Revisa tu correo' });
+  });
+
+  it('shows a step indicator: «Tu clínica» first, «Tu cuenta» after «Continuar»', async () => {
+    mockApi(() => Promise.resolve({ message: 'genérico' }));
+    render(<RegisterForm tenant={null} />);
+    expect(screen.getByRole('button', { name: /tu clínica/i }).closest('li')).toHaveAttribute('aria-current', 'step');
+    await fillClinicStep();
+    await continueToAccount();
+    expect(screen.getByRole('button', { name: /tu cuenta/i }).closest('li')).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByLabelText(/nombre completo/i)).toHaveFocus();
+    expect(screen.queryByRole('group', { name: 'Tu sede' })).not.toBeInTheDocument();
+  });
+
+  it('the address field shows its suffix and the resulting address, and only takes lowercase', () => {
+    mockApi(() => Promise.resolve({ message: 'genérico' }));
+    render(<RegisterForm tenant={null} />);
+    const address = screen.getByLabelText('Dirección web');
+    expect(screen.getByText('.dentalix.app')).toBeInTheDocument();
+    fireEvent.change(address, { target: { value: 'Sonrisa' } });
+    expect(address).toHaveValue('sonrisa');
+    expect(address).toHaveAccessibleDescription(
+      'Así entrarás: sonrisa.dentalix.app. Solo minúsculas sin tildes, números y guiones.',
+    );
+  });
+
+  it('«Continuar» checks the clinic name and the address format before moving on', async () => {
+    mockApi(() => Promise.resolve({ message: 'genérico' }));
+    render(<RegisterForm tenant={null} />);
+    await fillClinicStep();
+    fireEvent.change(screen.getByLabelText(/nombre de la clínica/i), { target: { value: ' ' } });
+    fireEvent.change(screen.getByLabelText('Dirección web'), { target: { value: 'sonrisa norte' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.getByLabelText(/nombre de la clínica/i)).toHaveAccessibleDescription(
+      'Escribe el nombre de la clínica (al menos 2 caracteres).',
+    );
+    expect(screen.getByLabelText(/nombre de la clínica/i)).toHaveFocus();
+    expect(screen.getByLabelText('Dirección web')).toHaveAccessibleDescription(
+      'Usa solo minúsculas sin tildes, números y guiones (por ejemplo, sonrisa-norte).',
+    );
+    expect(screen.queryByLabelText(/nombre completo/i)).not.toBeInTheDocument();
+  });
+
+  it('states the password rule before submitting and checks it, with the other account fields', async () => {
+    mockApi(() => Promise.resolve({ message: 'genérico' }));
+    render(<RegisterForm tenant={null} />);
+    await fillClinicStep();
+    await continueToAccount();
+    const password = screen.getByLabelText('Contraseña');
+    expect(password).toHaveAccessibleDescription('Mínimo 8 caracteres.');
+    fireEvent.change(screen.getByLabelText(/correo/i), { target: { value: 'ana@' } });
+    fireEvent.change(password, { target: { value: 'corta' } });
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+    expect(registerCalls()).toHaveLength(0);
+    expect(screen.getByLabelText(/nombre completo/i)).toHaveAccessibleDescription(
+      'Escribe tu nombre (al menos 2 caracteres).',
+    );
+    expect(screen.getByLabelText(/nombre completo/i)).toHaveFocus();
+    expect(screen.getByLabelText(/correo/i)).toHaveAccessibleDescription(
+      'Escribe un correo electrónico válido (por ejemplo, nombre@clinica.com).',
+    );
+    expect(password).toHaveAccessibleDescription('La contraseña debe tener al menos 8 caracteres.');
   });
 });

@@ -11,14 +11,13 @@ import {
 } from '@/lib/collections/collections-api';
 import {
   CHANNEL_LABELS,
-  OUTCOME_LABELS,
-  PROMISE_STATUS_BADGE,
-  PROMISE_STATUS_LABELS,
+  OUTCOME_LABELS
 } from '@/lib/collections/presentation';
 import { AsyncSection } from '@/components/shared/async-section';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SectionHeader } from '@/components/ui/section-header';
 import { CollectionNoteDialog } from './collection-note-dialog';
 import { PaymentPromiseDialog } from './payment-promise-dialog';
 
@@ -98,28 +97,27 @@ export function PatientCollectionsSection({
 
   return (
     <section aria-labelledby="collections-heading" className="flex flex-col gap-3" data-testid="patient-collections">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 id="collections-heading" className="text-lg font-semibold text-ink">
-            {collectionsCopy.heading}
-          </h2>
-          <p className="max-w-[68ch] text-sm text-muted">{collectionsCopy.description}</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="button" variant="outline" onClick={() => setDialog('note')} className="max-sm:h-11">
-            <NotebookPen aria-hidden />
-            {collectionsCopy.registerNote}
-          </Button>
-          {canPromise ? (
-            <Button type="button" variant="outline" onClick={() => setDialog('promise')} className="max-sm:h-11">
-              <HandCoins aria-hidden />
-              {collectionsCopy.promise}
+      <SectionHeader
+        titleId="collections-heading"
+        title={collectionsCopy.heading}
+        description={<span className="block max-w-[68ch]">{collectionsCopy.description}</span>}
+        actions={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setDialog('note')} className="max-sm:flex-1">
+              <NotebookPen aria-hidden />
+              {collectionsCopy.registerNote}
             </Button>
-          ) : null}
-        </div>
-      </div>
+            {canPromise ? (
+              <Button type="button" variant="secondary" onClick={() => setDialog('promise')} className="max-sm:flex-1">
+                <HandCoins aria-hidden />
+                {collectionsCopy.promise}
+              </Button>
+            ) : null}
+          </>
+        }
+      />
 
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
 
@@ -138,11 +136,11 @@ export function PatientCollectionsSection({
             {promises.length === 0 ? (
               <p className="text-sm text-muted">{collectionsCopy.noPromises}</p>
             ) : (
-              <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+              <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
                 {promises.map((p) => (
                   <li key={p.id} className="flex min-w-0 flex-col gap-1 px-4 py-3 text-sm" data-testid="promise-row">
                     <span className="flex flex-wrap items-center gap-2">
-                      <Badge variant={PROMISE_STATUS_BADGE[p.status]}>{PROMISE_STATUS_LABELS[p.status]}</Badge>
+                      <StatusBadge kind="paymentPromise" status={p.status} />
                       <span className="font-medium tabular-nums text-ink">
                         {collectionsCopy.promiseLine(formatCurrency(p.amount, p.currency), formatCivilDate(p.dueDate))}
                       </span>
@@ -153,7 +151,7 @@ export function PatientCollectionsSection({
                     </span>
                     {/* Si se volvió a cumplir con otro abono, ya no aplica. */}
                     {p.reopenedAt && p.status !== 'KEPT' ? (
-                      <span className="text-xs text-warning tabular-nums">
+                      <span className="text-xs text-warning-text tabular-nums">
                         {collectionsCopy.reopened(formatDateTime(p.reopenedAt))}
                       </span>
                     ) : null}
@@ -167,7 +165,7 @@ export function PatientCollectionsSection({
             {notes.length === 0 ? (
               <p className="text-sm text-muted">{collectionsCopy.noNotes}</p>
             ) : (
-              <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+              <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
                 {notes.map((n) => (
                   <li key={n.id} className="flex min-w-0 flex-col gap-1 px-4 py-3 text-sm" data-testid="note-row">
                     <span className="font-medium text-ink">

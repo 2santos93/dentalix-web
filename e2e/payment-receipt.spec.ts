@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
+import { dataList, dataListRows, rowAction } from './support/data-list';
 
 /**
  * e2e (DX-136): recibo de caja numerado por sede.
@@ -121,10 +122,11 @@ function pdfPageCount(pdf: Buffer): number {
 async function openReceiptFromStatement(page: Page, origin: string, patientId: string, amount: number) {
   await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
   const panel = page.locator('#tabpanel-account-statement');
-  const table = panel.getByRole('table', { name: /movimientos/i });
+  // UX v2: «Recibo» vive en el «⋯» del movimiento (tabla o tarjeta).
+  const table = dataList(panel, /movimientos/i);
   await expect(table).toBeVisible({ timeout: 15_000 });
-  const row = table.getByRole('row').filter({ hasText: figure(amount) });
-  await row.getByRole('button', { name: /Recibo del abono/ }).click();
+  const row = dataListRows(table).filter({ hasText: figure(amount) });
+  await rowAction(page, row, 'Recibo');
   const dialog = page.getByRole('dialog', { name: 'Recibo de caja' });
   await expect(dialog.getByTestId('receipt-document')).toBeVisible({ timeout: 15_000 });
   return dialog;

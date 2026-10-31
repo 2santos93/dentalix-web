@@ -47,9 +47,15 @@ function buildAlertLines(data: MedicalHistory): string[] {
 interface ClinicalAlertBannerProps {
   token: string;
   patientId: string;
+  /**
+   * La ficha ya dice «Sin anamnesis registrada» en su aviso (con «Enviar
+   * anamnesis» y «Registrar»): aquí no se repite. Solo calla ESE estado; el
+   * fallo de la comprobación y «sin alertas» se siguen diciendo.
+   */
+  hideNoHistory?: boolean;
 }
 
-export function ClinicalAlertBanner({ token, patientId }: ClinicalAlertBannerProps) {
+export function ClinicalAlertBanner({ token, patientId, hideNoHistory = false }: ClinicalAlertBannerProps) {
   const [data, setData] = useState<MedicalHistory | null>(null);
   // Se sigue aparte de `data`: si el fallo se guardara como `data = null`,
   // "no pudimos preguntar" y "no hay alergias registradas" serían el mismo
@@ -101,7 +107,7 @@ export function ClinicalAlertBanner({ token, patientId }: ClinicalAlertBannerPro
       <div
         role="status"
         aria-live="polite"
-        className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 p-3 text-sm text-ink"
+        className="flex items-center gap-2 rounded-lg border border-border bg-surface-sunken p-3 text-sm text-ink"
       >
         <CloudOff aria-hidden="true" className="size-4 shrink-0 text-muted" />
         <span className="flex-1">{copy.unknown}</span>
@@ -121,6 +127,7 @@ export function ClinicalAlertBanner({ token, patientId }: ClinicalAlertBannerPro
   // `data === null` con la petición resuelta = el paciente no tiene ninguna
   // versión de anamnesis. No es lo mismo que tenerla y salir limpia.
   if (!data) {
+    if (hideNoHistory) return null;
     return (
       <p role="status" className="text-sm text-muted">
         {copy.noHistory}
@@ -141,7 +148,7 @@ export function ClinicalAlertBanner({ token, patientId }: ClinicalAlertBannerPro
   const lines = buildAlertLines(data);
 
   return (
-    <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-danger">
+    <div role="alert" className="rounded-lg border border-danger/30 bg-danger-subtle p-3 text-danger-text">
       <div className="flex items-center gap-2 font-semibold">
         <TriangleAlert className="h-5 w-5" aria-hidden="true" />
         {copy.title}

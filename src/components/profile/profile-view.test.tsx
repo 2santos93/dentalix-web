@@ -28,12 +28,26 @@ describe('ProfileView', () => {
     expect(screen.getByText(/Clínica Sur/)).toBeInTheDocument();
   });
 
-  it('saves an edited name', async () => {
+  it('saves an edited name from the «Cambios sin guardar» bar (no Save button until it changes)', async () => {
     render(<ProfileView token="T" />);
-    const input = await screen.findByLabelText(/nombre/i);
+    const input = await screen.findByLabelText('Nombre completo');
+    expect(screen.queryByRole('button', { name: /guardar/i })).not.toBeInTheDocument();
     fireEvent.change(input, { target: { value: 'Ana G. Nueva' } });
-    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar el nombre' }));
     await waitFor(() => expect(updateName).toHaveBeenCalledWith('T', 'Ana G. Nueva'));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /guardar/i })).not.toBeInTheDocument());
+  });
+
+  it('read-only facts come before the editable name; other clinics are listed', async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profile,
+      memberships: [...profile.memberships, { tenantId: 't2', clinicName: 'Clínica Norte', role: 'ADMIN' }],
+    });
+    render(<ProfileView token="T" />);
+    const email = await screen.findByText('ana@clinica.com');
+    const input = screen.getByLabelText('Nombre completo');
+    expect(email.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Clínica Norte (Administrador/a)')).toBeInTheDocument();
   });
 
   it('revisión M-7: si la foto no se puede reducir, el aviso dice el tope real (900 KB)', async () => {

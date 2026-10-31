@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getPrescriptionSettings,
@@ -11,11 +11,12 @@ import {
   type PrescriptionSettings,
 } from '@/lib/prescriptions/prescriptions-api';
 import { SectionError } from '@/components/errors/section-error';
-import { InlineError } from '@/components/errors/inline-error';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
+import { SettingRows } from '@/components/settings/settings-page';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -49,19 +50,26 @@ function parseValidityDays(text: string): number | null {
   return days >= PRESCRIPTION_VALIDITY_DAYS_MIN && days <= PRESCRIPTION_VALIDITY_DAYS_MAX ? days : null;
 }
 
-/** Los valores de la API pasan a ser la base y el borrador del formulario. */
-function useSettingsDraft() {
-  const [settings, setSettings] = useState<PrescriptionSettings | null>(null);
-  const [words, setWords] = useState(false);
-  const [record, setRecord] = useState(false);
-  const [validity, setValidity] = useState('');
-  const adopt = useCallback((next: PrescriptionSettings) => {
-    setSettings(next);
-    setWords(next.printQuantityInWords);
-    setRecord(next.requireClinicalRecordNumber);
-    setValidity(String(next.validityDays));
-  }, []);
-  return { settings, words, setWords, record, setRecord, validity, setValidity, adopt };
+/** Lo que edita el formulario: los valores de la API, con la validez como texto. */
+interface PrescriptionSettingsDraft {
+  words: boolean;
+  record: boolean;
+  validity: string;
+}
+
+const EMPTY_DRAFT: PrescriptionSettingsDraft = { words: false, record: false, validity: '' };
+
+function toDraft(settings: PrescriptionSettings): PrescriptionSettingsDraft {
+  return {
+    words: settings.printQuantityInWords,
+    record: settings.requireClinicalRecordNumber,
+    validity: String(settings.validityDays),
+  };
+}
+
+/** «30» y « 30 » son el mismo valor: espacios alrededor no son un cambio. */
+function sameDraft(a: PrescriptionSettingsDraft, b: PrescriptionSettingsDraft): boolean {
+  return a.words === b.words && a.record === b.record && a.validity.trim() === b.validity.trim();
 }
 
 /**
@@ -71,7 +79,12 @@ function useSettingsDraft() {
  * página decide el permiso y no monta esto sin él.
  */
 export function PrescriptionSettingsForm({ token }: { token: string }) {
-  const { settings, words, setWords, record, setRecord, validity, setValidity, adopt } = useSettingsDraft();
+  const [settings, setSettings] = useState<PrescriptionSettings | null>(null);
+  const saved = useMemo(() => (settings ? toDraft(settings) : EMPTY_DRAFT), [settings]);
+  // Borrador frente a lo guardado: la barra «Cambios sin guardar» solo aparece
+  // con cambios, y salir con cambios pregunta (DESIGN.md → Settings pages).
+  const { draft, update, dirty, discard, commit } = useSettingsDraft(saved, sameDraft);
+  const { words, record, validity } = draft;
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -79,7 +92,9 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const noticeRef = useRef<HTMLParagraphElement>(null);
-  const validityId = useId();
+  const id = useId();
+  const formId = `${id}-form`;
+  const validityId = `${id}-validity`;
   const validityRef = useRef<HTMLInputElement>(null);
   const validityHintId = `${validityId}-hint`;
 
@@ -88,7 +103,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
     getPrescriptionSettings(token)
       .then((res) => {
         if (cancelled) return;
-        adopt(res);
+        setSettings(res);
         setLoadError(null);
       })
       .catch((err: unknown) => {
@@ -97,10 +112,10 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey, adopt]);
+  }, [token, reloadKey]);
 
-  // Tras guardar, Guardar queda deshabilitado (no hay cambios) y el foco caería
-  // a `<body>`: lo llevamos al aviso para no perder el sitio al teclado.
+  // Tras guardar, la barra desaparece (no hay cambios) y el foco caería a
+  // `<body>`: lo llevamos al aviso para no perder el sitio al teclado.
   useEffect(() => {
     if (notice) noticeRef.current?.focus();
   }, [notice]);
@@ -118,7 +133,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   }
   if (!settings) {
     return (
-      <div role="status" aria-label="Cargando" className="max-w-2xl rounded-xl border border-border bg-surface p-6">
+      <div role="status" aria-label="Cargando" className="rounded-xl border border-border bg-surface p-6">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="mt-4 h-4 w-56" />
         <Skeleton className="mt-4 h-4 w-32" />
@@ -126,10 +141,11 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
     );
   }
 
-  const unchanged =
-    words === settings.printQuantityInWords &&
-    record === settings.requireClinicalRecordNumber &&
-    validity.trim() === String(settings.validityDays);
+  function edit(patch: Partial<PrescriptionSettingsDraft>) {
+    update(patch);
+    setNotice('');
+    setSaveError(null);
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -145,13 +161,13 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
     setValidityError(null);
     setSaving(true);
     try {
-      adopt(
-        await savePrescriptionSettings(token, {
-          printQuantityInWords: words,
-          requireClinicalRecordNumber: record,
-          validityDays,
-        }),
-      );
+      const next = await savePrescriptionSettings(token, {
+        printQuantityInWords: words,
+        requireClinicalRecordNumber: record,
+        validityDays,
+      });
+      commit(toDraft(next));
+      setSettings(next);
       setNotice(copy.saved);
     } catch (err) {
       setSaveError(apiErrorMessage(err, copy.saveError));
@@ -161,28 +177,27 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex max-w-2xl flex-col gap-4">
-      <div className="divide-y divide-hairline rounded-xl border border-border bg-surface">
-        <SettingSwitch
-          title={copy.wordsTitle}
-          hint={copy.wordsHint}
-          checked={words}
-          disabled={saving}
-          onChange={(value) => {
-            setWords(value);
-            setNotice('');
-          }}
-        />
-        <SettingSwitch
-          title={copy.recordTitle}
-          hint={copy.recordHint}
-          checked={record}
-          disabled={saving}
-          onChange={(value) => {
-            setRecord(value);
-            setNotice('');
-          }}
-        />
+    <form id={formId} onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <SettingRows>
+        {/* Esperan a «Guardar»: casillas, no interruptores (DESIGN.md → Form Controls). */}
+        <div className="px-4 py-3 sm:px-6">
+          <Checkbox
+            label={copy.wordsTitle}
+            description={copy.wordsHint}
+            checked={words}
+            disabled={saving}
+            onChange={(e) => edit({ words: e.target.checked })}
+          />
+        </div>
+        <div className="px-4 py-3 sm:px-6">
+          <Checkbox
+            label={copy.recordTitle}
+            description={copy.recordHint}
+            checked={record}
+            disabled={saving}
+            onChange={(e) => edit({ record: e.target.checked })}
+          />
+        </div>
         <div className="px-4 py-4 sm:px-6">
           <FormField
             htmlFor={validityId}
@@ -202,86 +217,35 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
               aria-invalid={validityError ? true : undefined}
               aria-describedby={validityError ? fieldErrorId(validityId) : validityHintId}
               onChange={(e) => {
-                setValidity(e.target.value);
+                edit({ validity: e.target.value });
                 setValidityError(null);
-                setNotice('');
               }}
-              className="w-28 tabular-nums max-sm:min-h-11"
+              className="t-data w-28"
             />
           </FormField>
         </div>
-      </div>
-      {saveError ? <InlineError variant="summary">{saveError}</InlineError> : null}
+      </SettingRows>
       <p
         ref={noticeRef}
         role="status"
         tabIndex={-1}
-        className={cn(notice ? 'text-sm text-success' : 'sr-only', 'focus:outline-none')}
+        className={cn(notice ? 'text-sm text-success-text' : 'sr-only', 'focus:outline-none')}
       >
         {notice}
       </p>
-      <Button
-        type="submit"
-        loading={saving}
-        disabled={unchanged}
-        className="self-start max-sm:min-h-11 max-sm:w-full"
-      >
-        {copy.save}
-      </Button>
+      {/* Único guardado: aparece con cambios; el error del guardado va dentro. */}
+      <SaveBar
+        dirty={dirty}
+        saving={saving}
+        form={formId}
+        error={saveError}
+        saveLabel={copy.save}
+        onDiscard={() => {
+          discard();
+          setValidityError(null);
+          setSaveError(null);
+        }}
+      />
     </form>
-  );
-}
-
-function SettingSwitch({
-  title,
-  hint,
-  checked,
-  disabled,
-  onChange,
-}: {
-  title: string;
-  hint: string;
-  checked: boolean;
-  disabled: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  const id = useId();
-  return (
-    <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-6">
-      <div className="min-w-0">
-        <p id={`${id}-title`} className="font-medium text-ink">
-          {title}
-        </p>
-        <p id={`${id}-hint`} className="text-sm text-muted">
-          {hint}
-        </p>
-      </div>
-      {/* El botón es el objetivo táctil (44 px bajo `sm`, DESIGN.md); el carril va dentro. */}
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-labelledby={`${id}-title`}
-        aria-describedby={`${id}-hint`}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className="inline-flex shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 max-sm:min-h-11 max-sm:min-w-11 sm:mt-1"
-      >
-        <span
-          aria-hidden
-          className={cn(
-            'relative inline-flex h-6 w-11 items-center rounded-full border border-border transition-colors',
-            checked ? 'bg-primary' : 'bg-bg',
-          )}
-        >
-          <span
-            className={cn(
-              'inline-block h-5 w-5 rounded-full bg-surface shadow transition-transform',
-              checked ? 'translate-x-5' : 'translate-x-0.5',
-            )}
-          />
-        </span>
-      </button>
-    </div>
   );
 }

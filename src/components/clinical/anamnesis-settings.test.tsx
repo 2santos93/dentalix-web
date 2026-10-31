@@ -29,6 +29,8 @@ describe('AnamnesisSettingsSection (DX-247)', () => {
     mockedSave.mockResolvedValue({ anamnesisValidityMonths: 6 });
     render(<AnamnesisSettingsSection token="tok" allowed />);
     expect(await screen.findByTestId('anamnesis-validity')).toHaveTextContent('12 meses');
+    // El valor de fábrica lleva el chip neutro «Por defecto» (SettingRow, B6).
+    expect(screen.getByText('Por defecto')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cambiar' }));
     const dialog = await screen.findByRole('dialog');
     await user.selectOptions(screen.getByLabelText('Meses de vigencia'), '6');
@@ -36,6 +38,7 @@ describe('AnamnesisSettingsSection (DX-247)', () => {
     await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', { anamnesisValidityMonths: 6 }));
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
     expect(screen.getByTestId('anamnesis-validity')).toHaveTextContent('6 meses');
+    expect(screen.queryByText('Por defecto')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Vigencia de la anamnesis guardada.');
   });
 

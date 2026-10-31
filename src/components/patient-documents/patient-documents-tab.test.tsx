@@ -18,6 +18,7 @@ import { setupUser } from '@/lib/test/user';
 import { makeDocument, tokenFor } from '@/lib/test/patient-documents';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { typeDate } from '@/components/patients/date-test-utils';
 
 jest.mock('../../lib/patient-documents/patient-documents-api', () => ({
   ...jest.requireActual('../../lib/patient-documents/patient-documents-api'),
@@ -63,6 +64,20 @@ function fileInput() {
 
 function dropFiles(files: File[]) {
   fireEvent.drop(screen.getByTestId('documents-drop-zone'), { dataTransfer: { files, types: ['Files'] } });
+}
+
+/** Las acciones de un documento viven en el «⋯» de su fila (RowActions). */
+async function rowAction(user: ReturnType<typeof setupUser>, name: string, action: string) {
+  await user.click(await screen.findByRole('button', { name: `Acciones de ${name}` }));
+  await user.click(await screen.findByRole('menuitem', { name: action }));
+}
+
+/** Nombres de las acciones del «⋯» de un documento (abre y cierra el menú). */
+async function menuItems(user: ReturnType<typeof setupUser>, name: string): Promise<string[]> {
+  await user.click(await screen.findByRole('button', { name: `Acciones de ${name}` }));
+  const items = (await screen.findAllByRole('menuitem')).map((el) => el.textContent?.trim() ?? '');
+  await user.keyboard('{Escape}');
+  return items;
 }
 
 describe('PatientDocumentsTab (DX-151)', () => {
@@ -158,7 +173,7 @@ describe('PatientDocumentsTab (DX-151)', () => {
     expect(active).toHaveTextContent('10/10/2026');
     expect(active).toHaveTextContent('11, 21');
     expect(active).toHaveTextContent('Dra. Laura Ruiz');
-    expect(voided).toHaveAttribute('data-status', 'VOIDED');
+    expect(within(voided).getByText('sonrisa.jpg', VISIBLE).closest('[data-document-status]')).toHaveAttribute('data-document-status', 'VOIDED');
     expect(within(voided).getByText('sonrisa.jpg', VISIBLE)).toHaveClass('line-through');
     expect(voided).toHaveTextContent('Anulado');
     expect(voided).toHaveTextContent('Motivo: Paciente equivocado');
@@ -167,6 +182,7 @@ describe('PatientDocumentsTab (DX-151)', () => {
   });
 
   it('acciones por rol: el autor y ADMIN anulan; otro odontólogo no; DOCX sin «Ver»', async () => {
+    const user = setupUser();
     const docs = [
       makeDocument({ uploadedById: 'u-rec' }),
       makeDocument({
@@ -180,15 +196,18 @@ describe('PatientDocumentsTab (DX-151)', () => {
     mockedList.mockResolvedValue(docs);
     const { unmount } = render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
     await screen.findByText('panoramica.pdf', VISIBLE);
-    expect(screen.queryByRole('button', { name: /^anular/i })).not.toBeInTheDocument();
+    // Tocar el documento lo abre; el que el navegador no enseña se descarga.
     expect(screen.getByRole('button', { name: 'Ver panoramica.pdf' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ver informe.docx' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Descargar informe.docx' })).toBeInTheDocument();
+    expect(await menuItems(user, 'panoramica.pdf')).toEqual(['Ver', 'Descargar']);
+    expect(await menuItems(user, 'informe.docx')).toEqual(['Descargar']);
     unmount();
 
     render(<PatientDocumentsTab token={RECEPTION} patientId="p1" />);
     await screen.findByText('panoramica.pdf', VISIBLE);
-    expect(screen.getAllByRole('button', { name: /^anular/i })).toHaveLength(2);
+    expect(await menuItems(user, 'panoramica.pdf')).toEqual(['Ver', 'Descargar', 'Anular']);
+    expect(await menuItems(user, 'informe.docx')).toEqual(['Descargar', 'Anular']);
   });
 
   it('si la API no trae el nombre del autor, la fila dice «un usuario»', async () => {
@@ -204,7 +223,7 @@ describe('PatientDocumentsTab (DX-151)', () => {
       makeDocument({ voidedAt: '2026-10-12T10:00:00.000Z', voidedByName: 'Admin', voidReason: 'Duplicado' }),
     );
     render(<PatientDocumentsTab token={ADMIN} patientId="p1" />);
-    await user.click(await screen.findByRole('button', { name: 'Anular panoramica.pdf' }));
+    await rowAction(user, 'panoramica.pdf', 'Anular');
     const dialog = await screen.findByRole('dialog', { name: 'Anular documento' });
     await user.type(within(dialog).getByLabelText('Motivo de la anulación'), 'Duplicado');
     await user.click(within(dialog).getByRole('button', { name: 'Anular documento' }));
@@ -218,12 +237,12 @@ describe('PatientDocumentsTab (DX-151)', () => {
     mockedList.mockResolvedValue([makeDocument()]);
     mockedUrl.mockResolvedValueOnce({ url: 'http://files/x?sig', expiresAt: '', disposition: 'attachment' });
     render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
-    await user.click(await screen.findByRole('button', { name: 'Descargar panoramica.pdf' }));
+    await rowAction(user, 'panoramica.pdf', 'Descargar');
     expect(mockedUrl).toHaveBeenCalledWith(DENTIST, 'p1', 'doc-1', 'attachment');
     expect(mockedDownload).toHaveBeenCalledWith('http://files/x?sig');
 
     mockedUrl.mockRejectedValueOnce(new ApiError(500, 'boom'));
-    await user.click(screen.getByRole('button', { name: 'Descargar panoramica.pdf' }));
+    await rowAction(user, 'panoramica.pdf', 'Descargar');
     expect(mockedNotify).toHaveBeenCalledWith(
       'No pudimos descargar el documento.',
       expect.objectContaining({ onRetry: expect.any(Function) }),
@@ -294,7 +313,7 @@ describe('PatientDocumentsTab (DX-151)', () => {
     const row = await screen.findByRole('listitem', { name: 'remision.pdf' });
     await user.selectOptions(within(row).getByLabelText('Categoría'), 'REFERRAL');
     await user.type(within(row).getByLabelText('Dientes (opcional)'), '11{Enter}21,');
-    fireEvent.change(within(row).getByLabelText('Fecha clínica (opcional)'), { target: { value: '2026-10-01' } });
+    await typeDate(user, within(row).getByRole('group', { name: 'Fecha clínica (opcional)' }), '2026-10-01');
     await user.type(within(row).getByLabelText('Notas (opcional)'), 'Ortodoncia');
     await user.click(within(row).getByRole('button', { name: 'Subir remision.pdf' }));
 

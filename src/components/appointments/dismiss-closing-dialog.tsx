@@ -15,8 +15,8 @@ import { FormModal } from '@/components/shared/form-modal';
 import { fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
 
 export const dismissClosingCopy = {
   title: 'Descartar de «Pendiente de cerrar»',
@@ -131,52 +131,33 @@ export function DismissClosingDialog({
       error={error}
       touchTargets
     >
-      <fieldset
-        role="radiogroup"
-        className="flex flex-col gap-2"
-        aria-invalid={errors.reason ? true : undefined}
-        aria-describedby={errors.reason ? fieldErrorId(reasonName) : undefined}
+      <RadioGroup
+        id={reasonName}
+        legend={copy.reason}
+        value={reasonCode ?? undefined}
+        onValueChange={(code) => {
+          setReasonCode(code as ClosingDismissalReason);
+          setErrors({});
+        }}
+        error={errors.reason}
+        disabled={submitting}
+        optionsClassName="gap-2"
       >
-        <legend className="mb-1.5 text-sm font-medium text-ink">{copy.reason}</legend>
-        {CLOSING_DISMISSAL_REASONS.map((code) => {
-          const optionId = `${reasonName}-${code}`;
-          return (
-            <label
-              key={code}
-              htmlFor={optionId}
-              className={cn(
-                'flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 transition-colors hover:bg-bg',
-                reasonCode === code && 'border-primary',
-              )}
-            >
-              <input
-                id={optionId}
-                type="radio"
-                name={reasonName}
-                value={code}
-                checked={reasonCode === code}
-                disabled={submitting}
-                onChange={() => {
-                  setReasonCode(code);
-                  setErrors({});
-                }}
-                className="size-5 shrink-0 accent-[var(--color-primary)]"
-              />
-              <span className="text-sm font-medium text-ink">{CLOSING_DISMISSAL_REASON_LABELS[code]}</span>
-            </label>
-          );
-        })}
-        {errors.reason ? (
-          <InlineError id={fieldErrorId(reasonName)} className="text-xs">
-            {errors.reason}
-          </InlineError>
-        ) : null}
-      </fieldset>
+        {CLOSING_DISMISSAL_REASONS.map((code) => (
+          <RadioOption
+            key={code}
+            // El primero lleva el foco cuando falta el motivo.
+            id={`${reasonName}-${code}`}
+            value={code}
+            label={CLOSING_DISMISSAL_REASON_LABELS[code]}
+          />
+        ))}
+      </RadioGroup>
 
       {reasonCode === 'OTHER' ? (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={otherId}>{copy.other}</Label>
-          <textarea
+          <Textarea
             id={otherId}
             rows={2}
             // El tope real es de caracteres (lo valida el envío); este solo
@@ -190,7 +171,6 @@ export function DismissClosingDialog({
               setText(e.target.value);
               setErrors((x) => ({ ...x, other: undefined }));
             }}
-            className={cn(fieldClass, errors.other && 'border-danger')}
           />
           <p id={counterId} className="self-end text-xs tabular-nums text-muted">
             {copy.counter(chars(text))}
