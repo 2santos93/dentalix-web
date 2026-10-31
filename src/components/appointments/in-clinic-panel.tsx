@@ -35,6 +35,8 @@ import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indic
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { SectionHeader } from '@/components/ui/section-header';
+import { Badge } from '@/components/ui/badge';
+import { triageLabels } from '@/lib/appointments/walk-in';
 
 export const inClinicCopy = {
   title: 'En clínica',
@@ -64,6 +66,11 @@ export const inClinicCopy = {
     readyForCheckout: (m: number) => `Por cobrar ${m} min`,
   },
   appointmentAt: (time: string) => `Cita ${time}`,
+  // DX-470: urgencia sin cita y su triaje de recepción.
+  urgent: 'Urgencia',
+  walkIn: 'Sin cita',
+  overbooked: 'Sobrecupo',
+  triage: (patient: string) => `Señales de triaje de ${patient}`,
   arrivedAt: (time: string, punctuality: string) => `Llegó ${time} · ${punctuality}`,
 };
 
@@ -355,6 +362,7 @@ function InClinicGroup({
                         )}
                       </p>
                     ) : null}
+                    <TriageSummary item={item} patientName={name} />
                   </div>
                   <StatusBadge kind="punctuality" status={item.punctuality} className="tabular-nums">
                     {inClinicCopy.minutes[group](item.minutesInStatus)}
@@ -375,6 +383,45 @@ function InClinicGroup({
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * DX-470: insignia «Urgencia» (tipo de cita urgente), «Sin cita» y
+ * «Sobrecupo», con las señales de triaje y la nota de recepción. Nada si la
+ * cita no es urgente ni tiene triaje.
+ */
+function TriageSummary({ item, patientName }: { item: InClinicItem; patientName: string }) {
+  const labels = triageLabels(item.triageFlags);
+  if (!item.urgent && !item.walkIn && labels.length === 0 && !item.triageNote) return null;
+  return (
+    <div className="mt-1 flex min-w-0 flex-col gap-1" data-testid="in-clinic-triage">
+      <ul className="flex flex-wrap gap-1" aria-label={inClinicCopy.triage(patientName)}>
+        {item.urgent ? (
+          <li>
+            <Badge variant="danger" dot>
+              {inClinicCopy.urgent}
+            </Badge>
+          </li>
+        ) : null}
+        {item.walkIn ? (
+          <li>
+            <Badge variant="neutral">{inClinicCopy.walkIn}</Badge>
+          </li>
+        ) : null}
+        {item.overbooked ? (
+          <li>
+            <Badge variant="warning">{inClinicCopy.overbooked}</Badge>
+          </li>
+        ) : null}
+        {labels.map((label) => (
+          <li key={label}>
+            <Badge variant="info">{label}</Badge>
+          </li>
+        ))}
+      </ul>
+      {item.triageNote ? <p className="text-xs break-words text-ink">{item.triageNote}</p> : null}
+    </div>
   );
 }
 

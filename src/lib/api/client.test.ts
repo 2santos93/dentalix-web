@@ -182,6 +182,24 @@ describe('apiFetch', () => {
     expect((err as ApiError).canOverride).toBe(true);
     expect(new ApiError(409, 'x').canOverride).toBeNull();
   });
+
+  it('DX-470: expone `existingPatientId` del 409 PATIENT_DUPLICATE (y null si no viene)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      headers: { get: () => null },
+      json: async () => ({
+        statusCode: 409,
+        code: 'PATIENT_DUPLICATE',
+        message: 'Ya existe un paciente con ese número de documento.',
+        existingPatientId: 'p-1',
+      }),
+    }) as unknown as typeof fetch;
+    const err = await apiFetch('/appointments/walk-in', { method: 'POST', body: {} }).catch((e: unknown) => e);
+    expect((err as ApiError).code).toBe('PATIENT_DUPLICATE');
+    expect((err as ApiError).existingPatientId).toBe('p-1');
+    expect(new ApiError(409, 'x').existingPatientId).toBeNull();
+  });
 });
 
 describe('apiFetch — refresh por cookie (DX-062)', () => {

@@ -47,6 +47,11 @@ export class ApiError extends Error {
    * reintentar con motivo («Agendar igualmente»). `null` si no viene.
    */
   public readonly canOverride: boolean | null;
+  /**
+   * DX-470: en el 409 `PATIENT_DUPLICATE` del alta mínima de «Atender sin
+   * cita», el paciente que ya tiene ese documento (se ofrece usarlo).
+   */
+  public readonly existingPatientId: string | null;
 
   constructor(
     public readonly status: number,
@@ -60,6 +65,7 @@ export class ApiError extends Error {
       holidayId?: string | null;
       line?: number | null;
       canOverride?: boolean | null;
+      existingPatientId?: string | null;
     } = {},
   ) {
     super(message);
@@ -72,6 +78,7 @@ export class ApiError extends Error {
     this.holidayId = details.holidayId ?? null;
     this.line = details.line ?? null;
     this.canOverride = details.canOverride ?? null;
+    this.existingPatientId = details.existingPatientId ?? null;
   }
 }
 
