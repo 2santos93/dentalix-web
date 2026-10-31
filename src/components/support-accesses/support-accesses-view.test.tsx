@@ -46,10 +46,33 @@ describe('SupportAccessesView (SEC-008)', () => {
     expect(screen.queryByRole('navigation', { name: 'Paginación' })).not.toBeInTheDocument();
   });
 
-  it('vacío: explica qué verá aquí la clínica', async () => {
+  it('vacío: explica qué verá aquí la clínica y enseña la forma del registro', async () => {
     mockedList.mockResolvedValueOnce({ items: [], nextCursor: null });
-    render(<SupportAccessesView token="t" />);
+    const { container } = render(<SupportAccessesView token="t" />);
     expect(await screen.findByText('Nadie de Dentalix ha entrado a la clínica.')).toBeInTheDocument();
+    // Las columnas en fantasma: visibles, fuera del árbol accesible.
+    const ghost = container.querySelector('[aria-hidden="true"]');
+    expect(ghost).toHaveTextContent('QuiénCuándoPor quéHasta cuándo');
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('el origen se lee: dispositivo e IP, el loopback como este equipo', async () => {
+    mockedList.mockResolvedValueOnce({
+      items: [
+        {
+          ...access,
+          ip: '::1',
+          userAgent:
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        },
+      ],
+      nextCursor: null,
+    });
+    render(<SupportAccessesView token="t" />);
+    const table = await screen.findByRole('table', { name: 'Accesos de soporte a la clínica' });
+    expect(within(table).getByText('Chrome · macOS')).toBeInTheDocument();
+    expect(within(table).getByText('Este equipo (local)')).toBeInTheDocument();
+    expect(table).not.toHaveTextContent('Mozilla');
   });
 
   it('error: sección con «Reintentar» que vuelve a pedir la lista', async () => {

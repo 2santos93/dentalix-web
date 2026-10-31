@@ -125,7 +125,11 @@ test('el superadmin enrola el MFA, entra a una clínica con código y motivo, y 
     await loginAs(adminPage, origin, target.email, PASSWORD);
     await adminPage.goto(`${origin}/settings/accesos-de-soporte`);
     await expect(adminPage.getByRole('heading', { name: 'Accesos de soporte' })).toBeVisible();
-    const table = adminPage.getByRole('table', { name: 'Accesos de soporte a la clínica' });
+    // DataList: tabla desde 640 px; en el teléfono, lista de tarjetas con el mismo nombre.
+    const table =
+      viewport.width < 640
+        ? adminPage.getByRole('list', { name: 'Accesos de soporte a la clínica' })
+        : adminPage.getByRole('table', { name: 'Accesos de soporte a la clínica' });
     await expect(table).toContainText(REASON, { timeout: 15_000 });
     await expect(table).toContainText(home.email);
     if (viewport.width === 390) await expectNoHorizontalScroll(adminPage);

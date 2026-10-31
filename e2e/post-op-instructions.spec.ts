@@ -178,13 +178,18 @@ for (const viewport of VIEWPORTS) {
       color: '#7C3AED',
     });
 
-    // --- 1. Ajustes › Sedes: teléfono de la sede --------------------------------
+    // --- 1. Ajustes › Sedes › la sede: su teléfono (B6: en «Editar sede») ------
     await page.goto(`${origin}/settings/sedes`);
-    const phone = page.getByRole('textbox', { name: /^Teléfono · / });
-    await expect(phone).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('link', { name: /^Abrir / }).first().click();
+    const editSede = page.getByRole('button', { name: /^(?:Editar|Revisar) / });
+    await expect(editSede).toBeVisible({ timeout: 15_000 });
+    await editSede.click();
+    const sedeDialog = page.getByRole('dialog', { name: /^(?:Editar|Revisar) sede/ });
+    const phone = sedeDialog.getByLabel('Teléfono', { exact: true });
     await phone.fill(SEDE_PHONE);
-    await page.locator('form', { has: phone }).getByRole('button', { name: /^Guardar/ }).click();
-    await expect(page.getByText('Guardado', { exact: true })).toBeVisible();
+    await sedeDialog.getByRole('button', { name: 'Guardar sede' }).click();
+    await expect(sedeDialog).toBeHidden();
+    await expect(page.getByRole('region', { name: 'Datos de la sede' })).toContainText(SEDE_PHONE.slice(-4));
     await expectNoHorizontalScroll(page);
 
     // --- 2. Ajustes › Indicaciones: crear POI-EXO -------------------------------

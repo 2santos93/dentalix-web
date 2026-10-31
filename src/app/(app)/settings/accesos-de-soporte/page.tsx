@@ -2,8 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { SupportAccessesView } from '@/components/support-accesses/support-accesses-view';
 
 const copy = {
@@ -38,9 +37,8 @@ export default function SupportAccessesSettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic" width="wide">
       <SupportAccessesView token={accessToken} />
-    </>
+    </SettingsPage>
   );
 }

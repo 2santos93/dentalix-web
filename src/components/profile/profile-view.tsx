@@ -10,26 +10,36 @@ import {
   removeAvatar,
   type MyProfile,
 } from '@/lib/me/me-api';
+import { readJwtClaims } from '@/lib/auth/jwt-claims';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { FormField } from '@/components/shared/form-field';
+import { Skeleton } from '@/components/ui/skeleton';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Avatar } from '@/components/ui/avatar';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
+import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
+import { SettingsSection } from '@/components/settings/settings-page';
 import { initials } from '@/lib/format/initials';
 
 // Copy as constants (i18n-ready) — same convention as staff-view.tsx.
 const copy = {
   loading: 'Cargando perfil…',
   loadError: 'No pudimos cargar tu perfil.',
+  accountHeading: 'Tu cuenta',
+  accountHelp: 'Tu correo y tu rol los gestiona la administración de la clínica.',
+  nameHeading: 'Nombre',
+  nameHelp: 'Así te ven el equipo y los pacientes en citas, recetas y documentos.',
   nameLabel: 'Nombre completo',
+  nameMissing: 'Escribe tu nombre.',
   save: 'Guardar',
-  saving: 'Guardando…',
+  saveFor: 'Guardar el nombre',
   saveError: 'No pudimos guardar tu nombre. Intenta de nuevo.',
   emailLabel: 'Correo electrónico',
   clinicLabel: 'Clínica',
   roleLabel: 'Rol',
+  otherClinics: 'También en',
   avatarAlt: 'Foto de perfil',
   upload: 'Cambiar foto',
   uploading: 'Subiendo…',
@@ -50,9 +60,12 @@ interface ProfileViewProps {
 }
 
 /**
- * "Mi perfil": avatar (upload/remove), editable name, read-only email and
- * clinic/role. Follows staff-view.tsx's load pattern — useState/useEffect
- * keyed by a `reloadKey` bump after a mutation, no TanStack Query in this app.
+ * "Mi perfil" (B6, plantilla de Ajustes): primero lo que es de solo lectura
+ * —foto, correo, clínica y rol— y después lo editable —el nombre, con la barra
+ * «Cambios sin guardar» como único guardado—. Antes el «Guardar» del nombre
+ * quedaba encima del correo y la clínica, como si también los guardara.
+ * Follows staff-view.tsx's load pattern — useState/useEffect keyed by a
+ * `reloadKey` bump after a mutation, no TanStack Query in this app.
  */
 export function ProfileView({ token }: ProfileViewProps) {
   const [profile, setProfile] = useState<MyProfile | null>(null);
@@ -60,8 +73,10 @@ export function ProfileView({ token }: ProfileViewProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const [name, setName] = useState('');
+  const { draft: name, setDraft: setName, dirty: nameDirty, discard: discardName, commit: commitName } =
+    useSettingsDraft(profile?.fullName ?? '');
   const [savingName, setSavingName] = useState(false);
+  const [nameFieldError, setNameFieldError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
 
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -78,7 +93,6 @@ export function ProfileView({ token }: ProfileViewProps) {
       .then((p) => {
         if (!active) return;
         setProfile(p);
-        setName(p.fullName);
       })
       .catch(() => active && setLoadError(copy.loadError))
       .finally(() => active && setLoading(false));
@@ -90,11 +104,17 @@ export function ProfileView({ token }: ProfileViewProps) {
   async function handleSaveName(e: React.FormEvent) {
     e.preventDefault();
     setNameError(null);
+    setNameFieldError(null);
+    if (name.trim() === '') {
+      setNameFieldError(copy.nameMissing);
+      document.getElementById('profile-name')?.focus();
+      return;
+    }
     setSavingName(true);
     try {
       const updated = await updateName(token, name.trim());
       setProfile(updated);
-      setName(updated.fullName);
+      commitName(updated.fullName);
     } catch (err) {
       setNameError(apiErrorMessage(err, copy.saveError));
     } finally {
@@ -133,9 +153,10 @@ export function ProfileView({ token }: ProfileViewProps) {
 
   if (loading) {
     return (
-      <p role="status" className="text-sm text-muted">
-        {copy.loading}
-      </p>
+      <div role="status" aria-label={copy.loading} className="flex flex-col gap-4">
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+      </div>
     );
   }
   if (loadError || !profile) {
@@ -147,77 +168,101 @@ export function ProfileView({ token }: ProfileViewProps) {
     );
   }
 
-  const membership = profile.memberships[0];
+  // La membresía de ESTA clínica (la del token); las demás, aparte.
+  const tenantId = readJwtClaims(token)?.tenantId;
+  const membership = profile.memberships.find((m) => m.tenantId === tenantId) ?? profile.memberships[0];
+  const others = profile.memberships.filter((m) => m !== membership);
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-6 py-6">
-        <div className="flex items-center gap-4">
-          <Avatar
-            size="xl"
-            initials={initials(profile.fullName)}
-            src={profile.avatarUrl}
-            alt={profile.avatarUrl ? copy.avatarAlt : undefined}
-          />
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={avatarBusy}
-                onClick={() => fileRef.current?.click()}
-              >
-                {avatarBusy ? copy.uploading : copy.upload}
-              </Button>
-              {profile.avatarUrl && (
-                <Button type="button" variant="ghost" disabled={avatarBusy} onClick={handleRemove}>
-                  {copy.remove}
-                </Button>
-              )}
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              aria-label={copy.upload}
-              onChange={handleUpload}
+    <>
+      <SettingsSection title={copy.accountHeading} description={copy.accountHelp}>
+        <div className="flex flex-col gap-6 rounded-xl border border-border bg-surface p-4 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <Avatar
+              size="xl"
+              initials={initials(profile.fullName)}
+              src={profile.avatarUrl}
+              alt={profile.avatarUrl ? copy.avatarAlt : undefined}
             />
-            {avatarError && <InlineError>{avatarError}</InlineError>}
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={avatarBusy}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {avatarBusy ? copy.uploading : copy.upload}
+                </Button>
+                {profile.avatarUrl && (
+                  <Button type="button" variant="ghost" disabled={avatarBusy} onClick={handleRemove}>
+                    {copy.remove}
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                aria-label={copy.upload}
+                onChange={handleUpload}
+              />
+              {avatarError && <InlineError>{avatarError}</InlineError>}
+            </div>
           </div>
+          <DescriptionList columns={2}>
+            <DescriptionItem label={copy.emailLabel}>{profile.email}</DescriptionItem>
+            {membership ? (
+              <>
+                <DescriptionItem label={copy.clinicLabel}>{membership.clinicName}</DescriptionItem>
+                <DescriptionItem label={copy.roleLabel}>{ROLE_LABEL[membership.role] ?? membership.role}</DescriptionItem>
+              </>
+            ) : null}
+            {others.length > 0 ? (
+              <DescriptionItem label={copy.otherClinics}>
+                {others.map((m) => `${m.clinicName} (${ROLE_LABEL[m.role] ?? m.role})`).join(' · ')}
+              </DescriptionItem>
+            ) : null}
+          </DescriptionList>
         </div>
+      </SettingsSection>
 
-        <form onSubmit={handleSaveName} className="flex flex-col gap-3">
-          <FormField htmlFor="profile-name" label={copy.nameLabel}>
-            <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} required />
-          </FormField>
-          {nameError && <InlineError>{nameError}</InlineError>}
-          <div>
-            <Button type="submit" disabled={savingName}>
-              {savingName ? copy.saving : copy.save}
-            </Button>
+      <SettingsSection title={copy.nameHeading} description={copy.nameHelp}>
+        <form id="profile-name-form" onSubmit={handleSaveName} noValidate className="flex flex-col gap-4">
+          <div className="rounded-xl border border-border bg-surface p-4 sm:p-6">
+            <FormField htmlFor="profile-name" label={copy.nameLabel} error={nameFieldError}>
+              <Input
+                id="profile-name"
+                autoComplete="name"
+                value={name}
+                disabled={savingName}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setNameFieldError(null);
+                }}
+                aria-invalid={nameFieldError ? true : undefined}
+                aria-describedby={nameFieldError ? fieldErrorId('profile-name') : undefined}
+                required
+                className="sm:max-w-sm"
+              />
+            </FormField>
           </div>
+          <SaveBar
+            dirty={nameDirty}
+            saving={savingName}
+            form="profile-name-form"
+            error={nameError}
+            saveLabel={copy.save}
+            saveAriaLabel={copy.saveFor}
+            onDiscard={() => {
+              discardName();
+              setNameError(null);
+              setNameFieldError(null);
+            }}
+          />
         </form>
-
-        <dl className="grid gap-2 text-sm">
-          <div className="flex gap-2">
-            <dt className="text-muted">{copy.emailLabel}:</dt>
-            <dd className="text-ink">{profile.email}</dd>
-          </div>
-          {membership && (
-            <>
-              <div className="flex gap-2">
-                <dt className="text-muted">{copy.clinicLabel}:</dt>
-                <dd className="text-ink">{membership.clinicName}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="text-muted">{copy.roleLabel}:</dt>
-                <dd className="text-ink">{ROLE_LABEL[membership.role] ?? membership.role}</dd>
-              </div>
-            </>
-          )}
-        </dl>
-      </CardContent>
-    </Card>
+      </SettingsSection>
+    </>
   );
 }

@@ -465,17 +465,20 @@ test.describe('registro con el reloj del navegador', () => {
       await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
       await expect(clock).toContainText('Sugerido por tu navegador.');
 
+      // Paso 1 (la clínica y su sede).
       await page.getByLabel('Nombre de la clínica').fill(`Clínica Registro ${tag}`);
-      await page.getByLabel('Subdominio').fill(sub);
-      await page.getByLabel('Nombre completo').fill('Lucía Registro');
-      await page.getByLabel('Correo electrónico').fill(email);
-      await page.getByLabel('Contraseña', { exact: true }).fill(password);
+      await page.getByLabel('Dirección web').fill(sub);
       // Sin `hourCycle`: se queda el que sugirió el navegador.
       await fillRegistrationLocation(page, { country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES' });
       await expect(clock.getByRole('radio', { name: label, exact: true })).toBeChecked();
       if (viewport.width === 390) await expectNoHorizontalScroll(page);
       await clock.scrollIntoViewIfNeeded();
       await shoot(page, 'registro-reloj', viewport.width);
+      await page.getByRole('button', { name: 'Continuar' }).click();
+      // Paso 2 (la cuenta).
+      await page.getByLabel('Nombre completo').fill('Lucía Registro');
+      await page.getByLabel('Correo electrónico').fill(email);
+      await page.getByLabel('Contraseña', { exact: true }).fill(password);
 
       const sent = page.waitForRequest(
         (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/auth/register'),

@@ -4,10 +4,13 @@ import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 
 /**
- * e2e (DX-319): nº de registro sanitario de la sede en Ajustes › Sedes.
+ * e2e (DX-319): nº de registro sanitario de la sede en Ajustes › Sedes → la
+ * ficha de la sede (B6).
  *
  * Una clínica nueva: la tarjeta ya no habla del REPS; el ADMIN escribe un nº
- * libre (sin formato por país), activa «Mostrar en los documentos» y guarda;
+ * libre (sin formato por país), activa «Mostrar el nº de registro en los
+ * documentos» y guarda desde la barra «Cambios sin guardar» (sin cambios no
+ * hay botón de guardar);
  * al recargar sigue ahí y la API lo devuelve. Un 503 deja el error con el foco
  * en «Guardar»; un 400, el campo inválido con el foco en él. En escritorio (1440px) y móvil
  * (390px), sin scroll horizontal ni errores en la consola.
@@ -48,15 +51,18 @@ for (const viewport of VIEWPORTS) {
     });
 
     await page.goto(`${origin}/settings/sedes`);
+    await page.getByRole('link', { name: 'Abrir Sede principal' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Sede principal' })).toBeVisible({ timeout: 15_000 });
     const section = page.getByRole('region', { name: 'Nº de registro sanitario' });
     const field = section.getByLabel(/Nº de registro sanitario · Sede principal/);
     await expect(field).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/REPS/)).toHaveCount(0);
     await expect(field).toHaveAttribute('maxlength', '64');
-    const toggle = section.getByRole('checkbox', { name: /Mostrar en los documentos · Sede principal/ });
+    const toggle = section.getByRole('checkbox', { name: /Mostrar el nº de registro en los documentos/ });
     await expect(toggle).not.toBeChecked();
     const save = section.getByRole('button', { name: 'Guardar el nº de registro sanitario de Sede principal' });
-    await expect(save).toBeDisabled();
+    // Sin cambios no hay nada que guardar: la barra no está.
+    await expect(save).toHaveCount(0);
     await expectNoHorizontalScroll(page);
 
     // Un fallo del guardado que no es del campo (503): error visible y foco en
@@ -86,8 +92,8 @@ for (const viewport of VIEWPORTS) {
     // Guardar de verdad, con «Mostrar en los documentos».
     await toggle.check();
     await save.click();
-    await expect(section.getByRole('status').filter({ hasText: 'Guardado' })).toBeVisible();
-    await expect(save).toBeDisabled();
+    await expect(page.getByText('Nº de registro sanitario de Sede principal guardado.')).toBeVisible();
+    await expect(save).toHaveCount(0);
     await expectNoHorizontalScroll(page);
 
     await page.reload();

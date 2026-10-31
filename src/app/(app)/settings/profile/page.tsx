@@ -2,18 +2,22 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { PageHeader } from '@/components/shared/page-header';
+import { SettingsPage, SettingsSection } from '@/components/settings/settings-page';
 import { ProfileView } from '@/components/profile/profile-view';
 import { ChangePasswordForm } from '@/components/profile/change-password-form';
-import { Separator } from '@/components/ui/separator';
 
 const copy = {
   title: 'Mi perfil',
-  description: 'Gestiona tu nombre, tu foto y tu contraseña.',
+  description: 'Tu nombre, tu foto y tu contraseña.',
   securityTitle: 'Seguridad',
   checkingSession: 'Verificando sesión…',
 };
 
+/**
+ * Mi perfil (B6): en Ajustes → «Tu cuenta», con la plantilla de Ajustes. Una
+ * sola acción primaria: el «Guardar» de la barra, que solo aparece cuando el
+ * nombre cambió; la contraseña se cambia en su diálogo.
+ */
 export default function ProfilePage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -30,16 +34,11 @@ export default function ProfilePage() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader title={copy.title} description={copy.description} />
-      <div className="flex flex-col gap-8">
-        <ProfileView token={accessToken} />
-        <div>
-          <h2 className="mb-3 text-lg font-semibold text-ink">{copy.securityTitle}</h2>
-          <Separator className="mb-4" />
-          <ChangePasswordForm token={accessToken} />
-        </div>
-      </div>
-    </>
+    <SettingsPage title={copy.title} description={copy.description}>
+      <ProfileView token={accessToken} />
+      <SettingsSection title={copy.securityTitle}>
+        <ChangePasswordForm token={accessToken} />
+      </SettingsSection>
+    </SettingsPage>
   );
 }

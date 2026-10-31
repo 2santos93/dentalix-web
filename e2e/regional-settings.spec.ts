@@ -211,14 +211,18 @@ for (const viewport of VIEWPORTS) {
         timeout: 10_000,
       });
 
+      // Paso 1 (la clínica y su sede).
       await page.getByLabel('Nombre de la clínica').fill(`Clínica Madrid ${tag}`);
-      await page.getByLabel('Subdominio').fill(subdomain);
-      await page.getByLabel('Nombre completo').fill('Lucía Registro');
-      await page.getByLabel('Correo electrónico').fill(email);
-      await page.getByLabel('Contraseña', { exact: true }).fill(password);
+      await page.getByLabel('Dirección web').fill(subdomain);
       await fillRegistrationLocation(page, MADRID);
       if (viewport.width === 390) await expectNoHorizontalScroll(page);
       await shoot(page, 'e2e-registro', viewport.width);
+      await page.getByRole('button', { name: 'Continuar' }).click();
+      // Paso 2 (la cuenta).
+      await page.getByLabel('Nombre completo').fill('Lucía Registro');
+      await page.getByLabel('Correo electrónico').fill(email);
+      await page.getByLabel('Contraseña', { exact: true }).fill(password);
+      if (viewport.width === 390) await expectNoHorizontalScroll(page);
 
       const sent = page.waitForRequest(
         (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/auth/register'),

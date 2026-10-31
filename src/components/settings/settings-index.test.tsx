@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
-import { SettingsIndex } from './settings-index';
+import { SettingsIndex, splitSettingsColumns } from './settings-index';
+import { visibleSettingsSections } from './settings-sections';
 
 function tokenForRole(role: string): string {
   const part = (value: string) =>
@@ -8,18 +9,23 @@ function tokenForRole(role: string): string {
 }
 
 describe('SettingsIndex (DX-282)', () => {
-  it('ADMIN: cinco secciones y las 24 pantallas como enlaces', () => {
+  it('ADMIN: siete secciones y las 25 pantallas como enlaces', () => {
     render(<SettingsIndex token={tokenForRole('ADMIN')} />);
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     expect(headings).toEqual([
+      'Tu cuenta',
       'Clínica y sedes',
       'Agenda',
       'Cobro',
       'Historia clínica',
       'Datos y seguridad',
+      'Herramientas y registros',
     ]);
-    expect(screen.getAllByRole('link')).toHaveLength(24);
+    expect(screen.getAllByRole('link')).toHaveLength(25);
+    expect(
+      within(screen.getByRole('list', { name: 'Tu cuenta' })).getByRole('link', { name: 'Mi perfil' }),
+    ).toHaveAttribute('href', '/settings/profile');
 
     // Cada sección es una lista con nombre: el lector de pantalla dice dónde está.
     const agenda = screen.getByRole('list', { name: 'Agenda' });
@@ -43,7 +49,7 @@ describe('SettingsIndex (DX-282)', () => {
     render(<SettingsIndex token={tokenForRole(role)} />);
 
     const links = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
-    expect(links).toEqual(['/settings/sedes', '/settings/horarios', '/settings/privacidad']);
+    expect(links).toEqual(['/settings/profile', '/settings/sedes', '/settings/horarios', '/settings/privacidad']);
     expect(screen.queryByRole('heading', { name: 'Cobro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Historia clínica' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Consentimientos/ })).not.toBeInTheDocument();
@@ -56,5 +62,17 @@ describe('SettingsIndex (DX-282)', () => {
     // la lista de enlaces de un lector de pantalla no lea frases enteras.
     const link = screen.getByRole('link', { name: 'Caja' });
     expect(link).toHaveAccessibleDescription('Cómo se abre y se cierra la caja por turno.');
+  });
+});
+
+describe('splitSettingsColumns', () => {
+  it('reparte los grupos de ADMIN en dos columnas de alto parecido sin cambiar el orden', () => {
+    const sections = visibleSettingsSections('ADMIN');
+    const [left, right] = splitSettingsColumns(sections);
+    expect([...left, ...right]).toEqual(sections);
+    const rows = (column: typeof sections) => column.reduce((n, s) => n + s.entries.length + 1.5, 0);
+    expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(8);
+    expect(left.length).toBeGreaterThan(0);
+    expect(right.length).toBeGreaterThan(0);
   });
 });

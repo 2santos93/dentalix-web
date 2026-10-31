@@ -122,17 +122,20 @@ test('registering a clinic in a country outside the old pair', async ({ page, re
 
   await page.goto(`${regOrigin}/register`);
   await waitForHydratedForm(page);
+  // Paso 1 (la clínica y su sede).
   await page.getByLabel('Nombre de la clínica').fill(`Clínica Caracas ${suffix}`);
-  await page.getByLabel('Subdominio').fill(sub);
-  await page.getByLabel('Nombre completo').fill('Andrés Registro');
-  await page.getByLabel('Correo electrónico').fill(email);
-  await page.getByLabel('Contraseña', { exact: true }).fill(password);
+  await page.getByLabel('Dirección web').fill(sub);
   await searchCountry(page, 'venez', 'Venezuela');
   await page.getByLabel('Moneda', { exact: true }).selectOption(VENEZUELA.currency);
   await pickRegional(page.getByLabel('Zona horaria', { exact: true }), VENEZUELA.timeZone);
   await pickRegional(page.getByLabel('Formato regional', { exact: true }), VENEZUELA.locale);
   await page.getByRole('radio', { name: '12 h', exact: true }).check();
   await shoot(page, 'register-country', page.getByRole('group', { name: 'Tu sede' }));
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  // Paso 2 (la cuenta).
+  await page.getByLabel('Nombre completo').fill('Andrés Registro');
+  await page.getByLabel('Correo electrónico').fill(email);
+  await page.getByLabel('Contraseña', { exact: true }).fill(password);
 
   const sent = page.waitForRequest(
     (req) => req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/api/v1/auth/register'),

@@ -45,8 +45,8 @@ export async function waitForHydratedForm(page: Page): Promise<void> {
  * NO tenant, so callers must keep every post-login `page.goto` on the origin
  * this helper returns instead of using a relative path.
  *
- * The register form still has the "Subdominio" field (registration creates
- * the clinic, so it has to name it). The login form does NOT — it only takes
+ * The register form still has the address field («Dirección web», the
+ * subdomain: registration creates the clinic, so it has to name it). The login form does NOT — it only takes
  * email + password; the tenant travels via the host we're already on.
  */
 export interface RegisterAndLoginParams {
@@ -87,21 +87,26 @@ export async function registerAndLogin(
   await page.goto(`${origin}/register`);
   await waitForHydratedForm(page);
 
+  // Paso 1 (la clínica): nombre, dirección web y «Tu sede».
   await page.getByLabel('Nombre de la clínica').fill(clinicName);
-  await page.getByLabel('Subdominio').fill(subdomain);
+  await page.getByLabel('Dirección web').fill(subdomain);
+  await fillRegistrationLocation(page, { ...E2E_REGION, ...location });
+  await page.getByRole('button', { name: 'Continuar' }).click();
+
+  // Paso 2 (la cuenta).
   await page.getByLabel('Nombre completo').fill(fullName);
   await page.getByLabel('Correo electrónico').fill(email);
   // exact: true targets only the password INPUT — the field has a show/hide
   // toggle whose accessible name would otherwise make a substring "Contraseña"
   // match resolve to 2 elements (strict-mode violation).
   await page.getByLabel('Contraseña', { exact: true }).fill(password);
-  await fillRegistrationLocation(page, { ...E2E_REGION, ...location });
 
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
 
   // DX-029: el registro responde igual exista o no el correo y no crea nada
-  // hasta abrir el enlace del email. Un 4xx real (p. ej. subdominio ocupado)
-  // deja la alerta del formulario: falla con su texto en vez de colgarse.
+  // hasta abrir el enlace del email. Un 4xx real (p. ej. dirección ocupada,
+  // que vuelve al paso 1) deja la alerta del formulario: falla con su texto en
+  // vez de colgarse.
   const registerError = page.locator('p[role="alert"]');
   await expect(page.getByRole('heading', { name: 'Revisa tu correo' }))
     .toBeVisible({ timeout: 10_000 })

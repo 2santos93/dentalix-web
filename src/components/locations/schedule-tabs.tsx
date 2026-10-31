@@ -36,7 +36,6 @@ export function ScheduleTabs({
       aria-label={copy.tablist}
       value={active}
       onValueChange={onChange}
-      className="mb-6"
       items={TABS.map((tab) => ({
         value: tab.key,
         label: tab.label,

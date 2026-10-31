@@ -2,8 +2,7 @@
 import { Suspense, useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { PageHeader } from '@/components/shared/page-header';
-import { SETTINGS_BACK } from '@/components/settings/settings-sections';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { AuditLogView } from '@/components/audit/audit-log-view';
 
 const copy = {
@@ -51,8 +50,7 @@ function AuditSettingsView() {
   if (!accessToken) return null;
 
   return (
-    <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+    <SettingsPage title={copy.title} description={copy.description} scope="clinic" width="wide">
       <AuditLogView
         // Otra ficha, otra lista: el estado de filtros y páginas no se arrastra.
         key={patientId ?? 'clinic'}
@@ -60,6 +58,6 @@ function AuditSettingsView() {
         patientId={patientId}
         onClearPatient={patientId ? () => router.replace(pathname) : undefined}
       />
-    </>
+    </SettingsPage>
   );
 }

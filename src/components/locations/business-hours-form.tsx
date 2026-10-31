@@ -15,15 +15,18 @@ import {
 } from '@/lib/locations/schedule-api';
 import { onLocationChange } from '@/lib/locations/location-store';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
+import { timeZoneLabel } from '@/lib/locations/regional-options';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
-import { FormField } from '@/components/shared/form-field';
+import { Switch } from '@/components/ui/switch';
+import { TimeField } from '@/components/ui/date-field';
+import { useDateLocale } from '@/components/ui/date-locale';
 import { AsyncSection } from '@/components/shared/async-section';
-import { InlineError } from '@/components/errors/inline-error';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
+import { weekOrder } from './week-order';
 
 // Copy as constants (i18n-ready, es-first), igual que el resto de la app.
 const copy = {
@@ -32,12 +35,16 @@ const copy = {
   timezoneLoading: '…',
   timezoneWhere: 'Se cambia en',
   timezoneLink: 'Ajustes → Sedes',
+  editing: (name: string) => `Editando: ${name}`,
+  weekLabel: 'Horario de la semana',
   openLabel: 'Abierto',
   closedLabel: 'Cerrado',
   addRange: 'Agregar tramo',
   removeRange: 'Quitar tramo',
   fromLabel: 'Desde',
   toLabel: 'Hasta',
+  rangeFrom: (day: string, n: number) => `${day}, tramo ${n}: desde`,
+  rangeTo: (day: string, n: number) => `${day}, tramo ${n}: hasta`,
   save: 'Guardar horario',
   saved: 'Horario guardado.',
   unconfiguredNotice:
@@ -91,7 +98,21 @@ interface BusinessHoursFormProps {
  * cerrado; la semana entera vacía deja la sede sin restricción.
  */
 export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
-  const [week, setWeek] = useState<DraftWeek>(EMPTY_WEEK);
+  // Lo guardado (lo que dio la API) y el borrador: la barra «Cambios sin
+  // guardar» aparece solo cuando difieren (DESIGN.md → Settings pages).
+  const [savedWeek, setSavedWeek] = useState<DraftWeek>(EMPTY_WEEK);
+  const { draft: week, setDraft: setWeek, dirty, discard, commit } = useSettingsDraft(savedWeek);
+  const { locale } = useDateLocale();
+  const order = weekOrder(locale);
+  // Qué sede se está editando: la activa; en «Todas las sedes», la principal
+  // (la misma regla que la API y que `pickSedeTimeZone`).
+  const locationsState = useLocationsState(token);
+  const editingSede =
+    locationsState.status === 'ready'
+      ? ((locationsState.activeLocationId
+          ? locationsState.locations.find((l) => l.id === locationsState.activeLocationId)
+          : undefined) ?? locationsState.locations.find((l) => l.isActive))
+      : undefined;
   // Zona del horario que dio la API (= la de la sede); sin horario, la de la
   // sede leída de la lista de sedes. Nunca una zona de reserva.
   const [scheduleZone, setScheduleZone] = useState<string | null>(null);
@@ -122,7 +143,10 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
       try {
         const hours = await getLocationSchedule(token);
         if (cancelled) return;
-        setWeek(toDraft(hours));
+        // Otra sede: lo de antes no se arrastra.
+        const next = toDraft(hours);
+        setSavedWeek(next);
+        setWeek(next);
         setScheduleZone(hours?.timezone ?? null);
         setHadSchedule(hours !== null && hours.ranges.length > 0);
         setLoadError(null);
@@ -137,7 +161,8 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey]);
+    // `setWeek` es el setter estable de `useState` (dentro de `useSettingsDraft`).
+  }, [token, reloadKey, setWeek]);
 
   function updateDay(weekday: number, ranges: DraftRange[]) {
     setSaved(false);
@@ -205,7 +230,9 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
     setSaving(true);
     try {
       const updated = await replaceLocationSchedule(token, payload);
-      setWeek(toDraft(updated));
+      const next = toDraft(updated);
+      setSavedWeek(next);
+      commit(next);
       setScheduleZone(updated.timezone);
       setHadSchedule(updated.ranges.length > 0);
       setSaved(true);
@@ -216,6 +243,8 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
     }
   }
 
+  const zoneText = timezone ? timeZoneLabel(timezone) : copy.timezoneLoading;
+
   return (
     <AsyncSection
       loading={loading}
@@ -224,119 +253,137 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
       retryLabel={copy.retry}
       skeleton={<Skeleton className="h-64 w-full rounded-xl" />}
     >
-      <form onSubmit={handleSubmit} aria-label={copy.save} className="flex flex-col gap-6">
+      <form onSubmit={handleSubmit} aria-label={copy.save} id="business-hours-form" noValidate className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1 text-sm text-muted">
+          {editingSede ? <p className="font-medium text-ink">{copy.editing(editingSede.name)}</p> : null}
+          <p>
+            {copy.timezoneLabel}:{' '}
+            {zoneError ? null : <span className="font-medium text-ink">{zoneText}</span>}
+            {' · '}
+            {copy.timezoneWhere}{' '}
+            {isAdmin ? (
+              <Link
+                href="/settings/sedes"
+                className="whitespace-nowrap font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+              >
+                {copy.timezoneLink}
+              </Link>
+            ) : (
+              copy.timezoneLink
+            )}
+          </p>
+        </div>
+        {zoneError ? (
+          <SedeConfigError kind="timeZone" variant="field" onRetry={zoneError.retry} className="max-w-xs" />
+        ) : null}
         {!hadSchedule && (
-          <p role="status" className="text-sm text-muted">
+          <p role="status" className="max-w-[68ch] text-sm text-muted">
             {copy.unconfiguredNotice}
           </p>
         )}
 
-        <p className="text-sm text-muted">
-          {copy.timezoneLabel}:{' '}
-          {zoneError ? null : <span className="font-medium text-ink">{timezone ?? copy.timezoneLoading}</span>}
-          {' · '}
-          {copy.timezoneWhere}{' '}
-          {isAdmin ? (
-            <Link
-              href="/settings/sedes"
-              className="whitespace-nowrap font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {copy.timezoneLink}
-            </Link>
-          ) : (
-            copy.timezoneLink
-          )}
-        </p>
-        {zoneError ? (
-          <SedeConfigError kind="timeZone" variant="field" onRetry={zoneError.retry} className="max-w-xs" />
-        ) : null}
-
-        <div className="flex flex-col gap-3">
-          {WEEKDAY_LABELS.map((label, weekday) => {
+        {/* Una fila por día en una sola tarjeta (antes, 7 tarjetas a todo el
+            ancho): la semana entera cabe en una pantalla de escritorio. El
+            orden sigue el formato regional de la sede. */}
+        <ul
+          aria-label={copy.weekLabel}
+          className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface"
+        >
+          {order.map((weekday) => {
+            const label = WEEKDAY_LABELS[weekday];
             const ranges = week[weekday];
             const isOpen = ranges.length > 0;
             return (
-              <Card key={weekday} className="flex flex-col gap-3 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-ink">{label}</span>
-                  <label className="inline-flex items-center gap-2 text-xs text-muted">
-                    <input
-                      type="checkbox"
+              <li
+                key={weekday}
+                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:gap-4 sm:px-6"
+              >
+                <div className="flex min-h-10 items-center justify-between gap-3 sm:w-44 sm:shrink-0">
+                  <span className="font-medium text-ink">{label}</span>
+                  <span className="flex items-center gap-2">
+                    <span aria-hidden className="text-sm text-muted">
+                      {isOpen ? copy.openLabel : copy.closedLabel}
+                    </span>
+                    {/* Siempre «Abierto»: el nombre no cambia con el estado. */}
+                    <Switch
                       checked={isOpen}
                       onChange={() => toggleDay(weekday)}
                       aria-label={`${copy.openLabel} ${label}`}
                     />
-                    {isOpen ? copy.openLabel : copy.closedLabel}
-                  </label>
+                  </span>
                 </div>
 
-                {isOpen && (
-                  <div className="flex flex-col gap-2">
+                {isOpen ? (
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
                     {ranges.map((range, index) => (
-                      <div key={index} className="flex flex-wrap items-end gap-2">
-                        <FormField
-                          htmlFor={`day-${weekday}-range-${index}-start`}
-                          label={copy.fromLabel}
-                        >
-                          <Input
-                            id={`day-${weekday}-range-${index}-start`}
-                            type="time"
-                            required
-                            value={range.start}
-                            onChange={(e) => editRange(weekday, index, { start: e.target.value })}
-                            className="w-32 tabular-nums"
-                          />
-                        </FormField>
-                        <FormField
-                          htmlFor={`day-${weekday}-range-${index}-end`}
-                          label={copy.toLabel}
-                        >
-                          <Input
-                            id={`day-${weekday}-range-${index}-end`}
-                            type="time"
-                            required
-                            value={range.end}
-                            onChange={(e) => editRange(weekday, index, { end: e.target.value })}
-                            className="w-32 tabular-nums"
-                          />
-                        </FormField>
+                      <div key={index} className="flex items-center gap-2">
+                        <TimeField
+                          id={`day-${weekday}-range-${index}-start`}
+                          value={range.start || null}
+                          onChange={(v) => editRange(weekday, index, { start: v ?? '' })}
+                          aria-label={copy.rangeFrom(label, index + 1)}
+                          required
+                          className="w-32"
+                        />
+                        <span aria-hidden className="text-muted">
+                          –
+                        </span>
+                        <TimeField
+                          id={`day-${weekday}-range-${index}-end`}
+                          value={range.end || null}
+                          onChange={(v) => editRange(weekday, index, { end: v ?? '' })}
+                          aria-label={copy.rangeTo(label, index + 1)}
+                          required
+                          className="w-32"
+                        />
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
+                          size="icon-sm"
+                          // Gris en reposo (catorce papeleras rojas gritan); rojo al apuntar.
+                          className="text-muted hover:bg-danger-subtle hover:text-danger-text"
                           onClick={() => removeRange(weekday, index)}
                           aria-label={`${copy.removeRange} ${label} ${index + 1}`}
+                          title={`${copy.removeRange} ${index + 1}`}
                         >
-                          <Trash2 className="size-3.5" />
+                          <Trash2 aria-hidden />
                         </Button>
                       </div>
                     ))}
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
                       className="self-start"
                       onClick={() => addRange(weekday)}
+                      aria-label={`${copy.addRange} ${label}`}
                     >
-                      <Plus className="size-3.5" /> {copy.addRange}
+                      <Plus aria-hidden /> {copy.addRange}
                     </Button>
                   </div>
-                )}
-              </Card>
+                ) : null}
+              </li>
             );
           })}
-        </div>
+        </ul>
 
-        {saveError && <InlineError>{saveError}</InlineError>}
-        {saved && !saveError && (
-          <p role="status" className="text-sm font-medium text-primary">
+        {saved && !dirty && !saveError ? (
+          <p role="status" className="text-sm font-medium text-success-text">
             {copy.saved}
           </p>
-        )}
+        ) : null}
 
-        <Button type="submit" loading={saving} className="self-start">
-          {copy.save}
-        </Button>
+        <SaveBar
+          dirty={dirty}
+          saving={saving}
+          form="business-hours-form"
+          error={saveError}
+          saveLabel={copy.save}
+          onDiscard={() => {
+            discard();
+            setSaveError(null);
+          }}
+        />
       </form>
     </AsyncSection>
   );

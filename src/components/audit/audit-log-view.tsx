@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Lock, X } from 'lucide-react';
+import { Lock, X } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   listAuditEvents,
@@ -50,24 +50,18 @@ import { isValidRange, MAX_RANGE_DAYS } from '@/lib/payments/cash-period';
 import { isCivilDay } from '@/lib/time/civil-day';
 import { wallInstant } from '@/lib/time/wall-clock';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { DateRangePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
-import { toolbarFieldClass } from '@/components/shared/list-toolbar';
+import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { cn } from '@/lib/utils';
+import { CursorPagination } from './cursor-pagination';
+import { OriginCell, originText } from './origin-cell';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -81,6 +75,7 @@ const copy = {
   actionAll: 'Todas las acciones',
   resourceLabel: 'Recurso',
   resourceAll: 'Todos los recursos',
+  periodLabel: 'Período',
   fromLabel: 'Desde',
   toLabel: 'Hasta',
   rangeHint: 'Sin fechas se ven los últimos 30 días.',
@@ -102,7 +97,6 @@ const copy = {
   // DX-128: la baja de recordatorios por enlace o mensaje la hace el paciente.
   patientActor: 'El propio paciente',
   formerMember: 'Usuario retirado',
-  noIp: 'Sin IP',
   // Sin "Intenta de nuevo.": alimenta AsyncSection -> SectionError, que trae su botón.
   loadError: 'No pudimos cargar la auditoría.',
   badRequest: 'Los filtros no son válidos: revisa las fechas (como mucho 366 días).',
@@ -111,16 +105,9 @@ const copy = {
   empty: 'No hay eventos con estos filtros.',
   emptyHint: 'Prueba con otro período, usuario o acción.',
   patientEmpty: 'Nadie ha accedido a esta ficha en el período.',
-  pagination: 'Paginación',
-  prev: 'Anterior',
-  next: 'Siguiente',
-  page: (n: number) => `Página ${n}`,
 };
 
 const PAGE_SIZE = 50;
-
-/** Valor de una celda con varias líneas: en móvil, a la derecha de su etiqueta y en bloque. */
-const cellValueClass = 'min-w-0 max-sm:text-right';
 
 interface Filters {
   actorUserId: string;
@@ -223,6 +210,10 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
   const rangeErrorId = React.useId();
   const hintId = React.useId();
   const zoneHintId = React.useId();
+  const actorId = React.useId();
+  const actionId = React.useId();
+  const resourceId = React.useId();
+  const periodId = React.useId();
 
   // Otra sede activa, otra zona: los días cuentan otro rango, así que la
   // paginación vuelve a la primera página (ajuste en el render, sin efecto).
@@ -305,78 +296,73 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
       .filter(Boolean)
       .join(' ') || undefined;
 
+  const rows: AuditRowData[] = clock
+    ? items.map((event) => ({ event, time: auditTime(event, clock, locationNames), detail: eventDetail(event, locationNames) }))
+    : [];
+  const columns = auditColumns(!patientId);
+
   return (
     <div className="flex flex-col gap-3">
       <div
         role="group"
         aria-label={copy.filtersLabel}
-        className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+        className="grid min-w-0 grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end"
       >
         <ActorFilter
           token={token}
+          id={actorId}
           value={filters.actorUserId}
           onChange={(actorUserId) => changeFilters({ actorUserId })}
         />
-        <select
-          aria-label={copy.actionLabel}
-          value={filters.action}
-          onChange={(e) => changeFilters({ action: e.target.value as Filters['action'] })}
-          className={cn(toolbarFieldClass, 'sm:w-44')}
-        >
-          <option value="">{copy.actionAll}</option>
-          {AUDIT_ACTION_OPTIONS.map((a) => (
-            <option key={a} value={a}>
-              {AUDIT_ACTION_LABELS[a]}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label={copy.resourceLabel}
-          value={filters.resourceType}
-          onChange={(e) =>
-            changeFilters({
-              resourceType: e.target.value as Filters['resourceType'],
-            })
-          }
-          className={cn(toolbarFieldClass, 'sm:w-44')}
-        >
-          <option value="">{copy.resourceAll}</option>
-          {AUDIT_RESOURCE_OPTIONS.map((r) => (
-            <option key={r} value={r}>
-              {AUDIT_RESOURCE_LABELS[r]}
-            </option>
-          ))}
-        </select>
-        {/* En móvil, dos columnas con la etiqueta encima: «Desde» y «Hasta» en
-            línea no caben en 390px junto a dos campos de fecha. */}
-        <div className="grid min-w-0 grid-cols-2 gap-3 sm:flex">
-          <label className="flex min-w-0 flex-col gap-1 text-sm text-muted sm:flex-row sm:items-center sm:gap-2">
-            <span className="shrink-0">{copy.fromLabel}</span>
-            <Input
-              type="date"
-              value={filters.from}
-              max={filters.to || undefined}
-              onChange={(e) => changeFilters({ from: e.target.value })}
-              aria-invalid={invalidRange !== null}
-              aria-describedby={dateDescribedBy}
-              className="min-w-0 tabular-nums sm:w-36"
-            />
-          </label>
-          <label className="flex min-w-0 flex-col gap-1 text-sm text-muted sm:flex-row sm:items-center sm:gap-2">
-            <span className="shrink-0">{copy.toLabel}</span>
-            <Input
-              type="date"
-              value={filters.to}
-              min={filters.from || undefined}
-              onChange={(e) => changeFilters({ to: e.target.value })}
-              aria-invalid={invalidRange !== null}
-              aria-describedby={dateDescribedBy}
-              className="min-w-0 tabular-nums sm:w-36"
-            />
-          </label>
-        </div>
+        <FormField htmlFor={actionId} label={copy.actionLabel} className="min-w-0 sm:w-44">
+          <NativeSelect
+            id={actionId}
+            value={filters.action}
+            onChange={(e) => changeFilters({ action: e.target.value as Filters['action'] })}
+          >
+            <option value="">{copy.actionAll}</option>
+            {AUDIT_ACTION_OPTIONS.map((a) => (
+              <option key={a} value={a}>
+                {AUDIT_ACTION_LABELS[a]}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+        <FormField htmlFor={resourceId} label={copy.resourceLabel} className="min-w-0 sm:w-44">
+          <NativeSelect
+            id={resourceId}
+            value={filters.resourceType}
+            onChange={(e) => changeFilters({ resourceType: e.target.value as Filters['resourceType'] })}
+          >
+            <option value="">{copy.resourceAll}</option>
+            {AUDIT_RESOURCE_OPTIONS.map((r) => (
+              <option key={r} value={r}>
+                {AUDIT_RESOURCE_LABELS[r]}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+        {/* «Desde – Hasta» en un solo campo, en el locale de la sede (dd/mm/aaaa
+            donde toca), con atajos. Sin periodo, la API da los últimos 30 días. */}
+        <FormField htmlFor={periodId} label={copy.periodLabel} className="col-span-2 min-w-0 sm:w-72">
+          <DateRangePicker
+            id={periodId}
+            value={filters.from && filters.to ? { from: filters.from, to: filters.to } : null}
+            onChange={(range) => changeFilters({ from: range?.from ?? '', to: range?.to ?? '' })}
+            presets
+            startLabel={copy.fromLabel}
+            endLabel={copy.toLabel}
+            isInvalid={invalidRange !== null}
+            aria-describedby={dateDescribedBy}
+          />
+        </FormField>
         {hasFilters ? (
-          <Button type="button" variant="ghost" onClick={() => changeFilters(NO_FILTERS)}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="col-span-2 sm:col-auto"
+            onClick={() => changeFilters(NO_FILTERS)}
+          >
             {copy.clearFilters}
           </Button>
         ) : null}
@@ -384,14 +370,14 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
 
       <div className="flex flex-col gap-1 empty:hidden">
         {zoneHint ? (
-          <p id={zoneHintId} className="text-xs text-muted">
+          <p id={zoneHintId} className="t-caption">
             {zoneHint}
           </p>
         ) : null}
         {invalidRange ? (
           <InlineError id={rangeErrorId}>{invalidRange}</InlineError>
         ) : !filters.from && !filters.to ? (
-          <p id={hintId} className="text-xs text-muted">
+          <p id={hintId} className="t-caption">
             {copy.rangeHint}
           </p>
         ) : null}
@@ -406,7 +392,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
               onClick={onClearPatient}
               aria-label={copy.clearPatient}
               title={copy.clearPatient}
-              className="flex size-6 items-center justify-center rounded-full text-muted hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="flex size-6 items-center justify-center rounded-full text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:size-10"
             >
               <X aria-hidden className="size-3.5" />
             </button>
@@ -442,89 +428,40 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
           emptyDescription={copy.emptyHint}
           skeleton={<TableSkeleton rows={5} />}
         >
-          <Card className="overflow-hidden p-0">
-            <Table aria-label={locked ? copy.patientTableLabel : copy.tableLabel}>
-              <caption className="sr-only">
-                {locked ? copy.patientTableLabel : copy.tableLabel}
-              </caption>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead scope="col">{copy.colWhen}</TableHead>
-                  <TableHead scope="col">{copy.colActor}</TableHead>
-                  <TableHead scope="col">{copy.colAction}</TableHead>
-                  <TableHead scope="col">{copy.colResource}</TableHead>
-                  {patientId ? null : <TableHead scope="col">{copy.colPatient}</TableHead>}
-                  <TableHead scope="col">{copy.colOrigin}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {/* Sin reloj, AsyncSection pinta el esqueleto: ninguna fila se formatea. */}
-                {clock
-                  ? items.map((event) => (
-                      <AuditRow
-                        key={event.id}
-                        event={event}
-                        time={auditTime(event, clock, locationNames)}
-                        showPatient={!patientId}
-                        locationNames={locationNames}
-                      />
-                    ))
-                  : null}
-              </TableBody>
-            </Table>
-          </Card>
+          {/* Sin reloj, AsyncSection pinta el esqueleto: ninguna fila se formatea. */}
+          <DataList
+            label={locked ? copy.patientTableLabel : copy.tableLabel}
+            rows={rows}
+            columns={columns}
+            getRowKey={(row) => row.event.id}
+          />
         </AsyncSection>
       ) : null}
 
       {clock && !forbidden && !invalidRange && !loadError && (cursors.length > 1 || data?.nextCursor) ? (
-        <nav
-          aria-label={copy.pagination}
-          className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"
-        >
-          <p className="text-sm text-muted tabular-nums" aria-live="polite">
-            {copy.page(cursors.length)}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={loading || cursors.length <= 1}
-              onClick={() => setCursors((stack) => stack.slice(0, -1))}
-            >
-              <ChevronLeft /> {copy.prev}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={loading || !data?.nextCursor}
-              onClick={() => {
-                const next = data?.nextCursor;
-                if (next) setCursors((stack) => [...stack, next]);
-              }}
-            >
-              {copy.next} <ChevronRight />
-            </Button>
-          </div>
-        </nav>
+        <CursorPagination
+          page={cursors.length}
+          hasNext={Boolean(data?.nextCursor)}
+          disabled={loading}
+          onPrev={() => setCursors((stack) => stack.slice(0, -1))}
+          onNext={() => {
+            const next = data?.nextCursor;
+            if (next) setCursors((stack) => [...stack, next]);
+          }}
+        />
       ) : null}
     </div>
   );
 }
 
-function AuditRow({
-  event,
-  time,
-  showPatient,
-  locationNames,
-}: {
+interface AuditRowData {
   event: AuditEvent;
   time: AuditTime;
-  showPatient: boolean;
-  locationNames: LocationNames | null;
-}) {
-  const detail =
+  detail: string | null;
+}
+
+function eventDetail(event: AuditEvent, locationNames: LocationNames | null): string | null {
+  return (
     communicationDetail(event.metadata) ??
     confirmationLinkDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
@@ -542,70 +479,140 @@ function AuditRow({
     locationCalendarDetail(event.metadata) ??
     exchangeRateBackupDetail(event.metadata) ??
     anamnesisDetail(event.metadata) ??
-    signatureRequestDetail(event.metadata);
+    signatureRequestDetail(event.metadata)
+  );
+}
+
+function actorName(event: AuditEvent): string {
+  if (event.actor) return event.actor.fullName ?? copy.formerMember;
+  return isPatientOptOut(event.metadata) ? copy.patientActor : copy.unknownActor;
+}
+
+/** El tono de la acción: neutro para leer, semántico para lo que cambia o alerta. */
+function actionTone(action: AuditAction): NonNullable<BadgeProps['variant']> {
+  const variant = AUDIT_ACTION_VARIANT[action];
+  // `muted` es el alias v1 de las lecturas: en v2, neutro.
+  return variant === 'muted' ? 'neutral' : variant;
+}
+
+/** Cabeceras en tipo frase (DESIGN.md → Caption: nunca en mayúsculas). */
+const headerClassName = 'normal-case tracking-normal';
+
+function PatientLink({ event }: { event: AuditEvent }) {
+  if (!event.patient) return null;
   return (
-    <TableRow>
-      <TableCell className="tabular-nums" data-label={copy.colWhen}>
-        {/* Un solo bloque: en móvil la celda es flex (etiqueta | valor). */}
-        <div className={cellValueClass}>
+    <Link
+      href={`/patients/${event.patient.id}`}
+      className="font-medium text-ink underline-offset-4 hover:text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      {event.patient.fullName}
+    </Link>
+  );
+}
+
+/**
+ * Las columnas: tabla de seis columnas desde `sm`; en el teléfono, tarjeta de
+ * dos líneas: «Usuario · Acción» con la hora a la derecha, y debajo el rol (y
+ * la hora de la sede del evento, si su reloj marca otra), el recurso, el
+ * paciente y el origen.
+ */
+function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
+  const columns: (DataListColumn<AuditRowData> | null)[] = [
+    {
+      id: 'when',
+      header: copy.colWhen,
+      mobile: 'trailing',
+      headerClassName,
+      cell: ({ time }) => (
+        <div className="t-data min-w-0">
           <time dateTime={time.iso} className="whitespace-nowrap text-ink">
             {time.reference.when}
           </time>{' '}
-          <span className="whitespace-nowrap text-xs text-muted">{time.reference.offset}</span>
-          {time.sede ? <span className="block text-xs text-muted">{copy.sedeTime(time.sede)}</span> : null}
+          <span className="t-caption whitespace-nowrap">{time.reference.offset}</span>
+          {time.sede ? <span className="t-caption block">{copy.sedeTime(time.sede)}</span> : null}
         </div>
-      </TableCell>
-      <TableCell data-label={copy.colActor}>
-        <div className={cellValueClass}>
-          <span className="block font-medium text-ink">
-            {event.actor
-              ? (event.actor.fullName ?? copy.formerMember)
-              : isPatientOptOut(event.metadata)
-                ? copy.patientActor
-                : copy.unknownActor}
-          </span>
-          <span className="block text-xs text-muted">
-            {actorRoleLabel(event.actor?.role ?? null)}
-          </span>
-        </div>
-      </TableCell>
-      <TableCell data-label={copy.colAction}>
-        <Badge variant={AUDIT_ACTION_VARIANT[event.action]}>
-          {AUDIT_ACTION_LABELS[event.action]}
-        </Badge>
-      </TableCell>
-      <TableCell data-label={copy.colResource}>
-        <div className={cellValueClass}>
-          {AUDIT_RESOURCE_LABELS[event.resourceType]}
-          {detail ? <span className="block text-xs text-muted">{detail}</span> : null}
-        </div>
-      </TableCell>
-      {showPatient ? (
-        <TableCell data-label={copy.colPatient}>
-          {event.patient ? (
-            <Link
-              href={`/patients/${event.patient.id}`}
-              className="font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {event.patient.fullName}
-            </Link>
-          ) : (
-            <span className="text-muted">—</span>
-          )}
-        </TableCell>
-      ) : null}
-      <TableCell data-label={copy.colOrigin}>
-        <div className={cellValueClass}>
-          <span className="block tabular-nums text-ink">{event.ip ?? copy.noIp}</span>
-          {event.userAgent ? (
-            <span className="block max-w-56 truncate text-xs text-muted max-sm:ml-auto" title={event.userAgent}>
-              {event.userAgent}
-            </span>
+      ),
+      mobileCell: ({ time }) => (
+        <span className="flex flex-col items-end">
+          <time dateTime={time.iso} className="whitespace-nowrap">
+            {time.reference.when}
+          </time>
+          <span className="t-caption whitespace-nowrap">{time.reference.offset}</span>
+        </span>
+      ),
+    },
+    {
+      id: 'actor',
+      header: copy.colActor,
+      mobile: 'primary',
+      headerClassName,
+      cell: ({ event }) => (
+        <span className="flex min-w-0 flex-col">
+          <span className="block">{actorName(event)}</span>
+          <span className="t-caption block">{actorRoleLabel(event.actor?.role ?? null)}</span>
+        </span>
+      ),
+      mobileCell: ({ event }) => `${actorName(event)} · ${AUDIT_ACTION_LABELS[event.action]}`,
+    },
+    {
+      id: 'action',
+      header: copy.colAction,
+      headerClassName,
+      cell: ({ event }) => <Badge variant={actionTone(event.action)}>{AUDIT_ACTION_LABELS[event.action]}</Badge>,
+      // En el teléfono la acción ya va en la línea 1; esta posición de la
+      // línea 2 lleva el rol y, si su reloj marca otra, la hora de la sede.
+      mobileCell: ({ event, time }) => (
+        <>
+          <span>{actorRoleLabel(event.actor?.role ?? null)}</span>
+          {time.sede ? (
+            <>
+              <span aria-hidden> · </span>
+              <span>{copy.sedeTime(time.sede)}</span>
+            </>
           ) : null}
+        </>
+      ),
+    },
+    {
+      id: 'resource',
+      header: copy.colResource,
+      headerClassName,
+      cell: ({ event, detail }) => (
+        <div className="min-w-0">
+          {AUDIT_RESOURCE_LABELS[event.resourceType]}
+          {detail ? <span className="t-caption block">{detail}</span> : null}
         </div>
-      </TableCell>
-    </TableRow>
-  );
+      ),
+      mobileCell: ({ event, detail }) => (
+        <>
+          <span>{AUDIT_RESOURCE_LABELS[event.resourceType]}</span>
+          {detail ? (
+            <>
+              <span aria-hidden> · </span>
+              <span>{detail}</span>
+            </>
+          ) : null}
+        </>
+      ),
+    },
+    showPatient
+      ? {
+          id: 'patient',
+          header: copy.colPatient,
+          headerClassName,
+          cell: ({ event }) => (event.patient ? <PatientLink event={event} /> : <span className="text-muted">—</span>),
+          mobileCell: ({ event }) => (event.patient ? <PatientLink event={event} /> : null),
+        }
+      : null,
+    {
+      id: 'origin',
+      header: copy.colOrigin,
+      headerClassName,
+      cell: ({ event }) => <OriginCell ip={event.ip} userAgent={event.userAgent} />,
+      mobileCell: ({ event }) => originText(event.ip, event.userAgent),
+    },
+  ];
+  return columns.filter((c): c is DataListColumn<AuditRowData> => c !== null);
 }
 
 /**
@@ -615,10 +622,12 @@ function AuditRow({
  */
 function ActorFilter({
   token,
+  id,
   value,
   onChange,
 }: {
   token: string;
+  id: string;
   value: string;
   onChange: (actorUserId: string) => void;
 }) {
@@ -642,29 +651,20 @@ function ActorFilter({
     };
   }, [token, attempt]);
 
-  if (failed) {
-    return (
-      <FieldError
-        label={copy.actorUnavailable}
-        onRetry={() => setAttempt((n) => n + 1)}
-        className="sm:w-48"
-      />
-    );
-  }
   return (
-    <select
-      aria-label={copy.actorLabel}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={staff === null}
-      className={cn(toolbarFieldClass, 'sm:w-48')}
-    >
-      <option value="">{copy.actorAll}</option>
-      {(staff ?? []).map((member) => (
-        <option key={member.userId} value={member.userId}>
-          {member.fullName}
-        </option>
-      ))}
-    </select>
+    <FormField htmlFor={id} label={copy.actorLabel} className="col-span-2 min-w-0 sm:w-52">
+      {failed ? (
+        <FieldError label={copy.actorUnavailable} retryId={id} onRetry={() => setAttempt((n) => n + 1)} />
+      ) : (
+        <NativeSelect id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={staff === null}>
+          <option value="">{copy.actorAll}</option>
+          {(staff ?? []).map((member) => (
+            <option key={member.userId} value={member.userId}>
+              {member.fullName}
+            </option>
+          ))}
+        </NativeSelect>
+      )}
+    </FormField>
   );
 }
