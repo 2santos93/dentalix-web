@@ -206,6 +206,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/subdomains/{slug}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ¿Se puede registrar esta dirección web?
+         * @description Con las mismas reglas que POST /auth/register. «available» no la reserva: el envío del registro puede seguir dando 409 si otra clínica la toma antes.
+         */
+        get: operations["PublicSubdomainsController_availability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff/invitations": {
         parameters: {
             query?: never;
@@ -6132,6 +6152,20 @@ export interface components {
             token: string;
             password: string;
         };
+        /**
+         * @description available = se puede registrar; taken = ya es de una clínica (también dada de baja); invalid = no cumple el formato (minúsculas, números y guiones, 1–63, sin guion al principio ni al final); reserved = dirección de la plataforma (www, api…).
+         * @enum {string}
+         */
+        SubdomainAvailability: "available" | "taken" | "invalid" | "reserved";
+        SubdomainAvailabilityDto: {
+            /**
+             * @description La dirección tal como se registraría (sin espacios, en minúsculas). Vacía si la ruta era desmesurada.
+             * @example sonrisa
+             */
+            subdomain: string;
+            /** @description available = se puede registrar; taken = ya es de una clínica (también dada de baja); invalid = no cumple el formato (minúsculas, números y guiones, 1–63, sin guion al principio ni al final); reserved = dirección de la plataforma (www, api…). */
+            status: components["schemas"]["SubdomainAvailability"];
+        };
         CreateInvitationDto: {
             fullName: string;
             email: string;
@@ -6260,25 +6294,56 @@ export interface components {
             esAlerta: boolean;
         };
         SmokingDto: {
-            activo: boolean;
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            estado: "SI" | "NO" | "DESCONOCE";
+            /** @description Solo con «Sí». */
             porDia?: number;
+            /** @description Solo con «Sí». */
             anios?: number;
         };
         AlcoholDto: {
-            activo: boolean;
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            estado: "SI" | "NO" | "DESCONOCE";
+            /** @description Solo con «Sí». */
             frecuencia?: string;
         };
         OralHygieneDto: {
             cepilladoPorDia?: number;
-            hilo?: boolean;
-            enjuague?: boolean;
-            cremaConFluor?: boolean;
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            hilo?: "SI" | "NO" | "DESCONOCE";
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            enjuague?: "SI" | "NO" | "DESCONOCE";
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            cremaConFluor?: "SI" | "NO" | "DESCONOCE";
         };
         HabitsDto: {
             tabaquismo?: components["schemas"]["SmokingDto"];
             alcohol?: components["schemas"]["AlcoholDto"];
-            sustancias?: boolean;
-            bruxismo?: boolean;
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            sustancias?: "SI" | "NO" | "DESCONOCE";
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            bruxismo?: "SI" | "NO" | "DESCONOCE";
             higieneOral?: components["schemas"]["OralHygieneDto"];
             dieta?: string;
         };
@@ -6313,6 +6378,11 @@ export interface components {
             talla?: number;
             glucometria?: number;
         };
+        /**
+         * @description Embarazo: SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder». Solo el «Sí» enciende la alerta.
+         * @enum {string}
+         */
+        AnamnesisAnswerStatus: "SI" | "NO" | "DESCONOCE";
         SaveMedicalHistoryDto: {
             allergies?: components["schemas"]["AllergyDto"][];
             /** @description Solo las condiciones que se contestaron (Sí / No / No sabe). Una condición del checklist que no figura está «Sin responder»: nunca se interpreta como «No». */
@@ -6324,7 +6394,14 @@ export interface components {
             vitalSigns?: components["schemas"]["VitalSignsDto"];
             familyHistory?: string;
             notes?: string;
+            /** @description Embarazo: SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder». Solo el «Sí» enciende la alerta. */
+            pregnancy?: components["schemas"]["AnamnesisAnswerStatus"];
+            /**
+             * @deprecated
+             * @description Deprecado: usar `pregnancy`. Solo `true` dice algo («Sí»); `false` se trata como sin responder. Si viene `pregnancy`, manda `pregnancy`.
+             */
             embarazo?: boolean;
+            /** @description Solo con `pregnancy` = SI. */
             semanasEmbarazo?: number;
         };
         CreatePatientDto: {
@@ -7691,6 +7768,7 @@ export interface components {
             removed: number;
         };
         SafetyFlagsDto: {
+            /** @description DERIVADA: true solo con un «Sí» explícito al embarazo (`pregnancy`). No dice si se contestó «No». */
             embarazo: boolean;
             semanasEmbarazo?: number;
             anticoagulantes: boolean;
@@ -7719,6 +7797,8 @@ export interface components {
             conditions: components["schemas"]["ConditionDto"][];
             medications: components["schemas"]["MedicationDto"][];
             habits: components["schemas"]["HabitsDto"] | null;
+            /** @description Embarazo: SI / NO / DESCONOCE; null = sin responder. En las versiones anteriores a este campo solo se guardaba el «Sí»: allí null puede ser «No» o no preguntado (nunca se inventa un «No»). */
+            pregnancy: components["schemas"]["AnamnesisAnswerStatus"] | null;
             dentalHistory: components["schemas"]["DentalHistoryDto"] | null;
             surgeries: components["schemas"]["SurgeryDto"][];
             vitalSigns: components["schemas"]["VitalSignsDto"] | null;
@@ -17924,6 +18004,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSubdomainsController_availability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubdomainAvailabilityDto"];
+                };
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
