@@ -13,6 +13,7 @@ import {
   getEntryAnesthesia,
   listAnesthetics,
   loadSampleAnesthetics,
+  minAgeLabel,
   parseCarpules,
   parseWeightKg,
   recordAnesthesia,
@@ -86,13 +87,16 @@ export const anesthesiaCopy = {
   submit: 'Registrar anestesia',
   close: 'Cerrar',
   genericError: 'No pudimos registrar la anestesia. Intenta de nuevo.',
-  conflict: 'La dosis supera el máximo o hay un aviso de alergia: confirma con un motivo.',
+  conflict:
+    'La dosis supera el máximo, el tope de epinefrina o la edad mínima del anestésico, o hay un aviso de alergia: confirma con un motivo.',
+  alertSource: (source: string) => `Fuente: ${source}`,
   line: (r: { carpules: number; doseMg: number }) =>
     `${formatDecimal(r.carpules)} carp. · ${formatDecimal(r.doseMg)} mg`,
   override: 'Confirmado con motivo:',
 };
 
 const TECHNIQUES = Object.keys(TECHNIQUE_LABELS) as AnesthesiaTechnique[];
+const BAR_ALERT_CODES = new Set(['DOSE_NEAR_MAX', 'WEIGHT_MISSING', 'EPINEPHRINE_NEAR_MAX']);
 const CHECK_DEBOUNCE_MS = 400;
 
 type LoadState =
@@ -148,20 +152,24 @@ function AlertLines({ alerts }: { alerts: DoseAlert[] }) {
   return (
     <ul className="flex flex-col gap-2">
       {alerts
-        .filter((a) => a.code !== 'DOSE_NEAR_MAX' && a.code !== 'WEIGHT_MISSING')
-        .map((alert) => {
+        // La barra ya los dice (dosis, peso y epinefrina cerca del tope).
+        .filter((a) => !BAR_ALERT_CODES.has(a.code))
+        .map((alert, index) => {
           const blocking = alert.severity === 'BLOCKING';
           const Icon = blocking ? ShieldAlert : Info;
           return (
             <li
-              key={alert.code}
+              key={`${alert.code}-${index}`}
               className={cn(
                 'flex items-start gap-2 rounded-md border p-3 text-sm text-ink',
                 blocking ? 'border-danger/40 bg-danger/5' : 'border-warning/40 bg-warning/5',
               )}
             >
               <Icon aria-hidden className={cn('mt-0.5 size-4 shrink-0', blocking ? 'text-danger' : 'text-warning')} />
-              <span className="min-w-0 break-words">{alert.message}</span>
+              <span className="flex min-w-0 flex-col gap-0.5 break-words">
+                <span>{alert.message}</span>
+                <span className="text-xs text-muted">{anesthesiaCopy.alertSource(alert.source)}</span>
+              </span>
             </li>
           );
         })}
@@ -175,6 +183,10 @@ function AlertLines({ alerts }: { alerts: DoseAlert[] }) {
  * la barra de dosis que calcula el SERVIDOR al cambiar anestésico, carpules o
  * peso. ≥ 80 % avisa; ≥ 100 % (o alergia a anestésicos) pide confirmación y
  * motivo, que la API sella y audita.
+ *
+ * DX-420: los avisos bloqueantes nuevos (edad mínima del anestésico, tope de
+ * epinefrina) usan la MISMA confirmación con motivo; cada aviso enseña su
+ * fuente (AAPD, Malamed).
  */
 export function AnesthesiaModal({
   open,
@@ -455,11 +467,14 @@ export function AnesthesiaModal({
             {...fieldProps('anesthetic', `${id}-anesthetic`)}
           >
             <option value="">{anesthesiaCopy.chooseAnesthetic}</option>
-            {catalog.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} · {formatDecimal(p.mlPerCarpule)} ml
-              </option>
-            ))}
+            {catalog.map((p) => {
+              const minAge = minAgeLabel(p);
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {formatDecimal(p.mlPerCarpule)} ml{minAge ? ` · ${minAge}` : ''}
+                </option>
+              );
+            })}
           </select>
         </FormField>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

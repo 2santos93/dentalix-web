@@ -40,6 +40,9 @@ const ARTI: AnestheticProduct = {
   mlPerCarpule: 1.7,
   maxMgPerKg: 7,
   maxAbsoluteMg: 500,
+  pediatricMaxMgPerKg: null,
+  minAgeYears: 4,
+  epinephrineMgPerCarpule: 0.017,
   sampleCode: 'ARTICAINE_4_EPI',
   active: true,
   createdAt: '2026-10-01T00:00:00.000Z',
@@ -48,13 +51,16 @@ const ARTI: AnestheticProduct = {
 
 function doseSummary(overrides: Partial<AnesthesiaDoseSummary> = {}): AnesthesiaDoseSummary {
   return {
-    rulesVersion: 'ANESTHESIA_DOSE_V2',
+    rulesVersion: 'ANESTHESIA_DOSE_V3',
     weightKg: 20,
     totalMg: 0,
     byAnesthetic: [],
     percent: 0,
     level: 'OK',
     alerts: [],
+    adjustment: { pediatric: true, infant: false, sedation: false, factor: 1, ageYears: 8 },
+    epinephrine: { totalMg: 0, maxMg: 0.2, percent: 0, cardiac: false, level: 'OK' },
+    remaining: null,
     ...overrides,
   };
 }
@@ -371,5 +377,97 @@ describe('AnesthesiaModal (DX-307)', () => {
       await user.click(screen.getByRole('button', { name: 'Reintentar' }));
       expect(await screen.findByText(/68 mg · 49 % del máximo/)).toBeInTheDocument();
     });
+  });
+});
+
+describe('AnesthesiaModal (DX-420)', () => {
+  beforeEach(() => {
+    Object.values(mocked).forEach((m) => m.mockReset());
+    mocked.entry.mockResolvedValue(entry());
+    mocked.catalog.mockResolvedValue([ARTI]);
+  });
+
+  it('el selector dice la edad mínima del anestésico', async () => {
+    renderModal();
+    expect(await screen.findByRole('option', { name: /Articaína .* · desde 4 años/ })).toBeInTheDocument();
+  });
+
+  it('articaína en menor de 4 años: aviso con su fuente y la misma confirmación con motivo', async () => {
+    const user = userEvent.setup();
+    mocked.check.mockResolvedValue(
+      checkResult({
+        totalMg: 34,
+        percent: 36,
+        alerts: [
+          {
+            code: 'AGE_BELOW_MINIMUM',
+            severity: 'BLOCKING',
+            message: 'Articaína no recomendada en menores de 4 años (el paciente tiene 3).',
+            source: 'AAPD, Use of Local Anesthesia for Pediatric Dental Patients (revisión 2023)',
+          },
+        ],
+      }),
+    );
+    mocked.record.mockResolvedValue({} as never);
+    renderModal();
+    await fill(user, '0,5');
+    expect(await screen.findByText(/no recomendada en menores de 4 años/)).toBeInTheDocument();
+    expect(screen.getByText(/Fuente: AAPD/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: anesthesiaCopy.submit }));
+    expect(await screen.findByText(anesthesiaCopy.confirmRequired)).toBeInTheDocument();
+    expect(mocked.record).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('checkbox', { name: anesthesiaCopy.confirm }));
+    await user.type(screen.getByLabelText(anesthesiaCopy.reasonLabel), 'Sin alternativa en el gabinete');
+    await user.click(screen.getByRole('button', { name: anesthesiaCopy.submit }));
+    await waitFor(() => expect(mocked.record).toHaveBeenCalled());
+    expect(mocked.record.mock.calls[0][3]).toHaveProperty('overrideReason', 'Sin alternativa en el gabinete');
+  });
+
+  it('cardiópata por encima de 0,04 mg de epinefrina: barra de epinefrina en alerta y motivo obligatorio', async () => {
+    const user = userEvent.setup();
+    mocked.check.mockResolvedValue(
+      checkResult({
+        totalMg: 102,
+        percent: 21,
+        epinephrine: { totalMg: 0.051, maxMg: 0.04, percent: 128, cardiac: true, level: 'EXCEEDED' },
+        alerts: [
+          {
+            code: 'EPINEPHRINE_OVER_MAX',
+            severity: 'BLOCKING',
+            message: 'Epinefrina por encima del tope: 0,051 mg de 0,04 mg por cita (128 %, cardiopatía en la anamnesis).',
+            source: 'Malamed',
+          },
+        ],
+      }),
+    );
+    renderModal();
+    await fill(user, '3');
+    const meter = await screen.findByRole('meter', { name: 'Epinefrina por cita' });
+    expect(meter).toHaveAttribute('aria-valuenow', '100');
+    expect(screen.getByText('Tope de 0,04 mg: cardiopatía en la anamnesis.')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: anesthesiaCopy.confirm })).toBeInTheDocument();
+  });
+
+  it('sedación del día: dice por qué baja el máximo', async () => {
+    const user = userEvent.setup();
+    mocked.check.mockResolvedValue(
+      checkResult({
+        totalMg: 34,
+        percent: 35,
+        alerts: [
+          {
+            code: 'DOSE_REDUCED_SEDATION',
+            severity: 'INFO',
+            message:
+              'Máximo reducido un 30 %: hay sedación consciente registrada en las 24 h de la anestesia (depresor del sistema nervioso central).',
+            source: 'AAPD',
+          },
+        ],
+      }),
+    );
+    renderModal();
+    await fill(user, '0,5');
+    expect(await screen.findByText(/Máximo reducido un 30 %/)).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 });

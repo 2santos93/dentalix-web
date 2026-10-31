@@ -1221,7 +1221,7 @@ export interface paths {
         put?: never;
         /**
          * Registra anestesia local en la evolución (inalterable)
-         * @description El servidor calcula los mg, el acumulado del PACIENTE en la ventana de 24 h que contiene la administración con más acumulado (todas sus evoluciones y sedes de la clínica, DX-418) y la fracción del máximo por peso. Al llegar al 100 % (o con alergia a anestésicos) responde 409 salvo `overrideReason`, que queda sellado y auditado. Dos registros simultáneos del mismo paciente se serializan (bloqueo por paciente): el segundo calcula con el primero.
+         * @description El servidor calcula los mg, el acumulado del PACIENTE en la ventana de 24 h que contiene la administración con más acumulado (todas sus evoluciones y sedes de la clínica, DX-418) y la fracción del máximo por peso. Al llegar al 100 %, al tope de epinefrina, por debajo de la edad mínima del anestésico (DX-420) o con alergia a anestésicos responde 409 salvo `overrideReason`, que queda sellado y auditado. Dos registros simultáneos del mismo paciente se serializan (bloqueo por paciente): el segundo calcula con el primero.
          */
         post: operations["AnesthesiaController_record"];
         delete?: never;
@@ -1241,7 +1241,7 @@ export interface paths {
         put?: never;
         /**
          * Previsualiza la dosis acumulada con un anestésico más
-         * @description No guarda nada. Lee la anamnesis vigente (peso y alergias) y lo ya registrado al paciente en la ventana de 24 h que contiene `administeredAt` (por defecto, ahora; la de más acumulado) en cualquier evolución y sede de la clínica (DX-418).
+         * @description No guarda nada. Lee la anamnesis vigente (peso y alergias) y lo ya registrado al paciente en la ventana de 24 h que contiene `administeredAt` (por defecto, ahora; la de más acumulado) en cualquier evolución y sede de la clínica (DX-418). DX-420: aplica el máximo pediátrico (< 12 años), −30 % en menores de 6 meses o con hoja de sedación en las 24 h, la edad mínima del anestésico y el tope de epinefrina por cita (0,04 mg con cardiopatía en la anamnesis), y devuelve «quedan X mg ≈ Y carpules» en `summary.remaining`.
          */
         post: operations["AnesthesiaController_check"];
         delete?: never;
@@ -7616,6 +7616,21 @@ export interface components {
              * @example 500
              */
             maxAbsoluteMg: number;
+            /**
+             * @description DX-420: mg/kg en menores de 12 años (AAPD); null = el de adulto
+             * @example 4.4
+             */
+            pediatricMaxMgPerKg: number | null;
+            /**
+             * @description DX-420: edad mínima en años (AAPD: articaína 4, bupivacaína 12); null = sin mínimo
+             * @example 4
+             */
+            minAgeYears: number | null;
+            /**
+             * @description DX-420: mg de epinefrina por carpule (ml × 1000 / dilución; 1:100.000 → 0,01 mg/ml); 0 sin epinefrina; null = no se sabe
+             * @example 0.018
+             */
+            epinephrineMgPerCarpule: number | null;
             /** @example LIDOCAINE_2_EPI */
             sampleCode: string | null;
             active: boolean;
@@ -7632,6 +7647,12 @@ export interface components {
             mlPerCarpule: number;
             maxMgPerKg: number;
             maxAbsoluteMg: number;
+            /** @description DX-420: mg/kg en menores de 12 años; null = el de adulto */
+            pediatricMaxMgPerKg?: number | null;
+            /** @description DX-420: edad mínima en años; null = sin mínimo */
+            minAgeYears?: number | null;
+            /** @description DX-420: mg de epinefrina por carpule. Sin él, se deduce de la dilución del vasoconstrictor y del volumen (1:100.000 × 1,8 ml = 0,018 mg) */
+            epinephrineMgPerCarpule?: number | null;
         };
         UpdateAnestheticProductDto: {
             name?: string;
@@ -7641,6 +7662,12 @@ export interface components {
             mlPerCarpule?: number;
             maxMgPerKg?: number;
             maxAbsoluteMg?: number;
+            /** @description DX-420: mg/kg en menores de 12 años; null = el de adulto */
+            pediatricMaxMgPerKg?: number | null;
+            /** @description DX-420: edad mínima en años; null = sin mínimo */
+            minAgeYears?: number | null;
+            /** @description DX-420: mg de epinefrina por carpule. Sin él, se deduce de la dilución del vasoconstrictor y del volumen (1:100.000 × 1,8 ml = 0,018 mg) */
+            epinephrineMgPerCarpule?: number | null;
             /** @description false = desactivado (no se borra) */
             active?: boolean;
         };
@@ -7672,6 +7699,9 @@ export interface components {
             mlPerCarpule: number;
             maxMgPerKg: number;
             maxAbsoluteMg: number;
+            pediatricMaxMgPerKg: number | null;
+            minAgeYears: number | null;
+            epinephrineMgPerCarpule: number | null;
             carpules: number;
             doseMg: number;
             technique: components["schemas"]["AnesthesiaTechnique"];
@@ -7685,6 +7715,10 @@ export interface components {
             /** @description mg acumulados CON este registro: de la evolución con ANESTHESIA_DOSE_V1; del paciente en 24 h con ANESTHESIA_DOSE_V2 (DX-418) */
             cumulativeMg: number;
             cumulativePercent: number | null;
+            /** @description DX-420: mg de epinefrina de esta dosis; null antes de V3 */
+            epinephrineMg: number | null;
+            /** @description DX-420: epinefrina acumulada del paciente en la ventana CON este registro; null antes de V3 */
+            cumulativeEpinephrineMg: number | null;
             safetyRulesVersion: string;
             safetyAlerts: components["schemas"]["DoseAlertDto"][];
             overrideReason: string | null;
@@ -7701,9 +7735,60 @@ export interface components {
             mg: number;
             maxMg: number | null;
             percent: number | null;
+            /**
+             * @description DX-420: mg/kg usado (pediátrico en menores de 12 años si el catálogo lo tiene)
+             * @example 4.4
+             */
+            maxMgPerKg: number;
+            /** @description DX-420: fuente del máximo, para enseñarla */
+            maxSource: string;
+        };
+        DoseAdjustmentDto: {
+            /** @description DX-420: menor de 12 años (máximo pediátrico del catálogo) */
+            pediatric: boolean;
+            /** @description Menor de 6 meses: −30 % */
+            infant: boolean;
+            /** @description Hoja de sedación en esta evolución o en las 24 h: −30 % */
+            sedation: boolean;
+            /**
+             * @description Multiplicador del máximo (1 = sin reducción; 0,49 con las dos)
+             * @example 0.7
+             */
+            factor: number;
+            ageYears: number | null;
+        };
+        EpinephrineSummaryDto: {
+            /**
+             * @description mg de epinefrina del paciente en la misma ventana de 24 h
+             * @example 0.054
+             */
+            totalMg: number;
+            /**
+             * @description Tope por cita: 0,2 mg; 0,04 mg con cardiopatía en la anamnesis
+             * @example 0.04
+             */
+            maxMg: number;
+            percent: number;
+            /** @description Cardiopatía en la anamnesis; null sin anamnesis */
+            cardiac: boolean | null;
+            /** @enum {string} */
+            level: "OK" | "WARNING" | "EXCEEDED";
+        };
+        DoseRemainingDto: {
+            name: string;
+            /** @description mg que quedan de este anestésico */
+            mg: number;
+            /** @description En cuartos de carpule, hacia abajo y sin llegar al 100 % (que ya exige motivo) */
+            carpules: number;
+            /** @example 1.8 */
+            mlPerCarpule: number;
+            /** @enum {string} */
+            limitedBy: "DOSE" | "EPINEPHRINE";
+            /** @description mg de epinefrina que quedan hasta el tope */
+            epinephrineMg: number;
         };
         AnesthesiaDoseSummaryDto: {
-            /** @example ANESTHESIA_DOSE_V2 */
+            /** @example ANESTHESIA_DOSE_V3 */
             rulesVersion: string;
             weightKg: number | null;
             /** @description mg acumulados del PACIENTE en la ventana de 24 h (DX-418): todas sus evoluciones, sedes y profesionales de la clínica */
@@ -7714,6 +7799,10 @@ export interface components {
             /** @enum {string} */
             level: "OK" | "WARNING" | "EXCEEDED" | "NO_WEIGHT";
             alerts: components["schemas"]["DoseAlertDto"][];
+            adjustment: components["schemas"]["DoseAdjustmentDto"];
+            epinephrine: components["schemas"]["EpinephrineSummaryDto"];
+            /** @description DX-420: «quedan X mg ≈ Y carpules» del anestésico previsualizado (lo que se agote antes: dosis o epinefrina); null sin dosis nueva o sin peso */
+            remaining: components["schemas"]["DoseRemainingDto"] | null;
         };
         AnesthesiaDoseWindowPartDto: {
             /** Format: uuid */
@@ -7813,7 +7902,7 @@ export interface components {
             site?: string;
             /** @description Lote del carpule */
             lot?: string;
-            /** @description Motivo con el que se confirma superar la dosis máxima o un aviso de alergia. Sin él, 409. */
+            /** @description Motivo con el que se confirma superar la dosis máxima, el tope de epinefrina, la edad mínima del anestésico (DX-420) o un aviso de alergia. Sin él, 409. */
             overrideReason?: string;
         };
         RecordedAnesthesiaDto: {
@@ -7834,6 +7923,9 @@ export interface components {
             mlPerCarpule: number;
             maxMgPerKg: number;
             maxAbsoluteMg: number;
+            pediatricMaxMgPerKg: number | null;
+            minAgeYears: number | null;
+            epinephrineMgPerCarpule: number | null;
             carpules: number;
             doseMg: number;
             technique: components["schemas"]["AnesthesiaTechnique"];
@@ -7847,6 +7939,10 @@ export interface components {
             /** @description mg acumulados CON este registro: de la evolución con ANESTHESIA_DOSE_V1; del paciente en 24 h con ANESTHESIA_DOSE_V2 (DX-418) */
             cumulativeMg: number;
             cumulativePercent: number | null;
+            /** @description DX-420: mg de epinefrina de esta dosis; null antes de V3 */
+            epinephrineMg: number | null;
+            /** @description DX-420: epinefrina acumulada del paciente en la ventana CON este registro; null antes de V3 */
+            cumulativeEpinephrineMg: number | null;
             safetyRulesVersion: string;
             safetyAlerts: components["schemas"]["DoseAlertDto"][];
             overrideReason: string | null;

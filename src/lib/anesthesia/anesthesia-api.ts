@@ -21,9 +21,19 @@ export type AnesthesiaDoseWindow = components['schemas']['AnesthesiaDoseWindowDt
 export type AnesthesiaDoseWindowPart = components['schemas']['AnesthesiaDoseWindowPartDto'];
 export type RecordAnesthesiaInput = components['schemas']['RecordAnesthesiaDto'];
 export type AnesthesiaDoseCheckInput = components['schemas']['AnesthesiaDoseCheckDto'];
+export type EpinephrineSummary = components['schemas']['EpinephrineSummaryDto'];
+export type DoseRemaining = components['schemas']['DoseRemainingDto'];
 
-/** Versión de las reglas desde la que el acumulado es del paciente en 24 h (DX-418). */
-export const PATIENT_WINDOW_RULES_VERSION = 'ANESTHESIA_DOSE_V2';
+/** Única versión de las reglas cuyo acumulado sellado es solo de la evolución (DX-307). */
+export const PER_ENTRY_RULES_VERSION = 'ANESTHESIA_DOSE_V1';
+
+/**
+ * Desde V2 (DX-418) el acumulado sellado es del paciente en 24 h; V3 (DX-420)
+ * y las siguientes lo mantienen.
+ */
+export function isPatientWindowRules(rulesVersion: string): boolean {
+  return rulesVersion !== PER_ENTRY_RULES_VERSION;
+}
 
 /** Topes que repite la API. */
 export const OVERRIDE_REASON_MIN = 10;
@@ -128,4 +138,17 @@ export function parseWeightKg(text: string): number | null {
 /** «1,5» / «72» con coma decimal, como el resto de la ficha. */
 export function formatDecimal(value: number): string {
   return String(Math.round(value * 100) / 100).replace('.', ',');
+}
+
+/** mg de epinefrina con hasta 4 decimales: «0,018», «0,0225». */
+export function formatEpinephrineMg(value: number): string {
+  return String(Math.round(value * 10000) / 10000).replace('.', ',');
+}
+
+/**
+ * DX-420: «desde 4 años» si el anestésico tiene edad mínima en el catálogo
+ * (AAPD: articaína 4, bupivacaína 12); null si no.
+ */
+export function minAgeLabel(product: Pick<AnestheticProduct, 'minAgeYears'>): string | null {
+  return product.minAgeYears === null ? null : `desde ${product.minAgeYears} años`;
 }
