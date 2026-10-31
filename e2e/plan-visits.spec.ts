@@ -11,6 +11,7 @@ import { API_URL, tenantOrigin } from "./support/urls";
 import { loginAs, accessTokenOf } from "./support/auth";
 import { atSede, sedeDayFromToday } from "./support/clock";
 import { chooseAppointmentStatus } from "./support/appointment-status";
+import { fillDate } from "./support/dates";
 import {
   meetsTouchTarget,
   waitForAnimationsSettled,
@@ -611,7 +612,7 @@ for (const width of [390, 1440])
       await page.goto(origin + "/agenda");
       await page.getByRole("button", { name: "Día", exact: true }).click();
       await page.getByRole("button", { name: "Lista", exact: true }).click();
-      await page.getByLabel("Fecha", { exact: true }).fill(day);
+      await fillDate(page, "Fecha", day);
       const status = page.getByRole("combobox", {
         name: /^Estado de la cita de 10:15–10:45/,
       });

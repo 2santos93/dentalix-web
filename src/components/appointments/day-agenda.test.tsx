@@ -156,14 +156,14 @@ describe('DayAgenda', () => {
     // The component declares itself a query container...
     expect(container.querySelector('.\\@container')).toBeInTheDocument();
 
-    // ...and both variants key off that container (`@2xl` = 42rem), not the
+    // ...and both variants key off that container (`@[40rem]`), not the
     // viewport: keyed on `md:` the wide table also rendered inside the ~384px
     // day drawer, where it got clipped.
     const table = container.querySelector('table');
     expect(table).toBeInTheDocument();
-    expect(table?.closest('.hidden.\\@2xl\\:block')).toBeInTheDocument();
+    expect(table?.closest('.hidden.\\@\\[40rem\\]\\:block')).toBeInTheDocument();
 
-    const narrowWrapper = container.querySelector('.\\@2xl\\:hidden');
+    const narrowWrapper = container.querySelector('.\\@\\[40rem\\]\\:hidden');
     expect(narrowWrapper).toBeInTheDocument();
   });
 

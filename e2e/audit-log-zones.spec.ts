@@ -9,6 +9,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { utcOffsetLabel } from '../src/lib/format/zone';
 import { addCivilDays, wallDay } from '../src/lib/time/wall-clock';
+import { activeSedeSelect } from './support/nav';
 
 /**
  * e2e DX-362: el registro de auditoría de una clínica con sedes en tres zonas
@@ -198,7 +199,7 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
     await expect(table).toBeVisible();
 
     // 4. Berlín como sede activa: horas y días en Berlín; el evento de Bogotá añade la suya.
-    await page.getByLabel('Sede', { exact: true }).locator('visible=true').first().selectOption({ label: BERLIN.name });
+    await activeSedeSelect(page).selectOption({ label: BERLIN.name });
     await expect(
       page.getByText(`Horas y días en la hora de Berlín (Europe/Berlin, ${offset(now, BERLIN)}). Lo más reciente, arriba.`, {
         exact: true,
@@ -219,6 +220,6 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
     await shoot(page, 'auditoria-zonas-berlin', viewport.width);
 
     // De vuelta a «Todas las sedes» para la siguiente anchura.
-    await page.getByLabel('Sede', { exact: true }).locator('visible=true').first().selectOption({ label: 'Todas las sedes' });
+    await activeSedeSelect(page).selectOption({ label: 'Todas las sedes' });
   }
 });

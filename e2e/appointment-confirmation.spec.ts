@@ -77,7 +77,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
 
   // --- Recepción: agenda -> Día de mañana -> Detalle -> Enviar confirmación ---
   await page.goto(`${origin}/agenda`);
-  await expect(page.getByRole('heading', { name: 'Agenda' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   // DX-121: el Día abre en columnas; la fila con estado está en «Lista».
   await page.getByRole('button', { name: 'Lista', exact: true }).click();

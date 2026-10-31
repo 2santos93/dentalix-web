@@ -214,7 +214,7 @@ test('DX-264 Mes: solo la marca de la alerta crítica, +1 más y el panel del d�
       const marker = day.getByTestId('month-alert-marker');
       await expect(marker).toHaveCount(1);
       await expect(marker).toContainText('Requiere premedicación');
-      await expect(day.getByTestId('month-appointment').filter({ has: marker })).toContainText(/Jorge \S\./);
+      await expect(day.getByTestId('month-appointment').filter({ has: page.getByTestId('month-alert-marker') })).toContainText(/Jorge \S\./);
       expect(await day.locator('button button').count()).toBe(0);
       await expectNoHorizontalScroll(page);
       // Con el teclado: la celda abre el panel del día con las tres alertas.
@@ -222,7 +222,9 @@ test('DX-264 Mes: solo la marca de la alerta crítica, +1 más y el panel del d�
       await day.getByRole('button', { name: /citas$/ }).focus();
       await page.keyboard.press('Enter');
       const panel = page.getByRole('dialog');
-      await expect(panel.getByTestId('medical-alert-indicator')).toHaveCount(3);
+      // El panel monta la tabla y las tarjetas del día (una oculta por la
+      // consulta de contenedor): se cuentan las que se ven.
+      await expect(panel.getByTestId('medical-alert-indicator').locator('visible=true')).toHaveCount(3);
       await page.keyboard.press('Escape');
       await expect(panel).toBeHidden();
       await day.scrollIntoViewIfNeeded();

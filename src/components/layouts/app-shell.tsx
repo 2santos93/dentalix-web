@@ -258,10 +258,19 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           )}
         >
           {groups.map((group, index) => (
-            <div key={group.id} role="group" aria-label={group.label ?? undefined} className="flex flex-col gap-0.5">
+            // Densidad medida (DX-347): a 900 px de alto los 15 enlaces de ADMIN,
+            // sus 4 grupos, la cabecera y el pie caben sin scroll. Expandido,
+            // enlaces de 32 px; en el raíl, 15 × 44 px táctiles pegados y una
+            // regla de 1 px entre grupos (con margen no cabían: 764 px de 675).
+            <div
+              key={group.id}
+              role="group"
+              aria-label={group.label ?? undefined}
+              className={cn('flex flex-col', !collapsed && 'gap-0.5')}
+            >
               {index > 0 &&
                 (collapsed ? (
-                  <hr aria-hidden className="mx-3 my-2 border-border-subtle" />
+                  <hr aria-hidden className="mx-3 my-0 border-border-subtle" />
                 ) : (
                   <p aria-hidden className="t-overline whitespace-nowrap px-3 pb-1 pt-4">
                     {group.label}
@@ -281,7 +290,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                       title={collapsed || long ? navLabel(href) : undefined}
                       className={cn(
                         'relative flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors',
-                        collapsed ? 'h-11 w-full justify-center' : 'min-h-9 min-w-0 flex-1 gap-3 px-3 py-1.5',
+                        collapsed ? 'h-11 w-full justify-center' : 'min-h-8 min-w-0 flex-1 gap-3 px-3 py-1.5',
                         active
                           ? 'bg-primary-subtle text-primary-subtle-text'
                           : 'text-muted hover:bg-surface-sunken hover:text-ink',

@@ -533,7 +533,8 @@ that shares its fetch — those two look interchangeable and are not.
   - `primary` — line 1, left, ink 15px/600 (one per list; defaults to the first column);
   - `trailing` — line 1, right: the key value (amount, time, age; tabular) or the status badge;
   - `meta` (default) — line 2, muted 13px, values joined with « · », blanks skipped (return
-    `null` from `mobileCell`, never «—»);
+    `null` from `mobileCell`, never «—»); it wraps, never truncates (documents and phones must
+    stay readable);
   - `hidden` — off the card (it lives on the record). **Never hide money.**
   With `getRowHref`/`onRowClick` the whole card is the tap target (≥56px) with a trailing
   chevron, and on desktop the primary cell's link is stretched over the row (one link per row
@@ -572,7 +573,9 @@ screen it opens; a group with no visible entries disappears.
 - **Desktop (≥1024px): grouped sidebar**, 240px, surface + right border, collapsible to a 64px
   icon rail (preference remembered in `localStorage`). Group headings are `t-overline`
   (muted, no tracking caps), 16px above each group; in the rail, a `border-subtle` rule
-  replaces the heading. Items: icon 16px + label, 36px min height, 6px radius, **never wrap**
+  replaces the heading (a 1px rule, no margin: the rail's 44px targets stack edge to edge). Items:
+  icon 16px + label, 32px min height (so ADMIN's 15 entries, 4 headings, header and footer fit a
+  900px-high window without scrolling), 6px radius, **never wrap**
   (`whitespace-nowrap`, truncate). Active = `primary-subtle` bg + `primary-subtle-text`;
   hover = `surface-sunken`. Header: brand + collapse control, then a search trigger showing
   the shortcut (⌘K / Ctrl K). Footer: sede switcher above the account card; the role under the

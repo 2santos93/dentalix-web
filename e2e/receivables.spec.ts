@@ -5,6 +5,7 @@ import { apiLogin, apiPost, type ApiSession } from './support/api';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll } from './support/layout';
 import { sedeDayFromToday } from './support/clock';
+import { openSection } from './support/nav';
 
 /**
  * DX-145 · Cartera por antigüedad, vista por RECEPCIÓN en la clínica demo
@@ -75,7 +76,7 @@ async function openCarteraAsReception(page: Page): Promise<void> {
   // Toda la clínica: el deudor sembrado no tiene sede asignada por cita.
   await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
   await page.goto(`${origin}/caja`);
-  await page.getByRole('link', { name: 'Cartera' }).first().click();
+  await openSection(page, 'Cartera');
   await expect(page).toHaveURL(/\/caja\/cartera$/);
   await expect(page.getByRole('heading', { name: 'Cartera', level: 1 })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'Resumen por antigüedad' })).toBeVisible();
