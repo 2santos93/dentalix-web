@@ -329,7 +329,7 @@ export function SplitPaymentSummary({
               label={copy.confirmCredit}
             />
             {confirmError ? (
-              <InlineError id="rp-confirm-credit-error" className="text-xs">
+              <InlineError id="rp-confirm-credit-error">
                 {confirmError}
               </InlineError>
             ) : null}

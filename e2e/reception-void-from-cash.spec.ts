@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { openPatientTab } from './support/patient-tabs';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (DX-057): recepción anula desde la CAJA un abono suyo de hoy.
@@ -111,15 +112,21 @@ for (const viewport of [
 
     // --- Caja: «Anular» solo en el abono propio.
     await page.goto(`${origin}/caja`);
-    const table = page.getByRole('table', { name: 'Abonos del período' });
+    // UX v2: tabla desde 640 px, tarjetas en el teléfono (`DataList`); Recibo
+    // y Anular en el «⋯» de cada fila.
+    const table = dataList(page, 'Abonos del período');
     await expect(table).toBeVisible({ timeout: 15_000 });
-    const ownRow = table.getByRole('row').filter({ hasText: ownName });
-    const otherRow = table.getByRole('row').filter({ hasText: otherName });
+    const ownRow = dataListRows(table).filter({ hasText: ownName });
+    const otherRow = dataListRows(table).filter({ hasText: otherName });
     await expect(ownRow).toHaveCount(1);
     await expect(otherRow).toHaveCount(1);
-    await expect(otherRow.getByRole('button', { name: /anular/i })).toHaveCount(0);
+    await otherRow.getByRole('button', { name: `Acciones de abono de Caja ${otherName}` }).click();
+    await expect(page.getByRole('menuitem', { name: 'Recibo' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: /anular/i })).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
-    await ownRow.getByRole('button', { name: `Anular abono de Caja ${ownName}` }).click();
+    await ownRow.getByRole('button', { name: `Acciones de abono de Caja ${ownName}` }).click();
+    await page.getByRole('menuitem', { name: 'Anular' }).click();
     const dialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
     await expect(dialog).toBeVisible();
     // Qué abono es y la regla de recepción, en español.

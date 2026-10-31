@@ -117,8 +117,8 @@ function AdminAction({ settings, payments }: { settings: ExchangeRateSettingsSta
           <Link href={EXCHANGE_RATE_SETTINGS_HREF} className={linkClass}>
             {withoutRateCopy.adminLink}
           </Link>
-          {days.manual ? <span className="block text-xs">{withoutRateCopy.adminHint}</span> : null}
-          {days.backup ? <span className="block text-xs">{withoutRateCopy.backupHint}</span> : null}
+          {days.manual ? <span className="t-caption block">{withoutRateCopy.adminHint}</span> : null}
+          {days.backup ? <span className="t-caption block">{withoutRateCopy.backupHint}</span> : null}
         </p>
       ) : null}
       {automatic ? (
@@ -126,7 +126,7 @@ function AdminAction({ settings, payments }: { settings: ExchangeRateSettingsSta
           <Link href={EXCHANGE_RATE_SETTINGS_HREF} className={linkClass}>
             {withoutRateCopy.switchToManualLink}
           </Link>
-          <span className="block text-xs">{withoutRateCopy.switchToManualHint}</span>
+          <span className="t-caption block">{withoutRateCopy.switchToManualHint}</span>
         </p>
       ) : null}
     </>

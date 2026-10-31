@@ -4,6 +4,7 @@ import { loginAs } from './support/auth';
 import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { E2E_BROWSER_LOCALE } from './support/regional';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (DX-097): un abono cobrado a las 20:00 en Bogotá sale en la caja de
@@ -78,12 +79,13 @@ async function expectNightPaymentToday(page: Page, seeded: Seeded): Promise<void
 
   await expect(page.getByRole('button', { name: 'Hoy' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('cash-period-note')).toHaveText(
-    `${shown(seeded.day)} · días en hora de Bogotá`,
+    `${shown(seeded.day)} · días según la hora de la sede`,
     { timeout: 15_000 },
   );
-  const table = page.getByRole('table', { name: 'Abonos del período' });
+  // UX v2: tabla desde 640 px, tarjetas en el teléfono (`DataList`).
+  const table = dataList(page, 'Abonos del período');
   await expect(table).toBeVisible({ timeout: 15_000 });
-  const row = table.getByRole('row').filter({ hasText: seeded.patientName });
+  const row = dataListRows(table).filter({ hasText: seeded.patientName });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(shown(seeded.day));
   await expect(row).toContainText('97.000');

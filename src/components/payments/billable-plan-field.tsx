@@ -3,6 +3,8 @@ import { billablePlanLabel, type BillablePlan, type MoneyFormatter } from '@/lib
 import { formatCurrency } from '@/lib/format/currency';
 import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
+import { EmptyState } from '@/components/shared/empty-state';
+import { NativeSelect } from '@/components/ui/native-select';
 import type { BillablePlansState } from './use-billable-plans';
 
 // Copy como constantes (i18n-ready).
@@ -20,11 +22,6 @@ export const billablePlanFieldCopy = {
   inFavor: 'a favor',
   otherCurrencies: (list: string) => `También abonado en otra moneda: ${list}`,
 };
-
-// <select> nativo con el aspecto del átomo Input (misma cadena que el resto de
-// formularios de pagos).
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50';
 
 interface BillablePlanFieldProps {
   id: string;
@@ -63,19 +60,18 @@ export function BillablePlanField({
       ) : state.plans === null ? (
         <p
           role="status"
-          className="flex h-10 items-center rounded-lg border border-border bg-surface-sunken px-3 text-sm text-muted"
+          className="flex h-10 items-center rounded-lg border border-border bg-surface-sunken px-3 text-sm text-muted pointer-coarse:h-11"
         >
           {billablePlanFieldCopy.loading}
         </p>
       ) : (
         <>
-          <select
+          <NativeSelect
             id={id}
             value={value}
             disabled={disabled}
             onChange={(e) => onChange(e.target.value)}
             aria-describedby={selected ? hintId : undefined}
-            className={fieldClass}
           >
             {state.plans.map((plan) => {
               const reason = unavailableReason?.(plan) ?? null;
@@ -85,7 +81,7 @@ export function BillablePlanField({
                 </option>
               );
             })}
-          </select>
+          </NativeSelect>
           {selected ? <PlanFigures id={hintId} plan={selected} money={money} /> : null}
         </>
       )}
@@ -98,7 +94,7 @@ function PlanFigures({ id, plan, money }: { id: string; plan: BillablePlan; mone
     .map((o) => money(o.amount, o.currency))
     .join(', ');
   return (
-    <p id={id} className="text-xs text-muted tabular-nums">
+    <p id={id} className="t-caption text-muted tabular-nums">
       {billablePlanFieldCopy.figures(
         plan.balance < 0
           ? `${money(-plan.balance, plan.currency)} ${billablePlanFieldCopy.inFavor}`
@@ -116,11 +112,11 @@ function PlanFigures({ id, plan, money }: { id: string; plan: BillablePlan; mone
 /** Paciente sin nada que cobrar: lo dice y explica de qué depende. */
 export function BillablePlansEmpty() {
   return (
-    <div role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center">
-      <p className="text-sm font-medium text-ink">{billablePlanFieldCopy.emptyTitle}</p>
-      <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
-        {billablePlanFieldCopy.emptyDescription}
-      </p>
-    </div>
+    <EmptyState
+      size="inline"
+      role="status"
+      title={billablePlanFieldCopy.emptyTitle}
+      description={billablePlanFieldCopy.emptyDescription}
+    />
   );
 }

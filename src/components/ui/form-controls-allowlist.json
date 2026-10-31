@@ -287,19 +287,7 @@
     "select": 2
   },
   "src/components/payments/billable-plan-field.tsx": {
-    "select": 3
-  },
-  "src/components/payments/cash-register-view.tsx": {
     "select": 1
-  },
-  "src/components/payments/reallocate-payment-modal.tsx": {
-    "radio": 1
-  },
-  "src/components/payments/record-payment-modal.tsx": {
-    "select": 2
-  },
-  "src/components/payments/void-payment-modal.tsx": {
-    "textarea": 1
   },
   "src/components/perio/new-perio-exam-modal.tsx": {
     "checkbox": 1,
