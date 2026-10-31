@@ -391,7 +391,10 @@ test('modal de sede: reloj bajo la vista previa; A pasa a 24 h y el panel lo pin
     await create.getByRole('radio', { name: '12 h', exact: true }).check();
     // M7, en Chromium: un número de-DE exacto y la hora de 12 h del ejemplo.
     await expect(create.getByText(/^Vista previa: 12\.345,67 · \d{2}\.\d{2}\.\d{4}/)).toBeVisible();
-    await expect(create.locator('[id$="-hourCycle-example"]')).toHaveText(/^(1[0-2]|[1-9]):[0-5]\d\s[ap]\.\s?m\.$/);
+    // El ejemplo es la descripción de la opción «12 h» (RadioCard de P2: `<id>-description`).
+    const twelve = create.getByRole('radio', { name: '12 h', exact: true });
+    const twelveExample = create.locator(`[id="${await twelve.getAttribute('id')}-description"]`);
+    await expect(twelveExample).toHaveText(/^(1[0-2]|[1-9]):[0-5]\d\s[ap]\.\s?m\.$/);
     // Grid: formato → vista previa → Reloj, cada uno a lo ancho, sin media fila vacía a 2 columnas.
     const preview = create.getByText(/^Vista previa:/);
     const clock = create.getByRole('radiogroup', { name: 'Reloj' });

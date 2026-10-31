@@ -223,7 +223,12 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
     await expectNoHorizontalScrollIn(page);
     await shoot(page, 'auditoria-zonas-berlin', viewport.width);
 
-    // De vuelta a «Todas las sedes» para la siguiente anchura.
+    // De vuelta a «Todas las sedes» para la siguiente anchura. Cambiar de sede
+    // recarga la página: se espera a que la recarga pinte la zona de Bogotá
+    // (su `/auth/refresh` ya respondió) antes del `goto` de la siguiente
+    // anchura; un `goto` con ese refresh en vuelo lo aborta cuando la API ya
+    // rotó la cookie y el siguiente refresh da 401 → /login.
     await activeSedeSelect(page).selectOption({ label: 'Todas las sedes' });
+    await expect(page.getByText(/^Horas y días en la hora de Bogotá /)).toBeVisible({ timeout: 15_000 });
   }
 });
