@@ -69,7 +69,7 @@ export function ImportProgress({
           aria-label={copy.progressLabel}
           max={100}
           value={progress.percent}
-          className="h-2 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-surface-2 [&::-webkit-progress-value]:bg-primary"
+          className="h-2 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-surface-sunken [&::-webkit-progress-value]:bg-primary"
         />
         <p className="text-sm tabular-nums text-muted" aria-live="polite">
           {copy.progress(n(progress.processedRows), n(progress.preparedRows))}

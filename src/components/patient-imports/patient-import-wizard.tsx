@@ -156,7 +156,7 @@ function UploadStatus({ uploaded, done }: { uploaded: number | null; done: strin
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={percent}
-          className="h-2 w-full max-w-sm overflow-hidden rounded-full bg-surface-2"
+          className="h-2 w-full max-w-sm overflow-hidden rounded-full bg-surface-sunken"
         >
           <div
             className="h-full rounded-full bg-primary transition-[width] duration-200 motion-reduce:transition-none"
@@ -649,7 +649,7 @@ function DryRunResult({
             {batch.preview.map((row) => (
               <li
                 key={row.rowNumber}
-                className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-2 last:border-0"
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-4 py-2 last:border-0"
               >
                 <span className="min-w-0 break-words text-ink">
                   <span className="tabular-nums text-muted">{row.rowNumber} · </span>

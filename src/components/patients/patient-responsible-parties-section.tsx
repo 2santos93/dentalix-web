@@ -62,7 +62,7 @@ function FamilyChip({ id, name, detail }: { id: string; name: string; detail: st
   return (
     <Link
       href={patientHref(id)}
-      className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm text-ink transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm text-ink transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
     >
       <span className="truncate font-medium">{name}</span>
       <span className="shrink-0 text-xs text-muted">· {detail}</span>
@@ -188,7 +188,7 @@ export function PatientResponsiblePartiesSection({
                       {party.responsiblePatient ? (
                         <Link
                           href={patientHref(party.responsiblePatient.id)}
-                          className="break-words font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          className="break-words font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
                           {party.fullName}
                         </Link>

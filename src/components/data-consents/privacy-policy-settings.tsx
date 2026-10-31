@@ -19,10 +19,9 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { Disclosure } from '@/components/shared/disclosure';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { fieldClass } from '@/lib/ui/field-class';
+import { SectionHeader } from '@/components/ui/section-header';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { usePrivacyPolicies } from './use-privacy-policies';
 
@@ -55,7 +54,9 @@ const copy = {
   historyHeading: 'Versiones anteriores',
   historyMeta: (date: string, by: string) => `${date} · ${by}`,
   readOnly: 'Solo un administrador puede publicar una versión nueva.',
-  current: 'Vigente',
+  policyLabel: 'Política',
+  expand: 'Ver texto completo',
+  collapse: 'Ver menos',
 };
 
 type Draft = PublishPrivacyPolicyInput;
@@ -138,30 +139,29 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
         {current ? (
           <div className="flex flex-col gap-6">
             <section aria-labelledby="pps-current" className="flex flex-col gap-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <h2 id="pps-current" className="t-title flex items-center gap-2 text-ink">
-                    {copy.currentHeading}
-                    <Badge variant="success">{copy.current}</Badge>
-                  </h2>
-                  <p className="mt-1 text-sm text-muted tabular-nums">
+              <SectionHeader
+                as="h2"
+                titleId="pps-current"
+                title={copy.currentHeading}
+                description={
+                  <span className="tnum">
                     {copy.currentMeta(
                       current.version,
                       formatDate(current.publishedAt),
                       current.publishedBy.fullName,
                     )}
-                  </p>
-                </div>
-                {publishButton}
-              </div>
+                  </span>
+                }
+                actions={publishButton ?? undefined}
+              />
               <PolicyBody policy={current} />
               {!isAdmin ? <p className="text-sm text-muted">{copy.readOnly}</p> : null}
             </section>
 
             {previous.length > 0 ? (
               <section className="flex flex-col gap-3">
-                <h2 className="t-label text-muted">{copy.historyHeading}</h2>
-                <Card className="divide-y divide-hairline p-0 shadow-none">
+                <SectionHeader as="h2" title={copy.historyHeading} />
+                <div className="divide-y divide-border-subtle rounded-lg border border-border bg-surface">
                   {previous.map((p) => (
                     <div key={p.id} className="px-4 py-2">
                       <Disclosure
@@ -172,7 +172,7 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
                       </Disclosure>
                     </div>
                   ))}
-                </Card>
+                </div>
               </section>
             ) : null}
           </div>
@@ -256,31 +256,55 @@ function PolicyTextarea({
 }) {
   return (
     <FormField htmlFor={id} label={label}>
-      <textarea
+      <Textarea
         id={id}
         rows={rows}
         required
         value={value}
         aria-describedby={describedBy}
         onChange={(e) => onChange(e.target.value)}
-        className={fieldClass}
       />
     </FormField>
   );
 }
 
+/**
+ * Una sola sección con filetes: la política (recortada con «Ver texto
+ * completo», sin un desplazamiento interno que en el teléfono pasa
+ * desapercibido), las tres casillas y la huella.
+ */
 function PolicyBody({ policy }: { policy: PrivacyPolicyVersion }) {
+  const [expanded, setExpanded] = useState(false);
+  const regionId = React.useId();
   return (
-    <div className="flex flex-col gap-4">
-      <div
-        role="region"
-        aria-label={`${copy.policyText} (versión ${policy.version})`}
-        tabIndex={0}
-        className="max-h-64 overflow-y-auto whitespace-pre-line rounded-lg border border-border bg-surface-2 p-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      >
-        {policy.policyText}
+    <div className="divide-y divide-border-subtle rounded-lg border border-border bg-surface">
+      <div className="flex flex-col gap-1 px-4 py-3">
+        <p className="t-label text-muted">{copy.policyLabel}</p>
+        <div
+          id={regionId}
+          role="region"
+          aria-label={`${copy.policyText} (versión ${policy.version})`}
+          className={cn(
+            'whitespace-pre-line text-sm text-ink',
+            !expanded &&
+              'max-h-48 overflow-hidden [mask-image:linear-gradient(to_bottom,black_65%,transparent)]',
+          )}
+        >
+          {policy.policyText}
+        </div>
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          className="self-start max-sm:min-h-11"
+          aria-expanded={expanded}
+          aria-controls={regionId}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? copy.collapse : copy.expand}
+        </Button>
       </div>
-      <dl className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+      <dl className="divide-y divide-border-subtle">
         {CONSENT_SCOPES.map((scope) => (
           <div key={scope} className="flex flex-col gap-1 px-4 py-3">
             <dt className="t-label text-muted">{SCOPE_LABELS[scope]}</dt>
@@ -289,7 +313,7 @@ function PolicyBody({ policy }: { policy: PrivacyPolicyVersion }) {
         ))}
         <div className="flex flex-col gap-1 px-4 py-3">
           <dt className="t-label text-muted">{copy.hash}</dt>
-          <dd className="break-all font-mono text-xs text-muted">{policy.contentHash}</dd>
+          <dd className="t-id break-all font-mono text-xs text-muted">{policy.contentHash}</dd>
         </div>
       </dl>
     </div>

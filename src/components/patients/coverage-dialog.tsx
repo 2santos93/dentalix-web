@@ -23,7 +23,6 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
-import { cn } from '@/lib/utils';
 
 export const coverageDialogCopy = {
   createTitle: 'Añadir cobertura',

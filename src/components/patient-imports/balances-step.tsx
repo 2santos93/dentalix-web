@@ -222,7 +222,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={percent}
-              className="h-2 w-full max-w-sm overflow-hidden rounded-full bg-surface-2"
+              className="h-2 w-full max-w-sm overflow-hidden rounded-full bg-surface-sunken"
             >
               <div
                 className="h-full rounded-full bg-primary transition-[width] duration-200 motion-reduce:transition-none"

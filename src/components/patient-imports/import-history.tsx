@@ -210,7 +210,7 @@ export function ImportHistory({
       >
         <ul aria-label={historyCopy.listLabel} className="flex flex-col rounded-xl border border-border bg-surface text-sm">
           {items.map((b) => (
-            <li key={b.id} className="flex flex-col gap-2 border-b border-hairline p-4 last:border-0">
+            <li key={b.id} className="flex flex-col gap-2 border-b border-border-subtle p-4 last:border-0">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <span className="min-w-0 break-all font-medium text-ink">{b.fileName}</span>
                 <StatusBadge kind="patientImport" status={b.status} />

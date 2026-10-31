@@ -82,7 +82,7 @@ export function ConsentPrintView({
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=consents`;
 
   return (
-    <div className="consent-print-page flex min-h-full flex-1 flex-col bg-surface-2 print:min-h-0 print:bg-white">
+    <div className="consent-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
       {data ? (
         <title>
           {copy.documentTitle(data.title, `${data.patient.firstName} ${data.patient.lastName}`)}

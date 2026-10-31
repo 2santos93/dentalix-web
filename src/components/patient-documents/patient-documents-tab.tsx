@@ -419,7 +419,7 @@ export function PatientDocumentsTab({
         key={item.key}
         data-status={item.status}
         aria-label={name}
-        className="flex flex-col gap-3 border-b border-hairline px-4 py-3 last:border-0"
+        className="flex flex-col gap-3 border-b border-border-subtle px-4 py-3 last:border-0"
       >
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <span className="min-w-0 font-medium text-ink [overflow-wrap:anywhere]">{name}</span>
@@ -504,7 +504,7 @@ export function PatientDocumentsTab({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(item.progress * 100)}
-            className="h-2 w-full overflow-hidden rounded-full bg-surface-2"
+            className="h-2 w-full overflow-hidden rounded-full bg-surface-sunken"
           >
             <div
               className={cn(
@@ -686,7 +686,7 @@ export function PatientDocumentsTab({
             }}
             className={cn(
               'flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors',
-              dragging ? 'border-primary bg-primary/5' : 'border-border bg-surface',
+              dragging ? 'border-primary-border bg-primary-subtle' : 'border-border bg-surface',
             )}
           >
             <Upload className="size-6 text-muted" aria-hidden />

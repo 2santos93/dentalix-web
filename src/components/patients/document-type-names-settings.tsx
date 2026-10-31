@@ -37,7 +37,7 @@ const copy = {
 
 // 44 px bajo `sm` (DESIGN.md, objetivo táctil de móvil).
 const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-11';
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-sm:min-h-11';
 
 const toDrafts = (names: DocumentTypeNames): Record<DocType, string> =>
   Object.fromEntries(DOC_TYPES.map((t) => [t, names[t] ?? ''])) as Record<DocType, string>;

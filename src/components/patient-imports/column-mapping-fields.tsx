@@ -26,7 +26,7 @@ const copy = {
 };
 
 export const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text disabled:cursor-not-allowed disabled:opacity-50';
 
 interface ColumnMappingFieldsProps {
   inspect: ImportInspect;
@@ -72,13 +72,13 @@ export function ColumnMappingFields({
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <div
           aria-hidden
-          className="hidden grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)_minmax(0,1fr)] gap-4 border-b border-border bg-surface-2 px-4 py-2 text-xs font-medium text-muted sm:grid"
+          className="hidden grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)_minmax(0,1fr)] gap-4 border-b border-border bg-surface-sunken px-4 py-2 text-xs font-medium text-muted sm:grid"
         >
           <span>{copy.field}</span>
           <span>{copy.column}</span>
           <span>{copy.sample}</span>
         </div>
-        <ul className="divide-y divide-hairline">
+        <ul className="divide-y divide-border-subtle">
           {inspect.fields.map((field) => {
             const key = field.key as ImportFieldKey;
             const selectId = `${id}-${field.key}`;
