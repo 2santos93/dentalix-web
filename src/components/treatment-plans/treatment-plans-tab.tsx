@@ -57,6 +57,7 @@ import { VoidCancellationFeeModal } from '@/components/appointments/fee-reason-m
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanVisitsBoard } from './plan-visits-board';
 import { PlanQuoteActions } from './plan-quote-actions';
+import { planPrimaryAction } from '@/lib/treatment-plans/plan-primary-action';
 import { PlanOptionsPanel } from './plan-options-panel';
 import { MarkDoneModal } from './mark-done-modal';
 import { ItemsTable } from './plan-items-table';
@@ -404,8 +405,11 @@ export function TreatmentPlansTab({
   // external system — a plain `useEffect` doing these `setState` calls
   // unconditionally on every run trips `react-hooks/set-state-in-effect`.
   const [prevSelectedPlanId, setPrevSelectedPlanId] = useState<string | null>(null);
+  // D2: lo informa `PlanVisitsBoard` (¿queda alguna visita por agendar?).
+  const [hasSchedulableVisit, setHasSchedulableVisit] = useState(false);
   if (selectedPlanId !== prevSelectedPlanId) {
     setPrevSelectedPlanId(selectedPlanId);
+    setHasSchedulableVisit(false);
     setPlanDetail(null);
     // Balance/abonos (PAY-T4) — same rationale: a different plan is a
     // genuinely different resource, and an in-progress abono form must not
@@ -848,6 +852,21 @@ export function TreatmentPlansTab({
   const discountable = Boolean(planDetail) && !signed && !closed && planDetail?.status !== 'ACCEPTED';
   const statusChoices = planDetail ? patchableStatuses(planDetail.status, role) : [];
   const optionGroup = selectedPlan ? optionGroupOf(plans, selectedPlan) : [];
+  // D2: UNA primaria con el plan abierto, elegida por su estado (borrador →
+  // «Agregar ítem», presentado → «Aceptar con firma», aceptado → «Agendar
+  // visita N» o cobrar). Todo lo demás del plan va en secundario.
+  const primary = planDetail
+    ? planPrimaryAction({
+        status: planDetail.status,
+        role,
+        signed,
+        itemCount: planDetail.items?.length ?? 0,
+        canAddItems: !closed && catalogItems.length > 0,
+        hasSchedulableVisit,
+        canBill: canSeeBilling && billable,
+        balance: planBalance?.balance ?? null,
+      })
+    : null;
 
   // Sin planes, crear el primero ES la acción de la pestaña (primaria); con
   // planes, la primaria del bloque es «Agregar ítem» y «Nuevo plan» baja a
@@ -993,6 +1012,7 @@ export function TreatmentPlansTab({
                 plan={planDetail}
                 role={role}
                 onAccepted={handlePlanAccepted}
+                acceptPrimary={primary === 'accept'}
               />
 
               {/* La opción que se le presenta al paciente (DX-040): presentar,
@@ -1103,6 +1123,8 @@ export function TreatmentPlansTab({
                       plan={planDetail}
                       role={role}
                       onChanged={refreshPlanDetail}
+                      primaryScheduling={primary === 'scheduleVisit'}
+                      onSchedulableChange={setHasSchedulableVisit}
                       renderItems={(visitItems, { visit, ordered }) => (
                         <ItemsTable
                           items={visitItems}
@@ -1158,7 +1180,7 @@ export function TreatmentPlansTab({
                     actions={
                       <Button
                         type="button"
-                        variant="secondary"
+                        variant={primary === 'registerPayment' ? 'default' : 'secondary'}
                         size="sm"
                         onClick={openPaymentForm}
                         disabled={!billable}
@@ -1285,6 +1307,7 @@ export function TreatmentPlansTab({
                       discountRules={discountRules}
                       role={role}
                       onAdded={() => Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()])}
+                      submitPrimary={primary === 'addItem'}
                     />
                   )}
                 </div>

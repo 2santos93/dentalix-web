@@ -45,6 +45,7 @@ import { getPaymentAllocations, replacePaymentAllocations } from '@/lib/payments
 import { presentPlan } from '@/lib/treatment-plans/plan-options-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { getPlanVisits } from '@/lib/treatment-plans/plan-visits-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -2971,5 +2972,108 @@ describe('TreatmentPlansTab', () => {
       await user.click(await screen.findByRole('button', { name: /^registrar abono$/i }));
       expect(screen.getByLabelText<HTMLSelectElement>(/^moneda$/i).value).toBe('JPY');
     });
+  });
+});
+
+// D2: UNA primaria (botón `default`) con el plan abierto, elegida por su estado.
+describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
+  const dentist = `h.${btoa(JSON.stringify({ sub: 'u-den', tenantId: 't1', role: 'DENTIST' }))}.s`;
+  const assistant = `h.${btoa(JSON.stringify({ sub: 'u-asis', tenantId: 't1', role: 'ASSISTANT' }))}.s`;
+  const admin = `h.${btoa(JSON.stringify({ sub: 'u-admin', tenantId: 't1', role: 'ADMIN' }))}.s`;
+  const isPrimary = (el: HTMLElement) => /(^|\s)bg-primary(\s|$)/.test(el.className);
+  const primaries = () => screen.getAllByRole('button').filter(isPrimary);
+
+  beforeEach(() => {
+    mockedListCatalogItems.mockReset();
+    mockedListCatalogItems.mockResolvedValue(catalog);
+    mockedListCurrencies.mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]);
+    jest.mocked(listStaff).mockResolvedValue([]);
+    jest.mocked(getPlanVisits).mockResolvedValue({ planId: 'plan-1', items: [], visitIntervals: {}, visits: [] });
+    mockedGetPlan.mockReset();
+    mockedListPlans.mockReset();
+    mockedGetPlanBalance.mockReset();
+    mockedGetPlanBalance.mockResolvedValue(emptyBalance());
+    mockedListPayments.mockReset();
+    mockedListPayments.mockResolvedValue([]);
+    mockedGetPaymentPlan.mockResolvedValue(null);
+    mockedGetDiscountPolicy.mockRejectedValue(new Error('sin política'));
+    mockedGetPriceQuote.mockImplementation(async (_t, _p, { catalogItemId, currency }) =>
+      quoteOf(catalogItemId, {}, currency),
+    );
+  });
+
+  function show(status: import('@/lib/treatment-plans/treatment-plans-api').TreatmentPlanStatus, items = [item1, item2]) {
+    const p = plan({ id: 'plan-1', status });
+    mockedListPlans.mockResolvedValue([p]);
+    mockedGetPlan.mockResolvedValue({ ...p, items, total: 0 });
+  }
+
+  it('DRAFT con ítems (odontólogo): «Agregar ítem» es la única; «Aceptar con firma» va en secundario', async () => {
+    show('DRAFT');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const accept = await screen.findByRole('button', { name: /aceptar con firma/i });
+    const add = await screen.findByRole('button', { name: /^agregar ítem$/i });
+    expect(isPrimary(add)).toBe(true);
+    expect(isPrimary(accept)).toBe(false);
+    expect(primaries()).toEqual([add]);
+  });
+
+  it('PRESENTED (odontólogo): «Aceptar con firma» es la única; «Agregar ítem» y «Enviar a aceptar» en secundario', async () => {
+    show('PRESENTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const accept = await screen.findByRole('button', { name: /aceptar con firma/i });
+    const add = await screen.findByRole('button', { name: /^agregar ítem$/i });
+    expect(isPrimary(accept)).toBe(true);
+    expect(isPrimary(add)).toBe(false);
+    expect(primaries()).toEqual([accept]);
+  });
+
+  it('PRESENTED (asistente, que no decide): «Agregar ítem» es la única', async () => {
+    show('PRESENTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={assistant} />);
+    const add = await screen.findByRole('button', { name: /^agregar ítem$/i });
+    expect(screen.queryByRole('button', { name: /aceptar con firma/i })).not.toBeInTheDocument();
+    expect(primaries()).toEqual([add]);
+  });
+
+  it('ACCEPTED con una visita sin cita: «Agendar visita 1» es la única', async () => {
+    const accepted = [{ ...item1, status: 'ACCEPTED' as const }, { ...item2, status: 'ACCEPTED' as const }];
+    show('ACCEPTED', accepted);
+    jest.mocked(getPlanVisits).mockResolvedValue({
+      planId: 'plan-1',
+      items: [],
+      visitIntervals: {},
+      visits: [
+        {
+          number: 1,
+          label: null,
+          minDaysAfterPrevious: 0,
+          minimumDate: '2026-01-10T00:00:00.000Z',
+          minimumDay: '2026-01-10',
+          planItemIds: accepted.map((i) => i.id),
+        },
+      ],
+    });
+    render(<TreatmentPlansTab patientId="pat-1" token={admin} />);
+    const schedule = await screen.findByRole('button', { name: /agendar visita 1/i });
+    await waitFor(() => expect(isPrimary(schedule)).toBe(true));
+    expect(primaries()).toEqual([schedule]);
+  });
+
+  it('ACCEPTED todo agendado y con saldo (ADMIN): «Registrar abono» es la única', async () => {
+    show('ACCEPTED', [{ ...item1, status: 'ACCEPTED' as const }]);
+    jest.mocked(getPlanVisits).mockResolvedValue({ planId: 'plan-1', items: [], visitIntervals: {}, visits: [] });
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    render(<TreatmentPlansTab patientId="pat-1" token={admin} />);
+    const pay = await screen.findByRole('button', { name: /^registrar abono$/i });
+    await waitFor(() => expect(isPrimary(pay)).toBe(true));
+    expect(primaries()).toEqual([pay]);
+  });
+
+  it('REJECTED: ninguna primaria', async () => {
+    show('REJECTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+    expect(primaries()).toEqual([]);
   });
 });

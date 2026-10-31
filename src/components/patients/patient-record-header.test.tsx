@@ -175,6 +175,15 @@ describe('PatientRecordHeader', () => {
     expect(onEdit).toHaveBeenCalledTimes(1);
   });
 
+  it('D2: en una pestaña con primaria propia, «Editar datos» baja a secundaria', () => {
+    const { rerender } = render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} />);
+    expect(screen.getByRole('button', { name: /editar datos/i }).className).toMatch(/(^|\s)bg-primary(\s|$)/);
+    rerender(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} editPrimary={false} />);
+    const edit = screen.getByRole('button', { name: /editar datos/i });
+    expect(edit.className).not.toMatch(/(^|\s)bg-primary(\s|$)/);
+    expect(edit.className).toMatch(/border-border/);
+  });
+
   it('mantiene la vuelta a la lista de pacientes', () => {
     render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} />);
     expect(screen.getByRole('link', { name: /volver a pacientes/i })).toHaveAttribute(

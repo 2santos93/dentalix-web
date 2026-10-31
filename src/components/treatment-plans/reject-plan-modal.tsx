@@ -29,13 +29,19 @@ const copy = {
   noteRequired: 'Con el motivo «Otro» describe en la nota por qué lo rechazó.',
   submit: 'Marcar rechazado',
   genericError: 'No pudimos marcar el presupuesto como rechazado. Intenta de nuevo.',
+  partial: (done: number, total: number, message: string) =>
+    `Se marcaron ${done} de ${total} opciones. ${message}`,
 };
 
 interface RejectPlanModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
-  planId: string;
+  /**
+   * El plan que se rechaza, o varios (D2: «Marcar rechazadas las N opciones»
+   * desde Presupuestos por seguir), todos con el mismo motivo y nota.
+   */
+  planId: string | readonly string[];
   /** Qué presupuesto se rechaza, p. ej. «Opción B · Ana Pérez». */
   subject?: string;
   onRejected: (plan: TreatmentPlan) => void;
@@ -59,7 +65,11 @@ export function RejectPlanModal({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Con varios planes, los ya rechazados (si uno falla a medias, el reintento
+  // no repite los hechos: un segundo rechazo sería un 409).
+  const [doneIds, setDoneIds] = useState<readonly string[]>([]);
   const noteRequired = reason === 'OTHER';
+  const planIds = typeof planId === 'string' ? [planId] : planId;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -74,14 +84,21 @@ export function RejectPlanModal({
     }
     setError(null);
     setSubmitting(true);
+    const body = { reason, ...(trimmed ? { note: trimmed } : {}) };
+    const done = [...doneIds];
     try {
-      const rejected = await rejectPlan(token, planId, {
-        reason,
-        ...(trimmed ? { note: trimmed } : {}),
-      });
-      onRejected(rejected);
+      let rejected: TreatmentPlan | null = null;
+      for (const id of planIds) {
+        if (done.includes(id)) continue;
+        rejected = await rejectPlan(token, id, body);
+        done.push(id);
+      }
+      setDoneIds(done);
+      if (rejected) onRejected(rejected);
     } catch (err) {
-      setError(apiErrorMessage(err, copy.genericError));
+      setDoneIds(done);
+      const message = apiErrorMessage(err, copy.genericError);
+      setError(done.length > 0 ? copy.partial(done.length, planIds.length, message) : message);
     } finally {
       setSubmitting(false);
     }

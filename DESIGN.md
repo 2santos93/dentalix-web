@@ -692,6 +692,25 @@ policies) — and each entry's label is **exactly** its page's title.
   switcher.
 - **Weeks** start where the sede's locale starts them (`weekOrder(locale)` in
   `components/locations/week-order.ts`; Monday when the locale has no region).
+- **A sede's regional config — two recorded decisions (D2, 2026-10-31):**
+  - *Currency suggested from the country, on creation only.* The product never decides by
+    country (DX-312 R3, G1 R2), with ONE named exception: `lib/locations/country-regional.ts`
+    (+ its generated JSON) PROPOSES currency, zones and format when a sede is created or
+    registered — a visible, editable suggestion labelled «Sugerido por el país». It never fills
+    or replaces a saved value (editing shows what is stored; only an empty field is suggested),
+    and nothing else may look a country up: in `src/architecture/no-location-fallbacks.test.ts`
+    `COUNTRY_RULE_EXCEPTIONS` holds that module and the frozen legacy prescription layout (R12),
+    nothing more.
+  - *Changing a sede's time zone re-counts its days; nothing stored is rewritten.* Instants
+    are stored in UTC and each movement's civil day (caja, reports, «hoy») is derived with the
+    sede's CURRENT zone. We deliberately do NOT freeze each movement's day at write time (no
+    API migration): the common reason to change a zone is that it was wrong, and then
+    re-counting the history in the right zone is the fix, not a side effect. Appointments
+    keep their exact instant. The edit form says so BEFORE saving («Qué cambia al guardar» →
+    «…la caja y los informes contarán los días con esa zona, también los de lo ya
+    registrado»), a sede with history needs an explicit confirmation (409
+    `LOCATION_REGIONAL_CHANGE_UNCONFIRMED`), and an open cash session blocks the change.
+    Civil dates typed by people (`invoiceDate`, birth dates) are already civil and never move.
 - **Lists** in settings follow Tables (`DataList`, row → edit, `RowActions` «⋯»;
   Desactivar = reversible, Eliminar = irreversible with consequences). Empty list: no
   «0 items» count, the primary lives inside the `EmptyState`.
