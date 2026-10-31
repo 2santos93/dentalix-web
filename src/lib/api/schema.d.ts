@@ -1213,12 +1213,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Anestesia de una evolución y su acumulado frente al máximo */
+        /**
+         * Anestesia de una evolución y el acumulado del paciente en las últimas 24 h frente al máximo
+         * @description DX-418: el acumulado suma TODAS las administraciones del paciente en la clínica (cualquier evolución, sede y profesional) en una ventana móvil de 24 h, con el desglose por evolución y profesional. Las de otra clínica nunca cuentan.
+         */
         get: operations["AnesthesiaController_listByEntry"];
         put?: never;
         /**
          * Registra anestesia local en la evolución (inalterable)
-         * @description El servidor calcula los mg, el acumulado de la evolución y la fracción del máximo por peso. Al llegar al 100 % (o con alergia a anestésicos) responde 409 salvo `overrideReason`, que queda sellado y auditado.
+         * @description El servidor calcula los mg, el acumulado del PACIENTE a menos de 24 h de la administración (todas sus evoluciones y sedes de la clínica, DX-418) y la fracción del máximo por peso. Al llegar al 100 % (o con alergia a anestésicos) responde 409 salvo `overrideReason`, que queda sellado y auditado. Dos registros simultáneos del mismo paciente se serializan (bloqueo por paciente): el segundo calcula con el primero.
          */
         post: operations["AnesthesiaController_record"];
         delete?: never;
@@ -1238,7 +1241,7 @@ export interface paths {
         put?: never;
         /**
          * Previsualiza la dosis acumulada con un anestésico más
-         * @description No guarda nada. Lee la anamnesis vigente (peso y alergias) y lo ya registrado en la evolución.
+         * @description No guarda nada. Lee la anamnesis vigente (peso y alergias) y lo ya registrado al paciente a menos de 24 h de `administeredAt` (por defecto, ahora) en cualquier evolución y sede de la clínica (DX-418).
          */
         post: operations["AnesthesiaController_check"];
         delete?: never;
@@ -7587,6 +7590,7 @@ export interface components {
             weightKg: number | null;
             /** @enum {string|null} */
             weightSource: "ANAMNESIS" | "ENTERED" | null;
+            /** @description mg acumulados CON este registro: de la evolución con ANESTHESIA_DOSE_V1; del paciente en 24 h con ANESTHESIA_DOSE_V2 (DX-418) */
             cumulativeMg: number;
             cumulativePercent: number | null;
             safetyRulesVersion: string;
@@ -7607,10 +7611,10 @@ export interface components {
             percent: number | null;
         };
         AnesthesiaDoseSummaryDto: {
-            /** @example ANESTHESIA_DOSE_V1 */
+            /** @example ANESTHESIA_DOSE_V2 */
             rulesVersion: string;
             weightKg: number | null;
-            /** @description mg acumulados de la evolución */
+            /** @description mg acumulados del PACIENTE en la ventana de 24 h (DX-418): todas sus evoluciones, sedes y profesionales de la clínica */
             totalMg: number;
             byAnesthetic: components["schemas"]["AnestheticDoseDto"][];
             /** @description Suma de las fracciones de cada máximo, en %; null sin peso */
@@ -7619,11 +7623,57 @@ export interface components {
             level: "OK" | "WARNING" | "EXCEEDED" | "NO_WEIGHT";
             alerts: components["schemas"]["DoseAlertDto"][];
         };
+        AnesthesiaDoseWindowPartDto: {
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** @description Es la evolución consultada */
+            current: boolean;
+            /** Format: uuid */
+            authorId: string;
+            /** @description Profesional que la registró */
+            authorName: string | null;
+            /** Format: uuid */
+            locationId: string | null;
+            /** @description Sede (cuentan también las de otra sede de la clínica) */
+            locationName: string | null;
+            /** Format: date-time */
+            firstAdministeredAt: string;
+            /** Format: date-time */
+            lastAdministeredAt: string;
+            carpules: number;
+            mg: number;
+            /** @description Parte del máximo que aporta, en % (redondeada: las partes pueden no sumar el total); null sin peso */
+            percent: number | null;
+        };
+        AnesthesiaDoseWindowDto: {
+            /**
+             * @description DX-418: ventana MÓVIL de 24 h alrededor de la administración, no el día civil de la sede: las dosis máximas de anestésico local son por sesión / 24 h, y con el día civil 3 carpules a las 23:30 y 3 a las 00:30 empezarían de cero.
+             * @example 24
+             */
+            hours: number;
+            /**
+             * Format: date-time
+             * @description Inicio (excluido)
+             */
+            from: string;
+            /**
+             * Format: date-time
+             * @description Fin (excluido)
+             */
+            to: string;
+            /** @description Lo ya registrado, por evolución y profesional, en orden de administración */
+            parts: components["schemas"]["AnesthesiaDoseWindowPartDto"][];
+            /** @description mg de la dosis previsualizada (sin guardar); null si no hay */
+            pendingMg: number | null;
+        };
         EntryAnesthesiaDto: {
+            /** @description Lo registrado en esta evolución */
             records: components["schemas"]["AnesthesiaAdministrationDto"][];
+            /** @description Acumulado del paciente en las últimas 24 h (DX-418) */
             summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
             ageYears: number | null;
             weightRequired: boolean;
+            window: components["schemas"]["AnesthesiaDoseWindowDto"];
         };
         AnesthesiaDoseCheckDto: {
             /**
@@ -7635,14 +7685,21 @@ export interface components {
             carpules: number;
             /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la valoración de sedación de esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
             weightKg?: number;
+            /**
+             * Format: date-time
+             * @description Hora de la administración; por defecto, ahora. No puede ser futura. Centra la ventana de 24 h del acumulado del paciente (DX-418): manda la misma al previsualizar y al guardar.
+             */
+            administeredAt?: string;
         };
         AnesthesiaCheckDto: {
+            /** @description Acumulado del paciente en la ventana de 24 h CON la dosis previsualizada */
             summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
             ageYears: number | null;
             /** @enum {string|null} */
             weightSource: "ANAMNESIS" | "ENTERED" | null;
             /** @description Menor de 12 años sin peso: hay que anotarlo */
             weightRequired: boolean;
+            window: components["schemas"]["AnesthesiaDoseWindowDto"];
         };
         RecordAnesthesiaDto: {
             /**
@@ -7654,16 +7711,16 @@ export interface components {
             carpules: number;
             /** @description Peso anotado en el sillón (kg). Sin él: el último pesado en el sillón en esta evolución; si no, el de la valoración de sedación de esta evolución; si no, el de la anamnesis vigente; si no, el ya usado en esta evolución. */
             weightKg?: number;
+            /**
+             * Format: date-time
+             * @description Hora de la administración; por defecto, ahora. No puede ser futura. Centra la ventana de 24 h del acumulado del paciente (DX-418): manda la misma al previsualizar y al guardar.
+             */
+            administeredAt?: string;
             technique: components["schemas"]["AnesthesiaTechnique"];
             /** @description Zona o dientes FDI */
             site?: string;
             /** @description Lote del carpule */
             lot?: string;
-            /**
-             * Format: date-time
-             * @description Hora de la administración; por defecto, ahora
-             */
-            administeredAt?: string;
             /** @description Motivo con el que se confirma superar la dosis máxima o un aviso de alergia. Sin él, 409. */
             overrideReason?: string;
         };
@@ -7695,6 +7752,7 @@ export interface components {
             weightKg: number | null;
             /** @enum {string|null} */
             weightSource: "ANAMNESIS" | "ENTERED" | null;
+            /** @description mg acumulados CON este registro: de la evolución con ANESTHESIA_DOSE_V1; del paciente en 24 h con ANESTHESIA_DOSE_V2 (DX-418) */
             cumulativeMg: number;
             cumulativePercent: number | null;
             safetyRulesVersion: string;
@@ -19062,7 +19120,7 @@ export interface operations {
                     "application/json": components["schemas"]["AnesthesiaCheckDto"];
                 };
             };
-            /** @description Carpules o peso inválidos */
+            /** @description Carpules, peso u hora inválidos */
             400: {
                 headers: {
                     [name: string]: unknown;

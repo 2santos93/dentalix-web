@@ -9,6 +9,7 @@ import {
   recordAnesthesia,
   type AnesthesiaCheck,
   type AnesthesiaDoseSummary,
+  type AnesthesiaDoseWindow,
   type AnestheticProduct,
   type EntryAnesthesia,
 } from '@/lib/anesthesia/anesthesia-api';
@@ -47,7 +48,7 @@ const ARTI: AnestheticProduct = {
 
 function doseSummary(overrides: Partial<AnesthesiaDoseSummary> = {}): AnesthesiaDoseSummary {
   return {
-    rulesVersion: 'ANESTHESIA_DOSE_V1',
+    rulesVersion: 'ANESTHESIA_DOSE_V2',
     weightKg: 20,
     totalMg: 0,
     byAnesthetic: [],
@@ -58,8 +59,41 @@ function doseSummary(overrides: Partial<AnesthesiaDoseSummary> = {}): Anesthesia
   };
 }
 
+function doseWindow(overrides: Partial<AnesthesiaDoseWindow> = {}): AnesthesiaDoseWindow {
+  return {
+    hours: 24,
+    from: '2026-10-29T15:00:00.000Z',
+    to: '2026-10-31T15:00:00.000Z',
+    parts: [],
+    pendingMg: null,
+    ...overrides,
+  };
+}
+
+/** Lo que el paciente recibió hoy en OTRA evolución y sede (DX-418). */
+const OTHER_ENTRY_PART: AnesthesiaDoseWindow['parts'][number] = {
+  clinicalEntryId: 'e0',
+  current: false,
+  authorId: 'u2',
+  authorName: 'Dr. Luis Pérez',
+  locationId: 'l2',
+  locationName: 'Sede Norte',
+  firstAdministeredAt: '2026-10-30T13:00:00.000Z',
+  lastAdministeredAt: '2026-10-30T13:00:00.000Z',
+  carpules: 3,
+  mg: 108,
+  percent: 77,
+};
+
 function entry(overrides: Partial<EntryAnesthesia> = {}): EntryAnesthesia {
-  return { records: [], summary: doseSummary(), ageYears: 8, weightRequired: false, ...overrides };
+  return {
+    records: [],
+    summary: doseSummary(),
+    ageYears: 8,
+    weightRequired: false,
+    window: doseWindow(),
+    ...overrides,
+  };
 }
 
 function checkResult(summary: Partial<AnesthesiaDoseSummary>, extra: Partial<AnesthesiaCheck> = {}): AnesthesiaCheck {
@@ -68,6 +102,7 @@ function checkResult(summary: Partial<AnesthesiaDoseSummary>, extra: Partial<Ane
     ageYears: 8,
     weightSource: 'ANAMNESIS',
     weightRequired: false,
+    window: doseWindow(),
     ...extra,
   };
 }
@@ -267,5 +302,72 @@ describe('AnesthesiaModal (DX-307)', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
     expect(await screen.findByText(anesthesiaCopy.noneRecorded)).toBeInTheDocument();
+  });
+
+  describe('DX-418 · acumulado del paciente en las últimas 24 h', () => {
+    it('sin anestesia en esta evolución, enseña lo que recibió hoy en otra, con profesional y sede', async () => {
+      mocked.entry.mockResolvedValue(
+        entry({
+          summary: doseSummary({ totalMg: 108, percent: 77 }),
+          window: doseWindow({ parts: [OTHER_ENTRY_PART] }),
+        }),
+      );
+      renderModal();
+      const bar = await screen.findByRole('region', { name: 'Acumulado del paciente en las últimas 24 h' });
+      expect(bar).toHaveTextContent('108 mg · 77 % del máximo');
+      const breakdown = screen.getByRole('list', { name: 'Desglose por evolución y profesional' });
+      expect(breakdown).toHaveTextContent('Otra evolución · Dr. Luis Pérez · Sede Norte');
+      expect(breakdown).toHaveTextContent('3 carp. · 108 mg (77 %)');
+    });
+
+    it('caso del criterio: 3 + 3 carpules en dos evoluciones → 154 %, bloqueo y la dosis nueva aparte', async () => {
+      const user = userEvent.setup();
+      mocked.check.mockResolvedValue(
+        checkResult(
+          {
+            totalMg: 216,
+            percent: 154,
+            level: 'EXCEEDED',
+            alerts: [
+              {
+                code: 'DOSE_OVER_MAX',
+                severity: 'BLOCKING',
+                message: 'Dosis máxima superada: 216 mg de 140 mg (154 %) para 20 kg.',
+                source: 'Malamed',
+              },
+            ],
+          },
+          { window: doseWindow({ parts: [OTHER_ENTRY_PART], pendingMg: 108 }) },
+        ),
+      );
+      renderModal();
+      await fill(user, '3');
+      expect(await screen.findByText(/216 mg de 140 mg \(154 %\)/)).toBeInTheDocument();
+      expect(screen.getByText('Esta dosis, sin guardar: 108 mg')).toBeInTheDocument();
+      expect(screen.getByText(/Dr. Luis Pérez · Sede Norte/)).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: anesthesiaCopy.confirm })).toBeInTheDocument();
+    });
+
+    it('mientras calcula, la barra dice que calcula; si falla, dice por qué y se reintenta', async () => {
+      const user = userEvent.setup();
+      let rejectFirst!: (err: Error) => void;
+      mocked.check
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectFirst = reject;
+            }),
+        )
+        .mockResolvedValue(checkResult({ totalMg: 68, percent: 49 }));
+      renderModal();
+      await fill(user, '1');
+      expect(await screen.findByText(anesthesiaCopy.checking)).toBeInTheDocument();
+      await waitFor(() => expect(mocked.check).toHaveBeenCalledTimes(1));
+      rejectFirst(new Error('red'));
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(anesthesiaCopy.checkError);
+      await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+      expect(await screen.findByText(/68 mg · 49 % del máximo/)).toBeInTheDocument();
+    });
   });
 });

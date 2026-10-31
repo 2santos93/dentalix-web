@@ -21,6 +21,7 @@ import {
   TECHNIQUE_LABELS,
   formatDecimal,
   listPatientAnesthesia,
+  PATIENT_WINDOW_RULES_VERSION,
   type AnesthesiaAdministration,
 } from '@/lib/anesthesia/anesthesia-api';
 import { sedeTime } from '@/lib/locations/sede-clock';
@@ -67,10 +68,12 @@ const copy = {
   anesthesiaLabel: (entryDate: string) => `Anestesia local de la evolución del ${entryDate}`,
   anesthesiaLine: (r: AnesthesiaAdministration) =>
     `${r.anestheticName} · ${formatDecimal(r.carpules)} carp. · ${formatDecimal(r.doseMg)} mg · ${TECHNIQUE_LABELS[r.technique]}${r.site ? ` · ${r.site}` : ''}${r.lot ? ` · Lote ${r.lot}` : ''}`,
-  anesthesiaTotal: (mg: number, percent: number | null) =>
-    percent === null
-      ? `Acumulado ${formatDecimal(mg)} mg · dosis máxima no calculada: falta el peso`
-      : `Acumulado ${formatDecimal(mg)} mg · ${percent} % del máximo`,
+  // DX-418: desde las reglas V2 el acumulado sellado es del paciente en 24 h
+  // (todas sus evoluciones); en V1 era solo de la evolución.
+  anesthesiaTotal: (mg: number, percent: number | null, rulesVersion: string) =>
+    `${rulesVersion === PATIENT_WINDOW_RULES_VERSION ? 'Acumulado del paciente en 24 h:' : 'Acumulado'} ${formatDecimal(mg)} mg · ${
+      percent === null ? 'dosis máxima no calculada: falta el peso' : `${percent} % del máximo`
+    }`,
   anesthesiaOverride: 'Confirmado con motivo:',
   anesthesiaLoadError:
     'No pudimos cargar la anestesia registrada en las evoluciones. Ábrela con «Anestesia» en cada evolución o reintenta.',
@@ -316,7 +319,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
           ))}
         </ul>
         <p className="text-xs tabular-nums text-muted">
-          {copy.anesthesiaTotal(last.cumulativeMg, last.cumulativePercent)}
+          {copy.anesthesiaTotal(last.cumulativeMg, last.cumulativePercent, last.safetyRulesVersion)}
         </p>
       </div>
     );

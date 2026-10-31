@@ -3,8 +3,11 @@ import type { components } from '@/lib/api/schema';
 
 /**
  * Anestesia local en la evolución (DX-307). El SERVIDOR calcula los mg, el
- * acumulado de la evolución y la fracción de la dosis máxima por peso; la web
- * solo lo enseña. Los registros son inalterables (corrección por adenda).
+ * acumulado y la fracción de la dosis máxima por peso; la web solo lo enseña.
+ * Los registros son inalterables (corrección por adenda).
+ *
+ * DX-418: el acumulado es del PACIENTE en una ventana móvil de 24 h (todas
+ * sus evoluciones y sedes de la clínica), con el desglose en `window`.
  */
 export type AnestheticProduct = components['schemas']['AnestheticProductDto'];
 export type AnesthesiaTechnique = components['schemas']['AnesthesiaTechnique'];
@@ -14,8 +17,13 @@ export type AnesthesiaDoseSummary = components['schemas']['AnesthesiaDoseSummary
 export type AnesthesiaCheck = components['schemas']['AnesthesiaCheckDto'];
 export type EntryAnesthesia = components['schemas']['EntryAnesthesiaDto'];
 export type DoseAlert = components['schemas']['DoseAlertDto'];
+export type AnesthesiaDoseWindow = components['schemas']['AnesthesiaDoseWindowDto'];
+export type AnesthesiaDoseWindowPart = components['schemas']['AnesthesiaDoseWindowPartDto'];
 export type RecordAnesthesiaInput = components['schemas']['RecordAnesthesiaDto'];
 export type AnesthesiaDoseCheckInput = components['schemas']['AnesthesiaDoseCheckDto'];
+
+/** Versión de las reglas desde la que el acumulado es del paciente en 24 h (DX-418). */
+export const PATIENT_WINDOW_RULES_VERSION = 'ANESTHESIA_DOSE_V2';
 
 /** Topes que repite la API. */
 export const OVERRIDE_REASON_MIN = 10;
