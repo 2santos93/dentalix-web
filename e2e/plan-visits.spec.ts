@@ -249,6 +249,10 @@ async function readableText(scope: Locator) {
         (e) =>
           e.checkVisibility() &&
           !e.closest(":disabled,[aria-disabled=true]") &&
+          // Una casilla (`Checkbox` UX v2) no tiene texto: su \`color\` no
+          // pinta nada (la caja la dibuja el primitivo, con borde
+          // \`border-input\` ≥ 3:1). Solo se mide el texto.
+          !e.matches('input[type="checkbox"],input[type="radio"]') &&
           (e.matches("input,select") ||
             [...e.childNodes].some(
               (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim(),

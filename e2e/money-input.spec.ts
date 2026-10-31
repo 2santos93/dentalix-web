@@ -159,9 +159,12 @@ for (const v of viewports) {
     await payment.getByLabel('Método').selectOption({ label: 'Efectivo' });
     await payment.getByRole('button', { name: 'Registrar abono' }).click();
     await expect(payment).toBeHidden({ timeout: 10_000 });
-    await expect(panel.getByRole('button', { name: /^Anular abono de 150\.000,00\sCOP/ })).toBeVisible({
-      timeout: 15_000,
-    });
+    // UX v2: el movimiento nuevo, con «Anular» en su «⋯».
+    const actions = panel.getByRole('button', { name: /^Acciones de abono de 150\.000,00\sCOP/ });
+    await expect(actions).toBeVisible({ timeout: 15_000 });
+    await actions.click();
+    await expect(page.getByRole('menuitem', { name: 'Anular' })).toBeVisible();
+    await page.keyboard.press('Escape');
     // El compromiso en USD sigue abierto: el abono fue en otra moneda.
     await expect(block.getByTestId('promise-row').getByText('Abierto')).toBeVisible();
     await expectNoHorizontalScroll(page);

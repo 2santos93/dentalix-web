@@ -100,19 +100,19 @@ export function PlanOptionsPanel({
       {mayPresent || mayReject || mayBranch ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           {mayPresent ? (
-            <Button type="button" variant="outline" onClick={handlePresent} loading={presenting}>
+            <Button type="button" variant="secondary" onClick={handlePresent} loading={presenting}>
               <Presentation aria-hidden />
               {presenting ? copy.presenting : copy.present}
             </Button>
           ) : null}
           {mayReject ? (
-            <Button type="button" variant="outline" onClick={() => setRejecting(true)}>
+            <Button type="button" variant="secondary" onClick={() => setRejecting(true)}>
               <XCircle aria-hidden />
               {copy.reject}
             </Button>
           ) : null}
           {mayBranch ? (
-            <Button type="button" variant="outline" onClick={() => setCreating(true)}>
+            <Button type="button" variant="secondary" onClick={() => setCreating(true)}>
               <CopyPlus aria-hidden />
               {copy.createAlternative}
             </Button>

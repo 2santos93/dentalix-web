@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
+import { dataList } from './support/data-list';
 
 /**
  * e2e (DX-049 · SEC-013): anular un abono exige motivo y deja rastro.
@@ -79,8 +80,10 @@ for (const viewport of [
     await expect(panel.getByRole('heading', { name: 'Detalle del plan' })).toBeVisible({
       timeout: 15_000,
     });
-    await panel.getByRole('button', { name: /^Abonos y saldo\s+\d+ abonos?$/ }).click();
-    await panel.getByRole('button', { name: 'Anular' }).locator('visible=true').first().click();
+    await panel.getByRole('button', { name: /^Abonos registrados\s+\d+ abonos?$/ }).click();
+    // UX v2: «Anular» vive en el «⋯» de la fila del abono.
+    await panel.getByRole('button', { name: /^Acciones de abono/ }).first().click();
+    await page.getByRole('menuitem', { name: 'Anular' }).click();
 
     const dialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
     await expect(dialog).toBeVisible();
@@ -102,7 +105,7 @@ for (const viewport of [
     // Estado de cuenta: el anulado con su autor y motivo.
     await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
     const statement = page.locator('#tabpanel-account-statement');
-    const movements = statement.getByRole('table', { name: 'Movimientos (abonos)' });
+    const movements = dataList(statement, 'Movimientos (abonos)');
     await expect(movements).toContainText(`Anulado por ${adminName}: ${REASON}`, {
       timeout: 10_000,
     });

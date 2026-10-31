@@ -10,12 +10,11 @@ import { locationTimeZone } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { attendsAt, attributionInstant, isAttendingRole } from '@/lib/treatment-plans/item-attribution';
-import { Input } from '@/components/ui/input';
 import { FormModal } from '@/components/shared/form-modal';
 import { FieldError } from '@/components/errors/field-error';
 import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { DatePicker } from '@/components/ui/date-picker';
 
 const copy = {
   doneTitle: 'Marcar como realizado',
@@ -226,13 +225,14 @@ export function MarkDoneModal({
       submitDisabled={staff === null || staff.length === 0 || unchanged}
       error={error}
     >
-      <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-ink">{subject}</p>
+      <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm font-medium text-ink">{subject}</p>
       {attribute ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-1.5">
             <Label htmlFor={locationSelectId}>{copy.locationLabel}</Label>
-            <select
+            <NativeSelect
               id={locationSelectId}
+              selectClassName="max-md:h-11"
               value={locationId}
               disabled={submitting}
               aria-required
@@ -247,7 +247,6 @@ export function MarkDoneModal({
                 );
                 if (!stillThere) setPerformerId('');
               }}
-              className={cn(fieldClass, 'h-11 md:h-10', error === copy.locationRequired && 'border-danger')}
             >
               <option value="" disabled>
                 {copy.locationPlaceholder}
@@ -257,10 +256,12 @@ export function MarkDoneModal({
                   {l.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
-            <Label htmlFor={dateId}>{copy.dateLabel}</Label>
+            <Label id={`${dateId}-label`} htmlFor={dateId}>
+              {copy.dateLabel}
+            </Label>
             {zoneMissing ? (
               <SedeConfigError
                 kind="timeZone"
@@ -270,19 +271,19 @@ export function MarkDoneModal({
                 className="h-11 md:h-10"
               />
             ) : (
-              <Input
+              <DatePicker
                 id={dateId}
-                type="date"
-                value={day}
+                name={dateId}
+                value={day || null}
                 max={today ?? undefined}
                 disabled={submitting}
-                aria-required
-                aria-invalid={error === copy.dateRequired || undefined}
-                onChange={(e) => {
-                  setDay(e.target.value);
+                required
+                aria-labelledby={`${dateId}-label`}
+                isInvalid={error === copy.dateRequired}
+                onChange={(next) => {
+                  setDay(next ?? '');
                   setError(null);
                 }}
-                className={cn('h-11 tabular-nums md:h-10', error === copy.dateRequired && 'border-danger')}
               />
             )}
           </div>
@@ -301,8 +302,9 @@ export function MarkDoneModal({
             {copy.empty}
           </p>
         ) : (
-          <select
+          <NativeSelect
             id={selectId}
+            selectClassName="max-md:h-11"
             value={performerId}
             disabled={submitting}
             aria-required
@@ -311,7 +313,6 @@ export function MarkDoneModal({
               setPerformerId(e.target.value);
               setError(null);
             }}
-            className={cn(fieldClass, 'h-11 md:h-10', error === copy.performerRequired && 'border-danger')}
           >
             <option value="" disabled>
               {copy.performerPlaceholder}
@@ -321,7 +322,7 @@ export function MarkDoneModal({
                 {member.fullName}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         )}
       </div>
       {mode === 'done' && (locationName || activeLocationId === null) ? (

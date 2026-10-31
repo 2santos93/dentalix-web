@@ -18,6 +18,26 @@ import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { clinicLocation } from '@/lib/test/locations';
 
+
+/** UX v2: Recibo y Anular viven en el «⋯» de cada fila («Acciones de abono de …»). */
+async function pickRowAction(
+  user: ReturnType<typeof userEvent.setup>,
+  patient: RegExp,
+  item: string,
+  scope: HTMLElement = document.body,
+): Promise<void> {
+  await user.click(await within(scope).findByRole('button', { name: new RegExp(`acciones de abono de ${patient.source}`, 'i') }));
+  await user.click(await screen.findByRole('menuitem', { name: item }));
+}
+
+/** Los elementos del menú «⋯» de una fila, abierto y cerrado con Escape. */
+async function rowMenuItems(user: ReturnType<typeof userEvent.setup>, row: HTMLElement): Promise<string[]> {
+  await user.click(within(row).getByRole('button', { name: /^acciones de abono de/i }));
+  const items = (await screen.findAllByRole('menuitem')).map((i) => i.textContent ?? '');
+  await user.keyboard('{Escape}');
+  return items;
+}
+
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
   getPaymentReceipt: jest.fn(),
@@ -339,11 +359,19 @@ it('la tabla lleva caption y cabeceras de columna', async () => {
   render(<CashRegisterView token="tok" />);
 
   const table = await screen.findByRole('table', { name: /abonos/i });
-  expect(table.querySelector('caption')).toHaveTextContent(/abonos del período/i);
+  // `DataList`: la tabla se nombra con `aria-label` (sin `<caption>` duplicado).
+  expect(table).toHaveAccessibleName('Abonos del período');
   const headers = within(table).getAllByRole('columnheader');
-  // 6 columnas de datos + «Acciones» (solo existe si alguna fila es anulable).
-  expect(headers).toHaveLength(7);
-  headers.forEach((th) => expect(th).toHaveAttribute('scope', 'col'));
+  // 6 columnas de datos + «Acciones» (el «⋯» de cada fila: Recibo siempre).
+  expect(headers.map((th) => th.textContent)).toEqual([
+    'Fecha',
+    'Paciente',
+    'Destino',
+    'Método',
+    'Sede',
+    'Monto',
+    'Acciones',
+  ]);
 });
 
 it('cambiar de período o de método vuelve a pedir la caja con el filtro nuevo, desde la página 1', async () => {
@@ -465,13 +493,17 @@ it('el rango personalizado pide las fechas elegidas y no consulta un rango inver
   await screen.findByRole('table', { name: /abonos/i });
 
   await user.click(screen.getByRole('button', { name: 'Personalizado' }));
-  const from = screen.getByLabelText('Desde');
-  const to = screen.getByLabelText('Hasta');
+  // `DateRangePicker` (UX v2): «Desde – Hasta» en un solo campo, por segmentos
+  // dd/mm/aaaa; los tres primeros son «Desde» y los tres últimos «Hasta».
+  const period = screen.getByRole('group', { name: 'Período personalizado' });
+  const segments = () => within(period).getAllByRole('spinbutton');
+  async function typeEnd(part: 'from' | 'to', ddmmyyyy: string) {
+    await user.click(segments()[part === 'from' ? 0 : 3]);
+    await user.keyboard(ddmmyyyy);
+  }
 
-  await user.clear(from);
-  await user.type(from, '2026-09-01');
-  await user.clear(to);
-  await user.type(to, '2026-09-30');
+  await typeEnd('from', '01092026');
+  await typeEnd('to', '30092026');
   await waitFor(() =>
     expect(mockedList).toHaveBeenLastCalledWith('tok', {
       from: '2026-09-01',
@@ -482,16 +514,16 @@ it('el rango personalizado pide las fechas elegidas y no consulta un rango inver
 
   await screen.findByRole('table', { name: /abonos/i });
   const calls = mockedList.mock.calls.length;
-  await user.clear(from);
-  await user.type(from, '2026-10-05');
+  // Solo el mes de «Desde» (01/09 → 01/10): queda después de «Hasta».
+  await user.click(segments()[1]);
+  await user.keyboard('{ArrowUp}');
   const error = await screen.findByText(/la fecha final no puede ser anterior/i);
   expect(mockedList).toHaveBeenCalledTimes(calls);
 
-  // Los dos campos apuntan al mensaje que los explica.
+  // El campo apunta al mensaje que lo explica.
   const errorId = error.closest('[id]')?.id;
   expect(errorId).toBeTruthy();
-  expect(from).toHaveAttribute('aria-describedby', errorId);
-  expect(to).toHaveAttribute('aria-describedby', errorId);
+  expect(document.querySelector(`[aria-describedby~="${errorId}"]`)).not.toBeNull();
 
   // Y no se queda en pantalla el resultado de OTRO rango (el de septiembre)
   // como si respondiera al que está escrito.
@@ -500,8 +532,10 @@ it('el rango personalizado pide las fechas elegidas y no consulta un rango inver
   expect(screen.queryByText(/^\d+ abonos?$/)).not.toBeInTheDocument();
 
   // Al corregirlo vuelve a pedir y a pintar.
-  await user.clear(from);
-  await user.type(from, '2026-09-10');
+  await user.click(segments()[1]);
+  await user.keyboard('{ArrowDown}');
+  await user.click(segments()[0]);
+  await user.keyboard('10');
   await waitFor(() =>
     expect(mockedList).toHaveBeenLastCalledWith('tok', {
       from: '2026-09-10',
@@ -538,13 +572,9 @@ it('cada fila abre el recibo de caja de su abono (DX-136)', async () => {
   const table = await screen.findByRole('table', { name: /abonos/i });
   const beto = within(table).getByRole('row', { name: /beto ruiz/i });
   // También en las filas que no se pueden anular.
-  expect(
-    within(beto).getByRole('button', {
-      name: /recibo del abono de beto ruiz/i,
-    }),
-  ).toBeInTheDocument();
+  expect(await rowMenuItems(user, beto)).toContain('Recibo');
   const ana = within(table).getByRole('row', { name: /ana gómez/i });
-  await user.click(within(ana).getByRole('button', { name: /recibo del abono de ana gómez/i }));
+  await pickRowAction(user, /ana gómez/, 'Recibo', ana);
 
   const dialog = await screen.findByRole('dialog', { name: /recibo de caja/i });
   expect(await within(dialog).findByTestId('receipt-document')).toHaveTextContent('N.º PRI-000009');
@@ -555,16 +585,15 @@ describe('anular desde la caja (DX-057)', () => {
   const REASON = 'Cobro registrado dos veces';
 
   it('enseña «Anular» solo en las filas que el servidor marca canVoid', async () => {
+    const user = userEvent.setup();
     mockedList.mockResolvedValue(response());
     render(<CashRegisterView token="tok" />);
     const table = await screen.findByRole('table', { name: /abonos/i });
 
     const ana = within(table).getByRole('row', { name: /ana gómez/i });
-    expect(
-      within(ana).getByRole('button', { name: /anular abono de ana gómez/i }),
-    ).toBeInTheDocument();
+    expect(await rowMenuItems(user, ana)).toEqual(['Recibo', 'Anular']);
     const beto = within(table).getByRole('row', { name: /beto ruiz/i });
-    expect(within(beto).queryByRole('button', { name: /anular/i })).not.toBeInTheDocument();
+    expect(await rowMenuItems(user, beto)).toEqual(['Recibo']);
   });
 
   it('revisión DX-390: una forma de pago de un cobro dividido avisa que se anula el cobro entero', async () => {
@@ -573,7 +602,7 @@ describe('anular desde la caja (DX-057)', () => {
       response({ items: [{ ...anaCash, splitId: 'pay-1', splitLines: 2 }], total: 1 }),
     );
     render(<CashRegisterView token="tok" />);
-    await user.click(await screen.findByRole('button', { name: /anular abono de ana gómez/i }));
+    await pickRowAction(user, /ana gómez/, 'Anular');
     const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
     expect(dialog).toHaveTextContent(
       'Es una de las 2 formas de pago de un mismo cobro: se anulan todas y su recibo.',
@@ -599,7 +628,7 @@ describe('anular desde la caja (DX-057)', () => {
     mockedVoid.mockResolvedValue(undefined);
     render(<CashRegisterView token="tok" />);
 
-    await user.click(await screen.findByRole('button', { name: /anular abono de ana gómez/i }));
+    await pickRowAction(user, /ana gómez/, 'Anular');
     const dialog = await screen.findByRole('dialog', {
       name: /anular este abono/i,
     });
@@ -627,7 +656,7 @@ describe('anular desde la caja (DX-057)', () => {
     mockedVoid.mockRejectedValueOnce(new ApiError(404, 'Payment not found'));
     render(<CashRegisterView token="tok" />);
 
-    await user.click(await screen.findByRole('button', { name: /anular abono de ana gómez/i }));
+    await pickRowAction(user, /ana gómez/, 'Anular');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByLabelText(/motivo/i));
     await user.paste(REASON);
@@ -674,11 +703,7 @@ describe('tras anular, la caja no se queda en una página vacía (DX-067)', () =
     render(<CashRegisterView token="tok" />);
 
     await user.click(await screen.findByRole('button', { name: /siguiente/i }));
-    await user.click(
-      await screen.findByRole('button', {
-        name: /anular abono de zoe última/i,
-      }),
-    );
+    await pickRowAction(user, /zoe última/, 'Anular');
     const dialog = await screen.findByRole('dialog', {
       name: /anular este abono/i,
     });
@@ -732,6 +757,7 @@ describe('tras anular, la caja no se queda en una página vacía (DX-067)', () =
 
 describe('fecha de pago vs. fecha de registro (DX-067)', () => {
   it('dice «Registrado hoy» cuando el abono con fecha antigua se registró hoy', async () => {
+    const user = userEvent.setup();
     mockedList.mockResolvedValue(
       response({
         items: [
@@ -747,7 +773,7 @@ describe('fecha de pago vs. fecha de registro (DX-067)', () => {
     expect(within(ana).getByText('01/10/2026')).toBeInTheDocument();
     expect(within(ana).getByText('Registrado hoy')).toBeInTheDocument();
     // «Anular» sigue: la ventana mira el registro, y ahora se lee por qué.
-    expect(within(ana).getByRole('button', { name: /anular/i })).toBeInTheDocument();
+    expect(await rowMenuItems(user, ana)).toContain('Anular');
 
     const beto = within(table).getByRole('row', { name: /beto ruiz/i });
     expect(within(beto).getByText('Registrado el 12/10/2026')).toBeInTheDocument();
@@ -783,7 +809,7 @@ describe('días de la sede (DX-097)', () => {
     );
     expect(mockedList).toHaveBeenCalledTimes(1);
     expect(await screen.findByTestId('cash-period-note')).toHaveTextContent(
-      '15/10/2026 · días en hora de Bogotá',
+      '15/10/2026 · días según la hora de la sede',
     );
   });
 

@@ -8,6 +8,7 @@ import { atSede, sedeDate, sedeDayFromToday, sedeTime } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
 import { E2E_BROWSER_LOCALE, E2E_REGION } from './support/regional';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (DX-089): personal restringido a sedes.
@@ -256,10 +257,10 @@ for (const viewport of VIEWPORTS) {
 
       // Caja: solo el abono de Norte.
       await rec.goto(`${origin}/caja`);
-      const cash = rec.getByRole('table', { name: 'Abonos del período' });
+      const cash = dataList(rec, 'Abonos del período');
       await expect(cash).toBeVisible({ timeout: 15_000 });
-      await expect(cash.getByRole('row').filter({ hasText: northName })).toContainText(figure(41_000));
-      await expect(cash.getByRole('row').filter({ hasText: centerName })).toHaveCount(0);
+      await expect(dataListRows(cash).filter({ hasText: northName })).toContainText(figure(41_000));
+      await expect(dataListRows(cash).filter({ hasText: centerName })).toHaveCount(0);
 
       // La ficha del paciente de la OTRA sede se abre: los pacientes son de la clínica.
       await rec.goto(`${origin}/patients/${centerPatient.id}`);

@@ -266,7 +266,7 @@ export function SplitPaymentSummary({
     <section
       data-testid="split-summary"
       aria-label={copy.summaryTitle(planCurrency)}
-      className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink"
+      className="flex flex-col gap-2 rounded-lg border border-border bg-surface-sunken px-3 py-2 text-sm text-ink"
     >
       <p className="t-label text-muted">{copy.summaryTitle(planCurrency)}</p>
       <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-3">
@@ -329,7 +329,7 @@ export function SplitPaymentSummary({
               label={copy.confirmCredit}
             />
             {confirmError ? (
-              <InlineError id="rp-confirm-credit-error" className="text-xs">
+              <InlineError id="rp-confirm-credit-error">
                 {confirmError}
               </InlineError>
             ) : null}

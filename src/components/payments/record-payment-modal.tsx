@@ -18,7 +18,8 @@ import { recordPaymentErrorMessage } from '@/lib/payments/payment-errors';
 import { statementCopy } from '@/lib/account-statement/presentation';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
@@ -90,11 +91,6 @@ const CONFIRM_CREDIT_ID = 'rp-confirm-credit';
 
 /** Valor del selector de destino de un saldo migrado. */
 const OPENING_PREFIX = 'ob:';
-
-// <select> nativo con el aspecto del átomo Input (misma cadena que el resto de
-// formularios de pagos).
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface FormState {
   /**
@@ -520,7 +516,7 @@ export function RecordPaymentModal({
 
       {openings.length > 0 ? (
         <FormField htmlFor="rp-target" label={copy.target}>
-          <select
+          <NativeSelect
             id="rp-target"
             value={targetValue}
             disabled={submitting}
@@ -531,7 +527,6 @@ export function RecordPaymentModal({
               patch({ target: e.target.value });
             }}
             aria-describedby={opening ? 'rp-target-hint' : undefined}
-            className={fieldClass}
           >
             {!noPlans ? <option value="">{copy.targetPlan}</option> : null}
             {openings.map((o) => (
@@ -539,9 +534,9 @@ export function RecordPaymentModal({
                 {copy.targetOpening(o.concept, money(o.pending, o.currency))}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           {opening ? (
-            <p id="rp-target-hint" className="mt-1 text-xs text-muted tabular-nums">
+            <p id="rp-target-hint" className="t-caption mt-1 text-muted tabular-nums">
               {copy.openingPending(money(opening.pending, opening.currency))}
             </p>
           ) : null}
@@ -627,16 +622,15 @@ export function RecordPaymentModal({
                     {zone.status === 'error' && !dateTouched ? (
                       <SedeConfigError kind="timeZone" variant="field" retryId="rp-date" onRetry={zone.retry} />
                     ) : (
-                      <Input
+                      <DatePicker
                         id="rp-date"
-                        type="date"
-                        value={form.date}
+                        name="rp-date"
+                        value={form.date || null}
                         disabled={submitting}
-                        onChange={(e) => {
+                        onChange={(next) => {
                           setDateTouched(true);
-                          patch({ date: e.target.value });
+                          patch({ date: next ?? '' });
                         }}
-                        className="tabular-nums"
                       />
                     )}
                   </FormField>
@@ -667,7 +661,7 @@ export function RecordPaymentModal({
                   <Button
                     id="rp-add-line"
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => {
                       split.add();
                       pendingFocus.current = `rp-line-${split.lines.length + 2}-amount`;
@@ -679,7 +673,7 @@ export function RecordPaymentModal({
                     {copy.split.addLine}
                   </Button>
                 ) : (
-                  <p className="text-xs text-muted">{copy.split.maxLines(SPLIT_MAX_LINES)}</p>
+                  <p className="t-caption text-muted">{copy.split.maxLines(SPLIT_MAX_LINES)}</p>
                 )
               ) : null}
               {isSplit && plan && splitTotal ? (

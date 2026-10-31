@@ -5,6 +5,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
+import { dataList, dataListRows, rowAction } from './support/data-list';
 
 /**
  * e2e (DX-327): tipos de documento genéricos, nombre libre del paciente y
@@ -109,9 +110,10 @@ async function payOnce(request: APIRequestContext, patientId: string, amount: nu
 /** Abre el estado de cuenta del paciente y el recibo del abono de `amount`. */
 async function openReceipt(page: Page, patientId: string, amount: number): Promise<Locator> {
   await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
-  const table = page.locator('#tabpanel-account-statement').getByRole('table', { name: /movimientos/i });
+  // UX v2: «Recibo» vive en el «⋯» del movimiento (tabla o tarjeta).
+  const table = dataList(page.locator('#tabpanel-account-statement'), /movimientos/i);
   await expect(table).toBeVisible({ timeout: 15_000 });
-  await table.getByRole('row').filter({ hasText: figure(amount) }).getByRole('button', { name: /Recibo del abono/ }).click();
+  await rowAction(page, dataListRows(table).filter({ hasText: figure(amount) }), 'Recibo');
   const dialog = page.getByRole('dialog', { name: 'Recibo de caja' });
   await expect(dialog.getByTestId('receipt-document')).toBeVisible({ timeout: 15_000 });
   return dialog;

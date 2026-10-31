@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 import { openPatientTab } from './support/patient-tabs';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (DX-011): abrir la ficha → pestaña «Estado de cuenta» → «Imprimir».
@@ -141,8 +142,9 @@ test('estado de cuenta: ficha → pestaña → imprimir muestra un documento lim
   await expect(summary.getByTestId('paid')).toContainText(money(300));
   await expect(summary.getByTestId('balance')).toContainText(money(700));
 
-  const movements = panel.getByRole('table', { name: 'Movimientos (abonos)' });
-  await expect(movements.getByRole('row')).toHaveCount(3);
+  // UX v2: tabla desde 640 px, tarjetas en el teléfono (`DataList`). Dos abonos.
+  const movements = dataList(panel, 'Movimientos (abonos)');
+  await expect(dataListRows(movements).filter({ hasText: /\d{2}\/\d{2}\/\d{4}/ })).toHaveCount(2);
   await expect(movements).toContainText('Anulado por Test User: Cobro duplicado');
 
   // --- «Imprimir» → vista imprimible en otra pestaña ---
