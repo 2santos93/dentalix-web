@@ -1,15 +1,19 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { FileSignature, Send } from 'lucide-react';
+import { Download, FileSignature, RotateCcw, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { notifyError } from '@/components/errors/notify';
+import { startDownload } from '@/lib/patient-documents/download';
+import { getPatientDocumentUrl } from '@/lib/patient-documents/patient-documents-api';
 import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { useSedeClock, type SedeClock } from '@/lib/locations/sede-clock';
 import {
   canRevokeSignatureRequest,
   signatureStatusLabel,
   listSignatureRequests,
+  retrySignedConsentPdf,
   revokeSignatureRequest,
   type SignatureRequest,
   type SignatureRequestCreated,
@@ -62,6 +66,15 @@ const copy = {
   sentToast: (to: string) => `Enlace enviado a ${to}.`,
   notQueued:
     'La solicitud quedó registrada, pero el email no salió. Anúlala y envíala de nuevo.',
+  // DX-422: el PDF firmado que genera la API al quedar completo.
+  pdfReady: 'PDF firmado archivado en Documentos del paciente.',
+  pdfPending: 'Generando el PDF firmado: aparecerá aquí y en Documentos del paciente.',
+  pdfFailed: 'No pudimos generar el PDF firmado tras varios intentos.',
+  downloadPdf: 'Descargar PDF',
+  retryPdf: 'Reintentar PDF',
+  pdfFor: (title: string) => ` de ${title}`,
+  downloadPdfError: 'No pudimos descargar el PDF firmado. Intenta de nuevo.',
+  retryPdfError: 'No pudimos volver a generar el PDF firmado. Intenta de nuevo.',
 };
 
 // Variantes de Badge (DESIGN.md · Chips): en curso con borde, esperando al
@@ -111,6 +124,38 @@ function evidence(r: SignatureRequest, clock: SedeClock | null, userId: string |
   return lines;
 }
 
+/**
+ * DX-422: dónde está el PDF firmado de un envío completo. «Generando» es un
+ * estado vivo (role=status) para los lectores de pantalla; el fallo, en el
+ * color de peligro con el botón «Reintentar PDF» al lado.
+ */
+/** B1: mientras algún PDF se genera, se relee la lista cada 5 s, como mucho ~2 min. */
+const PDF_POLL_MS = 5_000;
+const PDF_POLL_MAX = 24;
+
+function hasPendingPdf(rows: readonly SignatureRequest[]): boolean {
+  return rows.some((r) => r.status === 'COMPLETE' && r.signedPdfStatus === 'PENDING');
+}
+
+function SignedPdfStatusLine({ status }: { status: SignatureRequest['signedPdfStatus'] }) {
+  if (status === 'READY') return <p className="text-sm text-muted">{copy.pdfReady}</p>;
+  if (status === 'PENDING') {
+    return (
+      <p role="status" className="text-sm text-muted">
+        {copy.pdfPending}
+      </p>
+    );
+  }
+  if (status === 'FAILED') {
+    return (
+      <p role="alert" className="text-sm text-danger">
+        {copy.pdfFailed}
+      </p>
+    );
+  }
+  return null;
+}
+
 interface PatientSignatureRequestsSectionProps {
   token: string;
   patientId: string;
@@ -148,6 +193,8 @@ export function PatientSignatureRequestsSection({
   const sendRef = useRef<HTMLButtonElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
+  const [pdfBusy, setPdfBusy] = useState<ReadonlySet<string>>(new Set());
+  const [pollKey, setPollKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,6 +215,39 @@ export function PatientSignatureRequestsSection({
     };
   }, [token, patientId, reloadKey, refreshKey]);
 
+  // B1: mientras haya un PDF «Generando», relee la lista cada 5 s (en pausa
+  // con la pestaña oculta, sin contar) hasta ~2 min; un reintento reinicia la cuenta.
+  const pendingPdf = hasPendingPdf(rows);
+  useEffect(() => {
+    if (!pendingPdf) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let polls = 0;
+    const tick = () => {
+      if (cancelled) return;
+      if (document.visibilityState === 'hidden') {
+        timer = setTimeout(tick, PDF_POLL_MS);
+        return;
+      }
+      polls += 1;
+      listSignatureRequests(token, patientId)
+        .then((data) => {
+          if (!cancelled) setRows(data);
+        })
+        .catch(() => {
+          // Silencioso: la lista que se ve sigue valiendo; se reintenta al siguiente tick.
+        })
+        .finally(() => {
+          if (!cancelled && polls < PDF_POLL_MAX) timer = setTimeout(tick, PDF_POLL_MS);
+        });
+    };
+    timer = setTimeout(tick, PDF_POLL_MS);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [pendingPdf, token, patientId, pollKey]);
+
   async function handleRevoke(id: string) {
     setRevoking(true);
     setRevokeError(null);
@@ -182,6 +262,45 @@ export function PatientSignatureRequestsSection({
       setRevokeError(apiErrorMessage(err, copy.revokeError));
     } finally {
       setRevoking(false);
+    }
+  }
+
+  function setBusy(id: string, busy: boolean) {
+    setPdfBusy((prev) => {
+      const next = new Set(prev);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  /** DX-422: el PDF archivado se descarga como cualquier documento (URL firmada, auditada). */
+  async function handleDownloadPdf(r: SignatureRequest) {
+    if (!r.signedPdfDocumentId) return;
+    setBusy(r.id, true);
+    try {
+      const { url } = await getPatientDocumentUrl(token, patientId, r.signedPdfDocumentId, 'attachment');
+      startDownload(url);
+    } catch (err) {
+      notifyError(apiErrorMessage(err, copy.downloadPdfError), { onRetry: () => void handleDownloadPdf(r) });
+    } finally {
+      setBusy(r.id, false);
+    }
+  }
+
+  async function handleRetryPdf(r: SignatureRequest) {
+    if (!r.consentId) return;
+    setBusy(r.id, true);
+    try {
+      await retrySignedConsentPdf(token, patientId, r.consentId);
+      setRows((current) =>
+        current.map((row) => (row.id === r.id ? { ...row, signedPdfStatus: 'PENDING' } : row)),
+      );
+      setPollKey((k) => k + 1);
+    } catch (err) {
+      notifyError(apiErrorMessage(err, copy.retryPdfError), { onRetry: () => void handleRetryPdf(r) });
+    } finally {
+      setBusy(r.id, false);
     }
   }
 
@@ -263,7 +382,38 @@ export function PatientSignatureRequestsSection({
                     </li>
                   ))}
                 </ul>
+                <SignedPdfStatusLine status={r.status === 'COMPLETE' ? r.signedPdfStatus : null} />
               </div>
+              {r.status === 'COMPLETE' && r.signedPdfStatus === 'READY' && r.signedPdfDocumentId ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-11 shrink-0 sm:min-h-9"
+                  loading={pdfBusy.has(r.id)}
+                  disabled={pdfBusy.has(r.id)}
+                  onClick={() => void handleDownloadPdf(r)}
+                >
+                  <Download aria-hidden />
+                  {copy.downloadPdf}
+                  <span className="sr-only">{copy.pdfFor(r.title)}</span>
+                </Button>
+              ) : null}
+              {r.status === 'COMPLETE' && r.signedPdfStatus === 'FAILED' && r.consentId ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-11 shrink-0 sm:min-h-9"
+                  loading={pdfBusy.has(r.id)}
+                  disabled={pdfBusy.has(r.id)}
+                  onClick={() => void handleRetryPdf(r)}
+                >
+                  <RotateCcw aria-hidden />
+                  {copy.retryPdf}
+                  <span className="sr-only">{copy.pdfFor(r.title)}</span>
+                </Button>
+              ) : null}
               {canRevokeSignatureRequest(r.status) ? (
                 <Button
                   type="button"

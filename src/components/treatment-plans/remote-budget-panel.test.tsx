@@ -95,6 +95,8 @@ function budgetRequest(overrides: Partial<SignatureRequest> = {}): SignatureRequ
     signedIpAddress: null,
     budgetAcceptanceId: null,
     countersignedAt: null,
+    signedPdfStatus: null,
+    signedPdfDocumentId: null,
     ...overrides,
   };
 }

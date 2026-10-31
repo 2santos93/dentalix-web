@@ -1,12 +1,15 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'sonner';
 import { PatientSignatureRequestsSection } from './patient-signature-requests-section';
 import { ApiError } from '@/lib/api/api-error';
 import {
   listSignatureRequests,
+  retrySignedConsentPdf,
   revokeSignatureRequest,
   type SignatureRequest,
 } from '@/lib/signature-requests/signature-requests-api';
+import { getPatientDocumentUrl } from '@/lib/patient-documents/patient-documents-api';
+import { startDownload } from '@/lib/patient-documents/download';
 import { setupUser } from '@/lib/test/user';
 import { caracasSede } from '@/lib/test/sede-clock';
 
@@ -15,8 +18,14 @@ jest.mock('../../lib/signature-requests/signature-requests-api', () => ({
   ...jest.requireActual('../../lib/signature-requests/signature-requests-api'),
   listSignatureRequests: jest.fn(),
   revokeSignatureRequest: jest.fn(),
+  retrySignedConsentPdf: jest.fn(),
   getSignatureRequestOptions: jest.fn(() => new Promise(() => {})),
 }));
+jest.mock('../../lib/patient-documents/patient-documents-api', () => ({
+  ...jest.requireActual('../../lib/patient-documents/patient-documents-api'),
+  getPatientDocumentUrl: jest.fn(),
+}));
+jest.mock('../../lib/patient-documents/download', () => ({ startDownload: jest.fn() }));
 // Las horas, en el reloj de la sede que envió (Caracas, 12 h), no del navegador.
 jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest
@@ -26,6 +35,9 @@ jest.mock('../../lib/locations/locations-api', () => ({
 
 const mockedList = listSignatureRequests as jest.MockedFunction<typeof listSignatureRequests>;
 const mockedRevoke = revokeSignatureRequest as jest.MockedFunction<typeof revokeSignatureRequest>;
+const mockedRetry = retrySignedConsentPdf as jest.MockedFunction<typeof retrySignedConsentPdf>;
+const mockedUrl = getPatientDocumentUrl as jest.MockedFunction<typeof getPatientDocumentUrl>;
+const mockedDownload = startDownload as jest.MockedFunction<typeof startDownload>;
 
 function request(overrides: Partial<SignatureRequest> = {}): SignatureRequest {
   return {
@@ -57,8 +69,24 @@ function request(overrides: Partial<SignatureRequest> = {}): SignatureRequest {
     signedIpAddress: null,
     budgetAcceptanceId: null,
     countersignedAt: null,
+    signedPdfStatus: null,
+    signedPdfDocumentId: null,
     ...overrides,
   };
+}
+
+/** Un envío completo (DX-422): el PDF firmado en el estado pedido. */
+function complete(overrides: Partial<SignatureRequest> = {}): SignatureRequest {
+  return request({
+    id: 'c',
+    status: 'COMPLETE',
+    consentId: 'pc-1',
+    openedAt: '2026-10-30T15:00:00.000Z',
+    verifiedAt: '2026-10-30T15:01:00.000Z',
+    signedAt: '2026-10-30T15:05:00.000Z',
+    countersignedAt: '2026-10-30T16:00:00.000Z',
+    ...overrides,
+  });
 }
 
 describe('PatientSignatureRequestsSection (DX-243)', () => {
@@ -191,5 +219,130 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
     render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
     await user.click(await screen.findByRole('button', { name: 'Enviar a firmar' }));
     expect(await screen.findByRole('dialog', { name: 'Enviar a firmar' })).toBeInTheDocument();
+  });
+
+  describe('PDF firmado (DX-422)', () => {
+    beforeEach(() => {
+      mockedRetry.mockReset();
+      mockedUrl.mockReset();
+      mockedDownload.mockReset();
+    });
+
+    it('listo: «Descargar PDF» pide la URL firmada de descarga del documento y la abre', async () => {
+      mockedList.mockResolvedValue([complete({ signedPdfStatus: 'READY', signedPdfDocumentId: 'doc-1' })]);
+      mockedUrl.mockResolvedValue({ url: 'https://files/x.pdf', expiresAt: '2026-10-30T16:05:00.000Z', disposition: 'attachment' });
+      const user = setupUser();
+      render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+      const button = await screen.findByRole('button', { name: /Descargar PDF/ });
+      expect(button).toHaveAccessibleName('Descargar PDF de Consentimiento informado — Exodoncia');
+      expect(screen.getByText('PDF firmado archivado en Documentos del paciente.')).toBeInTheDocument();
+      await user.click(button);
+      await waitFor(() => expect(mockedDownload).toHaveBeenCalledWith('https://files/x.pdf'));
+      expect(mockedUrl).toHaveBeenCalledWith('tok', 'p1', 'doc-1', 'attachment');
+    });
+
+    it('si falla la descarga, avisa con un mensaje que dice qué hacer y el botón vuelve a estar disponible', async () => {
+      mockedList.mockResolvedValue([complete({ signedPdfStatus: 'READY', signedPdfDocumentId: 'doc-1' })]);
+      mockedUrl.mockRejectedValue(new Error('red'));
+      const user = setupUser();
+      render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+      await user.click(await screen.findByRole('button', { name: /Descargar PDF/ }));
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(
+          'No pudimos descargar el PDF firmado. Intenta de nuevo.',
+          expect.anything(),
+        ),
+      );
+      expect(screen.getByRole('button', { name: /Descargar PDF/ })).toBeEnabled();
+      expect(mockedDownload).not.toHaveBeenCalled();
+    });
+
+    it('generándose: lo dice y no ofrece descargar todavía', async () => {
+      mockedList.mockResolvedValue([complete({ signedPdfStatus: 'PENDING' })]);
+      render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+      expect(
+        await screen.findByText('Generando el PDF firmado: aparecerá aquí y en Documentos del paciente.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Descargar PDF/ })).toBeNull();
+    });
+
+    it('si la generación falló, lo muestra y «Reintentar PDF» lo vuelve a encolar', async () => {
+      mockedList.mockResolvedValue([complete({ signedPdfStatus: 'FAILED' })]);
+      mockedRetry.mockResolvedValue({ status: 'PENDING' });
+      const user = setupUser();
+      render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+      expect(
+        await screen.findByText('No pudimos generar el PDF firmado tras varios intentos.'),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /Reintentar PDF/ }));
+      expect(mockedRetry).toHaveBeenCalledWith('tok', 'p1', 'pc-1');
+      expect(
+        await screen.findByText('Generando el PDF firmado: aparecerá aquí y en Documentos del paciente.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Reintentar PDF/ })).toBeNull();
+    });
+
+    it('si el reintento falla, avisa con el mensaje de la API y deja reintentar', async () => {
+      mockedList.mockResolvedValue([complete({ signedPdfStatus: 'FAILED' })]);
+      mockedRetry.mockRejectedValue(new ApiError(409, 'El PDF firmado ya está archivado o se está generando.'));
+      const user = setupUser();
+      render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+      await user.click(await screen.findByRole('button', { name: /Reintentar PDF/ }));
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(
+          'El PDF firmado ya está archivado o se está generando.',
+          expect.anything(),
+        ),
+      );
+      expect(screen.getByRole('button', { name: /Reintentar PDF/ })).toBeEnabled();
+    });
+
+    describe('B1: mientras se genera, la ficha vuelve a mirar', () => {
+      beforeEach(() => jest.useFakeTimers());
+      afterEach(() => {
+        jest.useRealTimers();
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+      });
+
+      it('cada 5 s relee la lista; si falla, lo anuncia con role="alert" y deja de mirar', async () => {
+        mockedList
+          .mockResolvedValueOnce([complete({ signedPdfStatus: 'PENDING' })])
+          .mockResolvedValueOnce([complete({ signedPdfStatus: 'PENDING' })])
+          .mockResolvedValueOnce([complete({ signedPdfStatus: 'FAILED' })]);
+        render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+        await screen.findByText(/Generando el PDF firmado/);
+        expect(mockedList).toHaveBeenCalledTimes(1);
+        await act(() => jest.advanceTimersByTimeAsync(5_000));
+        expect(mockedList).toHaveBeenCalledTimes(2);
+        await act(() => jest.advanceTimersByTimeAsync(5_000));
+        expect(mockedList).toHaveBeenCalledTimes(3);
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'No pudimos generar el PDF firmado tras varios intentos.',
+        );
+        await act(() => jest.advanceTimersByTimeAsync(20_000));
+        expect(mockedList).toHaveBeenCalledTimes(3);
+      });
+
+      it('con la pestaña oculta no pide nada, y deja de mirar a los ~2 min', async () => {
+        mockedList.mockResolvedValue([complete({ signedPdfStatus: 'PENDING' })]);
+        render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+        await screen.findByText(/Generando el PDF firmado/);
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+        await act(() => jest.advanceTimersByTimeAsync(30_000));
+        expect(mockedList).toHaveBeenCalledTimes(1);
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+        await act(() => jest.advanceTimersByTimeAsync(10 * 60_000));
+        // 24 relecturas como mucho (2 min de pestaña visible) además de la primera.
+        expect(mockedList).toHaveBeenCalledTimes(25);
+      });
+    });
+
+    it('sin completar no hay nada del PDF', async () => {
+      mockedList.mockResolvedValue([request({ status: 'SIGNED_BY_PATIENT', signedAt: '2026-10-30T15:05:00.000Z' })]);
+      render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+      await screen.findByText(/Firmado por el paciente/);
+      expect(screen.queryByText(/PDF firmado/)).toBeNull();
+      expect(screen.queryByRole('button', { name: /PDF/ })).toBeNull();
+    });
   });
 });

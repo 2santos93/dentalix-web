@@ -4236,6 +4236,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/consents/{id}/signed-pdf/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PatientConsentsController_retrySignedPdfGeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/post-op-templates": {
         parameters: {
             query?: never;
@@ -14444,6 +14460,11 @@ export interface components {
             /** @description DX-243: IP desde la que firmó el paciente a distancia (evidencia); null si se firmó en pantalla */
             remoteIpAddress: string | null;
         };
+        /** @enum {string} */
+        SignedConsentPdfRetryStatus: "PENDING";
+        SignedConsentPdfRetryDto: {
+            status: components["schemas"]["SignedConsentPdfRetryStatus"];
+        };
         PostOpTemplateCatalogItemDto: {
             /** Format: uuid */
             id: string;
@@ -15034,6 +15055,11 @@ export interface components {
          * @enum {string}
          */
         SignatureRequestStatus: "SENT" | "OPENED" | "LOCKED" | "EXPIRED" | "REVOKED" | "SIGNED_BY_PATIENT" | "COMPLETE";
+        /**
+         * @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED)
+         * @enum {string}
+         */
+        SignedConsentPdfStatus: "PENDING" | "READY" | "FAILED";
         SignatureRequestDto: {
             /** Format: uuid */
             id: string;
@@ -15096,6 +15122,13 @@ export interface components {
              * @description Firma del profesional en la app (Completo)
              */
             countersignedAt: string | null;
+            /** @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED) */
+            signedPdfStatus: components["schemas"]["SignedConsentPdfStatus"] | null;
+            /**
+             * Format: uuid
+             * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
+             */
+            signedPdfDocumentId: string | null;
         };
         CreateSignatureRequestDto: {
             /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
@@ -15179,6 +15212,13 @@ export interface components {
              * @description Firma del profesional en la app (Completo)
              */
             countersignedAt: string | null;
+            /** @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED) */
+            signedPdfStatus: components["schemas"]["SignedConsentPdfStatus"] | null;
+            /**
+             * Format: uuid
+             * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
+             */
+            signedPdfDocumentId: string | null;
             /** @description false si el email no se pudo encolar: la solicitud queda registrada; anúlala y envía otra. */
             emailQueued: boolean;
         };
@@ -28106,6 +28146,49 @@ export interface operations {
             };
         };
     };
+    PatientConsentsController_retrySignedPdfGeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedConsentPdfRetryDto"];
+                };
+            };
+            /** @description Sin un rol de esta clínica (los cuatro roles pueden reintentar) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El PDF firmado ya está archivado o se está generando */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PostOpTemplatesController_list: {
         parameters: {
             query?: {
@@ -30649,7 +30732,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El documento ya está anulado. */
+            /** @description El documento ya está anulado, o es el PDF firmado de un consentimiento (DX-422), que no se anula. */
             409: {
                 headers: {
                     [name: string]: unknown;

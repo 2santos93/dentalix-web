@@ -191,6 +191,20 @@
       "reason": "Sin E2E_MAIL_DIR no se pueden leer el enlace ni el código de la firma a distancia."
     },
     {
+      "file": "e2e/remote-signature.spec.ts",
+      "title": "Firma a distancia de consentimientos (DX-243) › recepción descarga el PDF firmado desde la fila del envío (1440)",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "DX-422: sigue al flujo de firma a distancia, que sin E2E_MAIL_DIR no puede leer el enlace ni el código."
+    },
+    {
+      "file": "e2e/remote-signature.spec.ts",
+      "title": "Firma a distancia de consentimientos (DX-243) › recepción descarga el PDF firmado desde la fila del envío (390 px)",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "DX-422: sigue al flujo de firma a distancia, que sin E2E_MAIL_DIR no puede leer el enlace ni el código."
+    },
+    {
       "file": "e2e/remote-budget.spec.ts",
       "title": "Presupuesto a distancia (DX-415) › la clínica envía a aceptar el presupuesto presentado (1440)",
       "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
