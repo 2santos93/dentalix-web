@@ -7778,7 +7778,7 @@ export interface components {
             name: string;
             /** @description mg que quedan de este anestésico */
             mg: number;
-            /** @description En cuartos de carpule, hacia abajo */
+            /** @description En cuartos de carpule, hacia abajo y sin llegar al 100 % (que ya exige motivo) */
             carpules: number;
             /** @example 1.8 */
             mlPerCarpule: number;

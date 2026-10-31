@@ -174,6 +174,15 @@ describe('AnesthesiaDoseBar (DX-420)', () => {
     expect(screen.getByText('Quedan 52 mg ≈ 1,25 carpules de 1,8 ml')).toBeInTheDocument();
   });
 
+  it('«quedan» en singular con un carpule', () => {
+    expect(doseBarCopy.remaining({ ...pediatric.remaining!, mg: 44, carpules: 1 })).toBe(
+      'Quedan 44 mg ≈ 1 carpule de 1,8 ml',
+    );
+    expect(doseBarCopy.remaining({ ...pediatric.remaining!, mg: 0, carpules: 0 })).toBe(
+      'Quedan 0 mg ≈ 0 carpules de 1,8 ml',
+    );
+  });
+
   it('barra de epinefrina en mg junto a la del anestésico', () => {
     render(<AnesthesiaDoseBar summary={pediatric} />);
     const meter = screen.getByRole('meter', { name: doseBarCopy.epinephrineLabel });

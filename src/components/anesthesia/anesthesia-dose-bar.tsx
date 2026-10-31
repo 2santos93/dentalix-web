@@ -46,7 +46,7 @@ export const doseBarCopy = {
     `Máximo ${formatDecimal(maxMg)} mg (${formatDecimal(perKg)} mg/kg)`,
   source: (source: string) => `Fuente: ${source}`,
   remaining: (r: DoseRemaining) =>
-    `Quedan ${formatDecimal(r.mg)} mg ≈ ${formatDecimal(r.carpules)} carpules de ${formatDecimal(r.mlPerCarpule)} ml`,
+    `Quedan ${formatDecimal(r.mg)} mg ≈ ${formatDecimal(r.carpules)} ${r.carpules === 1 ? 'carpule' : 'carpules'} de ${formatDecimal(r.mlPerCarpule)} ml`,
   remainingByEpinephrine: (mg: number) =>
     `Limita la epinefrina: quedan ${formatEpinephrineMg(mg)} mg.`,
   epinephrineLabel: 'Epinefrina por cita',
