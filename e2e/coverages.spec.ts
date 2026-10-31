@@ -208,7 +208,7 @@ test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cab
   await dialog.getByLabel('Pagador').selectOption({ label: payerOption });
   await dialog.getByLabel('Plan').fill('Plan Complementario');
   await dialog.getByLabel('Nº de afiliado o póliza').fill('987654');
-  await dialog.getByLabel('Vigente hasta').fill(twoDaysAgo);
+  await fillDate(dialog, 'Vigente hasta', twoDaysAgo);
   await shot(page, 'coverage-dialog');
   await dialog.getByRole('button', { name: 'Añadir', exact: true }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
@@ -231,7 +231,7 @@ test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cab
   await row.getByRole('button', { name: `Acciones de la cobertura de ${payerName}` }).click();
   await page.getByRole('menuitem', { name: 'Editar' }).click();
   const edit = page.getByRole('dialog', { name: 'Editar cobertura' });
-  await edit.getByLabel('Vigente hasta').fill(tomorrow);
+  await fillDate(edit, 'Vigente hasta', tomorrow);
   await edit.getByRole('button', { name: 'Guardar' }).click();
   await expect(edit).toBeHidden({ timeout: 10_000 });
 

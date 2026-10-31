@@ -79,19 +79,6 @@
   "src/components/collections/payment-promise-dialog.tsx": {
     "select": 1
   },
-  "src/components/consents/consent-template-form-modal.tsx": {
-    "textarea": 1
-  },
-  "src/components/consents/new-consent-modal.tsx": {
-    "radio": 1,
-    "select": 2
-  },
-  "src/components/data-consents/consent-scope-fields.tsx": {
-    "checkbox": 1
-  },
-  "src/components/data-consents/privacy-policy-settings.tsx": {
-    "textarea": 1
-  },
   "src/components/discounts/discount-reason-fields.tsx": {
     "select": 1,
     "textarea": 1
@@ -146,56 +133,6 @@
   },
   "src/components/locations/regional-settings-fields.tsx": {
     "radio": 1
-  },
-  "src/components/patient-documents/patient-documents-tab.tsx": {
-    "select": 3
-  },
-  "src/components/patient-documents/void-document-modal.tsx": {
-    "textarea": 1
-  },
-  "src/components/patient-imports/balances-step.tsx": {
-    "checkbox": 1
-  },
-  "src/components/patient-imports/column-mapping-fields.tsx": {
-    "select": 3
-  },
-  "src/components/patient-imports/patient-import-wizard.tsx": {
-    "radio": 1
-  },
-  "src/components/patients/agreement-dialog.tsx": {
-    "select": 3,
-    "textarea": 1
-  },
-  "src/components/patients/clinical-entry-addendum-modal.tsx": {
-    "textarea": 1
-  },
-  "src/components/patients/coverage-dialog.tsx": {
-    "checkbox": 1,
-    "select": 1,
-    "textarea": 1
-  },
-  "src/components/patients/majority-age-settings.tsx": {
-    "select": 1
-  },
-  "src/components/patients/patient-communication-section.tsx": {
-    "checkbox": 2,
-    "select": 2
-  },
-  "src/components/patients/patient-create-wizard.tsx": {
-    "select": 2,
-    "textarea": 1
-  },
-  "src/components/patients/patient-edit-modal.tsx": {
-    "select": 3
-  },
-  "src/components/patients/patient-form.tsx": {
-    "select": 3,
-    "textarea": 1
-  },
-  "src/components/patients/responsible-party-dialog.tsx": {
-    "checkbox": 1,
-    "radio": 1,
-    "select": 2
   },
   "src/components/payers/payer-form-modal.tsx": {
     "select": 2

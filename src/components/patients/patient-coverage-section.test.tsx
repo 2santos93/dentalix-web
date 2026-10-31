@@ -338,11 +338,15 @@ describe('PatientCoverageSection (DX-153)', () => {
       expect(within(row).getByTestId('coverage-verification')).toHaveTextContent('Verificada');
       await rowAction(user, 'Sanitas', 'Editar');
       const dialog = await screen.findByRole('dialog');
-      const to = within(dialog).getByLabelText('Vigente hasta');
+      const to = within(dialog).getByRole('group', { name: 'Vigente hasta' });
+      // DatePicker: react-aria antepone «Fecha seleccionada: …»; la ayuda va al final.
       expect(to).toHaveAccessibleDescription(
-        'Déjala vacía si no tiene fecha de fin. Cambiar las fechas quita la verificación del administrador.',
+        /Déjala vacía si no tiene fecha de fin\. Cambiar las fechas quita la verificación del administrador\.$/,
       );
-      await user.clear(to);
+      for (const segment of within(to).getAllByRole('spinbutton')) {
+        await user.click(segment);
+        await user.keyboard('{Backspace}{Backspace}{Backspace}{Backspace}');
+      }
       await user.click(within(dialog).getByRole('button', { name: /guardar/i }));
 
       await waitFor(() =>

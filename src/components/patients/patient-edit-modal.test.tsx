@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientEditModal } from './patient-edit-modal';
 import { updatePatient } from '@/lib/patients/patients-api';
@@ -124,7 +124,12 @@ describe('PatientEditModal', () => {
       <PatientEditModal open patient={withBoth} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
     );
 
-    await user.clear(screen.getByLabelText(/fecha de nacimiento/i));
+    // DateField (segmentos de react-aria): se vacía borrando cada segmento.
+    const birth = screen.getByRole('group', { name: /fecha de nacimiento/i });
+    for (const segment of within(birth).getAllByRole('spinbutton')) {
+      await user.click(segment);
+      await user.keyboard('{Backspace}{Backspace}{Backspace}{Backspace}');
+    }
     await user.clear(screen.getByLabelText(/correo electrónico/i));
     await user.click(screen.getByRole('button', { name: /guardar/i }));
 

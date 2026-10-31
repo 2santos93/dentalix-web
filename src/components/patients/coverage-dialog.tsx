@@ -19,8 +19,10 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
 
 export const coverageDialogCopy = {
   createTitle: 'Añadir cobertura',
@@ -247,13 +249,12 @@ export function CoverageDialog({
         error={saveError}
       >
         <FormField htmlFor={payerId} label={copy.payer} error={fieldErrors.payer}>
-          <select
+          <NativeSelect
             id={payerId}
             value={draft.payerId}
             onChange={(e) => set('payerId', e.target.value)}
             aria-invalid={fieldErrors.payer ? true : undefined}
             aria-describedby={fieldErrors.payer ? fieldErrorId(payerId) : undefined}
-            className={cn(fieldClass, 'h-10')}
           >
             <option value="">{copy.payerPlaceholder}</option>
             {options.map((p) => (
@@ -261,7 +262,7 @@ export function CoverageDialog({
                 {p.name} · {payerTypeLabel(p.type)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           {canCreatePayer ? (
             <Button
               type="button"
@@ -325,12 +326,10 @@ export function CoverageDialog({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField htmlFor={`${ids}-from`} label={copy.validFrom}>
-            <Input
+            <DatePicker
               id={`${ids}-from`}
-              type="date"
-              value={draft.validFrom}
-              onChange={(e) => set('validFrom', e.target.value)}
-              className="tabular-nums"
+              value={draft.validFrom || null}
+              onChange={(value) => set('validFrom', value ?? '')}
             />
           </FormField>
           <FormField
@@ -340,46 +339,33 @@ export function CoverageDialog({
             hintId={`${toId}-hint`}
             error={fieldErrors.range}
           >
-            <Input
+            <DatePicker
               id={toId}
-              type="date"
-              value={draft.validTo}
-              onChange={(e) => set('validTo', e.target.value)}
+              value={draft.validTo || null}
+              onChange={(value) => set('validTo', value ?? '')}
               aria-invalid={fieldErrors.range ? true : undefined}
               aria-describedby={fieldErrors.range ? fieldErrorId(toId) : `${toId}-hint`}
-              className="tabular-nums"
             />
           </FormField>
         </div>
 
-        <div className="flex items-start gap-3">
-          <input
-            id={primaryId}
-            type="checkbox"
-            checked={draft.isPrimary}
-            disabled={primaryLocked}
-            onChange={(e) => set('isPrimary', e.target.checked)}
-            aria-describedby={`${primaryId}-hint`}
-            className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
-          />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor={primaryId} className="text-sm font-medium text-ink">
-              {copy.primary}
-            </label>
-            <p id={`${primaryId}-hint`} className="text-xs text-muted">
-              {primaryHint}
-            </p>
-          </div>
-        </div>
+        <Checkbox
+          id={primaryId}
+          checked={draft.isPrimary}
+          disabled={primaryLocked}
+          onChange={(e) => set('isPrimary', e.target.checked)}
+          label={copy.primary}
+          description={primaryHint}
+        />
 
         <FormField htmlFor={`${ids}-notes`} label={copy.notes}>
-          <textarea
+          <Textarea
             id={`${ids}-notes`}
             value={draft.notes}
             maxLength={500}
             rows={3}
+            autoGrow
             onChange={(e) => set('notes', e.target.value)}
-            className={fieldClass}
           />
         </FormField>
       </FormModal>

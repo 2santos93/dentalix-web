@@ -15,6 +15,8 @@ import {
 } from '@/lib/patients/responsible-parties-api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { RowActions } from '@/components/shared/row-actions';
+import { afterMenuCloses } from './after-menu-closes';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -38,8 +40,7 @@ export const responsiblesCopy = {
   isPatient: 'Paciente',
   edit: 'Editar',
   remove: 'Quitar',
-  editLabel: (name: string) => `Editar a ${name}`,
-  removeLabel: (name: string) => `Quitar a ${name}`,
+  actionsLabel: (name: string) => `Acciones de ${name}`,
   removeTitle: 'Quitar responsable',
   removeDescription: (name: string) =>
     `${name} deja de ser responsable de este paciente: ya no recibirá sus avisos ni saldrá en su estado de cuenta familiar.`,
@@ -62,7 +63,7 @@ function FamilyChip({ id, name, detail }: { id: string; name: string; detail: st
   return (
     <Link
       href={patientHref(id)}
-      className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm text-ink transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm text-ink transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
     >
       <span className="truncate font-medium">{name}</span>
       <span className="shrink-0 text-xs text-muted">· {detail}</span>
@@ -188,7 +189,7 @@ export function PatientResponsiblePartiesSection({
                       {party.responsiblePatient ? (
                         <Link
                           href={patientHref(party.responsiblePatient.id)}
-                          className="break-words font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          className="break-words font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
                           {party.fullName}
                         </Link>
@@ -201,37 +202,30 @@ export function PatientResponsiblePartiesSection({
                       <span className="text-sm text-muted tabular-nums [overflow-wrap:anywhere]">{contactLine}</span>
                     ) : null}
                     <span className="flex flex-wrap gap-1.5">
-                      {party.kind === 'PATIENT' ? <Badge variant="muted">{copy.isPatient}</Badge> : null}
-                      {party.isPayer ? <Badge variant="success">{copy.payer}</Badge> : null}
-                      {party.receivesNotices ? <Badge variant="secondary">{copy.notices}</Badge> : null}
+                      {party.kind === 'PATIENT' ? <Badge variant="neutral">{copy.isPatient}</Badge> : null}
+                      {party.isPayer ? <Badge variant="neutral">{copy.payer}</Badge> : null}
+                      {party.receivesNotices ? <Badge variant="neutral">{copy.notices}</Badge> : null}
                       {party.migratedFromGuardian ? <Badge variant="outline">{copy.migrated}</Badge> : null}
                     </span>
                   </div>
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      aria-label={copy.editLabel(party.fullName)}
-                      onClick={() => setDialog({ party })}
-                      className="max-sm:h-11 max-sm:flex-1"
-                    >
-                      {copy.edit}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label={copy.removeLabel(party.fullName)}
-                      onClick={() => {
-                        setRemoveError(null);
-                        setRemoving(party);
-                      }}
-                      className="max-sm:h-11 max-sm:flex-1"
-                    >
-                      {copy.remove}
-                    </Button>
-                  </div>
+                  {/* Editar y quitar, en el «⋯» de la fila (como Cobertura). */}
+                  <RowActions
+                    label={copy.actionsLabel(party.fullName)}
+                    className="shrink-0"
+                    actions={[
+                      { label: copy.edit, onSelect: () => afterMenuCloses(() => setDialog({ party })) },
+                      {
+                        label: copy.remove,
+                        destructive: true,
+                        separatorBefore: true,
+                        onSelect: () =>
+                          afterMenuCloses(() => {
+                            setRemoveError(null);
+                            setRemoving(party);
+                          }),
+                      },
+                    ]}
+                  />
                 </li>
               );
             })}

@@ -38,7 +38,8 @@ export default function PrivacySettingsPage() {
   if (!accessToken) return null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    // Columna de ajustes: 720 px alineada al borde del contenido (antes centrada).
+    <div className="w-full max-w-[720px]">
       <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <PrivacyPolicySettings token={accessToken} />
     </div>

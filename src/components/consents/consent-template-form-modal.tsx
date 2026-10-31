@@ -12,8 +12,7 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   createTitle: 'Nueva plantilla',
@@ -148,7 +147,7 @@ export function ConsentTemplateFormModal({
               type="button"
               title={v.label}
               onClick={() => insertVariable(v.key)}
-              className="min-h-9 rounded-md border border-border bg-surface px-2.5 font-mono text-xs text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="min-h-9 rounded-md border border-border bg-surface px-2.5 font-mono text-xs text-ink hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
             >
               {`{{${v.key}}}`}
               <span className="sr-only"> · {v.label}</span>
@@ -160,7 +159,7 @@ export function ConsentTemplateFormModal({
         </p>
       </div>
       <FormField htmlFor="consent-template-body" label={copy.bodyLabel}>
-        <textarea
+        <Textarea
           id="consent-template-body"
           ref={bodyRef}
           rows={12}
@@ -170,7 +169,7 @@ export function ConsentTemplateFormModal({
           required
           aria-invalid={unknown.length > 0 || undefined}
           aria-describedby={unknown.length > 0 ? 'consent-template-unknown' : undefined}
-          className={cn(fieldClass, 'h-auto font-[inherit] leading-relaxed')}
+          className="leading-relaxed"
         />
       </FormField>
       {unknown.length > 0 ? (

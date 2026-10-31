@@ -9,7 +9,11 @@ import {
   type DocType,
   type Sex,
 } from '@/lib/patients/patients-api';
-import { Wizard, WizardNav, type WizardStep } from '@/components/ui/wizard';
+import { Wizard, type WizardStep } from '@/components/ui/wizard';
+import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { Callout } from '@/components/ui/callout';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
@@ -17,8 +21,6 @@ import { useDateLocale } from '@/components/ui/date-locale';
 import { todayDate } from '@/lib/dates/iso';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
 import { DOC_TYPES, docTypeOptionLabel, normalizeDocTypeLabel } from '@/lib/patients/doc-type';
 import { isEmailAddress } from '@/lib/format/email';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
@@ -43,13 +45,13 @@ const copy = {
   firstNameRequired: 'Escribe el nombre.',
   lastNameRequired: 'Escribe el apellido.',
   emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',
-  docNumberLabel: 'Número de documento',
-  birthDateLabel: 'Fecha de nacimiento',
+  docNumberLabel: 'Número de documento (opcional)',
+  birthDateLabel: 'Fecha de nacimiento (opcional)',
   sexLabel: 'Sexo',
-  phoneLabel: 'Teléfono',
-  emailLabel: 'Correo electrónico',
-  addressLabel: 'Dirección',
-  notesLabel: 'Notas',
+  phoneLabel: 'Teléfono (opcional)',
+  emailLabel: 'Correo electrónico (opcional)',
+  addressLabel: 'Dirección (opcional)',
+  notesLabel: 'Notas (opcional)',
   requiredError: 'Nombre, apellido y tipo de documento son obligatorios para continuar.',
   summaryTitle: 'Resumen de la historia clínica',
   summaryAllergies: (n: number) => `Alergias registradas: ${n}`,
@@ -57,16 +59,23 @@ const copy = {
   summaryMedications: (n: number) => `Medicamentos registrados: ${n}`,
   noClinicalHistoryNote:
     'La historia clínica (antecedentes, alergias, medicamentos y hábitos) la completará el equipo clínico desde la ficha del paciente.',
-  submitLabel: 'Guardar',
+  submitLabel: 'Crear paciente',
+  back: 'Atrás',
+  next: 'Siguiente',
+  /** Bajo los datos: el resto del alta se puede dejar para después. */
+  laterNote:
+    'Con estos datos ya puedes crear el paciente. Los pasos siguientes son opcionales: la anamnesis y la autorización de datos también se completan después desde su ficha.',
+  laterNoteReception:
+    'Con estos datos ya puedes crear el paciente. La autorización de datos es opcional aquí: también se registra después desde su ficha.',
   genericError: 'No pudimos crear el paciente. Intenta de nuevo.',
 };
 
 const STEPS: WizardStep[] = [
   { key: 'datos', label: 'Datos' },
-  { key: 'antecedentes', label: 'Antecedentes' },
-  { key: 'alergias', label: 'Alergias y medicamentos' },
-  { key: 'habitos', label: 'Hábitos' },
-  { key: 'consentimiento', label: 'Autorización de datos' },
+  { key: 'antecedentes', label: 'Antecedentes', optional: true },
+  { key: 'alergias', label: 'Alergias y medicamentos', optional: true },
+  { key: 'habitos', label: 'Hábitos', optional: true },
+  { key: 'consentimiento', label: 'Autorización de datos', optional: true },
 ];
 
 /** Pasos que escriben la anamnesis v1: solo para roles clínicos (SEC-005). */
@@ -311,7 +320,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                 label={copy.docType}
                 error={missing.docType}
               >
-                <select
+                <NativeSelect
                   ref={docTypeRef}
                   id="pcw-doc-type"
                   name="docType"
@@ -322,7 +331,6 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                     clearMissing('docType');
                   }}
                   {...invalidProps('pcw-doc-type', missing.docType)}
-                  className={cn(fieldClass, 'h-10')}
                 >
                   <option value="">{copy.docTypePlaceholder}</option>
                   {DOC_TYPES.map((t) => (
@@ -330,7 +338,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                       {docTypeOptionLabel(t, docTypeNames)}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </FormField>
               <FormField htmlFor="pcw-doc-number" label={copy.docNumberLabel}>
                 <Input
@@ -366,20 +374,19 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                 />
               </FormField>
               <FormField htmlFor="pcw-sex" label={copy.sexLabel}>
-                <select
+                <NativeSelect
                   id="pcw-sex"
                   name="sex"
                   required
                   value={sex}
                   onChange={(e) => setSex(e.target.value as Sex)}
-                  className={cn(fieldClass, 'h-10')}
                 >
                   {sexOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </FormField>
             </div>
 
@@ -423,17 +430,22 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
             </FormField>
 
             <FormField htmlFor="pcw-notes" label={copy.notesLabel}>
-              <textarea
+              <Textarea
                 id="pcw-notes"
                 name="notes"
                 rows={3}
+                autoGrow
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className={fieldClass}
               />
             </FormField>
 
             {validationError ? <InlineError>{validationError}</InlineError> : null}
+            {steps.length > 1 ? (
+              <p className="t-caption max-w-prose text-muted">
+                {canWriteClinicalHistory ? copy.laterNote : copy.laterNoteReception}
+              </p>
+            ) : null}
           </div>
         )}
 
@@ -462,7 +474,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
         {stepKey === 'consentimiento' && (
           <div className="flex flex-col gap-4">
             {canWriteClinicalHistory ? (
-              <div className="flex flex-col gap-1 rounded-lg border border-border p-3 text-sm text-ink">
+              <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-3 text-sm text-ink">
                 <p className="t-label text-ink">{copy.summaryTitle}</p>
                 <p>{copy.summaryAllergies(history.allergies?.length ?? 0)}</p>
                 <p>
@@ -472,9 +484,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                 <p>{copy.summaryMedications(history.medications?.length ?? 0)}</p>
               </div>
             ) : (
-              <p className="rounded-lg border border-border p-3 text-sm text-muted">
-                {copy.noClinicalHistoryNote}
-              </p>
+              <Callout tone="neutral">{copy.noClinicalHistoryNote}</Callout>
             )}
             <PatientConsentStep
               token={token}
@@ -487,15 +497,26 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
         )}
       </Wizard>
 
-      <WizardNav
-        current={step}
-        total={steps.length}
-        onBack={() => goToStep(step - 1)}
-        onNext={() => goToStep(step + 1)}
-        onSubmit={handleSubmit}
-        submitting={submitting}
-        submitLabel={copy.submitLabel}
-      />
+      {/* Barra de acciones: pegada abajo en el teléfono (el formulario mide
+          más que la pantalla), en su sitio desde `sm`. «Crear paciente» es la
+          primaria en todos los pasos: solo el primero es obligatorio. */}
+      <div className="sticky bottom-0 z-10 -mx-4 flex items-center gap-2 border-t border-border bg-canvas px-4 py-3 sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0">
+        {step > 0 ? (
+          <Button type="button" variant="ghost" onClick={() => goToStep(step - 1)}>
+            {copy.back}
+          </Button>
+        ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          {step < steps.length - 1 ? (
+            <Button type="button" variant="secondary" onClick={() => goToStep(step + 1)}>
+              {copy.next}
+            </Button>
+          ) : null}
+          <Button type="button" onClick={handleSubmit} loading={submitting}>
+            {copy.submitLabel}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -17,6 +17,10 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { afterMenuCloses } from '@/components/patients/after-menu-closes';
+import { Callout } from '@/components/ui/callout';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PatientSignatureRequestsSection } from '@/components/signature-requests/patient-signature-requests-section';
 import { CountersignConsentModal } from './countersign-consent-modal';
@@ -35,11 +39,11 @@ const copy = {
   colDocument: 'Documento',
   colSigner: 'Firmante',
   colProfessional: 'Profesional',
-  colActions: 'Acciones',
+  rowLabel: (title: string, when: string) => `«${title}» del ${when}`,
   signer: (name: string, type: string) => `${name} (${type.toLowerCase()})`,
   version: (v: number) => `Versión ${v} de la plantilla`,
   print: 'Ver e imprimir',
-  printHint: (title: string) => `${title} (se abre en otra pestaña)`,
+  newTab: '(se abre en otra pestaña)',
   // DX-243: firma a distancia.
   receptionSupport:
     'Envía consentimientos a firmar a distancia y sigue su estado. El documento firmado lo ven los profesionales.',
@@ -50,6 +54,11 @@ const copy = {
   countersign: 'Firmar como profesional',
   countersignHint: (title: string) => ` · ${title}`,
   countersigned: 'Consentimiento completo: firmaste como profesional.',
+  awaitingYouTitle: 'Falta tu firma como profesional',
+  awaitingYou: (titles: string[]) =>
+    titles.length === 1
+      ? `El paciente ya firmó «${titles[0]}» a distancia; el consentimiento queda completo cuando firmes tú.`
+      : `El paciente ya firmó ${titles.length} consentimientos a distancia; quedan completos cuando firmes tú.`,
 };
 
 interface PatientConsentsTabProps {
@@ -89,10 +98,7 @@ export function PatientConsentsTab({ token, patientId, role, userId }: PatientCo
   if (!clinical) {
     return (
       <div className="flex flex-col gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-ink">{copy.heading}</h2>
-          <p className="max-w-[68ch] text-sm text-muted">{copy.receptionSupport}</p>
-        </div>
+        <SectionHeader as="h2" title={copy.heading} description={copy.receptionSupport} />
         <PatientSignatureRequestsSection token={token} patientId={patientId} userId={userId} />
       </div>
     );
@@ -172,47 +178,68 @@ function ClinicalConsents({
   function status(consent: PatientConsentSummary) {
     return (
       <span className="flex flex-wrap items-center gap-1.5">
-        <Badge variant={consent.complete ? 'success' : 'warning'}>
+        <Badge variant={consent.complete ? 'success' : 'warning'} dot>
           {consent.complete ? copy.complete : copy.pendingProfessional}
         </Badge>
-        {consent.remote ? <Badge variant="muted">{copy.remote}</Badge> : null}
+        {consent.remote ? <Badge variant="neutral">{copy.remote}</Badge> : null}
       </span>
     );
   }
 
   /** Solo el profesional elegido al enviarlo firma lo que falta (la API lo exige). */
-  function countersignButton(consent: PatientConsentSummary) {
-    if (consent.complete || !consent.remote || consent.remote.professionalUserId !== userId) {
-      return null;
-    }
-    return (
-      <Button
-        type="button"
-        size="sm"
-        className="w-full sm:w-auto"
-        onClick={() => {
-          setCountersignKey((k) => k + 1);
-          setCountersigning(consent);
-        }}
-      >
-        <PenLine aria-hidden />
-        {copy.countersign}
-        <span className="sr-only">{copy.countersignHint(consent.title)}</span>
-      </Button>
-    );
+  function awaitsMe(consent: PatientConsentSummary): boolean {
+    return !consent.complete && Boolean(consent.remote) && consent.remote?.professionalUserId === userId;
   }
 
-  function printLink(consent: PatientConsentSummary) {
-    return (
-      <Button asChild variant="secondary" size="sm" className="w-full sm:w-auto">
-        <a href={consentPrintHref(patientId, consent.id)} target="_blank" rel="noopener">
-          <Printer aria-hidden />
-          {copy.print}
-          <span className="sr-only"> · {copy.printHint(consent.title)}</span>
-        </a>
-      </Button>
-    );
+  function countersign(consent: PatientConsentSummary) {
+    setCountersignKey((k) => k + 1);
+    setCountersigning(consent);
   }
+
+  const awaitingMe = consents.filter(awaitsMe);
+
+  const columns: DataListColumn<PatientConsentSummary>[] = [
+    {
+      id: 'document',
+      header: copy.colDocument,
+      mobile: 'primary',
+      // El documento es el enlace a su vista imprimible (otra pestaña).
+      cell: (consent) => (
+        <span className="flex flex-col">
+          <a
+            href={consentPrintHref(patientId, consent.id)}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-1.5 font-medium text-ink underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+          >
+            {consent.title}
+            <Printer aria-hidden className="size-3.5 text-muted" />
+            <span className="sr-only"> · {copy.print} {copy.newTab}</span>
+          </a>
+          <span className="t-caption">{copy.version(consent.templateVersion)}</span>
+        </span>
+      ),
+    },
+    {
+      id: 'signedAt',
+      header: copy.colSignedAt,
+      cell: (consent) => <span className="tnum">{formatDateTime(consent.signedAt)}</span>,
+      mobileCell: (consent) => formatDateTime(consent.signedAt),
+    },
+    {
+      id: 'signer',
+      header: copy.colSigner,
+      cell: (consent) => copy.signer(consent.signerName, SIGNER_TYPE_LABELS[consent.signerType]),
+    },
+    {
+      id: 'professional',
+      header: copy.colProfessional,
+      cell: (consent) => <span className="text-muted">{consent.professionalName}</span>,
+      mobileCell: (consent) => consent.professionalName,
+      showFrom: 'lg',
+    },
+    { id: 'status', header: copy.colStatus, cell: status, mobile: 'trailing' },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
@@ -222,16 +249,33 @@ function ClinicalConsents({
         userId={userId}
         refreshKey={signaturesKey}
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-ink">{copy.heading}</h2>
-          <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
-        </div>
-        <Button type="button" onClick={openModal} className="w-full sm:w-auto">
-          <Plus aria-hidden />
-          {copy.newConsent}
-        </Button>
-      </div>
+      <SectionHeader
+        as="h2"
+        title={copy.heading}
+        description={copy.support}
+        actions={
+          <Button type="button" onClick={openModal} className="w-full sm:w-auto">
+            <Plus aria-hidden />
+            {copy.newConsent}
+          </Button>
+        }
+      />
+
+      {awaitingMe.length > 0 ? (
+        <Callout
+          tone="warning"
+          title={copy.awaitingYouTitle}
+          action={
+            <Button type="button" variant="secondary" onClick={() => countersign(awaitingMe[0])}>
+              <PenLine aria-hidden />
+              {copy.countersign}
+              <span className="sr-only">{copy.countersignHint(awaitingMe[0].title)}</span>
+            </Button>
+          }
+        >
+          {copy.awaitingYou(awaitingMe.map((c) => c.title))}
+        </Callout>
+      ) : null}
 
       <AsyncSection
         loading={loading}
@@ -243,76 +287,25 @@ function ClinicalConsents({
         emptyIcon={<FileSignature aria-hidden />}
         skeleton={<TabSkeleton />}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colSignedAt}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colDocument}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colSigner}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colProfessional}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {consents.map((consent) => (
-              <tr key={consent.id} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-3 tabular-nums">{formatDateTime(consent.signedAt)}</td>
-                <td className="px-4 py-3">
-                  <span className="font-medium">{consent.title}</span>
-                  <span className="block text-xs text-muted">
-                    {copy.version(consent.templateVersion)}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {copy.signer(consent.signerName, SIGNER_TYPE_LABELS[consent.signerType])}
-                </td>
-                <td className="px-4 py-3 text-muted">{consent.professionalName}</td>
-                <td className="px-4 py-3">{status(consent)}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex flex-col items-end gap-2">
-                    {countersignButton(consent)}
-                    {printLink(consent)}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {consents.map((consent) => (
-            <li
-              key={consent.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <p className="font-medium">{consent.title}</p>
-              <p className="text-muted tabular-nums">{formatDateTime(consent.signedAt)}</p>
-              <p>
-                {copy.signer(consent.signerName, SIGNER_TYPE_LABELS[consent.signerType])} ·{' '}
-                <span className="text-muted">{consent.professionalName}</span>
-              </p>
-              {status(consent)}
-              {countersignButton(consent)}
-              {printLink(consent)}
-            </li>
-          ))}
-        </ul>
+        <DataList
+          label={copy.tableLabel}
+          rows={consents}
+          columns={columns}
+          getRowKey={(consent) => consent.id}
+          getRowLabel={(consent) => copy.rowLabel(consent.title, formatDateTime(consent.signedAt))}
+          rowActions={(consent) => [
+            ...(awaitsMe(consent)
+              ? [{ label: copy.countersign, icon: <PenLine aria-hidden />, onSelect: () => afterMenuCloses(() => countersign(consent)) }]
+              : []),
+            {
+              label: copy.print,
+              icon: <Printer aria-hidden />,
+              onSelect: () => {
+                window.open(consentPrintHref(patientId, consent.id), '_blank', 'noopener');
+              },
+            },
+          ]}
+        />
       </AsyncSection>
 
       {countersigning ? (
