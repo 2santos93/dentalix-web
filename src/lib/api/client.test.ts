@@ -155,6 +155,24 @@ describe('apiFetch', () => {
     );
     expect((err as ApiError).line).toBe(1);
   });
+
+  it('DX-446: expone `canOverride` del 409 RESERVED_SLOT (y null si no viene)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      headers: { get: () => null },
+      json: async () => ({
+        statusCode: 409,
+        code: 'RESERVED_SLOT',
+        message: 'Ese horario está reservado para urgencias (Consulta de urgencia).',
+        canOverride: true,
+      }),
+    }) as unknown as typeof fetch;
+    const err = await apiFetch('/appointments', { method: 'POST', body: {} }).catch((e: unknown) => e);
+    expect((err as ApiError).code).toBe('RESERVED_SLOT');
+    expect((err as ApiError).canOverride).toBe(true);
+    expect(new ApiError(409, 'x').canOverride).toBeNull();
+  });
 });
 
 describe('apiFetch — refresh por cookie (DX-062)', () => {

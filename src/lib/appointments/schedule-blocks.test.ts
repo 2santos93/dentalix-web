@@ -3,6 +3,7 @@ import {
   blockBandForDay,
   blockLabel,
   blockShownInColumn,
+  reservedBlockColor,
   type ScheduleBlockLike,
 } from './schedule-blocks';
 import { wallInstant } from '@/lib/time/wall-clock';
@@ -36,6 +37,7 @@ describe('schedule-blocks (DX-122)', () => {
       MEETING: 'Reunión',
       LUNCH: 'Almuerzo',
       OTHER: 'Bloqueo',
+      RESERVED: 'Reservado',
     });
   });
 
@@ -85,5 +87,39 @@ describe('schedule-blocks (DX-122)', () => {
     expect(blockLabel(block({ providerId: null, locationId: 'loc', kind: 'MEETING', allowsBooking: false }))).toBe(
       'Reunión · toda la sede',
     );
+  });
+});
+
+describe('huecos reservados (DX-446)', () => {
+  const urgent = { id: 'urg', name: 'Consulta de urgencia', color: '#DC2626', isUrgent: true, active: true };
+  const cleaning = { id: 'lim', name: 'Limpieza', color: '#16A34A', isUrgent: false, active: true };
+  const reserved = (overrides: Partial<ScheduleBlockLike> = {}) =>
+    block({
+      kind: 'RESERVED',
+      allowsBooking: false,
+      reservedForTypes: [urgent],
+      releaseAtMinute: 660,
+      released: false,
+      ...overrides,
+    });
+
+  it('«Urgencias» si todos los tipos son de urgencia; si no, sus nombres; la nota manda', () => {
+    expect(blockLabel(reserved())).toBe('Urgencias · reservado');
+    expect(blockLabel(reserved({ reservedForTypes: [urgent, cleaning] }), 'Dra. Ana')).toBe(
+      'Consulta de urgencia, Limpieza · Dra. Ana · reservado',
+    );
+    expect(blockLabel(reserved({ note: 'Urgencias de la tarde' }))).toBe('Urgencias de la tarde · reservado');
+  });
+
+  it('liberado: «Libre desde HH:MM» con el reloj que se le pase', () => {
+    expect(blockLabel(reserved({ released: true }))).toBe('Urgencias · Libre desde 11:00');
+    expect(blockLabel(reserved({ released: true }), undefined, () => '11:00 a. m.')).toBe(
+      'Urgencias · Libre desde 11:00 a. m.',
+    );
+  });
+
+  it('el color es el del primer tipo; sin tipos, ninguno', () => {
+    expect(reservedBlockColor(reserved())).toBe('#DC2626');
+    expect(reservedBlockColor(block())).toBeNull();
   });
 });

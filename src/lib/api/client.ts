@@ -280,6 +280,7 @@ export function apiErrorFromBody(
   let locationId: string | null = null;
   let holidayId: string | null = null;
   let line: number | null = null;
+  let canOverride: boolean | null = null;
   if (body && typeof body === 'object') {
     const data = body as {
       message?: unknown;
@@ -288,6 +289,7 @@ export function apiErrorFromBody(
       locationId?: unknown;
       holidayId?: unknown;
       line?: unknown;
+      canOverride?: unknown;
     };
     const raw = data.message;
     if (typeof raw === 'string' && raw) messages = [raw];
@@ -297,6 +299,7 @@ export function apiErrorFromBody(
     if (typeof data.locationId === 'string' && data.locationId) locationId = data.locationId;
     if (typeof data.holidayId === 'string' && data.holidayId) holidayId = data.holidayId;
     if (typeof data.line === 'number' && Number.isInteger(data.line) && data.line >= 0) line = data.line;
+    if (typeof data.canOverride === 'boolean') canOverride = data.canOverride;
   }
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
@@ -307,6 +310,7 @@ export function apiErrorFromBody(
     locationId,
     holidayId,
     line,
+    canOverride,
   });
 }
 

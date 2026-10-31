@@ -8773,6 +8773,8 @@ export interface components {
             notes?: string;
             /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
             wantsEarlier?: boolean;
+            /** @description DX-446: «Agendar igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. Queda en `audit_event` (`reservedSlotOverride`). */
+            overrideReason?: string;
         };
         AppointmentTypeSummaryDto: {
             /** Format: uuid */
@@ -8879,6 +8881,10 @@ export interface components {
             reason: string;
             visitMinimums: components["schemas"]["VisitMinimumChangeDto"][];
         };
+        ReservedOverrideDto: {
+            blockIds: string[];
+            reason: string;
+        };
         AppointmentWriteDto: {
             planItemIds: string[];
             /** Format: uuid */
@@ -8975,6 +8981,8 @@ export interface components {
             planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
             /** @description DX-273: solo al sacar la cita de COMPLETED. El motivo y cómo queda el mínimo de la visita siguiente de cada plan afectado. */
             completedExit?: components["schemas"]["CompletedExitDto"];
+            /** @description DX-446: solo si la cita se agendó o movió a un hueco reservado saltándose la reserva (con `overrideReason`); queda en `audit_event`. */
+            reservedOverride?: components["schemas"]["ReservedOverrideDto"];
         };
         PatientIncidentCountsDto: {
             /** @example 2 */
@@ -9327,6 +9335,8 @@ export interface components {
             notes?: string;
             /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
             wantsEarlier?: boolean;
+            /** @description DX-446: «Mover igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. Queda en `audit_event` (`reservedSlotOverride`). */
+            overrideReason?: string;
         };
         MoveToOpeningDto: {
             /** Format: date-time */
@@ -9499,6 +9509,8 @@ export interface components {
             /** @example #7C3AED */
             color: string;
             active: boolean;
+            /** @description DX-446: tipo de urgencia (p. ej. «Consulta de urgencia»): se ofrece primero al reservar huecos. */
+            isUrgent: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9511,6 +9523,8 @@ export interface components {
             color: string;
             /** @description Por defecto, true */
             active?: boolean;
+            /** @description DX-446: tipo de urgencia. Por defecto, false */
+            isUrgent?: boolean;
         };
         UpdateAppointmentTypeDto: {
             name?: string;
@@ -9519,13 +9533,23 @@ export interface components {
             color?: string;
             /** @description Por defecto, true */
             active?: boolean;
+            /** @description DX-446: tipo de urgencia. Por defecto, false */
+            isUrgent?: boolean;
         };
         /**
-         * @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER.
+         * @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER, RESERVED (DX-446: hueco reservado para `reservedForTypeIds`; exige sede).
          * @enum {string}
          */
-        ScheduleBlockKind: "VACATION" | "MEETING" | "LUNCH" | "OTHER";
-        ScheduleBlockDto: {
+        ScheduleBlockKind: "VACATION" | "MEETING" | "LUNCH" | "OTHER" | "RESERVED";
+        ReservedTypeRefDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            color: string;
+            isUrgent: boolean;
+            active: boolean;
+        };
+        ScheduleBlockListItemDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -9550,17 +9574,30 @@ export interface components {
              * @description Fin (excluido).
              */
             end: string;
-            /** @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER. */
+            /** @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER, RESERVED (DX-446: hueco reservado para `reservedForTypeIds`; exige sede). */
             kind: components["schemas"]["ScheduleBlockKind"];
             /** @description true: se puede agendar encima y la respuesta de la cita trae un aviso; false: 409. */
             allowsBooking: boolean;
             note: string | null;
+            /** @description DX-446: tipos de cita que SÍ se pueden agendar en un bloque RESERVED (1–20, de esta clínica y activos: 404 si alguno es ajeno, 400 si está desactivado). Vacío o ausente en los demás tipos. */
+            reservedForTypeIds: string[];
+            /** @description DX-446: «Liberar a partir de», minutos desde las 00:00 de la hora de la SEDE del día del bloque (0–1439; 660 = 11:00), antes de su inicio. Pasada esa hora (reloj del servidor) el hueco admite cualquier tipo. null = no se libera. Solo en RESERVED. */
+            releaseAtMinute: number | null;
             /** Format: uuid */
             createdById: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @description DX-446: nombre y color de los tipos de `reservedForTypeIds` (vivos de esta clínica). */
+            reservedForTypes: components["schemas"]["ReservedTypeRefDto"][];
+            /**
+             * Format: date-time
+             * @description DX-446: instante de liberación del día del bloque (hora de la sede), o null.
+             */
+            releaseAt: string | null;
+            /** @description DX-446: true si ya pasó `releaseAt` según el reloj del servidor: la agenda muestra «Libre desde HH:MM». */
+            released: boolean;
         };
         AffectedAppointmentDto: {
             /** Format: uuid */
@@ -9601,13 +9638,58 @@ export interface components {
              * @description Posterior a `start`; como mucho 366 días después.
              */
             end: string;
-            /** @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER. */
+            /** @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER, RESERVED (DX-446: hueco reservado para `reservedForTypeIds`; exige sede). */
             kind: components["schemas"]["ScheduleBlockKind"];
             /** @default false */
             allowsBooking: boolean;
             note?: string;
+            /** @description DX-446: tipos de cita que SÍ se pueden agendar en un bloque RESERVED (1–20, de esta clínica y activos: 404 si alguno es ajeno, 400 si está desactivado). Vacío o ausente en los demás tipos. */
+            reservedForTypeIds?: string[];
+            /** @description DX-446: «Liberar a partir de», minutos desde las 00:00 de la hora de la SEDE del día del bloque (0–1439; 660 = 11:00), antes de su inicio. Pasada esa hora (reloj del servidor) el hueco admite cualquier tipo. null = no se libera. Solo en RESERVED. */
+            releaseAtMinute?: number | null;
             /** @description Si hay citas dentro del rango la API responde 409 (no las toca). Con true, se crea igualmente. */
             confirmAffected?: boolean;
+        };
+        ScheduleBlockDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /**
+             * Format: uuid
+             * @description Sede. null = el profesional en todas las sedes (solo con `providerId`).
+             */
+            locationId: string | null;
+            /**
+             * Format: uuid
+             * @description Profesional. null = toda la sede.
+             */
+            providerId: string | null;
+            /**
+             * Format: date-time
+             * @description Inicio (incluido).
+             */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Fin (excluido).
+             */
+            end: string;
+            /** @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER, RESERVED (DX-446: hueco reservado para `reservedForTypeIds`; exige sede). */
+            kind: components["schemas"]["ScheduleBlockKind"];
+            /** @description true: se puede agendar encima y la respuesta de la cita trae un aviso; false: 409. */
+            allowsBooking: boolean;
+            note: string | null;
+            /** @description DX-446: tipos de cita que SÍ se pueden agendar en un bloque RESERVED (1–20, de esta clínica y activos: 404 si alguno es ajeno, 400 si está desactivado). Vacío o ausente en los demás tipos. */
+            reservedForTypeIds: string[];
+            /** @description DX-446: «Liberar a partir de», minutos desde las 00:00 de la hora de la SEDE del día del bloque (0–1439; 660 = 11:00), antes de su inicio. Pasada esa hora (reloj del servidor) el hueco admite cualquier tipo. null = no se libera. Solo en RESERVED. */
+            releaseAtMinute: number | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
         };
         UpdateScheduleBlockDto: {
             /** Format: date-time */
@@ -9617,6 +9699,10 @@ export interface components {
             kind?: components["schemas"]["ScheduleBlockKind"];
             allowsBooking?: boolean;
             note?: string | null;
+            /** @description DX-446: tipos de cita que SÍ se pueden agendar en un bloque RESERVED (1–20, de esta clínica y activos: 404 si alguno es ajeno, 400 si está desactivado). Vacío o ausente en los demás tipos. */
+            reservedForTypeIds?: string[];
+            /** @description DX-446: «Liberar a partir de», minutos desde las 00:00 de la hora de la SEDE del día del bloque (0–1439; 660 = 11:00), antes de su inicio. Pasada esa hora (reloj del servidor) el hueco admite cualquier tipo. null = no se libera. Solo en RESERVED. */
+            releaseAtMinute?: number | null;
             /** @description Igual que al crear, si el rango cambia. */
             confirmAffected?: boolean;
         };
@@ -21105,14 +21191,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-210: `wantsEarlier` solo lo marcan RECEPTION, DENTIST y ADMIN */
+            /** @description DX-210: `wantsEarlier` solo lo marcan RECEPTION, DENTIST y ADMIN. DX-446: `overrideReason` solo lo envían ADMIN y DENTIST */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita, o el horario está bloqueado para ese profesional o la sede (DX-122) */
+            /** @description Solape con otra cita, el horario está bloqueado para ese profesional o la sede (DX-122), o es un hueco reservado para otros tipos y aún sin liberar (DX-446: `code: RESERVED_SLOT`, `canOverride` dice si quien agenda puede reintentar con `overrideReason`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21298,7 +21384,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Rol sin permiso de agenda, sin permiso para ese paso del flujo en la clínica (DX-200), o RECEPTION/ASSISTANT sacando una cita de COMPLETED (DX-273) */
+            /** @description Rol sin permiso de agenda, sin permiso para ese paso del flujo en la clínica (DX-200), o RECEPTION/ASSISTANT sacando una cita de COMPLETED (DX-273), o `overrideReason` sin ser ADMIN ni DENTIST (DX-446) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -21312,7 +21398,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200) */
+            /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22022,7 +22108,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ScheduleBlockDto"][];
+                    "application/json": components["schemas"]["ScheduleBlockListItemDto"][];
                 };
             };
             /** @description Rango vacío o de más de 92 días */
@@ -22062,7 +22148,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScheduleBlockDto"];
                 };
             };
-            /** @description Sin sede ni profesional, fin no posterior al inicio, más de 366 días o nota inválida */
+            /** @description Sin sede ni profesional, fin no posterior al inicio, más de 366 días, nota inválida, o reservado mal formado (DX-446: sin tipos, sin sede, más de un día, liberación tras el inicio, tipo desactivado) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22076,7 +22162,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Sede o profesional de otra clínica */
+            /** @description Sede, profesional o tipo de cita reservado (DX-446) de otra clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
