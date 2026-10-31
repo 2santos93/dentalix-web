@@ -3155,6 +3155,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/production-by-procedure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Producción por procedimiento y categoría, con honorario medio frente a catálogo
+         * @description Ítems de plan REALIZADOS (DONE), vivos y de planes vivos, con `completedAt` en el período (días civiles en la zona de la sede) y `performedLocationId` en una de las sedes que ve quien consulta (DX-089): cuenta la sede donde se REALIZÓ, no la del paciente. Agrupado por categoría y código del catálogo, por moneda del plan sin convertir (subtotal y total por moneda, nunca mezclados). ADMIN ve todo el equipo; un DENTIST, solo lo suyo. Los realizados sin fecha o sin sede salen en `unattributed` («Sin atribuir», DX-305). Sin nombres de paciente.
+         */
+        get: operations["ProductionByProcedureController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/production-by-procedure.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Producción por procedimiento en CSV (mismos filtros)
+         * @description Ítems de plan REALIZADOS (DONE), vivos y de planes vivos, con `completedAt` en el período (días civiles en la zona de la sede) y `performedLocationId` en una de las sedes que ve quien consulta (DX-089): cuenta la sede donde se REALIZÓ, no la del paciente. Agrupado por categoría y código del catálogo, por moneda del plan sin convertir (subtotal y total por moneda, nunca mezclados). ADMIN ve todo el equipo; un DENTIST, solo lo suyo. Los realizados sin fecha o sin sede salen en `unattributed` («Sin atribuir», DX-305). Sin nombres de paciente. Las mismas filas, subtotales y totales que la pantalla, con el período y los filtros en la cabecera; UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["ProductionByProcedureController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/production-by-procedure/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detalle de una fila: los ítems realizados de un procedimiento
+         * @description Mismos filtros y alcance que el reporte, más el procedimiento y la moneda de la fila: paciente, fecha, profesional y sede de cada ítem, del más reciente al más antiguo. Lleva el nombre del paciente: solo ADMIN y DENTIST (que ven pacientes), y el DENTIST solo los suyos. Auditado (VIEW).
+         */
+        get: operations["ProductionByProcedureController_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cash-sessions/settings": {
         parameters: {
             query?: never;
@@ -12552,6 +12612,161 @@ export interface components {
             hasActivity: boolean;
             /** @description ¿Alguna fila (o el total) tiene `previousPeriodUnattributed`? La pantalla lo explica junto a «Producción» y «% de cobro» */
             previousPeriodUnattributed: boolean;
+        };
+        ProductionFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+            /**
+             * Format: uuid
+             * @description En un DENTIST, siempre él
+             */
+            professionalId: string | null;
+            professionalName: string | null;
+            category: string | null;
+        };
+        ProductionLocationOptionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description false = sede desactivada (sigue saliendo) */
+            isActive: boolean;
+        };
+        ProductionProfessionalOptionDto: {
+            /** Format: uuid */
+            userId: string;
+            fullName: string;
+        };
+        ProductionOptionsDto: {
+            /** @description Las sedes que ve quien consulta (DX-089) */
+            locations: components["schemas"]["ProductionLocationOptionDto"][];
+            /** @description Quién atiende (DENTIST o ADMIN); a un DENTIST, solo él mismo */
+            professionals: components["schemas"]["ProductionProfessionalOptionDto"][];
+            /** @description Categorías del catálogo */
+            categories: string[];
+        };
+        ProcedureRowDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Procedimientos realizados */
+            count: number;
+            /** @description Σ precio */
+            gross: number;
+            /** @description Σ descuento */
+            discounts: number;
+            /** @description Bruto − descuentos */
+            net: number;
+            /** @description Honorario medio: neto ÷ cantidad (2 decimales) */
+            averageNet: number;
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @example D2391 */
+            code: string;
+            /** @example Resina */
+            label: string;
+            /** @description Categoría del catálogo; null = «Sin categoría» */
+            category: string | null;
+            /** @description Honorario medio de catálogo: Σ precio de catálogo congelado en cada ítem (DX-105) ÷ los ítems que lo tienen. null si ninguno lo tiene */
+            catalogAverage: number | null;
+            /** @description Ítems con precio de catálogo congelado */
+            catalogCount: number;
+            /** @description Diferencia % (1 decimal) del neto cobrado frente al catálogo, en los ítems que lo tienen: (Σ neto − Σ catálogo) ÷ Σ catálogo. Negativo = por debajo del catálogo. null sin catálogo o con catálogo 0 */
+            differencePercent: number | null;
+        };
+        CategoryTotalsDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Procedimientos realizados */
+            count: number;
+            /** @description Σ precio */
+            gross: number;
+            /** @description Σ descuento */
+            discounts: number;
+            /** @description Bruto − descuentos */
+            net: number;
+            /** @description Honorario medio: neto ÷ cantidad (2 decimales) */
+            averageNet: number;
+            category: string | null;
+        };
+        ProductionTotalsDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Procedimientos realizados */
+            count: number;
+            /** @description Σ precio */
+            gross: number;
+            /** @description Σ descuento */
+            discounts: number;
+            /** @description Bruto − descuentos */
+            net: number;
+            /** @description Honorario medio: neto ÷ cantidad (2 decimales) */
+            averageNet: number;
+        };
+        ProductionAmountsDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Procedimientos realizados */
+            count: number;
+            /** @description Σ precio */
+            gross: number;
+            /** @description Σ descuento */
+            discounts: number;
+            /** @description Bruto − descuentos */
+            net: number;
+        };
+        ProductionByProcedureDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /**
+             * @description CLINIC: todo el equipo (ADMIN); OWN: solo lo suyo (DENTIST)
+             * @enum {string}
+             */
+            scope: "CLINIC" | "OWN";
+            filters: components["schemas"]["ProductionFiltersDto"];
+            options: components["schemas"]["ProductionOptionsDto"];
+            /** @description Una fila por procedimiento y moneda, por categoría («Sin categoría» al final) y código */
+            rows: components["schemas"]["ProcedureRowDto"][];
+            /** @description Subtotal de cada categoría, por moneda */
+            categoryTotals: components["schemas"]["CategoryTotalsDto"][];
+            /** @description Total por moneda: nunca se suman monedas distintas */
+            totals: components["schemas"]["ProductionTotalsDto"][];
+            /** @description Realizados «Sin atribuir» (sin fecha o sin sede de realización, DX-305), por moneda: sin fecha no caen en ningún período, así que salen sea cual sea. Los que no tienen sede solo los ve quien ve todas las sedes sin elegir una */
+            unattributed: components["schemas"]["ProductionAmountsDto"][];
+            /** @description ¿Hay filas o «Sin atribuir»? */
+            hasActivity: boolean;
+        };
+        ProductionItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            completedAt: string;
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            /** Format: uuid */
+            professionalId: string | null;
+            professionalName: string | null;
+            /**
+             * Format: uuid
+             * @description Sede donde se realizó
+             */
+            locationId: string;
+            locationName: string;
+            /** @example 16 */
+            toothNumber: string;
+            currency: string;
+            price: number;
+            discount: number;
+            /** @description Precio − descuento */
+            net: number;
+        };
+        ProductionItemsDto: {
+            items: components["schemas"]["ProductionItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -24940,6 +25155,145 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo la administración ve los reportes de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProductionByProcedureController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses (731 días); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo lo realizado en esta sede (400 si no es de la clínica; 403 si no es de las del usuario). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo lo que realizó este profesional (usuario). Un DENTIST solo puede pedir el suyo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+                /** @description Solo los procedimientos de esta categoría del catálogo */
+                category?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionByProcedureDto"];
+                };
+            };
+            /** @description Período inválido o de más de 24 meses, o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven la producción por procedimiento. / Solo puedes ver tu propia producción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProductionByProcedureController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses (731 días); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo lo realizado en esta sede (400 si no es de la clínica; 403 si no es de las del usuario). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo lo que realizó este profesional (usuario). Un DENTIST solo puede pedir el suyo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+                /** @description Solo los procedimientos de esta categoría del catálogo */
+                category?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 24 meses, o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven la producción por procedimiento. / Solo puedes ver tu propia producción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProductionByProcedureController_items: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede donde se realizó). Como mucho 24 meses (731 días); las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo lo realizado en esta sede (400 si no es de la clínica; 403 si no es de las del usuario). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo lo que realizó este profesional (usuario). Un DENTIST solo puede pedir el suyo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+                /** @description Solo los procedimientos de esta categoría del catálogo */
+                category?: string;
+                /** @description El procedimiento del catálogo de la fila */
+                catalogItemId: string;
+                /** @description La moneda de la fila (ISO 4217); sin ella, todas */
+                currency?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionItemsDto"];
+                };
+            };
+            /** @description Período inválido o de más de 24 meses, o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven la producción por procedimiento. / Solo puedes ver tu propia producción. / sede fuera de las del usuario */
             403: {
                 headers: {
                     [name: string]: unknown;

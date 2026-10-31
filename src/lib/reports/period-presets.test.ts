@@ -1,4 +1,4 @@
-import { isValidPeriod, MAX_PERIOD_DAYS, PERIOD_PRESETS, periodFor } from './period-presets';
+import { isValidPeriod, MAX_PERIOD_DAYS, PERIOD_PRESETS, PRODUCTION_MAX_PERIOD_DAYS, periodFor } from './period-presets';
 
 describe('periodos de «Comparar sedes» (DX-014)', () => {
   const today = '2026-10-24';
@@ -41,5 +41,11 @@ describe('periodos de «Comparar sedes» (DX-014)', () => {
 
   it('«Personalizado» no tiene fechas propias', () => {
     expect(periodFor('custom', today)).toBeNull();
+  });
+
+  it('DX-423: con otro tope, 24 meses (731 días) caben y uno más no', () => {
+    expect(isValidPeriod({ from: '2024-11-01', to: '2026-10-31' }, PRODUCTION_MAX_PERIOD_DAYS)).toBe(true);
+    expect(isValidPeriod({ from: '2024-10-31', to: '2026-11-01' }, PRODUCTION_MAX_PERIOD_DAYS)).toBe(false);
+    expect(isValidPeriod({ from: '2024-11-01', to: '2026-10-31' })).toBe(false);
   });
 });
