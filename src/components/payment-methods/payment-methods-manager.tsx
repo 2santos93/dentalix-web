@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { Lock, Plus, Wallet } from 'lucide-react';
+import { Lock, Pencil, Plus, Power, PowerOff, Wallet } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   PAYMENT_METHOD_KIND_LABELS,
@@ -14,6 +14,10 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { notifyError } from '@/components/errors/notify';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { SectionHeader } from '@/components/ui/section-header';
+import type { RowAction } from '@/components/shared/row-actions';
+import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import { PaymentMethodFormModal } from './payment-method-form-modal';
 
 export const paymentMethodsCopy = {
@@ -32,7 +36,6 @@ export const paymentMethodsCopy = {
   colKind: 'Tipo base',
   colReference: 'Referencia',
   colStatus: 'Estado',
-  colActions: 'Acciones',
   requiresReference: 'Pide referencia',
   noReference: 'Opcional',
   active: 'Activo',
@@ -40,7 +43,6 @@ export const paymentMethodsCopy = {
   edit: 'Editar',
   deactivate: 'Desactivar',
   activate: 'Activar',
-  actionFor: (action: string, name: string) => `${action} «${name}»`,
   toggleError: (name: string) => `No pudimos cambiar el estado de «${name}».`,
 };
 const copy = paymentMethodsCopy;
@@ -126,56 +128,59 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
     }
   }
 
-  function actions(method: ClinicPaymentMethod) {
-    const toggleLabel = method.active ? copy.deactivate : copy.activate;
-    return (
-      <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => openModal(method)}
-          aria-label={copy.actionFor(copy.edit, method.name)}
-          className="max-sm:h-11 max-sm:flex-1"
-        >
-          {copy.edit}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          loading={pendingId === method.id}
-          onClick={() => void toggleActive(method)}
-          aria-label={copy.actionFor(toggleLabel, method.name)}
-          className="max-sm:h-11 max-sm:flex-1"
-        >
-          {toggleLabel}
-        </Button>
-      </div>
-    );
+  function rowActions(method: ClinicPaymentMethod): RowAction[] {
+    // Mientras su cambio de estado va en vuelo, la fila no ofrece otro.
+    const busy = pendingId === method.id;
+    return [
+      { label: copy.edit, icon: <Pencil aria-hidden />, onSelect: () => afterMenuCloses(() => openModal(method)) },
+      method.active
+        ? {
+            label: copy.deactivate,
+            icon: <PowerOff aria-hidden />,
+            destructive: true,
+            separatorBefore: true,
+            disabled: busy,
+            onSelect: () => void toggleActive(method),
+          }
+        : {
+            label: copy.activate,
+            icon: <Power aria-hidden />,
+            separatorBefore: true,
+            disabled: busy,
+            onSelect: () => void toggleActive(method),
+          },
+    ];
   }
 
-  const status = (method: ClinicPaymentMethod) => (
-    <Badge variant={method.active ? 'success' : 'muted'}>
-      {method.active ? copy.active : copy.inactive}
-    </Badge>
-  );
   const reference = (method: ClinicPaymentMethod) =>
     method.requiresReference ? copy.requiresReference : copy.noReference;
 
+  const columns: DataListColumn<ClinicPaymentMethod>[] = [
+    { id: 'name', header: copy.colName, mobile: 'primary', cell: (m) => <span className="font-medium text-ink">{m.name}</span> },
+    { id: 'kind', header: copy.colKind, cell: (m) => PAYMENT_METHOD_KIND_LABELS[m.kind] },
+    { id: 'reference', header: copy.colReference, cell: reference },
+    {
+      id: 'status',
+      header: copy.colStatus,
+      mobile: 'trailing',
+      // Activo / Inactivo es un estado del medio (no su categoría): tono del vocabulario común.
+      cell: (m) => (
+        <Badge variant={m.active ? 'success' : 'neutral'} dot>
+          {m.active ? copy.active : copy.inactive}
+        </Badge>
+      ),
+    },
+  ];
+
   return (
     <section aria-labelledby="payment-methods-title" className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <h2 id="payment-methods-title" className="t-title text-ink">
-          {copy.title}
-        </h2>
-        <p className="text-sm text-muted">{copy.description}</p>
-      </div>
+      <SectionHeader titleId="payment-methods-title" title={copy.title} description={copy.description} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted" aria-live="polite">
           {loading || error ? '' : copy.count(methods.length)}
         </p>
-        <Button type="button" onClick={() => openModal(null)} className="w-full max-sm:h-11 sm:w-auto">
+        {/* Secundaria: la primaria de Ajustes › Caja es «Guardar» de sus ajustes. */}
+        <Button type="button" variant="secondary" onClick={() => openModal(null)} className="w-full max-sm:h-11 sm:w-auto">
           <Plus aria-hidden />
           {copy.newMethod}
         </Button>
@@ -190,59 +195,15 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
         emptyDescription={copy.emptyHint}
         emptyIcon={<Wallet aria-hidden />}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colName}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colKind}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colReference}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {methods.map((m) => (
-              <tr key={m.id} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-3 font-medium">{m.name}</td>
-                <td className="px-4 py-3">{PAYMENT_METHOD_KIND_LABELS[m.kind]}</td>
-                <td className="px-4 py-3">{reference(m)}</td>
-                <td className="px-4 py-3">{status(m)}</td>
-                <td className="px-4 py-3">{actions(m)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {methods.map((m) => (
-            <li
-              key={m.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="min-w-0 truncate font-medium">{m.name}</span>
-                {status(m)}
-              </div>
-              <p className="text-xs text-muted">
-                {PAYMENT_METHOD_KIND_LABELS[m.kind]} · {reference(m)}
-              </p>
-              {actions(m)}
-            </li>
-          ))}
-        </ul>
+        <DataList
+          label={copy.tableLabel}
+          rows={methods}
+          columns={columns}
+          getRowKey={(m) => m.id}
+          getRowLabel={(m) => m.name}
+          onRowClick={(m) => openModal(m)}
+          rowActions={rowActions}
+        />
       </AsyncSection>
 
       <PaymentMethodFormModal

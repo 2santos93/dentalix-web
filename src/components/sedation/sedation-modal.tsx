@@ -14,7 +14,6 @@ import {
   PHASE_LABELS,
   ROUTE_LABELS,
   SEDATION_REASON_MIN,
-  STATUS_LABELS,
   assessSedation,
   bodyMassIndex,
   dischargeSedation,
@@ -52,6 +51,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 import { TimeField } from '@/components/ui/date-field';
 import { Callout } from '@/components/ui/callout';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 
 export const sedationCopy = {
   title: 'Hoja de sedación',
@@ -227,12 +228,12 @@ const UNITS = Object.keys(DOSE_UNIT_LABELS) as SedationDoseUnit[];
 const OTHER_ROUTES = (Object.keys(ROUTE_LABELS) as SedationRoute[]).filter((r) => r !== 'INHALED');
 const TICK_MS = 30_000;
 
+/** Un dato de la hoja (DescriptionList, DESIGN.md → Description list), con cifras tabulares. */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
-      <dt className="text-xs font-medium text-muted sm:w-48 sm:shrink-0">{label}</dt>
-      <dd className="min-w-0 break-words text-sm text-ink tabular-nums">{children}</dd>
-    </div>
+    <DescriptionItem label={label} numeric>
+      {children}
+    </DescriptionItem>
   );
 }
 
@@ -580,22 +581,24 @@ export function SedationModal({
 
   function renderSheet(s: SedationSheet) {
     const heading = (key: string, label: string) => (
-      <h3 id={`${id}-${key}`} className="text-sm font-medium text-ink">
+      <h3 id={`${id}-${key}`} className="t-label text-ink">
         {label}
       </h3>
     );
     return (
       <div className="flex flex-col gap-4">
-        <p className="break-words text-xs text-muted">
-          {sedationCopy.status}: <span className="font-medium text-ink">{STATUS_LABELS[s.status]}</span>
-          {' · '}
-          {sedationCopy.template(s.templateVersion, s.vitalsIntervalMinutes)}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="sr-only">{sedationCopy.status}: </span>
+          <StatusBadge kind="sedationSheet" status={s.status} />
+          <span className="t-caption break-words">
+            {sedationCopy.template(s.templateVersion, s.vitalsIntervalMinutes)}
+          </span>
         </p>
         {renderWatch(s)}
 
         <section aria-labelledby={`${id}-assessment`} className="flex flex-col gap-2">
           {heading('assessment', sedationCopy.assessmentHeading)}
-          <dl className="flex flex-col gap-1.5 rounded-lg border border-border p-3">
+          <DescriptionList columns={2} className="rounded-lg border border-border p-3">
             <Row label={sedationCopy.grade}>{GRADE_LABELS[s.grade]}</Row>
             <Row label={sedationCopy.asa}>
               {s.asaClass ? `ASA ${s.asaClass}${s.asaEmergency ? 'E' : ''}` : '—'}
@@ -617,7 +620,7 @@ export function SedationModal({
               {s.escortName ? `${s.escortName}${s.escortRelationship ? ` (${s.escortRelationship})` : ''}` : '—'}
             </Row>
             <Row label={sedationCopy.consentRead}>{s.consentConfirmed ? sedationCopy.yes : sedationCopy.no}</Row>
-          </dl>
+          </DescriptionList>
           <p className="text-xs text-muted">{by(s.author, s.assessedAt)}</p>
         </section>
 
@@ -654,7 +657,7 @@ export function SedationModal({
           {s.agents.length === 0 ? (
             <p className="text-sm text-muted">{sedationCopy.noAgents}</p>
           ) : (
-            <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border">
+            <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border">
               {s.agents.map((a) => (
                 <li key={a.id} className="flex flex-col gap-0.5 px-3 py-2 text-sm">
                   <span className="font-medium text-ink">
@@ -679,7 +682,7 @@ export function SedationModal({
             <ScrollFrame label={sedationCopy.vitalsTable} className="rounded-lg border border-border">
               <table aria-labelledby={`${id}-vitals`} className="w-full min-w-[34rem] text-sm text-ink">
                 <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted">
+                  <tr className="border-b border-border bg-surface-sunken text-left text-xs text-muted">
                     <th scope="col" className="px-2 py-2 font-medium">{sedationCopy.time}</th>
                     <th scope="col" className="px-2 py-2 font-medium">{sedationCopy.phase}</th>
                     <th scope="col" className="px-2 py-2 font-medium">SpO₂</th>
@@ -693,7 +696,7 @@ export function SedationModal({
                 </thead>
                 <tbody>
                   {s.vitals.map((v) => (
-                    <tr key={v.id} className="border-b border-hairline last:border-0 tabular-nums">
+                    <tr key={v.id} className="border-b border-border-subtle last:border-0 tabular-nums">
                       <td className="px-2 py-1.5">{sedeTime(v.takenAt, clock)}</td>
                       <td className="px-2 py-1.5">{PHASE_LABELS[v.phase]}</td>
                       <td className="px-2 py-1.5">{v.spo2 ?? '—'}</td>
@@ -716,7 +719,7 @@ export function SedationModal({
         {s.discharge ? (
           <section aria-labelledby={`${id}-discharge`} className="flex flex-col gap-2">
             {heading('discharge', sedationCopy.dischargeHeading)}
-            <dl className="flex flex-col gap-1.5 rounded-lg border border-border p-3">
+            <DescriptionList columns={2} className="rounded-lg border border-border p-3">
               <Row label={sedationCopy.criteria}>
                 {s.discharge.criteria.every((c) => c.met)
                   ? s.discharge.criteria.map((c) => c.label).join(' · ')
@@ -739,7 +742,7 @@ export function SedationModal({
               {s.discharge.sameMonitorJustification ? (
                 <Row label={sedationCopy.sameMonitorRead}>{s.discharge.sameMonitorJustification}</Row>
               ) : null}
-            </dl>
+            </DescriptionList>
           </section>
         ) : null}
       </div>
@@ -865,8 +868,8 @@ export function SedationModal({
         </div>
         {checkbox('asaEmergency', sedationCopy.asaEmergency)}
         {asa && HIGH_ASA.includes(asa) ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning-subtle p-3">
-            <p className="text-sm text-ink">{sedationCopy.highAsaHint}</p>
+          <div className="flex flex-col gap-3">
+            <Callout tone="warning">{sedationCopy.highAsaHint}</Callout>
             <FormField htmlFor={`${id}-interconsultation`} label={sedationCopy.interconsultation}>
               <Textarea
                 id={`${id}-interconsultation`}
@@ -905,14 +908,14 @@ export function SedationModal({
           {numberInput('weight', sedationCopy.weight)}
           {numberInput('height', sedationCopy.height)}
           <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-ink">{sedationCopy.bmi}</span>
+            <span className="t-label text-ink">{sedationCopy.bmi}</span>
             <output aria-live="polite" className="text-sm tabular-nums text-ink">
               {bmi === null ? '—' : formatDecimal(bmi)}
             </output>
           </div>
         </div>
         <div className="rounded-lg border border-border p-3">
-          <p className="text-sm font-medium text-ink">{sedationCopy.reversal}</p>
+          <p className="t-label text-ink">{sedationCopy.reversal}</p>
           <p aria-live="polite" className="text-sm tabular-nums text-ink">
             {reversal ? sedationCopy.reversalLine(reversal.naloxoneMg, reversal.flumazenilMg) : '—'}
           </p>
@@ -1032,7 +1035,7 @@ export function SedationModal({
     return (
       <div className="flex flex-col gap-3">
         <fieldset className="flex flex-col gap-1">
-          <legend className="text-sm font-medium text-ink">{sedationCopy.criteria}</legend>
+          <legend className="t-label text-ink">{sedationCopy.criteria}</legend>
           <p className="text-xs text-muted">
             {sedationCopy.criteriaHint(tpl.dischargeCriteria.length, tpl.aldreteMinimum)}
           </p>
@@ -1043,7 +1046,7 @@ export function SedationModal({
           {timeInput('time', sedationCopy.dischargedAt)}
         </div>
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-sm font-medium text-ink">{sedationCopy.dischargeVitals}</legend>
+          <legend className="t-label text-ink">{sedationCopy.dischargeVitals}</legend>
           {vitalsFields('d-')}
         </fieldset>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1085,7 +1088,7 @@ export function SedationModal({
   function renderForm(tpl: SedationTemplate) {
     if (!action) return null;
     return (
-      <div className="flex flex-col gap-3 border-t border-hairline pt-3">
+      <div className="flex flex-col gap-3 border-t border-border-subtle pt-3">
         {actions.length > 1 ? (
           <RadioGroup
             id={`${id}-action`}
@@ -1104,7 +1107,7 @@ export function SedationModal({
             ))}
           </RadioGroup>
         ) : (
-          <h3 className="text-sm font-medium text-ink">{sedationCopy.actions[action]}</h3>
+          <h3 className="t-label text-ink">{sedationCopy.actions[action]}</h3>
         )}
         {action === 'ASSESS' ? renderAssessForm() : null}
         {action === 'CHECKLIST' && sheet ? renderChecklistForm(tpl, sheet) : null}

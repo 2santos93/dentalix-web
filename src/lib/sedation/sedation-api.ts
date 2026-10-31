@@ -1,3 +1,4 @@
+import { statusLabels } from '@/lib/status/tones';
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 
@@ -75,12 +76,8 @@ export const DOSE_UNIT_LABELS: Record<SedationDoseUnit, string> = {
   ML: 'ml',
 };
 
-export const STATUS_LABELS: Record<SedationStatus, string> = {
-  ASSESSED: 'Valorada',
-  CHECKED: 'Checklist hecho',
-  IN_PROGRESS: 'En curso',
-  DISCHARGED: 'Egreso firmado',
-};
+/** Etiquetas del estado de la hoja: salen del mapa único de estados (`tones.ts`). */
+export const STATUS_LABELS: Record<SedationStatus, string> = statusLabels('sedationSheet');
 
 const entryPath = (patientId: string, entryId: string) =>
   `/patients/${patientId}/clinical-entries/${entryId}/sedation`;

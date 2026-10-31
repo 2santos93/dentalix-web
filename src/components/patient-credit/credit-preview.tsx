@@ -7,9 +7,9 @@ export function CreditPreview({ rows }: { rows: { label: string; value: string }
     <section
       aria-label={creditPreviewCopy.previewTitle}
       aria-live="polite"
-      className="rounded-lg border border-border bg-surface-2"
+      className="rounded-lg border border-border bg-surface-sunken"
     >
-      <dl className="divide-y divide-hairline">
+      <dl className="divide-y divide-border-subtle">
         {rows.map((row) => (
           <div key={row.label} className="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
             <dt className="min-w-0 break-words text-muted">{row.label}</dt>

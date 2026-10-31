@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Download, FileSignature, MailCheck, RotateCcw, Send } from 'lucide-react';
+import { Download, FileSignature, Link2Off, MailCheck, RotateCcw, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { notifyError } from '@/components/errors/notify';
@@ -19,12 +19,16 @@ import {
   type SignatureRequest,
   type SignatureRequestCreated,
 } from '@/lib/signature-requests/signature-requests-api';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Callout } from '@/components/ui/callout';
+import { SectionHeader } from '@/components/ui/section-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
+import { RowActions, type RowAction } from '@/components/shared/row-actions';
+import { afterMenuCloses } from '@/components/patients/after-menu-closes';
 import { SendToSignModal } from './send-to-sign-modal';
 
 const copy = {
@@ -58,7 +62,7 @@ const copy = {
   completed: (when: string) => `Completo: el profesional firmó el ${when}`,
   revoked: (when: string) => `Anulado el ${when}`,
   revoke: 'Anular enlace',
-  revokeHint: (title: string) => ` de ${title}`,
+  actionsOf: (title: string) => `Acciones de ${title}`,
   revokeTitle: '¿Anular el enlace?',
   revokeDescription: (title: string, to: string) =>
     `El enlace de «${title}» enviado a ${to} dejará de servir. Si hace falta, puedes enviar otro.`,
@@ -84,21 +88,6 @@ const copy = {
   resendCopyError: 'No pudimos reenviar la copia. Intenta de nuevo.',
 };
 
-// Variantes de Badge (DESIGN.md · Chips): en curso con borde, esperando al
-// profesional en warning, completo en success, anulado y bloqueado en danger
-// (como un plan cancelado) y caducado neutro.
-const BADGE: Record<
-  SignatureRequest['status'],
-  'outline' | 'warning' | 'danger' | 'muted' | 'success'
-> = {
-  SENT: 'outline',
-  OPENED: 'outline',
-  LOCKED: 'danger',
-  EXPIRED: 'muted',
-  REVOKED: 'danger',
-  SIGNED_BY_PATIENT: 'warning',
-  COMPLETE: 'success',
-};
 
 function at(iso: string | null | undefined, clock: SedeClock | null): string {
   if (!iso) return NO_SEDE_FORMAT;
@@ -153,16 +142,19 @@ function SignedPdfStatusLine({
   status,
   copySentAt,
   clock,
+  retry,
 }: {
   status: SignatureRequest['signedPdfStatus'];
   copySentAt: string | null;
   clock: SedeClock | null;
+  /** «Reintentar PDF», junto al aviso del fallo. */
+  retry?: React.ReactNode;
 }) {
   if (status === 'READY') {
     return (
       <>
         <p className="text-sm text-muted">{copy.pdfReady}</p>
-        <p className="text-sm text-muted tabular-nums">
+        <p className="text-sm tabular-nums text-muted">
           {copySentAt ? copy.copySent(at(copySentAt, clock)) : copy.copyNotSent}
         </p>
       </>
@@ -176,10 +168,11 @@ function SignedPdfStatusLine({
     );
   }
   if (status === 'FAILED') {
+    // Aviso de esta fila con su salida al lado (DESIGN.md → Callout).
     return (
-      <p role="alert" className="text-sm text-danger-text">
+      <Callout tone="danger" role="alert" action={retry}>
         {copy.pdfFailed}
-      </p>
+      </Callout>
     );
   }
   return null;
@@ -363,32 +356,69 @@ export function PatientSignatureRequestsSection({
 
   const clockOf = (locationId: string) => screenClock?.of(locationId) ?? screenClock;
 
+  function rowActions(r: SignatureRequest): RowAction[] {
+    const list: RowAction[] = [];
+    if (r.status === 'COMPLETE' && r.signedPdfStatus === 'READY' && r.signedPdfDocumentId) {
+      list.push({
+        label: copy.downloadPdf,
+        icon: <Download aria-hidden />,
+        disabled: pdfBusy.has(r.id),
+        onSelect: () => void handleDownloadPdf(r),
+      });
+      if (r.consentId) {
+        list.push({
+          label: copy.resendCopy,
+          icon: <MailCheck aria-hidden />,
+          disabled: pdfBusy.has(copyBusyKey(r.id)),
+          onSelect: () => void handleResendCopy(r),
+        });
+      }
+    }
+    if (canRevokeSignatureRequest(r.status)) {
+      list.push({
+        label: copy.revoke,
+        icon: <Link2Off aria-hidden />,
+        destructive: true,
+        separatorBefore: list.length > 0,
+        onSelect: () =>
+          afterMenuCloses(() => {
+            setRevokeError(null);
+            setConfirmRevoke(r);
+          }),
+      });
+    }
+    return list;
+  }
+
   return (
     <section
       aria-labelledby={`${ids}-heading`}
       data-testid="patient-signature-requests"
-      className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:p-6"
+      className="flex flex-col gap-4"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 id={`${ids}-heading`} className="text-base font-semibold text-ink">
-            {copy.heading}
-          </h3>
-          <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
-        </div>
-        <Button
-          ref={sendRef}
-          type="button"
-          className="w-full sm:w-auto"
-          onClick={() => {
-            setModalKey((k) => k + 1);
-            setModalOpen(true);
-          }}
-        >
-          <Send aria-hidden />
-          {copy.send}
-        </Button>
-      </div>
+      {/* B7: sin tarjeta propia (la pestaña ya es la superficie) y «Enviar a
+          firmar» secundaria: la primaria de la pestaña es «Nuevo consentimiento». */}
+      <SectionHeader
+        as="h3"
+        titleId={`${ids}-heading`}
+        title={copy.heading}
+        description={copy.support}
+        actions={
+          <Button
+            ref={sendRef}
+            type="button"
+            variant="secondary"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              setModalKey((k) => k + 1);
+              setModalOpen(true);
+            }}
+          >
+            <Send aria-hidden />
+            {copy.send}
+          </Button>
+        }
+      />
 
       {loading ? (
         <div role="status" aria-label={copy.loading} className="flex flex-col gap-2">
@@ -414,94 +444,63 @@ export function PatientSignatureRequestsSection({
           />
         </div>
       ) : (
-        <ul aria-label={copy.listLabel} className="flex flex-col divide-y divide-hairline">
-          {rows.map((r) => (
-            <li
-              key={r.id}
-              className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
-            >
-              <div className="flex min-w-0 flex-col gap-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-ink">{r.title}</span>
-                  <Badge variant={BADGE[r.status]}>{signatureStatusLabel(r.status, r.signerType)}</Badge>
+        <ul
+          aria-label={copy.listLabel}
+          className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border bg-surface"
+        >
+          {rows.map((r) => {
+            const actions = rowActions(r);
+            return (
+              <li key={r.id} className="flex items-start gap-3 px-4 py-3 sm:px-6">
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="break-words font-medium text-ink">{r.title}</span>
+                    <StatusBadge kind="signatureRequest" status={r.status}>
+                      {signatureStatusLabel(r.status, r.signerType)}
+                    </StatusBadge>
+                  </div>
+                  <ul className="flex flex-col gap-0.5 text-sm text-muted tabular-nums">
+                    {evidence(r, clockOf(r.locationId), userId).map((line) => (
+                      <li key={line} className="break-words">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                  <SignedPdfStatusLine
+                    status={r.status === 'COMPLETE' ? r.signedPdfStatus : null}
+                    copySentAt={r.signedPdfCopySentAt}
+                    clock={clockOf(r.locationId)}
+                    retry={
+                      r.status === 'COMPLETE' && r.signedPdfStatus === 'FAILED' && r.consentId ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="min-h-11 sm:min-h-9"
+                          loading={pdfBusy.has(r.id)}
+                          disabled={pdfBusy.has(r.id)}
+                          onClick={() => void handleRetryPdf(r)}
+                        >
+                          <RotateCcw aria-hidden />
+                          {copy.retryPdf}
+                          <span className="sr-only">{copy.pdfFor(r.title)}</span>
+                        </Button>
+                      ) : null
+                    }
+                  />
                 </div>
-                <ul className="flex flex-col gap-0.5 text-sm text-muted tabular-nums">
-                  {evidence(r, clockOf(r.locationId), userId).map((line) => (
-                    <li key={line} className="break-words">
-                      {line}
-                    </li>
-                  ))}
-                </ul>
-                <SignedPdfStatusLine
-                  status={r.status === 'COMPLETE' ? r.signedPdfStatus : null}
-                  copySentAt={r.signedPdfCopySentAt}
-                  clock={clockOf(r.locationId)}
-                />
-              </div>
-              {r.status === 'COMPLETE' && r.signedPdfStatus === 'READY' && r.signedPdfDocumentId ? (
-                <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="min-h-11 sm:min-h-9"
-                    loading={pdfBusy.has(r.id)}
-                    disabled={pdfBusy.has(r.id)}
-                    onClick={() => void handleDownloadPdf(r)}
-                  >
-                    <Download aria-hidden />
-                    {copy.downloadPdf}
-                    <span className="sr-only">{copy.pdfFor(r.title)}</span>
-                  </Button>
-                  {r.consentId ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="min-h-11 sm:min-h-9"
-                      loading={pdfBusy.has(copyBusyKey(r.id))}
-                      disabled={pdfBusy.has(copyBusyKey(r.id))}
-                      onClick={() => void handleResendCopy(r)}
-                    >
-                      <MailCheck aria-hidden />
-                      {copy.resendCopy}
-                      <span className="sr-only">{copy.pdfFor(r.title)}</span>
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
-              {r.status === 'COMPLETE' && r.signedPdfStatus === 'FAILED' && r.consentId ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="min-h-11 shrink-0 sm:min-h-9"
-                  loading={pdfBusy.has(r.id)}
-                  disabled={pdfBusy.has(r.id)}
-                  onClick={() => void handleRetryPdf(r)}
-                >
-                  <RotateCcw aria-hidden />
-                  {copy.retryPdf}
-                  <span className="sr-only">{copy.pdfFor(r.title)}</span>
-                </Button>
-              ) : null}
-              {canRevokeSignatureRequest(r.status) ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="min-h-11 shrink-0 sm:min-h-9"
-                  onClick={() => {
-                    setRevokeError(null);
-                    setConfirmRevoke(r);
-                  }}
-                >
-                  {copy.revoke}
-                  <span className="sr-only">{copy.revokeHint(r.title)}</span>
-                </Button>
-              ) : null}
-            </li>
-          ))}
+                {actions.length > 0 ? (
+                  <RowActions
+                    label={copy.actionsOf(r.title)}
+                    actions={actions}
+                    busy={pdfBusy.has(r.id) || pdfBusy.has(copyBusyKey(r.id))}
+                    // 44 px bajo sm, como el «⋯» de las tarjetas de DataList.
+                    className="size-11 shrink-0 sm:size-9"
+                  />
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
 
