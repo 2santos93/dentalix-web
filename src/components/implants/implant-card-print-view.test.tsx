@@ -7,6 +7,7 @@ import { setupUser } from '@/lib/test/user';
 import { makeImplantCard, tokenFor } from '@/lib/test/implants';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { citesLaw } from '@/architecture/law-citation';
 
 jest.mock('../../lib/implants/implants-api', () => ({
   ...jest.requireActual('../../lib/implants/implants-api'),
@@ -105,6 +106,8 @@ describe('ImplantCardPrintView (DX-191)', () => {
     expect(items[1]).toHaveAttribute('data-voided', 'true');
     expect(items[1]).toHaveTextContent('ANULADO');
     expect(card).toHaveTextContent('Entrega pendiente de registrar.');
+    // DX-323: la tarjeta no cita la base legal de ningún país.
+    expect(citesLaw(card.textContent ?? '')).toBe(false);
     // No abre el diálogo sola: la entrega se registra al pulsar «Imprimir».
     expect(window.print).not.toHaveBeenCalled();
   });
