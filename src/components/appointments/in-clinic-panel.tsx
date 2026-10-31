@@ -72,6 +72,8 @@ export const inClinicCopy = {
   overbooked: 'Sobrecupo',
   triage: (patient: string) => `Señales de triaje de ${patient}`,
   arrivedAt: (time: string, punctuality: string) => `Llegó ${time} · ${punctuality}`,
+  // Sin cita no hay hora con la que comparar: solo la llegada.
+  arrivedAtWalkIn: (time: string) => `Llegó ${time}`,
 };
 
 type GroupKey = keyof typeof inClinicCopy.groups;
@@ -340,7 +342,7 @@ function InClinicGroup({
                 key={item.appointmentId}
                 data-testid="in-clinic-item"
                 data-appointment-id={item.appointmentId}
-                data-punctuality={item.punctuality}
+                data-punctuality={item.walkIn ? undefined : item.punctuality}
                 className="flex flex-col gap-2 border-b border-hairline py-3 last:border-0"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -356,17 +358,25 @@ function InClinicGroup({
                     </p>
                     {item.arrivedAt ? (
                       <p className="text-xs tabular-nums text-muted">
-                        {inClinicCopy.arrivedAt(
-                          timeInZone(item.arrivedAt, tz, fmt),
-                          punctualityLabel(item.punctuality),
-                        )}
+                        {item.walkIn
+                          ? inClinicCopy.arrivedAtWalkIn(timeInZone(item.arrivedAt, tz, fmt))
+                          : inClinicCopy.arrivedAt(
+                              timeInZone(item.arrivedAt, tz, fmt),
+                              punctualityLabel(item.punctuality),
+                            )}
                       </p>
                     ) : null}
                     <TriageSummary item={item} patientName={name} />
                   </div>
-                  <StatusBadge kind="punctuality" status={item.punctuality} className="tabular-nums">
-                    {inClinicCopy.minutes[group](item.minutesInStatus)}
-                  </StatusBadge>
+                  {item.walkIn ? (
+                    <Badge variant="neutral" className="tabular-nums">
+                      {inClinicCopy.minutes[group](item.minutesInStatus)}
+                    </Badge>
+                  ) : (
+                    <StatusBadge kind="punctuality" status={item.punctuality} className="tabular-nums">
+                      {inClinicCopy.minutes[group](item.minutesInStatus)}
+                    </StatusBadge>
+                  )}
                 </div>
                 <ReservedElsewhereNotice item={item} runner={runner} onRetry={onRetry} />
                 <PatientFlowActions

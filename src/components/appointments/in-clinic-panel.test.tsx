@@ -139,6 +139,37 @@ describe('InClinicPanel (DX-200)', () => {
     expect(screen.getByText('4 pacientes')).toBeInTheDocument();
   });
 
+  it('DX-470 (QA): una llegada sin cita no muestra puntualidad («tarde») ni su color', () => {
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({
+            waiting: [
+              item({
+                appointmentId: 'u1',
+                urgent: true,
+                walkIn: true,
+                punctuality: 'LATE',
+                minutesInStatus: 3,
+                arrivedAt: '2026-10-19T14:03:00.000Z',
+              }),
+              item({ appointmentId: 'n1', patientFirstName: 'Berta', punctuality: 'LATE', arrivedAt: '2026-10-19T14:03:00.000Z' }),
+            ],
+          }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const [walkIn, normal] = screen.getAllByTestId('in-clinic-item');
+    expect(walkIn).not.toHaveTextContent(/tarde/i);
+    expect(within(walkIn).getByText(/^Llegó \d{1,2}:\d{2}/)).toBeInTheDocument();
+    expect(walkIn).not.toHaveAttribute('data-punctuality');
+    const badge = within(walkIn).getByText('Espera 3 min');
+    expect(badge).not.toHaveAttribute('data-status');
+    expect(normal).toHaveTextContent(/hasta 5 min tarde/);
+  });
+
   it('DX-470: la urgencia sin cita sale con su insignia, sus señales y la nota', () => {
     render(
       <InClinicPanel
