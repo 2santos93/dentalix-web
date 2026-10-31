@@ -31,7 +31,7 @@ export const linkOfferCopy = {
   skipped: (names: string) => `Sin este canal (no se les envía): ${names}.`,
   none: 'Ninguno de los elegidos puede recibirlo por este canal.',
   submit: 'Enviar oferta',
-  close: 'Cerrar',
+  close: 'Listo',
   sent: 'Oferta enviada',
   sentEmail: 'Correo en camino',
   openWhatsApp: 'Abrir WhatsApp',

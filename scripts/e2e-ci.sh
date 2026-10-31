@@ -117,6 +117,9 @@ load_env() {
   # DX-243: la firma a distancia pública (por IP y por token).
   export RATE_LIMIT_SIGNATURE_LIMIT=100000
   export RATE_LIMIT_SIGNATURE_TOKEN_LIMIT=100000
+  # DX-435: la oferta de hueco pública (por IP y por token).
+  export RATE_LIMIT_SLOT_OFFER_LIMIT=100000
+  export RATE_LIMIT_SLOT_TOKEN_LIMIT=100000
   # SEC-046: lecturas de un fichero de importación (inspect, dry-run y hoja de
   # saldos), 10 por minuto por clínica + usuario en un balde común. Los specs
   # de importación y de saldos migrados leen con el mismo ADMIN de la demo
