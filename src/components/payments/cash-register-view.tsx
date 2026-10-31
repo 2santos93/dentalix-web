@@ -158,7 +158,7 @@ interface CashRegisterViewProps {
  *
  * La barra no usa `ListToolbar` porque aquí no hay buscador —la API filtra por
  * período y método, no por texto— pero repite su gramática: misma fila, mismos
- * 40px y el mismo `toolbarFieldClass` en los controles.
+ * 40px y los mismos controles (`NativeSelect`, `DateRangePicker`).
  *
  * Los totales llegan del servidor ya agregados sobre el período ENTERO (no la
  * página visible) y sin convertir: un total por moneda, que es lo que se cuenta

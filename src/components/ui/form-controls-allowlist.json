@@ -3,14 +3,5 @@
     "checkbox": 2,
     "radio": 1,
     "select": 1
-  },
-  "src/components/locations/location-switcher.tsx": {
-    "select": 2
-  },
-  "src/components/shared/currency-select.tsx": {
-    "select": 1
-  },
-  "src/components/shared/list-toolbar.tsx": {
-    "select": 1
   }
 }

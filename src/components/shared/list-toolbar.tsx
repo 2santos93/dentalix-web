@@ -3,22 +3,10 @@ import * as React from 'react';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { controlHeight, fieldClass } from '@/lib/ui/field-class';
 
 const copy = {
   clear: 'Limpiar la búsqueda',
 };
-
-/**
- * Clase del `<select>` nativo para que case con el átomo `Input`. Se mantiene
- * nativo a propósito: en móvil abre la rueda del sistema, que es más rápida y
- * accesible que cualquier lista que dibujemos nosotros.
- *
- * Se exporta porque las vistas declaran sus propios filtros como children —
- * cada lista filtra por cosas distintas y no tiene sentido inventar aquí una
- * abstracción de "filtro" que solo sirva para el mínimo común.
- */
-export const toolbarFieldClass = `${fieldClass} ${controlHeight}`;
 
 interface ListToolbarProps {
   /** Nombre accesible del campo, p. ej. "Buscar por nombre o documento". */
@@ -27,7 +15,7 @@ interface ListToolbarProps {
   /** Lo que se ha TECLEADO (sin rebotar). La vista se encarga del debounce. */
   value: string;
   onChange: (value: string) => void;
-  /** Selects y conmutadores de la vista. */
+  /** Filtros de la vista (`NativeSelect`, `SegmentedControl`…). */
   children?: React.ReactNode;
   /**
    * La acción primaria de la lista ("Nuevo paciente", "Agregar insumo"): un

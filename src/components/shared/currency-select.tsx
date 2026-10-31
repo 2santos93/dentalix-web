@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { listCurrencies, type Currency } from '@/lib/reference/currencies-api';
 import { FieldError } from '@/components/errors/field-error';
-import { fieldClass } from '@/lib/ui/field-class';
+import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -24,6 +24,7 @@ type CurrencySelectProps = CurrencySource & {
   value: string;
   onChange: (code: string) => void;
   disabled?: boolean;
+  /** Ancho y colocación del campo (va al envoltorio de `NativeSelect`). */
   className?: string;
   /** Accessible name for call sites with no adjacent `<label>` (e.g. a `FormField`-less select next to a button). Optional — omit when a `<label htmlFor>` already provides one. */
   ariaLabel?: string;
@@ -98,12 +99,12 @@ export function CurrencySelect({
   const options = exclude?.length ? loaded.filter((c) => !exclude.includes(c.code)) : loaded;
 
   return (
-    <select
+    <NativeSelect
       id={id}
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className={cn(fieldClass, 'h-10', className)}
+      className={className}
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
       aria-invalid={invalid || undefined}
@@ -121,6 +122,6 @@ export function CurrencySelect({
           {c.symbol ? `${c.name} (${c.symbol})` : c.name}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }
