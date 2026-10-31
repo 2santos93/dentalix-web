@@ -201,8 +201,8 @@ test('ADMIN crea el convenio «Sura −20 %» y lo ve activo; a 390 px sin scrol
   const table = page.getByRole('table', { name: 'Convenios' });
   const row = table.getByRole('row', { name: new RegExp(agreementName) });
   await expect(row).toContainText(payerName);
-  // La condición dice el tipo: «20 % de descuento».
-  await expect(row).toContainText('20 % de descuento');
+  // La condición dice el tipo: «20 % de descuento» (el % con el formato de la sede: «20%» o «20 %»).
+  await expect(row).toContainText(/20\s?% de descuento/);
   await expect(row).toContainText('Toda la clínica');
   await expect(row).toContainText('Sin límite');
   // Activo: sin marca (solo los inactivos la llevan).

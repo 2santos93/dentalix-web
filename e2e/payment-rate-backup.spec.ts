@@ -178,7 +178,10 @@ for (const viewport of VIEWPORTS) {
 
       // 5. La tasa ya la usa el abono: no se puede corregir.
       await page.goto(`${session.origin}/settings/tasa-de-cambio`);
-      await expect(page.getByRole('table', { name: 'Tasas manuales' })).toContainText('Usada en abonos');
+      // DataList: tabla desde 640 px, lista de tarjetas en el teléfono.
+      await expect(
+        page.getByRole(viewport.width < 640 ? 'list' : 'table', { name: 'Tasas manuales' }),
+      ).toContainText('Usada en abonos');
       if (QA_DIR) {
         await page.screenshot({ path: `${QA_DIR}/dx402-usada-${viewport.width}.png` });
       }
