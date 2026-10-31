@@ -262,13 +262,16 @@ function pendingValue(id: string) {
 }
 
 describe('Inicio · ADMIN', () => {
-  it('cabecera con alcance y la hora de la sede (GMT), enlazada a Ajustes → Sedes', async () => {
+  it('cabecera con alcance y la zona de la sede (R1, useSedeZoneNote), con «Cambiar zona» a esa sede', async () => {
     render(<DashboardView token={tokenForRole('ADMIN')} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Inicio' })).toBeInTheDocument();
     const scope = await screen.findByTestId('dashboard-scope');
     expect(scope).toHaveTextContent('Todas las sedes');
-    const zone = await within(scope).findByRole('link', { name: 'Hora de Sede principal (GMT−5)' });
-    expect(zone).toHaveAttribute('href', '/settings/sedes');
+    expect(await within(scope).findByTestId('dashboard-zone-note')).toHaveTextContent(
+      /^Días en hora de .+ \(UTC−5\) \(Sede principal\)\.$/,
+    );
+    const change = within(scope).getByRole('link', { name: 'Cambiar zona' });
+    expect(change).toHaveAttribute('href', '/settings/sedes?sede=loc-1');
   });
 
   it('Hoy: cuenta por estado (sin canceladas) y lista con alertas, anamnesis y saldo vencido', async () => {
@@ -400,6 +403,7 @@ describe('Inicio · RECEPTION', () => {
     expect(screen.getByTestId('dashboard-scope')).toHaveTextContent('Sede Norte');
     // La zona es texto: recepción no cambia los ajustes de la sede.
     expect(await screen.findByTestId('dashboard-zone-note')).not.toHaveAttribute('href');
+    expect(screen.queryByRole('link', { name: 'Cambiar zona' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('pending-anamnesis')).not.toBeInTheDocument();
     expect(screen.queryByTestId('pending-low-stock')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Resultados del período' })).not.toBeInTheDocument();

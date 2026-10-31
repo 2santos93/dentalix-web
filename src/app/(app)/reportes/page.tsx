@@ -70,17 +70,22 @@ function ReportesRoute() {
   }
 
   const ownOnly = tabs.length === 1 && tabs[0].key === 'produccion';
+  const view =
+    tab === 'produccion' ? <ProductionByProcedureView token={accessToken} /> : <LocationsComparisonView token={accessToken} />;
   return (
     <>
       <PageHeader title={copy.title} description={ownOnly ? copy.descriptionOwn : copy.description} />
-      <ReportsTabs active={tab} onChange={changeTab} tabs={tabs} />
-      <div role="tabpanel" id={reportPanelId(tab)} aria-labelledby={reportTabId(tab)}>
-        {tab === 'produccion' ? (
-          <ProductionByProcedureView token={accessToken} />
-        ) : (
-          <LocationsComparisonView token={accessToken} />
-        )}
-      </div>
+      {/* Una barra con una sola pestaña promete secciones que no hay (critique-ops §11): sin ella si el rol ve un informe. */}
+      {tabs.length > 1 ? (
+        <>
+          <ReportsTabs active={tab} onChange={changeTab} tabs={tabs} />
+          <div role="tabpanel" id={reportPanelId(tab)} aria-labelledby={reportTabId(tab)}>
+            {view}
+          </div>
+        </>
+      ) : (
+        view
+      )}
     </>
   );
 }

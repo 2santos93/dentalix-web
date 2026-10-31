@@ -240,7 +240,7 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   // default currency COP -> covers today's abono; COP->COP passthrough) ---
   await page.goto(`${origin}/dashboard`);
   await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible();
-  await expect(page.getByTestId('dashboard-scope')).toContainText(/Hora de .+ \(GMT/);
+  await expect(page.getByTestId('dashboard-scope')).toContainText(/Días en hora de \S/);
 
   // --- «Hoy»: the seeded appointment (time + status + patient link) ---
   const today = page.getByRole('region', { name: 'Hoy' });
