@@ -1400,6 +1400,8 @@ describe('AgendaView', () => {
       offersToday: 0,
       offeredForSlot: false,
       pendingOfferId: null,
+      emailBlockedReason: null,
+      linkOfferState: null,
     };
 
     beforeEach(() => {
@@ -1424,6 +1426,8 @@ describe('AgendaView', () => {
           ...slot,
           timeZone: 'America/Bogota',
           providerOffSchedule: false,
+          linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
+          linkOfferOpen: true,
           offerCap: 2,
           items: [candidate],
           truncated: false,
@@ -1477,6 +1481,8 @@ describe('AgendaView', () => {
         start: '',
         end: '',
         providerOffSchedule: false,
+        linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
+        linkOfferOpen: true,
         timeZone: 'America/Bogota',
         offerCap: 2,
         items: [],

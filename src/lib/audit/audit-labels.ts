@@ -158,6 +158,8 @@ const ORIGIN_LABELS: Record<AuditOrigin, string> = {
   STAFF: 'anotado por el personal',
   // DX-150: el barrido de cobranza cierra compromisos sin usuario.
   JOB: 'proceso automático',
+  // DX-435: el paciente desde el enlace público de la oferta de hueco.
+  PUBLIC_LINK: 'desde el enlace de la oferta',
 };
 
 /**
