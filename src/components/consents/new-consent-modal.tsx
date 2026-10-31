@@ -39,7 +39,8 @@ import { SignaturePad } from '@/components/shared/signature-pad';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
-import { fieldClass } from '@/lib/ui/field-class';
+import { NativeSelect } from '@/components/ui/native-select';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -296,7 +297,8 @@ export function NewConsentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      {/* Se firma en la pantalla (tableta o teléfono): a pantalla completa bajo `sm`. */}
+      <DialogContent className="max-w-2xl max-sm:top-0 max-sm:left-0 max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:p-4">
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>
@@ -338,11 +340,10 @@ export function NewConsentModal({
                     {copy.noTemplates}
                   </p>
                 ) : (
-                  <select
+                  <NativeSelect
                     id="consent-template"
                     value={templateId}
                     onChange={(e) => setTemplateId(e.target.value)}
-                    className={cn(fieldClass, 'h-10')}
                     required
                   >
                     <option value="" disabled>
@@ -353,7 +354,7 @@ export function NewConsentModal({
                         {t.title}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 )}
               </FormField>
               <FormField htmlFor="consent-plan" label={copy.planLabel} hint={copy.planHint}>
@@ -366,11 +367,10 @@ export function NewConsentModal({
                 ) : plans === null ? (
                   <Skeleton className="h-10 w-full" />
                 ) : (
-                  <select
+                  <NativeSelect
                     id="consent-plan"
                     value={planId}
                     onChange={(e) => setPlanId(e.target.value)}
-                    className={cn(fieldClass, 'h-10')}
                   >
                     <option value="">{copy.planNone}</option>
                     {plans.map((p) => (
@@ -378,7 +378,7 @@ export function NewConsentModal({
                         {copy.planOption(p)}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 )}
               </FormField>
             </>
@@ -397,9 +397,9 @@ export function NewConsentModal({
               <section
                 aria-label={copy.previewRegion}
                 tabIndex={0}
-                className="max-h-[50dvh] overflow-y-auto rounded-lg border border-border bg-white p-4 text-[#111827] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="max-h-[50dvh] overflow-y-auto rounded-lg border border-border bg-surface p-4 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
               >
-                <h3 className="text-base font-semibold">{preview.title}</h3>
+                <h3 className="t-title">{preview.title}</h3>
                 <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">{preview.body}</p>
               </section>
             ) : (
@@ -412,40 +412,26 @@ export function NewConsentModal({
 
           {step === 2 && preview ? (
             <>
-              <fieldset className="flex flex-col gap-2">
-                <legend className="mb-1 text-sm font-medium text-ink">{copy.signerLegend}</legend>
-                <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
-                  {(
-                    [
-                      ['PATIENT', copy.signerPatient],
-                      ['GUARDIAN', copy.signerGuardian],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <label
-                      key={value}
-                      className="flex min-h-11 items-center gap-2 text-sm text-ink sm:min-h-0"
-                    >
-                      <input
-                        type="radio"
-                        name="signerType"
-                        value={value}
-                        checked={signerType === value}
-                        onChange={() => {
-                          // Quien firma cambió: la firma ya trazada era de otra persona.
-                          setSignerType(value);
-                          setPatientSignature(null);
-                          if (value === 'GUARDIAN' && prefill) {
-                            setGuardianName((v) => v || prefill.name);
-                            setGuardianDocument((v) => v || prefill.document);
-                          }
-                        }}
-                        className="size-4 accent-[var(--color-primary)]"
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              <RadioGroup
+                id="consent-signer"
+                name="signerType"
+                legend={copy.signerLegend}
+                value={signerType}
+                onValueChange={(next) => {
+                  const value = next as typeof signerType;
+                  // Quien firma cambió: la firma ya trazada era de otra persona.
+                  setSignerType(value);
+                  setPatientSignature(null);
+                  if (value === 'GUARDIAN' && prefill) {
+                    setGuardianName((v) => v || prefill.name);
+                    setGuardianDocument((v) => v || prefill.document);
+                  }
+                }}
+                optionsClassName="gap-1 sm:flex-row sm:gap-6"
+              >
+                <RadioOption value="PATIENT" label={copy.signerPatient} />
+                <RadioOption value="GUARDIAN" label={copy.signerGuardian} />
+              </RadioGroup>
               {minor && signerType === 'PATIENT' && responsibles ? (
                 <Callout tone="warning" role="status">
                   {copy.minorWarning(responsibles.majorityAge)}

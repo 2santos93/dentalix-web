@@ -12,8 +12,7 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 const copy = {
   createTitle: 'Nueva plantilla',
@@ -160,7 +159,7 @@ export function ConsentTemplateFormModal({
         </p>
       </div>
       <FormField htmlFor="consent-template-body" label={copy.bodyLabel}>
-        <textarea
+        <Textarea
           id="consent-template-body"
           ref={bodyRef}
           rows={12}
@@ -170,7 +169,7 @@ export function ConsentTemplateFormModal({
           required
           aria-invalid={unknown.length > 0 || undefined}
           aria-describedby={unknown.length > 0 ? 'consent-template-unknown' : undefined}
-          className={cn(fieldClass, 'h-auto font-[inherit] leading-relaxed')}
+          className="leading-relaxed"
         />
       </FormField>
       {unknown.length > 0 ? (

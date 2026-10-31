@@ -197,7 +197,9 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
     const table = page.getByRole('table', { name: 'Consentimientos firmados' });
     const pending = table.getByRole('row').filter({ hasText: 'Falta firma del profesional' }).first();
     await expect(pending).toContainText(TEMPLATE_TITLE, { timeout: 15_000 });
-    await pending.getByRole('button', { name: /firmar como profesional/i }).click();
+    // La acción vive en el «⋯» de la fila (y en el aviso «Falta tu firma» de arriba).
+    await pending.getByRole('button', { name: /^Acciones de/ }).click();
+    await page.getByRole('menuitem', { name: /firmar como profesional/i }).click();
 
     const dialog = page.getByRole('dialog', { name: 'Firmar como profesional' });
     await drawSignature(page, dialog.getByRole('img', { name: `Firma del profesional · ${DENTIST_NAME}` }));

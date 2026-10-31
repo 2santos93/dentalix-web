@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { FileText, Lock, Plus } from 'lucide-react';
+import { FileText, Lock, Pencil, Plus, Power } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listConsentTemplates,
@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { notifyError } from '@/components/errors/notify';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { ConsentTemplateFormModal } from './consent-template-form-modal';
 
 const copy = {
@@ -29,13 +30,13 @@ const copy = {
   colStatus: 'Estado',
   colVersion: 'Versión',
   colUpdated: 'Actualizada',
-  colActions: 'Acciones',
   active: 'Activa',
   inactive: 'Inactiva',
   edit: 'Editar',
   deactivate: 'Desactivar',
   activate: 'Activar',
-  actionFor: (action: string, title: string) => `${action} «${title}»`,
+  rowLabel: (title: string) => `«${title}»`,
+  versionMeta: (n: number) => `Versión ${n}`,
   toggleError: (title: string) => `No pudimos cambiar el estado de «${title}».`,
 };
 
@@ -121,45 +122,36 @@ export function ConsentTemplatesManager({ token, allowed }: ConsentTemplatesMana
     }
   }
 
-  function actions(template: ConsentTemplate) {
-    const toggleLabel = template.active ? copy.deactivate : copy.activate;
-    return (
-      <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => openModal(template)}
-          aria-label={copy.actionFor(copy.edit, template.title)}
-        >
-          {copy.edit}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          loading={pendingId === template.id}
-          onClick={() => void toggleActive(template)}
-          aria-label={copy.actionFor(toggleLabel, template.title)}
-        >
-          {toggleLabel}
-        </Button>
-      </div>
-    );
-  }
-
   function status(template: ConsentTemplate) {
     return (
-      <Badge variant={template.active ? 'success' : 'muted'}>
+      <Badge variant={template.active ? 'success' : 'neutral'} dot>
         {template.active ? copy.active : copy.inactive}
       </Badge>
     );
   }
 
+  const columns: DataListColumn<ConsentTemplate>[] = [
+    { id: 'title', header: copy.colTitle, cell: (t) => t.title, mobile: 'primary' },
+    { id: 'status', header: copy.colStatus, cell: status, mobile: 'trailing' },
+    {
+      id: 'version',
+      header: copy.colVersion,
+      cell: (t) => t.version,
+      mobileCell: (t) => copy.versionMeta(t.version),
+      numeric: true,
+    },
+    {
+      id: 'updated',
+      header: copy.colUpdated,
+      cell: (t) => <span className="tnum text-muted">{formatDateTime(t.updatedAt)}</span>,
+      mobileCell: (t) => formatDateTime(t.updatedAt),
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted" aria-live="polite">
+        <p className="t-caption tnum" aria-live="polite">
           {loading || error ? '' : copy.count(templates.length)}
         </p>
         <Button type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
@@ -177,59 +169,24 @@ export function ConsentTemplatesManager({ token, allowed }: ConsentTemplatesMana
         emptyDescription={copy.emptyHint}
         emptyIcon={<FileText aria-hidden />}
       >
-        <table
-          aria-label={copy.tableLabel}
-          className="hidden w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink md:table"
-        >
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left">
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colTitle}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colStatus}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                {copy.colVersion}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colUpdated}
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
-                <span className="sr-only">{copy.colActions}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {templates.map((t) => (
-              <tr key={t.id} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-3 font-medium">{t.title}</td>
-                <td className="px-4 py-3">{status(t)}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{t.version}</td>
-                <td className="px-4 py-3 tabular-nums text-muted">{formatDateTime(t.updatedAt)}</td>
-                <td className="px-4 py-3">{actions(t)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <ul aria-label={copy.tableLabel} className="flex flex-col gap-3 md:hidden">
-          {templates.map((t) => (
-            <li
-              key={t.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-medium">{t.title}</p>
-                {status(t)}
-              </div>
-              <p className="text-xs text-muted tabular-nums">
-                {copy.colVersion} {t.version} · {formatDateTime(t.updatedAt)}
-              </p>
-              {actions(t)}
-            </li>
-          ))}
-        </ul>
+        {/* Toda la fila abre la plantilla; activar/desactivar va en «⋯». */}
+        <DataList
+          label={copy.tableLabel}
+          rows={templates}
+          columns={columns}
+          getRowKey={(t) => t.id}
+          onRowClick={(t) => openModal(t)}
+          getRowLabel={(t) => copy.rowLabel(t.title)}
+          rowActions={(t) => [
+            { label: copy.edit, icon: <Pencil aria-hidden />, onSelect: () => openModal(t) },
+            {
+              label: t.active ? copy.deactivate : copy.activate,
+              icon: <Power aria-hidden />,
+              disabled: pendingId === t.id,
+              onSelect: () => void toggleActive(t),
+            },
+          ]}
+        />
       </AsyncSection>
 
       <ConsentTemplateFormModal
