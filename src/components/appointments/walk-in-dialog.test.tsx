@@ -181,6 +181,20 @@ describe('WalkInDialog (DX-470)', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  it('alta mínima incompleta: cada campo anuncia su error (aria-describedby)', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await screen.findByLabelText(copy.provider);
+    await user.click(screen.getByRole('radio', { name: copy.newPatient }));
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    for (const label of [copy.firstName, copy.lastName, copy.phone]) {
+      const field = screen.getByLabelText(label);
+      expect(field).toHaveAttribute('aria-invalid', 'true');
+      expect(field).toHaveAccessibleDescription(expect.stringContaining(copy.missingPatient));
+    }
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   it('error de carga de profesionales con «Reintentar»; error al enviar en el formulario', async () => {
     const user = userEvent.setup();
     staffMock.mockRejectedValueOnce(new Error('boom'));

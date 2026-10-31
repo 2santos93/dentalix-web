@@ -338,13 +338,13 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
         ) : (
           <div className="grid min-w-0 gap-4 sm:grid-cols-2">
             <FormField htmlFor={id('first')} label={walkInCopy.firstName} error={fieldErrors.firstName}>
-              <Input id={id('first')} autoComplete="off" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.firstName ? true : undefined} />
+              <Input id={id('first')} autoComplete="off" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.firstName ? true : undefined} aria-describedby={fieldErrors.firstName ? fieldErrorId(id('first')) : undefined} />
             </FormField>
             <FormField htmlFor={id('last')} label={walkInCopy.lastName} error={fieldErrors.lastName}>
-              <Input id={id('last')} autoComplete="off" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.lastName ? true : undefined} />
+              <Input id={id('last')} autoComplete="off" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.lastName ? true : undefined} aria-describedby={fieldErrors.lastName ? fieldErrorId(id('last')) : undefined} />
             </FormField>
             <FormField htmlFor={id('phone')} label={walkInCopy.phone} hint={walkInCopy.phoneHint} hintId={id('phone-hint')} error={fieldErrors.phone} className="sm:col-span-2">
-              <Input id={id('phone')} type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} aria-describedby={id('phone-hint')} aria-invalid={fieldErrors.phone ? true : undefined} />
+              <Input id={id('phone')} type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} aria-describedby={fieldErrors.phone ? `${id('phone-hint')} ${fieldErrorId(id('phone'))}` : id('phone-hint')} aria-invalid={fieldErrors.phone ? true : undefined} />
             </FormField>
             <FormField htmlFor={id('doc-type')} label={walkInCopy.docType}>
               <NativeSelect id={id('doc-type')} value={docType} onChange={(e) => setDocType(e.target.value as DocType | '')}>
