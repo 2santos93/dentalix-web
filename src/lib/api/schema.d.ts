@@ -28166,7 +28166,7 @@ export interface operations {
                     "application/json": components["schemas"]["SignedConsentPdfRetryDto"];
                 };
             };
-            /** @description Rol sin acceso clínico (recepción) */
+            /** @description Sin un rol de esta clínica (los cuatro roles pueden reintentar) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30732,7 +30732,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El documento ya está anulado. */
+            /** @description El documento ya está anulado, o es el PDF firmado de un consentimiento (DX-422), que no se anula. */
             409: {
                 headers: {
                     [name: string]: unknown;

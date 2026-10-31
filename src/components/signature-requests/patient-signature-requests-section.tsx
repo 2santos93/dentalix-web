@@ -129,6 +129,14 @@ function evidence(r: SignatureRequest, clock: SedeClock | null, userId: string |
  * estado vivo (role=status) para los lectores de pantalla; el fallo, en el
  * color de peligro con el botón «Reintentar PDF» al lado.
  */
+/** B1: mientras algún PDF se genera, se relee la lista cada 5 s, como mucho ~2 min. */
+const PDF_POLL_MS = 5_000;
+const PDF_POLL_MAX = 24;
+
+function hasPendingPdf(rows: readonly SignatureRequest[]): boolean {
+  return rows.some((r) => r.status === 'COMPLETE' && r.signedPdfStatus === 'PENDING');
+}
+
 function SignedPdfStatusLine({ status }: { status: SignatureRequest['signedPdfStatus'] }) {
   if (status === 'READY') return <p className="text-sm text-muted">{copy.pdfReady}</p>;
   if (status === 'PENDING') {
@@ -138,7 +146,13 @@ function SignedPdfStatusLine({ status }: { status: SignatureRequest['signedPdfSt
       </p>
     );
   }
-  if (status === 'FAILED') return <p className="text-sm text-danger">{copy.pdfFailed}</p>;
+  if (status === 'FAILED') {
+    return (
+      <p role="alert" className="text-sm text-danger">
+        {copy.pdfFailed}
+      </p>
+    );
+  }
   return null;
 }
 
@@ -180,6 +194,7 @@ export function PatientSignatureRequestsSection({
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
   const [pdfBusy, setPdfBusy] = useState<ReadonlySet<string>>(new Set());
+  const [pollKey, setPollKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,6 +214,39 @@ export function PatientSignatureRequestsSection({
       cancelled = true;
     };
   }, [token, patientId, reloadKey, refreshKey]);
+
+  // B1: mientras haya un PDF «Generando», relee la lista cada 5 s (en pausa
+  // con la pestaña oculta, sin contar) hasta ~2 min; un reintento reinicia la cuenta.
+  const pendingPdf = hasPendingPdf(rows);
+  useEffect(() => {
+    if (!pendingPdf) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let polls = 0;
+    const tick = () => {
+      if (cancelled) return;
+      if (document.visibilityState === 'hidden') {
+        timer = setTimeout(tick, PDF_POLL_MS);
+        return;
+      }
+      polls += 1;
+      listSignatureRequests(token, patientId)
+        .then((data) => {
+          if (!cancelled) setRows(data);
+        })
+        .catch(() => {
+          // Silencioso: la lista que se ve sigue valiendo; se reintenta al siguiente tick.
+        })
+        .finally(() => {
+          if (!cancelled && polls < PDF_POLL_MAX) timer = setTimeout(tick, PDF_POLL_MS);
+        });
+    };
+    timer = setTimeout(tick, PDF_POLL_MS);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [pendingPdf, token, patientId, pollKey]);
 
   async function handleRevoke(id: string) {
     setRevoking(true);
@@ -248,6 +296,7 @@ export function PatientSignatureRequestsSection({
       setRows((current) =>
         current.map((row) => (row.id === r.id ? { ...row, signedPdfStatus: 'PENDING' } : row)),
       );
+      setPollKey((k) => k + 1);
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.retryPdfError), { onRetry: () => void handleRetryPdf(r) });
     } finally {

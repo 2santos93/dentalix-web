@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'sonner';
 import { PatientSignatureRequestsSection } from './patient-signature-requests-section';
 import { ApiError } from '@/lib/api/api-error';
@@ -295,6 +295,46 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
         ),
       );
       expect(screen.getByRole('button', { name: /Reintentar PDF/ })).toBeEnabled();
+    });
+
+    describe('B1: mientras se genera, la ficha vuelve a mirar', () => {
+      beforeEach(() => jest.useFakeTimers());
+      afterEach(() => {
+        jest.useRealTimers();
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+      });
+
+      it('cada 5 s relee la lista; si falla, lo anuncia con role="alert" y deja de mirar', async () => {
+        mockedList
+          .mockResolvedValueOnce([complete({ signedPdfStatus: 'PENDING' })])
+          .mockResolvedValueOnce([complete({ signedPdfStatus: 'PENDING' })])
+          .mockResolvedValueOnce([complete({ signedPdfStatus: 'FAILED' })]);
+        render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+        await screen.findByText(/Generando el PDF firmado/);
+        expect(mockedList).toHaveBeenCalledTimes(1);
+        await act(() => jest.advanceTimersByTimeAsync(5_000));
+        expect(mockedList).toHaveBeenCalledTimes(2);
+        await act(() => jest.advanceTimersByTimeAsync(5_000));
+        expect(mockedList).toHaveBeenCalledTimes(3);
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'No pudimos generar el PDF firmado tras varios intentos.',
+        );
+        await act(() => jest.advanceTimersByTimeAsync(20_000));
+        expect(mockedList).toHaveBeenCalledTimes(3);
+      });
+
+      it('con la pestaña oculta no pide nada, y deja de mirar a los ~2 min', async () => {
+        mockedList.mockResolvedValue([complete({ signedPdfStatus: 'PENDING' })]);
+        render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+        await screen.findByText(/Generando el PDF firmado/);
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+        await act(() => jest.advanceTimersByTimeAsync(30_000));
+        expect(mockedList).toHaveBeenCalledTimes(1);
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+        await act(() => jest.advanceTimersByTimeAsync(10 * 60_000));
+        // 24 relecturas como mucho (2 min de pestaña visible) además de la primera.
+        expect(mockedList).toHaveBeenCalledTimes(25);
+      });
     });
 
     it('sin completar no hay nada del PDF', async () => {
