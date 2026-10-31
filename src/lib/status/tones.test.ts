@@ -41,6 +41,7 @@ describe('vocabulario de estados (tones.ts)', () => {
 
   it('las etiquetas son frases en mayúscula inicial y reutilizan el texto existente', () => {
     expect(statusLabel('appointment', 'ARRIVED')).toBe('En espera');
+    expect(statusLabels('staff')).toEqual({ ACTIVE: 'Activo', PENDING: 'Pendiente', INACTIVE: 'Inactivo' });
     expect(statusLabels('treatmentPlanItem')).toEqual({ PROPOSED: 'Propuesto', ACCEPTED: 'Aceptado', DONE: 'Realizado' });
     for (const map of Object.values(STATUS_PRESENTATION)) {
       for (const { label } of Object.values(map)) {

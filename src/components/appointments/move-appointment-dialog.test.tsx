@@ -82,7 +82,7 @@ describe('MoveAppointmentDialog (DX-121)', () => {
 
     await user.selectOptions(screen.getByLabelText('Profesional'), 'prov-2');
     await typeTime(user, 'Hora de inicio', '15:00');
-    // Envío implícito con Enter desde el campo de hora (submitOnEnter).
+    // Envío implícito con Enter desde el campo de hora (primitiva de fecha).
     await user.keyboard('{Enter}');
 
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));

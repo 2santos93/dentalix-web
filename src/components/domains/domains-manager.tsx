@@ -166,27 +166,22 @@ function ClinicAddress() {
   );
 }
 
-const headerClassName = 'normal-case tracking-normal';
-
 const columns: DataListColumn<TenantDomain>[] = [
   {
     id: 'host',
     header: copy.colHost,
     mobile: 'primary',
-    headerClassName,
     cell: (d) => <span className="break-all">{d.host}</span>,
   },
   {
     id: 'state',
     header: copy.colState,
     mobile: 'trailing',
-    headerClassName,
     cell: (d) => <StatusBadge kind="tenantDomain" status={d.status} />,
   },
   {
     id: 'detail',
     header: copy.colDetail,
-    headerClassName,
     cell: (d) => <span className="text-muted">{copy.summary[d.status](d)}</span>,
     mobileCell: (d) => copy.summary[d.status](d),
   },

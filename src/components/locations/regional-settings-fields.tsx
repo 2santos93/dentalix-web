@@ -23,10 +23,10 @@ import {
 } from '@/lib/locations/regional-options';
 import type { CountryField, RegionalSource } from '@/lib/locations/use-regional-draft';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { InlineError } from '@/components/errors/inline-error';
 import { CountryCombobox, type CountryComboboxCopy } from '@/components/shared/country-combobox';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { Button } from '@/components/ui/button';
+import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
 
 export const regionalSettingsFieldsCopy = {
@@ -165,7 +165,6 @@ export function RegionalSettingsFields({
   );
   const preview = regionalPreview(values.locale, values.timeZone, values.hourCycle, previewAt);
   const examples = hourCycleExamples(values.locale, values.timeZone, previewAt);
-  const hourCycleHintId = `${id('hourCycle')}-hint`;
   const country = countryName(values.country || null);
   const zoneOutside =
     Boolean(country) &&
@@ -289,70 +288,31 @@ export function RegionalSettingsFields({
         {preview ? copy.preview(preview) : null}
       </p>
 
-      <fieldset
-        role="radiogroup"
-        aria-required
-        aria-invalid={invalid('hourCycle')}
-        aria-describedby={errors.hourCycle ? fieldErrorId(id('hourCycle')) : hourCycleHintId}
-        className={cn('flex min-w-0 flex-col gap-1.5', !stacked && 'sm:col-span-2')}
+      <RadioGroup
+        id={id('hourCycle')}
+        legend={copy.hourCycle}
+        value={values.hourCycle}
+        onValueChange={(next) => onChange('hourCycle', next as RegionalSettingsValues['hourCycle'])}
+        required
+        hint={withSource(sources.hourCycle, copy.hourCycleHint)}
+        error={errors.hourCycle}
+        className={cn(!stacked && 'sm:col-span-2')}
+        // A dos columnas, las opciones caen bajo las columnas de los campos de arriba.
+        optionsClassName={cn('grid grid-cols-2 gap-2', !stacked && 'sm:gap-4')}
       >
-        <legend className="mb-1.5 text-sm font-medium text-ink">{copy.hourCycle}</legend>
-        {/* A dos columnas, las opciones caen bajo las columnas de los campos de arriba. */}
-        <div className={cn('grid grid-cols-2 gap-2', !stacked && 'sm:gap-4')}>
-          {HOUR_CYCLES.map((cycle, index) => {
+        {HOUR_CYCLES.map((cycle, index) => (
+          <RadioCard
+            key={cycle}
             // La primera opción lleva el id del campo: es la que se enfoca si falta el reloj.
-            const optionId = index === 0 ? id('hourCycle') : `${id('hourCycle')}-${cycle}`;
-            const checked = values.hourCycle === cycle;
-            return (
-              <label
-                key={cycle}
-                htmlFor={optionId}
-                className={cn(
-                  'flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg border bg-surface px-3 py-2 transition-colors hover:bg-bg',
-                  checked ? 'border-primary' : errors.hourCycle ? 'border-danger' : 'border-border',
-                )}
-              >
-                <input
-                  id={optionId}
-                  type="radio"
-                  name={id('hourCycle')}
-                  value={cycle}
-                  checked={checked}
-                  onChange={() => onChange('hourCycle', cycle)}
-                  // El nombre es solo «12 h»/«24 h»; el ejemplo lo describe.
-                  aria-labelledby={`${optionId}-label`}
-                  // El error también en cada opción (no todos los lectores anuncian el del grupo al entrar).
-                  aria-describedby={
-                    [examples ? `${optionId}-example` : null, errors.hourCycle ? fieldErrorId(id('hourCycle')) : null]
-                      .filter(Boolean)
-                      .join(' ') || undefined
-                  }
-                  className="size-4 shrink-0 accent-[var(--color-primary)]"
-                />
-                <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-                  <span id={`${optionId}-label`} className="text-sm font-medium text-ink">
-                    {HOUR_CYCLE_LABELS[cycle]}
-                  </span>
-                  {examples ? (
-                    <span id={`${optionId}-example`} className="text-xs tabular-nums text-muted">
-                      {examples[cycle]}
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-        {errors.hourCycle ? (
-          <InlineError id={fieldErrorId(id('hourCycle'))} className="text-xs">
-            {errors.hourCycle}
-          </InlineError>
-        ) : (
-          <p id={hourCycleHintId} className="text-xs text-muted">
-            {withSource(sources.hourCycle, copy.hourCycleHint)}
-          </p>
-        )}
-      </fieldset>
+            id={index === 0 ? id('hourCycle') : `${id('hourCycle')}-${cycle}`}
+            value={cycle}
+            // El nombre es solo «12 h»/«24 h»; el ejemplo lo describe.
+            title={HOUR_CYCLE_LABELS[cycle]}
+            description={examples ? <span className="tabular-nums">{examples[cycle]}</span> : undefined}
+            layout="inline"
+          />
+        ))}
+      </RadioGroup>
     </div>
   );
 }

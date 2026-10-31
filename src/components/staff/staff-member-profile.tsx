@@ -59,7 +59,7 @@ const copy = {
   specialtyHint: 'Sale en sus recetas, bajo su nombre.',
   save: 'Guardar cambios',
   saving: 'Guardando…',
-  statusActive: 'Aceptado',
+  statusActive: 'Activo',
   statusInactive: 'Inactivo',
   accessTitle: 'Acceso',
   accessActiveHint: 'Puede entrar a la clínica con su cuenta.',

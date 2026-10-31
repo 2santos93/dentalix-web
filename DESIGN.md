@@ -378,7 +378,12 @@ allowlist of not-yet-migrated files only shrinks.
   Hasta» in one field, range calendar, optional `presets`: Hoy · Últimos 7 días · Este mes · Mes
   anterior). A clock time → `TimeField` (12/24 h from the sede).
 - **ISO in, ISO out:** `value` is `'YYYY-MM-DD'` (`'HH:mm'` for time; `{ from, to }` for a
-  range) or `null`, `onChange` returns the same. `name` (`startName`/`endName`) renders a hidden
+  range) or `null`, `onChange` returns the same. Only **complete** dates leave the field: while
+  the year is being typed (`2`, `20`, `202`) it emits `null`, never `0002-10-05`; the segments
+  keep what was typed. A parent that passes a new `onChange` on every render changes nothing
+  inside the field (stable internal callbacks).
+- **Enter submits:** Enter in any segment submits the enclosing `<form>` (`requestSubmit()`),
+  like a native input. No screen adds its own handler for it. `name` (`startName`/`endName`) renders a hidden
   input with the ISO value so `<form>`/`FormData` keep working. `min`/`max` are ISO too.
 - **Locale from the clinic, never the browser:** `SedeDateLocaleProvider` (in the app shell)
   feeds the active sede's `locale`, `hourCycle` and time zone to every field: segment order
@@ -396,6 +401,19 @@ allowlist of not-yet-migrated files only shrinks.
 ### Cards / Containers
 - **Corner:** 12px. **Background:** surface. **Border:** 1px `border`. **Shadow:** none at rest — ever.
 - **Padding:** 16px on phones, 24px from `sm`. No nested cards; use `border-subtle` sections inside.
+
+### Dialogs and form modals
+- **`FormModal`** (create / edit a thing) is a centered modal from `sm` up and, **below 640px, a
+  full-screen sheet**: no corners, the form scrolls, the footer stays pinned to the bottom with
+  the primary full width on top of Cancel. `fullScreenOnMobile={false}` keeps a short form
+  floating. Any other `DialogContent` opts in with `fullScreenOnMobile` (e.g. signing a consent
+  on the phone) — never with copied `max-sm:` classes.
+- **Validation is ours:** the form is `noValidate`, so a native `required` on a `RadioGroup` or
+  `Checkbox` never pre-empts the form's own rung-4 errors. Text fields with `required` keep the
+  browser check as a safety net until the screen validates them itself and passes
+  `ownValidation`.
+- `Checkbox` keeps the same DOM with or without `error`/`description`: focusing the field with
+  the error before or after painting it is the same.
 
 ### Status tones (one vocabulary)
 Every domain status gets its tone and label from ONE map, `src/lib/status/tones.ts`,
@@ -527,13 +545,16 @@ the reload key that re-runs the load, not to the background-refresh function
 that shares its fetch — those two look interchangeable and are not.
 
 ### Tables
-- **Header:** surface-2, label type, muted. **Rows:** hairline separators, 44px min height,
+- **Header:** `t-label`, muted, **sentence case** — never `uppercase` + tracking (no per-column
+  override to undo it). **Rows:** hairline separators, 44px min height,
   hover = surface-2. **Numbers:** right-aligned, tabular.
 - **Lists use `DataList`** (`components/ui/data-list.tsx`): one column declaration, rendered as a
   real `<table>` from `sm` (640px) up and as a `<ul>` of compact cards on phones — two markups
   chosen by `matchMedia`, only one mounted (no duplicate DOM; without `matchMedia` — server,
   jsdom — the table renders). Each column declares its phone role with `mobile`:
-  - `primary` — line 1, left, ink 15px/600 (one per list; defaults to the first column);
+  - `primary` — line 1, left, ink 15px/600 (one per list; defaults to the first column); it
+    wraps to **two lines** before an ellipsis (`line-clamp-2 break-words`), so titles that share a
+    prefix or long file names stay distinguishable;
   - `trailing` — line 1, right: the key value (amount, time, age; tabular) or the status badge;
   - `meta` (default) — line 2, muted 13px, values joined with « · », blanks skipped (return
     `null` from `mobileCell`, never «—»); it wraps, never truncates (documents and phones must
@@ -542,7 +563,8 @@ that shares its fetch — those two look interchangeable and are not.
   With `getRowHref`/`onRowClick` the whole card is the tap target (≥56px) with a trailing
   chevron, and on desktop the primary cell's link is stretched over the row (one link per row
   for screen readers). Row actions go in `rowActions` → the `RowActions` «⋯» menu, outside the
-  card's link; never a labelled «ACCIONES» row or column of buttons. `leading` puts an avatar or
+  card's link (44px on touch); an item's `onSelect` runs once the menu has handed focus back to
+  the «⋯», so a Dialog it opens returns focus to that row when it closes — no timers in screens; never a labelled «ACCIONES» row or column of buttons. `leading` puts an avatar or
   icon before the primary cell; `showFrom` drops low-value columns on a narrow tablet.
 - **Comparison tables** (read down a column: caja del día, reportes, perio) opt out with
   `phone="scroll"`: the table stays a table on phones, scrolls sideways inside its frame with

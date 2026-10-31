@@ -261,7 +261,7 @@ function DataTable<T>({
 }
 
 const stretchedClass =
-  'after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-primary';
+  'after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-primary-text';
 
 function PrimaryCell<T>({
   row,
@@ -337,8 +337,11 @@ function PhoneList<T>({
           <>
             {leading?.(row)}
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="flex min-w-0 items-center justify-between gap-3">
-                <span className="min-w-0 truncate text-[15px] font-semibold leading-snug text-ink">
+              <span className="flex min-w-0 items-start justify-between gap-3">
+                {/* Hasta dos líneas y luego elipsis: títulos con el mismo prefijo
+                    («Consentimiento informado para…») o nombres de archivo largos
+                    se distinguen por el final. */}
+                <span data-slot="primary" className="line-clamp-2 min-w-0 break-words text-[15px] font-semibold leading-snug text-ink">
                   {(primaryCol.mobileCell ?? primaryCol.cell)(row)}
                 </span>
                 {!isBlank(trailingNode) ? (
@@ -369,7 +372,7 @@ function PhoneList<T>({
           'flex min-h-14 min-w-0 flex-1 items-center gap-3 py-3 pl-4 text-left',
           actions.length > 0 ? 'pr-1' : 'pr-4',
           opens &&
-            'transition-colors hover:bg-surface-sunken active:bg-surface-sunken focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+            'transition-colors hover:bg-surface-sunken active:bg-surface-sunken focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text',
         );
 
         return (

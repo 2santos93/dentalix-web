@@ -213,7 +213,7 @@ const inventoryStock = {
 
 /** Directorio del personal: miembro activo, invitación pendiente o inactivo. */
 const staff = {
-  ACTIVE: s('success', 'Aceptado'),
+  ACTIVE: s('success', 'Activo'),
   PENDING: s('warning', 'Pendiente'),
   INACTIVE: s('neutral', 'Inactivo'),
 } satisfies Presentations<Schemas['StaffDirectoryEntryDto']['status']>;

@@ -298,7 +298,7 @@ export function NewConsentModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Se firma en la pantalla (tableta o teléfono): a pantalla completa bajo `sm`. */}
-      <DialogContent className="max-w-2xl max-sm:top-0 max-sm:left-0 max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:p-4">
+      <DialogContent fullScreenOnMobile className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>

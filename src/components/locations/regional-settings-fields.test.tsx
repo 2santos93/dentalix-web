@@ -217,8 +217,8 @@ describe('RegionalSettingsFields', () => {
       // Sin reloj elegido: ninguna opción marcada y la vista previa sin hora.
       expect(h12).not.toBeChecked();
       expect(h23).not.toBeChecked();
-      expect(h12).toHaveAccessibleDescription('3:05 p. m.');
-      expect(h23).toHaveAccessibleDescription('15:05');
+      expect(h12).toHaveAccessibleDescription(expect.stringMatching(/^3:05 p\. m\. /));
+      expect(h23).toHaveAccessibleDescription(expect.stringMatching(/^15:05 /));
       expect(screen.getByText('Vista previa: 12,345.67 · 10/26/2026')).toBeInTheDocument();
 
       await user.click(h12);
@@ -231,8 +231,8 @@ describe('RegionalSettingsFields', () => {
 
       // Los ejemplos son la hora en la zona elegida.
       await chooseRegionalOption(user, screen.getByLabelText('Zona horaria'), 'Asia/Tokyo');
-      expect(h12).toHaveAccessibleDescription('12:05 a. m.');
-      expect(h23).toHaveAccessibleDescription('00:05');
+      expect(h12).toHaveAccessibleDescription(expect.stringMatching(/^12:05 a\. m\. /));
+      expect(h23).toHaveAccessibleDescription(expect.stringMatching(/^00:05 /));
       expect(screen.getByText('Vista previa: 12.345,67 · 27.10.2026 00:05')).toBeInTheDocument();
     });
   });

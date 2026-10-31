@@ -78,9 +78,6 @@
   "src/components/locations/location-switcher.tsx": {
     "select": 2
   },
-  "src/components/locations/regional-settings-fields.tsx": {
-    "radio": 1
-  },
   "src/components/payers/payer-form-modal.tsx": {
     "select": 2
   },

@@ -162,6 +162,23 @@ describe('DataList', () => {
       expect(trigger.closest('a')).toBeNull();
     });
 
+    it('la línea 1 se parte hasta dos líneas (no se recorta a una) y el «⋯» sigue en 44px', () => {
+      render(
+        <DataList
+          label="Pacientes"
+          rows={rows}
+          columns={columns}
+          getRowKey={(r) => r.id}
+          getRowLabel={(r) => r.name}
+          rowActions={() => [{ label: 'Archivar', onSelect: () => {} }]}
+        />,
+      );
+      const primary = screen.getByText('Ana García').closest('[data-slot="primary"]')!;
+      expect(primary).toHaveClass('line-clamp-2', 'break-words');
+      expect(primary).not.toHaveClass('truncate');
+      expect(screen.getByRole('button', { name: 'Acciones de Ana García' })).toHaveClass('size-11');
+    });
+
     it('con onRowClick, la tarjeta es un botón', async () => {
       const user = setupUser();
       const onRowClick = jest.fn();

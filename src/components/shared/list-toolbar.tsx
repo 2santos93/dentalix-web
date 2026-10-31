@@ -3,6 +3,7 @@ import * as React from 'react';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { controlHeight, fieldClass } from '@/lib/ui/field-class';
 
 const copy = {
   clear: 'Limpiar la búsqueda',
@@ -17,8 +18,7 @@ const copy = {
  * cada lista filtra por cosas distintas y no tiene sentido inventar aquí una
  * abstracción de "filtro" que solo sirva para el mínimo común.
  */
-export const toolbarFieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+export const toolbarFieldClass = `${fieldClass} ${controlHeight}`;
 
 interface ListToolbarProps {
   /** Nombre accesible del campo, p. ej. "Buscar por nombre o documento". */
@@ -112,7 +112,7 @@ export function ListToolbar({
               type="button"
               aria-label={copy.clear}
               onClick={() => onChange('')}
-              className="absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center pointer-coarse:size-9 justify-center rounded-md text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
             >
               <X className="size-3.5" aria-hidden />
             </button>

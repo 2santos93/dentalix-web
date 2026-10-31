@@ -1,6 +1,5 @@
 'use client';
 import * as React from 'react';
-import { submitOnEnter } from '@/components/appointments/submit-on-enter';
 import { useEffect, useRef, useState } from 'react';
 import { PatientMedicalAlertsNotice } from '@/components/clinical/appointment-medical-alerts';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -515,7 +514,7 @@ export function AppointmentForm({
     patients.length === 0;
 
   return (
-    <form onSubmit={handleSubmit} onKeyDownCapture={submitOnEnter} aria-label={copy.submit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} aria-label={copy.submit} className="flex flex-col gap-4">
       <Dialog open={showPatientDialog} onOpenChange={setShowPatientDialog}>
         <DialogContent>
           <DialogHeader>

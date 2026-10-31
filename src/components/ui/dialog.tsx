@@ -21,6 +21,10 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+/** Pantalla completa bajo `sm`: arriba a la izquierda, todo el alto y ancho, sin esquinas. */
+const FULL_SCREEN_ON_MOBILE =
+  'max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:content-start max-sm:rounded-none max-sm:border-0 max-sm:p-4';
+
 const DialogContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
@@ -30,8 +34,14 @@ const DialogContent = React.forwardRef<
      * lo dejaría en <body>.
      */
     closeDisabled?: boolean;
+    /**
+     * Bajo `sm` (<640px) el diálogo ocupa la pantalla entera (sin esquinas ni
+     * borde): formularios largos o que se firman en el teléfono. Desde `sm`,
+     * modal centrado como siempre.
+     */
+    fullScreenOnMobile?: boolean;
   }
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, closeDisabled = false, ...props }, ref) => {
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, closeDisabled = false, fullScreenOnMobile = false, ...props }, ref) => {
   // Los diálogos de la app se abren con `open` y sin `DialogTrigger`, así que
   // Radix no sabe a dónde devolver el foco al cerrar y lo deja en <body>. Se
   // recuerda el elemento que tenía el foco al abrir y se le devuelve al cerrar
@@ -45,8 +55,10 @@ const DialogContent = React.forwardRef<
         className={cn(
           'dlg-content fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-surface p-6 shadow-overlay',
           'max-h-[calc(100dvh-2rem)] overflow-y-auto',
+          fullScreenOnMobile && FULL_SCREEN_ON_MOBILE,
           className,
         )}
+        data-fullscreen-mobile={fullScreenOnMobile || undefined}
         onOpenAutoFocus={(event) => {
           const active = document.activeElement;
           returnFocusRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
@@ -71,7 +83,7 @@ const DialogContent = React.forwardRef<
           // Radix no cierra si el clic ya viene con `preventDefault`.
           onClick={closeDisabled ? (e) => e.preventDefault() : undefined}
           className={cn(
-            'absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden',
+            'absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text print:hidden',
             // DX-395: en móvil, «Cerrar» con el área táctil mínima (44 px).
             'max-sm:right-2 max-sm:top-2 max-sm:inline-flex max-sm:size-11 max-sm:items-center max-sm:justify-center',
             closeDisabled && 'cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted',

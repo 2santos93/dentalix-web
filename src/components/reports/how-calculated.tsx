@@ -71,7 +71,7 @@ export function HowCalculated({ column, text }: { column: string; text: string }
         role="tooltip"
         hidden={!position}
         style={position ? { top: position.top, left: position.left, width: WIDTH } : undefined}
-        className="fixed z-50 rounded-lg border border-border bg-surface p-3 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-ink shadow-[0_8px_28px_-8px_rgb(15_23_42/0.18)]"
+        className="fixed z-50 rounded-lg border border-border bg-surface p-3 text-left text-xs font-normal leading-relaxed text-ink shadow-[0_8px_28px_-8px_rgb(15_23_42/0.18)]"
       >
         {text}
       </span>
