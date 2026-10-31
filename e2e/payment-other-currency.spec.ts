@@ -165,7 +165,7 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
   await loginAs(page, origin, adminEmail, password);
   await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
   const panel = page.locator('#tabpanel-treatment-plans');
-  const fold = panel.getByRole('button', { name: /^Abonos y saldo/ });
+  const fold = panel.getByRole('button', { name: /^Abonos registrados/ });
   await expect(fold).toBeVisible({ timeout: 15_000 });
   if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
 
@@ -200,7 +200,7 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
   // La tasa de ayer cambia después: la reimpresión usa la congelada del abono.
   setProviderRate(YESTERDAY, 50);
   await page.reload();
-  const foldAgain = panel.getByRole('button', { name: /^Abonos y saldo/ });
+  const foldAgain = panel.getByRole('button', { name: /^Abonos registrados/ });
   if ((await foldAgain.getAttribute('aria-expanded')) !== 'true') await foldAgain.click();
   const again = await readReceipts();
   expect(again).toEqual(first);

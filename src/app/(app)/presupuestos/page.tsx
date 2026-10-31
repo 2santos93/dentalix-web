@@ -54,7 +54,7 @@ export default function PresupuestosPage() {
         description={copy.description}
         meta={<FollowUpScopeMarker token={accessToken} />}
       />
-      <Tabs value={tab} onValueChange={setTab} className="flex flex-col gap-6">
+      <Tabs value={tab} onValueChange={setTab} className="flex flex-col">
         <TabsList aria-label={copy.tabsLabel}>
           <TabsTrigger value="presented">Presentado sin aceptar</TabsTrigger>
           <TabsTrigger value="accepted">Aceptado sin agendar</TabsTrigger>

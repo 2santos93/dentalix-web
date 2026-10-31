@@ -1219,7 +1219,7 @@ export function TreatmentPlansTab({
                           siguiente paso. */}
                       <Disclosure
                         triggerId={PAYMENTS_TRIGGER_ID}
-                        summary={copy.paymentsHeading}
+                        summary={copy.paymentsDisclosure}
                         meta={copy.paymentsDisclosureMeta(payments.length)}
                         defaultOpen={payments.length === 0}
                       >

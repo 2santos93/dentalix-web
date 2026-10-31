@@ -153,7 +153,7 @@ async function openPlan(page: Page, origin: string, patientId: string): Promise<
 }
 
 async function openPayments(panel: Locator) {
-  const fold = panel.getByRole('button', { name: /^Abonos y saldo\s+\d+ abonos?$/ });
+  const fold = panel.getByRole('button', { name: /^Abonos registrados\s+\d+ abonos?$/ });
   if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
 }
 

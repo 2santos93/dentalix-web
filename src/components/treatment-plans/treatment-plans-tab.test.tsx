@@ -334,7 +334,7 @@ function emptyBalance(): PlanBalance {
 async function openPaymentsTable(
   user: ReturnType<typeof userEvent.setup>,
 ): Promise<HTMLElement> {
-  const trigger = await screen.findByRole("button", { name: /abonos y saldo/i });
+  const trigger = await screen.findByRole("button", { name: /abonos registrados/i });
   if (trigger.getAttribute("aria-expanded") === "false") await user.click(trigger);
   return screen.findByRole("table", { name: /abonos del plan de tratamiento/i });
 }
@@ -2890,7 +2890,7 @@ describe('TreatmentPlansTab', () => {
       row.remove();
       await user.keyboard('{Escape}');
       await waitFor(() =>
-        expect(screen.getByRole('button', { name: /abonos y saldo/i })).toHaveFocus(),
+        expect(screen.getByRole('button', { name: /abonos registrados/i })).toHaveFocus(),
       );
     });
   });

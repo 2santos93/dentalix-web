@@ -8,6 +8,7 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { frozenRateLabel, paymentRateCopy } from '@/lib/payments/payment-rate';
 import type { Payment } from '@/lib/payments/payments-api';
+import { statusLabel } from '@/lib/status/tones';
 import { copy } from './treatment-plans-tab-copy';
 
 /**
@@ -96,7 +97,24 @@ export function PlanPaymentsList({
         ) : (
           <span className="text-muted">{copy.paymentReceiptLegacy}</span>
         ),
-      mobileCell: (p) => copy.paymentReceiptMobile(p.receiptNumber),
+      // En el teléfono, las marcas van en la línea 2: en la 1 recortarían la fecha.
+      mobileCell: (p) => (
+        <>
+          {copy.paymentReceiptMobile(p.receiptNumber)}
+          {manualPaymentIds?.has(p.id) ? (
+            <>
+              {' '}
+              <Badge variant="neutral">{copy.manualAllocation}</Badge>
+            </>
+          ) : null}
+          {p.exchangeRateStatus === 'MISSING' ? (
+            <>
+              {' '}
+              <PaymentMissingRateBadge payment={p} />
+            </>
+          ) : null}
+        </>
+      ),
     },
     {
       id: 'amount',
@@ -113,6 +131,7 @@ export function PlanPaymentsList({
           <PaymentFrozenRate payment={p} fmt={fmt} />
         </span>
       ),
+      mobileCell: (p) => sedeMoney(p.amount, p.currency, fmt),
     },
     {
       id: 'method',
@@ -123,7 +142,7 @@ export function PlanPaymentsList({
         ) : (
           <span className="text-muted">{copy.paymentMethodFallback}</span>
         ),
-      mobileCell: (p) => (p.method ? <StatusBadge kind="paymentMethod" status={p.method} /> : null),
+      mobileCell: (p) => (p.method ? statusLabel('paymentMethod', p.method) : null),
     },
     {
       id: 'notes',
