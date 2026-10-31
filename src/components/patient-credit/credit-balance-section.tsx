@@ -70,6 +70,12 @@ export function CreditBalanceSection({
           {formatCurrency(source.credit, source.currency)} <span className="text-muted">{copy.inFavor}</span>
         </span>
       ),
+      // En el teléfono solo la cifra: «a favor» ya lo dice el título, y así el plan no se corta.
+      mobileCell: (source) => (
+        <span data-testid="credit-row" className="t-data whitespace-nowrap text-ink">
+          {formatCurrency(source.credit, source.currency)}
+        </span>
+      ),
     },
   ];
 
