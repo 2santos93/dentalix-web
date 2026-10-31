@@ -28,6 +28,10 @@ const mockRequestLocations = jest.fn();
 const mockedSummary = getExpenseSummary as jest.MockedFunction<typeof getExpenseSummary>;
 const mockedCsv = downloadExpenseSummaryCsv as jest.MockedFunction<typeof downloadExpenseSummaryCsv>;
 
+// Solo Date: los temporizadores de user-event y de carga siguen siendo reales.
+const NativeDate = Date;
+let fixtureNow: number;
+
 function summary(rows: ExpenseSummary['rows']): ExpenseSummary {
   return { from: '2026-05-01', to: '2026-10-31', rows };
 }
@@ -48,6 +52,16 @@ const copRow: ExpenseSummary['rows'][number] = {
 
 describe('ExpensesSummaryView (DX-274)', () => {
   beforeEach(() => {
+    fixtureNow = NativeDate.parse('2026-10-15T12:00:00Z');
+    globalThis.Date = new Proxy(NativeDate, {
+      construct(target, args, newTarget) {
+        return Reflect.construct(target, args.length ? args : [fixtureNow], newTarget);
+      },
+      apply() { return new NativeDate(fixtureNow).toString(); },
+      get(target, property, receiver) {
+        return property === 'now' ? () => fixtureNow : Reflect.get(target, property, receiver);
+      },
+    });
     mockedSummary.mockReset().mockResolvedValue(summary([copRow]));
     mockedCsv.mockReset().mockResolvedValue('csv');
     (getActiveLocationId as jest.Mock).mockReturnValue(null);
@@ -56,6 +70,8 @@ describe('ExpensesSummaryView (DX-274)', () => {
     jest.mocked(saveCsv).mockReset();
     jest.mocked(notifyError).mockReset();
   });
+
+  afterEach(() => { globalThis.Date = NativeDate; });
 
   it('pide los últimos seis meses hasta hoy y pinta la fila con ingresos, gastos y neto', async () => {
     render(<ExpensesSummaryView token="t" />);
@@ -236,15 +252,17 @@ describe('ExpensesSummaryView (DX-274)', () => {
     await waitFor(() => expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-08-01', to: '2026-10-31' }));
   });
 
-  it('elige el mes según la zona guardada en el horario, no la inferida del país', async () => {
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date('2026-10-31T12:00:00Z'));
-    try {
-      // Auckland ya está en noviembre; el listado fixture sigue indicando Bogotá.
-      render(<ExpensesSummaryView token="t" />);
-      await act(async () => {});
-      expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-06-01', to: '2026-11-30' });
-    } finally { jest.useRealTimers(); }
+  it.each([
+    ['2026-10-31T10:59:59Z', '2026-05-01', '2026-10-31'],
+    ['2026-10-31T11:00:00Z', '2026-06-01', '2026-11-30'],
+    ['2026-10-31T12:00:00Z', '2026-06-01', '2026-11-30'],
+  ])('elige el mes de la zona guardada, no el país: %s', async (instant, from, to) => {
+    fixtureNow = NativeDate.parse(instant);
+    // El listado indica Bogotá; el horario guardado es Auckland.
+    render(<ExpensesSummaryView token="t" />);
+    await screen.findByTestId('summary-row');
+    expect(getLocationSchedule).toHaveBeenCalledWith('t', 'loc-1');
+    expect(mockedSummary).toHaveBeenCalledWith('t', { from, to });
   });
 
   it('preserva el aviso de configuración de la API y permite reintentar tras configurarla', async () => {
