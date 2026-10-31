@@ -32,7 +32,7 @@ const payer = (id: string, name: string, active = true): Payer => ({
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 });
-const sanitas = payer('pay-1', 'Sanitas');
+const sanavida = payer('pay-1', 'Sanavida');
 const axa = payer('pay-2', 'Axa');
 const oldPayer = payer('pay-3', 'Mapfre', false);
 
@@ -64,7 +64,7 @@ function setup(over: Partial<React.ComponentProps<typeof CoverageDialog>> = {}) 
     token: 'tok',
     patientId: 'p1',
     coverage: null,
-    payers: [sanitas, axa, oldPayer],
+    payers: [sanavida, axa, oldPayer],
     canCreatePayer: false,
     onSaved: jest.fn(),
     onPayerCreated: jest.fn(),
@@ -81,16 +81,16 @@ describe('CoverageDialog (DX-153)', () => {
     setup();
     const select = screen.getByLabelText('Pagador');
     const names = within(select).getAllByRole('option').map((o) => o.textContent);
-    expect(names.join('|')).toContain('Sanitas');
+    expect(names.join('|')).toContain('Sanavida');
     expect(names.join('|')).toContain('Axa');
     expect(names.join('|')).not.toContain('Mapfre');
   });
 
   it('DX-326: each payer option carries its generic type label', () => {
-    setup({ payers: [{ ...sanitas, type: 'PREPAID_PLAN' }, axa] });
+    setup({ payers: [{ ...sanavida, type: 'PREPAID_PLAN' }, axa] });
     const select = screen.getByLabelText('Pagador');
     const names = within(select).getAllByRole('option').map((o) => o.textContent);
-    expect(names).toContain('Sanitas · Plan prepago');
+    expect(names).toContain('Sanavida · Plan prepago');
     expect(names).toContain('Axa · Otro / interno (cortesía, empleados)');
   });
 
@@ -167,7 +167,7 @@ describe('CoverageDialog (DX-153)', () => {
   });
 
   it('con permiso crea un pagador y lo deja elegido', async () => {
-    const created = payer('pay-9', 'Nueva EPS');
+    const created = payer('pay-9', 'Nueva Salud');
     mockedCreatePayer.mockResolvedValue(created);
     const onPayerCreated = jest.fn();
     // El padre suma el pagador creado a la lista: se simula con un rerender.
@@ -181,18 +181,18 @@ describe('CoverageDialog (DX-153)', () => {
       onSaved: jest.fn(),
       onPayerCreated,
     };
-    const { rerender } = render(<CoverageDialog {...props} payers={[sanitas]} />);
+    const { rerender } = render(<CoverageDialog {...props} payers={[sanavida]} />);
     const user = setupUser();
 
     await user.click(screen.getByRole('button', { name: '¿No está en la lista? Crear pagador' }));
     const payerDialog = await screen.findByRole('dialog', { name: 'Nuevo pagador' });
-    await user.type(within(payerDialog).getByLabelText('Nombre'), 'Nueva EPS');
+    await user.type(within(payerDialog).getByLabelText('Nombre'), 'Nueva Salud');
     // SEC-047: el tipo de pagador ya no viene preseleccionado.
     await user.selectOptions(within(payerDialog).getByLabelText('Tipo'), 'EMPLOYER');
     await user.click(within(payerDialog).getByRole('button', { name: 'Crear pagador' }));
 
     await waitFor(() => expect(onPayerCreated).toHaveBeenCalledWith(created));
-    rerender(<CoverageDialog {...props} payers={[sanitas, created]} />);
+    rerender(<CoverageDialog {...props} payers={[sanavida, created]} />);
     await waitFor(() =>
       expect((screen.getByLabelText('Pagador') as HTMLSelectElement).value).toBe('pay-9'),
     );
@@ -204,7 +204,7 @@ describe('CoverageDialog (DX-153)', () => {
     const external: Payer = { ...payer('pay-ext', 'Aseguradora Norte'), type: 'EMPLOYER' };
 
     it('con un pagador externo es obligatorio: error en el campo, foco y nada enviado', async () => {
-      setup({ payers: [external, sanitas] });
+      setup({ payers: [external, sanavida] });
       const user = setupUser();
       await user.selectOptions(screen.getByLabelText('Pagador'), 'pay-ext');
       const member = screen.getByLabelText('Nº de afiliado o póliza');

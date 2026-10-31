@@ -827,18 +827,18 @@ describe('AgendaView', () => {
   it.each([
     [
       'vencida',
-      { status: 'EXPIRED' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: '2026-01-31' },
-      'Cobertura: Sura EPS · venció el 31/01/2026',
+      { status: 'EXPIRED' as const, payerName: 'Surco Salud', planName: 'Plan Oro', validTo: '2026-01-31' },
+      'Cobertura: Surco Salud · venció el 31/01/2026',
     ],
     [
       'vigente con plan',
-      { status: 'ACTIVE' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: null },
-      'Cobertura: Sura EPS · Plan Oro',
+      { status: 'ACTIVE' as const, payerName: 'Surco Salud', planName: 'Plan Oro', validTo: null },
+      'Cobertura: Surco Salud · Plan Oro',
     ],
     [
       'pendiente de inicio',
-      { status: 'NOT_STARTED' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: null },
-      'Cobertura: Sura EPS · pendiente de inicio',
+      { status: 'NOT_STARTED' as const, payerName: 'Surco Salud', planName: 'Plan Oro', validTo: null },
+      'Cobertura: Surco Salud · pendiente de inicio',
     ],
   ])('Día: el detalle muestra la línea de cobertura (%s)', async (_label, coverage, expected) => {
     const future = new Date(Date.now() + 3 * 24 * 3600_000);

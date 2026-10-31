@@ -13,9 +13,9 @@ jest.mock('../../lib/payers/payers-api', () => ({
 const mockedCreate = createPayer as jest.MockedFunction<typeof createPayer>;
 const mockedUpdate = updatePayer as jest.MockedFunction<typeof updatePayer>;
 
-const sanitas: Payer = {
+const sanavida: Payer = {
   id: 'payer-1',
-  name: 'Sanitas',
+  name: 'Sanavida',
   type: 'PUBLIC_SYSTEM',
   active: true,
   createdAt: '2026-10-01T00:00:00.000Z',
@@ -75,7 +75,7 @@ describe('PayerFormModal (DX-153)', () => {
     const { dialog } = setup();
     const type = within(dialog).getByLabelText('Tipo');
     expect(type).toHaveValue('');
-    await user.type(within(dialog).getByLabelText('Nombre'), 'Sura EPS');
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Surco Salud');
     await user.click(within(dialog).getByRole('button', { name: 'Crear pagador' }));
     expect(await within(dialog).findByText('Elige el tipo de pagador.')).toBeInTheDocument();
     expect(type).toHaveAttribute('aria-invalid', 'true');
@@ -101,7 +101,7 @@ describe('PayerFormModal (DX-153)', () => {
 
   // Excepción G5.3 (DX-334): tipos de pagador anteriores a DX-326.
   it('legacy: un pagador OTRO de una API anterior también anuncia la pista interna', () => {
-    const { dialog } = setup({ ...sanitas, type: 'OTRO' as Payer['type'] });
+    const { dialog } = setup({ ...sanavida, type: 'OTRO' as Payer['type'] });
     const type = within(dialog).getByLabelText('Tipo');
     expect(type).toHaveValue('OTHER');
     expect(type).toHaveAccessibleDescription(OTHER_HINT);
@@ -121,7 +121,7 @@ describe('PayerFormModal (DX-153)', () => {
 
   it('creates with the normalized name and the type, never a country', async () => {
     const user = setupUser();
-    mockedCreate.mockResolvedValue({ ...sanitas, name: 'Aseguradora Norte', type: 'INSURER' });
+    mockedCreate.mockResolvedValue({ ...sanavida, name: 'Aseguradora Norte', type: 'INSURER' });
     const { dialog, onSaved, onOpenChange } = setup();
     await user.type(within(dialog).getByLabelText('Nombre'), '  Aseguradora   Norte ');
     await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'INSURER');
@@ -137,9 +137,9 @@ describe('PayerFormModal (DX-153)', () => {
 
   it('edits with the seeded type and sends name and type only', async () => {
     const user = setupUser();
-    mockedUpdate.mockResolvedValue({ ...sanitas, type: 'EMPLOYER' });
-    const { dialog, onSaved } = setup(sanitas);
-    expect(within(dialog).getByLabelText('Nombre')).toHaveValue('Sanitas');
+    mockedUpdate.mockResolvedValue({ ...sanavida, type: 'EMPLOYER' });
+    const { dialog, onSaved } = setup(sanavida);
+    expect(within(dialog).getByLabelText('Nombre')).toHaveValue('Sanavida');
     expect(within(dialog).getByLabelText('Tipo')).toHaveValue('PUBLIC_SYSTEM');
 
     await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'EMPLOYER');
@@ -147,7 +147,7 @@ describe('PayerFormModal (DX-153)', () => {
 
     await waitFor(() =>
       expect(mockedUpdate).toHaveBeenCalledWith('tok', 'payer-1', {
-        name: 'Sanitas',
+        name: 'Sanavida',
         type: 'EMPLOYER',
       }),
     );
@@ -157,7 +157,7 @@ describe('PayerFormModal (DX-153)', () => {
 
   // Excepción G5.3 (DX-334): tipos de pagador anteriores a DX-326.
   it('legacy type from an older API seeds its generic type', () => {
-    const { dialog } = setup({ ...sanitas, type: 'EPS_CO' as Payer['type'] });
+    const { dialog } = setup({ ...sanavida, type: 'EPS_CO' as Payer['type'] });
     expect(within(dialog).getByLabelText('Tipo')).toHaveValue('PUBLIC_SYSTEM');
   });
 
@@ -166,7 +166,7 @@ describe('PayerFormModal (DX-153)', () => {
     mockedCreate.mockRejectedValue(new ApiError(409, 'Ya existe un pagador con ese nombre.'));
     const { dialog, onSaved, onOpenChange } = setup();
     await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'EMPLOYER');
-    await user.type(within(dialog).getByLabelText('Nombre'), 'Sanitas');
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Sanavida');
     await user.click(within(dialog).getByRole('button', { name: 'Crear pagador' }));
     expect(
       await within(dialog).findByText('Ya existe un pagador con ese nombre.'),

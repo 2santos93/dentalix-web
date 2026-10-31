@@ -47,12 +47,12 @@ describe('payers-api', () => {
 
   it('crea, edita y retira', async () => {
     const spy = mockFetch({});
-    await createPayer('tok', { name: 'Sanitas', type: 'PUBLIC_SYSTEM' });
+    await createPayer('tok', { name: 'Sanavida', type: 'PUBLIC_SYSTEM' });
     await updatePayer('tok', 'payer-1', { active: false });
     await deletePayer('tok', 'payer-1');
     expect(call(spy, 0)).toMatchObject({
       method: 'POST',
-      body: { name: 'Sanitas', type: 'PUBLIC_SYSTEM' },
+      body: { name: 'Sanavida', type: 'PUBLIC_SYSTEM' },
     });
     expect(call(spy, 1)).toMatchObject({ method: 'PATCH', body: { active: false } });
     expect(call(spy, 1).path).toMatch(/\/payers\/payer-1$/);

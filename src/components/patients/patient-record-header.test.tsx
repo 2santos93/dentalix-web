@@ -223,7 +223,7 @@ describe('PatientRecordHeader · saldo vencido (DX-150)', () => {
 describe('PatientRecordHeader · cobertura vencida (DX-153)', () => {
   const coverage = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED') => ({
     status,
-    payerName: 'Sanitas',
+    payerName: 'Sanavida',
     planName: null,
     validTo: '2026-01-31',
   });
@@ -270,8 +270,8 @@ describe('PatientRecordHeader · cobertura vencida (DX-153)', () => {
 describe('PatientRecordHeader · chip de convenio (DX-105)', () => {
   const agreement = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED' | 'INACTIVE') => ({
     status,
-    agreementName: 'Sanitas 2026',
-    payerName: 'Sanitas',
+    agreementName: 'Sanavida 2026',
+    payerName: 'Sanavida',
   });
 
   it('muestra «Convenio: nombre» con un convenio vigente', () => {
@@ -282,7 +282,7 @@ describe('PatientRecordHeader · chip de convenio (DX-105)', () => {
         onEdit={() => {}}
       />,
     );
-    expect(screen.getByTestId('agreement-chip')).toHaveTextContent('Convenio: Sanitas 2026');
+    expect(screen.getByTestId('agreement-chip')).toHaveTextContent('Convenio: Sanavida 2026');
   });
 
   it.each(['NONE', 'EXPIRED', 'NOT_STARTED', 'INACTIVE'] as const)(
@@ -304,7 +304,7 @@ describe('PatientRecordHeader · chip de convenio (DX-105)', () => {
       <PatientRecordHeader
         patient={patient({
           agreement: agreement('ACTIVE'),
-          coverage: { status: 'EXPIRED', payerName: 'Sanitas', planName: null, validTo: '2026-01-31' },
+          coverage: { status: 'EXPIRED', payerName: 'Sanavida', planName: null, validTo: '2026-01-31' },
         })}
         loading={false}
         onEdit={() => {}}

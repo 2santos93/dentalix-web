@@ -48,9 +48,9 @@ const mockedCatalog = listCatalogItems as jest.MockedFunction<typeof listCatalog
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedNotify = notifyError as jest.MockedFunction<typeof notifyError>;
 
-const sanitasPayer: Payer = {
+const sanavidaPayer: Payer = {
   id: 'payer-1',
-  name: 'Sanitas',
+  name: 'Sanavida',
   type: 'PUBLIC_SYSTEM',
   active: true,
   createdAt: '2026-10-01T00:00:00.000Z',
@@ -68,8 +68,8 @@ const norte: ClinicLocation = clinicLocation({
 
 const porcentaje: Agreement = {
   id: 'ag-1',
-  name: 'Convenio Sanitas',
-  payer: { id: 'payer-1', name: 'Sanitas', type: 'PREPAID_PLAN' },
+  name: 'Convenio Sanavida',
+  payer: { id: 'payer-1', name: 'Sanavida', type: 'PREPAID_PLAN' },
   kind: 'PERCENT_DISCOUNT',
   percent: 15,
   percentByCategory: { Preventiva: 20, Endodoncia: 5 },
@@ -85,11 +85,11 @@ const porcentaje: Agreement = {
 const lista: Agreement = {
   ...porcentaje,
   id: 'ag-2',
-  name: 'Sura tarifas',
+  name: 'Surco tarifas',
   kind: 'PRICE_LIST',
   percent: null,
   percentByCategory: null,
-  priceList: { id: 'pl-1', name: 'Lista Sura 2026', currency: 'COP' },
+  priceList: { id: 'pl-1', name: 'Lista Surco 2026', currency: 'COP' },
   locationId: 'loc-1',
   validFrom: null,
   validTo: null,
@@ -146,7 +146,7 @@ describe('AgreementsManager (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedList.mockResolvedValue([porcentaje, lista, inactivo]);
-    mockedPayers.mockResolvedValue([sanitasPayer]);
+    mockedPayers.mockResolvedValue([sanavidaPayer]);
     mockedPriceLists.mockResolvedValue([]);
     mockedCatalog.mockResolvedValue([
       catalogItem('a', 'Preventiva'),
@@ -167,8 +167,8 @@ describe('AgreementsManager (DX-105)', () => {
     render(<AgreementsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Convenios' });
     const rows = within(table).getAllByRole('row');
-    expect(rows[1]).toHaveTextContent('Convenio Sanitas');
-    expect(rows[1]).toHaveTextContent('Sanitas');
+    expect(rows[1]).toHaveTextContent('Convenio Sanavida');
+    expect(rows[1]).toHaveTextContent('Sanavida');
     // DX-378 (FE-078): el % con el formato de la sede (es-CO: «15%»), no con «es» («15 %»).
     expect(rows[1]).toHaveTextContent('15% de descuento · 2 categorías con porcentaje propio');
     expect(rows[1]).toHaveTextContent('Toda la clínica');
@@ -176,7 +176,7 @@ describe('AgreementsManager (DX-105)', () => {
     expect(rows[1]).toHaveTextContent('3');
     // El estado solo se ve cuando es la excepción.
     expect(rows[1]).not.toHaveTextContent('Activo');
-    expect(rows[2]).toHaveTextContent('Lista: Lista Sura 2026');
+    expect(rows[2]).toHaveTextContent('Lista: Lista Surco 2026');
     expect(rows[2]).toHaveTextContent('Sede Norte');
     expect(rows[2]).toHaveTextContent('Sin límite');
     expect(rows[3]).toHaveTextContent('Inactivo');
@@ -217,8 +217,8 @@ describe('AgreementsManager (DX-105)', () => {
       ),
     ).toBeInTheDocument();
     expect(cards[0]).toHaveTextContent('3 pacientes');
-    expect(cards[0]).toHaveTextContent('Sanitas · 15% de descuento');
-    expect(within(cards[0]).getByRole('button', { name: 'Acciones de Convenio Sanitas' })).toBeInTheDocument();
+    expect(cards[0]).toHaveTextContent('Sanavida · 15% de descuento');
+    expect(within(cards[0]).getByRole('button', { name: 'Acciones de Convenio Sanavida' })).toBeInTheDocument();
   });
 
   // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
@@ -284,7 +284,7 @@ describe('AgreementsManager (DX-105)', () => {
       .getAllByRole('row')
       .slice(1)
       .map((r) => within(r).getAllByRole('cell')[0].textContent);
-    expect(names).toEqual(['AntiguoInactivoSanitas', 'BetaSanitas', 'Convenio SanitasSanitas', 'Sura tarifasSanitas']);
+    expect(names).toEqual(['AntiguoInactivoSanavida', 'BetaSanavida', 'Convenio SanavidaSanavida', 'Surco tarifasSanavida']);
   });
 
   it('desactiva y, si falla, avisa con reintento sin cambiar la lista', async () => {
@@ -293,7 +293,7 @@ describe('AgreementsManager (DX-105)', () => {
     render(<AgreementsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Convenios' });
 
-    await rowAction(user, 'Convenio Sanitas', 'Desactivar');
+    await rowAction(user, 'Convenio Sanavida', 'Desactivar');
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'ag-1', { active: false }));
     await waitFor(() => expect(within(table).getAllByText('Inactivo')).toHaveLength(2));
 
@@ -326,7 +326,7 @@ describe('AgreementsManager (DX-105)', () => {
     render(<AgreementsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Convenios' });
 
-    await rowAction(user, 'Convenio Sanitas', 'Retirar');
+    await rowAction(user, 'Convenio Sanavida', 'Retirar');
     const dialog = await screen.findByRole('dialog');
     // La confirmación dice la consecuencia con el número de pacientes.
     expect(
@@ -336,6 +336,6 @@ describe('AgreementsManager (DX-105)', () => {
     ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Retirar convenio' }));
     expect(await within(dialog).findByText(message)).toBeInTheDocument();
-    expect(within(table).getByText('Convenio Sanitas')).toBeInTheDocument();
+    expect(within(table).getByText('Convenio Sanavida')).toBeInTheDocument();
   });
 });

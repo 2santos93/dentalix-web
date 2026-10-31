@@ -1,6 +1,6 @@
 import { agreementEligibility, agreementEligibilityCopy } from './agreement-eligibility';
 
-const sura = { id: 'pay-sura', name: 'Sura EPS', type: 'PUBLIC_SYSTEM' as const };
+const surco = { id: 'pay-surco', name: 'Surco Salud', type: 'PUBLIC_SYSTEM' as const };
 const cortesia = { id: 'pay-cor', name: 'Cortesía', type: 'OTHER' as const };
 const ME = 'user-me';
 const cov = (
@@ -21,9 +21,9 @@ const cov = (
 
 describe('agreementEligibility (SEC-047)', () => {
   it('un convenio de pagador externo pide una cobertura viva de ese pagador, para cualquier rol', () => {
-    const coverages = [cov('c1', sura.id), cov('c2', sura.id, 'EXPIRED'), cov('c3', cortesia.id)];
+    const coverages = [cov('c1', surco.id), cov('c2', surco.id, 'EXPIRED'), cov('c3', cortesia.id)];
     for (const role of ['ADMIN', 'DENTIST', 'ASSISTANT', 'RECEPTION'] as const) {
-      expect(agreementEligibility({ payer: sura }, coverages, role, ME)).toEqual({
+      expect(agreementEligibility({ payer: surco }, coverages, role, ME)).toEqual({
         kind: 'needs-coverage',
         coverages: [coverages[0]],
       });
@@ -32,22 +32,22 @@ describe('agreementEligibility (SEC-047)', () => {
 
   it('sin cobertura viva del pagador explica por qué no se puede asignar', () => {
     const out = agreementEligibility(
-      { payer: sura },
-      [cov('c2', sura.id, 'EXPIRED'), cov('c4', sura.id, 'NOT_STARTED')],
+      { payer: surco },
+      [cov('c2', surco.id, 'EXPIRED'), cov('c4', surco.id, 'NOT_STARTED')],
       'RECEPTION',
       ME,
     );
     expect(out).toEqual({
       kind: 'blocked',
-      reason: agreementEligibilityCopy.noLiveCoverage('Sura EPS'),
+      reason: agreementEligibilityCopy.noLiveCoverage('Surco Salud'),
     });
-    expect(agreementEligibilityCopy.noLiveCoverage('Sura EPS')).toBe(
-      'El paciente no tiene una cobertura vigente de «Sura EPS». Añádela en «Coberturas» y vuelve a asignar el convenio.',
+    expect(agreementEligibilityCopy.noLiveCoverage('Surco Salud')).toBe(
+      'El paciente no tiene una cobertura vigente de «Surco Salud». Añádela en «Coberturas» y vuelve a asignar el convenio.',
     );
   });
 
   it('un convenio interno (pagador OTHER) solo lo asigna ADMIN, con la cobertura opcional', () => {
-    const coverages = [cov('c3', cortesia.id), cov('c1', sura.id)];
+    const coverages = [cov('c3', cortesia.id), cov('c1', surco.id)];
     expect(agreementEligibility({ payer: cortesia }, coverages, 'ADMIN', ME)).toEqual({
       kind: 'optional-coverage',
       coverages: [coverages[0]],
@@ -91,38 +91,38 @@ describe('agreementEligibility (SEC-047)', () => {
 
   describe('SEC-049: cobertura verificable', () => {
     it('quien no es ADMIN no ve la cobertura que registró él y nadie verificó', () => {
-      const mine = cov('c1', sura.id, 'ACTIVE', false, { declaredById: ME });
-      const verified = cov('c2', sura.id, 'ACTIVE', false, {
+      const mine = cov('c1', surco.id, 'ACTIVE', false, { declaredById: ME });
+      const verified = cov('c2', surco.id, 'ACTIVE', false, {
         declaredById: ME,
         verifiedAt: '2026-10-20T15:00:00.000Z',
       });
-      const byOther = cov('c3', sura.id);
+      const byOther = cov('c3', surco.id);
       for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION'] as const) {
-        expect(agreementEligibility({ payer: sura }, [mine, verified, byOther], role, ME)).toEqual(
+        expect(agreementEligibility({ payer: surco }, [mine, verified, byOther], role, ME)).toEqual(
           { kind: 'needs-coverage', coverages: [verified, byOther] },
         );
       }
     });
 
     it('si solo tiene las suyas sin verificar, explica qué falta', () => {
-      const mine = cov('c1', sura.id, 'ACTIVE', false, { declaredById: ME });
-      expect(agreementEligibility({ payer: sura }, [mine], 'RECEPTION', ME)).toEqual({
+      const mine = cov('c1', surco.id, 'ACTIVE', false, { declaredById: ME });
+      expect(agreementEligibility({ payer: surco }, [mine], 'RECEPTION', ME)).toEqual({
         kind: 'blocked',
-        reason: agreementEligibilityCopy.selfDeclared('Sura EPS'),
+        reason: agreementEligibilityCopy.selfDeclared('Surco Salud'),
       });
-      expect(agreementEligibilityCopy.selfDeclared('Sura EPS')).toBe(
-        'La cobertura de «Sura EPS» la registraste tú y aún no la ha verificado un administrador: pide a un administrador que la verifique en «Coberturas» (o que asigne él el convenio).',
+      expect(agreementEligibilityCopy.selfDeclared('Surco Salud')).toBe(
+        'La cobertura de «Surco Salud» la registraste tú y aún no la ha verificado un administrador: pide a un administrador que la verifique en «Coberturas» (o que asigne él el convenio).',
       );
     });
 
     it('ADMIN usa cualquiera; una migrada vale para todos', () => {
-      const mine = cov('c1', sura.id, 'ACTIVE', false, { declaredById: ME });
-      expect(agreementEligibility({ payer: sura }, [mine], 'ADMIN', ME)).toEqual({
+      const mine = cov('c1', surco.id, 'ACTIVE', false, { declaredById: ME });
+      expect(agreementEligibility({ payer: surco }, [mine], 'ADMIN', ME)).toEqual({
         kind: 'needs-coverage',
         coverages: [mine],
       });
-      const migrated = cov('c2', sura.id, 'ACTIVE', true, { declaredById: null });
-      expect(agreementEligibility({ payer: sura }, [migrated], 'RECEPTION', ME)).toEqual({
+      const migrated = cov('c2', surco.id, 'ACTIVE', true, { declaredById: null });
+      expect(agreementEligibility({ payer: surco }, [migrated], 'RECEPTION', ME)).toEqual({
         kind: 'needs-coverage',
         coverages: [migrated],
       });

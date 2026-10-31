@@ -42,10 +42,10 @@ describe('agreement-presentation (DX-105)', () => {
   it('el chip solo dice «Convenio: X» con ACTIVE', () => {
     const s = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED' | 'INACTIVE') => ({
       status,
-      agreementName: 'Sanitas 2026',
-      payerName: 'Sanitas',
+      agreementName: 'Sanavida 2026',
+      payerName: 'Sanavida',
     });
-    expect(agreementChipText(s('ACTIVE'))).toBe('Convenio: Sanitas 2026');
+    expect(agreementChipText(s('ACTIVE'))).toBe('Convenio: Sanavida 2026');
     for (const st of ['NONE', 'EXPIRED', 'NOT_STARTED', 'INACTIVE'] as const) {
       expect(agreementChipText(s(st))).toBe('');
     }

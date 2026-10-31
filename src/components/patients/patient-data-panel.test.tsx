@@ -129,7 +129,7 @@ describe('PatientDataPanel', () => {
 
   it('oculta por completo un bloque sin datos', () => {
     render(<PatientDataPanel patient={patient()} />);
-    // Sin contacto de emergencia ni acudiente cargados.
+    // Sin contacto de emergencia ni tutor cargados.
     expect(screen.queryByText(/^Emergencia$/)).not.toBeInTheDocument();
   });
 
@@ -202,11 +202,11 @@ describe('PatientDataPanel · sin aseguradora en texto libre (DX-322)', () => {
   it('patient data panel never shows a legacy insurer row', () => {
     // DX-322: el texto libre de aseguradora sale del contrato; aunque una
     // respuesta antigua lo traiga, la ficha no lo pinta.
-    const stale = { ...patient({ occupation: 'Docente', coverage: coverage('NONE') }), insurerEps: 'Sanitas' };
+    const stale = { ...patient({ occupation: 'Docente', coverage: coverage('NONE') }), insurerEps: 'Sanavida' };
     render(<PatientDataPanel patient={stale} />);
     expect(screen.queryByText('Aseguradora (dato anterior)')).not.toBeInTheDocument();
     expect(screen.queryByText('Aseguradora / EPS')).not.toBeInTheDocument();
-    expect(screen.queryByText('Sanitas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sanavida')).not.toBeInTheDocument();
   });
 });
 

@@ -11,12 +11,12 @@ import { API_URL, tenantOrigin } from './support/urls';
  * e2e DX-105: listas de precios y convenios.
  *
  * ADMIN crea (por la UI) la lista «Tarifa» en COP y le pone precio a un
- * procedimiento («Editar precio»), y el convenio «Sura −20 %» (el pagador se
+ * procedimiento («Editar precio»), y el convenio «Surco −20 %» (el pagador se
  * crea por la API, con la cobertura del paciente: SEC-047). RECEPCIÓN asigna
  * el convenio en la ficha —el diálogo elige la cobertura vigente— y ve el chip
- * «Convenio: Sura −20 %». El DENTISTA abre la pestaña Plan, crea un plan en
+ * «Convenio: Surco −20 %». El DENTISTA abre la pestaña Plan, crea un plan en
  * COP, elige el procedimiento y el precio llega precargado con el −20 % y la
- * línea de origen «Convenio · Sura −20 %»; la fila del plan y el presupuesto
+ * línea de origen «Convenio · Surco −20 %»; la fila del plan y el presupuesto
  * imprimible dicen «Convenio» y «Ahorro por convenio». Todo a 390 px sin
  * scroll horizontal y con los diálogos dentro de la pantalla.
  *
@@ -31,9 +31,9 @@ const admin = { fullName: 'Ana Titular', email: `ana.conv.${suffix}@example.com`
 const reception = { fullName: 'Rita Recepción', email: `rita.conv.${suffix}@example.com` };
 const dentist = { fullName: 'Daniel Odontólogo', email: `dani.conv.${suffix}@example.com` };
 const lastName = `Convenio${suffix}`.slice(0, 40);
-const payerName = 'Sura EPS';
+const payerName = 'Surco Salud';
 const listName = 'Tarifa';
-const agreementName = 'Sura −20 %';
+const agreementName = 'Surco −20 %';
 const procedureLabel = `Corona DX105 ${suffix}`.slice(0, 40);
 const CATALOG_PRICE = 150_000;
 const LIST_PRICE = 140_000;
@@ -97,7 +97,7 @@ test.beforeAll(async ({ request }) => {
   // registra el ADMIN, así que recepción puede asignar el convenio con ella.
   await apiPost(request, session, `/patients/${patientId}/coverages`, {
     payerId: payer.id,
-    planName: 'Plan Sura',
+    planName: 'Plan Surco',
     memberNumber: '1020304050',
   });
 });
@@ -183,7 +183,7 @@ test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento;
   await expectNoHorizontalScroll(page);
 });
 
-test('ADMIN crea el convenio «Sura −20 %» y lo ve activo; a 390 px sin scroll horizontal', async ({ page }) => {
+test('ADMIN crea el convenio «Surco −20 %» y lo ve activo; a 390 px sin scroll horizontal', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: 'light' });
   await loginAs(page, origin, admin.email, password);
@@ -222,7 +222,7 @@ test('ADMIN crea el convenio «Sura −20 %» y lo ve activo; a 390 px sin scrol
   await expect(modal390).toBeHidden();
 });
 
-test('RECEPCIÓN asigna el convenio en la ficha: sección y chip «Convenio: Sura −20 %»; a 390 px cabe', async ({
+test('RECEPCIÓN asigna el convenio en la ficha: sección y chip «Convenio: Surco −20 %»; a 390 px cabe', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });

@@ -32,14 +32,14 @@ const mockedRemove = removePatientAgreement as jest.MockedFunction<typeof remove
 const mockedAgreements = listAgreements as jest.MockedFunction<typeof listAgreements>;
 const mockedCoverages = listCoverages as jest.MockedFunction<typeof listCoverages>;
 
-const sanitas = { id: 'pay-1', name: 'Sanitas' };
+const sanavida = { id: 'pay-1', name: 'Sanavida' };
 const renderSection = (onChanged?: () => void) =>
   render(<PatientAgreementSection token="tok" patientId="p1" onChanged={onChanged} role="ADMIN" />);
 
 describe('PatientAgreementSection (DX-105)', () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    mockedAgreements.mockResolvedValue([agreementDto('ag1', 'Sanitas 2026', sanitas)]);
+    mockedAgreements.mockResolvedValue([agreementDto('ag1', 'Sanavida 2026', sanavida)]);
     mockedCoverages.mockResolvedValue([]);
   });
 
@@ -79,8 +79,8 @@ describe('PatientAgreementSection (DX-105)', () => {
     mockedGet.mockResolvedValue({ current: patientAgreement(), history: [] });
     renderSection();
     const card = await screen.findByTestId('agreement-current');
-    expect(within(card).getByText('Sanitas 2026')).toBeInTheDocument();
-    expect(within(card).getByText('Sanitas')).toBeInTheDocument();
+    expect(within(card).getByText('Sanavida 2026')).toBeInTheDocument();
+    expect(within(card).getByText('Sanavida')).toBeInTheDocument();
     expect(within(card).getByText('Descuento porcentual')).toBeInTheDocument();
     expect(within(card).getByText('Vigente hasta 31/01/2027')).toBeInTheDocument();
     expect(within(card).getByText('Vigente')).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe('PatientAgreementSection (DX-105)', () => {
     const history = await screen.findByTestId('agreement-history');
     expect(within(history).getByText('Historial (1)')).toBeInTheDocument();
     expect(history.tagName).toBe('DETAILS');
-    expect(history).toHaveTextContent('Convenio viejo · Sanitas');
+    expect(history).toHaveTextContent('Convenio viejo · Sanavida');
     expect(history).toHaveTextContent('01/01/2025 – 31/12/2025');
     expect(history).toHaveTextContent('Retirado el 15/01/2026');
   });
@@ -125,14 +125,14 @@ describe('PatientAgreementSection (DX-105)', () => {
     mockedGet.mockResolvedValueOnce({ current: patientAgreement(), history: [] });
     mockedAssign.mockResolvedValue(patientAgreement());
     // SEC-047: el convenio de un pagador pide la cobertura vigente del paciente.
-    mockedCoverages.mockResolvedValue([coverageFor('c1', sanitas, 'Salud Plus')]);
+    mockedCoverages.mockResolvedValue([coverageFor('c1', sanavida, 'Salud Plus')]);
     const onChanged = jest.fn();
     renderSection(onChanged);
     const user = setupUser();
 
     await user.click(await screen.findByRole('button', { name: 'Asignar convenio' }));
     const dialog = await screen.findByRole('dialog');
-    await screen.findByRole('option', { name: /Sanitas 2026/ });
+    await screen.findByRole('option', { name: /Sanavida 2026/ });
     await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
     await user.click(within(dialog).getByRole('button', { name: 'Asignar' }));
 
@@ -150,7 +150,7 @@ describe('PatientAgreementSection (DX-105)', () => {
     renderSection(onChanged);
     const user = setupUser();
 
-    await user.click(await screen.findByRole('button', { name: 'Quitar el convenio Sanitas 2026' }));
+    await user.click(await screen.findByRole('button', { name: 'Quitar el convenio Sanavida 2026' }));
     const confirm = await screen.findByRole('dialog');
     expect(mockedRemove).not.toHaveBeenCalled();
     await user.click(within(confirm).getByRole('button', { name: 'Quitar' }));
@@ -171,7 +171,7 @@ describe('PatientAgreementSection (DX-105)', () => {
     renderSection(onChanged);
     const user = setupUser();
 
-    await user.click(await screen.findByRole('button', { name: 'Quitar el convenio Sanitas 2026' }));
+    await user.click(await screen.findByRole('button', { name: 'Quitar el convenio Sanavida 2026' }));
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Quitar' }));
     expect(await within(screen.getByRole('dialog')).findByRole('alert')).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();

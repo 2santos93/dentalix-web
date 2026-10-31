@@ -46,7 +46,7 @@ describe('agreements-api', () => {
   it('crea, edita y retira', async () => {
     const spy = mockFetch({});
     await createAgreement('tok', {
-      name: 'Convenio Sura',
+      name: 'Convenio Surco',
       payerId: 'payer-1',
       kind: 'PERCENT_DISCOUNT',
       percent: 15,
@@ -56,7 +56,7 @@ describe('agreements-api', () => {
     await deleteAgreement('tok', 'ag-1');
     expect(call(spy, 0)).toMatchObject({
       method: 'POST',
-      body: { name: 'Convenio Sura', kind: 'PERCENT_DISCOUNT', percent: 15, percentByCategory: { Preventiva: 20 } },
+      body: { name: 'Convenio Surco', kind: 'PERCENT_DISCOUNT', percent: 15, percentByCategory: { Preventiva: 20 } },
     });
     expect(call(spy, 1)).toMatchObject({ method: 'PATCH', body: { active: false, validTo: null } });
     expect(call(spy, 1).path).toMatch(/\/agreements\/ag-1$/);

@@ -44,11 +44,11 @@ const payer = (id: string, name: string, over: Partial<Payer> = {}): Payer => ({
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...over,
 });
-const sanitas = payer('pay-1', 'Sanitas', { type: 'INSURER' });
-const colsanitas = payer('pay-2', 'Colsanitas', { type: 'PREPAID_PLAN' });
+const sanavida = payer('pay-1', 'Sanavida', { type: 'INSURER' });
+const colsanavida = payer('pay-2', 'Colsanavida', { type: 'PREPAID_PLAN' });
 
 function coverage(over: Partial<PatientCoverage> = {}): PatientCoverage {
-  const p = over.payer ?? sanitas;
+  const p = over.payer ?? sanavida;
   return {
     id: 'c1',
     patientId: 'p1',
@@ -90,7 +90,7 @@ describe('PatientCoverageSection (DX-153)', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockRole = 'RECEPTION';
-    mockedPayers.mockResolvedValue([sanitas, colsanitas]);
+    mockedPayers.mockResolvedValue([sanavida, colsanavida]);
   });
 
   it('carga: esqueleto con estado accesible y título «Cobertura»', () => {
@@ -129,7 +129,7 @@ describe('PatientCoverageSection (DX-153)', () => {
       coverage(),
       coverage({
         id: 'c2',
-        payer: colsanitas,
+        payer: colsanavida,
         planName: null,
         memberNumber: null,
         policyHolderName: 'Rosa Díaz',
@@ -151,7 +151,7 @@ describe('PatientCoverageSection (DX-153)', () => {
     const rows = await screen.findAllByTestId('coverage-row');
     expect(rows).toHaveLength(3);
 
-    expect(within(rows[0]).getByText('Sanitas')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Sanavida')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Aseguradora')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Salud Plus')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Afiliado n.º 88123456')).toHaveClass('tabular-nums');
@@ -211,14 +211,14 @@ describe('PatientCoverageSection (DX-153)', () => {
   });
 
   it('marca otra cobertura como principal desde «Editar»', async () => {
-    const second = coverage({ id: 'c2', payer: colsanitas, isPrimary: false });
+    const second = coverage({ id: 'c2', payer: colsanavida, isPrimary: false });
     mockedList.mockResolvedValue([coverage(), second]);
     mockedUpdate.mockResolvedValue({ ...second, isPrimary: true });
     const onChanged = jest.fn();
     renderSection(onChanged);
     const user = setupUser();
 
-    await rowAction(user, 'Colsanitas', 'Editar');
+    await rowAction(user, 'Colsanavida', 'Editar');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByLabelText('Principal'));
     await user.click(within(dialog).getByRole('button', { name: /guardar/i }));
@@ -240,11 +240,11 @@ describe('PatientCoverageSection (DX-153)', () => {
     renderSection();
     const user = setupUser();
 
-    await rowAction(user, 'Sanitas', 'Editar');
+    await rowAction(user, 'Sanavida', 'Editar');
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /guardar/i }));
     expect(await screen.findByText('Cobertura guardada.')).toBeInTheDocument();
 
-    await rowAction(user, 'Sanitas', 'Editar');
+    await rowAction(user, 'Sanavida', 'Editar');
     expect(screen.queryByText('Cobertura guardada.')).not.toBeInTheDocument();
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /guardar/i }));
     expect(await screen.findByText('Cobertura guardada.')).toBeInTheDocument();
@@ -258,7 +258,7 @@ describe('PatientCoverageSection (DX-153)', () => {
     renderSection(onChanged);
     const user = setupUser();
 
-    await rowAction(user, 'Sanitas', 'Quitar');
+    await rowAction(user, 'Sanavida', 'Quitar');
     const confirm = await screen.findByRole('dialog');
     expect(mockedDelete).not.toHaveBeenCalled();
     await user.click(within(confirm).getByRole('button', { name: 'Quitar' }));
@@ -279,7 +279,7 @@ describe('PatientCoverageSection (DX-153)', () => {
     renderSection(onChanged);
     const user = setupUser();
 
-    await rowAction(user, 'Sanitas', 'Quitar');
+    await rowAction(user, 'Sanavida', 'Quitar');
     const confirm = await screen.findByRole('dialog');
     await user.click(within(confirm).getByRole('button', { name: 'Quitar' }));
 
@@ -297,7 +297,7 @@ describe('PatientCoverageSection (DX-153)', () => {
           verifiedById: 'admin-1',
           verifiedByName: 'Ana Gómez',
         }),
-        coverage({ id: 'c2', payer: colsanitas, isPrimary: false }),
+        coverage({ id: 'c2', payer: colsanavida, isPrimary: false }),
         coverage({ id: 'c3', payer: otro, isPrimary: false }),
       ]);
       renderSection();
@@ -336,7 +336,7 @@ describe('PatientCoverageSection (DX-153)', () => {
 
       const row = await screen.findByTestId('coverage-row');
       expect(within(row).getByTestId('coverage-verification')).toHaveTextContent('Verificada');
-      await rowAction(user, 'Sanitas', 'Editar');
+      await rowAction(user, 'Sanavida', 'Editar');
       const dialog = await screen.findByRole('dialog');
       const to = within(dialog).getByRole('group', { name: 'Vigente hasta' });
       // DatePicker: react-aria antepone «Fecha seleccionada: …»; la ayuda va al final.
@@ -389,7 +389,7 @@ describe('PatientCoverageSection (DX-153)', () => {
       const user = setupUser();
 
       await user.click(
-        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanavida' }),
       );
       const dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
       expect(dialog).toHaveTextContent('el nº de afiliado 88123456 es de este paciente');
@@ -416,7 +416,7 @@ describe('PatientCoverageSection (DX-153)', () => {
       renderSection();
       const user = setupUser();
       await user.click(
-        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanavida' }),
       );
       const dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
       await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
@@ -442,7 +442,7 @@ describe('PatientCoverageSection (DX-153)', () => {
       renderSection();
       const user = setupUser();
       await user.click(
-        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanavida' }),
       );
       let dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
       await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
@@ -454,7 +454,7 @@ describe('PatientCoverageSection (DX-153)', () => {
       );
 
       await user.click(
-        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanavida' }),
       );
       dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
       expect(dialog).toHaveTextContent('el nº de afiliado 88123499 es de este paciente');
