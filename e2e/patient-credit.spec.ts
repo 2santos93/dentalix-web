@@ -104,7 +104,9 @@ for (const viewport of [
     await expect(credit.getByTestId('credit-row')).toContainText(money(300));
 
     // --- Aplicar a otro plan -------------------------------------------------
-    await credit.getByRole('button', { name: /Aplicar a otro plan/ }).click();
+    // UX v2 (B7): las acciones de la fila viven en su «⋯».
+    await credit.getByRole('button', { name: /^Acciones de/ }).click();
+    await page.getByRole('menuitem', { name: /Aplicar a otro plan/ }).click();
     const transfer = page.getByRole('dialog');
     await transfer.getByLabel('Importe a aplicar').fill('200');
     await expect(transfer.getByRole('region', { name: 'Vista previa' })).toContainText(money(100));
@@ -114,7 +116,8 @@ for (const viewport of [
     await expect(credit.getByTestId('credit-row')).toContainText(money(100));
 
     // --- Devolver --------------------------------------------------------------
-    await credit.getByRole('button', { name: /Devolver/ }).click();
+    await credit.getByRole('button', { name: /^Acciones de/ }).click();
+    await page.getByRole('menuitem', { name: /Devolver/ }).click();
     const refund = page.getByRole('dialog');
     await refund.getByLabel('Importe a devolver').fill('40');
     await refund.getByLabel('Cómo se devuelve').selectOption('TRANSFER');

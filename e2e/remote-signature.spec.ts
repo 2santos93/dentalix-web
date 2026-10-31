@@ -229,7 +229,9 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
           timeout: 2_000,
         });
       }).toPass({ timeout: 30_000 });
-      const button = signatureRows(page).first().getByRole('button', { name: `Descargar PDF de ${TEMPLATE_TITLE}` });
+      // UX v2 (B7): «Descargar PDF» vive en el «⋯» de la fila.
+      await signatureRows(page).first().getByRole('button', { name: `Acciones de ${TEMPLATE_TITLE}` }).click();
+      const button = page.getByRole('menuitem', { name: 'Descargar PDF' });
       await expect(button).toBeVisible();
       await expectNoHorizontalScroll(page);
       const [download] = await Promise.all([page.waitForEvent('download'), button.click()]);
@@ -291,7 +293,8 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       const row = signatureRows(page).first();
       await expect(row).toContainText(/Copia enviada al paciente el /, { timeout: 15_000 });
       await expectNoHorizontalScroll(page);
-      await row.getByRole('button', { name: `Reenviar copia de ${TEMPLATE_TITLE}` }).click();
+      await row.getByRole('button', { name: `Acciones de ${TEMPLATE_TITLE}` }).click();
+      await page.getByRole('menuitem', { name: 'Reenviar copia' }).click();
       await expect(page.getByText('Copia enviada a la***@example.com. El enlace anterior ya no sirve.')).toBeVisible();
       const previous = copyToken;
       await expect(async () => {
