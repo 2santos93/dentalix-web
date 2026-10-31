@@ -5,8 +5,6 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
 
 const copy = {
   title: 'Tarjeta de implante',
-  legalBasis:
-    'Res. 4816/2008, art. 31 (CO) · Reglamento (UE) 2017/745, art. 18 y RD 192/2023, art. 36 (ES)',
   patientHeading: 'Portador del implante',
   name: 'Nombre',
   document: 'Documento',
@@ -50,7 +48,6 @@ export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: Reg
     <article className="implant-card-print-root flex min-w-0 flex-col gap-5 bg-white p-6 text-ink sm:p-8 print:p-0">
       <header className="flex flex-col gap-1 border-b border-border pb-3">
         <h1 className="text-xl font-semibold">{copy.title}</h1>
-        <p className="text-xs text-muted">{copy.legalBasis}</p>
       </header>
 
       <div className="grid gap-5 sm:grid-cols-2 print:grid-cols-2">
