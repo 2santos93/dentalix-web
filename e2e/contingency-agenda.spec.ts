@@ -29,8 +29,8 @@ const password = 'Password123!';
 const admin = { fullName: 'Ana Titular', email: `ana.cont.${suffix}@example.com` };
 const dentist = { fullName: 'Luis Contingencia', email: `luis.cont.${suffix}@example.com` };
 const reception = { fullName: 'Rita Recepción', email: `rita.cont.${suffix}@example.com` };
-const kept = { firstName: 'Sara', lastName: `Viene${suffix}`.slice(0, 40), phone: '+57 300 1234567' };
-const cancelled = { firstName: 'Tomás', lastName: `Cancela${suffix}`.slice(0, 40), phone: '+57 300 7654321' };
+const kept = { firstName: 'Sara', lastName: `Viene${suffix.slice(0, 8)}`, phone: '+57 300 1234567' };
+const cancelled = { firstName: 'Tomás', lastName: `Cancela${suffix.slice(0, 8)}`, phone: '+57 300 7654321' };
 const TOMORROW = sedeDayFromToday(1);
 /** Captura de QA a 390 px a DX339_QA_DIR, o a test-results. */
 const QA_DIR = process.env.DX339_QA_DIR ?? 'test-results';
