@@ -82,11 +82,18 @@ describe('StaffView', () => {
     render(<StaffView token="tok" />);
     await screen.findByRole('table', { name: /personal/i });
 
-    expect(screen.getByRole('link', { name: /ver el perfil de ana ríos/i })).toHaveAttribute(
-      'href',
-      '/staff/u1',
-    );
-    expect(screen.queryByRole('link', { name: /ver el perfil de beto/i })).not.toBeInTheDocument();
+    // DataList: el nombre es el enlace (estirado sobre toda la fila).
+    expect(screen.getByRole('link', { name: 'Ana Ríos' })).toHaveAttribute('href', '/staff/u1');
+    expect(screen.queryByRole('link', { name: /beto/i })).not.toBeInTheDocument();
+  });
+
+  it('sin invitaciones en la página no hay columna de acciones (ni una fila de «—»)', async () => {
+    mockedList.mockResolvedValue(page([miembro]));
+    render(<StaffView token="tok" />);
+    const table = await screen.findByRole('table', { name: /personal/i });
+
+    expect(within(table).queryByRole('columnheader', { name: 'Acciones' })).not.toBeInTheDocument();
+    expect(within(table).queryByText('—')).not.toBeInTheDocument();
   });
 
   it('la tabla ya no edita: ni el nombre ni el rol son campos dentro de ella', async () => {

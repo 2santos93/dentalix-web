@@ -14,9 +14,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { SectionHeader } from '@/components/ui/section-header';
 import { FormField } from '@/components/shared/form-field';
 import { EmptyState } from '@/components/shared/empty-state';
-import { Skeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/shared/page-header';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { ArrowUpRight, LogOut } from 'lucide-react';
@@ -35,12 +37,39 @@ const copy = {
   signingIn: 'Entrando…',
   signOut: 'Salir',
   enter: 'Entrar',
+  clinicsTitle: 'Clínicas',
+  colClinic: 'Clínica',
+  colSubdomain: 'Subdominio',
+  loading: 'Cargando clínicas…',
   invalid: 'Credenciales inválidas.',
   loadError: 'No pudimos cargar las clínicas.',
   emptyTitle: 'Sin clínicas',
   emptyDescription: 'Todavía no hay ninguna clínica registrada.',
   count: (n: number) => (n === 1 ? '1 clínica' : `${n} clínicas`),
 };
+
+/**
+ * Cada clínica es una fila que entra a ella (toda la fila es el enlace): se
+ * entra por su propio host con un enlace normal, no con un fetch; allí se
+ * inicia sesión y el backend reconoce al superadmin sin membresía y le pide
+ * código TOTP y motivo (acceso de soporte de SEC-008, sin refresh).
+ */
+const TENANT_COLUMNS: DataListColumn<PlatformTenant>[] = [
+  { id: 'name', header: copy.colClinic, mobile: 'primary', cell: (t) => t.name },
+  { id: 'subdomain', header: copy.colSubdomain, cell: (t) => <span className="t-id text-muted">{t.subdomain}</span> },
+  {
+    id: 'enter',
+    header: <span className="sr-only">{copy.enter}</span>,
+    mobile: 'hidden',
+    align: 'end',
+    // Pista visual de que la fila sale a otra clínica; el enlace ya es la fila.
+    cell: () => (
+      <span aria-hidden className="inline-flex items-center gap-1 text-sm font-medium text-primary-text">
+        {copy.enter} <ArrowUpRight className="size-4" />
+      </span>
+    ),
+  },
+];
 
 /**
  * La sesión de plataforma usa el mismo mecanismo que la de clínica (DX-062):
@@ -156,67 +185,47 @@ export function PlatformView() {
   }
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="t-display text-ink">{copy.title}</h1>
-          <p className="mt-1 text-sm text-muted">
-            {copy.subtitle}
-            {!loading && tenants.length > 0 && ` · ${copy.count(tenants.length)}`}
-          </p>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={handleSignOut}>
-          <LogOut /> {copy.signOut}
-        </Button>
+    <main className="mx-auto flex max-w-3xl flex-col px-4 py-8 sm:px-6 sm:py-10">
+      <PageHeader
+        title={copy.title}
+        description={
+          !loading && tenants.length > 0 ? `${copy.subtitle} · ${copy.count(tenants.length)}` : copy.subtitle
+        }
+        actions={
+          <Button type="button" variant="secondary" onClick={handleSignOut}>
+            <LogOut /> {copy.signOut}
+          </Button>
+        }
+      />
+
+      <div className="flex flex-col gap-8">
+        {/* SEC-008: sin MFA no hay acceso de soporte a las clínicas. */}
+        <PlatformMfaCard token={token} />
+
+        <section aria-labelledby="platform-clinics-title" className="flex flex-col gap-3">
+          <SectionHeader titleId="platform-clinics-title" title={copy.clinicsTitle} description={copy.enterHint} />
+          {loadError ? (
+            <SectionError
+              description={loadError}
+              onRetry={() => {
+                setLoadError(null);
+                setRetryTick((t) => t + 1);
+              }}
+            />
+          ) : (
+            <DataList
+              label={copy.clinicsTitle}
+              rows={tenants}
+              columns={TENANT_COLUMNS}
+              getRowKey={(t) => t.id}
+              getRowHref={(t) => clinicUrl(t.subdomain)}
+              loading={loading}
+              loadingLabel={copy.loading}
+              empty={<EmptyState role="status" title={copy.emptyTitle} description={copy.emptyDescription} />}
+            />
+          )}
+        </section>
       </div>
-
-      {/* SEC-008: sin MFA no hay acceso de soporte a las clínicas. */}
-      <PlatformMfaCard token={token} />
-      <p className="text-sm text-muted">{copy.enterHint}</p>
-
-      {loading ? (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full" />
-          ))}
-        </div>
-      ) : loadError ? (
-        <SectionError
-          description={loadError}
-          onRetry={() => {
-            setLoadError(null);
-            setRetryTick((t) => t + 1);
-          }}
-        />
-      ) : tenants.length === 0 ? (
-        <EmptyState
-          role="status"
-          title={copy.emptyTitle}
-          description={copy.emptyDescription}
-        />
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {tenants.map((t) => (
-            <li key={t.id}>
-              <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <div>
-                  <p className="font-medium text-ink">{t.name}</p>
-                  <p className="text-sm text-muted tabular-nums">{t.subdomain}</p>
-                </div>
-                {/* Enlace normal (no fetch): se entra a la clínica por su propio
-                    host y allí se inicia sesión; el backend reconoce al
-                    superadmin sin membresía y le pide código TOTP y motivo
-                    (acceso de soporte de SEC-008, sin refresh). */}
-                <Button asChild variant="outline" size="sm">
-                  <a href={clinicUrl(t.subdomain)}>
-                    {copy.enter} <ArrowUpRight />
-                  </a>
-                </Button>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      )}
     </main>
   );
 }

@@ -61,7 +61,8 @@ describe('StaffMemberProfile', () => {
   it('muestra los datos del miembro y su estado', async () => {
     render(<StaffMemberProfile token="tok" userId="u1" />);
 
-    expect(await screen.findByText('Ana Ríos')).toBeInTheDocument();
+    // Patrón de ficha: el nombre es el título de la página.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ana Ríos' })).toBeInTheDocument();
     expect(screen.getByText('Aceptado')).toBeInTheDocument();
     expect(screen.getByLabelText(/nombre completo/i)).toHaveValue('Ana Ríos');
   });
@@ -69,9 +70,10 @@ describe('StaffMemberProfile', () => {
   it('el correo se ve pero no se edita: identifica la cuenta', async () => {
     render(<StaffMemberProfile token="tok" userId="u1" />);
 
-    const email = await screen.findByLabelText(/correo electrónico/i);
-    expect(email).toHaveValue('ana@clinic.com');
-    expect(email).toHaveAttribute('readonly');
+    // Se lee en la sección «Acceso» (lista de descripción), no en un campo.
+    expect(await screen.findByText('ana@clinic.com')).toBeInTheDocument();
+    expect(screen.getByText('Correo electrónico').tagName).toBe('DT');
+    expect(screen.queryByRole('textbox', { name: /correo electrónico/i })).not.toBeInTheDocument();
   });
 
   it('guardar solo manda lo que cambió', async () => {
@@ -252,7 +254,7 @@ describe('StaffMemberProfile', () => {
     render(<StaffMemberProfile token="tok" userId="u1" />);
     await screen.findByText('Ana Ríos');
 
-    expect(screen.getByRole('link', { name: /volver a personal/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Personal' })).toHaveAttribute(
       'href',
       '/staff',
     );
