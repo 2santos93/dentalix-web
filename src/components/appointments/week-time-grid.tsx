@@ -144,7 +144,7 @@ export function WeekTimeGrid({
                 <span
                   key={block.id}
                   data-testid="week-block-chip"
-                  className="mt-1 block truncate rounded border border-dashed border-warning/50 bg-warning-subtle px-1 text-[0.6875rem] font-medium text-ink"
+                  className="mt-1 block truncate rounded border border-dashed border-warning/50 bg-warning-subtle px-1 text-xs font-medium text-ink"
                 >
                   {labelOf(block)}
                 </span>
@@ -182,7 +182,7 @@ export function WeekTimeGrid({
                 type="button"
                 data-testid={`week-grid-slot-${date}-${slotTime(i)}`}
                 onClick={() => onSelectSlot(date, slotTime(i))}
-                className="block w-full border-b border-border/40 hover:bg-primary/5"
+                className="block w-full border-b border-border/40 hover:bg-primary-subtle"
                 style={{ height: ROW_HEIGHT_PX }}
                 aria-label={copy.createSlotLabel(date, sedeMinute(i * SLOT_MINUTES, clock.fmt))}
               />

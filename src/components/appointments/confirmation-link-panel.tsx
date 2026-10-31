@@ -108,7 +108,7 @@ export function ConfirmationLinkPanel({ token, appointment, clock, onLinkCreated
   }
 
   return (
-    <section aria-labelledby={`${ids}-heading`} className="flex flex-col gap-3 border-t border-hairline pt-4">
+    <section aria-labelledby={`${ids}-heading`} className="flex flex-col gap-3 border-t border-border-subtle pt-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id={`${ids}-heading`} className="text-sm font-semibold text-ink">
           {copy.heading}
@@ -136,7 +136,7 @@ export function ConfirmationLinkPanel({ token, appointment, clock, onLinkCreated
       {error && <InlineError>{error}</InlineError>}
 
       {link && (
-        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-sunken p-3">
           <label htmlFor={linkId} className="text-xs font-medium tracking-wide text-muted">
             {copy.linkLabel}
           </label>

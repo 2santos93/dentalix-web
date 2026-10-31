@@ -1624,7 +1624,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     inicio). Solo citas aún por atender. */}
                 {liveDetailAppointment.status === 'SCHEDULED' ||
                 liveDetailAppointment.status === 'CONFIRMED' ? (
-                  <div className="border-t border-hairline pt-4">
+                  <div className="border-t border-border-subtle pt-4">
                     <AnamnesisLinkPanel
                       key={`anamnesis-${liveDetailAppointment.id}`}
                       token={token}

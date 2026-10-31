@@ -84,7 +84,7 @@ export function PublicReminderOptOutView({ optOutToken }: { optOutToken: string 
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">

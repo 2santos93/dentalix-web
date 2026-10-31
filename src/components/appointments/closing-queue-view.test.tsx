@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ClosingQueueView, closingQueueCopy } from './closing-queue-view';
 import { dismissClosingCopy } from './dismiss-closing-dialog';
 import { ApiError, NetworkError } from '@/lib/api/api-error';
@@ -107,6 +108,17 @@ const empty = (over: Partial<ClosingQueue> = {}) =>
     ...over,
   });
 
+/**
+ * Las acciones de cada pendiente van en el «⋯» de su fila (RowActions): abre
+ * el menú de la primera fila de la sección `table` y elige `label`.
+ */
+async function rowAction(table: string, label: string) {
+  const section = await screen.findByRole('table', { name: table });
+  const [trigger] = within(section).getAllByRole('button', { name: /^Acciones de / });
+  await userEvent.click(trigger);
+  await userEvent.click(await screen.findByRole('menuitem', { name: label }));
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -122,8 +134,12 @@ describe('ClosingQueueView (DX-439)', () => {
     const outcome = screen.getByRole('table', { name: 'Citas sin desenlace' });
     expect(within(outcome).getByText('30/10/2026 19:00')).toBeInTheDocument();
     expect(screen.getByText('Resina · diente 16')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: closingQueueCopy.writeEvolution })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: closingQueueCopy.markDone })).toBeInTheDocument();
+    // Sin columna de botones: cada fila lleva su «⋯» con lo que cierra el pendiente.
+    const evolution = screen.getByRole('table', { name: 'Atendidas sin evolución' });
+    expect(within(evolution).getAllByRole('button', { name: /^Acciones de / })).toHaveLength(1);
+    await userEvent.click(within(evolution).getByRole('button', { name: /^Acciones de / }));
+    expect(await screen.findByRole('menuitem', { name: closingQueueCopy.writeEvolution })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: closingQueueCopy.dismiss })).toBeInTheDocument();
   });
 
   it('solo pinta las secciones que la API devuelve para el rol', async () => {
@@ -155,7 +171,7 @@ describe('ClosingQueueView (DX-439)', () => {
     );
     update.mockResolvedValue({} as Awaited<ReturnType<typeof updateAppointment>>);
     render(<ClosingQueueView token="t" />);
-    fireEvent.click(await screen.findByRole('button', { name: closingQueueCopy.noShow }));
+    await rowAction('Citas sin desenlace', closingQueueCopy.noShow);
     await waitFor(() => expect(update).toHaveBeenCalledWith('t', 'a1', { status: 'NO_SHOW' }));
     await waitFor(() => expect(screen.getByTestId('closing-count-OUTCOME')).toHaveTextContent('0'));
   });
@@ -171,8 +187,7 @@ describe('ClosingQueueView (DX-439)', () => {
       createdAt: '2026-10-31T12:00:00.000Z',
     });
     render(<ClosingQueueView token="t" />);
-    const evolution = await screen.findByRole('table', { name: 'Atendidas sin evolución' });
-    fireEvent.click(within(evolution).getByRole('button', { name: closingQueueCopy.dismiss }));
+    await rowAction('Atendidas sin evolución', closingQueueCopy.dismiss);
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: dismissClosingCopy.submit }));
     expect(await within(dialog).findByText(dismissClosingCopy.reasonRequired)).toBeInTheDocument();
@@ -250,7 +265,7 @@ describe('ClosingQueueView — cerrar desde la cita (DX-439)', () => {
     const changed = jest.fn();
     window.addEventListener(CLOSING_QUEUE_CHANGED_EVENT, changed);
     render(<ClosingQueueView token="t" />);
-    fireEvent.click(await screen.findByRole('button', { name: closingQueueCopy.markDone }));
+    await rowAction('Tratamiento sin marcar como hecho', closingQueueCopy.markDone);
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/Sede Norte/)).toBeInTheDocument();
     await waitFor(() => expect(within(dialog).getByRole('combobox')).toHaveValue('d2'));
@@ -269,7 +284,7 @@ describe('ClosingQueueView — cerrar desde la cita (DX-439)', () => {
   it('«Escribir evolución» abre la evolución ligada a la cita', async () => {
     load.mockResolvedValue(queue());
     render(<ClosingQueueView token="t" />);
-    fireEvent.click(await screen.findByRole('button', { name: closingQueueCopy.writeEvolution }));
+    await rowAction('Atendidas sin evolución', closingQueueCopy.writeEvolution);
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('heading', { name: 'Registrar evolución' })).toBeInTheDocument();
     expect(listNoteTemplates).toHaveBeenCalled();
@@ -287,8 +302,7 @@ describe('ClosingQueueView — cerrar desde la cita (DX-439)', () => {
     load.mockResolvedValueOnce(queue()).mockResolvedValueOnce(queue({ evolution: { total: 0, items: [] }, total: 2 }));
     dismiss.mockRejectedValue(new ApiError(409, 'Ese pendiente ya no está en «Pendiente de cerrar».', { messages: ['Ese pendiente ya no está en «Pendiente de cerrar».'] }));
     render(<ClosingQueueView token="t" />);
-    const evolution = await screen.findByRole('table', { name: 'Atendidas sin evolución' });
-    fireEvent.click(within(evolution).getByRole('button', { name: closingQueueCopy.dismiss }));
+    await rowAction('Atendidas sin evolución', closingQueueCopy.dismiss);
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByLabelText('Cita duplicada'));
     fireEvent.click(within(dialog).getByRole('button', { name: dismissClosingCopy.submit }));
@@ -299,8 +313,7 @@ describe('ClosingQueueView — cerrar desde la cita (DX-439)', () => {
   it('«Otro» cuenta caracteres: dos emojis no bastan', async () => {
     load.mockResolvedValue(queue());
     render(<ClosingQueueView token="t" />);
-    const evolution = await screen.findByRole('table', { name: 'Atendidas sin evolución' });
-    fireEvent.click(within(evolution).getByRole('button', { name: closingQueueCopy.dismiss }));
+    await rowAction('Atendidas sin evolución', closingQueueCopy.dismiss);
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByLabelText('Otro'));
     fireEvent.change(within(dialog).getByLabelText(dismissClosingCopy.other), { target: { value: '👍👍' } });

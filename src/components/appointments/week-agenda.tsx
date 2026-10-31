@@ -103,7 +103,7 @@ export function WeekAgenda({
               data-testid="week-day-header"
               data-date={date}
               onClick={() => onSelectDay(date)}
-              className="text-left text-sm font-medium text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg rounded"
+              className="text-left text-sm font-medium text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text rounded"
             >
               {weekDayHeader(date, clock.fmt)}
             </button>

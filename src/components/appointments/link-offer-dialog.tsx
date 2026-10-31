@@ -154,7 +154,7 @@ export function LinkOfferDialog({
     >
       {results ? (
         <div className="flex flex-col gap-3">
-          <ul data-testid="link-offer-results" className="flex flex-col divide-y divide-hairline rounded-xl border border-border">
+          <ul data-testid="link-offer-results" className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border">
             {results.map((r) => (
               <li key={r.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                 <span className="flex min-w-0 items-start gap-2 text-sm text-ink">

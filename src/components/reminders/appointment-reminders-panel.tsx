@@ -143,7 +143,7 @@ export function AppointmentRemindersPanel({ token, appointmentId, clock }: Appoi
     }
     return (
       <>
-        <ul aria-label={copy.listLabel} className="flex flex-col divide-y divide-hairline">
+        <ul aria-label={copy.listLabel} className="flex flex-col divide-y divide-border-subtle">
           {data.items.map((item) => {
             const extra = detail(item, clock);
             return (
@@ -172,7 +172,7 @@ export function AppointmentRemindersPanel({ token, appointmentId, clock }: Appoi
   }
 
   return (
-    <section aria-labelledby={`${ids}-heading`} className="flex flex-col gap-3 border-t border-hairline pt-4">
+    <section aria-labelledby={`${ids}-heading`} className="flex flex-col gap-3 border-t border-border-subtle pt-4">
       <h3 id={`${ids}-heading`} className="text-sm font-semibold text-ink">
         {copy.heading}
       </h3>

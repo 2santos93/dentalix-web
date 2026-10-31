@@ -149,7 +149,7 @@ export function WaitlistPanel({
           id={titleId}
           ref={titleRef}
           tabIndex={-1}
-          className="t-title rounded text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="t-title rounded text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
         >
           {waitlistCopy.title}
         </h2>
@@ -181,7 +181,7 @@ export function WaitlistPanel({
         </p>
       ) : (
         <>
-          <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+          <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
             {entries.map((entry) => {
               const name = waitlistPatientName(entry);
               return (
@@ -205,7 +205,7 @@ export function WaitlistPanel({
                       <a
                         href={`tel:${entry.patientPhone}`}
                         aria-label={waitlistCopy.call(entry.patientPhone)}
-                        className="inline-flex items-center gap-1 self-start rounded text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        className="inline-flex items-center gap-1 self-start rounded text-primary-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                       >
                         <Phone className="size-3.5" aria-hidden />
                         <span className="tabular-nums">{entry.patientPhone}</span>

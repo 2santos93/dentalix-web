@@ -321,7 +321,7 @@ function IssueList({ rows, num }: { rows: HolidayImportRow[]; num: Num }) {
         {copy.issuesHeading}
       </h3>
       {/* Desplazable y enfocable: con 200 filas se recorre con el teclado. */}
-      <div tabIndex={0} aria-labelledby={headingId} role="region" className="max-h-64 overflow-y-auto rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+      <div tabIndex={0} aria-labelledby={headingId} role="region" className="max-h-64 overflow-y-auto rounded-lg border border-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text">
         {/* El nombre lo lleva la región; repetirlo en la lista lo leería dos veces. */}
         <ul className="divide-y divide-border">
           {shown.map((r, i) => (

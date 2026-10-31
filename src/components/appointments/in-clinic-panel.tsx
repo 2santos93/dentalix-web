@@ -44,6 +44,8 @@ export const inClinicCopy = {
   emptyHint: 'Cuando recepción marque «Llegó» en la agenda, el paciente aparece aquí.',
   noLocation: 'Elige una sede para ver quién está en la clínica.',
   chooseLocation: 'Elegir sede',
+  noLocationTitle: 'Este panel es por sede',
+  noLocationHint: 'Elige qué sede quieres ver.',
   openFullscreen: 'Abrir a pantalla completa',
   retry: 'Reintentar',
   refreshHint: 'Se actualiza solo cada 45 segundos.',
@@ -223,7 +225,23 @@ export function InClinicPanel({
     <section ref={panelRef} aria-labelledby={titleId} className={cn('flex min-w-0 flex-col gap-3', className)}>
       {header}
 
-      {noLocation ? (
+      {noLocation && !showTitle ? (
+        // A pantalla completa el panel ES la página: el estado sin sede trae la
+        // acción dentro, sin decir dónde vive el selector (critique-ops §2).
+        <div data-testid="in-clinic-no-location">
+          <EmptyState
+            role="status"
+            icon={<MapPin aria-hidden />}
+            title={inClinicCopy.noLocationTitle}
+            description={inClinicCopy.noLocationHint}
+            action={
+              <Button type="button" variant="secondary" onClick={onChooseLocation}>
+                {inClinicCopy.chooseLocation}
+              </Button>
+            }
+          />
+        </div>
+      ) : noLocation ? (
         // Una línea y la acción, no una caja vacía: el panel es por sede.
         <p className="text-sm text-muted" data-testid="in-clinic-no-location">
           <MapPin aria-hidden className="mr-1.5 inline size-4 -translate-y-px align-middle" />
@@ -334,7 +352,7 @@ function InClinicGroup({
                 data-testid="in-clinic-item"
                 data-appointment-id={item.appointmentId}
                 data-punctuality={item.punctuality}
-                className="flex flex-col gap-2 border-b border-hairline py-3 last:border-0"
+                className="flex flex-col gap-2 border-b border-border-subtle py-3 last:border-0"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

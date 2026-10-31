@@ -270,7 +270,7 @@ export function OpeningsDialog({
               {groups.map((group) => (
                 <div key={group.day} className="flex flex-col gap-1.5">
                   <h3 className="text-xs font-semibold text-muted first-letter:uppercase">{dayLabel(group.day)}</h3>
-                  <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border bg-surface">
+                  <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border bg-surface">
                     {group.openings.map((opening) => (
                       <li
                         key={opening.start}

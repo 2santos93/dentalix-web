@@ -359,7 +359,7 @@ export function DayColumns({
         tabIndex={scrolls ? 0 : undefined}
         className={cn(
           'rounded-lg border border-border bg-surface',
-          scrolls && 'overflow-x-auto scroll-x-shadows focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+          scrolls && 'overflow-x-auto scroll-x-shadows focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
         )}
       >
         <div
@@ -373,7 +373,7 @@ export function DayColumns({
           style={{ '--cols': providers.length, '--hours': fmt.hourCycle === 'h12' ? '5.5rem' : '3.5rem' } as React.CSSProperties}
         >
           {/* Cabecera: nombre y nº de citas por columna. */}
-          <div className="sticky left-0 z-10 border-b border-border bg-surface-2" />
+          <div className="sticky left-0 z-10 border-b border-border bg-surface-sunken" />
           {providers.map((p) => {
             const count = appointments.filter((a) => a.providerId === p.userId).length;
             return (
@@ -381,7 +381,7 @@ export function DayColumns({
                 key={p.userId}
                 data-testid="day-column-header"
                 className={cn(
-                  'min-w-0 border-b border-l border-border bg-surface-2 px-3 py-2',
+                  'min-w-0 border-b border-l border-border bg-surface-sunken px-3 py-2',
                   p.userId !== active && 'hidden sm:block',
                 )}
               >
@@ -469,7 +469,7 @@ export function DayColumns({
                     data-testid="closed-band"
                     aria-hidden
                     title={copy.closedHours}
-                    className="pointer-events-none absolute inset-x-0 bg-surface-2/80 [background-image:repeating-linear-gradient(135deg,transparent_0_6px,var(--color-border)_6px_7px)]"
+                    className="pointer-events-none absolute inset-x-0 bg-surface-sunken/80 [background-image:repeating-linear-gradient(135deg,transparent_0_6px,var(--color-border)_6px_7px)]"
                     style={{
                       top: offsetFromMinute(band.start, span),
                       height: (band.end - band.start) * PX_PER_MINUTE,
@@ -531,7 +531,7 @@ export function DayColumns({
                             type="button"
                             aria-label={copy.blockRemove(label)}
                             onClick={() => onSelectBlock(block)}
-                            className="pointer-events-auto m-1 max-w-[calc(100%-0.5rem)] truncate rounded bg-surface/90 px-1.5 py-0.5 text-left text-xs font-medium text-ink shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            className="pointer-events-auto m-1 max-w-[calc(100%-0.5rem)] truncate rounded bg-surface/90 px-1.5 py-0.5 text-left text-xs font-medium text-ink shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                           >
                             {label}
                           </button>
@@ -555,7 +555,7 @@ export function DayColumns({
                       data-testid="free-gap"
                       aria-label={copy.freeGapFor(range, p.fullName)}
                       onClick={() => onFillOpening?.(p.userId, { start: gap.start, end: gap.end })}
-                      className="absolute inset-x-1 z-[1] flex h-6 items-center justify-center gap-1 rounded-md border border-dashed border-border bg-surface/80 px-2 text-xs font-medium text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="absolute inset-x-1 z-[1] flex h-6 items-center justify-center gap-1 rounded-md border border-dashed border-border bg-surface/80 px-2 text-xs font-medium text-muted transition-colors hover:border-primary hover:text-primary-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                       // Centrado en el hueco: no tapa «Sin citas hoy» de arriba.
                       style={{ top: top + Math.max(0, (height - 24) / 2) }}
                     >
@@ -608,8 +608,8 @@ export function DayColumns({
                         // Sin overflow-hidden aquí: lo lleva el contenido de
                         // dentro. Así la zona táctil de 44 px del icono de
                         // alerta (DX-247) no se recorta en las citas de 15 min.
-                        'group absolute rounded-md border text-left shadow-sm',
-                        !colors && 'border-border bg-surface-2 text-ink',
+                        'group absolute rounded-md border text-left',
+                        !colors && 'border-border bg-surface-sunken text-ink',
                         canMove && 'cursor-grab active:cursor-grabbing',
                         (dragging || pendingId === a.id) && 'opacity-50',
                         inactive && 'opacity-60',
@@ -702,7 +702,7 @@ export function DayColumns({
                             // la rodea tiene su propio botón.
                             onFillOpening?.(p.userId, { start: a.start, end: a.end }, a.locationId)
                           }
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary-text shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
                           <UserPlus className="size-4" aria-hidden />
                         </button>
@@ -713,7 +713,7 @@ export function DayColumns({
                           aria-label={copy.moveToFor(patient)}
                           title={copy.moveTo}
                           onClick={() => onMoveRequest(a)}
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface/90 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
                           <MoveRight className="size-4" aria-hidden />
                         </button>
@@ -726,7 +726,7 @@ export function DayColumns({
                   <div
                     data-testid="drag-preview"
                     aria-hidden
-                    className="pointer-events-none absolute inset-x-1 rounded-md border-2 border-dashed border-primary bg-primary/10 px-2 py-1 text-xs font-medium text-ink"
+                    className="pointer-events-none absolute inset-x-1 rounded-md border-2 border-dashed border-primary bg-primary-subtle px-2 py-1 text-xs font-medium text-ink"
                     style={{
                       top: offsetFromMinute(dragTarget.minute, span),
                       height: Math.max(durationMinutes(drag.appointment) * PX_PER_MINUTE, 24),
@@ -765,7 +765,7 @@ export function DayColumns({
         <p className="flex items-center gap-2 text-xs text-muted">
           <span
             aria-hidden
-            className="inline-block size-3 rounded-sm border border-border bg-surface-2 [background-image:repeating-linear-gradient(135deg,transparent_0_3px,var(--color-border)_3px_4px)]"
+            className="inline-block size-3 rounded-sm border border-border bg-surface-sunken [background-image:repeating-linear-gradient(135deg,transparent_0_3px,var(--color-border)_3px_4px)]"
           />
           {copy.closedHours}
         </p>

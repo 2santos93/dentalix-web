@@ -12,6 +12,7 @@ const copy = {
   description:
     'Quién está en la sala de espera, en el sillón y listo para cobrar en la sede, con los minutos de espera. Se actualiza solo.',
   descriptionMine: 'Tus pacientes en la sala de espera, en el sillón y listos para cobrar en la sede.',
+  back: 'Agenda',
 };
 
 /**
@@ -25,8 +26,9 @@ export function InClinicView({ token }: { token: string }) {
   const role = getTokenRole(token);
   const mine = role === 'DENTIST';
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col">
       <PageHeader
+        back={{ href: '/agenda', label: copy.back }}
         title={mine ? copy.titleMine : copy.title}
         description={mine ? copy.descriptionMine : copy.description}
       />

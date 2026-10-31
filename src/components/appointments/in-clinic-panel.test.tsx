@@ -243,6 +243,24 @@ describe('InClinicPanel (DX-200)', () => {
     expect(mockedGet).not.toHaveBeenCalled();
   });
 
+  it('a pantalla completa sin sede: estado vacío con «Elegir sede» dentro, sin decir dónde está el selector', async () => {
+    const choose = jest.fn();
+    render(
+      <InClinicPanel
+        state={staticState({ noLocation: true })}
+        role="ADMIN"
+        runner={noRunner as never}
+        showTitle={false}
+        onChooseLocation={choose}
+      />,
+    );
+    const empty = screen.getByTestId('in-clinic-no-location');
+    expect(within(empty).getByText('Este panel es por sede')).toBeInTheDocument();
+    expect(empty).not.toHaveTextContent(/arriba/);
+    await userEvent.click(within(empty).getByRole('button', { name: 'Elegir sede' }));
+    expect(choose).toHaveBeenCalled();
+  });
+
   it('una clínica de una sede no elige sede: el panel es el de esa sede', async () => {
     setActiveLocationId(null);
     mockedLocations.mockResolvedValue([sede('unica')]);

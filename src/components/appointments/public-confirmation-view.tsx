@@ -108,7 +108,7 @@ function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointm
     },
   ];
   return (
-    <dl className="divide-y divide-hairline rounded-xl border border-border bg-surface">
+    <dl className="divide-y divide-border-subtle rounded-xl border border-border bg-surface">
       {/* Cada grupo solo lleva dt/dd (axe definition-list): el icono va
           dentro del dt, colocado a la izquierda. */}
       {rows.map(({ icon: Icon, label, value, sub }) => (
@@ -251,7 +251,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
