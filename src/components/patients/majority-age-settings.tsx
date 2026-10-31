@@ -145,6 +145,7 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
           <Button
             type="button"
             variant="secondary"
+            className="max-sm:min-h-11"
             onClick={() => {
               setDraft(settings.majorityAge);
               setSaveError(null);
@@ -172,6 +173,7 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
                 value={draft}
                 onChange={(e) => setDraft(Number(e.target.value))}
                 disabled={saving}
+                selectClassName="max-sm:h-11"
               >
                 {options.map((age) => (
                   <option key={age} value={age}>
@@ -187,7 +189,7 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
                   {copy.cancel}
                 </Button>
               </DialogClose>
-              <Button type="submit" loading={saving}>
+              <Button type="submit" loading={saving} className="max-sm:min-h-11">
                 {copy.save}
               </Button>
             </DialogFooter>

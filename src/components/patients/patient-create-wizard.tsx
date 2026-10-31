@@ -502,17 +502,17 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
           primaria en todos los pasos: solo el primero es obligatorio. */}
       <div className="sticky bottom-0 z-10 -mx-4 flex items-center gap-2 border-t border-border bg-canvas px-4 py-3 sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0">
         {step > 0 ? (
-          <Button type="button" variant="ghost" onClick={() => goToStep(step - 1)}>
+          <Button type="button" variant="ghost" className="max-sm:min-h-11" onClick={() => goToStep(step - 1)}>
             {copy.back}
           </Button>
         ) : null}
         <div className="ml-auto flex items-center gap-2">
           {step < steps.length - 1 ? (
-            <Button type="button" variant="secondary" onClick={() => goToStep(step + 1)}>
+            <Button type="button" variant="secondary" className="max-sm:min-h-11" onClick={() => goToStep(step + 1)}>
               {copy.next}
             </Button>
           ) : null}
-          <Button type="button" onClick={handleSubmit} loading={submitting}>
+          <Button type="button" className="max-sm:min-h-11" onClick={handleSubmit} loading={submitting}>
             {copy.submitLabel}
           </Button>
         </div>
