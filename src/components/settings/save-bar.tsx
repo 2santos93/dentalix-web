@@ -122,7 +122,10 @@ export function SaveBar({
 }: SaveBarProps) {
   const visible = dirty || saving || Boolean(error);
   return (
-    <div aria-live="polite" className={cn('sticky bottom-3 z-10', className)}>
+    // Sin cambios, el contenedor vivo sale del flujo (`absolute`): sigue en el
+    // árbol de accesibilidad para anunciar la barra, pero no suma el hueco del
+    // `gap` del formulario.
+    <div aria-live="polite" className={cn(visible ? 'sticky bottom-3 z-10' : 'absolute', className)}>
       {visible ? (
         <div
           role="region"

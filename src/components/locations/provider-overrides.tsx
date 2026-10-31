@@ -262,8 +262,9 @@ export function ProviderOverrides({
                 {ranges.length > 1 ? (
                   <Button
                     type="button"
-                    variant="destructive-ghost"
+                    variant="ghost"
                     size="icon-sm"
+                    className="text-muted hover:bg-danger-subtle hover:text-danger-text"
                     aria-label={copy.removeRange(i + 1)}
                     onClick={() => setRanges((prev) => prev.filter((_, j) => j !== i))}
                   >

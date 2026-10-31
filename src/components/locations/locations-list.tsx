@@ -19,7 +19,6 @@ import { DescriptionItem } from '@/components/ui/description-list';
 export const locationsListCopy = {
   // La página ya se titula «Sedes»: la sección no lo repite.
   heading: 'Sedes de la clínica',
-  support: 'País, moneda, zona horaria, formato y reloj de cada sede deciden la caja, la agenda y los documentos. Abre una sede para su contacto, registro sanitario y política de cancelación.',
   open: (name: string) => `Abrir ${name}`,
   create: 'Nueva sede',
   edit: 'Editar',
@@ -151,7 +150,6 @@ export function LocationsList({
           <h2 id="locations-heading" className="t-title text-ink">
             {copy.heading}
           </h2>
-          <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
         </div>
         {canEdit ? (
           <Button type="button" onClick={() => openModal('new')} className="w-full sm:w-auto">

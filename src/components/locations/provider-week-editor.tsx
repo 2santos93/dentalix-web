@@ -202,8 +202,9 @@ export function ProviderWeekEditor({ draft, locations, canEdit, onChange }: Prov
                                 />
                                 <Button
                                   type="button"
-                                  variant="destructive-ghost"
+                                  variant="ghost"
                                   size="icon-sm"
+                                  className="text-muted hover:bg-danger-subtle hover:text-danger-text"
                                   aria-label={copy.removeRange(where)}
                                   onClick={() => setDay(l.id, weekday, ranges.filter((_, i) => i !== index))}
                                 >
