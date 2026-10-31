@@ -13,6 +13,7 @@ import {
   isPatientOptOut,
   staffLoginDetail,
   cashSessionDetail,
+  sedationDetail,
   scheduleChangeDetail,
   patientFlowDetail,
   planItemAttributionDetail,
@@ -105,6 +106,14 @@ describe('implantSearchDetail (DX-191)', () => {
     );
     expect(staffLoginDetail({ reason: 'REMINDER_OPT_OUT' })).toBeNull();
     expect(staffLoginDetail({})).toBeNull();
+  });
+});
+
+describe('sedationDetail (DX-407)', () => {
+  it('nombra la parte de la hoja de sedación y nada más', () => {
+    expect(sedationDetail({ reason: 'SEDATION_VITALS' })).toBe('Toma de constantes');
+    expect(sedationDetail({ reason: 'SEDATION_DISCHARGE' })).toBe('Egreso');
+    expect(sedationDetail({ reason: 'CASH_SESSION_CLOSED' })).toBeNull();
   });
 });
 

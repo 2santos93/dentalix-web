@@ -123,6 +123,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PAYMENT_METHOD: 'Medio de pago',
   ANESTHETIC_PRODUCT: 'Catálogo de anestésicos',
   ANESTHESIA_ADMINISTRATION: 'Anestesia de evolución',
+  SEDATION_RECORD: 'Hoja de sedación',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -329,6 +330,19 @@ const CASH_SESSION_REASONS: Record<string, string> = {
   CASH_SESSION_CURRENT: 'Caja abierta propia',
   CASH_SETTINGS: 'Ajustes de caja',
 };
+
+const SEDATION_REASONS: Record<string, string> = {
+  SEDATION_ASSESSMENT: 'Valoración previa',
+  SEDATION_CHECKLIST: 'Checklist previo',
+  SEDATION_AGENT: 'Fármaco de sedación',
+  SEDATION_VITALS: 'Toma de constantes',
+  SEDATION_DISCHARGE: 'Egreso',
+};
+
+/** DX-407: qué parte de la hoja de sedación se registró, o null si no es de ella. */
+export function sedationDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && SEDATION_REASONS[metadata.reason]) ?? null;
+}
 
 /** DX-027: qué se hizo con la caja por turno, o null si no es de caja. */
 export function cashSessionDetail(metadata: AuditMetadata): string | null {

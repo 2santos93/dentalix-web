@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { useHorizontalOverflow } from '@/lib/ui/use-horizontal-overflow';
 
 /**
  * Tabla que se apila en móvil.
@@ -28,26 +29,7 @@ import { cn } from '@/lib/utils';
  * contenido por ver (`.scroll-x-shadows`).
  */
 function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
-  const viewport = React.useRef<HTMLDivElement>(null);
-  const [scrollable, setScrollable] = React.useState(false);
-
-  // Se mide en el cliente porque no depende de un breakpoint sino del ancho real
-  // del contenido: los mismos 528px sobran para la tabla de pacientes y no le
-  // bastan a la del catálogo.
-  React.useEffect(() => {
-    const el = viewport.current;
-    if (!el) return;
-
-    const measure = () => setScrollable(el.scrollWidth > el.clientWidth + 1);
-    measure();
-
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    // La tabla también cambia de ancho sin que cambie el marco: al filtrar, al
-    // paginar o al editar una fila con un valor más largo.
-    if (el.firstElementChild) observer.observe(el.firstElementChild);
-    return () => observer.disconnect();
-  }, []);
+  const [viewport, scrollable] = useHorizontalOverflow<HTMLDivElement>();
 
   return (
     <div

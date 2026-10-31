@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClinicalEntriesList } from './clinical-entries-list';
 import {
@@ -8,6 +8,10 @@ import {
 } from '@/lib/patients/clinical-api';
 import { listStaff } from '@/lib/staff/staff-api';
 import { listPatientAnesthesia } from '@/lib/anesthesia/anesthesia-api';
+import { listPatientSedation } from '@/lib/sedation/sedation-api';
+import { checkedSheet } from '@/lib/test/sedation-sheet';
+import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
+import { sedeTime } from '@/lib/locations/sede-clock';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — use a relative path (same convention as the other tests).
@@ -29,6 +33,11 @@ jest.mock('../../lib/staff/staff-api', () => ({
 jest.mock('../../lib/anesthesia/anesthesia-api', () => ({
   ...jest.requireActual('../../lib/anesthesia/anesthesia-api'),
   listPatientAnesthesia: jest.fn().mockResolvedValue([]),
+}));
+// DX-407: las hojas de sedación también se piden aparte (fail soft).
+jest.mock('../../lib/sedation/sedation-api', () => ({
+  ...jest.requireActual('../../lib/sedation/sedation-api'),
+  listPatientSedation: jest.fn().mockResolvedValue([]),
 }));
 // DX-170: el modal «Nueva evolución» pide las plantillas al abrirse.
 jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
@@ -486,5 +495,91 @@ describe('ClinicalEntriesList', () => {
     (listPatientAnesthesia as jest.Mock).mockRejectedValueOnce(new Error('red'));
     render(<ClinicalEntriesList token="token" patientId="p1" />);
     expect(await screen.findByText(/no pudimos cargar la anestesia registrada/i)).toBeInTheDocument();
+  });
+
+  it('DX-407: la hoja de sedación sale bajo su evolución y avisa si va tarde', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientSedation as jest.Mock).mockResolvedValueOnce([
+      checkedSheet({
+        status: 'IN_PROGRESS',
+        watch: {
+          intervalMinutes: 5,
+          active: true,
+          startedAt: '2026-02-01T15:00:00.000Z',
+          lastTakenAt: '2026-02-01T15:04:00.000Z',
+          nextDueAt: '2026-02-01T15:09:00.000Z',
+          overdue: true,
+          overdueMinutes: 3,
+          missedIntervals: 0,
+        },
+      }),
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(
+      (await screen.findAllByText('Moderada (consciente) · ASA II · En curso')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pasó el intervalo de constantes sin toma').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', { name: /hoja de sedación de la evolución/i }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('QA DX-407: dos evoluciones del mismo día tienen botones con nombre propio (motivo y hora de registro)', async () => {
+    const sameDay = [
+      { ...entries[0], id: 'ce-a', reason: 'Exodoncia simple', createdAt: '2026-02-01T15:00:00.000Z' },
+      { ...entries[0], id: 'ce-b', reason: 'Restauraciones bajo sedación', createdAt: '2026-02-01T17:30:00.000Z' },
+    ];
+    mockedList.mockResolvedValue(sameDay);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    await screen.findAllByText('Exodoncia simple');
+    const clock = testAgendaClock([caracasSede()]);
+    for (const prefix of [/^Hoja de sedación de la evolución del /, /^Anestesia de la evolución del /, /^Añadir adenda a la evolución del /]) {
+      // Mismo botón en la tabla (escritorio) y en la tarjeta (móvil): 2 + 2.
+      const names = screen.getAllByRole('button', { name: prefix }).map((b) => b.getAttribute('aria-label'));
+      expect(new Set(names).size).toBe(2);
+      for (const entry of sameDay) {
+        expect(names.some((n) => n?.includes(entry.reason!) && n.includes(sedeTime(entry.createdAt, clock)))).toBe(true);
+      }
+    }
+  });
+
+  it('DX-407: el aviso de la ficha se recalcula con la hora: una hoja que iba en hora al cargar avisa al pasar el intervalo', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick', 'setImmediate'] });
+    try {
+      mockedList.mockResolvedValue(entries);
+      (listPatientSedation as jest.Mock).mockResolvedValueOnce([
+        checkedSheet({
+          status: 'IN_PROGRESS',
+          watch: {
+            intervalMinutes: 5,
+            active: true,
+            startedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+            lastTakenAt: null,
+            nextDueAt: new Date(Date.now() + 60_000).toISOString(),
+            overdue: false,
+            overdueMinutes: 0,
+            missedIntervals: 0,
+          },
+        }),
+      ]);
+      render(<ClinicalEntriesList token="token" patientId="p1" />);
+      expect(
+        (await screen.findAllByText('Moderada (consciente) · ASA II · En curso')).length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByText('Pasó el intervalo de constantes sin toma')).not.toBeInTheDocument();
+      act(() => {
+        jest.advanceTimersByTime(2 * 60_000);
+      });
+      expect(screen.getAllByText('Pasó el intervalo de constantes sin toma').length).toBeGreaterThan(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('DX-407: si las hojas de sedación no cargan lo dice', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientSedation as jest.Mock).mockRejectedValueOnce(new Error('red'));
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(await screen.findByText(/no pudimos cargar las hojas de sedación/i)).toBeInTheDocument();
   });
 });
