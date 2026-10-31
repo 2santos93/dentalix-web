@@ -12,6 +12,7 @@ import {
   DateFieldContext,
   DateInput,
   DatePicker as AriaDatePicker,
+  DatePickerStateContext,
   DateRangePicker as AriaDateRangePicker,
   DateRangePickerStateContext,
   DateSegment,
@@ -26,6 +27,7 @@ import {
   useSlottedContext,
   type CalendarCellRenderProps,
 } from 'react-aria-components';
+import { FocusScope } from '@radix-ui/react-focus-scope';
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { fieldLabelId } from '@/components/shared/form-field';
 import { DateI18n, useDateLocale } from '@/components/ui/date-locale';
@@ -142,6 +144,60 @@ function OverlayTitle({ field, fallback }: { field: DateBaseProps; fallback: str
 }
 
 /**
+ * Un diálogo o una hoja de Radix por debajo (un formulario en un modal) no ve
+ * el calendario como capa suya: vive en otro portal. Para que se pueda usar
+ * ahí dentro:
+ * - `data-nested-layer`: el diálogo de Radix no se cierra por un clic, un
+ *   foco o un Escape que vienen de él (`keepOpenForNestedLayer`,
+ *   `keepOpenWhileComboboxExpanded`);
+ * - `pointer-events: auto` en línea: Radix deja el `body` sin eventos de
+ *   puntero (también en línea);
+ * - `PauseOuterFocusTrap` mientras está abierto: si no, la trampa de foco del
+ *   diálogo devolvía el foco al botón y el calendario no se podía usar con el
+ *   teclado.
+ */
+
+/**
+ * Pausa la trampa de foco de Radix de debajo mientras el calendario está
+ * abierto: montar un `FocusScope` de Radix (la MISMA versión que usa
+ * `react-dialog`, fijada en package.json) lo pone encima de su pila y pausa el
+ * anterior. Radix solo lo apila en el render siguiente al montaje, cuando
+ * react-aria ya intentó enfocar el día y la trampa se lo devolvió al botón:
+ * en cuanto queda pausada, el foco vuelve al día del calendario.
+ */
+const NESTED_LAYER_STYLE: React.CSSProperties = { pointerEvents: 'auto' };
+
+function PauseOuterFocusTrap() {
+  const picker = React.useContext(DatePickerStateContext);
+  const range = React.useContext(DateRangePickerStateContext);
+  return picker?.isOpen || range?.isOpen ? <OuterTrapPause /> : null;
+}
+
+function OuterTrapPause() {
+  const [node, setNode] = React.useState<HTMLSpanElement | null>(null);
+  React.useEffect(() => {
+    // Este efecto corre después del de `FocusScope` (su hijo): ya está pausada.
+    if (!node) return;
+    const layers = document.querySelectorAll<HTMLElement>('[data-nested-layer]');
+    const layer = layers[layers.length - 1];
+    if (!layer || layer.contains(document.activeElement)) return;
+    const target =
+      layer.querySelector<HTMLElement>('[role="grid"] [tabindex="0"]') ??
+      layer.querySelector<HTMLElement>('[role="dialog"]');
+    target?.focus({ preventScroll: true });
+  }, [node]);
+  return (
+    <FocusScope
+      asChild
+      onMountAutoFocus={(event) => event.preventDefault()}
+      onUnmountAutoFocus={(event) => event.preventDefault()}
+    >
+      <span hidden ref={setNode} />
+    </FocusScope>
+  );
+}
+
+/**
  * La capa del calendario: popover anclado al campo en escritorio; hoja
  * inferior con título y cierre en teléfonos.
  */
@@ -149,29 +205,42 @@ function CalendarOverlay({ title, children }: { title: React.ReactNode; children
   const wide = useMediaQuery('(min-width: 640px)');
   if (wide) {
     return (
-      <Popover
-        placement="bottom start"
-        offset={6}
-        className="z-50 rounded-xl border border-border bg-surface p-3 text-ink shadow-overlay outline-none"
-      >
-        <Dialog className="outline-none">{children}</Dialog>
-      </Popover>
+      <>
+        <PauseOuterFocusTrap />
+        <Popover
+          data-nested-layer=""
+          placement="bottom start"
+          offset={6}
+          style={NESTED_LAYER_STYLE}
+          className="z-50 rounded-xl border border-border bg-surface p-3 text-ink shadow-overlay outline-none"
+        >
+          <Dialog className="outline-none">{children}</Dialog>
+        </Popover>
+      </>
     );
   }
   return (
-    <ModalOverlay isDismissable className="dlg-overlay fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm">
-      <Modal className="fixed inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-xl border-t border-border bg-surface px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-ink shadow-overlay outline-none">
-        <Dialog className="flex flex-col items-center gap-2 outline-none">
-          <div className="flex w-full items-center justify-between">
-            {title}
-            <AriaButton slot="close" aria-label="Cerrar" className={navButtonClass}>
-              <X aria-hidden />
-            </AriaButton>
-          </div>
-          {children}
-        </Dialog>
-      </Modal>
-    </ModalOverlay>
+    <>
+      <PauseOuterFocusTrap />
+      <ModalOverlay
+        data-nested-layer=""
+        isDismissable
+        style={NESTED_LAYER_STYLE}
+        className="dlg-overlay fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm"
+      >
+        <Modal className="fixed inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-xl border-t border-border bg-surface px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-ink shadow-overlay outline-none">
+          <Dialog className="flex flex-col items-center gap-2 outline-none">
+            <div className="flex w-full items-center justify-between">
+              {title}
+              <AriaButton slot="close" aria-label="Cerrar" className={navButtonClass}>
+                <X aria-hidden />
+              </AriaButton>
+            </div>
+            {children}
+          </Dialog>
+        </Modal>
+      </ModalOverlay>
+    </>
   );
 }
 

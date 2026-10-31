@@ -392,6 +392,11 @@ allowlist of not-yet-migrated files only shrinks.
 - **Labels:** inside `FormField`, pass `id={htmlFor}`; the field names itself with
   `aria-labelledby={fieldLabelId(id)}`. Outside one, pass `label`. Invalid state with
   `isInvalid` or `aria-invalid` (danger border, like every field).
+- **Inside a dialog or sheet:** the calendar lives in its own (react-aria) portal, so it is
+  marked `data-nested-layer`, takes pointer events back (`pointer-events: auto`) and, while
+  open, pauses the Radix focus trap underneath (a Radix `FocusScope` of the same version as
+  `react-dialog`, pinned in package.json). A click or focus inside it is not «outside» the
+  dialog, and Escape closes the calendar only; a second Escape closes the dialog.
 - **Look:** the segment group is a `fieldClass` field (border-input, accent focus halo, danger
   when invalid, 44px on touch). Calendar cells 40px (44px coarse), today = accent ring,
   selected = solid accent, outside-month muted.
