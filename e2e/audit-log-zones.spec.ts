@@ -10,6 +10,7 @@ import { regionalFormat } from '../src/lib/format/regional-format';
 import { utcOffsetLabel } from '../src/lib/format/zone';
 import { addCivilDays, wallDay } from '../src/lib/time/wall-clock';
 import { activeSedeSelect } from './support/nav';
+import { fillDateRange } from './support/dates';
 
 /**
  * e2e DX-362: el registro de auditoría de una clínica con sedes en tres zonas
@@ -150,7 +151,12 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto(`${origin}/settings/auditoria`);
-    const table = page.getByRole('table', { name: 'Registro de auditoría' });
+    // El registro (DataList): tabla desde 640 px; en el teléfono, tarjetas.
+    const phone = viewport.width < 640;
+    const table = phone
+      ? page.getByRole('list', { name: 'Registro de auditoría' })
+      : page.getByRole('table', { name: 'Registro de auditoría' });
+    const rows = phone ? table.getByRole('listitem') : table.locator('tbody tr');
     await expect(table).toBeVisible({ timeout: 15_000 });
 
     // 1. La zona de la pantalla (en «Todas las sedes», la principal), junto a los filtros.
@@ -163,16 +169,16 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
     ).toBeVisible();
 
     // 2. Cronológica: los instantes de las filas, de más reciente a más antiguo.
-    const instants = await table.locator('tbody time').evaluateAll((els) => els.map((el) => el.getAttribute('datetime')!));
+    const instants = await rows.locator('time').evaluateAll((els) => els.map((el) => el.getAttribute('datetime')!));
     expect(instants.length).toBeGreaterThanOrEqual(4);
     expect([...instants].sort().reverse()).toEqual(instants);
 
     // Solo las consultas de la historia clínica: una por sede.
     await page.getByLabel('Recurso').selectOption({ label: 'Historia clínica' });
-    await expect(table.locator('tbody tr')).toHaveCount(3, { timeout: 10_000 });
+    await expect(rows).toHaveCount(3, { timeout: 10_000 });
     for (const sede of [BOGOTA, BERLIN, NEW_YORK]) {
       const iso = viewedAt[sede.name]!;
-      const row = table.locator('tbody tr').filter({ has: page.locator(`time[datetime="${iso}"]`) });
+      const row = rows.filter({ has: page.locator(`time[datetime="${iso}"]`) });
       await expect(row.locator('time')).toHaveText(when(iso, BOGOTA));
       await expect(row).toContainText(offset(iso, BOGOTA));
       if (sede === BOGOTA) {
@@ -187,12 +193,10 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
 
     // 3. El día de los eventos, contado en Bogotá, los muestra; el siguiente, vacío.
     const day = wallDay(viewedAt[BOGOTA.name]!, BOGOTA.timeZone);
-    await page.getByLabel('Desde').fill(day);
-    await page.getByLabel('Hasta').fill(day);
-    await expect(table.locator('tbody tr')).toHaveCount(3, { timeout: 10_000 });
+    await fillDateRange(page, 'Período', day, day);
+    await expect(rows).toHaveCount(3, { timeout: 10_000 });
     const next = addCivilDays(day, 1);
-    await page.getByLabel('Hasta').fill(next);
-    await page.getByLabel('Desde').fill(next);
+    await fillDateRange(page, 'Período', next, next);
     await expect(page.getByText('No hay eventos con estos filtros.')).toBeVisible({ timeout: 10_000 });
     await expectNoHorizontalScroll(page);
     await page.getByRole('button', { name: 'Limpiar filtros' }).click();
@@ -206,14 +210,14 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
       }),
     ).toBeVisible({ timeout: 10_000 });
     await page.getByLabel('Recurso').selectOption({ label: 'Historia clínica' });
-    await expect(table.locator('tbody tr')).toHaveCount(3, { timeout: 10_000 });
+    await expect(rows).toHaveCount(3, { timeout: 10_000 });
     const bogotaIso = viewedAt[BOGOTA.name]!;
-    const bogotaRow = table.locator('tbody tr').filter({ has: page.locator(`time[datetime="${bogotaIso}"]`) });
+    const bogotaRow = rows.filter({ has: page.locator(`time[datetime="${bogotaIso}"]`) });
     await expect(bogotaRow.locator('time')).toHaveText(when(bogotaIso, BERLIN));
     await expect(
       bogotaRow.getByText(`En Bogotá: ${when(bogotaIso, BOGOTA)} ${offset(bogotaIso, BOGOTA)}`, { exact: true }),
     ).toBeVisible();
-    const berlinRow = table.locator('tbody tr').filter({ has: page.locator(`time[datetime="${viewedAt[BERLIN.name]}"]`) });
+    const berlinRow = rows.filter({ has: page.locator(`time[datetime="${viewedAt[BERLIN.name]}"]`) });
     await expect(berlinRow.getByText(/^En /)).toHaveCount(0);
     await expectNoHorizontalScroll(page);
     await expectNoHorizontalScrollIn(page);

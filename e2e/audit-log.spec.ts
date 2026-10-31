@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { openSection } from './support/nav';
+import { fillDateRange } from './support/dates';
 
 /**
  * e2e (DX-009): registro de auditoría para ADMIN.
@@ -78,6 +79,14 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
+/**
+ * El registro (DataList): tabla desde 640 px; en el teléfono, lista de
+ * tarjetas con el mismo nombre accesible.
+ */
+function auditLog(page: Page, width: number, name: string) {
+  return width < 640 ? page.getByRole('list', { name }) : page.getByRole('table', { name });
+}
+
 for (const viewport of VIEWPORTS) {
   test(`ADMIN consulta la auditoría con filtros, vacío y la pestaña Accesos (${viewport.name})`, async ({
     page,
@@ -109,7 +118,7 @@ for (const viewport of VIEWPORTS) {
     await expect(page).toHaveURL(/\/settings\/auditoria$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Auditoría' })).toBeVisible();
 
-    const table = page.getByRole('table', { name: 'Registro de auditoría' });
+    const table = auditLog(page, viewport.width, 'Registro de auditoría');
     await expect(table).toBeVisible({ timeout: 15_000 });
     await expect(table.getByText('Inicio de sesión').first()).toBeVisible();
     await expect(table.getByText('Historia clínica').first()).toBeVisible();
@@ -126,8 +135,7 @@ for (const viewport of VIEWPORTS) {
     await expect(table.getByText('Evolución').first()).toBeVisible();
 
     // Un período sin eventos: vacío que enseña qué hacer.
-    await page.getByLabel('Desde').fill('2020-01-01');
-    await page.getByLabel('Hasta').fill('2020-01-02');
+    await fillDateRange(page, 'Período', '2020-01-01', '2020-01-02');
     await expect(page.getByText('No hay eventos con estos filtros.')).toBeVisible();
     await expectNoHorizontalScroll(page);
 
@@ -138,7 +146,7 @@ for (const viewport of VIEWPORTS) {
     // Pestaña «Accesos» de la ficha: los de este paciente.
     await page.goto(`${origin}/patients/${patientId}?tab=access-log`);
     await expect(page.getByRole('tab', { name: 'Accesos' })).toHaveAttribute('aria-selected', 'true');
-    const accesses = page.getByRole('table', { name: 'Accesos a la ficha' });
+    const accesses = auditLog(page, viewport.width, 'Accesos a la ficha');
     await expect(accesses).toBeVisible({ timeout: 15_000 });
     await expect(accesses.getByText('Historia clínica').first()).toBeVisible();
     await expect(accesses.getByText('Ficha del paciente').first()).toBeVisible();
