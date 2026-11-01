@@ -47,7 +47,9 @@ export const linkOfferCopy = {
         ? 'Oferta enviada.'
         : `Oferta enviada a los ${total}.`
       : ok === 0
-        ? `No se pudo enviar a ninguno de los ${total}.`
+        ? total === 1
+          ? 'No se pudo enviar la oferta.'
+          : `No se pudo enviar a ninguno de los ${total}.`
         : `Oferta enviada a ${ok} de ${total}. ${total - ok === 1 ? 'Falló 1' : `Fallaron ${total - ok}`}.`,
   retryFailed: 'Reintentar con los que fallaron',
 };
@@ -103,8 +105,8 @@ export function LinkOfferDialog({
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<Result[] | null>(null);
   const statusRef = React.useRef<HTMLParagraphElement>(null);
-  // Tras reintentar sin que quede nadie fallido, el botón desaparece: el foco
-  // pasa al resumen en vez de caer en <body>.
+  // Al enviar desaparece «Enviar» y, tras reintentar sin que quede nadie
+  // fallido, «Reintentar…»: el foco pasa al resumen en vez de caer en <body>.
   const focusStatus = React.useRef(false);
   React.useEffect(() => {
     if (!focusStatus.current) return;
@@ -155,6 +157,7 @@ export function LinkOfferDialog({
     setSubmitting(true);
     const out = await send(eligible);
     setSubmitting(false);
+    focusStatus.current = true;
     setResults(out);
     if (out.some((r) => r.ok)) onSent();
   }

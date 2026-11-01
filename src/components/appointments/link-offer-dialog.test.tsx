@@ -101,6 +101,8 @@ describe('LinkOfferDialog: resultados anunciados y reintento (DX-486, FE-102)', 
     await user.click(within(dialog).getByRole('button', { name: copy.submit }));
     const retry = await within(dialog).findByRole('button', { name: copy.retryFailed });
     expect(mockedLinkOffer).toHaveBeenCalledTimes(3);
+    // «Enviar» desaparece al mostrar el resumen: el foco va a él, no a <body>.
+    await waitFor(() => expect(within(dialog).getByRole('status')).toHaveFocus());
 
     mockedLinkOffer.mockResolvedValueOnce(offer('p-carla')).mockResolvedValueOnce(offer('p-dario'));
     await user.click(retry);
@@ -116,6 +118,11 @@ describe('LinkOfferDialog: resultados anunciados y reintento (DX-486, FE-102)', 
     expect(within(dialog).queryByRole('button', { name: copy.retryFailed })).not.toBeInTheDocument();
     expect(within(dialog).getByRole('status')).toHaveFocus();
     expect(onSent).toHaveBeenCalledTimes(2);
+  });
+
+  it('con un solo destinatario el resumen no habla de «ninguno de los 1»', () => {
+    expect(copy.summary(0, 1)).toBe('No se pudo enviar la oferta.');
+    expect(copy.summary(1, 1)).toBe('Oferta enviada.');
   });
 
   it('si todos fallan lo dice, ofrece reintentar y no avisa al panel', async () => {
