@@ -102,6 +102,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   AGREEMENT: 'Convenio',
   // DX-233: horario de un profesional por sede y sus excepciones por fecha.
   PROVIDER_SCHEDULE: 'Horario del profesional',
+  CHAIR: 'Sillón',
   // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
   MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
   // DX-243: firma a distancia (enviar, abrir, código, bloqueo, firma, anular).
@@ -392,6 +393,17 @@ const SEDATION_REASONS: Record<string, string> = {
   SEDATION_VITALS: 'Toma de constantes',
   SEDATION_DISCHARGE: 'Egreso',
 };
+
+const CHAIR_REASONS: Record<string, string> = {
+  CHAIR_ORDER: 'Orden de los sillones',
+  CHAIR_DEACTIVATED: 'Sillón desactivado',
+  CHAIR_REACTIVATED: 'Sillón reactivado',
+};
+
+/** DX-211: qué se hizo con un sillón (orden, desactivar, reactivar), o null. */
+export function chairDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && CHAIR_REASONS[metadata.reason]) ?? null;
+}
 
 /** DX-407: qué parte de la hoja de sedación se registró, o null si no es de ella. */
 export function sedationDetail(metadata: AuditMetadata): string | null {

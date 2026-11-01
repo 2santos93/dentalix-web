@@ -142,3 +142,92 @@ describe('MoveAppointmentDialog con el reloj de la sede (DX-378)', () => {
     });
   });
 });
+
+describe('MoveAppointmentDialog con sillones (DX-211)', () => {
+  beforeEach(() => mockedUpdate.mockReset());
+  const base = {
+    tenantId: 't1',
+    locationId: 'loc-1',
+    sortOrder: 0,
+    defaultProviderId: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  const chairs = [
+    { ...base, id: 'ch-1', name: 'Sillón 1', active: true },
+    { ...base, id: 'ch-2', name: 'Sillón 2', active: true },
+    { ...base, id: 'ch-old', name: 'Viejo', active: false },
+  ];
+  const withChair: Appointment = {
+    ...appointment,
+    chairId: 'ch-old',
+    chair: { id: 'ch-old', name: 'Viejo', active: false },
+  };
+
+  function renderWithChairs(appt: Appointment) {
+    render(
+      <MoveAppointmentDialog clock={CLOCK}
+        open
+        onOpenChange={jest.fn()}
+        token="tok"
+        appointment={appt}
+        providers={providers}
+        hours={null}
+        onMoved={jest.fn()}
+        chairs={chairs}
+      />,
+    );
+  }
+
+  it('ofrece los sillones activos y el de la cita aunque esté inactivo', () => {
+    renderWithChairs(withChair);
+    const select = screen.getByLabelText('Sillón');
+    expect(select).toHaveValue('ch-old');
+    expect(screen.getByRole('option', { name: 'Viejo (inactivo)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Sillón 2' })).toBeInTheDocument();
+  });
+
+  it('cambiar de sillón manda chairId en el mismo PATCH; quitarlo manda null', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockResolvedValue({ ...withChair, notes: null });
+    renderWithChairs(withChair);
+    await user.selectOptions(screen.getByLabelText('Sillón'), 'ch-2');
+    await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'apt-1', expect.objectContaining({ chairId: 'ch-2' })),
+    );
+    mockedUpdate.mockClear();
+    await user.selectOptions(screen.getByLabelText('Sillón'), '');
+    await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'apt-1', expect.objectContaining({ chairId: null })),
+    );
+  });
+
+  it('sin cambiar el sillón no lo manda (una cita sin sillones sigue igual)', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockResolvedValue({ ...appointment, notes: null });
+    renderWithChairs(appointment);
+    await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('chairId');
+  });
+
+  it('revisión A1: si solo cambia el sillón, manda solo {chairId} (sin hora ni profesional), también en una cita ya empezada', async () => {
+    const user = userEvent.setup();
+    const started = new Date(Date.now() - 10 * 60_000);
+    const inClinic: Appointment = {
+      ...withChair,
+      chairId: 'ch-1',
+      chair: { id: 'ch-1', name: 'Sillón 1', active: true },
+      status: 'ARRIVED',
+      start: started.toISOString(),
+      end: new Date(started.getTime() + 30 * 60_000).toISOString(),
+    };
+    mockedUpdate.mockResolvedValue({ ...inClinic, notes: null, chairId: 'ch-2' });
+    renderWithChairs(inClinic);
+    await user.selectOptions(screen.getByLabelText('Sillón'), 'ch-2');
+    await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'apt-1', { chairId: 'ch-2' }));
+  });
+});

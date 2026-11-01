@@ -2011,6 +2011,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chairs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ChairsController_list"];
+        put?: never;
+        post: operations["ChairsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chairs/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ChairsController_reorder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chairs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["ChairsController_update"];
+        trace?: never;
+    };
+    "/api/v1/chairs/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ChairsController_deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chairs/{id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ChairsController_reactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payment-methods": {
         parameters: {
             query?: never;
@@ -5825,7 +5905,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -9034,8 +9114,16 @@ export interface components {
             planItemIds?: string[];
             /** Format: uuid */
             patientId: string;
-            /** Format: uuid */
-            providerId: string;
+            /**
+             * Format: uuid
+             * @description Profesional de la cita. DX-211: opcional si viene `chairId` con profesional por defecto (se toma el del sillón); el elegido manda siempre. Sin ninguno, 400.
+             */
+            providerId?: string;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita. De esta clínica (si no, 404), de la sede de la cita y activo (si no, 400). Otra cita viva en ese sillón y franja: 409 «El sillón X ya está ocupado de HH:MM a HH:MM» (horas de la sede). Sin él, nada cambia.
+             */
+            chairId?: string;
             /** Format: date-time */
             start: string;
             /**
@@ -9077,6 +9165,14 @@ export interface components {
          * @enum {string}
          */
         TriageFlag: "PAIN" | "SWELLING" | "INFECTION" | "FEVER" | "BLEEDING" | "TRAUMA";
+        ChairSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sillón 1 */
+            name: string;
+            /** @description false = el sillón se desactivó después: se muestra «(inactivo)». */
+            active: boolean;
+        };
         /**
          * @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede).
          * @enum {string}
@@ -9261,6 +9357,13 @@ export interface components {
             walkIn: boolean;
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita; null = sin sillón.
+             */
+            chairId: string | null;
+            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9382,6 +9485,13 @@ export interface components {
             walkIn: boolean;
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita; null = sin sillón.
+             */
+            chairId: string | null;
+            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9518,6 +9628,13 @@ export interface components {
             walkIn: boolean;
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita; null = sin sillón.
+             */
+            chairId: string | null;
+            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9753,6 +9870,13 @@ export interface components {
             walkIn: boolean;
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita; null = sin sillón.
+             */
+            chairId: string | null;
+            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9770,6 +9894,11 @@ export interface components {
              * @description DX-121: mover la cita a otro profesional de la clínica. Mismas reglas que reagendar: solape 409, horario de la sede 422, y anula el enlace de confirmación.
              */
             providerId?: string;
+            /**
+             * Format: uuid
+             * @description DX-211: cambiar el sillón (de la sede de la cita y activo; si no, 400/404) o quitarlo con null. Al cambiarlo o reagendar una cita con sillón se mira que esté libre en la franja (409 con su nombre y horas). Cambiar solo el sillón no anula el enlace de confirmación; queda auditado como movimiento.
+             */
+            chairId?: string | null;
             /**
              * @description DX-200: flujo en la clínica sin saltos (409 si no): ARRIVED desde SCHEDULED/CONFIRMED y solo el día de la cita (RECEPTION, ASSISTANT, ADMIN; fija `arrivedAt`); IN_CHAIR desde ARRIVED y READY_FOR_CHECKOUT desde IN_CHAIR (DENTIST, ASSISTANT, ADMIN; fijan `seatedAt` / `readyForCheckoutAt`); la salida a COMPLETED (o CANCELLED si se fue sin pasar al sillón) desde el flujo, RECEPTION, ASSISTANT, ADMIN. Nunca NO_SHOW desde el flujo; para volver a agendada, `POST /appointments/:id/undo-arrival`. Las horas las pone el servidor. Rol sin permiso: 403. DX-273: salir de COMPLETED (a cualquier otro estado) solo ADMIN y DENTIST, con `statusReason` (403 / 400).
              * @enum {string}
@@ -10323,6 +10452,60 @@ export interface components {
         ProviderScheduleSettingsDto: {
             /** @description false (defecto): una cita fuera del horario del profesional se agenda con el aviso PROVIDER_OFF_SCHEDULE. true: se rechaza con 409. */
             strictProviderSchedule: boolean;
+        };
+        ChairDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sillón 1 */
+            name: string;
+            /** @description Orden de la columna en la agenda; empate por nombre. */
+            sortOrder: number;
+            /**
+             * Format: uuid
+             * @description Profesional que se propone al elegir el sillón en una cita (solo si aún no hay profesional elegido).
+             */
+            defaultProviderId: string | null;
+            /** @description false = desactivado: no se ofrece para citas nuevas ni sale como columna; sus citas lo conservan. */
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateChairDto: {
+            /**
+             * Format: uuid
+             * @description Sede del sillón.
+             */
+            locationId: string;
+            /** @example Sillón 1 */
+            name: string;
+            /** @description Por defecto, al final de la sede. */
+            sortOrder?: number;
+            /**
+             * Format: uuid
+             * @description Profesional por defecto: un miembro activo que atiende pacientes en la sede.
+             */
+            defaultProviderId?: string | null;
+        };
+        ReorderChairsDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @description TODOS los sillones de la sede (activos o no), cada uno una vez, en el orden de las columnas. */
+            chairIds: string[];
+        };
+        UpdateChairDto: {
+            name?: string;
+            sortOrder?: number;
+            /**
+             * Format: uuid
+             * @description null quita el profesional por defecto.
+             */
+            defaultProviderId?: string | null;
         };
         /**
          * @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER).
@@ -21732,6 +21915,8 @@ export interface operations {
                 providerId?: string;
                 /** @description DX-121: columnas de la vista Día. Hasta 12 ids del personal activo de la clínica (otro id da 400). Se repite el parámetro: ?providerIds=a&providerIds=b. */
                 providerIds?: string[];
+                /** @description DX-211: solo las citas de estos sillones (activos o no) de la sede de la agenda (`locationId` o X-Location-Id; sin sede, 400). Un sillón de otra sede o clínica da 400. Hasta 12; se repite el parámetro: ?chairIds=a&chairIds=b. */
+                chairIds?: string[];
                 /** @description DX-121: sede de la agenda. Si falta, la del request (X-Location-Id) o todas. */
                 locationId?: string;
             };
@@ -21750,7 +21935,7 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentListItemDto"][];
                 };
             };
-            /** @description Más de 12 profesionales o alguno ajeno a la clínica */
+            /** @description Más de 12 profesionales o alguno ajeno a la clínica; DX-211: más de 12 sillones, alguno de otra sede o clínica, o `chairIds` sin sede */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21781,7 +21966,7 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentWriteDto"];
                 };
             };
-            /** @description Datos inválidos, cita en el pasado, sin hora de fin ni tipo, o tipo desactivado/ajeno */
+            /** @description Datos inválidos, cita en el pasado, sin hora de fin ni tipo, o tipo desactivado/ajeno; DX-211: sin profesional (ni el del sillón), o sillón de otra sede o desactivado */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21795,7 +21980,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita, el horario está bloqueado para ese profesional o la sede (DX-122), o es un hueco reservado para otros tipos y aún sin liberar (DX-446: `code: RESERVED_SLOT`, `canOverride` dice si quien agenda puede reintentar con `overrideReason`) */
+            /** @description Solape con otra cita (del profesional, del paciente o, DX-211, del sillón: «El sillón X ya está ocupado de HH:MM a HH:MM»), el horario está bloqueado para ese profesional o la sede (DX-122), o es un hueco reservado para otros tipos y aún sin liberar (DX-446: `code: RESERVED_SLOT`, `canOverride` dice si quien agenda puede reintentar con `overrideReason`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22040,14 +22225,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Cita o profesional no encontrados en esta clínica */
+            /** @description Cita, profesional o sillón no encontrados en esta clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200) */
+            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23237,6 +23422,265 @@ export interface operations {
             };
             /** @description Solo un administrador puede cambiar los horarios de los profesionales. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_list: {
+        parameters: {
+            query: {
+                /** @description Sede de los sillones (entre las permitidas al usuario). */
+                locationId: string;
+                /** @description true = también los desactivados (pantalla de gestión). Por defecto, solo los activos. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sillones de la sede por `sortOrder` y nombre. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"][];
+                };
+            };
+            /** @description Sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChairDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"];
+                };
+            };
+            /** @description Nombre vacío o de más de 40, orden fuera de 0–999, o el profesional por defecto no atiende pacientes o no atiende en la sede */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede o profesional no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un sillón con ese nombre en la sede */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_reorder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderChairsDto"];
+            };
+        };
+        responses: {
+            /** @description Los sillones de la sede en el orden nuevo. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"][];
+                };
+            };
+            /** @description No son todos los sillones de la sede, o alguno se repite */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChairDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sillón o profesional no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un sillón con ese nombre en la sede */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Desactivado (no se borra): deja de ofrecerse para citas nuevas y de salir como columna; sus citas lo conservan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"];
+                };
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sillón no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_reactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"];
+                };
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sillón no encontrado en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
