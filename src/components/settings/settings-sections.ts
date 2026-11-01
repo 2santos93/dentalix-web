@@ -236,7 +236,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/historia-clinica',
         label: 'Historia clínica',
-        description: 'Cuánto tiempo es válida la anamnesis antes de pedir que se revise.',
+        description: 'Vigencia de la anamnesis y cuánto tiempo se conserva la historia clínica.',
         icon: ClipboardClock,
         visible: canManageAnamnesisSettings,
       },
