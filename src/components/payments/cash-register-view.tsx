@@ -28,6 +28,7 @@ import {
   PAYMENT_METHOD_LABELS,
 } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
+import { PAYMENT_ADJUSTMENT_TYPE_LABELS, signedAdjustmentAmount } from '@/lib/payments/payment-adjustments';
 import { formatCivilDate, formatDate } from '@/lib/format/date';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
@@ -79,6 +80,12 @@ const copy = {
   mediumInactive: (name: string) => `${name} (inactivo)`,
   mediumsError: 'No cargaron los medios',
   methodNone: 'Sin método',
+  // DX-516: ajustes por medio de pago.
+  collectedRow: (amount: string) => `Cobrado ${amount}`,
+  adjustmentsTitle: 'Ajustes por medio de pago',
+  adjustmentsCount: (n: number) => (n === 1 ? '1 ajuste' : `${n} ajustes`),
+  collectedTitle: 'Cobrado (abonos ± ajustes)',
+  collectedHint: 'lo que entró',
   // DX-515: abonos con o sin el nº de la factura fiscal emitida fuera.
   invoiceLabel: 'Factura externa',
   invoiceAll: 'Con y sin factura externa',
@@ -415,7 +422,15 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
       numeric: true,
       mobile: 'trailing',
       cell: (payment) => (
-        <span className="font-medium text-ink">{formatCurrency(payment.amount, payment.currency)}</span>
+        <span className="flex flex-col items-end">
+          <span className="font-medium text-ink">{formatCurrency(payment.amount, payment.currency)}</span>
+          {/* DX-516: con ajustes por medio de pago, lo que entró de verdad. */}
+          {payment.adjustments.length > 0 ? (
+            <span className="t-caption text-muted tabular-nums">
+              {copy.collectedRow(formatCurrency(payment.collectedAmount, payment.currency))}
+            </span>
+          ) : null}
+        </span>
       ),
     },
   ];
@@ -758,6 +773,31 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
           ))}
         </SummaryList>
       </div>
+      {/* DX-516: solo si el período tiene ajustes por medio de pago. */}
+      {summary.adjustments.length > 0 ? (
+        <div className="grid gap-0 border-t border-border-subtle sm:grid-cols-2 sm:divide-x sm:divide-border-subtle">
+          <SummaryList label={copy.adjustmentsTitle}>
+            {summary.adjustments.map((row) => (
+              <SummaryRow
+                key={`${row.currency}-${row.type}`}
+                label={PAYMENT_ADJUSTMENT_TYPE_LABELS[row.type]}
+                meta={`${row.currency} · ${copy.adjustmentsCount(row.count)}`}
+                value={signedAdjustmentAmount({ type: row.type, amount: row.total, currency: row.currency })}
+              />
+            ))}
+          </SummaryList>
+          <SummaryList label={copy.collectedTitle} className="max-sm:border-t max-sm:border-border-subtle">
+            {summary.collected.map((row) => (
+              <SummaryRow
+                key={row.currency}
+                label={row.currency}
+                meta={copy.collectedHint}
+                value={formatCurrency(row.total, row.currency)}
+              />
+            ))}
+          </SummaryList>
+        </div>
+      ) : null}
     </section>
   );
 }
