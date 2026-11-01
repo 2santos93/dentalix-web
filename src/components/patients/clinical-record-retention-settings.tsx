@@ -275,7 +275,13 @@ export function ClinicalRecordRetentionSettingsSection({
           isDefault={effectiveYears === min && settings.clinicalRecordRetentionYears === min}
           value={<span data-testid="retention-years">{copy.years(effectiveYears)}</span>}
           action={
-            <Button type="button" variant="secondary" className="max-sm:min-h-11" onClick={openDialog}>
+            <Button
+              type="button"
+              variant="secondary"
+              className="max-sm:min-h-11"
+              aria-label={copy.dialogTitle}
+              onClick={openDialog}
+            >
               {copy.change}
             </Button>
           }

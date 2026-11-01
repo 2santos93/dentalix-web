@@ -51,7 +51,7 @@ const unconfirmed = (message = UNCONFIRMED_MESSAGE) =>
   new ApiError(409, message, { code: RETENTION_REDUCTION_UNCONFIRMED });
 
 async function openDialog(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('button', { name: 'Cambiar' }));
+  await user.click(await screen.findByRole('button', { name: 'Cambiar el plazo de conservación' }));
   await screen.findByRole('dialog', { name: 'Cambiar el plazo de conservación' });
 }
 async function setYears(user: ReturnType<typeof userEvent.setup>, value: string) {

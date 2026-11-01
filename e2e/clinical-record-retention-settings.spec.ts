@@ -105,7 +105,7 @@ async function openSettings(page: Page, at = origin): Promise<Locator> {
  * anamnesis. Cuelga del mismo control que el valor (el `data-testid`).
  */
 const changeButton = (page: Page) =>
-  page.getByTestId('retention-years').locator('xpath=../..').getByRole('button', { name: 'Cambiar', exact: true });
+  page.getByTestId('retention-years').locator('xpath=../..').getByRole('button', { name: 'Cambiar el plazo de conservación' });
 
 /** Abre el diálogo y escribe `years`; devuelve el diálogo en su primer paso. */
 async function openDialogWith(page: Page, years: number): Promise<Locator> {
@@ -255,7 +255,7 @@ test('RECEPCIÓN no ve la entrada en Ajustes y, por URL, ve el estado bloqueado'
   });
   await expect(page.getByText('La ficha de cada paciente dice hasta cuándo se conserva su historia.')).toBeVisible();
   await expect(page.getByTestId('retention-years')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Cambiar', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Cambiar el plazo de conservación' })).toHaveCount(0);
 });
 
 test('390 px: el diálogo cabe en sus dos pasos, sin scroll lateral y con objetivos táctiles', async ({ page }) => {
