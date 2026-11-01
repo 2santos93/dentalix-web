@@ -501,11 +501,13 @@ describe('RegisterForm', () => {
     mockApi(() => Promise.resolve({ message: 'genérico' }));
     render(<RegisterForm tenant={null} />);
     const address = screen.getByLabelText('Dirección web');
-    expect(screen.getByText('.dentalix.app')).toBeInTheDocument();
+    // El dominio se lee como en el componente: el CI fija NEXT_PUBLIC_ROOT_DOMAIN.
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dentalix.app';
+    expect(screen.getByText(`.${rootDomain}`)).toBeInTheDocument();
     fireEvent.change(address, { target: { value: 'Sonrisa' } });
     expect(address).toHaveValue('sonrisa');
     expect(address).toHaveAccessibleDescription(
-      'Así entrarás: sonrisa.dentalix.app. Solo minúsculas sin tildes, números y guiones.',
+      `Así entrarás: sonrisa.${rootDomain}. Solo minúsculas sin tildes, números y guiones.`,
     );
   });
 

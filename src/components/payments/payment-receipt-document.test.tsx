@@ -307,3 +307,28 @@ describe('DX-390: cobro dividido', () => {
     );
   });
 });
+
+// DX-340: el recibo pinta el abono y el saldo con los decimales de la moneda:
+// JPY sin decimales, EUR con céntimos (los mismos totales que el plan y el
+// estado de cuenta: suma de líneas).
+it.each([
+  { currency: 'JPY', amount: 5000, billable: 18912, balance: 13912, shown: [/5\.?000 JPY/, /13\.912 JPY/], cents: false },
+  { currency: 'EUR', amount: 50.5, billable: 189.12, balance: 138.62, shown: [/50,50/, /138,62/], cents: true },
+])('$currency: abono y saldo con los decimales de su moneda', ({ currency, amount, billable, balance, shown, cents }) => {
+  const base = paymentReceiptFixture();
+  render(
+    <PaymentReceiptDocument
+      receipt={{
+        ...base,
+        snapshot: {
+          ...base.snapshot,
+          payment: { ...base.snapshot.payment, amount, currency },
+          planBalance: { currency, billable, paid: amount, balance },
+        },
+      }}
+    />,
+  );
+  const doc = text(screen.getByTestId('receipt-document'));
+  for (const figure of shown) expect(doc).toMatch(figure);
+  expect(/\d,\d\d\b/.test(doc)).toBe(cents);
+});

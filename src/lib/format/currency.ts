@@ -1,10 +1,15 @@
-// Copia byte a byte de `prisma/reference/iso4217-zero-decimal.json` de la API: no se edita aquí.
+// Copia byte a byte de `prisma/reference/cldr-format-digits-zero.json` de la API: no se edita aquí.
 // La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
 // divergen. Ver src/lib/money/README.md.
-import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
+import cldrFormatDigits from '@/lib/money/cldr-format-digits-zero.json';
 
-/** Monedas sin decimales según ISO 4217 (copia de la lista de la API, R7). */
-const ISO_ZERO_DECIMAL: ReadonlySet<string> = new Set(iso4217ZeroDecimal.minorUnitsZero);
+/**
+ * Monedas que se PINTAN sin decimales: dígitos de formato de CLDR 47, fijados
+ * en la API (DX-340), no los minor units ISO ni el redondeo (`roundingDigits`
+ * de la API). Se lee de la copia versionada, no del `Intl` del host, para que
+ * el formato no cambie con el ICU y funcione sin red (SSR, offline).
+ */
+const CLDR_ZERO_FORMAT_DIGITS: ReadonlySet<string> = new Set(cldrFormatDigits.cldrDigitsZero);
 
 /**
  * Crash-safe currency formatter. `Intl.NumberFormat({ style:'currency' })`
@@ -29,7 +34,7 @@ export function formatCurrency(
   // 150.000,50 se pintaría (redondeado) como 150.001. Las monedas que en ISO
   // 4217 no tienen decimales (JPY, VND…: GLOBAL-G1) van sin ellos cuando el
   // importe es entero; con céntimos conserva 2 decimales, nunca se redondea.
-  const digits = Number.isInteger(amount) && ISO_ZERO_DECIMAL.has(currency.toUpperCase()) ? 0 : 2;
+  const digits = Number.isInteger(amount) && CLDR_ZERO_FORMAT_DIGITS.has(currency.toUpperCase()) ? 0 : 2;
   try {
     return new Intl.NumberFormat(locale, {
       style: 'currency',

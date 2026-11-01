@@ -53,6 +53,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { BulkDiscountModal, bulkDiscountCopy } from '@/components/discounts/bulk-discount-modal';
+import { contractRoundingDigits } from '@/lib/money/line-rounding';
 import { VoidCancellationFeeModal } from '@/components/appointments/fee-reason-modal';
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanVisitsBoard } from './plan-visits-board';
@@ -1325,6 +1326,7 @@ export function TreatmentPlansTab({
           token={token}
           planId={planDetail.id}
           currency={planDetail.currency}
+          roundingDigits={contractRoundingDigits(planDetail.currencyDigits)}
           items={(planDetail.items ?? []).filter((i) => selectedItemIds.has(i.id))}
           procedureOf={(item) => procedureName(item, catalogById)}
           rules={discountRules}

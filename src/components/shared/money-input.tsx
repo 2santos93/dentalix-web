@@ -47,7 +47,7 @@ function previewText(text: string, currency: string, requirePositive: boolean): 
  * Campo de importe (DX-241): el único sitio de la app donde se escribe dinero.
  * Texto con teclado decimal (`type="number"` descarta en silencio la coma de un
  * teclado en español), y debajo lo que se va a guardar ya interpretado —
- * «Se guardará: 150,50 US$» — o por qué no se entiende. Quien lo usa lee el
+ * «Se guardará: 150,50 USD» — o por qué no se entiende. Quien lo usa lee el
  * importe con `parseMoneyInput(value, currency)` al enviar y, si no vale, pasa
  * su error al `FormField` (escalón 4, junto al campo) con `aria-invalid`: la
  * vista previa calla entonces para no repetirlo.

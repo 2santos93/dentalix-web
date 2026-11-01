@@ -486,6 +486,48 @@ describe('TreatmentPlansTab', () => {
     expect(await screen.findByText(/este plan todavía no tiene ítems/i)).toBeInTheDocument();
   });
 
+  // DX-340: el total del plan es la suma de sus líneas y se pinta con los
+  // decimales de su moneda (JPY sin decimales; EUR con céntimos).
+  it.each([
+    {
+      currency: 'JPY',
+      lines: [
+        { price: 12345, discount: 926 },
+        { price: 8001, discount: 600 },
+        { price: 99, discount: 7 },
+      ],
+      total: 18912,
+      shown: /^18\.912\sJPY$|^JPY\s18\.912$|^¥\s?18\.912$|^18\.912\s¥$/,
+    },
+    {
+      currency: 'EUR',
+      lines: [
+        { price: 123.45, discount: 9.26 },
+        { price: 0.99, discount: 0.07 },
+        { price: 80.01, discount: 6 },
+      ],
+      total: 189.12,
+      shown: /^189,12\s€$/,
+    },
+  ])('$currency: el total es la suma de las líneas y lleva los decimales de la moneda', async ({ currency, lines, total, shown }) => {
+    const items = lines.map((line, i) => ({ ...item2, id: `item-${i}`, toothNumber: String(11 + i), ...line }));
+    const detail = {
+      ...plan({ id: 'plan-1', currency }),
+      items,
+      total,
+      currencyDigits: currency === 'JPY' ? { minorUnits: 0, roundingDigits: 0 } : { minorUnits: 2, roundingDigits: 2 },
+    };
+    mockedListPlans.mockResolvedValue([plan({ id: 'plan-1', currency })]);
+    mockedGetPlan.mockResolvedValue(detail);
+
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+
+    const label = await screen.findByText('Total');
+    const figure = label.parentElement?.textContent?.replace('Total', '').replace(/\s/g, ' ').trim() ?? '';
+    expect(figure).toMatch(shown);
+    expect(figure.includes(',00')).toBe(false);
+  });
+
   it("renders a plan's items with the total equal to the sum of the items' prices", async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedGetPlan.mockResolvedValue(plan1Detail);
