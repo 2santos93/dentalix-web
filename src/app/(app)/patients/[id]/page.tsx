@@ -495,7 +495,7 @@ function PatientDetailView() {
               onChanged={onAgreementChanged}
               role={getTokenRole(accessToken)}
             />
-            {/* DX-039: retención legal (lo ven todos); los controles de ADMIN
+            {/* DX-039: retención (lo ven todos); los controles de ADMIN
                 están en el menú «⋯» de la cabecera. */}
             <PatientRetentionSection patient={patient} />
           </TabPanel>
