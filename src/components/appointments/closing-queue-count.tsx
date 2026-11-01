@@ -1,63 +1,19 @@
 'use client';
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { getClosingQueueCount } from '@/lib/appointments/closing-queue-api';
+import { useWorkQueueCount, WORK_QUEUES_CHANGED_EVENT } from '@/components/work-queues/work-queues-context';
 
-/** Cada cuánto se relee el contador mientras la app está abierta. */
-const POLL_MS = 60_000;
-
-/** Evento de ventana tras cerrar o descartar un pendiente: el contador se relee al momento. */
-export const CLOSING_QUEUE_CHANGED_EVENT = 'dentalix:closing-queue-changed';
+/** Evento de ventana tras cerrar o descartar un pendiente: los contadores se releen al momento. */
+export const CLOSING_QUEUE_CHANGED_EVENT = WORK_QUEUES_CHANGED_EVENT;
 
 export function notifyClosingQueueChanged(): void {
   window.dispatchEvent(new Event(CLOSING_QUEUE_CHANGED_EVENT));
 }
 
-const ClosingQueueCountContext = createContext(0);
-
 /**
- * DX-439: UNA lectura del contador de «Pendiente de cerrar» para toda la app
- * (el menú y el enlace de la Agenda leen la misma): las secciones del rol, en
- * sus sedes. Se relee al cambiar de pantalla, cada minuto y al recibir
- * `CLOSING_QUEUE_CHANGED_EVENT`. Un fallo deja el último valor: es un
- * contador, la página tiene su propio estado de error.
+ * DX-439 / DX-503: el contador de «Pendiente de cerrar» del menú y de la
+ * cabecera de la Agenda. Sale de la MISMA lectura de `GET /work-queues/summary`
+ * que «Mi día» en Inicio (`WorkQueuesProvider` del AppShell), así que los tres
+ * enseñan el mismo número. 0 sin proveedor o sin permiso.
  */
-export function ClosingQueueCountProvider({
-  token,
-  enabled,
-  pathname,
-  children,
-}: {
-  token: string | null;
-  enabled: boolean;
-  pathname: string;
-  children: ReactNode;
-}) {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (!token || !enabled) return;
-    let cancelled = false;
-    const load = () =>
-      getClosingQueueCount(token)
-        .then((summary) => {
-          if (!cancelled) setCount(summary.total);
-        })
-        .catch(() => undefined);
-    void load();
-    const timer = setInterval(() => void load(), POLL_MS);
-    const onChanged = () => void load();
-    window.addEventListener(CLOSING_QUEUE_CHANGED_EVENT, onChanged);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      window.removeEventListener(CLOSING_QUEUE_CHANGED_EVENT, onChanged);
-    };
-  }, [token, enabled, pathname]);
-
-  return <ClosingQueueCountContext.Provider value={enabled ? count : 0}>{children}</ClosingQueueCountContext.Provider>;
-}
-
-/** El contador del proveedor (0 sin proveedor o sin permiso). */
 export function useClosingQueueCount(): number {
-  return useContext(ClosingQueueCountContext);
+  return useWorkQueueCount('CLOSING_QUEUE');
 }
