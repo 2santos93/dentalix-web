@@ -2,7 +2,8 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatCurrency } from '@/lib/format/currency';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 import { parseDecimalInput } from '@/lib/format/money';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
@@ -63,6 +64,8 @@ interface BulkDiscountModalProps {
   procedureOf: (item: TreatmentPlanItem) => string;
   rules: DiscountRules;
   role: ClinicRole | null;
+  /** DX-489: el formato de la sede, el de los demás importes del plan; `null` mientras carga («—»). */
+  fmt: RegionalFormat | null;
   /** `skippedNoDiscount`: ítems cuya prestación no admite descuentos (DX-105). */
   onApplied: (items: TreatmentPlanItem[], skippedNoDiscount: number) => void;
 }
@@ -95,6 +98,7 @@ export function BulkDiscountModal({
   procedureOf,
   rules,
   role,
+  fmt,
   onApplied,
 }: BulkDiscountModalProps) {
   // Sin rol conocido, la web no adivina el tope: lo decide la API.
@@ -199,8 +203,8 @@ export function BulkDiscountModal({
                 {procedureOf(item)}
               </span>
               <span className="tabular-nums text-muted" data-testid="bulk-discount-preview">
-                {formatCurrency(item.price, currency)} →{' '}
-                {roundingDigits === null ? bulkDiscountCopy.previewPending : `−${formatCurrency(discount, currency)}`}
+                {sedeMoney(item.price, currency, fmt)} →{' '}
+                {roundingDigits === null ? bulkDiscountCopy.previewPending : `−${sedeMoney(discount, currency, fmt)}`}
               </span>
             </li>
           ))}

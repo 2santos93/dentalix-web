@@ -1,5 +1,6 @@
 'use client';
-import { formatCurrency } from '@/lib/format/currency';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 import { allocationCopy } from '@/lib/payments/allocation-copy';
 import type { PlanBalance } from '@/lib/payments/payments-api';
 import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
@@ -26,31 +27,35 @@ export function PlanMoneySummary({
   total,
   currency,
   balance,
+  fmt,
 }: {
   token: string;
   total: number;
   currency: string;
   balance: PlanBalance | null;
+  /** DX-489: el formato de la sede, el mismo de la lista de abonos (DX-386); sin él, «—». */
+  fmt: RegionalFormat | null;
 }) {
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const figures: { key: string; label: string; value: string; strong?: boolean; help?: string }[] = [
-    { key: 'total', label: copy.totalLabel, value: formatCurrency(total, currency) },
+    { key: 'total', label: copy.totalLabel, value: money(total, currency) },
   ];
   if (balance) {
     figures.push(
       {
         key: 'billable',
         label: copy.billableLabel,
-        value: formatCurrency(balance.billable, balance.planCurrency),
+        value: money(balance.billable, balance.planCurrency),
       },
       {
         key: 'paid',
         label: copy.paidLabel,
-        value: formatCurrency(balance.paid, balance.planCurrency),
+        value: money(balance.paid, balance.planCurrency),
       },
       {
         key: 'balance',
         label: copy.balanceLabel,
-        value: formatCurrency(balance.balance, balance.planCurrency),
+        value: money(balance.balance, balance.planCurrency),
         strong: true,
       },
     );
@@ -59,7 +64,7 @@ export function PlanMoneySummary({
       figures.push({
         key: 'unallocated',
         label: allocationCopy.unallocated,
-        value: formatCurrency(balance.unallocated, balance.planCurrency),
+        value: money(balance.unallocated, balance.planCurrency),
         help: allocationCopy.unallocatedHelp,
       });
     }

@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { CreatePaymentPlanModal } from './create-payment-plan-modal';
 import { ApiError } from '@/lib/api/client';
 import { createPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
+import { regionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 
 jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
   createPaymentPlan: jest.fn(),
@@ -44,6 +46,15 @@ it('propone 12 cuotas mensuales desde hoy, sin pie y el total facturable del pla
     /^\d{4}-\d{2}-\d{2}$/,
   );
   expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Cuota: 100.000,00 COP');
+});
+
+it('DX-489: desde el plan de tratamiento, la vista previa sale con el formato de la sede (código delante)', () => {
+  const fmt = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+  renderModal({ money: (amount, code) => sedeMoney(amount, code, fmt) });
+  const dialog = screen.getByRole('dialog', { name: 'Crear plan de pagos' });
+  const text = dialog.textContent?.replace(/\s/g, ' ') ?? '';
+  expect(text).toContain('Cuota: COP 100.000,00');
+  expect(text).not.toContain('100.000,00 COP');
 });
 
 it('crea el plan de cuotas con los datos del formulario y avisa', async () => {

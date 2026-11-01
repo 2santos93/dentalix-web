@@ -1,6 +1,7 @@
 import { test, expect, type Locator } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { formatCurrency } from '../src/lib/format/currency';
+import { regionalFormat } from '../src/lib/format/regional-format';
+import { moneyWithCode } from '../src/lib/format/sede-number';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
@@ -68,11 +69,12 @@ const tooth1 = '11';
 const tooth2 = '21';
 
 // El plan nace en la moneda de la sede (G1, DX-313: nunca un USD por defecto),
-// la que el registro le dio (`E2E_REGION`), y la UI formatea con el MISMO helper que se importa aquí
-// (`src/lib/format/currency.ts`, locale `es`), así las aserciones no dependen
-// de cómo el ICU de turno pinte el símbolo o los separadores.
+// la que el registro le dio (`E2E_REGION`), y la UI formatea los importes del
+// plan con el formato de esa sede y el código ISO (DX-386, DX-489) usando el
+// MISMO helper que se importa aquí, así las aserciones no dependen de cómo el
+// ICU de turno pinte los separadores.
 const planCurrency = E2E_REGION.currency;
-const money = (amount: number): string => formatCurrency(amount, planCurrency);
+const money = (amount: number): string => moneyWithCode(amount, planCurrency, regionalFormat(E2E_REGION));
 
 test('treatment plan: create -> add item -> total -> status DONE -> remove -> total drops -> persists on reload', async ({
   page,

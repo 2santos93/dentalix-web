@@ -18,10 +18,10 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { formatCivilDate } from '@/lib/format/date';
-// Crash-safe by contract: a plan whose currency isn't a valid ISO 4217 code
-// would make an inline `Intl.NumberFormat` throw during render and take this
-// whole subtree down (~8 money cells here). See `formatCurrency`'s own doc.
-import { formatCurrency } from '@/lib/format/currency';
+// DX-489: con el formato de la sede, como el resto de importes del plan
+// (`moneyWithCode` nunca lanza con un código que Intl no acepta).
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 
 const copy = {
   heading: 'Plan de pagos',
@@ -57,6 +57,8 @@ interface PaymentPlanSectionProps {
   planCurrency: string;
   billable: number;
   refreshSignal: number;
+  /** DX-489: el formato de la sede (el de la lista de abonos); sin él, «—». */
+  fmt: RegionalFormat | null;
   /**
    * ¿Se puede crear un plan de cuotas? No en un plan rechazado o cancelado
    * (DX-109: la API responde 409). Por defecto, sí.
@@ -70,6 +72,7 @@ export function PaymentPlanSection({
   planCurrency,
   billable,
   refreshSignal,
+  fmt,
   canCreate = true,
 }: PaymentPlanSectionProps) {
   const [plan, setPlan] = useState<PaymentPlan | null>(null);
@@ -168,8 +171,8 @@ export function PaymentPlanSection({
         />
       ) : (
         <>
-          <PaymentPlanSummary plan={plan} currency={planCurrency} />
-          <InstallmentsTable plan={plan} currency={planCurrency} />
+          <PaymentPlanSummary plan={plan} currency={planCurrency} fmt={fmt} />
+          <InstallmentsTable plan={plan} currency={planCurrency} fmt={fmt} />
         </>
       )}
 
@@ -178,6 +181,7 @@ export function PaymentPlanSection({
         onOpenChange={setShowCreate}
         token={token}
         plan={{ id: planId, currency: planCurrency, billable }}
+        money={(amount, code) => sedeMoney(amount, code, fmt)}
         onCreated={async () => {
           await refetch();
           setShowCreate(false);
@@ -203,24 +207,25 @@ export function PaymentPlanSection({
  * no como tres tarjetas de número grande: DESIGN.md prohíbe la plantilla de
  * métrica-héroe como estructura.
  */
-function PaymentPlanSummary({ plan, currency }: { plan: PaymentPlan; currency: string }) {
+function PaymentPlanSummary({ plan, currency, fmt }: { plan: PaymentPlan; currency: string; fmt: RegionalFormat | null }) {
+  const money = (amount: number) => sedeMoney(amount, currency, fmt);
   return (
     <DescriptionList columns={3}>
       <DescriptionItem label={copy.totalToFinance} numeric>
-        {formatCurrency(plan.totalToFinance, currency)}
+        {money(plan.totalToFinance)}
       </DescriptionItem>
       <DescriptionItem label={copy.paid} numeric>
-        {formatCurrency(plan.paidTotal, currency)}
+        {money(plan.paidTotal)}
       </DescriptionItem>
       <DescriptionItem label={copy.remaining} numeric valueClassName="font-semibold">
-        {formatCurrency(plan.remaining, currency)}
+        {money(plan.remaining)}
       </DescriptionItem>
       <DescriptionItem label={copy.nextDue} numeric>
-        {plan.nextDue ? `${formatCivilDate(plan.nextDue.dueDate)} · ${formatCurrency(plan.nextDue.amount, currency)}` : copy.none}
+        {plan.nextDue ? `${formatCivilDate(plan.nextDue.dueDate)} · ${money(plan.nextDue.amount)}` : copy.none}
       </DescriptionItem>
       {plan.overdueCount > 0 ? (
         <DescriptionItem label={copy.overdue} numeric valueClassName="font-medium text-danger-text">
-          {plan.overdueCount} · {formatCurrency(plan.overdueAmount, currency)}
+          {plan.overdueCount} · {money(plan.overdueAmount)}
         </DescriptionItem>
       ) : null}
     </DescriptionList>
@@ -268,7 +273,8 @@ function buildRows(plan: PaymentPlan): Row[] {
  * teléfono: cuota + cubierto/monto / vencimiento · estado). Ningún importe se
  * esconde en el teléfono.
  */
-function InstallmentsTable({ plan, currency }: { plan: PaymentPlan; currency: string }) {
+function InstallmentsTable({ plan, currency, fmt }: { plan: PaymentPlan; currency: string; fmt: RegionalFormat | null }) {
+  const money = (amount: number) => sedeMoney(amount, currency, fmt);
   const columns: DataListColumn<Row>[] = [
     {
       id: 'seq',
@@ -278,20 +284,20 @@ function InstallmentsTable({ plan, currency }: { plan: PaymentPlan; currency: st
       mobileCell: (r) => (r.key === 'down' ? r.label : `#${r.label}`),
     },
     { id: 'due', header: copy.colDue, cell: (r) => <span className="tabular-nums">{formatCivilDate(r.dueDate)}</span> },
-    { id: 'amount', header: copy.colAmount, numeric: true, cell: (r) => formatCurrency(r.amount, currency), mobile: 'hidden' },
+    { id: 'amount', header: copy.colAmount, numeric: true, cell: (r) => money(r.amount), mobile: 'hidden' },
     {
       id: 'covered',
       header: copy.colCovered,
       numeric: true,
       mobile: 'trailing',
-      cell: (r) => formatCurrency(r.covered, currency),
+      cell: (r) => money(r.covered),
       mobileCell: (r) => (
         <>
           <span className="sr-only">{copy.colCovered}: </span>
-          {formatCurrency(r.covered, currency)}
+          {money(r.covered)}
           {' / '}
           <span className="sr-only">{copy.colAmount}: </span>
-          {formatCurrency(r.amount, currency)}
+          {money(r.amount)}
         </>
       ),
     },

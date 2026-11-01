@@ -231,7 +231,7 @@ for (const viewport of [
     await expectItem(panel, mobile, data.done, { paid: 100, pending: 0 });
     await expectItem(panel, mobile, data.accepted, { paid: 50, pending: 0 });
     await expectItem(panel, mobile, data.proposed, 'not-billable');
-    await expect(unallocatedFigure(panel)).toContainText(money(30));
+    await expect(unallocatedFigure(panel)).toContainText(sedeUsd(30));
 
     // Aceptar el propuesto: el sobrante se le imputa solo.
     await panel
@@ -434,7 +434,7 @@ test('DX-051 axe: ítems del plan, «Ver por ítem» y el modal «Imputar abono�
 
       // Pestaña del plan: Cobrado/Pendiente por ítem y «Sin imputar».
       const panel = await openPlan(page, origin, data.patientId);
-      await expect(unallocatedFigure(panel)).toContainText(money(30));
+      await expect(unallocatedFigure(panel)).toContainText(sedeUsd(30));
       await unallocatedFigure(panel).scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(evidence, `plan-summary-${label}.png`) });
       await openPayments(panel);

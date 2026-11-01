@@ -79,6 +79,12 @@ interface CreatePaymentPlanModalProps {
   plan: PaymentPlanTarget | null;
   /** Tras crear: quien abre el modal recarga sus datos y lo cierra. */
   onCreated: () => void | Promise<void>;
+  /**
+   * DX-489: cómo se pinta un importe en la vista previa, para que salga con el
+   * formato de la pantalla que abre el modal (el plan de tratamiento usa el de
+   * la sede). Por defecto, `formatCurrency` (estado de cuenta).
+   */
+  money?: (amount: number, currency: string) => string;
   /** Campos previos al formulario (p. ej. el selector de plan del estado de cuenta). */
   children?: React.ReactNode;
 }
@@ -96,6 +102,7 @@ export function CreatePaymentPlanModal({
   token,
   plan,
   onCreated,
+  money = formatCurrency,
   children,
 }: CreatePaymentPlanModalProps) {
   const [form, setForm] = useState<FormState>(initialForm);
@@ -265,8 +272,8 @@ export function CreatePaymentPlanModal({
         </FormField>
         <p className="text-sm text-muted tabular-nums">
           {copy.financedPreview(
-            formatCurrency(previewFinanced, currency),
-            formatCurrency(previewPer, currency),
+            money(previewFinanced, currency),
+            money(previewPer, currency),
           )}
         </p>
         </>
