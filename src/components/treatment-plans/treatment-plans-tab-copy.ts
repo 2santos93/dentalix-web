@@ -153,6 +153,8 @@ export const copy = {
   itemDiscount: (amount: string) => `Descuento −${amount}`,
   // SEC-041: el precio por debajo del de catálogo cuenta como descuento.
   itemPriceReduction: (amount: string, catalog: string) => `Rebaja −${amount} (catálogo ${catalog})`,
+  priceBelowCatalogOtherCurrency: (catalog: string) =>
+    `Precio de catálogo: ${catalog}, en otra moneda y sin convertir. Se compara con el tope de tu rol y sale en el informe de descuentos.`,
   priceBelowCatalogDetail: (reduction: string, catalog: string) =>
     `Rebaja de ${reduction} sobre ${catalog}. Se compara con el tope de tu rol y sale en el informe de descuentos.`,
   // DX-204: motivo del descuento y «Descuento %» sobre varios ítems.

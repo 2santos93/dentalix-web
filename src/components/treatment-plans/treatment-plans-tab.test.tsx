@@ -945,6 +945,29 @@ describe('TreatmentPlansTab', () => {
       ).toBeInTheDocument();
     });
 
+    it('sin lista en EUR, el aviso de precio por debajo del catálogo no pinta el catálogo en EUR', async () => {
+      mockedGetPriceQuote.mockResolvedValue({
+        basePrice: 80000,
+        price: 80000,
+        source: 'CATALOG',
+        agreementId: null,
+        agreementName: null,
+        allowDiscount: true,
+        currency: 'EUR',
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText('Precio', { exact: true });
+      await user.clear(field);
+      await user.type(field, '100,55');
+      const notice = await screen.findByText(/^Precio de catálogo: COP 80\.000,00, en otra moneda y sin convertir\./);
+      expect(notice).toBeInTheDocument();
+      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/EUR\s80\.000|Rebaja de/);
+    });
+
     it('el mismo importe sale con UN formato en el resumen, la tabla y la lista de abonos', async () => {
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
@@ -2241,6 +2264,16 @@ describe('TreatmentPlansTab', () => {
 
     // SEC-041: un precio por debajo del de catálogo cuenta como descuento.
     describe('precio por debajo del de catálogo (SEC-041)', () => {
+      // El catálogo en la moneda del plan (sedes en USD): la rebaja se puede
+      // restar. Con el catálogo en otra moneda, ver DX-489.
+      const { clinicLocation } = jest.requireActual('../../lib/test/locations');
+      beforeEach(() => {
+        jest.mocked(listLocations).mockResolvedValue([{ ...clinicLocation(), currency: 'USD' }]);
+      });
+      afterEach(() => {
+        jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+      });
+
       async function openForm(token: string) {
         mockedListPlans.mockResolvedValue([plan1]);
         mockedGetPlan.mockResolvedValue(plan1Detail);

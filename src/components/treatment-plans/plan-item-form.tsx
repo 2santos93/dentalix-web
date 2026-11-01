@@ -261,6 +261,10 @@ export function PlanItemForm({
       ? effectiveDiscount(addCatalogPrice, addPrice, addDiscountValue)
       : null;
   const addBelowCatalog = addEffective !== null && addEffective.priceReduction > 0;
+  // DX-489: sin lista de precios en la moneda del plan, el precio de
+  // referencia es el del catálogo, en su propia moneda: no se resta del plan.
+  const catalogInOtherCurrency =
+    (quoteReady ? quoteReady.source === 'CATALOG' : true) && catalogCurrency !== plan.currency;
   const addDiscounted = addEffective ? addEffective.total > 0 : addDiscountValue > 0;
   const addReasonRequired =
     discountRules !== null &&
@@ -345,10 +349,14 @@ export function PlanItemForm({
               <>
                 <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>
                 <span className="block">
-                  {copy.priceBelowCatalogDetail(
-                    sedeMoney(addEffective.priceReduction, plan.currency, fmt),
-                    sedeMoney(addCatalogPrice, plan.currency, fmt),
-                  )}
+                  {catalogInOtherCurrency
+                    ? copy.priceBelowCatalogOtherCurrency(
+                        formatListPrice(addCatalogPrice, catalogCurrency, sedeListPriceFormat(fmt)),
+                      )
+                    : copy.priceBelowCatalogDetail(
+                        sedeMoney(addEffective.priceReduction, plan.currency, fmt),
+                        sedeMoney(addCatalogPrice, plan.currency, fmt),
+                      )}
                 </span>
               </>
             ) : null}
