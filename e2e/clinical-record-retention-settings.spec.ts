@@ -1,9 +1,11 @@
 import { test, expect, type Locator, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { axeInBothThemes } from './support/axe';
 import { expectDialogInsideViewport, expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { shot } from './support/qa-shot';
 import { expectTouchTarget } from './support/touch-targets';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -88,8 +90,8 @@ async function patientRetention(page: Page) {
   };
 }
 
-async function openSettings(page: Page): Promise<Locator> {
-  await page.goto(`${origin}/settings/historia-clinica`);
+async function openSettings(page: Page, at = origin): Promise<Locator> {
+  await page.goto(`${at}/settings/historia-clinica`);
   await expect(page.getByRole('heading', { level: 1, name: 'Historia clínica' })).toBeVisible({
     timeout: 15_000,
   });
@@ -282,3 +284,129 @@ test('390 px: el diálogo cabe en sus dos pasos, sin scroll lateral y con objeti
   await expect(reduceDialog).toBeHidden({ timeout: 10_000 });
   await expect(page.getByTestId('retention-years')).toHaveText(`${base} años`);
 });
+
+/**
+ * QA visual (spec §11): las capturas `${name}-${ancho}-${claro|oscuro}.png` en
+ * `E2E_QA_DIR` (sin la variable, `shot` no captura y el test solo recorre el
+ * flujo). Una clínica nueva por ancho, para no depender del estado de los
+ * tests anteriores.
+ */
+for (const width of [1440, 390]) {
+  test(`capturas del plazo de conservación a ${width} px`, async ({ page, request }) => {
+    test.setTimeout(180_000);
+    const tag = `${suffix}${width}`;
+    const sub = `conserva-${width}-${suffix}`.slice(0, 40);
+    const o = tenantOrigin(sub);
+    const qaAdmin = { fullName: 'Ana Titular', email: `ana.qa.${tag}@example.com` };
+    const qaReception = { fullName: 'Rita Recepción', email: `rita.qa.${tag}@example.com` };
+    const qaSession = await registerClinicViaApi(request, {
+      subdomain: sub,
+      clinicName: `Clínica Conserva ${tag}`,
+      fullName: qaAdmin.fullName,
+      email: qaAdmin.email,
+      password,
+    });
+    await addStaffViaApi(request, qaSession, { ...qaReception, role: 'RECEPTION', password });
+    const { id } = await apiPost<{ id: string }>(request, qaSession, '/patients', {
+      firstName: 'Rosa',
+      lastName: `Conserva${tag.slice(0, 6)}`,
+      docType: 'NATIONAL_ID',
+      docNumber: `QA${tag}`.slice(0, 20),
+      sex: 'F',
+    });
+    await apiPost(request, qaSession, `/patients/${id}/clinical-entries`, { notes: 'Control semestral' });
+    const settingsRes = await request.get(`${API_URL}/patients/retention/settings`, { headers: qaSession.headers });
+    const { effectiveYears: from } = (await settingsRes.json()) as { effectiveYears: number };
+    const to = from + 5;
+
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await loginAs(page, o, qaAdmin.email, password);
+
+    // 1. Ajustes, con el plazo por defecto.
+    await openSettings(page, o);
+    await shot(page, 'ajustes', width);
+
+    // 2. El diálogo al subir.
+    let dialog = await openDialogWith(page, to);
+    await shot(page, 'subir-20', width);
+
+    // 4. El 400 de la API (el cliente deja pasar el número; se cambia en vuelo
+    // por uno fuera de rango para ver el mensaje real de la API).
+    await page.route('**/patients/retention/settings', async (route) => {
+      if (route.request().method() !== 'PUT') return route.continue();
+      return route.continue({ postData: JSON.stringify({ clinicalRecordRetentionYears: 999 }) });
+    });
+    await dialog.getByRole('button', { name: `Subir a ${to} años` }).click();
+    await expect(dialog.getByRole('alert')).toBeVisible({ timeout: 10_000 });
+    await shot(page, 'error-400', width);
+    await page.unroute('**/patients/retention/settings');
+    await raiseTo(page, dialog, to);
+
+    // 5. La ficha con el plazo subido.
+    const retentionRegion = retention(page);
+    await page.goto(`${o}/patients/${id}`);
+    await expect(retentionRegion).toContainText(`Se conserva ${to} años desde la última atención`, {
+      timeout: 15_000,
+    });
+    await retentionRegion.scrollIntoViewIfNeeded();
+    await shot(page, 'ficha-20', width);
+
+    // 7. El modal «Retención extendida» y, guardado, la ficha con el plazo doble.
+    await page.getByRole('button', { name: 'Más acciones' }).click();
+    await page.getByRole('menuitem', { name: 'Cambiar retención' }).click();
+    const extended = page.getByRole('dialog');
+    await extended.getByLabel('Plazo').selectOption('DOUBLE');
+    await extended.getByLabel('Motivo').fill('Paciente con tratamiento en curso');
+    await shot(page, 'modal-retencion', width);
+    await extended.getByRole('button', { name: 'Guardar retención' }).click();
+    await expect(extended).toBeHidden({ timeout: 10_000 });
+    await expect(retentionRegion).toContainText(`${2 * to} años`);
+    await retentionRegion.scrollIntoViewIfNeeded();
+    await shot(page, 'ficha-doble-40', width);
+
+    // Vuelve al plazo simple para que lo que sigue sea el plazo de la clínica.
+    await page.getByRole('button', { name: 'Más acciones' }).click();
+    await page.getByRole('menuitem', { name: 'Cambiar retención' }).click();
+    await extended.getByLabel('Plazo').selectOption('NONE');
+    await extended.getByLabel('Motivo').fill('Fin del tratamiento en curso');
+    await extended.getByRole('button', { name: 'Guardar retención' }).click();
+    await expect(extended).toBeHidden({ timeout: 10_000 });
+
+    // 3. El paso de confirmación al bajar.
+    await openSettings(page, o);
+    dialog = await openDialogWith(page, from);
+    await askToReduce(dialog, from, to);
+    await shot(page, 'confirmar-reduccion', width);
+    await dialog.getByRole('button', { name: 'Reducir el plazo' }).click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+
+    // 6. «Por el plazo anterior»: la historia tenía una fecha mayor al reducir
+    // (fuera de la ventana de 24 h, que no se puede esperar en un e2e: el suelo
+    // se deja por SQL, como lo escribiría el cambio de plazo).
+    if (!process.env.E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+    execFileSync('psql', [process.env.E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `id=${id}`], {
+      input: `UPDATE patients SET retention_floor_until = (current_date + interval '${to + 1} years')::date WHERE id = :'id'::uuid;`,
+    });
+    await page.goto(`${o}/patients/${id}`);
+    await expect(retentionRegion).toContainText('por el plazo anterior de la clínica', { timeout: 15_000 });
+    await retentionRegion.scrollIntoViewIfNeeded();
+    await shot(page, 'ficha-plazo-anterior', width);
+
+    // 8. La fila de auditoría.
+    await page.goto(`${o}/settings/auditoria`);
+    // A 390 px la lista no es una tabla: se busca el texto de la fila.
+    const auditRow = page.getByText(auditChange(to, from)).first();
+    await expect(auditRow).toBeVisible({ timeout: 15_000 });
+    await auditRow.scrollIntoViewIfNeeded();
+    await shot(page, 'auditoria', width);
+
+    // 9. El estado bloqueado, con Recepción.
+    await page.context().clearCookies();
+    await loginAs(page, o, qaReception.email, password);
+    await page.goto(`${o}/settings/historia-clinica`);
+    await expect(page.getByText('Solo administración cambia el plazo de conservación.')).toBeVisible({
+      timeout: 15_000,
+    });
+    await shot(page, 'bloqueado', width);
+  });
+}
