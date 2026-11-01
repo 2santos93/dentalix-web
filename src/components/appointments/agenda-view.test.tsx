@@ -462,6 +462,79 @@ describe('AgendaView', () => {
     expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
   });
 
+  describe('urgencia en sobrecupo (DX-509)', () => {
+    async function openList(user: ReturnType<typeof userEvent.setup>) {
+      await renderAgenda(<AgendaView token="tok" />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      return screen.findByRole('table', { name: /agenda del día/i });
+    }
+
+    it('el distintivo «Sobrecupo» sale solo mientras lo es (no en una normal ni en una cancelada)', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([
+        appointment({ id: 'urg', patientFirstName: 'Úrsula', patientLastName: 'Pérez', overbooked: true, status: 'ARRIVED' }),
+        appointment({
+          id: 'normal',
+          patientFirstName: 'Berta',
+          patientLastName: 'Gil',
+          start: '2026-03-10T10:00:00.000Z',
+          end: '2026-03-10T10:30:00.000Z',
+          overbooked: false,
+        }),
+        appointment({
+          id: 'cancelada',
+          patientFirstName: 'Carla',
+          patientLastName: 'Ruiz',
+          start: '2026-03-10T11:00:00.000Z',
+          end: '2026-03-10T11:30:00.000Z',
+          overbooked: true,
+          status: 'CANCELLED',
+        }),
+      ]);
+      const user = userEvent.setup();
+      const table = await openList(user);
+      const rows = within(table).getAllByRole('row').slice(1);
+      const chipIn = (name: RegExp) =>
+        within(rows.find((r) => name.test(r.textContent ?? ''))!).queryByTestId('overbooked-chip');
+      expect(chipIn(/Úrsula/)).toHaveTextContent('Sobrecupo');
+      expect(chipIn(/Berta/)).toBeNull();
+      expect(chipIn(/Carla/)).toBeNull();
+    });
+
+    it('reactivar con su hora ocupada: pregunta y «Mantener en sobrecupo» reenvía con keepOverbooked', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      const cancelled = appointment({ id: 'urg', overbooked: true, status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
+      mockedListAppointments.mockResolvedValue([cancelled]);
+      mockedUpdateAppointment
+        .mockRejectedValueOnce(
+          new ApiError(
+            409,
+            'Esta urgencia se atendió en sobrecupo y su hora ya la ocupa otra cita del profesional. Muévela a otra hora o mantenla como sobrecupo.',
+            { code: 'OVERBOOK_SLOT_TAKEN' },
+          ),
+        )
+        .mockResolvedValueOnce({ ...cancelled, status: 'SCHEDULED' });
+      const user = userEvent.setup();
+      const table = await openList(user);
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
+
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      expect(dialog).toHaveTextContent('mantenla como sobrecupo');
+      expect(mockedUpdateAppointment).toHaveBeenCalledTimes(1);
+      await user.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
+      await waitFor(() =>
+        expect(mockedUpdateAppointment).toHaveBeenLastCalledWith('tok', 'urg', {
+          status: 'SCHEDULED',
+          keepOverbooked: true,
+        }),
+      );
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Su hora ya está ocupada' })).not.toBeInTheDocument(),
+      );
+    });
+  });
+
   it('keeps the row\'s status select disabled until the in-place refresh actually resolves, not just until the PATCH settles (review fix)', async () => {
     mockedListStaff.mockResolvedValue(staff);
 

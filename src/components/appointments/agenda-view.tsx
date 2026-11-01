@@ -95,7 +95,9 @@ import {
 import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair, FileDown, Siren } from 'lucide-react';
 import { ContingencyAgendaDialog, contingencyCopy } from '@/components/appointments/contingency-agenda-dialog';
 import { WalkInDialog, walkInCopy } from '@/components/appointments/walk-in-dialog';
-import { canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
+import { OVERBOOK_SLOT_TAKEN, canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
+import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
+import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import { canDownloadContingencyAgenda } from '@/lib/appointments/contingency-agenda-api';
 import { InClinicPanel, inClinicCopy } from '@/components/appointments/in-clinic-panel';
 import { focusLocationSwitcher } from '@/components/locations/location-switcher';
@@ -126,6 +128,7 @@ import { FieldError } from '@/components/errors/field-error';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
+import { ApiError } from '@/lib/api/api-error';
 import {
   Sheet,
   SheetContent,
@@ -184,6 +187,8 @@ const copy = {
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericRefreshError: 'No pudimos actualizar la agenda.',
   genericStatusChangeError: 'No pudimos cambiar el estado de la cita.',
+  /** DX-509: reactivada a sabiendas en sobrecupo. */
+  reactivatedOverbooked: 'Cita reactivada. Sigue en sobrecupo.',
   /** Selected-day appointment count, shown above the day panel in the month view. */
   dayCount: (n: number) => (n === 0 ? 'Sin citas' : n === 1 ? '1 cita' : `${n} citas`),
   noProviders: 'No hay profesionales activos en esta clínica.',
@@ -836,6 +841,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
 
   // DX-200: un paso del flujo (desde la tarjeta, el detalle o el panel)
   // refresca la agenda y el panel; por la ref, con los filtros vigentes.
+  // DX-509: «Mantener en sobrecupo» al reactivar (el de «Deshacer llegada»
+  // lo lleva el runner del flujo).
+  const [keepOverbooked, setKeepOverbooked] = useState<KeepOverbookedPrompt | null>(null);
   const flow = usePatientFlow(token, () => {
     setInClinicReloadKey((k) => k + 1);
     void refreshAppointmentsInPlaceRef.current();
@@ -1048,6 +1056,19 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       await updateAppointment(token, id, { status });
       await afterStatusChange();
     } catch (err) {
+      // DX-509: reactivar una urgencia en sobrecupo cuya hora ya ocupa otra
+      // cita: la decisión de mantenerla en sobrecupo es explícita.
+      if (err instanceof ApiError && err.code === OVERBOOK_SLOT_TAKEN) {
+        setKeepOverbooked({
+          message: apiErrorMessage(err, copy.genericStatusChangeError),
+          confirm: async () => {
+            await updateAppointment(token, id, { status, keepOverbooked: true });
+            toast.success(copy.reactivatedOverbooked);
+            await afterStatusChange();
+          },
+        });
+        return;
+      }
       notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
         onRetry: () => handleStatusChange(id, status),
       });
@@ -1697,6 +1718,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 <AppointmentMedicalAlerts flags={liveDetailAppointment.medicalAlerts} />
                 {/* DX-279: inasistencias y cancelaciones tardías del paciente (12 meses). */}
                 <AttendanceBadge counts={liveDetailAppointment.attendance} className="self-start" />
+                {/* DX-509: la urgencia sigue sin ocupar la hora del profesional. */}
+                <OverbookedChip
+                  overbooked={liveDetailAppointment.overbooked}
+                  status={liveDetailAppointment.status}
+                  className="self-start"
+                />
                 {liveDetailAppointment.status === 'CANCELLED' &&
                 cancellationSummary(liveDetailAppointment) ? (
                   <p className="text-sm text-muted" data-testid="cancellation-summary">
@@ -1963,6 +1990,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           defaultLocationId={activeLocationId}
         />
       ) : null}
+
+      {flow.overbookDialog}
+      <KeepOverbookedDialog prompt={keepOverbooked} onClose={() => setKeepOverbooked(null)} />
 
       {showWalkIn ? (
         <WalkInDialog

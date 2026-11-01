@@ -40,6 +40,7 @@ import {
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
 import { freeGaps } from '@/lib/appointments/opening-candidates';
 import { WANTS_EARLIER_LABEL, WantsEarlierChip } from '@/components/appointments/wants-earlier-chip';
+import { OVERBOOKED_LABEL, OverbookedChip, showsOverbooked } from '@/components/appointments/overbooked-chip';
 import {
   STATUS_LABELS,
   patientLabel,
@@ -652,6 +653,7 @@ export function DayColumns({
                             coverageChipText(a.coverage),
                             medicalAlertSummary(a.medicalAlerts),
                             wantsEarlier ? WANTS_EARLIER_LABEL : null,
+                            showsOverbooked(a) ? OVERBOOKED_LABEL : null,
                           ]
                             .filter(Boolean)
                             .join(' · ')}
@@ -668,6 +670,8 @@ export function DayColumns({
                               seguir viéndose en las citas de 30 min. */}
                           <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
                             <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>
+                            {/* DX-509: solo mientras es sobrecupo. */}
+                            <OverbookedChip overbooked={a.overbooked} status={a.status} className="min-w-0 py-0" />
                             <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
                             <CoverageMarker coverage={a.coverage} />
                           </span>

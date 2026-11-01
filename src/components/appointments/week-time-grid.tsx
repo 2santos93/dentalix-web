@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import { OVERBOOKED_LABEL, OverbookedChip, showsOverbooked } from '@/components/appointments/overbooked-chip';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import {
   ROW_HEIGHT_PX,
@@ -237,7 +238,7 @@ export function WeekTimeGrid({
                     type="button"
                     data-testid="week-grid-appointment"
                     data-id={a.id}
-                    aria-label={[range, patient, STATUS_LABELS[a.status], a.appointmentType?.name, overdueChipText(a.balance), coverageChipText(a.coverage), confirmationIndicator(a) ? CONFIRMATION_INDICATOR_LABELS[confirmationIndicator(a)!] : null].filter(Boolean).join(' · ')}
+                    aria-label={[range, patient, STATUS_LABELS[a.status], a.appointmentType?.name, overdueChipText(a.balance), coverageChipText(a.coverage), confirmationIndicator(a) ? CONFIRMATION_INDICATOR_LABELS[confirmationIndicator(a)!] : null, showsOverbooked(a) ? OVERBOOKED_LABEL : null].filter(Boolean).join(' · ')}
                     onClick={() => onSelectAppointment(a)}
                     className={`h-full w-full overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${hasMedicalAlert ? 'pr-6' : ''} ${STATUS_BADGE_CLASSES[a.status]}`}
                   >
@@ -254,6 +255,8 @@ export function WeekTimeGrid({
                     <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
                     {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
                     <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />
+                    {/* DX-509: solo mientras es sobrecupo. */}
+                    <OverbookedChip overbooked={a.overbooked} status={a.status} className="mt-0.5 px-1 py-0" />
                   </button>
                   {hasMedicalAlert ? (
                     <MedicalAlertIndicator

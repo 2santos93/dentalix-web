@@ -13,6 +13,7 @@ import { useSessionLocations } from '@/lib/locations/session-locations';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import {
+  IDEMPOTENCY_KEY_REUSED,
   NO_RESERVED_SLOT,
   OVERBOOK_REASON_MAX,
   PATIENT_DUPLICATE,
@@ -196,6 +197,15 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
   // Tras validar con errores: llevar el foco al primero cuando ya se pintó.
   const focusFirstError = useRef(false);
   const [submitting, setSubmitting] = useState(false);
+  // DX-510: una Idempotency-Key por intento (lo que dura el modal abierto):
+  // un doble clic, Enter repetido o «Reintentar» tras un corte de red
+  // devuelven la misma cita, nunca un segundo paciente ni una segunda cita.
+  // Un 409 (sin hueco reservado, documento repetido) no registra nada, así
+  // que seguir con la misma clave tras corregir es correcto.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  // El botón se deshabilita al pintar `submitting`; esto corta el segundo
+  // envío que llega antes (doble Enter en el mismo tick).
+  const inFlight = useRef(false);
   // DX-327: el nombre local de cada tipo de documento de la clínica.
   const docTypeNames = useDocumentTypeNames(token);
 
@@ -300,6 +310,7 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
 
   /** Valida y envía lo que hay en el formulario (también desde «Reintentar»). */
   async function submit() {
+    if (inFlight.current) return;
     const errors = validate();
     setFieldErrors(errors);
     setError(null);
@@ -326,9 +337,10 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
             },
           }),
     };
+    inFlight.current = true;
     setSubmitting(true);
     try {
-      const result = await createWalkIn(token, input, effectiveLocationId);
+      const result = await createWalkIn(token, input, effectiveLocationId, idempotencyKey);
       notifyInClinicChanged();
       onCreated?.(result);
       onOpenChange(false);
@@ -342,11 +354,20 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
           message: apiErrorMessage(err, walkInCopy.duplicateTitle),
           patient: err.existingPatient,
         });
+      } else if (err instanceof ApiError && err.code === IDEMPOTENCY_KEY_REUSED) {
+        // Esta clave ya registró la urgencia con otros datos (p. ej. la
+        // respuesta se perdió y luego se cambió el formulario): se dice, el
+        // panel «En clínica» se refresca para verla y un envío deliberado
+        // después ya es otro intento.
+        setError(apiErrorMessage(err, walkInCopy.error));
+        setIdempotencyKey(crypto.randomUUID());
+        notifyInClinicChanged();
       } else {
         setError(apiErrorMessage(err, walkInCopy.error));
         setRetryable(err instanceof NetworkError || (err instanceof ApiError && err.status >= 500));
       }
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   }

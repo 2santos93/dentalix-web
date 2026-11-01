@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError, NetworkError } from '@/lib/api/api-error';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
@@ -47,6 +47,7 @@ const STAFF: StaffMember[] = [
 ];
 
 const RESULT = { id: 'a1', patientFirstName: 'Lucía', patientLastName: 'Sin Cita' } as WalkInResult;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function renderDialog(locationId: string | null = 'loc-centro', defaultProviderId: string | null = null) {
   const onOpenChange = jest.fn();
@@ -100,6 +101,7 @@ describe('WalkInDialog (DX-470)', () => {
         newPatient: { firstName: 'Lucía', lastName: 'Sin Cita', phone: '+58 412 555 0101' },
       },
       'loc-centro',
+      expect.stringMatching(UUID),
     );
     expect(notifyInClinicChanged).toHaveBeenCalled();
     expect(onCreated).toHaveBeenCalledWith(RESULT);
@@ -130,7 +132,12 @@ describe('WalkInDialog (DX-470)', () => {
     await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
     await user.click(screen.getByRole('button', { name: copy.submit }));
     await waitFor(() =>
-      expect(createMock).toHaveBeenCalledWith('T', { providerId: 'dent-1', triageFlags: [], patientId: 'p-1' }, 'loc-centro'),
+      expect(createMock).toHaveBeenCalledWith(
+        'T',
+        { providerId: 'dent-1', triageFlags: [], patientId: 'p-1' },
+        'loc-centro',
+        expect.stringMatching(UUID),
+      ),
     );
   });
 
@@ -160,6 +167,8 @@ describe('WalkInDialog (DX-470)', () => {
     await user.click(screen.getByRole('button', { name: copy.submitOverbook }));
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
     expect(createMock.mock.calls[1][1]).toMatchObject({ overbookReason: 'Dolor agudo, no puede esperar' });
+    // DX-510: el 409 no registró nada; el reintento es el mismo intento.
+    expect(createMock.mock.calls[1][3]).toBe(createMock.mock.calls[0][3]);
   });
 
   it('documento repetido: ofrece usar el paciente que ya existe', async () => {
@@ -523,5 +532,70 @@ describe('WalkInDialog (DX-470)', () => {
     staffMock.mockReturnValue(new Promise(() => {}));
     renderDialog();
     expect(screen.getByRole('option', { name: copy.providersLoading })).toBeInTheDocument();
+  });
+
+  describe('Idempotency-Key (DX-510)', () => {
+    async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+      await fillNewPatient(user);
+      await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+      await user.click(screen.getByRole('button', { name: copy.submit }));
+    }
+
+    it('mientras se envía, el botón queda deshabilitado y un doble clic no manda un segundo POST', async () => {
+      const user = userEvent.setup();
+      let resolve: (r: WalkInResult) => void = () => undefined;
+      createMock.mockReturnValueOnce(new Promise<WalkInResult>((r) => (resolve = r)));
+      const { onOpenChange } = renderDialog();
+      await fillNewPatient(user);
+      await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+      const submit = screen.getByRole('button', { name: copy.submit });
+      await user.dblClick(submit);
+      await waitFor(() => expect(submit).toBeDisabled());
+      expect(submit).toHaveAttribute('aria-busy', 'true');
+      // Enter en el formulario mientras tanto: tampoco.
+      await user.type(screen.getByLabelText(copy.firstName), '{Enter}');
+      expect(createMock).toHaveBeenCalledTimes(1);
+      expect(createMock.mock.calls[0][3]).toMatch(UUID);
+
+      resolve(RESULT);
+      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+      expect(createMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('misma clave ya usada con otros datos (422): lo dice, refresca «En clínica» y el siguiente envío es otro intento', async () => {
+      const user = userEvent.setup();
+      createMock
+        .mockRejectedValueOnce(
+          new ApiError(
+            422,
+            'Esta atención sin cita ya se registró con otros datos. Revisa «En clínica» antes de volver a intentarlo.',
+            { code: 'IDEMPOTENCY_KEY_REUSED' },
+          ),
+        )
+        .mockResolvedValueOnce(RESULT);
+      renderDialog();
+      await fillAndSubmit(user);
+      expect(await screen.findByText(/ya se registró con otros datos/)).toBeInTheDocument();
+      expect(notifyInClinicChanged).toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: copy.retry })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: copy.submit }));
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
+      expect(createMock.mock.calls[1][3]).toMatch(UUID);
+      expect(createMock.mock.calls[1][3]).not.toBe(createMock.mock.calls[0][3]);
+    });
+
+    it('cada apertura del modal es un intento con su propia clave', async () => {
+      const user = userEvent.setup();
+      createMock.mockResolvedValue(RESULT);
+      const first = renderDialog();
+      await fillAndSubmit(user);
+      await waitFor(() => expect(first.onOpenChange).toHaveBeenCalledWith(false));
+      cleanup();
+      renderDialog();
+      await fillAndSubmit(user);
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
+      expect(createMock.mock.calls[1][3]).not.toBe(createMock.mock.calls[0][3]);
+    });
   });
 });

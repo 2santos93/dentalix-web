@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Armchair, CircleCheck, DoorOpen, Undo2, Wallet } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -22,6 +22,9 @@ import {
   type PlanItemReservedElsewhere,
 } from '@/lib/appointments/plan-item-reservations';
 import { notifyError } from '@/components/errors/notify';
+import { ApiError } from '@/lib/api/api-error';
+import { OVERBOOK_SLOT_TAKEN } from '@/lib/appointments/walk-in';
+import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -33,6 +36,8 @@ export const patientFlowCopy = {
     CHECKOUT: (name: string) => `Cita de ${name} completada.`,
     UNDO_ARRIVAL: (name: string) => `Se deshizo la llegada de ${name}.`,
   } satisfies Record<FlowAction, (name: string) => string>,
+  /** DX-509: deshecha la llegada de una urgencia que sigue en sobrecupo. */
+  undoneOverbooked: (name: string) => `Se deshizo la llegada de ${name}. Sigue en sobrecupo.`,
   error: 'No pudimos cambiar el estado de la cita.',
   actionsFor: (name: string) => `Estado de ${name} en la clínica`,
 };
@@ -57,6 +62,11 @@ export interface PatientFlowRunner {
    * reservaba otra. false si la API lo rechazó (ya avisado con Reintentar).
    */
   claim?: (appointmentId: string, item: PlanItemReservedElsewhere) => Promise<boolean>;
+  /**
+   * DX-509: el diálogo «Mantener en sobrecupo» de «Deshacer llegada». Quien
+   * usa el runner lo pinta una vez (cerrado no pinta nada).
+   */
+  overbookDialog?: ReactNode;
 }
 
 /** Id del toast «reservado en otra cita» de un tratamiento de la cita. */
@@ -117,6 +127,7 @@ export function claimKey(appointmentId: string, planItemId: string): string {
 export function usePatientFlow(token: string, onChanged: () => void): PatientFlowRunner {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [claimingKey, setClaimingKey] = useState<string | null>(null);
+  const [overbookPrompt, setOverbookPrompt] = useState<KeepOverbookedPrompt | null>(null);
 
   async function claim(appointmentId: string, item: PlanItemReservedElsewhere) {
     setClaimingKey(claimKey(appointmentId, item.planItemId));
@@ -202,6 +213,20 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       }
       return true;
     } catch (err) {
+      // DX-509: la urgencia es un sobrecupo y su hora ya la ocupa otra cita:
+      // deshacer la llegada exige decidir si sigue en sobrecupo.
+      if (action === 'UNDO_ARRIVAL' && err instanceof ApiError && err.code === OVERBOOK_SLOT_TAKEN) {
+        setOverbookPrompt({
+          message: apiErrorMessage(err, patientFlowCopy.error),
+          confirm: async () => {
+            await undoArrival(token, appointmentId, { keepOverbooked: true });
+            toast.success(patientFlowCopy.undoneOverbooked(patientName));
+            onChanged();
+            notifyInClinicChanged();
+          },
+        });
+        return false;
+      }
       // El reintento cierra sobre la propia operación (cita y paso): no hay
       // estado ambiente que pueda quedar viejo.
       notifyError(apiErrorMessage(err, patientFlowCopy.error), {
@@ -215,7 +240,13 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     }
   }
 
-  return { pendingId, run, claimingKey, claim };
+  return {
+    pendingId,
+    run,
+    claimingKey,
+    claim,
+    overbookDialog: <KeepOverbookedDialog prompt={overbookPrompt} onClose={() => setOverbookPrompt(null)} />,
+  };
 }
 
 interface PatientFlowActionsProps {
