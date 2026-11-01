@@ -38,13 +38,13 @@ function patient(overrides: Partial<Patient> = {}): Patient {
 }
 
 /**
- * Simula un runtime al oeste de UTC (Bogotá, UTC-5) sin depender de `TZ`:
+ * Simula un runtime al oeste de UTC (UTC-5) sin depender de `TZ`:
  * jest.config.ts fija `process.env.TZ = 'UTC'` en el proceso padre, y V8 ya
  * cachea la zona horaria local al arrancar — cambiar `process.env.TZ` desde
  * un test no tiene ningún efecto sobre `Date`. En cambio los getters
  * *locales* (`getFullYear`/`getMonth`/`getDate`) sí se pueden interceptar en
  * `Date.prototype`, así que se reimplementan como si la zona local fuera
- * Bogotá — igual que el runtime real haría.
+ * UTC-5 — igual que el runtime real haría.
  */
 function mockLocalTimezoneAsBogota() {
   const OFFSET_MS = 5 * 60 * 60 * 1000; // UTC-5
@@ -117,7 +117,7 @@ describe('PatientDataPanel', () => {
 
   it('no resta un día a la edad justo antes del cumpleaños, al oeste de UTC', () => {
     mockLocalTimezoneAsBogota();
-    // "Hoy" en Bogotá es 31 de julio (un día antes del cumpleaños); nacido el
+    // "Hoy" en la sede es 31 de julio (un día antes del cumpleaños); nacido el
     // 1 de agosto de 2000 todavía no cumple años, la edad correcta es 25. La
     // implementación anterior leía `birthDate` con getters locales y perdía
     // el desfase de un día, dando 26.

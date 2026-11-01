@@ -269,7 +269,7 @@ describe('ProductionByProcedureView (DX-423)', () => {
       items: [
         {
           id: 'i2',
-          // 03:00 UTC del 01/10: en Bogotá aún es el 30/09; en Tokio, el 01/10.
+          // 03:00 UTC del 01/10: en la sede aún es el 30/09; en Tokio, el 01/10.
           completedAt: '2026-10-01T03:00:00.000Z',
           patientId: null,
           patientName: null,

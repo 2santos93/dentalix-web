@@ -88,7 +88,7 @@ jest.mock('../../lib/payments/payments-api', () => ({
   voidPayment: jest.fn(),
 }));
 // DX-051: la imputación de un abono (modal «Imputar abono», solo ADMIN).
-// Una sede en Bogotá (fixture explícito): la fecha por defecto del abono es su «hoy».
+// Una sede en la sede (fixture explícito): la fecha por defecto del abono es su «hoy».
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
   listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
@@ -999,7 +999,7 @@ describe('TreatmentPlansTab', () => {
       expect(await screen.findByText('A pagar')).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
 
-      // La sede del fixture está en Bogotá: el día es el 15, aunque en UTC ya
+      // La sede del fixture está en la sede: el día es el 15, aunque en UTC ya
       // sea el 16.
       expect(paymentDateValue()).toBe('2026-10-15');
     } finally {
