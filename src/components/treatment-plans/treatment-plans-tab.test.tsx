@@ -497,7 +497,7 @@ describe('TreatmentPlansTab', () => {
         { price: 99, discount: 7 },
       ],
       total: 18912,
-      shown: /^18\.912\sJPY$|^JPY\s18\.912$|^¥\s?18\.912$|^18\.912\s¥$/,
+      shown: /^18\.912\sJPY$|^JPY\s18\.912$/,
     },
     {
       currency: 'EUR',
@@ -507,7 +507,7 @@ describe('TreatmentPlansTab', () => {
         { price: 80.01, discount: 6 },
       ],
       total: 189.12,
-      shown: /^189,12\s€$/,
+      shown: /^189,12\sEUR$/,
     },
   ])('$currency: el total es la suma de las líneas y lleva los decimales de la moneda', async ({ currency, lines, total, shown }) => {
     const items = lines.map((line, i) => ({ ...item2, id: `item-${i}`, toothNumber: String(11 + i), ...line }));
