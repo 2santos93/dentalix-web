@@ -2,9 +2,9 @@ import { isValidRange, presetRange } from './cash-period';
 
 // DX-097: los atajos salen del día civil de la SEDE (su zona IANA), no del
 // reloj del navegador. La suite corre con TZ=UTC: si se leyera la fecha local,
-// los casos de Bogotá de noche saldrían un día después.
+// los casos de la sede de noche saldrían un día después.
 const BOGOTA = 'America/Bogota';
-// Jueves 15/10/2026 a las 22:30 en Bogotá = viernes 16 a las 03:30 UTC.
+// Jueves 15/10/2026 a las 22:30 en la sede = viernes 16 a las 03:30 UTC.
 const bogotaThu2230 = new Date('2026-10-16T03:30:00.000Z');
 
 describe('presetRange (en la zona de la sede)', () => {
@@ -25,7 +25,7 @@ describe('presetRange (en la zona de la sede)', () => {
   });
 
   it('esta semana un domingo: la semana que termina ese día, no la siguiente', () => {
-    // Domingo 18/10 a las 21:00 en Bogotá = lunes 19 02:00 UTC.
+    // Domingo 18/10 a las 21:00 en la sede = lunes 19 02:00 UTC.
     expect(presetRange('week', BOGOTA, new Date('2026-10-19T02:00:00.000Z'))).toEqual({
       from: '2026-10-12',
       to: '2026-10-18',
@@ -40,7 +40,7 @@ describe('presetRange (en la zona de la sede)', () => {
   });
 
   it('este mes: el de la sede, del 1 al último día (bisiestos incluidos)', () => {
-    // 31/10 a las 22:00 en Bogotá = 01/11 03:00 UTC: sigue siendo octubre.
+    // 31/10 a las 22:00 en la sede = 01/11 03:00 UTC: sigue siendo octubre.
     expect(presetRange('month', BOGOTA, new Date('2026-11-01T03:00:00.000Z'))).toEqual({
       from: '2026-10-01',
       to: '2026-10-31',
@@ -52,7 +52,7 @@ describe('presetRange (en la zona de la sede)', () => {
   });
 
   it('presetRange throws on an invalid zone', () => {
-    // Sin zona válida no hay «hoy»: nunca se cuenta en Bogotá ni en la del navegador.
+    // Sin zona válida no hay «hoy»: nunca se cuenta en la sede ni en la del navegador.
     expect(() => presetRange('today', 'Mars/Olympus', bogotaThu2230)).toThrow(RangeError);
     expect(() => presetRange('month', '', bogotaThu2230)).toThrow(RangeError);
   });

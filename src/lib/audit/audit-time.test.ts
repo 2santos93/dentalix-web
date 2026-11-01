@@ -30,7 +30,7 @@ const newYork = clinicLocation({
 const SEDES = [bogota, berlin, newYork];
 const NAMES = locationNameMap(SEDES);
 
-// El mismo instante en las tres: 22:30 en Bogotá, 05:30 en Berlín, 23:30 en Nueva York.
+// El mismo instante en las tres: 22:30 en la sede, 05:30 en Berlín, 23:30 en Nueva York.
 const AT = '2026-10-16T03:30:00.000Z';
 const event = (locationId: string | null, timeZone = 'America/Bogota') => ({
   occurredAt: AT,
@@ -95,7 +95,7 @@ describe('auditTime', () => {
       NAMES,
     );
     expect(row.reference).toEqual({ when: '01/12/2026 10:00 a. m.', offset: 'UTC−5' });
-    // Mismo desfase que Bogotá ese día: la hora no se repite.
+    // Mismo desfase que la sede ese día: la hora no se repite.
     expect(row.sede).toBeNull();
   });
 
