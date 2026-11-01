@@ -123,3 +123,17 @@ describe('SegmentedControl — activación manual con radio', () => {
     expect(onChange).toHaveBeenCalledWith('m');
   });
 });
+
+describe('SegmentedControl: objetivos táctiles (DX-485)', () => {
+  it.each(['md', 'sm'] as const)('%s: el carril no fija su alto y cada segmento mide 44 px en táctil', (size) => {
+    render(<SegmentedControl aria-label="Vista" value="mes" size={size} options={options} onValueChange={() => {}} />);
+    const group = screen.getByRole('radiogroup', { name: 'Vista' });
+    // Sin alto fijo: si los segmentos crecen (táctil, `touchTargets` de un
+    // modal) el carril crece con ellos y no los recorta con su overflow.
+    expect(group.className.split(/\s+/).filter((c) => /^(pointer-coarse:)?h-/.test(c))).toEqual([]);
+    expect(group).toHaveClass(size === 'sm' ? 'min-h-8' : 'min-h-10');
+    for (const segment of screen.getAllByRole('radio')) {
+      expect(segment).toHaveClass('pointer-coarse:min-h-11');
+    }
+  });
+});

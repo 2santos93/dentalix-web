@@ -474,7 +474,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
             onClick={() => range && void exportCsv(range.from, range.to, medium)}
             disabled={!range || customError !== null || forbidden}
             loading={exporting}
-            className="max-sm:h-11 max-sm:w-full sm:ml-auto"
+            className="max-sm:min-h-11 max-sm:w-full sm:ml-auto"
           >
             {copy.export}
           </Button>

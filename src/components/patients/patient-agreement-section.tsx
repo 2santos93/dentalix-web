@@ -183,7 +183,7 @@ export function PatientAgreementSection({
               clearNotice();
               setDialogOpen(true);
             }}
-            className="max-sm:h-11 max-sm:flex-1"
+            className="max-sm:min-h-11 max-sm:flex-1"
           >
             {copy.change}
           </Button>
@@ -197,7 +197,7 @@ export function PatientAgreementSection({
               setRemoveError(null);
               setRemoving(true);
             }}
-            className="max-sm:h-11 max-sm:flex-1"
+            className="max-sm:min-h-11 max-sm:flex-1"
           >
             {copy.remove}
           </Button>
