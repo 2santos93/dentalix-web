@@ -149,8 +149,11 @@ test('a 390 px cada deudor es una tarjeta que abre su estado de cuenta; Llamar y
   await menu.click();
   await expect(page.getByRole('menuitem', { name: 'Llamar al 0412 555 0199' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'WhatsApp' }).click();
-  const opened = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
-  expect(opened).toHaveLength(1);
+  // RowActions ejecuta la acción en diferido (`setTimeout`, al cerrarse el menú):
+  // se espera a que llegue la llamada en vez de leerla una sola vez.
+  const readOpened = () => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
+  await expect.poll(readOpened).toHaveLength(1);
+  const opened = await readOpened();
   expectSafeWhatsApp(opened[0]);
   await expectNoHorizontalScroll(page);
 });
