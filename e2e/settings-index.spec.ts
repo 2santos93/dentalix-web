@@ -214,7 +214,7 @@ test('ADMIN: el menú de cuenta cabe en 1366×768, 1440×900 y 390×844, tambié
   await page.getByRole('button', { name: 'Expandir menú' }).click();
 });
 
-test('ADMIN: Ajustes agrupa las 25 pantallas; de ahí a Horarios y Sedes y de vuelta con «← Ajustes»', async ({
+test('ADMIN: Ajustes agrupa las 26 pantallas; de ahí a Horarios y Sedes y de vuelta con «← Ajustes»', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
@@ -231,7 +231,7 @@ test('ADMIN: Ajustes agrupa las 25 pantallas; de ahí a Horarios y Sedes y de vu
     'Datos y seguridad',
     'Herramientas y registros',
   ]);
-  await expect(main.getByRole('listitem').getByRole('link')).toHaveCount(25);
+  await expect(main.getByRole('listitem').getByRole('link')).toHaveCount(26);
 
   await main.getByRole('list', { name: 'Agenda' }).getByRole('link', { name: 'Horarios' }).click();
   await expect(page).toHaveURL(`${origin}/settings/horarios`);
@@ -254,7 +254,7 @@ test('ADMIN a 390 px: filas del índice y «← Ajustes» de 44 px, sin scroll h
   await signIn(page, admin.email);
   await openSettings(page, admin.fullName);
   const links = page.getByRole('main').getByRole('listitem').getByRole('link');
-  await expect(links).toHaveCount(25, { timeout: 15_000 });
+  await expect(links).toHaveCount(26, { timeout: 15_000 });
   await expectTouchTargets(links, '/settings a 390');
   await expectNoHorizontalScroll(page);
 
@@ -340,7 +340,7 @@ test('axe: /settings y el menú abierto, a 390 y 1440 px, en claro y oscuro', as
       // Mismo documento: cambian la ventana y el esquema, sin recargar.
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${colorScheme}\\b`));
-      await expect(page.getByRole('main').getByRole('listitem').getByRole('link')).toHaveCount(25);
+      await expect(page.getByRole('main').getByRole('listitem').getByRole('link')).toHaveCount(26);
       expect.soft(await serious(`settings-${width}-${colorScheme}`), `/settings ${width} ${colorScheme}`).toEqual([]);
 
       await openAccountMenu(page, admin.fullName);
