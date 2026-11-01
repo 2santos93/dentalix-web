@@ -8,6 +8,8 @@ export type PasswordResetTokenStatus = components['schemas']['PasswordResetToken
 export const FORGOT_PASSWORD_PATH = '/olvide-contrasena';
 /** Aviso del login tras restablecer (`/login?restablecida=1`). */
 export const PASSWORD_RESET_DONE_PARAM = 'restablecida';
+/** DX-021: invitación aceptada con una cuenta que necesita segundo factor. */
+export const INVITATION_ACCEPTED_PARAM = 'invitacion-aceptada';
 
 /**
  * `POST /auth/forgot-password` (DX-010): la API responde SIEMPRE 202 con el

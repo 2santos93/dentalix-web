@@ -252,6 +252,11 @@ export function signatureRequestDetail(metadata: AuditMetadata): string | null {
 const STAFF_LOGIN_REASONS: Record<string, string> = {
   LOGIN_UNLOCKED: 'Desbloqueo del inicio de sesión',
   LOGIN_UNLOCK_REFUSED: 'Desbloqueo del inicio de sesión rechazado (sin cambios)',
+  // DX-021: inicio de sesión con segundo factor.
+  MFA_TOTP: 'Con código de la app',
+  MFA_RECOVERY_CODE: 'Con un código de recuperación',
+  MFA_ENROLLED: 'Activó la verificación en dos pasos al entrar',
+  INVALID_MFA_CODE: 'Código de verificación incorrecto',
 };
 
 /**
@@ -275,6 +280,11 @@ const STAFF_REASONS: Record<string, string> = {
   CLINIC_REGISTERED: 'Clínica registrada',
   OWN_NAME_CHANGED: 'Cambió su propio nombre',
   SESSIONS_REVOKED: 'Cambió su contraseña y cerró sus demás sesiones',
+  // DX-021: verificación en dos pasos de la cuenta propia.
+  MFA_ENROLLMENT_STARTED: 'Empezó a activar la verificación en dos pasos',
+  MFA_ENABLED: 'Activó la verificación en dos pasos y cerró sus demás sesiones',
+  MFA_DISABLED: 'Desactivó la verificación en dos pasos y cerró sus demás sesiones',
+  MFA_RECOVERY_CODES_REGENERATED: 'Generó códigos de recuperación nuevos',
   // PUT /staff/:userId/locations (anterior a DX-359): sin antes ni después.
   LOCATIONS_CHANGED: 'Sedes del miembro cambiadas',
 };
@@ -731,6 +741,12 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   const { from, to } = metadata.statusChange;
   if (metadata.reason === 'PRESCRIPTION_SETTINGS') return prescriptionSettingsDetail(from, to);
   if (metadata.reason === 'EXCHANGE_RATE_SOURCE') return exchangeRateSourceDetail(from, to);
+  // DX-021: solo el sentido del cambio.
+  if (metadata.reason === 'MFA_POLICY') {
+    return to === 'ADMIN_MFA_REQUIRED'
+      ? 'Verificación en dos pasos: obligatoria para administradores'
+      : 'Verificación en dos pasos: opcional para administradores';
+  }
   if (metadata.reason !== 'MAJORITY_AGE_SETTINGS') return null;
   const before = ageOf(from);
   const after = ageOf(to);

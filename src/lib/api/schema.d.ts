@@ -226,6 +226,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Completa el login con el código de la app o un código de recuperación
+         * @description Queda en la auditoría de la clínica: LOGIN (`MFA_TOTP` / `MFA_RECOVERY_CODE`) o LOGIN_FAILED (`INVALID_MFA_CODE`). Un código de la app vale una sola vez; uno de recuperación, también.
+         */
+        post: operations["LoginMfaController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Alta forzada: genera el secreto (pendiente) y el otpauth URI */
+        post: operations["LoginMfaController_startEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Alta forzada: confirma con un código, activa la verificación y abre la sesión
+         * @description Devuelve los 10 códigos de recuperación (una sola vez). Queda auditado (UPDATE STAFF_MEMBER `MFA_ENABLED` y LOGIN `MFA_ENROLLED`).
+         */
+        post: operations["LoginMfaController_confirmEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/security-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Política de seguridad de la clínica */
+        get: operations["SecurityPolicyController_get"];
+        /**
+         * Cambia la política de seguridad de la clínica (solo ADMIN)
+         * @description Para exigir el MFA a los ADMIN, quien lo cambia debe tener ya el suyo activo (409 si no). Queda en la auditoría con el antes y el después.
+         */
+        put: operations["SecurityPolicyController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff/invitations": {
         parameters: {
             query?: never;
@@ -371,6 +449,100 @@ export interface paths {
         put?: never;
         post: operations["MeController_uploadAvatar"];
         delete: operations["MeController_removeAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado de tu verificación en dos pasos */
+        get: operations["MyMfaController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inicia el alta: con tu contraseña, genera el secreto (pendiente) y el otpauth URI para el QR */
+        post: operations["MyMfaController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirma el alta con un código de la app: la activa, devuelve 10 códigos de recuperación y cierra tus demás sesiones
+         * @description Queda en la auditoría (UPDATE STAFF_MEMBER, `MFA_ENABLED`) sin secreto ni códigos.
+         */
+        post: operations["MyMfaController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desactiva la verificación: contraseña actual + código de la app (o de recuperación); cierra tus demás sesiones
+         * @description No se puede si es obligatoria para ti (cuenta de soporte o clínica que la exige a los ADMIN). Queda en la auditoría (`MFA_DISABLED`).
+         */
+        post: operations["MyMfaController_disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Genera 10 códigos de recuperación nuevos (los anteriores dejan de valer): contraseña + código
+         * @description Queda en la auditoría (`MFA_RECOVERY_CODES_REGENERATED`).
+         */
+        post: operations["MyMfaController_regenerate"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3037,7 +3209,7 @@ export interface paths {
         post?: never;
         /**
          * Anular un abono (con motivo; queda quién y cuándo)
-         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono). Si el abono contaba para un compromiso de pago cumplido del paciente en su moneda y ya no queda cubierto, el compromiso vuelve a OPEN (o BROKEN si su día ya pasó en la zona de su sede), en la misma transacción y auditado (DX-215).
+         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. Exige acceso a la sede persistida del abono, también sin cabecera o en vista consolidada. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono). Si el abono contaba para un compromiso de pago cumplido del paciente en su moneda y ya no queda cubierto, el compromiso vuelve a OPEN (o BROKEN si su día ya pasó en la zona de su sede), en la misma transacción y auditado (DX-215).
          */
         delete: operations["PaymentsController_remove"];
         options?: never;
@@ -6298,18 +6470,6 @@ export interface components {
             /** @description Subdominio de la clínica recién creada */
             subdomain: string;
         };
-        LoginDto: {
-            /** @example ana@clinica.com */
-            email: string;
-            password: string;
-            /**
-             * @description SEC-008: código TOTP de 6 dígitos. Solo para el acceso de soporte (break-glass) de un superadmin a una clínica en la que no es miembro; en cualquier otro login se ignora.
-             * @example 123456
-             */
-            mfaCode?: string;
-            /** @description SEC-008: motivo del acceso de soporte (10–500 caracteres). La clínica lo ve en «Accesos de soporte». */
-            breakGlassReason?: string;
-        };
         AuthTokensDto: {
             accessToken: string;
             /** @description Solo sin `X-Refresh-Transport: cookie` (clientes antiguos). En modo cookie el refresh viaja en la cookie HttpOnly `dentalix_rt` (Path=/api/v1/auth) y no se devuelve aquí. Nunca en un acceso break-glass. */
@@ -6321,6 +6481,29 @@ export interface components {
              * @description SEC-008: caducidad del token break-glass (ISO 8601).
              */
             expiresAt?: string;
+        };
+        MfaChallengeDto: {
+            /**
+             * @description `MFA_REQUIRED`: pide el código de la app (o uno de recuperación) en POST /auth/login/mfa. `MFA_ENROLLMENT_REQUIRED`: la clínica (o la cuenta de soporte) exige la verificación y aún no está activa: alta forzada en /auth/login/mfa/enrollment.
+             * @enum {string}
+             */
+            mfa: "MFA_REQUIRED" | "MFA_ENROLLMENT_REQUIRED";
+            /** @description Token intermedio de un solo uso (5 min; 10 en el alta). No da acceso a ninguna ruta de datos. */
+            mfaToken: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        LoginDto: {
+            /** @example ana@clinica.com */
+            email: string;
+            password: string;
+            /**
+             * @description SEC-008: código TOTP de 6 dígitos. Solo para el acceso de soporte (break-glass) de un superadmin a una clínica en la que no es miembro; en cualquier otro login se ignora.
+             * @example 123456
+             */
+            mfaCode?: string;
+            /** @description SEC-008: motivo del acceso de soporte (10–500 caracteres). La clínica lo ve en «Accesos de soporte». */
+            breakGlassReason?: string;
         };
         RefreshDto: Record<string, never>;
         LogoutDto: Record<string, never>;
@@ -6363,6 +6546,50 @@ export interface components {
             subdomain: string;
             /** @description available = se puede registrar; taken = ya es de una clínica (también dada de baja); invalid = no cumple el formato (minúsculas, números y guiones, 1–63, sin guion al principio ni al final); reserved = dirección de la plataforma (www, api…). */
             status: components["schemas"]["SubdomainAvailability"];
+        };
+        VerifyLoginMfaDto: {
+            /**
+             * @description Código de 6 dígitos de la app.
+             * @example 123456
+             */
+            code?: string;
+            /**
+             * @description Uno de los códigos de recuperación (cada uno vale una sola vez).
+             * @example ABCD-EFGH-IJKL-MNOP
+             */
+            recoveryCode?: string;
+            /** @description El `mfaToken` que devolvió POST /auth/login. */
+            mfaToken: string;
+        };
+        StartLoginMfaEnrollmentDto: {
+            /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
+            mfaToken: string;
+        };
+        MfaEnrollmentDto: {
+            /**
+             * @description Secreto en base32 para escribirlo a mano en la app. Solo en esta respuesta.
+             * @example JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+             */
+            secret: string;
+            /** @example otpauth://totp/Dentalix:ana%40clinica.com?secret=JBSWY3DPEHPK3PXP&issuer=Dentalix&algorithm=SHA1&digits=6&period=30 */
+            otpauthUri: string;
+        };
+        ConfirmLoginMfaEnrollmentDto: {
+            /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
+            mfaToken: string;
+            /** @example 123456 */
+            code: string;
+        };
+        MfaEnrolledSessionDto: {
+            accessToken: string;
+            /** @description Solo sin `X-Refresh-Transport: cookie` (ver AuthTokensDto). */
+            refreshToken?: string;
+            /** @description 10 códigos de recuperación de un solo uso. No se vuelven a mostrar. */
+            recoveryCodes: string[];
+        };
+        SecurityPolicyDto: {
+            /** @description DX-021: exige la verificación en dos pasos a los ADMIN de la clínica. Quien no la tenga pasa por el alta forzada en su próximo inicio de sesión. */
+            requireAdminMfa: boolean;
         };
         CreateInvitationDto: {
             fullName: string;
@@ -6438,6 +6665,54 @@ export interface components {
         AvatarResponseDto: {
             /** @description URL absoluta y estable del avatar (FILES_PUBLIC_BASE_URL vigente + clave) */
             avatarUrl: string;
+        };
+        MyMfaStatusDto: {
+            enabled: boolean;
+            /** Format: date-time */
+            enabledAt: string | null;
+            /** @description Códigos de recuperación sin usar (0 sin MFA). */
+            recoveryCodesRemaining: number;
+            /** @description Obligatorio para ti en esta clínica (cuenta de soporte de Dentalix, o ADMIN de una clínica que lo exige): no se puede desactivar. */
+            required: boolean;
+        };
+        StartMyMfaDto: {
+            /** @description Contraseña actual (re-autenticación). */
+            currentPassword: string;
+        };
+        ConfirmMyMfaDto: {
+            /** @example 123456 */
+            code: string;
+        };
+        MyMfaEnabledDto: {
+            enabled: boolean;
+            /** Format: date-time */
+            enabledAt: string | null;
+            /** @description Códigos de recuperación sin usar (0 sin MFA). */
+            recoveryCodesRemaining: number;
+            /** @description Obligatorio para ti en esta clínica (cuenta de soporte de Dentalix, o ADMIN de una clínica que lo exige): no se puede desactivar. */
+            required: boolean;
+            recoveryCodes: string[];
+            /** @description Access token nuevo: activar el MFA cierra tus demás sesiones (tokenVersion + 1). En modo cookie el refresh nuevo llega en la cookie. */
+            accessToken: string;
+            refreshToken?: string;
+        };
+        ReauthMfaDto: {
+            /**
+             * @description Código de 6 dígitos de la app.
+             * @example 123456
+             */
+            code?: string;
+            /**
+             * @description Uno de los códigos de recuperación (cada uno vale una sola vez).
+             * @example ABCD-EFGH-IJKL-MNOP
+             */
+            recoveryCode?: string;
+            /** @description Contraseña actual (re-autenticación). */
+            currentPassword: string;
+        };
+        RecoveryCodesDto: {
+            /** @description 10 códigos de un solo uso. Solo se muestran en esta respuesta. */
+            recoveryCodes: string[];
         };
         /** @enum {string} */
         DocType: "NATIONAL_ID" | "PASSPORT" | "RESIDENCE_PERMIT" | "TAX_ID" | "OTHER";
@@ -10148,13 +10423,26 @@ export interface components {
             professionalSpecialty?: string;
         };
         StaffLocationsDto: {
-            /** @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío */
+            /**
+             * @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío
+             * @example false
+             */
             all: boolean;
-            /** @description Sedes activas en las que puede trabajar. Con `all: false` y vacío, sus sedes ya no están activas */
+            /**
+             * @description Sedes activas en las que puede trabajar. Con `all: false` y vacío, sus sedes ya no están activas
+             * @example [
+             *       "c6a90d5a-9b1c-4b1e-8e41-d3125c016078"
+             *     ]
+             */
             locationIds: string[];
         };
         ReplaceStaffLocationsDto: {
-            /** @description Sedes activas de esta clínica. [] = todas. Los duplicados se ignoran */
+            /**
+             * @description Sedes activas de esta clínica. [] = todas. Los duplicados se ignoran. Se asignan con PUT /staff/:userId/locations tras la invitación; crear invitaciones y PATCH /staff/:userId no aceptan locationIds
+             * @example [
+             *       "c6a90d5a-9b1c-4b1e-8e41-d3125c016078"
+             *     ]
+             */
             locationIds: string[];
         };
         ScheduleRangeDto: {
@@ -18256,12 +18544,13 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Sesión (`AuthTokensDto`) o, DX-021, el paso del segundo factor (`MfaChallengeDto`: `mfa`, `mfaToken`, `expiresAt`) que se completa en `POST /auth/login/mfa` (o en `/auth/login/mfa/enrollment*` si es un alta forzada). */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensDto"];
+                    "application/json": components["schemas"]["AuthTokensDto"] | components["schemas"]["MfaChallengeDto"];
                 };
             };
             /** @description `mfaCode` no es de 6 dígitos o `breakGlassReason` no tiene 10–500 caracteres */
@@ -18475,6 +18764,209 @@ export interface operations {
             };
         };
     };
+    LoginMfaController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyLoginMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
+                };
+            };
+            /** @description Falta el código o vienen los dos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: "MFA_INVALID_CODE"` (código erróneo o ya usado) o `code: "MFA_CHALLENGE_EXPIRED"` (token intermedio caducado, usado o de otra clínica: volver a iniciar sesión) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos de esta cuenta (5 → espera creciente, el mismo contador que el MFA del superadmin) o avalancha de peticiones. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LoginMfaController_startEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartLoginMfaEnrollmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentDto"];
+                };
+            };
+            /** @description `code: "MFA_CHALLENGE_EXPIRED"` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La verificación ya está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LoginMfaController_confirmEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmLoginMfaEnrollmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrolledSessionDto"];
+                };
+            };
+            /** @description Código erróneo o sin alta pendiente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: "MFA_CHALLENGE_EXPIRED"` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos de esta cuenta (5 → espera creciente, el mismo contador que el MFA del superadmin) o avalancha de peticiones. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SecurityPolicyController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityPolicyDto"];
+                };
+            };
+            /** @description Solo la administración ve y cambia la seguridad de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SecurityPolicyController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecurityPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityPolicyDto"];
+                };
+            };
+            /** @description Solo la administración ve y cambia la seguridad de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Quien la enciende no tiene MFA activo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     StaffInvitationsController_list: {
         parameters: {
             query?: never;
@@ -18628,12 +19120,16 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Sesión (`AuthTokensDto`) o, DX-021, `{ loginRequired: true }`: aceptada, pero la cuenta necesita segundo factor y debe entrar por /login. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensDto"];
+                    "application/json": components["schemas"]["AuthTokensDto"] | {
+                        /** @enum {boolean} */
+                        loginRequired: true;
+                    };
                 };
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
@@ -18777,6 +19273,220 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMfaStatusDto"];
+                };
+            };
+        };
+    };
+    MyMfaController_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartMyMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentDto"];
+                };
+            };
+            /** @description Contraseña incorrecta */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMyMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMfaEnabledDto"];
+                };
+            };
+            /** @description Código incorrecto o sin alta pendiente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos (5 → espera creciente; el mismo contador que el login). `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
+                };
+            };
+            /** @description Contraseña o código incorrectos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Obligatoria para ti */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos (5 → espera creciente; el mismo contador que el login). `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_regenerate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesDto"];
+                };
+            };
+            /** @description Contraseña o código incorrectos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos (5 → espera creciente; el mismo contador que el login). `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26319,7 +27029,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Rol sin acceso a pagos */
+            /** @description Rol sin acceso a pagos o abono de una sede no permitida */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -26371,7 +27081,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Rol sin acceso a pagos, o RECEPTION anulando un abono de otro usuario o de otro día */
+            /** @description Sede del abono no permitida (LOCATION_NOT_ALLOWED), rol sin acceso a pagos, o RECEPTION anulando un abono de otro usuario o de otro día */
             403: {
                 headers: {
                     [name: string]: unknown;

@@ -343,4 +343,43 @@ describe('LoginForm', () => {
       expect(screen.queryByLabelText(/código de verificación/i)).not.toBeInTheDocument();
     });
   });
+
+  describe('DX-021: segundo factor', () => {
+    async function passPassword(res: unknown) {
+      (apiFetch as jest.Mock).mockReset();
+      (apiFetch as jest.Mock).mockResolvedValueOnce(res);
+      render(<LoginForm />);
+      fireEvent.change(screen.getByLabelText(/email|correo/i), { target: { value: 'a@b.co' } });
+      fireEvent.change(screen.getByLabelText(/password|contraseña/i), {
+        target: { value: 'secret123' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /iniciar/i }));
+    }
+
+    it('con MFA activo pide el código y lo canjea con el token intermedio', async () => {
+      await passPassword({ mfa: 'MFA_REQUIRED', mfaToken: 'tok', expiresAt: 'x' });
+      const input = await screen.findByLabelText('Código de verificación');
+      (apiFetch as jest.Mock).mockResolvedValueOnce({ accessToken: 'a' });
+      fireEvent.change(input, { target: { value: '123456' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Verificar' }));
+      await waitFor(() =>
+        expect(apiFetch).toHaveBeenLastCalledWith('/auth/login/mfa', {
+          method: 'POST',
+          body: { mfaToken: 'tok', code: '123456' },
+        }),
+      );
+    });
+
+    it('un código incorrecto se queda en el paso con el error', async () => {
+      await passPassword({ mfa: 'MFA_REQUIRED', mfaToken: 'tok', expiresAt: 'x' });
+      const input = await screen.findByLabelText('Código de verificación');
+      (apiFetch as jest.Mock).mockRejectedValueOnce(
+        new ApiError(401, 'x', { code: 'MFA_INVALID_CODE' } as never),
+      );
+      fireEvent.change(input, { target: { value: '123456' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Verificar' }));
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      expect(screen.getByLabelText('Código de verificación')).toBeInTheDocument();
+    });
+  });
 });
