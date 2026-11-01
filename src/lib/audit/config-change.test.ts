@@ -265,3 +265,18 @@ it('DX-515: el nº de factura externa y la leyenda del recibo con su antes y des
   );
   expect(legend?.map((i) => i.label)).toEqual(['Leyenda propia de la sede', 'Leyenda del recibo']);
 });
+
+describe("plazo de conservación (DX-330)", () => {
+  it("se lee en español, con antes, después y unidad", () => {
+    const list = configChangeItems({
+      reason: "CLINICAL_RECORD_RETENTION_SETTINGS",
+      configChange: {
+        before: { clinicalRecordRetentionYears: 25 },
+        after: { clinicalRecordRetentionYears: 15 },
+      },
+    });
+    expect(configChangeText(list!)).toBe(
+      "Plazo de conservación de la historia clínica: 25 → 15 años",
+    );
+  });
+});

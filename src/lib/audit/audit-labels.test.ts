@@ -414,6 +414,40 @@ describe('clinicSettingsDetail (DX-328)', () => {
     ).toBe('Mayoría de edad: 18 → 21 años');
   });
 
+  describe('CLINICAL_RECORD_RETENTION_SETTINGS (DX-330)', () => {
+    const event = (direction: 'UP' | 'DOWN', n: number, win = false) => ({
+      reason: 'CLINICAL_RECORD_RETENTION_SETTINGS',
+      configChange: { before: { clinicalRecordRetentionYears: 25 }, after: { clinicalRecordRetentionYears: 15 } },
+      retentionTermChange: {
+        direction,
+        protectedPatients: n,
+        effectiveBefore: 25,
+        effectiveAfter: 15,
+        withinCorrectionWindow: win,
+      },
+    });
+    it.each([
+      [0, 'Conservación de la historia clínica'],
+      [1, 'Conservación de la historia clínica · 1 historia mantiene su fecha'],
+      [2, 'Conservación de la historia clínica · 2 historias mantienen su fecha'],
+    ])('bajada con n = %i', (n, text) => {
+      expect(clinicSettingsDetail(event('DOWN', n))).toBe(text);
+    });
+    it('bajada dentro de la ventana de corrección', () => {
+      expect(clinicSettingsDetail(event('DOWN', 2, true))).toBe(
+        'Conservación de la historia clínica · 2 historias mantienen su fecha · corrección de una subida',
+      );
+      expect(clinicSettingsDetail(event('DOWN', 0, true))).toBe(
+        'Conservación de la historia clínica · corrección de una subida',
+      );
+    });
+    it('subida y metadata rota → null', () => {
+      expect(clinicSettingsDetail(event('UP', 0))).toBeNull();
+      expect(clinicSettingsDetail({ reason: 'CLINICAL_RECORD_RETENTION_SETTINGS' })).toBeNull();
+      expect(clinicSettingsDetail(event('DOWN', -1))).toBeNull();
+    });
+  });
+
   it('null para otra reason', () => {
     expect(
       clinicSettingsDetail({ reason: 'CASH_SETTINGS', statusChange: { from: 'AGE_18', to: 'AGE_16' } }),
