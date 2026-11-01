@@ -51,7 +51,7 @@ test.beforeAll(async ({ playwright }) => {
 function accountTrigger(page: Page, fullName: string): Locator {
   const width = page.viewportSize()?.width ?? 0;
   return width < 768
-    ? page.getByRole('button', { name: 'Cuenta', exact: true })
+    ? page.getByRole('button', { name: new RegExp(`(?:^| · )Cuenta · ${fullName}$`) })
     : page.getByRole('button', { name: new RegExp(fullName) }).first();
 }
 

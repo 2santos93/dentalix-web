@@ -228,6 +228,21 @@ describe('ExpensesSummaryView (DX-274)', () => {
     await waitFor(() => expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-08-01', to: '2026-10-31' }));
   });
 
+  it.each([
+    ['2026-10-31T10:59:59Z', '2026-05-01', '2026-10-31'],
+    ['2026-10-31T11:00:00Z', '2026-06-01', '2026-11-30'],
+  ])('respeta el límite de mes de Auckland: %s', async (instant, from, to) => {
+    const previousNow = Date.now();
+    jest.setSystemTime(new Date(instant));
+    try {
+      // El listado indica Bogotá; el horario guardado es Auckland.
+      render(<ExpensesSummaryView token="t" />);
+      await act(async () => {});
+      expect(getLocationSchedule).toHaveBeenCalledWith('t', 'loc-1');
+      expect(mockedSummary).toHaveBeenCalledWith('t', { from, to });
+    } finally { jest.setSystemTime(previousNow); }
+  });
+
   it('elige el mes según la zona guardada en el horario, no la inferida del país', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-10-31T12:00:00Z'));

@@ -96,11 +96,11 @@ export function PublicPostOpView({ linkToken }: { linkToken: string }) {
         )}
 
         {state.kind === 'invalid' && (
-          <Notice icon={LinkIcon} title={copy.invalidTitle} message={copy.invalidMessage} />
+          <Notice headingLevel={1} icon={LinkIcon} title={copy.invalidTitle} message={copy.invalidMessage} />
         )}
 
         {state.kind === 'expired' && (
-          <Notice icon={TimerOff} title={copy.expiredTitle} message={copy.expiredMessage} />
+          <Notice headingLevel={1} icon={TimerOff} title={copy.expiredTitle} message={copy.expiredMessage} />
         )}
 
         {state.kind === 'ready' && (

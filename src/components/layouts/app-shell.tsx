@@ -121,7 +121,12 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const navLabel = (href: string) => {
     const label = fullLabel(href);
     if (href === '/agenda' && waitingForYou > 0) return `${label} · ${waitingForYouLabel(waitingForYou)}`;
-    if (inboxCount(href) > 0) return `${label} · ${inboxCount(href)}`;
+    if (inboxCount(href) > 0) {
+      const count = inboxCount(href);
+      // Preserve the visible label-and-count sequence for label-in-name checks.
+      if (href === ANAMNESIS_HREF) return `Anamnesis ${count} · por revisar`;
+      return `${label} ${count}`;
+    }
     return label;
   };
   const hasCount = (href: string) => (href === '/agenda' && waitingForYou > 0) || inboxCount(href) > 0;
@@ -237,7 +242,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            aria-label={copy.search}
+            // Expandido, el nombre es el texto visible («Buscar…» y el atajo): label-in-name.
+            aria-label={collapsed ? copy.search : undefined}
             aria-keyshortcuts="Meta+K Control+K"
             title={collapsed ? `${copy.search} (⌘K / Ctrl K)` : undefined}
             className={cn(
@@ -306,6 +312,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                     >
                       <Icon className="size-4 shrink-0" />
                       {!collapsed && <span className="min-w-0 truncate">{label}</span>}
+                      {!collapsed && inboxCount(href) > 0 ? ' ' : null}
                       {inboxCount(href) > 0 && (
                         <InboxCount href={href} count={inboxCount(href)} variant={collapsed ? 'rail' : 'full'} />
                       )}
