@@ -160,14 +160,17 @@ describe('NewPrescriptionModal', () => {
     ) as HTMLElement;
     expect(blocking).toHaveTextContent('alergia a penicilina');
     expect(screen.getByText('Informativos (1)')).toBeInTheDocument();
-    expect(mockedCheck).toHaveBeenLastCalledWith('tok', 'p1', [
-      {
-        activeIngredient: 'Amoxicilina',
-        concentration: '500 mg',
-        dose: '1 cápsula',
-        frequency: 'Cada 8 horas',
-      },
-    ]);
+    // La consulta va con retardo: en un runner lento la última llamada llega después del aviso.
+    await waitFor(() =>
+      expect(mockedCheck).toHaveBeenLastCalledWith('tok', 'p1', [
+        {
+          activeIngredient: 'Amoxicilina',
+          concentration: '500 mg',
+          dose: '1 cápsula',
+          frequency: 'Cada 8 horas',
+        },
+      ]),
+    );
     const button = screen.getByRole('button', { name: 'Emitir receta' });
     expect(button).toBeDisabled();
     await user.click(within(blocking).getByRole('checkbox', { name: /confirmo que conozco los avisos/i }));
