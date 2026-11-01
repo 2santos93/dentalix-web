@@ -117,8 +117,8 @@ interface ClinicalEntriesListProps {
  * oculta el registro por no poder nombrar a quien lo hizo).
  *
  * DX-170: «Nueva evolución» abre un modal con plantillas y preguntas; una
- * evolución ligada a una cita dice de qué visita es («Cita del dd/mm · Dra.
- * X»).
+ * evolución ligada a una cita dice de qué visita es («Cita del 1/11 · Dra.
+ * X»: día/mes con el patrón corto del locale de la sede, DX-520).
  */
 export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' }: ClinicalEntriesListProps) {
   // DX-378: el día de la cita, en la zona y con el formato de la sede.

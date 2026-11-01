@@ -3,7 +3,9 @@ import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
-import { LATE_BROWSER_TIME, atSede, lastSlotToday, sedeDayFromToday } from './support/clock';
+import { LATE_BROWSER_TIME, SEDE_TZ, atSede, lastSlotToday, sedeDayFromToday } from './support/clock';
+import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
 
@@ -22,7 +24,7 @@ import { API_URL } from './support/urls';
  *      del navegador fijo a las 23:30 de Bogotá; DX-252, TST-030: sin
  *      `test.skip` cerca de medianoche, ver `lastSlotToday`.)
  *   3. Ficha → Historia clínica: la evolución lleva el texto con las
- *      respuestas y «Cita del dd/mm · <profesional>»; desde «Nueva evolución»
+ *      respuestas y «Cita del <día/mes de la sede> · <profesional>»; desde «Nueva evolución»
  *      usa la plantilla con una pregunta omitida («[sin respuesta]»).
  *   4. «Cargar plantillas de ejemplo» añade las de ejemplo.
  * Sin scroll horizontal a 390 con el formulario de preguntas abierto.
@@ -128,7 +130,10 @@ for (const viewport of VIEWPORTS) {
     await page.getByRole('button', { name: 'Registrar evolución' }).click();
 
     const evolution = page.getByRole('dialog', { name: 'Registrar evolución' });
-    await expect(evolution.getByText(new RegExp(`^Cita del \\d{1,2}/\\d{1,2} · ${ownerName}$`))).toBeVisible();
+    // DX-520: el día/mes exacto con la regla de la sede (patrón corto del
+    // locale: «1/11» en es-*), calculado con el mismo helper que la UI.
+    const visitLine = `Cita del ${regionalFormat(E2E_REGION).dayMonth(slot.start, SEDE_TZ)} · ${ownerName}`;
+    await expect(evolution.getByText(visitLine, { exact: true })).toBeVisible();
     await evolution.getByRole('radio', { name: /Resina/ }).click();
     await evolution.getByRole('radio', { name: 'O', exact: true }).check();
     await evolution.getByRole('checkbox', { name: 'Adhesivo universal' }).check();
@@ -145,7 +150,7 @@ for (const viewport of VIEWPORTS) {
     await page.goto(`${origin}/patients/${patient.id}?tab=clinical-history`);
     await expect(page.getByText(expected).locator('visible=true')).toBeVisible({ timeout: 15_000 });
     await expect(
-      page.getByText(new RegExp(`^Cita del \\d{1,2}/\\d{1,2} · ${ownerName}$`)).locator('visible=true'),
+      page.getByText(visitLine, { exact: true }).locator('visible=true'),
     ).toBeVisible();
 
     await page.getByRole('button', { name: 'Nueva evolución' }).click();
