@@ -14,7 +14,8 @@ import {
 } from '@/lib/appointments/opening-candidates';
 import type { SedeClock } from '@/lib/locations/sede-clock';
 import { FormModal } from '@/components/shared/form-modal';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 
 // Copy as constants (i18n-ready, es-first).
@@ -39,6 +40,18 @@ export const linkOfferCopy = {
   openWhatsAppFor: (name: string) => `Abrir WhatsApp con la oferta para ${name}`,
   whatsappHint: 'Abre cada WhatsApp y envía el mensaje: ya lleva el enlace.',
   error: 'No se pudo enviar. Intenta de nuevo.',
+  // DX-486: el resumen se anuncia (role=status) y los fallidos se pueden reintentar.
+  summary: (ok: number, total: number) =>
+    ok === total
+      ? total === 1
+        ? 'Oferta enviada.'
+        : `Oferta enviada a los ${total}.`
+      : ok === 0
+        ? total === 1
+          ? 'No se pudo enviar la oferta.'
+          : `No se pudo enviar a ninguno de los ${total}.`
+        : `Oferta enviada a ${ok} de ${total}. ${total - ok === 1 ? 'Falló 1' : `Fallaron ${total - ok}`}.`,
+  retryFailed: 'Reintentar con los que fallaron',
 };
 
 type Result = {
@@ -91,16 +104,23 @@ export function LinkOfferDialog({
   const [channel, setChannel] = useState<LinkOfferChannel>(emailCount > 0 ? 'LINK_EMAIL' : 'LINK_WA_ME');
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<Result[] | null>(null);
+  const statusRef = React.useRef<HTMLParagraphElement>(null);
+  // Al enviar desaparece «Enviar» y, tras reintentar sin que quede nadie
+  // fallido, «Reintentar…»: el foco pasa al resumen en vez de caer en <body>.
+  const focusStatus = React.useRef(false);
+  React.useEffect(() => {
+    if (!focusStatus.current) return;
+    focusStatus.current = false;
+    statusRef.current?.focus();
+  }, [results]);
 
   const eligible = candidates.filter((c) => linkOfferChannels(c)[channel]);
   const skipped = candidates.filter((c) => !linkOfferChannels(c)[channel]);
 
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (eligible.length === 0) return;
-    setSubmitting(true);
+  /** Crea las ofertas una a una: el fallo de una no frena a las demás. */
+  async function send(targets: OpeningCandidate[]): Promise<Result[]> {
     const out: Result[] = [];
-    for (const c of eligible) {
+    for (const c of targets) {
       try {
         const offer = await createLinkOffer(token, slot, c, channel);
         const waHref =
@@ -128,10 +148,37 @@ export function LinkOfferDialog({
         });
       }
     }
+    return out;
+  }
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (eligible.length === 0) return;
+    setSubmitting(true);
+    const out = await send(eligible);
     setSubmitting(false);
+    focusStatus.current = true;
     setResults(out);
     if (out.some((r) => r.ok)) onSent();
   }
+
+  /** Reenvía solo a los que fallaron; los que salieron bien no se repiten. */
+  async function retryFailed() {
+    if (!results) return;
+    const failedKeys = new Set(results.filter((r) => !r.ok).map((r) => r.key));
+    const targets = eligible.filter((c) => failedKeys.has(keyOf(c)));
+    if (targets.length === 0) return;
+    setSubmitting(true);
+    const retried = await send(targets);
+    setSubmitting(false);
+    const merged = results.map((r) => retried.find((n) => n.key === r.key) ?? r);
+    if (merged.every((r) => r.ok)) focusStatus.current = true;
+    setResults(merged);
+    if (retried.some((r) => r.ok)) onSent();
+  }
+
+  const okCount = results?.filter((r) => r.ok).length ?? 0;
+  const failedCount = results ? results.length - okCount : 0;
 
   return (
     <FormModal
@@ -152,6 +199,15 @@ export function LinkOfferDialog({
       lockCloseWhileSubmitting
       touchTargets
     >
+      {/* Montada desde el principio (vacía) para que el lector anuncie el resumen. */}
+      <p
+        ref={statusRef}
+        role="status"
+        tabIndex={-1}
+        className={cn('text-sm font-medium text-ink focus-visible:outline-none', !results && 'sr-only')}
+      >
+        {results ? linkOfferCopy.summary(okCount, results.length) : null}
+      </p>
       {results ? (
         <div className="flex flex-col gap-3">
           <ul data-testid="link-offer-results" className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border">
@@ -179,7 +235,9 @@ export function LinkOfferDialog({
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={linkOfferCopy.openWhatsAppFor(r.name)}
-                    className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+                    // DX-486: 44 px también en el enlace (el `touchTargets`
+                    // del modal solo alcanza a los botones).
+                    className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-h-11')}
                   >
                     <MessageCircle aria-hidden /> {linkOfferCopy.openWhatsApp}
                   </a>
@@ -189,6 +247,17 @@ export function LinkOfferDialog({
           </ul>
           {results.some((r) => r.waHref) ? (
             <p className="text-xs text-muted">{linkOfferCopy.whatsappHint}</p>
+          ) : null}
+          {failedCount > 0 ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="self-start"
+              disabled={submitting}
+              onClick={() => void retryFailed()}
+            >
+              {linkOfferCopy.retryFailed}
+            </Button>
           ) : null}
         </div>
       ) : (

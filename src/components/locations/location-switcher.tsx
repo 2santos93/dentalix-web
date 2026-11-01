@@ -34,6 +34,30 @@ export function shortSedeLabel(name: string): string {
   return (meaningful[0] ?? words[0] ?? name).replace(/[,.;:]$/, '');
 }
 
+/** Marca de los desplegables del selector de sede (`data-location-switcher`, en todas sus variantes). */
+const SWITCHER_ATTR = 'data-location-switcher';
+
+/**
+ * Enfoca el selector de sede global visible (barra lateral en escritorio,
+ * pastilla de la barra superior en el teléfono) y abre su lista si el
+ * navegador lo permite. Se busca por la marca, no por el nombre accesible
+ * (en el teléfono es «Sede: <nombre>»), y solo entre los que se ven (el de la
+ * barra lateral está oculto a 390 px). Devuelve `false` si no hay ninguno a la
+ * vista, para que quien llama deje el foco en un sitio razonable.
+ */
+export function focusLocationSwitcher(): boolean {
+  const select = Array.from(document.querySelectorAll<HTMLSelectElement>(`select[${SWITCHER_ATTR}]`)).find(
+    (el) => el.getClientRects().length > 0,
+  );
+  if (!select) return false;
+  select.focus();
+  try {
+    select.showPicker?.();
+  } catch {
+    // Sin gesto del usuario o sin soporte: queda enfocado, que basta.
+  }
+  return true;
+}
 
 /**
  * Selector de sede. Se muestra en cuanto la clínica tiene AL MENOS UNA sede.
@@ -180,6 +204,7 @@ export function LocationSwitcher({
   // y abre el desplegable del sistema. El foco lo pinta el botón que lo lleva.
   const overlaySelect = (name: string) => (
     <NativeSelect
+      data-location-switcher=""
       aria-label={name}
       value={active ?? ''}
       onChange={(e) => handleChange(e.target.value)}
@@ -236,6 +261,7 @@ export function LocationSwitcher({
     <label className={cn('relative flex items-center', variant === 'block' ? 'w-full' : 'inline-flex')}>
       <span className="sr-only">{copy.label}</span>
       <NativeSelect
+        data-location-switcher=""
         aria-label={copy.label}
         value={active ?? ''}
         onChange={(e) => handleChange(e.target.value)}

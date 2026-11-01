@@ -97,7 +97,8 @@ import { ContingencyAgendaDialog, contingencyCopy } from '@/components/appointme
 import { WalkInDialog, walkInCopy } from '@/components/appointments/walk-in-dialog';
 import { canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
 import { canDownloadContingencyAgenda } from '@/lib/appointments/contingency-agenda-api';
-import { InClinicPanel, focusLocationSwitcher, inClinicCopy } from '@/components/appointments/in-clinic-panel';
+import { InClinicPanel, inClinicCopy } from '@/components/appointments/in-clinic-panel';
+import { focusLocationSwitcher } from '@/components/locations/location-switcher';
 import {
   dismissReservedToasts,
   PatientFlowActions,
@@ -1888,11 +1889,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           <SheetContent
             className="top-0 h-dvh max-h-none rounded-none border-t-0 sm:w-[26rem]"
             onCloseAutoFocus={(event) => {
-              // «Elegir sede»: al cerrar la hoja, el foco va al selector de sede.
+              // «Elegir sede»: al cerrar la hoja, el foco va al selector de sede
+              // visible (en el teléfono, el de la barra superior). Si no hay
+              // ninguno a la vista, vuelve al botón que abrió la hoja.
               if (!chooseLocationOnClose.current) return;
               chooseLocationOnClose.current = false;
-              event.preventDefault();
-              focusLocationSwitcher();
+              if (focusLocationSwitcher()) event.preventDefault();
             }}
           >
             <SheetHeader className="sr-only">
