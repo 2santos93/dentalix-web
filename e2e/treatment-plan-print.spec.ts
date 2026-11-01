@@ -3,12 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { registerClinicViaApi } from './support/api';
+import { DEMO_CURRENCY, DEMO_REGION } from './support/demo';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e (DX-012): presupuesto imprimible del plan y aceptación firmada.
  *
  * Corre contra la clínica DEMO sembrada (`npm run seed:demo` en la API):
- *   - la administradora crea por la API un paciente con un plan en COP de dos
+ *   - la administradora crea por la API un paciente con un plan en la moneda de la sede (USD) de dos
  *     procedimientos (uno con descuento);
  *   - en la ficha → «Plan de tratamiento», «Imprimir presupuesto» abre la vista
  *     A4 en otra pestaña con la clínica, la sede, el paciente, el profesional,
@@ -27,9 +29,10 @@ const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
 const ADMIN_EMAIL = process.env.E2E_DEMO_ADMIN_EMAIL ?? 'admin@demo.dentalix.app';
 const RECEPTION_EMAIL = process.env.E2E_DEMO_RECEPTION_EMAIL ?? 'recepcion@demo.dentalix.app';
 
-const CROWN = 1_200_000;
-const CROWN_DISCOUNT = 120_000;
-const RESIN = 150_000;
+// Cifras de tres dígitos: sin separador de miles, igual en cualquier formato de la sede.
+const CROWN = 600;
+const CROWN_DISCOUNT = 60;
+const RESIN = 150;
 
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix
@@ -37,11 +40,11 @@ const suffix = rawSuffix
   .toLowerCase()
   .slice(0, 8);
 
-// Mismo formateador que la app (`formatCurrency`, locale `es`). Solo la cifra
-// («1.200.000,00»): entre ella y «COP» va un espacio duro.
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP', currencyDisplay: 'code' });
+// El formato de la sede principal (DX-378), con los dos decimales del USD
+// (DX-340). Solo la cifra («690,00»): entre ella y el código va un espacio duro.
+const sedeFormat = regionalFormat(DEMO_REGION);
 function figure(amount: number): string {
-  return cop.format(amount).split(/\s/)[0];
+  return sedeFormat.number(amount, { min: 2, max: 2 });
 }
 
 async function apiLogin(request: APIRequestContext, host: string, email: string): Promise<string> {
@@ -53,7 +56,7 @@ async function apiLogin(request: APIRequestContext, host: string, email: string)
   return ((await res.json()) as { accessToken: string }).accessToken;
 }
 
-/** Siembra como ADMIN: paciente + plan en COP con dos ítems (uno con descuento). */
+/** Siembra como ADMIN: paciente + plan en USD con dos ítems (uno con descuento). */
 async function seed(
   request: APIRequestContext,
   origin: string,
@@ -93,7 +96,7 @@ async function seed(
     defaultPrice: RESIN,
   });
   const plan = await post<{ id: string }>(`/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   await post(`/treatment-plans/${plan.id}/items`, {
     toothNumber: '21',
@@ -157,7 +160,7 @@ async function expectPrintableQuote(
   await expect(header).toContainText('Sede principal');
   await expect(header).toContainText('Válido 30 días');
   await expect(printPage.getByTestId('quote-parties')).toContainText(data.fullName);
-  await expect(printPage.getByTestId('quote-total-COP')).toContainText(
+  await expect(printPage.getByTestId(`quote-total-${DEMO_CURRENCY}`)).toContainText(
     figure(CROWN - CROWN_DISCOUNT + RESIN),
   );
 

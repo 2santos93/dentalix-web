@@ -4,14 +4,15 @@ import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { dataList, dataListRows, rowAction } from './support/data-list';
-import { demoNationalIdName } from './support/demo';
+import { DEMO_CURRENCY, DEMO_REGION, demoNationalIdLabel } from './support/demo';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e (DX-136): recibo de caja numerado por sede.
  *
  * Corre contra la clínica DEMO sembrada (`npm run seed:demo` en la API):
  *   - la administradora crea por la API un paciente (con email y documento) y
- *     un plan en COP; recepción registra abonos por la API, y cada uno trae
+ *     un plan en la moneda de la sede principal (USD); recepción registra abonos por la API, y cada uno trae
  *     su número de la serie de la sede principal (`PRI-000123`);
  *   - recepción abre el recibo desde el estado de cuenta: número, clínica,
  *     «Datos fiscales pendientes», documento enmascarado, quién cobró y el
@@ -22,6 +23,8 @@ import { demoNationalIdName } from './support/demo';
  *     en pantalla y en la impresión;
  *   - un rol sin permiso de cobro: 403 en español en la API y aviso en la vista.
  * En escritorio (1440px) y en móvil (390px, sin scroll horizontal).
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
@@ -35,10 +38,10 @@ const suffix = rawSuffix
   .toLowerCase()
   .slice(0, 8);
 
-// Mismo formateador que la app (`formatCurrency`, locale `es`): solo la cifra.
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP', currencyDisplay: 'code' });
+// El formato de la sede principal (DX-378), con los dos decimales del USD (DX-340): solo la cifra.
+const sedeFormat = regionalFormat(DEMO_REGION);
 function figure(amount: number): string {
-  return cop.format(amount).split(/\s/)[0];
+  return sedeFormat.number(amount, { min: 2, max: 2 });
 }
 
 async function apiLogin(request: APIRequestContext, host: string, email: string): Promise<string> {
@@ -80,14 +83,14 @@ async function seed(request: APIRequestContext, host: string, tag: string, amoun
     email: `recibo-${tag}@example.com`,
   });
   const plan = await post<{ id: string }>(admin, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   const payments: Seeded['payments'] = [];
   for (const amount of amounts) {
     const payment = await post<{ id: string; receiptNumber: string }>(
       reception,
       `/treatment-plans/${plan.id}/payments`,
-      { amount, currency: 'COP', paidAt: new Date().toISOString(), method: 'CASH' },
+      { amount, currency: DEMO_CURRENCY, paidAt: new Date().toISOString(), method: 'CASH' },
     );
     expect(payment.receiptNumber).toMatch(/^PRI-\d{6,}$/);
     payments.push({ id: payment.id, receiptNumber: payment.receiptNumber, amount });
@@ -146,7 +149,7 @@ for (const viewport of [
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const origin = tenantOrigin(DEMO_SUBDOMAIN);
     const host = new URL(origin).host;
-    const data = await seed(page.request, host, `${suffix}${viewport.width}`, [125_000, 80_000]);
+    const data = await seed(page.request, host, `${suffix}${viewport.width}`, [125, 80]);
     const [first, second] = data.payments;
     // Consecutivos dentro de la serie de la sede.
     expect(Number(second.receiptNumber.split('-')[1])).toBe(Number(first.receiptNumber.split('-')[1]) + 1);
@@ -161,7 +164,7 @@ for (const viewport of [
     await expect(doc).toContainText('Clínica Demo');
     await expect(doc).toContainText('Datos fiscales pendientes');
     await expect(doc).toContainText(data.fullName);
-    await expect(doc).toContainText(`${await demoNationalIdName(page.request)} ******${data.docNumber.slice(-4)}`);
+    await expect(doc).toContainText(`${await demoNationalIdLabel(page.request)} ******${data.docNumber.slice(-4)}`);
     await expect(doc).not.toContainText(data.docNumber);
     await expect(doc).toContainText(figure(first.amount));
     await expect(doc).toContainText('Recibió');
@@ -220,7 +223,7 @@ test('un abono anulado conserva su número y su recibo sale ANULADO con motivo y
 }) => {
   const origin = tenantOrigin(DEMO_SUBDOMAIN);
   const host = new URL(origin).host;
-  const data = await seed(page.request, host, `${suffix}void`, [61_000]);
+  const data = await seed(page.request, host, `${suffix}void`, [61]);
   const [payment] = data.payments;
   const admin = { 'X-Tenant-Host': host, Authorization: `Bearer ${await apiLogin(page.request, host, ADMIN_EMAIL)}` };
   const voided = await page.request.delete(`${API_URL}/payments/${payment.id}`, {
@@ -255,7 +258,7 @@ test('un abono anulado conserva su número y su recibo sale ANULADO con motivo y
 test('un rol sin permiso de cobro recibe 403 en español y la vista imprimible lo dice', async ({ page }) => {
   const origin = tenantOrigin(DEMO_SUBDOMAIN);
   const host = new URL(origin).host;
-  const data = await seed(page.request, host, `${suffix}403`, [10_000]);
+  const data = await seed(page.request, host, `${suffix}403`, [10]);
   const dentist = { 'X-Tenant-Host': host, Authorization: `Bearer ${await apiLogin(page.request, host, DENTIST_EMAIL)}` };
   const res = await page.request.get(`${API_URL}/payments/${data.payments[0].id}/receipt`, { headers: dentist });
   expect(res.status()).toBe(403);

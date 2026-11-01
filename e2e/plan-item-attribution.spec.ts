@@ -4,7 +4,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 import { loginAs } from './support/auth';
 import { expectTouchTarget } from './support/touch-targets';
 import { E2E_BROWSER_LOCALE } from './support/regional';
-import { DEMO_TIME_ZONE } from './support/demo';
+import { DEMO_CURRENCY, DEMO_TIME_ZONE } from './support/demo';
 
 /**
  * DX-050 · Producción atribuible. En la clínica demo (`npm run seed:demo`), la
@@ -68,9 +68,9 @@ async function seed(request: APIRequestContext, tag: string): Promise<Seeded> {
     kind: 'PROCEDURE',
     labelEs: `Resina ${tag}`,
     color: '#3366CC',
-    defaultPrice: 100000,
+    defaultPrice: 100,
   });
-  const plan = await call<{ id: string }>('post', `/patients/${patient.id}/treatment-plans`, { currency: 'COP' });
+  const plan = await call<{ id: string }>('post', `/patients/${patient.id}/treatment-plans`, { currency: DEMO_CURRENCY });
   const item = await call<{ id: string }>('post', `/treatment-plans/${plan.id}/items`, {
     toothNumber: '16',
     catalogItemId: catalog.id,

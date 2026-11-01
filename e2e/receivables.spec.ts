@@ -6,6 +6,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll } from './support/layout';
 import { sedeDayFromToday } from './support/clock';
 import { openSection } from './support/nav';
+import { DEMO_CURRENCY } from './support/demo';
 
 /**
  * DX-145 · Cartera por antigüedad, vista por RECEPCIÓN en la clínica demo
@@ -48,10 +49,10 @@ test.beforeAll(async ({ playwright }) => {
       kind: 'PROCEDURE',
       labelEs: `Corona ${suffix}`,
       color: '#3366CC',
-      defaultPrice: 400000,
+      defaultPrice: 400,
     });
     const plan = await apiPost<{ id: string }>(api, admin, `/patients/${patientId}/treatment-plans`, {
-      currency: 'COP',
+      currency: DEMO_CURRENCY,
     });
     const item = await apiPost<{ id: string }>(api, admin, `/treatment-plans/${plan.id}/items`, {
       toothNumber: '11',
@@ -90,7 +91,7 @@ function expectSafeWhatsApp(href: string | null): void {
   const text = decodeURIComponent(href!.split('?text=')[1]);
   expect(text).toContain('Hola Deudor');
   expect(text).not.toMatch(/\d/);
-  expect(text).not.toMatch(/COP|\$|saldo|deuda|cuota|corona/i);
+  expect(text).not.toMatch(new RegExp(`${DEMO_CURRENCY}|\\$|saldo|deuda|cuota|corona`, 'i'));
 }
 
 test('recepción abre Cartera desde el menú y filtra más de 90 días (1440 px)', async ({ page }) => {
@@ -148,8 +149,11 @@ test('a 390 px cada deudor es una tarjeta que abre su estado de cuenta; Llamar y
   await menu.click();
   await expect(page.getByRole('menuitem', { name: 'Llamar al 0412 555 0199' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'WhatsApp' }).click();
-  const opened = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
-  expect(opened).toHaveLength(1);
+  // RowActions ejecuta la acción en diferido (`setTimeout`, al cerrarse el menú):
+  // se espera a que llegue la llamada en vez de leerla una sola vez.
+  const readOpened = () => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
+  await expect.poll(readOpened).toHaveLength(1);
+  const opened = await readOpened();
   expectSafeWhatsApp(opened[0]);
   await expectNoHorizontalScroll(page);
 });
@@ -179,7 +183,7 @@ test('a 390 px los importes de cada tarjeta no se salen de ella (deudas de millo
   await loginAs(page, origin, RECEPTION, DEMO_PASSWORD);
   await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
   await page.goto(`${origin}/caja/cartera`);
-  // La demo tiene deudores de más de un millón con varios tramos (p. ej. 1.535.000 COP).
+  // La demo tiene deudores con importes largos y varios tramos.
   const cards = page.getByRole('list', { name: 'Deudores' }).getByRole('listitem');
   await expect(cards.first()).toBeVisible({ timeout: 15_000 });
   const overflowing = await cards.evaluateAll((cards) =>

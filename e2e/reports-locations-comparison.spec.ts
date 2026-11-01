@@ -6,6 +6,17 @@ import { loginAs } from './support/auth';
 import { tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 import { openSection } from './support/nav';
+import { DEMO_LOCATION_REGIONS, demoAdminSession, listLocations } from './support/demo';
+import {
+  cashCollected,
+  choosePeriod,
+  collectedOf,
+  comparisonRow,
+  nonZero,
+  presetPeriod,
+  type ZonedLocation,
+} from './support/comparison';
+import { sedeToday } from '../src/lib/locations/use-sede-time-zone';
 
 /**
  * e2e (DX-014): «Reportes» → «Comparar sedes» contra la clínica DEMO sembrada
@@ -26,12 +37,21 @@ import { openSection } from './support/nav';
  * La comparación también lista las sedes retiradas, y otra suite o una
  * prueba a mano sobre la misma base pueden haber añadido alguna: eso no
  * cambia lo que este spec comprueba de las dos sembradas.
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
 const ADMIN_EMAIL = process.env.E2E_DEMO_ADMIN_EMAIL ?? 'admin@demo.dentalix.app';
 const DENTIST_EMAIL = process.env.E2E_DEMO_DENTIST_EMAIL ?? 'dentista@demo.dentalix.app';
-const SEDES = ['Sede principal', 'Sede Norte'];
+const SEDES = ['Sede principal', 'Sede Norte', 'Sede São Paulo', 'Sede Londres'];
+/** En qué cobra cada sede: la moneda de su región y, las de USD, también en bolívares. */
+const SEDE_CURRENCIES: Readonly<Record<string, string[]>> = Object.fromEntries(
+  SEDES.map((name) => {
+    const { currency } = DEMO_LOCATION_REGIONS[name];
+    return [name, currency === 'USD' ? ['USD', 'VES'] : [currency]];
+  }),
+);
 
 /** Fila (1440 px) o tarjeta (390 px) de la sede `name`, por su nombre exacto. */
 function sedeRow(page: Page, name: string) {
@@ -55,8 +75,28 @@ async function openReports(page: Page): Promise<void> {
 
 test.describe.configure({ mode: 'serial' });
 
-test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CSV', async ({ page }) => {
+test('«Mes anterior» se cuenta en la zona de la sede de la pantalla, aunque otra sede ya cambió de mes', () => {
+  // 23:30 del 31 de octubre en Caracas: en São Paulo (00:30) y en Londres
+  // (03:30) ya es 1 de noviembre, y la demo siembra su «mes anterior» en octubre.
+  const now = new Date('2026-11-01T03:30:00Z');
+  const zones: [string, string][] = [
+    ['Sede principal', 'America/Caracas'],
+    ['Sede Norte', 'America/Caracas'],
+    ['Sede São Paulo', 'America/Sao_Paulo'],
+    ['Sede Londres', 'Europe/London'],
+  ];
+  const locations: ZonedLocation[] = zones.map(([name, timeZone], i) => ({ id: `l${i}`, name, isActive: true, timeZone }));
+  expect(zones.map(([, zone]) => sedeToday(zone, now))).toEqual(['2026-10-31', '2026-10-31', '2026-11-01', '2026-11-01']);
+  // Sin sede activa, la principal: septiembre, el mes en que Londres y São Paulo no tienen historia.
+  expect(presetPeriod('last_month', locations, null, now)).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+  // Con Londres activa, su zona.
+  expect(presetPeriod('last_month', locations, 'l3', now)).toEqual({ from: '2026-10-01', to: '2026-10-31' });
+});
+
+test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CSV', async ({ page, request }) => {
   test.setTimeout(120_000);
+  const session = await demoAdminSession(request);
+  const locations = await listLocations(request, session);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openReports(page);
 
@@ -72,8 +112,7 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   }
   const total = page.getByTestId('comparison-total');
   await expect(total.getByRole('rowheader', { name: 'Total clínica' })).toBeVisible();
-  // La demo cobra en USD: un importe por moneda, con su código (otros specs
-  // dejan en ella planes en COP, que salen con el suyo).
+  // La demo cobra en varias monedas: un importe por moneda, con su código.
   await expect(total.getByRole('cell').first()).toContainText(/\b[A-Z]{3}\b/);
   await expect(total.getByRole('cell').filter({ hasText: 'USD' }).first()).toBeVisible();
   for (const column of [
@@ -109,21 +148,60 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   await expect(page.getByRole('tooltip').filter({ visible: true })).toContainText('precio neto');
   await page.keyboard.press('Escape');
 
-  // Orden: por «Cobrado», de mayor a menor y luego al revés.
-  const collected = table.getByRole('columnheader', { name: /^Cobrado/ });
-  await expect(collected).toHaveAttribute('aria-sort', 'none');
-  await table.getByRole('button', { name: 'Cobrado', exact: true }).click();
-  await expect(collected).toHaveAttribute('aria-sort', 'descending');
-  // Las dos sedes sembradas cambian de orden entre sí (puede haber otras).
+  // Orden: por «Cobrado», de mayor a menor y luego al revés, en «Mes anterior».
+  // Qué cobra cada sede ese mes no se fija a mano: la pantalla cuenta el mes
+  // en la zona de la principal y la API lo corta en la de cada sede, y al
+  // cambiar de mes Londres y São Paulo ya van por el siguiente (ver
+  // support/comparison.ts). Sale de la respuesta que pinta la pantalla,
+  // contrastada sede a sede con su caja.
+  const report = await choosePeriod(page, 'last_month', locations);
+  for (const name of SEDES) {
+    const location = locations.find((l) => l.name === name)!;
+    const collected = collectedOf(comparisonRow(report, name));
+    const cash = await cashCollected(request, session, location.id, report);
+    expect(nonZero(collected), `«Cobrado» de ${name} frente a su caja`).toEqual(nonZero(cash));
+    // Cada sede cobra en su moneda (las de Caracas, también en bolívares).
+    for (const code of Object.keys(nonZero(collected))) expect(SEDE_CURRENCIES[name], name).toContain(code);
+    const cell = sedeRow(page, name).getByRole('cell').nth(1);
+    for (const code of collected.keys()) await expect(cell, name).toContainText(code, { timeout: 15_000 });
+  }
+  const collectedHeader = table.getByRole('columnheader', { name: /^Cobrado/ });
+  await expect(collectedHeader).toHaveAttribute('aria-sort', 'none');
+  // Se ordena por la primera moneda del total (`sortCurrency`), la que la
+  // pantalla pinta primero en «Total clínica»; la API las trae por código.
+  // La inversión entre las dos sedes USD de PF3 no se puede comprobar con este
+  // comportamiento: ticket de producto (ordenar por la moneda elegida).
+  const sortCode = [...collectedOf(report.total).keys()][0];
+  expect(sortCode, 'la demo cobra algo en «Mes anterior»').toBeDefined();
+  expect((await total.getByRole('cell').nth(1).innerText()).match(/\b[A-Z]{3}\b/)?.[0], 'moneda de orden').toBe(sortCode);
+  const amounts = new Map<string, number>();
+  for (const name of SEDES) {
+    const value = collectedOf(comparisonRow(report, name)).get(sortCode);
+    if (value !== undefined) amounts.set(name, value);
+  }
+  expect(amounts.size, `sedes con cobro en ${sortCode}`).toBeGreaterThan(0);
+  const shown = new Map<string, number>();
+  for (const name of SEDES) {
+    const text = await sedeRow(page, name).getByRole('cell').nth(1).innerText();
+    const figure = text.match(new RegExp(`${sortCode}\\s([\\d.]+,\\d{2})`))?.[1];
+    if (figure) shown.set(name, Number(figure.replace(/\./g, '').replace(',', '.')));
+  }
+  expect(Object.fromEntries(shown), `«Cobrado» en ${sortCode} en pantalla`).toEqual(Object.fromEntries(amounts));
+  const byName = (a: string, b: string) => a.localeCompare(b, 'es');
+  const expectedOrder = (direction: 1 | -1) => [
+    ...[...amounts.keys()].sort((a, b) => direction * (amounts.get(a)! - amounts.get(b)!) || byName(a, b)),
+    ...SEDES.filter((n) => !amounts.has(n)).sort(byName),
+  ];
   const sedeOrder = async () => {
     const names = (await rows.getByRole('rowheader').allTextContents()).map((n) => n.trim());
-    return SEDES.filter((name) => names.includes(name)).sort((a, b) => names.indexOf(a) - names.indexOf(b));
+    return names.filter((n) => SEDES.includes(n));
   };
-  const desc = await sedeOrder();
-  expect(desc).toHaveLength(SEDES.length);
   await table.getByRole('button', { name: 'Cobrado', exact: true }).click();
-  await expect(collected).toHaveAttribute('aria-sort', 'ascending');
-  await expect.poll(sedeOrder).toEqual([...desc].reverse());
+  await expect(collectedHeader).toHaveAttribute('aria-sort', 'descending');
+  await expect.poll(sedeOrder).toEqual(expectedOrder(-1));
+  await table.getByRole('button', { name: 'Cobrado', exact: true }).click();
+  await expect(collectedHeader).toHaveAttribute('aria-sort', 'ascending');
+  await expect.poll(sedeOrder).toEqual(expectedOrder(1));
   await expect(page.getByTestId('comparison-total')).toBeVisible();
 
   // CSV con los filtros activos.

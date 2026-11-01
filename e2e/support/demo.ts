@@ -1,7 +1,8 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import { apiLogin, type ApiSession } from './api';
 import { API_URL, tenantOrigin } from './urls';
-import { E2E_REGION, type RegionalSettings } from './regional';
+import { DOC_TYPE_LABEL } from '../../src/lib/patients/doc-type';
+import { type RegionalSettings } from './regional';
 
 /**
  * La clínica DEMO (`npm run seed:demo` en la API) es estado compartido: la
@@ -15,51 +16,76 @@ export const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!
 export const DEMO_ADMIN_EMAIL = process.env.E2E_DEMO_ADMIN_EMAIL ?? 'admin@demo.dentalix.app';
 
 /**
- * Región de las dos sedes que siembra `seed:demo` (V1): una clínica
- * venezolana que trabaja en USD, en hora de Caracas (UTC−4 fijo) y con el
- * formato es-VE. Parte de sus abonos y de la caja abierta van en bolívares.
+ * Región de cada una de las cuatro sedes que siembra `seed:demo` (V1,
+ * DX-335): las dos venezolanas trabajan en USD, en hora de Caracas (UTC−4
+ * fijo) y con el formato es-VE; São Paulo en BRL y pt-BR; Londres en GBP y
+ * en-GB. Parte de los abonos y de la caja abierta de la principal van en
+ * bolívares. Los valores son los de `prisma/demo/data.ts` de la API.
  */
-export const DEMO_TIME_ZONE = 'America/Caracas';
-export const DEMO_CURRENCY = 'USD';
-export const DEMO_REGION: RegionalSettings = {
+const VE_USD: RegionalSettings = {
   country: 'VE',
-  currency: DEMO_CURRENCY,
-  timeZone: DEMO_TIME_ZONE,
+  currency: 'USD',
+  timeZone: 'America/Caracas',
   locale: 'es-VE',
   hourCycle: 'h23',
 };
+export const DEMO_LOCATION_REGIONS: Readonly<Record<string, RegionalSettings>> = {
+  'Sede principal': VE_USD,
+  'Sede Norte': VE_USD,
+  'Sede São Paulo': {
+    country: 'BR',
+    currency: 'BRL',
+    timeZone: 'America/Sao_Paulo',
+    locale: 'pt-BR',
+    hourCycle: 'h23',
+  },
+  'Sede Londres': {
+    country: 'GB',
+    currency: 'GBP',
+    timeZone: 'Europe/London',
+    locale: 'en-GB',
+    hourCycle: 'h23',
+  },
+};
+/** La región de la sede principal, la que usan los specs que escriben en la demo. */
+export const DEMO_REGION: RegionalSettings = DEMO_LOCATION_REGIONS['Sede principal'];
+export const DEMO_TIME_ZONE: string = DEMO_REGION.timeZone;
+export const DEMO_CURRENCY: string = DEMO_REGION.currency;
 /**
  * Nombre local que la demo da al documento nacional (DX-327, dato de la
  * clínica puesto en Ajustes; V1 le pone el venezolano): fichas, recibos e
  * importación lo muestran en lugar del genérico «Documento nacional». Se lee
- * de la API, como la pantalla: el spec no escribe nombres de país.
+ * de la API, como la pantalla: el spec no escribe nombres de país. Si la
+ * clínica no lo ha nombrado, es el genérico.
  */
-export async function demoNationalIdName(request: APIRequestContext): Promise<string> {
+export async function demoNationalIdLabel(request: APIRequestContext): Promise<string> {
   const session = await demoAdminSession(request);
   const res = await request.get(`${API_URL}/patients/document-type-names`, { headers: session.headers });
   expect(res.ok(), `GET /patients/document-type-names falló: ${await res.text()}`).toBeTruthy();
   const { names } = (await res.json()) as { names: Record<string, string | null> };
-  expect(names.NATIONAL_ID, 'la demo siembra el nombre local del documento nacional').toBeTruthy();
-  return names.NATIONAL_ID as string;
+  return names.NATIONAL_ID ?? DOC_TYPE_LABEL.NATIONAL_ID;
 }
 
 /** Sedes que siembra `seed:demo` (prisma/demo/data.ts de la API). */
-export const DEMO_SEEDED_LOCATIONS = ['Sede principal', 'Sede Norte'];
+export const DEMO_SEEDED_LOCATIONS: string[] = Object.keys(DEMO_LOCATION_REGIONS);
 
 /** Personal que siembra `seed:demo`. */
-export const DEMO_SEEDED_STAFF = [
+export const DEMO_SEEDED_STAFF: string[] = [
   'admin@demo.dentalix.app',
   'dentista@demo.dentalix.app',
   'dentista2@demo.dentalix.app',
   'recepcion@demo.dentalix.app',
   'asistente@demo.dentalix.app',
   'recepcion.norte@demo.dentalix.app',
+  'dentista.saopaulo@demo.dentalix.app',
+  'dentista.londres@demo.dentalix.app',
 ];
 
 export interface DemoLocation {
   id: string;
   name: string;
   isActive: boolean;
+  timeZone: string | null;
 }
 
 export function demoAdminSession(request: APIRequestContext): Promise<ApiSession> {
@@ -97,7 +123,7 @@ export async function reuseDemoLocation(
     if (!existing.isActive) await setLocationActive(request, session, existing.id, true);
     return existing.id;
   }
-  const res = await request.post(`${API_URL}/locations`, { headers: session.headers, data: { name, ...E2E_REGION } });
+  const res = await request.post(`${API_URL}/locations`, { headers: session.headers, data: { name, ...DEMO_REGION } });
   expect(res.ok(), `POST /locations falló: ${await res.text()}`).toBeTruthy();
   return ((await res.json()) as { id: string }).id;
 }
