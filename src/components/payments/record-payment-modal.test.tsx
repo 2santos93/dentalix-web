@@ -50,6 +50,7 @@ jest.mock('../../lib/payments/payment-methods-api', () => ({
       active: true,
       requiresReference: false,
       legacyMethod: 'TRANSFER',
+      adjustments: [],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
@@ -60,6 +61,7 @@ jest.mock('../../lib/payments/payment-methods-api', () => ({
       active: true,
       requiresReference: true,
       legacyMethod: null,
+      adjustments: [],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
@@ -159,6 +161,8 @@ function savedPayment(
     exchangeRateCurrency: 'COP',
     frozenRate: null,
     exchangeRateStatus: 'NOT_NEEDED',
+    adjustments: [],
+    collectedAmount: 150000,
     ...overrides,
   };
 }
@@ -313,6 +317,8 @@ it('un abono guardado sin tasa lo dice en el aviso', async () => {
       amount: 50,
       currency: 'USD',
       exchangeRateStatus: 'MISSING',
+      adjustments: [],
+      collectedAmount: 50,
     }),
   );
   const { onRecorded } = renderModal();

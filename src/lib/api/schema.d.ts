@@ -2123,6 +2123,38 @@ export interface paths {
         patch: operations["PaymentMethodsController_update"];
         trace?: never;
     };
+    "/api/v1/payment-methods/{id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PaymentMethodsController_addAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-methods/{id}/adjustments/{adjustmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PaymentMethodsController_changeAdjustment"];
+        trace?: never;
+    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -10604,6 +10636,35 @@ export interface components {
          * @enum {string}
          */
         PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+        /**
+         * @description Impuesto, recargo o descuento (genéricos).
+         * @enum {string}
+         */
+        PaymentAdjustmentType: "TAX" | "SURCHARGE" | "DISCOUNT";
+        /** @enum {string} */
+        PaymentAdjustmentCalculation: "PERCENT" | "FIXED";
+        PaymentMethodAdjustmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            paymentMethodId: string;
+            /** @description Impuesto, recargo o descuento (genéricos). */
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label: string;
+            calculation: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Porcentaje (0, 100] con hasta 2 decimales; solo PERCENT. */
+            percent: number | null;
+            /** @description Importe fijo; solo FIXED. */
+            fixedAmount: number | null;
+            /** @description Moneda del importe fijo: el ajuste solo se aplica a abonos en esa moneda. */
+            fixedCurrency: string | null;
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         PaymentMethodDto: {
             /** Format: uuid */
             id: string;
@@ -10616,6 +10677,8 @@ export interface components {
             requiresReference: boolean;
             /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
             legacyMethod: components["schemas"]["PaymentMethod"] | null;
+            /** @description DX-516: sus ajustes (activos o no; hasta 5 activos). Vacío por defecto. */
+            adjustments: components["schemas"]["PaymentMethodAdjustmentDto"][];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -10638,6 +10701,34 @@ export interface components {
             active?: boolean;
             /** @description Sin indicarlo, no pide referencia. */
             requiresReference?: boolean;
+        };
+        CreatePaymentAdjustmentDto: {
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label: string;
+            calculation: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Con PERCENT: (0, 100], hasta 2 decimales. */
+            percent?: number | null;
+            /** @description Con FIXED: > 0, con los decimales de redondeo de su moneda (DX-340). */
+            fixedAmount?: number | null;
+            /** @description Con FIXED: moneda del catálogo. */
+            fixedCurrency?: string | null;
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
+        };
+        UpdatePaymentAdjustmentDto: {
+            type?: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label?: string;
+            calculation?: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Con PERCENT: (0, 100], hasta 2 decimales. */
+            percent?: number | null;
+            /** @description Con FIXED: > 0, con los decimales de redondeo de su moneda (DX-340). */
+            fixedAmount?: number | null;
+            /** @description Con FIXED: moneda del catálogo. */
+            fixedCurrency?: string | null;
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
         };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
@@ -12065,6 +12156,22 @@ export interface components {
             /** @example Saldo migrado */
             concept: string;
         };
+        PaymentAdjustmentLineDto: {
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label: string;
+            calculation: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Con PERCENT. */
+            percent: number | null;
+            /** @description Con FIXED. */
+            fixedAmount: number | null;
+            /** @description El importe del abono sobre el que se calculó. */
+            base: number;
+            /** @description Importe del ajuste (> 0), en la moneda del abono. */
+            amount: number;
+            /** @description Código ISO 4217 (la moneda del abono). */
+            currency: string;
+        };
         CashPaymentDto: {
             /** Format: uuid */
             id: string;
@@ -12120,6 +12227,13 @@ export interface components {
              * @example 2
              */
             splitLines: number | null;
+            /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
+            adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
+            /**
+             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`.
+             * @example 103
+             */
+            collectedAmount: number;
         };
         CashScopeDto: {
             /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
@@ -12164,6 +12278,27 @@ export interface components {
             /** @example 2 */
             count: number;
         };
+        CashAdjustmentTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /**
+             * @description Suma (en positivo) sin convertir.
+             * @example 3
+             */
+            total: number;
+            /**
+             * @description Número de líneas de ajuste.
+             * @example 1
+             */
+            count: number;
+        };
+        CashCollectedTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @example 103 */
+            total: number;
+        };
         CashPaymentsSummaryDto: {
             /** @description Número de abonos del período */
             count: number;
@@ -12173,6 +12308,10 @@ export interface components {
             byMethod: components["schemas"]["CashMethodTotalDto"][];
             /** @description DX-377: total por medio de pago de la clínica y moneda. */
             byPaymentMethod: components["schemas"]["CashPaymentMethodTotalDto"][];
+            /** @description DX-516: ajustes por medio de pago de los abonos del período, por moneda y tipo (vacío sin ajustes). */
+            adjustments: components["schemas"]["CashAdjustmentTotalDto"][];
+            /** @description DX-516: lo cobrado por moneda: abonos + impuestos + recargos − descuentos (sin ajustes, igual que `byCurrency`). */
+            collected: components["schemas"]["CashCollectedTotalDto"][];
         };
         CashPaymentsResponseDto: {
             items: components["schemas"]["CashPaymentDto"][];
@@ -12316,6 +12455,13 @@ export interface components {
             frozenRate: components["schemas"]["FrozenExchangeRateDto"] | null;
             /** @description DX-375: la tasa del abono. NOT_NEEDED: está en la moneda de su destino. FROZEN: congeló su tasa al registrarse (o el barrido, si se cobró sin tasa) y saldos y totales la usan siempre, aunque la tasa cambie después. MISSING: «sin tasa»: no había tasa de su día; no cuenta en el saldo del plan hasta que se registre (Ajustes › Tasa de cambio) y el barrido de cada minuto la congele. LEGACY: anterior a la tasa congelada y aún sin congelar: se convierte con la tasa de su día, como antes, hasta que el barrido la congele. */
             exchangeRateStatus: components["schemas"]["PaymentExchangeRateStatus"];
+            /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
+            adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
+            /**
+             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`.
+             * @example 103
+             */
+            collectedAmount: number;
         };
         SplitPaymentLineDto: {
             /** @example 50 */
@@ -12511,6 +12657,8 @@ export interface components {
             reference: string | null;
             /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
             equivalentAmount: number | null;
+            /** @description DX-516: ajustes del medio de esta línea; ausente si no tiene ninguno. */
+            adjustments?: components["schemas"]["PaymentAdjustmentLineDto"][];
             /** @description Como `exchangeRate` del recibo, para esta línea. */
             exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
         };
@@ -12576,6 +12724,8 @@ export interface components {
              * @example 2026-10-17
              */
             paidOn: string;
+            /** @description DX-516: ajustes por medio de pago congelados al emitir; ausente sin ajustes, en los recibos anteriores y en un cobro dividido (van en cada línea). */
+            adjustments?: components["schemas"]["PaymentAdjustmentLineDto"][];
         };
         ReceiptPlanDto: {
             /** Format: uuid */
@@ -12629,6 +12779,8 @@ export interface components {
             reference: string | null;
             /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
             equivalentAmount: number | null;
+            /** @description DX-516: ajustes del medio de esta línea; ausente si no tiene ninguno. */
+            adjustments?: components["schemas"]["PaymentAdjustmentLineDto"][];
         };
         ReceiptSnapshotSplitDto: {
             lines: components["schemas"]["ReceiptSplitLineDto"][];
@@ -14217,12 +14369,14 @@ export interface components {
             /** @description Abonos del turno que cuentan */
             payments: number;
             paymentsCount: number;
+            /** @description DX-516: ajustes por medio de pago de esos abonos, con signo (impuestos y recargos +, descuentos −); 0 sin ajustes. */
+            paymentAdjustments: number;
             /** @description Ajustes que entraron en esta caja (con signo) */
             adjustments: number;
             /** @description Salidas de caja menor del turno (DX-274), en positivo: se restan. Solo en efectivo. */
             outflows: number;
             outflowsCount: number;
-            /** @description opening + payments + adjustments − outflows (puede ser negativo) */
+            /** @description opening + payments + paymentAdjustments + adjustments − outflows (puede ser negativo) */
             expected: number;
         };
         CashSessionPaymentDto: {
@@ -14246,6 +14400,8 @@ export interface components {
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
+            /** @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). */
+            collectedAmount: number;
         };
         CashVoidedPaymentDto: {
             /** Format: uuid */
@@ -14268,6 +14424,8 @@ export interface components {
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
+            /** @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). */
+            collectedAmount: number;
             /** Format: date-time */
             voidedAt: string | null;
             voidedBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -24007,6 +24165,113 @@ export interface operations {
                 content?: never;
             };
             /** @description Ya existe un medio con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_addAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentAdjustmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodAdjustmentDto"];
+                };
+            };
+            /** @description Etiqueta vacía o larga, porcentaje fuera de (0, 100], importe fijo sin moneda o con más decimales que su moneda. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Etiqueta repetida en el medio o tope de ajustes activos */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_changeAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                adjustmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePaymentAdjustmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodAdjustmentDto"];
+                };
+            };
+            /** @description Campo inválido (como en el alta). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio o ajuste no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Etiqueta repetida en el medio o tope de ajustes activos */
             409: {
                 headers: {
                     [name: string]: unknown;

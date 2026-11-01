@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** [fuente en la API, copia en la web] (spec G1-B §8; DX-312 §6.5; DX-329 §3.2; DX-340). */
+/** [fuente en la API, copia en la web] (spec G1-B §8; DX-312 §6.5; DX-329 §3.2; DX-340; DX-516). */
 export const PAIRS = [
   ['prisma/reference/cldr-format-digits-zero.json', 'src/lib/money/cldr-format-digits-zero.json'],
   ['prisma/reference/iana-zone-names.json', 'src/lib/locations/iana-zone-names.json'],
@@ -21,6 +21,8 @@ export const PAIRS = [
   ['prisma/reference/iso3166-countries.json', 'src/lib/locations/iso3166-countries.json'],
   ['prisma/reference/phone-regions-list.json', 'src/lib/locations/phone-regions-list.json'],
   ['src/shared/money/rounding-vectors.json', 'src/lib/money/rounding-vectors.json'],
+  // DX-516: vectores de los ajustes por medio de pago.
+  ['src/modules/payment-methods/domain/payment-adjustment-vectors.json', 'src/lib/payments/payment-adjustment-vectors.json'],
 ];
 
 /** Mensajes de deriva de cada par; vacío si las copias son idénticas. */

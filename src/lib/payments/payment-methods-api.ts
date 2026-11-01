@@ -66,3 +66,33 @@ export async function updatePaymentMethod(
     token,
   });
 }
+
+// DX-516: ajustes por medio de pago (solo ADMIN).
+export type PaymentMethodAdjustment = components['schemas']['PaymentMethodAdjustmentDto'];
+export type CreatePaymentAdjustmentInput = components['schemas']['CreatePaymentAdjustmentDto'];
+export type UpdatePaymentAdjustmentInput = components['schemas']['UpdatePaymentAdjustmentDto'];
+
+export async function createPaymentAdjustment(
+  token: string,
+  paymentMethodId: string,
+  input: CreatePaymentAdjustmentInput,
+): Promise<PaymentMethodAdjustment> {
+  return apiFetch<PaymentMethodAdjustment>(`/payment-methods/${paymentMethodId}/adjustments`, {
+    method: 'POST',
+    body: input,
+    token,
+  });
+}
+
+export async function updatePaymentAdjustment(
+  token: string,
+  paymentMethodId: string,
+  adjustmentId: string,
+  input: UpdatePaymentAdjustmentInput,
+): Promise<PaymentMethodAdjustment> {
+  return apiFetch<PaymentMethodAdjustment>(`/payment-methods/${paymentMethodId}/adjustments/${adjustmentId}`, {
+    method: 'PATCH',
+    body: input,
+    token,
+  });
+}

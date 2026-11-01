@@ -58,6 +58,7 @@ const METHODS = [
     active: true,
     requiresReference: false,
     legacyMethod: 'CASH' as const,
+    adjustments: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -68,6 +69,7 @@ const METHODS = [
     active: true,
     requiresReference: true,
     legacyMethod: 'TRANSFER' as const,
+    adjustments: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -130,6 +132,8 @@ function savedSplit(): SplitPayment {
     exchangeRateCurrency: 'COP',
     frozenRate: null,
     exchangeRateStatus: 'NOT_NEEDED' as const,
+    adjustments: [],
+    collectedAmount: amount,
   });
   return {
     id: 'pay-1',
