@@ -23,10 +23,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 26 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
+  it('ADMIN ve las 27 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(26);
-    expect(new Set(hrefs).size).toBe(26);
+    expect(hrefs).toHaveLength(27);
+    expect(new Set(hrefs).size).toBe(27);
   });
 
   it('la entrada de Historia clínica dice también el plazo de conservación (DX-330)', () => {
@@ -116,5 +116,16 @@ describe('Índice de Ajustes (DX-282)', () => {
 
   it('sin rol legible (token de plataforma o basura) no enseña nada de administración', () => {
     expect(hrefsFor(null)).toEqual(FOR_EVERYONE);
+  });
+});
+
+describe('Monedas (DX-517)', () => {
+  it('solo ADMIN la ve, en Cobro, justo tras «Tasa de cambio»', () => {
+    const cobro = visibleSettingsSections('ADMIN').find((section) => section.id === 'cobro');
+    const labels = cobro?.entries.map((entry) => entry.label) ?? [];
+    expect(labels.indexOf('Monedas')).toBe(labels.indexOf('Tasa de cambio') + 1);
+    for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT'] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/monedas');
+    }
   });
 });

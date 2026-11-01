@@ -65,6 +65,8 @@ const FIELD_LABELS: Record<string, string> = {
   externalInvoiceNumber: "Nº de factura externa",
   // DX-330: plazo de conservación de la historia clínica.
   clinicalRecordRetentionYears: "Plazo de conservación de la historia clínica",
+  // DX-517: «VES=Bs.», una moneda por elemento.
+  currencyTexts: "Texto de las monedas",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 

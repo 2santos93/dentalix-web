@@ -17,6 +17,21 @@ export function parseTenantFromHost(host: string | null): string | null {
 }
 
 /**
+ * El host es de la plataforma (raíz, www o localhost): ahí nunca hay clínica.
+ * No es lo mismo que `parseTenantFromHost(...) === null`: un dominio propio
+ * también da null y sí tiene clínica (la resuelve la API por el host).
+ */
+export function isPlatformHost(host: string): boolean {
+  const hostname = host.split(':')[0].toLowerCase();
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === ROOT_DOMAIN ||
+    hostname === `www.${ROOT_DOMAIN}`
+  );
+}
+
+/**
  * Enlace al inicio de sesión de la clínica `subdomain` desde la página actual
  * (DX-029: tras confirmar el registro). Si ya estamos en su host, basta la
  * ruta relativa; si no, se arma su origen sobre el dominio raíz (o

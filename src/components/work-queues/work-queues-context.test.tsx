@@ -63,6 +63,30 @@ describe('WorkQueuesProvider (DX-503)', () => {
     expect(screen.getByTestId('badge-CLOSING_QUEUE')).toHaveTextContent('2');
   });
 
+  it('DX-503-bis: en Inicio, UNA petición (todas las listas), no la del menú antes', async () => {
+    render(
+      <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname="/dashboard">
+        <Badge k="CLOSING_QUEUE" />
+        <MyDay />
+      </WorkQueuesProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('view')).toHaveTextContent('LOW_STOCK=4'));
+    await act(async () => {});
+    expect(summary).toHaveBeenCalledTimes(1);
+    expect(summary.mock.calls[0][1]).toBeUndefined();
+    expect(screen.getByTestId('badge-CLOSING_QUEUE')).toHaveTextContent('3');
+  });
+
+  it('DX-503-bis: «Mi día» montado fuera de Inicio sigue pidiendo todas', async () => {
+    render(
+      <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname="/otra">
+        <MyDay />
+      </WorkQueuesProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('view')).toHaveTextContent('LOW_STOCK=4'));
+    expect(summary.mock.calls.at(-1)?.[1]).toBeUndefined();
+  });
+
   it('sin «Mi día» montado pide solo las listas del menú', async () => {
     render(
       <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname="/patients">

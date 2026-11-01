@@ -9,6 +9,7 @@ import {
   CalendarDays,
   ClipboardClock,
   ClipboardList,
+  Coins,
   Clock,
   FileSignature,
   FileUp,
@@ -41,6 +42,7 @@ import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
 import { canManageExchangeRates } from '@/lib/exchange/exchange-settings-api';
+import { canManageCurrencyTexts } from '@/lib/exchange/currency-texts-api';
 import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
 import { canManageDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { canManagePatientSettings } from '@/lib/patients/patient-settings-api';
@@ -183,7 +185,8 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/caja',
         label: 'Caja',
-        description: 'Cómo se abre y se cierra la caja por turno.',
+        // DX-515-bis: también los medios de pago (DX-377) y el recibo (DX-515).
+        description: 'Cómo se abre y se cierra la caja por turno, con qué medios se cobra y qué dice el recibo.',
         icon: Wallet,
         visible: canManageCashSessions,
       },
@@ -194,6 +197,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Si la tasa del día la da un proveedor o la registra la clínica, y las tasas registradas.',
         icon: ArrowLeftRight,
         visible: canManageExchangeRates,
+      },
+      // DX-517.
+      {
+        href: '/settings/monedas',
+        label: 'Monedas',
+        description: 'Cómo se escribe cada moneda en importes, recibos y mensajes. Sin texto propio, se usa su código.',
+        icon: Coins,
+        visible: canManageCurrencyTexts,
       },
       // DX-204.
       {
