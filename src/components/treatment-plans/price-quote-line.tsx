@@ -1,5 +1,4 @@
 import { PRICE_SOURCE_LABELS } from '@/components/agreements/agreement-labels';
-import { formatCurrency } from '@/lib/format/currency';
 import type { PriceSource } from '@/lib/patients/patient-agreement-api';
 
 const copy = {
@@ -13,8 +12,14 @@ function isAgreementSource(source: string | null | undefined): boolean {
 }
 
 /**
+ * Pinta el precio de lista (el del catálogo) con SU moneda, que puede no ser la
+ * del plan (DX-489, `formatListPrice`).
+ */
+export type ListPriceText = (value: number) => string;
+
+/**
  * Origen del precio resuelto en el formulario: «Convenio · Seguros Sol ·
- * precio de lista $100.000». El precio de lista (catálogo) solo sale si
+ * precio de lista COP 100.000,00». El precio de lista (catálogo) solo sale si
  * difiere del resuelto.
  */
 export function priceSourceText(
@@ -24,12 +29,12 @@ export function priceSourceText(
     basePrice: number | null;
     price: number | null;
   },
-  currency: string,
+  listPrice: ListPriceText,
 ): string {
   const parts: string[] = [PRICE_SOURCE_LABELS[quote.source]];
   if (isAgreementSource(quote.source) && quote.agreementName) parts.push(quote.agreementName);
   if (quote.basePrice !== null && quote.basePrice !== quote.price) {
-    parts.push(copy.listPrice(formatCurrency(quote.basePrice, currency)));
+    parts.push(copy.listPrice(listPrice(quote.basePrice)));
   }
   return parts.join(' · ');
 }
@@ -46,10 +51,9 @@ export function itemPriceOriginText(
     basePrice: number | null;
     catalogPrice: number | null;
   },
-  currency: string,
+  listPrice: ListPriceText,
 ): string | null {
-  const list =
-    item.basePrice !== null ? copy.listPrice(formatCurrency(item.basePrice, currency)) : null;
+  const list = item.basePrice !== null ? copy.listPrice(listPrice(item.basePrice)) : null;
   if (isAgreementSource(item.priceSource)) {
     const head = copy.agreementItem(item.agreementName ?? '').trim();
     return list ? `${head} · ${list}` : head;
@@ -63,16 +67,16 @@ export function itemPriceOriginText(
 /** Línea de origen bajo el campo de precio del formulario. */
 export function PriceQuoteLine({
   quote,
-  currency,
+  listPrice,
   id,
 }: {
   quote: Parameters<typeof priceSourceText>[0];
-  currency: string;
+  listPrice: ListPriceText;
   id?: string;
 }) {
   return (
     <p id={id} className="t-caption text-muted tabular-nums">
-      {priceSourceText(quote, currency)}
+      {priceSourceText(quote, listPrice)}
     </p>
   );
 }

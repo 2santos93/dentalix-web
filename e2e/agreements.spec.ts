@@ -2,6 +2,9 @@ import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { formatCurrency } from '../src/lib/format/currency';
+import { regionalFormat } from '../src/lib/format/regional-format';
+import { moneyWithCode } from '../src/lib/format/sede-number';
+import { E2E_REGION } from './support/regional';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
@@ -43,6 +46,8 @@ const SAVING = CATALOG_PRICE - AGREEMENT_PRICE;
 const money = (amount: number): string => formatCurrency(amount, 'COP');
 // Solo la cifra («120.000,00»): entre ella y «COP» va un espacio duro.
 const figure = (amount: number): string => money(amount).split(/\s/)[0];
+/** La pestaña del plan pinta sus importes con el formato de la sede (DX-386, DX-489). */
+const sedeMoney = (amount: number): string => moneyWithCode(amount, 'COP', regionalFormat(E2E_REGION));
 
 const QA_DIR = path.resolve(process.env.DX105_QA_DIR ?? 'e2e/.qa-shots');
 const QA = process.env.DX105_QA_SHOTS === '1';
@@ -300,7 +305,7 @@ test('el DENTISTA abre el plan: el precio llega precargado con el convenio, la f
   await expect(price).toHaveValue(String(AGREEMENT_PRICE), { timeout: 10_000 });
   const source = form.getByText(/^Convenio · /);
   await expect(source).toContainText(agreementName);
-  await expect(source).toContainText(`precio de lista ${money(CATALOG_PRICE)}`);
+  await expect(source).toContainText(`precio de lista ${sedeMoney(CATALOG_PRICE)}`);
   await expectNoHorizontalScroll(page);
   await price.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await shot(page, 'plan-precio-convenio-1440');
@@ -309,9 +314,9 @@ test('el DENTISTA abre el plan: el precio llega precargado con el convenio, la f
   const itemRow = panel.locator('table tbody tr').filter({ has: page.getByRole('cell', { name: '21', exact: true }) });
   await expect(itemRow).toBeVisible({ timeout: 10_000 });
   await expect(itemRow).toContainText(procedureLabel);
-  await expect(itemRow).toContainText(money(AGREEMENT_PRICE));
+  await expect(itemRow).toContainText(sedeMoney(AGREEMENT_PRICE));
   await expect(itemRow).toContainText(`Convenio ${agreementName}`);
-  await expect(itemRow).toContainText(`precio de lista ${money(CATALOG_PRICE)}`);
+  await expect(itemRow).toContainText(`precio de lista ${sedeMoney(CATALOG_PRICE)}`);
 
   // Presupuesto imprimible: «Convenio» y «Ahorro por convenio».
   const [printPage] = await Promise.all([

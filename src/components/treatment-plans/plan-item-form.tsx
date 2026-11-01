@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatCurrency } from '@/lib/format/currency';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 import { isFdiToothNumber } from '@/lib/odontogram/fdi';
 import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
@@ -25,6 +26,7 @@ import {
   type TreatmentPlan,
 } from '@/lib/treatment-plans/treatment-plans-api';
 import { usePriceQuote } from '@/lib/treatment-plans/use-price-quote';
+import { formatListPrice, sedeListPriceFormat } from '@/lib/treatment-plans/list-price';
 import {
   DiscountReasonFields,
   EMPTY_REASON,
@@ -57,6 +59,10 @@ interface PlanItemFormProps {
   /** DX-204: política de descuentos para avisar antes de enviar; `null` = decide la API. */
   discountRules: DiscountRules | null;
   role: ClinicRole | null;
+  /** DX-489: moneda del catálogo (la del «precio de lista»); `null` si no se sabe. */
+  catalogCurrency: string | null;
+  /** DX-489: formato de la sede, el de los demás importes del plan; `null` mientras carga («—»). */
+  fmt: RegionalFormat | null;
   /** Tras agregar: refresca el plan y el saldo (y se espera antes de reactivar el botón). */
   onAdded: () => Promise<unknown>;
   /** D2: ¿«Agregar ítem» es LA primaria de la vista? Si no, secundario. */
@@ -76,6 +82,8 @@ export function PlanItemForm({
   catalogById,
   discountRules,
   role,
+  catalogCurrency,
+  fmt,
   onAdded,
   submitPrimary = true,
 }: PlanItemFormProps) {
@@ -324,7 +332,11 @@ export function PlanItemForm({
           ) : priceQuote.status === 'error' ? (
             <FieldError label={copy.priceQuoteError} onRetry={priceQuote.retry} />
           ) : quoteReady ? (
-            <PriceQuoteLine id="tp-price-source" quote={quoteReady} currency={addCurrency} />
+            <PriceQuoteLine
+              id="tp-price-source"
+              quote={quoteReady}
+              listPrice={(value) => formatListPrice(value, catalogCurrency, sedeListPriceFormat(fmt))}
+            />
           ) : null}
           {/* SEC-041: aviso, no bloqueo; la API decide con el
               tope del rol. */}
@@ -334,8 +346,8 @@ export function PlanItemForm({
                 <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>
                 <span className="block">
                   {copy.priceBelowCatalogDetail(
-                    formatCurrency(addEffective.priceReduction, plan.currency),
-                    formatCurrency(addCatalogPrice, plan.currency),
+                    sedeMoney(addEffective.priceReduction, plan.currency, fmt),
+                    sedeMoney(addCatalogPrice, plan.currency, fmt),
                   )}
                 </span>
               </>

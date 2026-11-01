@@ -135,6 +135,12 @@ const MONEY_WITH_CODE = [
   'components/payments/without-rate-notice.tsx',
   'components/treatment-plans/item-paid-cell.tsx',
   'components/account-statement/plan-items-balance.tsx',
+  // DX-489: el resto de importes del plan, con el mismo formato que sus abonos.
+  'components/treatment-plans/plan-money-summary.tsx',
+  'components/treatment-plans/plan-items-table.tsx',
+  'components/treatment-plans/plan-item-form.tsx',
+  'components/treatment-plans/payment-plan-section.tsx',
+  'components/treatment-plans/price-quote-line.tsx',
 ];
 
 /** Los nombres que el fichero importa de `@/lib/format/currency`. */

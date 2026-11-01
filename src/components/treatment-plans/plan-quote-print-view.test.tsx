@@ -154,4 +154,46 @@ describe('PlanQuotePrintView (DX-012)', () => {
     expect(await screen.findByText('No encontramos este presupuesto.')).toBeInTheDocument();
     await waitFor(() => expect(print).not.toHaveBeenCalled());
   });
+
+  describe('DX-489: el precio de lista en la moneda del catálogo', () => {
+    const eurQuote = () =>
+      planQuoteFixture({
+        currency: 'EUR',
+        items: [{ ...planQuoteFixture().items[0], unitPrice: 100.55, discount: 0, subtotal: 100.55, listPrice: 80000, agreementName: 'Plan Oro' }],
+        totals: [{ currency: 'EUR', gross: 100.55, discount: 0, net: 100.55, agreementSaving: 79899.45 }],
+      });
+    const flat = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
+
+    it('plan en EUR, sedes en COP: lo que se imprime lleva el precio de lista en COP y sin ahorro', async () => {
+      mockedGet.mockResolvedValue(eurQuote());
+      renderView();
+      const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
+      expect(flat(table)).toContain('Precio de lista 80.000,00 COP');
+      expect(flat(table)).not.toContain('80.000,00 EUR');
+      expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
+      expect(print).toHaveBeenCalledTimes(1);
+    });
+
+    it('no abre el diálogo de impresión hasta saber la moneda del catálogo', async () => {
+      let resolveLocations!: (value: ReturnType<typeof clinicLocation>[]) => void;
+      jest.mocked(listLocations).mockReturnValue(new Promise((resolve) => (resolveLocations = resolve)));
+      mockedGet.mockResolvedValue(eurQuote());
+      renderView();
+      await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+      expect(screen.queryByTestId('quote-header')).not.toBeInTheDocument();
+      expect(print).not.toHaveBeenCalled();
+      resolveLocations([clinicLocation()]);
+      expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
+      expect(print).toHaveBeenCalledTimes(1);
+    });
+
+    it('si las sedes no cargan, imprime igual con la cifra sin moneda y la nota', async () => {
+      jest.mocked(listLocations).mockRejectedValue(new Error('red'));
+      mockedGet.mockResolvedValue(eurQuote());
+      renderView();
+      const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
+      expect(flat(table)).toMatch(/Precio de lista 80\.000,00(?! (EUR|COP))/);
+      expect(screen.getByTestId('quote-list-price-note')).toHaveTextContent(/puede estar en otra moneda/);
+    });
+  });
 });

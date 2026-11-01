@@ -1,12 +1,13 @@
 'use client';
 import Link from 'next/link';
-import { formatCurrency } from '@/lib/format/currency';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import type { PlanItemBalance } from '@/lib/payments/payments-api';
 import { DISCOUNT_REASON_LABELS, effectiveDiscount, type DiscountReasonCode } from '@/lib/discounts/discount-rules';
 import { ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
+import { formatListPrice, sedeListPriceFormat } from '@/lib/treatment-plans/list-price';
 import type { TreatmentPlanItem, TreatmentPlanItemStatus } from '@/lib/treatment-plans/treatment-plans-api';
 import { voidFeeCopy } from '@/components/appointments/fee-reason-modal';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -18,7 +19,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { ItemPaidCell, ItemPaidLine, itemPaidCopy } from './item-paid-cell';
-import { itemPriceOriginText } from './price-quote-line';
+import { itemPriceOriginText, type ListPriceText } from './price-quote-line';
 import {
   ITEM_STATUS_OPTIONS,
   copy,
@@ -38,6 +39,11 @@ export interface ItemsTableProps {
   catalogById: Map<string, DentalCatalogItem>;
   /** The plan's currency (`planDetail.currency`) — item prices don't carry their own currency. */
   currency: string;
+  /**
+   * DX-489: moneda del catálogo (`clinicBaseCurrency`), la del «precio de
+   * lista»; `null` si no se sabe (la cifra va sin moneda).
+   */
+  catalogCurrency: string | null;
   /** La visita cuyos ítems lista (`null` sin visitas): nombra la tabla. */
   visit: number | null;
   /** DX-343: «Cargo n de N» de cada ítem de cargo (ver `feeReferences`). */
@@ -91,7 +97,10 @@ export interface ItemsTableProps {
     selectedIds: ReadonlySet<string>;
     onToggle: (itemId: string, checked: boolean) => void;
   };
-  /** DX-386: formato de la sede para «Cobrado» y «Pendiente»; `null` mientras carga («—»). */
+  /**
+   * DX-386/DX-489: formato de la sede para TODOS los importes de la tabla
+   * (precio, descuento, cobrado, pendiente); `null` mientras carga («—»).
+   */
   fmt: RegionalFormat | null;
 }
 
@@ -139,7 +148,7 @@ function ItemAttributionLine({
 function FeeItemLine({
   item,
   label,
-  currency,
+  money,
   feeRef,
   disabled,
   onVoid,
@@ -147,7 +156,8 @@ function FeeItemLine({
   item: TreatmentPlanItem;
   /** El procedimiento tal como lo dice la fila. */
   label: string;
-  currency: string;
+  /** Un importe del plan con el formato de la sede. */
+  money: (amount: number) => string;
   /** Solo con más de un cargo en el plan. */
   feeRef?: FeeRef;
   /** DX-343: tras un 409, hasta releer el plan. */
@@ -165,7 +175,7 @@ function FeeItemLine({
           variant="destructive-ghost"
           size="sm"
           disabled={disabled}
-          aria-label={copy.voidFeeFor(label, formatCurrency(item.price, currency), feeRef)}
+          aria-label={copy.voidFeeFor(label, money(item.price), feeRef)}
           onClick={() => onVoid(item)}
         >
           {voidFeeCopy.action}
@@ -176,9 +186,17 @@ function FeeItemLine({
 }
 
 /** Línea del descuento de un ítem: importe y, si lo tiene, su motivo. */
-function ItemDiscountLine({ item, currency }: { item: TreatmentPlanItem; currency: string }) {
+function ItemDiscountLine({
+  item,
+  money,
+  listPrice,
+}: {
+  item: TreatmentPlanItem;
+  money: (amount: number) => string;
+  listPrice: ListPriceText;
+}) {
   const { priceReduction } = effectiveDiscount(item.catalogPrice, item.price, item.discount);
-  const origin = itemPriceOriginText(item, currency);
+  const origin = itemPriceOriginText(item, listPrice);
   if (item.discount <= 0 && priceReduction <= 0 && !origin) return null;
   const reason = item.discountReason as DiscountReasonCode | null;
   return (
@@ -186,13 +204,10 @@ function ItemDiscountLine({ item, currency }: { item: TreatmentPlanItem; currenc
       {origin ? <span className="block tabular-nums">{origin}</span> : null}
       {priceReduction > 0 && item.catalogPrice !== null ? (
         <span className="block">
-          {copy.itemPriceReduction(
-            formatCurrency(priceReduction, currency),
-            formatCurrency(item.catalogPrice, currency),
-          )}
+          {copy.itemPriceReduction(money(priceReduction), money(item.catalogPrice))}
         </span>
       ) : null}
-      {item.discount > 0 ? <span className="block">{copy.itemDiscount(formatCurrency(item.discount, currency))}</span> : null}
+      {item.discount > 0 ? <span className="block">{copy.itemDiscount(money(item.discount))}</span> : null}
       {reason ? (
         <span className="block">{copy.itemDiscountReason(DISCOUNT_REASON_LABELS[reason])}</span>
       ) : null}
@@ -271,6 +286,7 @@ export function ItemsTable({
   items,
   catalogById,
   currency,
+  catalogCurrency,
   updatingItemId,
   visit,
   feeRefs,
@@ -290,6 +306,11 @@ export function ItemsTable({
   selection,
   fmt,
 }: ItemsTableProps) {
+  // DX-489: un único formato para los importes del plan, el de la sede (el de
+  // la lista de abonos); el precio de lista, en la moneda del catálogo.
+  const money = (amount: number) => sedeMoney(amount, currency, fmt);
+  const listPriceFormat = sedeListPriceFormat(fmt);
+  const listPrice: ListPriceText = (value) => formatListPrice(value, catalogCurrency, listPriceFormat);
   // SEC-050: el ítem de un cargo vigente no se quita, no cambia de estado ni
   // entra en «Descuento %».
   const isFee = (item: TreatmentPlanItem) => Boolean(item.cancellationFeeAppointmentId);
@@ -364,8 +385,8 @@ export function ItemsTable({
                   <TableCell>{procedureName(item, catalogById)}</TableCell>
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
                   <TableCell className="tabular-nums">
-                    {formatCurrency(item.price, currency)}
-                    <ItemDiscountLine item={item} currency={currency} />
+                    {money(item.price)}
+                    <ItemDiscountLine item={item} money={money} listPrice={listPrice} />
                   </TableCell>
                   {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} fmt={fmt} /> : null}
                   <TableCell>
@@ -396,7 +417,7 @@ export function ItemsTable({
                       <FeeItemLine
                         item={item}
                         label={procedureName(item, catalogById)}
-                        currency={currency}
+                        money={money}
                         feeRef={feeRefs.get(item.id)}
                         disabled={feeStale}
                         onVoid={onVoidFee}
@@ -456,8 +477,8 @@ export function ItemsTable({
               <p className="mt-2 text-ink">{procedureName(item, catalogById)}</p>
               <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">
-                {formatCurrency(item.price, currency)}
-                <ItemDiscountLine item={item} currency={currency} />
+                {money(item.price)}
+                <ItemDiscountLine item={item} money={money} listPrice={listPrice} />
               </p>
               {itemBalances?.has(item.id) ? (
                 <div className="mt-1">
@@ -472,7 +493,7 @@ export function ItemsTable({
                   <FeeItemLine
                     item={item}
                     label={procedureName(item, catalogById)}
-                    currency={currency}
+                    money={money}
                     feeRef={feeRefs.get(item.id)}
                     disabled={feeStale}
                     onVoid={onVoidFee}
