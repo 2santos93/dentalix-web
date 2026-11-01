@@ -20,7 +20,7 @@ export function canManageClinicSettings(role: ClinicRole | null): boolean {
 export const LOGO_MAX_BYTES = 1024 * 1024;
 /** Lo que sube por el proxy con el sobre del multipart dentro de su MB. */
 export const LOGO_UPLOAD_MAX_BYTES = LOGO_MAX_BYTES - 16 * 1024;
-export const LOGO_ACCEPT = 'image/png,image/jpeg,image/svg+xml,.png,.jpg,.jpeg,.svg';
+export const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp';
 
 /** `GET /clinic/settings`. */
 export function getClinicSettings(token: string): Promise<ClinicSettings> {

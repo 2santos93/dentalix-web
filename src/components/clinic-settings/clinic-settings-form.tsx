@@ -41,7 +41,7 @@ export const clinicSettingsCopy = {
   colorPicker: 'Elegir el color',
   colorHex: 'Color en hexadecimal',
   logo: 'Logo',
-  logoHelp: 'PNG, JPG o SVG de hasta 1 MB. Mejor horizontal y con fondo transparente.',
+  logoHelp: 'PNG, JPG o WebP de hasta 1 MB. Mejor horizontal y con fondo transparente.',
   logoNone: 'Sin logo: se usan las iniciales.',
   logoPending: (name: string) => `Nuevo: ${name} (se sube al guardar).`,
   logoRemoving: 'Se quitará al guardar.',
@@ -81,7 +81,7 @@ export const clinicSettingsCopy = {
     color: 'Escribe un color en hexadecimal de seis cifras, p. ej. #0E7490.',
     email: 'Escribe un email con la forma nombre@dominio.',
     tooLong: (max: number) => `Hasta ${max} caracteres.`,
-    logoType: 'El logo debe ser una imagen PNG, JPG o SVG.',
+    logoType: 'El logo debe ser una imagen PNG, JPG o WebP.',
     logoSize: 'El logo supera el máximo de 1 MB.',
   },
 };
@@ -130,7 +130,7 @@ function toDraft(s: ClinicSettings): Draft {
 }
 
 const isLogoFile = (file: File) =>
-  /^image\/(png|jpeg|svg\+xml)$/.test(file.type) || /\.(png|jpe?g|svg)$/i.test(file.name);
+  /^image\/(png|jpeg|webp)$/.test(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name);
 
 /** Errores de cada campo antes de mandar nada (la API valida otra vez). */
 export function validateClinicDraft(draft: Draft): Partial<Record<TextField, string>> {

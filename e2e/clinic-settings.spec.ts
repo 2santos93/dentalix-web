@@ -166,12 +166,24 @@ test('un logo inválido se rechaza; un color sin contraste o cerca de un estado 
   await expect(page.getByRole('textbox', { name: 'Nombre comercial' })).toBeVisible({ timeout: 15_000 });
   const input = page.getByTestId('clinic-logo-input');
   await input.setInputFiles({ name: 'logo.gif', mimeType: 'image/gif', buffer: Buffer.from('GIF89a') });
-  await expect(page.getByText('El logo debe ser una imagen PNG, JPG o SVG.')).toBeVisible();
+  await expect(page.getByText('El logo debe ser una imagen PNG, JPG o WebP.')).toBeVisible();
+  // Un SVG con script disfrazado de PNG: lo rechaza la API, por sus bytes.
+  await input.setInputFiles({
+    name: 'logo.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+  });
+  await page.getByRole('button', { name: 'Guardar los datos de la clínica' }).click();
+  await expect(page.getByRole('region', { name: 'Cambios sin guardar' }).getByRole('alert')).toContainText(
+    'El logo debe ser una imagen PNG, JPG o WebP.',
+    { timeout: 15_000 },
+  );
+  await page.getByRole('button', { name: 'Descartar' }).click();
   // Con extensión .png pero sin ser un PNG: lo rechaza la API, por sus bytes.
   await input.setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from('<html>hola</html>') });
   await page.getByRole('button', { name: 'Guardar los datos de la clínica' }).click();
   await expect(page.getByRole('region', { name: 'Cambios sin guardar' }).getByRole('alert')).toContainText(
-    'El logo debe ser una imagen PNG, JPG o SVG.',
+    'El logo debe ser una imagen PNG, JPG o WebP.',
     { timeout: 15_000 },
   );
   await page.getByRole('button', { name: 'Descartar' }).click();

@@ -2880,7 +2880,7 @@ export interface paths {
         put?: never;
         /**
          * Sube el logo de la clínica
-         * @description DX-019. PNG, JPG o SVG de hasta 1 MB. El tipo se comprueba por los bytes y el fichero se re-escribe antes de guardarlo (sin metadatos; el SVG, sin scripts, enlaces ni estilos externos). Es público por diseño (marca).
+         * @description DX-019. PNG, JPG o WebP de hasta 1 MB. El tipo se comprueba por los bytes y el fichero se re-escribe antes de guardarlo (sin metadatos). SVG no se admite. Es público por diseño (marca).
          */
         post: operations["ClinicSettingsController_uploadLogo"];
         /** Quita el logo de la clínica (DX-019) */
@@ -11710,7 +11710,7 @@ export interface components {
             /** @description Organización clínica actual; separada del contenido firmado. */
             visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
             /**
-             * @description 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
+             * @description 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
              * @enum {number}
              */
             version: 1 | 2;
@@ -11724,8 +11724,8 @@ export interface components {
             currency: string;
             clinicName: string;
             clinicLogoUrl: string | null;
-            /** @description DX-019: datos fiscales de HOY (no forman parte del contenido firmado). */
-            clinicFiscal: components["schemas"]["ClinicFiscalDto"];
+            /** @description DX-019: datos fiscales. Aceptado: los congelados al firmar; null si no los llevaba (nunca los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             location: components["schemas"]["PlanQuoteLocationDto"];
             patient: components["schemas"]["PlanQuotePatientDto"];
             /** @description Profesional que creó el plan */
@@ -17226,6 +17226,8 @@ export interface components {
             professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
+            /** @description DX-019: datos fiscales congelados al emitir; null = la receta se imprime sin ellos (nunca con los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             locationName: string;
             locationAddress: string | null;
             notes: string | null;
@@ -17443,6 +17445,8 @@ export interface components {
             professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
+            /** @description DX-019: datos fiscales congelados al emitir; null = la receta se imprime sin ellos (nunca con los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             locationName: string;
             locationAddress: string | null;
             notes: string | null;
@@ -17465,8 +17469,6 @@ export interface components {
             voidReason: string | null;
             items: components["schemas"]["PrescriptionItemDto"][];
             clinicLogoUrl: string | null;
-            /** @description DX-019: datos fiscales de HOY (no forman parte del hash de la receta). */
-            clinicFiscal: components["schemas"]["ClinicFiscalDto"];
             /** @description Formato regional y zona actuales de la sede de la receta, para imprimirla */
             locationFormat: components["schemas"]["PrescriptionLocationFormatDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
@@ -26216,7 +26218,7 @@ export interface operations {
                 "multipart/form-data": {
                     /**
                      * Format: binary
-                     * @description PNG, JPG o SVG de hasta 1 MB
+                     * @description PNG, JPG o WebP de hasta 1 MB
                      */
                     file: string;
                 };
@@ -26231,7 +26233,7 @@ export interface operations {
                     "application/json": components["schemas"]["ClinicSettingsDto"];
                 };
             };
-            /** @description El logo está vacío. / El logo supera el máximo de 1 MB. / El logo debe ser una imagen PNG, JPG o SVG. / El logo no es una imagen válida o está dañado. Expórtalo de nuevo y vuelve a subirlo. / El logo es demasiado grande: como mucho 8192 × 8192 píxeles. / El SVG no se puede usar como logo: debe ser un dibujo SVG sencillo, sin scripts, enlaces ni imágenes incrustadas. */
+            /** @description El logo está vacío. / El logo supera el máximo de 1 MB. / El logo debe ser una imagen PNG, JPG o WebP. / El logo no es una imagen válida o está dañado. Expórtalo de nuevo y vuelve a subirlo. / El logo es demasiado grande: como mucho 8192 × 8192 píxeles. */
             400: {
                 headers: {
                     [name: string]: unknown;

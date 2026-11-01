@@ -5,8 +5,9 @@ import { taxIdLine, type ClinicFiscal } from '@/lib/clinic/clinic-settings-api';
  * DX-019: los datos fiscales y de contacto de la clínica en la cabecera de un
  * documento imprimible (presupuesto, receta, estado de cuenta): razón social ·
  * identificador con el nombre que le da la clínica, dirección fiscal y
- * contacto. Lo que falte no se pinta; sin nada, no hay bloque. El recibo de
- * caja usa su foto congelada (y su aviso «Datos fiscales pendientes»).
+ * contacto. Lo que falte no se pinta; sin nada, no hay bloque. Receta y
+ * presupuesto firmado pasan la foto congelada al emitir: `null` = se imprime
+ * sin datos fiscales, nunca con los de hoy. El recibo pinta los suyos aparte.
  */
 export function ClinicFiscalLines({ fiscal, className }: { fiscal: ClinicFiscal | null | undefined; className?: string }) {
   if (!fiscal) return null;

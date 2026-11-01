@@ -1,4 +1,8 @@
 import { render, screen } from '@testing-library/react';
+import { PlanQuoteDocument } from '@/components/treatment-plans/plan-quote-document';
+import { PrescriptionDocument } from '@/components/prescriptions/prescription-document';
+import { planQuoteFixture } from '@/components/treatment-plans/plan-quote-fixture';
+import { makePrescriptionDocument } from '@/lib/test/prescriptions';
 import { ClinicFiscalLines } from './clinic-fiscal-lines';
 import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
 
@@ -19,6 +23,24 @@ describe('ClinicFiscalLines (DX-019)', () => {
     rerender(<ClinicFiscalLines fiscal={EMPTY_CLINIC_FISCAL} />);
     expect(screen.queryByTestId('clinic-fiscal')).not.toBeInTheDocument();
     rerender(<ClinicFiscalLines fiscal={undefined} />);
+    expect(screen.queryByTestId('clinic-fiscal')).not.toBeInTheDocument();
+  });
+});
+
+describe('documentos emitidos (DX-019)', () => {
+  const FROZEN = { ...EMPTY_CLINIC_FISCAL, legalName: 'Sonrisas S.A.', taxId: 'J-1', taxIdLabel: 'ID fiscal' };
+
+  it('el presupuesto imprime su foto; sin foto, ningún dato fiscal', () => {
+    const { rerender } = render(<PlanQuoteDocument catalogCurrency="COP" quote={planQuoteFixture({ clinicFiscal: FROZEN })} />);
+    expect(screen.getByTestId('clinic-fiscal')).toHaveTextContent('Sonrisas S.A. · ID fiscal J-1');
+    rerender(<PlanQuoteDocument catalogCurrency="COP" quote={planQuoteFixture({ clinicFiscal: null })} />);
+    expect(screen.queryByTestId('clinic-fiscal')).not.toBeInTheDocument();
+  });
+
+  it('la receta imprime su foto; sin foto, ningún dato fiscal', () => {
+    const { rerender } = render(<PrescriptionDocument format={null} prescription={makePrescriptionDocument({ clinicFiscal: FROZEN })} />);
+    expect(screen.getByTestId('clinic-fiscal')).toHaveTextContent('Sonrisas S.A. · ID fiscal J-1');
+    rerender(<PrescriptionDocument format={null} prescription={makePrescriptionDocument({ clinicFiscal: null })} />);
     expect(screen.queryByTestId('clinic-fiscal')).not.toBeInTheDocument();
   });
 });

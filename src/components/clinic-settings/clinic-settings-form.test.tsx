@@ -151,7 +151,7 @@ describe('Ajustes › Datos de la clínica (DX-019)', () => {
     renderForm();
     const input = await screen.findByTestId('clinic-logo-input');
     await userEvent.upload(input, new File(['GIF89a'], 'logo.gif', { type: 'image/gif' }), { applyAccept: false });
-    expect(screen.getByText('El logo debe ser una imagen PNG, JPG o SVG.')).toBeInTheDocument();
+    expect(screen.getByText('El logo debe ser una imagen PNG, JPG o WebP.')).toBeInTheDocument();
     const big = new File([new Uint8Array(1024 * 1024)], 'logo.png', { type: 'image/png' });
     await userEvent.upload(input, big);
     expect(screen.getByText('El logo supera el máximo de 1 MB.')).toBeInTheDocument();
