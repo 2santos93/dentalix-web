@@ -181,7 +181,10 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
       const row = rows.filter({ has: page.locator(`time[datetime="${iso}"]`) });
       await expect(row.locator('time')).toHaveText(when(iso, BOGOTA));
       await expect(row).toContainText(offset(iso, BOGOTA));
-      if (sede === BOGOTA) {
+      // Solo si el reloj de la sede marca otra hora que el de la pantalla en ese
+      // instante (audit-time.ts): Nueva York en horario de invierno va, como
+      // Bogotá, en UTC−5 y no lleva segunda hora.
+      if (sede === BOGOTA || offset(iso, sede) === offset(iso, BOGOTA)) {
         await expect(row.getByText(/^En /)).toHaveCount(0);
       } else {
         await expect(row.getByText(`En ${sede.name}: ${when(iso, sede)} ${offset(iso, sede)}`, { exact: true })).toBeVisible();
