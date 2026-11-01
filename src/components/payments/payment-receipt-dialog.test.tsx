@@ -105,3 +105,19 @@ it('si el envío falla, el motivo en español va a un aviso con reintento y el r
   );
   expect(screen.getByTestId('receipt-document')).toBeInTheDocument();
 });
+
+// DX-515-bis: el encabezado del diálogo dice el título congelado en el recibo.
+it('con título propio congelado, el encabezado del diálogo lo dice; sin él, «Recibo de caja»', async () => {
+  const fixture = paymentReceiptFixture();
+  mockedGet.mockResolvedValue({ ...fixture, snapshot: { ...fixture.snapshot, title: 'Recibo de pago' } });
+  const { unmount } = render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
+  expect(await screen.findByRole('dialog', { name: 'Recibo de pago' })).toBeInTheDocument();
+  expect(screen.queryByRole('dialog', { name: /recibo de caja/i })).not.toBeInTheDocument();
+  unmount();
+
+  mockedGet.mockResolvedValue(fixture);
+  render(<PaymentReceiptDialog token="tok" paymentId="pay-2" onOpenChange={() => undefined} />);
+  const dialog = await screen.findByRole('dialog', { name: 'Recibo de caja' });
+  await within(dialog).findByTestId('receipt-document');
+  expect(screen.getByRole('dialog', { name: 'Recibo de caja' })).toBeInTheDocument();
+});

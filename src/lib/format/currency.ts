@@ -2,6 +2,8 @@
 // La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
 // divergen. Ver src/lib/money/README.md.
 import cldrFormatDigits from '@/lib/money/cldr-format-digits-zero.json';
+import { currencyTextFor, moneyWithCurrencyText, type CurrencyTexts } from '@/lib/format/currency-text';
+import { clinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
 
 /**
  * Monedas que se PINTAN sin decimales: dígitos de formato de CLDR 47, fijados
@@ -23,12 +25,20 @@ const CLDR_ZERO_FORMAT_DIGITS: ReadonlySet<string> = new Set(cldrFormatDigits.cl
  * resto de pantallas ya pintan el código (DX-378, `moneyWithCode`). Donde se
  * conoce la sede, mejor `sedeMoney`/`moneyWithCode`, que además usan su
  * formato.
+ *
+ * DX-517: si la clínica dio a esa moneda un texto propio («VES» → «Bs.»), ese
+ * texto ocupa el lugar del código en la posición del locale («1234,50 Bs.» en
+ * `es`). `texts`: el de la clínica (`clinicCurrencyTexts`) salvo que se pase
+ * otro, como el congelado en la foto de un recibo.
  */
 export function formatCurrency(
   amount: number,
   currency: string,
   locale = 'es',
+  texts: CurrencyTexts = clinicCurrencyTexts(),
 ): string {
+  const text = currencyTextFor(texts, currency);
+  if (text !== undefined) return moneyWithCurrencyText(amount, currency, locale, text);
   // Dos decimales fijos: los importes se guardan con céntimos, y las
   // versiones recientes de ICU/CLDR dan 0 decimales a COP, con lo que
   // 150.000,50 se pintaría (redondeado) como 150.001. Las monedas que en ISO

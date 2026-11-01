@@ -26,6 +26,9 @@
  * la persona quiso escribir.
  */
 
+import { currencyTextFor } from '@/lib/format/currency-text';
+import { clinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
+
 /** Decimales que admite un importe escrito, en cualquier moneda. */
 const MONEY_DECIMALS = 2;
 
@@ -78,12 +81,17 @@ function normalizeSpaces(text: string): string {
 /**
  * Quita el símbolo o el código de la moneda del campo, delante o detrás, como
  * los pinta `formatCurrency` («150,50 USD», «150,50 EUR», DX-378) o como se
- * escriben a mano («$ 150,50», «150,50 €»). El código de otra moneda se queda y el
+ * escriben a mano («$ 150,50», «150,50 €»), o con el texto propio de la clínica
+ * para esa moneda (DX-517). El código de otra moneda se queda y el
  * texto no se entiende: mejor eso que guardar euros como dólares.
  */
 function stripCurrency(raw: string, currency: string): string {
   const text = normalizeSpaces(raw);
-  const affixes = currencyAffixes(currency);
+  // DX-517: también el texto propio de la clínica para ESA moneda («Bs. 1.234,50»).
+  const own = currencyTextFor(clinicCurrencyTexts(), currency)?.toLowerCase();
+  const affixes = own
+    ? [own, ...currencyAffixes(currency)].sort((x, y) => y.length - x.length)
+    : currencyAffixes(currency);
   const lower = text.toLowerCase();
   for (const affix of affixes) {
     if (lower.startsWith(affix)) {

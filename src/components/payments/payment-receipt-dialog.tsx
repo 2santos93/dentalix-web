@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Lock, Mail, Printer, ReceiptText } from 'lucide-react';
 import { toast } from 'sonner';
@@ -59,15 +59,24 @@ interface PaymentReceiptDialogProps {
  * paciente. `paymentId` hace a la vez de bandera de apertura y de qué abono.
  */
 export function PaymentReceiptDialog({ token, paymentId, onOpenChange }: PaymentReceiptDialogProps) {
+  // DX-515-bis: el encabezado dice el título CONGELADO en el recibo (el que
+  // tenía la clínica al emitirlo); mientras carga, o sin título, el de siempre.
+  const [frozenTitle, setFrozenTitle] = useState<{ paymentId: string; title: string } | null>(null);
+  const title = frozenTitle && frozenTitle.paymentId === paymentId ? frozenTitle.title : copy.title;
   return (
     <Dialog open={paymentId !== null} onOpenChange={onOpenChange}>
       {paymentId !== null ? (
         <DialogContent className="max-w-3xl gap-3 p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{copy.title}</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{copy.description}</DialogDescription>
           </DialogHeader>
-          <ReceiptBody token={token} paymentId={paymentId} onClose={() => onOpenChange(false)} />
+          <ReceiptBody
+            token={token}
+            paymentId={paymentId}
+            onClose={() => onOpenChange(false)}
+            onTitle={(t) => setFrozenTitle(t ? { paymentId, title: t } : null)}
+          />
         </DialogContent>
       ) : null}
     </Dialog>
@@ -78,16 +87,24 @@ function ReceiptBody({
   token,
   paymentId,
   onClose,
+  onTitle,
 }: {
   token: string;
   paymentId: string;
   onClose: () => void;
+  /** El título congelado del recibo cargado (`null` = sin título propio). */
+  onTitle: (title: string | null) => void;
 }) {
   const [receipt, setReceipt] = useState<PaymentReceipt | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [sending, setSending] = useState(false);
+  // El último `onTitle` sin volver a cargar el recibo cuando el padre lo recrea.
+  const onTitleRef = useRef(onTitle);
+  useEffect(() => {
+    onTitleRef.current = onTitle;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +113,7 @@ function ReceiptBody({
         if (cancelled) return;
         setReceipt(res);
         setError(null);
+        onTitleRef.current(res.snapshot.title ?? null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;

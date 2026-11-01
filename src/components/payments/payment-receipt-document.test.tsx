@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { PaymentReceiptDocument } from './payment-receipt-document';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import type { PaymentReceipt } from '@/lib/payments/payment-receipts-api';
+import { setClinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
 
 function text(node: HTMLElement): string {
   return (node.textContent ?? '').replace(/\s/g, ' ');
@@ -331,4 +332,29 @@ it.each([
   const doc = text(screen.getByTestId('receipt-document'));
   for (const figure of shown) expect(doc).toMatch(figure);
   expect(/\d,\d\d\b/.test(doc)).toBe(cents);
+});
+
+describe('texto propio de cada moneda (DX-517)', () => {
+  afterEach(() => setClinicCurrencyTexts({}));
+
+  it('los importes usan el texto congelado en la foto del recibo', () => {
+    const receipt = paymentReceiptFixture();
+    render(
+      <PaymentReceiptDocument
+        receipt={{ ...receipt, snapshot: { ...receipt.snapshot, currencyTexts: { COP: 'Col$' } } }}
+      />,
+    );
+    const doc = screen.getByTestId('receipt-document');
+    expect(text(doc)).toContain('150.000,00 Col$');
+    expect(text(doc)).toContain('450.000,00 Col$');
+    expect(text(doc)).not.toContain('COP');
+  });
+
+  it('un recibo emitido sin textos se reimprime igual aunque la clínica los configure después', () => {
+    setClinicCurrencyTexts({ COP: 'Col$' });
+    render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
+    const doc = screen.getByTestId('receipt-document');
+    expect(text(doc)).toContain('150.000,00 COP');
+    expect(text(doc)).not.toContain('Col$');
+  });
 });

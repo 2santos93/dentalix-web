@@ -689,6 +689,7 @@ describe('recibo no fiscal en la auditoría (DX-515)', () => {
     ['RECEIPT_SETTINGS', 'Título y leyenda del recibo'],
     ['RECEIPT_LEGEND', 'Leyenda del recibo de la sede'],
     ['EXTERNAL_INVOICE_NUMBER', 'Nº de factura externa del abono'],
+    ['CURRENCY_TEXTS', 'Texto de las monedas'],
   ])('%s → %s', (reason, text) => {
     expect(receiptDetail({ reason })).toBe(text);
   });
