@@ -4,7 +4,7 @@ import { test, expect } from './support/test';
 import { loginAs } from './support/auth';
 import { apiPost, registerClinicViaApi } from './support/api';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
-import { MAIL_DIR, linkFromMail } from './support/mail';
+import { MAIL_DIR, linkFromMail, mailMark } from './support/mail';
 import { E2E_BROWSER_LOCALE } from './support/regional';
 
 /**
@@ -92,11 +92,12 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
     const dialog = page.getByRole('dialog', { name: 'Enviar a aceptar' });
     await expect(dialog.getByRole('region', { name: 'Destinatario' })).toContainText(/ma\*\*\*@example\.com · acepta/);
     await expectDialogInsideViewport(page, dialog);
+    const sentSince = mailMark();
     await dialog.getByRole('button', { name: 'Enviar a aceptar' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText(/Enviado a aceptar a ma\*\*\*@example\.com .* · Enviado/)).toBeVisible();
 
-    link = await linkFromMail(PATIENT_EMAIL, /(https?:\/\/\S+\/firmar\/[A-Za-z0-9_-]{43})/);
+    link = await linkFromMail(PATIENT_EMAIL, /(https?:\/\/\S+\/firmar\/[A-Za-z0-9_-]{43})/, { since: sentSince });
   });
 
   test('la paciente ve el presupuesto y lo acepta desde el móvil (390 px, sin sesión)', async ({ browser }) => {
@@ -116,8 +117,9 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
       await expect(page.getByText(PROCEDURE)).toHaveCount(0);
       await expectNoHorizontalScroll(page);
 
+      const codeSince = mailMark();
       await page.getByRole('button', { name: 'Enviarme el código' }).click();
-      const code = await linkFromMail(PATIENT_EMAIL, /Tu código de verificación es: (\d{6})/);
+      const code = await linkFromMail(PATIENT_EMAIL, /Tu código de verificación es: (\d{6})/, { since: codeSince });
       await page.getByLabel('Código de 6 dígitos').fill(code);
       await page.getByRole('button', { name: 'Ver el presupuesto' }).click();
 
@@ -129,12 +131,13 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
 
       await page.getByRole('checkbox', { name: /he revisado el presupuesto/i }).check();
       await drawSignature(page, page.getByRole('img', { name: 'Tu firma' }));
+      const acceptedSince = mailMark();
       await page.getByRole('button', { name: 'Aceptar y firmar' }).click();
       await expect(page.getByRole('heading', { name: 'Presupuesto aceptado' })).toBeVisible();
       await expect(page.getByRole('button', { name: /imprimir o guardar en pdf/i })).toBeVisible();
       await expectNoHorizontalScroll(page);
 
-      await linkFromMail(PATIENT_EMAIL, /(registramos tu aceptación)/);
+      await linkFromMail(PATIENT_EMAIL, /(registramos tu aceptación)/, { since: acceptedSince });
 
       await page.goto(link);
       await expect(page.getByRole('heading', { name: 'Enlace no válido' })).toBeVisible();

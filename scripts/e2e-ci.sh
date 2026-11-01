@@ -120,6 +120,12 @@ load_env() {
   # DX-435: la oferta de hueco pública (por IP y por token).
   export RATE_LIMIT_SLOT_OFFER_LIMIT=100000
   export RATE_LIMIT_SLOT_TOKEN_LIMIT=100000
+  # DX-443: la copia pública del PDF firmado (por IP: 20/min; por token:
+  # 10/min). Una pasada de remote-signature abre /copia/ media docena de
+  # veces; repetida (--repeat-each) o junto a otra suite, la siguiente daba 429
+  # («No se pudo cargar») en vez de la copia.
+  export RATE_LIMIT_COPY_LINK_LIMIT=100000
+  export RATE_LIMIT_COPY_TOKEN_LIMIT=100000
   # SEC-046: lecturas de un fichero de importación (inspect, dry-run y hoja de
   # saldos), 10 por minuto por clínica + usuario en un balde común. Los specs
   # de importación y de saldos migrados leen con el mismo ADMIN de la demo
@@ -133,6 +139,11 @@ load_env() {
   # en cada corrida; con el tope diario de 5 una segunda corrida del día daría
   # 429 al enviar el enlace.
   export MAIL_RECIPIENT_DAILY_LIMIT=100000
+  # Ídem por clínica (50 al día): cada pasada de remote-signature manda 6
+  # correos de la demo (enlace, código, copia y dos reenvíos); con
+  # --repeat-each o dos corridas el mismo día contra la misma base, «Enviar a
+  # firmar» acababa en «La clínica alcanzó el máximo de 50 correos».
+  export MAIL_TENANT_DAILY_LIMIT=100000
   export RATE_LIMIT_PASSWORD_RESET_LIMIT=100000
   # DX-010: los emails se dejan como JSON en $STATE_DIR/mail (FileMailer, solo
   # dev/e2e) para que Playwright abra el enlace de «Restablecer contraseña».
@@ -235,6 +246,12 @@ phase_api() {
   group "API: build y start:prod en :$E2E_API_PORT"
   (cd "$API_DIR" && npm run build)
   mkdir -p "$STORAGE_DIR"
+  # El buzón es de ESTA API y su base: los emails de una ejecución anterior
+  # llevan enlaces y códigos que esta base no conoce, y un spec que lee el
+  # último email al mismo destinatario (la paciente de la demo) podía abrir
+  # uno de ellos antes de que llegara el nuevo («Enlace no válido»).
+  rm -rf "$MAIL_FILE_DIR"
+  mkdir -p "$MAIL_FILE_DIR"
   start_bg api "$API_DIR" npm run start:prod
   wait_for "${API_URL}/health/ready" API "$LOG_DIR/api.log" "$STATE_DIR/api.pid"
   wait_for_worker

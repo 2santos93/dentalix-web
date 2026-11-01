@@ -4,7 +4,7 @@ import { apiLogin } from './support/api';
 import { loginAs } from './support/auth';
 import { DEMO_PASSWORD, DEMO_SUBDOMAIN } from './support/demo';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
-import { MAIL_DIR, linkFromMail } from './support/mail';
+import { MAIL_DIR, linkFromMail, mailMark } from './support/mail';
 import { E2E_BROWSER_LOCALE } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -41,6 +41,9 @@ const TEMPLATE_TITLE = 'Consentimiento informado — Exodoncia';
 
 let patientId = '';
 let link = '';
+// El buzón es de la suite entera (y de repeticiones del spec): cada lectura
+// solo acepta emails escritos desde la acción que los provoca (mailMark).
+let copySince = 0;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -88,6 +91,7 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
 
     await section.getByRole('button', { name: 'Enviar a firmar' }).click();
     const dialog = page.getByRole('dialog', { name: 'Enviar a firmar' });
+    const sentSince = mailMark();
     await expect(dialog.getByRole('region', { name: 'Destinatario' })).toContainText(
       'la***@example.com · firma Laura Castro Jiménez (paciente)',
     );
@@ -113,7 +117,7 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
     await expect(row.getByText('Enviado', { exact: true })).toBeVisible();
     await expect(row).toContainText('a la***@example.com por Paola Martínez Ruiz');
 
-    link = await linkFromMail(PATIENT_EMAIL, /(https?:\/\/\S+\/firmar\/[A-Za-z0-9_-]{43})/);
+    link = await linkFromMail(PATIENT_EMAIL, /(https?:\/\/\S+\/firmar\/[A-Za-z0-9_-]{43})/, { since: sentSince });
     expect(new URL(link).host).toBe(new URL(origin).host);
   });
 
@@ -139,10 +143,11 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       await expect(page.getByText(/Exodoncia/)).toHaveCount(0);
       await expectNoHorizontalScroll(page);
 
+      const codeSince = mailMark();
       await page.getByRole('button', { name: 'Enviarme el código' }).click();
       const codeInput = page.getByLabel('Código de 6 dígitos');
       await expect(codeInput).toBeVisible();
-      const code = await linkFromMail(PATIENT_EMAIL, /Tu código de verificación es: (\d{6})/);
+      const code = await linkFromMail(PATIENT_EMAIL, /Tu código de verificación es: (\d{6})/, { since: codeSince });
 
       await codeInput.fill(code === '000000' ? '111111' : '000000');
       await page.getByRole('button', { name: 'Ver el documento' }).click();
@@ -203,6 +208,8 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
 
     const dialog = page.getByRole('dialog', { name: 'Firmar como profesional' });
     await drawSignature(page, dialog.getByRole('img', { name: `Firma del profesional · ${DENTIST_NAME}` }));
+    // Esta firma completa el consentimiento: de ella salen el PDF y la copia por email (DX-443).
+    copySince = mailMark();
     await dialog.getByRole('button', { name: 'Firmar' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText('Consentimiento completo: firmaste como profesional.')).toBeVisible();
@@ -244,7 +251,10 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
   let copyToken = '';
 
   test('la paciente descarga su copia del PDF firmado una sola vez (390 px, sin sesión)', async ({ browser }) => {
-    copyToken = await linkFromMail(PATIENT_EMAIL, /\/copia\/([A-Za-z0-9_-]{43})/);
+    expect(copySince, 'el profesional no llegó a firmar').toBeGreaterThan(0);
+    // La copia pasa por la cola del PDF, la suya y el outbox: puede llegar
+    // después de que la fila diga «archivado». Solo vale la de ESTA firma.
+    copyToken = await linkFromMail(PATIENT_EMAIL, /\/copia\/([A-Za-z0-9_-]{43})/, { since: copySince });
     const context = await browser.newContext({
       locale: E2E_BROWSER_LOCALE,
       timezoneId: 'America/Bogota',
@@ -294,11 +304,12 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       await expect(row).toContainText(/Copia enviada al paciente el /, { timeout: 15_000 });
       await expectNoHorizontalScroll(page);
       await row.getByRole('button', { name: `Acciones de ${TEMPLATE_TITLE}` }).click();
+      const resentSince = mailMark();
       await page.getByRole('menuitem', { name: 'Reenviar copia' }).click();
       await expect(page.getByText('Copia enviada a la***@example.com. El enlace anterior ya no sirve.')).toBeVisible();
       const previous = copyToken;
       await expect(async () => {
-        copyToken = await linkFromMail(PATIENT_EMAIL, /\/copia\/([A-Za-z0-9_-]{43})/);
+        copyToken = await linkFromMail(PATIENT_EMAIL, /\/copia\/([A-Za-z0-9_-]{43})/, { since: resentSince });
         expect(copyToken).not.toBe(previous);
       }).toPass({ timeout: 15_000 });
 
