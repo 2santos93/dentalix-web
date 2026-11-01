@@ -710,7 +710,7 @@ describe('AgendaView', () => {
     });
   });
 
-  it('defaults to Mes (calendar) view; switching to Semana fetches the week range and renders WeekAgenda', async () => {
+  it('defaults to Mes (calendar) view; switching to Semana fetches the week range and renders WeekTimeGrid', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
@@ -806,7 +806,7 @@ describe('AgendaView', () => {
     expect(agendaDate()).toBe('2026-03-09');
     // Back in Día view (columnas por profesional, DX-121) — with no
     // appointments mocked for this test, each column's empty state confirms
-    // it's the one rendering (WeekAgenda has no such copy).
+    // it's the one rendering (the week grid has no such copy).
     expect(await screen.findAllByText('Sin citas hoy')).toHaveLength(staff.length);
     expect(screen.queryByLabelText(/agenda de la semana/i)).not.toBeInTheDocument();
   });

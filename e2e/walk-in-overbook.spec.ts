@@ -2,6 +2,8 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
+import { atSede, sedeDayFromToday } from './support/clock';
+import { fillDate, fillTime } from './support/dates';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -14,6 +16,9 @@ import { API_URL, tenantOrigin } from './support/urls';
  *    profesional. «Deshacer llegada» pregunta («Su hora ya está ocupada») y
  *    «Mantener en sobrecupo» la deja agendada en sobrecupo: la agenda lo dice
  *    con «Sobrecupo». Movida a otra hora deja de serlo y el distintivo se va.
+ * 1b. DX-509-bis: «Mover a…» de un sobrecupo mantenido a una hora ocupada:
+ *    el 409 de siempre y, además, «Siguiente hueco libre» con «Usar este
+ *    hueco», que lo deja en el formulario y lo mueve (deja de ser sobrecupo).
  * 2. DX-510: doble clic en «Atender en sobrecupo»: una sola cita (y, si el
  *    navegador llegó a mandar dos POST, con la misma Idempotency-Key).
  * Capturas de QA a 390/1440, claro y oscuro (DX509_QA_DIR o test-results).
@@ -32,6 +37,8 @@ let dentistId: string;
 let urgentId: string;
 let bertaId: string;
 let carlaId: string;
+let doraId: string;
+let elsaId: string;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -100,6 +107,8 @@ test.beforeAll(async ({ request }) => {
   urgentId = await patient('Úrsula');
   bertaId = await patient('Berta');
   carlaId = await patient('Carla');
+  doraId = await patient('Dora');
+  elsaId = await patient('Elsa');
 });
 
 test('DX-509: deshacer la llegada con su hora ocupada pregunta; en sobrecupo la agenda lo dice y al moverla deja de serlo', async ({
@@ -186,6 +195,124 @@ test('DX-509: deshacer la llegada con su hora ocupada pregunta; en sobrecupo la 
   await expect(entry('Úrsula')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('overbooked-chip')).toHaveCount(0);
   await page.screenshot({ path: `${dir}/agenda-movida-sin-sobrecupo-1440-light.png` });
+});
+
+test('DX-509-bis: mover un sobrecupo a una hora ocupada ofrece el siguiente hueco libre', async ({
+  page,
+  request,
+}, testInfo) => {
+  // Dora en sobrecupo, mantenida a sabiendas (su hora la ocupa Elsa).
+  const walkIn = await apiPost<{ id: string; start: string }>(request, session, '/appointments/walk-in', {
+    patientId: doraId,
+    providerId: dentistId,
+    triageFlags: ['PAIN'],
+    overbookReason: 'Dolor agudo, no puede esperar',
+  });
+  // La cita de Berta del primer test puede ocupar ya ese hueco (409): basta.
+  const over = new Date(Math.max(Date.now(), new Date(walkIn.start).getTime()) + 5 * 60_000);
+  const blocker = await request.post(`${API_URL}/appointments`, {
+    headers: session.headers,
+    data: {
+      patientId: elsaId,
+      providerId: dentistId,
+      start: over.toISOString(),
+      end: new Date(over.getTime() + 30 * 60_000).toISOString(),
+    },
+  });
+  expect([201, 409], await blocker.text()).toContain(blocker.status());
+  await apiPost(request, session, `/appointments/${walkIn.id}/undo-arrival`, { keepOverbooked: true });
+  expect(await apiCall<{ overbooked: boolean }>(request, 'get', `/appointments/${walkIn.id}`)).toMatchObject({
+    overbooked: true,
+  });
+  // Destino: dentro de tres días a las 10:00, ocupado por otra cita del odontólogo.
+  const day = sedeDayFromToday(3);
+  await apiPost(request, session, '/appointments', {
+    patientId: elsaId,
+    providerId: dentistId,
+    start: atSede(day, '10:00').toISOString(),
+    end: atSede(day, '10:30').toISOString(),
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await loginAs(page, origin, reception.email, password);
+  const dialog = page.getByRole('dialog', { name: 'Mover a…' });
+  const tryOccupied = async () => {
+    await page.goto(`${origin}/agenda`);
+    await page.getByRole('button', { name: 'Día', exact: true }).click();
+    await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+    const move = page.getByRole('button', { name: `Mover a… la cita de Dora ${lastName}` });
+    // En el teléfono, una columna a la vez: la del odontólogo.
+    if ((page.viewportSize()?.width ?? 1440) < 768) {
+      await page
+        .getByRole('group', { name: 'Profesional visible' })
+        .getByRole('button', { name: dentist.fullName })
+        .click({ timeout: 15_000 });
+    }
+    await move.click({ timeout: 15_000 });
+    await expect(dialog).toBeVisible();
+    await fillDate(dialog, 'Fecha', day);
+    await fillTime(dialog, 'Hora de inicio', '10:00');
+    await dialog.getByRole('button', { name: 'Mover cita' }).click();
+    await expect(dialog.getByText('El profesional ya tiene una cita en ese horario')).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByTestId('move-next-opening')).toContainText('Siguiente hueco libre', { timeout: 10_000 });
+  };
+  await tryOccupied();
+  const offer = dialog.getByTestId('move-next-opening');
+  await expect(offer).toContainText(`10:30 con ${dentist.fullName}`);
+  await shoot(page, qaDir(testInfo), 'mover-siguiente-hueco', tryOccupied);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await tryOccupied();
+  await offer.getByRole('button', { name: 'Usar este hueco' }).click();
+  await expect(offer).toBeHidden();
+  await dialog.getByRole('button', { name: 'Mover cita' }).click();
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
+  const moved = await apiCall<{ start: string; overbooked: boolean }>(request, 'get', `/appointments/${walkIn.id}`);
+  expect(moved).toMatchObject({ start: atSede(day, '10:30').toISOString(), overbooked: false });
+});
+
+test('DX-509-bis (QA visual): «Pendiente de cerrar» pinta los sobrecupos mantenidos aparte', async ({
+  page,
+}, testInfo) => {
+  // Lo que lista la API ya lo prueban sus e2e (walk-in-overbook.e2e-spec, con
+  // días anteriores y el reloj de la lista): aquí solo cómo se ve, sobre la
+  // respuesta real con una fila añadida (la clínica de la corrida no tiene
+  // días anteriores).
+  await page.route(/\/closing-queue(\?.*)?$/, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as Record<string, unknown>;
+    const start = atSede(sedeDayFromToday(-1), '10:00');
+    body.keptOverbooks = {
+      total: 1,
+      items: [
+        {
+          appointmentId: randomUUID(),
+          patientId: urgentId,
+          patientName: `Úrsula ${lastName}`,
+          start: start.toISOString(),
+          end: new Date(start.getTime() + 30 * 60_000).toISOString(),
+          status: 'COMPLETED',
+          locationId: (body.locations as { id: string }[])[0].id,
+          locationName: (body.locations as { name: string }[])[0].name,
+          timeZone: 'America/Bogota',
+          professionalId: dentistId,
+          professionalName: dentist.fullName,
+          keptAt: new Date(start.getTime() - 60 * 60_000).toISOString(),
+          keptByName: reception.fullName,
+        },
+      ],
+    };
+    await route.fulfill({ response, json: body });
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await loginAs(page, origin, reception.email, password);
+  const open = async () => {
+    await page.goto(`${origin}/agenda/pendiente-de-cerrar`);
+    await expect(page.getByRole('heading', { name: /Sobrecupos mantenidos/ })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(new RegExp(`${reception.fullName} · `)).first()).toBeVisible();
+  };
+  await open();
+  await shoot(page, qaDir(testInfo), 'pendiente-sobrecupos-mantenidos', open);
 });
 
 test('DX-510: doble clic en «Atender en sobrecupo» crea una sola cita', async ({ page, request }) => {

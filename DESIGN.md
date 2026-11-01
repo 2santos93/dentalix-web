@@ -644,8 +644,9 @@ screen it opens; a group with no visible entries disappears.
     Cerrar sesión. The Android back button closes it (a history entry is pushed on open).
 - **Command palette** (⌘K / Ctrl+K anywhere; the sidebar trigger; the phone search button):
   one input + grouped listbox — *Pacientes* (name or document, 200ms debounce, ≥2 chars),
-  *Ir a* (sections the role can open; settings screens while typing), *Acciones* (Nueva cita,
-  Nuevo paciente). Combobox/listbox ARIA with `aria-activedescendant`; arrows, Ctrl+Home/End,
+  *Ir a* (sections the role can open; settings screens while typing — and, while typing,
+  «Mi día» → `/dashboard#pendientes`: the «Pendientes» block of Inicio, every role, never a
+  sidebar entry of its own), *Acciones* (Nueva cita, Nuevo paciente). Combobox/listbox ARIA with `aria-activedescendant`; arrows, Ctrl+Home/End,
   Enter. Accent-insensitive matching. Full-screen on phones.
 - **System chrome:** `viewport-fit=cover` and a `theme-color` per scheme set to the canvas
   token (light `#F7F9FC`, dark `#0B0F14`) — never the accent.

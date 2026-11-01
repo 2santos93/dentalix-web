@@ -34,7 +34,7 @@ it('renders 7 day headers Mon..Sun', () => {
       onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
     />,
   );
-  // Reusa el mismo testid que WeekAgenda ('week-day-header') para que los
+  // Testid 'week-day-header' (el de la antigua lista semanal, retirada en DX-509-bis): así los
   // tests de agenda-view que ya lo usan sigan pasando tras el swap (Task 5).
   const headers = screen.getAllByTestId('week-day-header');
   expect(headers).toHaveLength(7);

@@ -92,6 +92,7 @@ function queue(over: Partial<ClosingQueue> = {}): ClosingQueue {
       ],
     },
     staleInClinic: 0,
+    keptOverbooks: { total: 0, items: [] },
     total: 3,
     locations: [{ id: 'l1', name: 'Sede Caracas' }],
     locationsWithoutZone: [],
@@ -207,6 +208,39 @@ describe('ClosingQueueView (DX-439)', () => {
         reasonText: 'Está en la ficha en papel',
       }),
     );
+  });
+
+  it('DX-509-bis: lista los sobrecupos mantenidos con quién y cuándo, aparte (también sin pendientes)', async () => {
+    load.mockResolvedValue(
+      empty({
+        keptOverbooks: {
+          total: 1,
+          items: [
+            {
+              ...appointment({ appointmentId: 'k1', patientName: 'Úrsula Urgencia', status: 'COMPLETED' }),
+              // 30/10 14:05 UTC = 10:05 en Caracas.
+              keptAt: '2026-10-30T14:05:00.000Z',
+              keptByName: 'Rita Recepción',
+            },
+          ],
+        },
+      }),
+    );
+    render(<ClosingQueueView token="t" />);
+    expect(await screen.findByText(closingQueueCopy.empty)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Sobrecupos mantenidos/ })).toBeInTheDocument();
+    const table = screen.getByRole('table', { name: 'Sobrecupos mantenidos' });
+    expect(within(table).getByText('Úrsula Urgencia')).toBeInTheDocument();
+    expect(await within(table).findByText('Rita Recepción · 30/10/2026 10:05')).toBeInTheDocument();
+    // Informativo: sin «⋯» ni descartar.
+    expect(within(table).queryByRole('button', { name: /^Acciones de / })).not.toBeInTheDocument();
+  });
+
+  it('DX-509-bis: sin sobrecupos mantenidos, la sección no sale', async () => {
+    load.mockResolvedValue(queue());
+    render(<ClosingQueueView token="t" />);
+    expect(await screen.findByRole('heading', { name: /Citas sin desenlace/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Sobrecupos mantenidos/ })).not.toBeInTheDocument();
   });
 
   it('avisa de las citas de días anteriores que siguen «en la clínica» y enlaza al panel', async () => {

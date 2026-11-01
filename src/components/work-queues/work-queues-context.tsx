@@ -12,6 +12,13 @@ import {
 /** Cada cuánto se relee mientras la app está abierta. */
 const POLL_MS = 60_000;
 
+/**
+ * DX-503-bis: pantallas que montan «Mi día» (Inicio). En ellas la PRIMERA
+ * lectura ya pide todas las listas: sin esto, el proveedor pedía las del menú
+ * y, un instante después (al apuntarse Inicio), todas — dos peticiones.
+ */
+const FULL_PATHS: ReadonlySet<string> = new Set(['/dashboard']);
+
 /** Evento de ventana tras cerrar o descartar un pendiente: se relee al momento. */
 export const WORK_QUEUES_CHANGED_EVENT = 'dentalix:closing-queue-changed';
 
@@ -42,7 +49,8 @@ interface Snapshot {
  * DX-503: UNA lectura de `GET /work-queues/summary` para toda la app. El menú
  * (contadores de «Pendiente de cerrar» y «Anamnesis») y «Mi día» en Inicio
  * leen la MISMA respuesta, así que sus números nunca difieren. Fuera de
- * Inicio se piden solo las listas del menú; con Inicio montado, todas. Se
+ * Inicio se piden solo las listas del menú; en Inicio (o con «Mi día»
+ * montado), todas, desde la primera lectura. Se
  * relee al cambiar de pantalla o de sede, cada minuto y al recibir
  * `WORK_QUEUES_CHANGED_EVENT`.
  *
@@ -63,7 +71,7 @@ export function WorkQueuesProvider({
   const role = getTokenRole(token);
   const menuKeys = useMemo(() => menuQueuesFor(role), [role]);
   const [fullConsumers, setFullConsumers] = useState(0);
-  const wantFull = fullConsumers > 0;
+  const wantFull = fullConsumers > 0 || FULL_PATHS.has(pathname);
   const [scope, setScope] = useState('all');
   const [reloadKey, setReloadKey] = useState(0);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
