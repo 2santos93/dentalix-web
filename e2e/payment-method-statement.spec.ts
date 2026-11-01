@@ -242,7 +242,7 @@ for (const viewport of [
     const file = await download;
     expect(file.suggestedFilename()).toMatch(/^caja-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/);
     const csv = await readFile((await file.path()) as string, 'utf8');
-    expect(csv).toContain('Fecha,Sede,Paciente,Destino,Medio,Referencia,Moneda,Importe');
+    expect(csv).toContain('Fecha,Sede,Paciente,Destino,Medio,Referencia,Factura externa,Moneda,Importe');
     expect(csv).toContain(`"${MOBILE}","${reference}"`);
     expect(csv).not.toContain('"Efectivo"');
     await expect(page.getByText('Caja exportada.')).toBeVisible();
