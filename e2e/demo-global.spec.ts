@@ -1,6 +1,5 @@
-import { test, expect, type APIRequestContext, type Page } from './support/test';
+import { test, expect, type APIRequestContext, type Locator, type Page } from './support/test';
 import { fillDate } from './support/dates';
-import { mkdirSync } from 'node:fs';
 import { loginAs } from './support/auth';
 import { axeInBothThemes } from './support/axe';
 import {
@@ -13,6 +12,7 @@ import {
   type DemoLocation,
 } from './support/demo';
 import { expectNoHorizontalScroll } from './support/layout';
+import { shot } from './support/qa-shot';
 import { activeSedeSelect } from './support/nav';
 import { API_URL, tenantOrigin } from './support/urls';
 import { formatCivilDate } from '../src/lib/format/date';
@@ -37,12 +37,14 @@ import type { ApiSession } from './support/api';
  *  5. La cobertura pendiente de «Ricardo Salcedo Parra» empieza después de hoy.
  *  6. El móvil de «Emily Clarke» (línea fija de Londres) no sirve para WhatsApp.
  *
- * Nada se crea ni se cambia: no hay limpieza que hacer. Cada pantalla, sin
+ *  7. Ajustes › Sedes, «Comparar sedes» y el recibo de un abono de cada sede
+ *     (su número de la serie de la sede y su moneda).
+ *
+ * Nada se crea ni se cambia (abrir un recibo solo deja su evento de auditoría): no hay limpieza que hacer. Cada pantalla, sin
  * scroll horizontal y con axe sin violaciones serias ni críticas, en claro y
  * oscuro. Capturas a 1440 y 390 px en E2E_QA_DIR si está definido.
  */
 const origin = tenantOrigin(DEMO_SUBDOMAIN);
-const QA_DIR = process.env.E2E_QA_DIR;
 const VIEWPORTS = [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
@@ -52,36 +54,33 @@ const LOOKAHEAD_DAYS = 21;
 
 const REGIONS = Object.entries(DEMO_LOCATION_REGIONS);
 
-/**
- * La captura `${name}-${width}-${scheme}.png` en claro y oscuro, en
- * `E2E_QA_DIR` (sin la variable no captura); deja la página en claro.
- */
-async function shot(page: Page, name: string, width: number): Promise<void> {
-  if (!QA_DIR) return;
-  mkdirSync(QA_DIR, { recursive: true });
-  // Sin el hover del último clic y sin transiciones de color a medias.
-  await page.mouse.move(0, 0);
-  for (const scheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await expect(page.locator('html')).toHaveClass(scheme === 'dark' ? /\bdark\b/ : /^(?!.*\bdark\b)/);
-    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))));
-    await page.screenshot({ path: `${QA_DIR}/${name}-${width}-${scheme}.png`, fullPage: false });
-  }
-  await page.emulateMedia({ colorScheme: 'light' });
-}
+/** Cómo se nombran las capturas de cada sede; `plan` es null donde el brief no pide la captura del plan. */
+const SEDE_SHOTS: Readonly<Record<string, { slug: string; plan: string | null }>> = {
+  'Sede principal': { slug: 'principal', plan: null },
+  'Sede Norte': { slug: 'norte', plan: null },
+  'Sede São Paulo': { slug: 'saopaulo', plan: 'plan-saopaulo-brl' },
+  'Sede Londres': { slug: 'londres', plan: 'plan-londres-gbp' },
+};
 
 /**
  * Lo que se pide de cada pantalla: sin scroll horizontal y, en claro y en
  * oscuro, sin violaciones de axe serias ni críticas. Después, la captura.
  */
-async function checkScreen(page: Page, name: string, width: number): Promise<void> {
+async function checkScreen(page: Page, name: string, width: number, captureAs: string | null = name): Promise<void> {
   await expectNoHorizontalScroll(page);
   const found = await axeInBothThemes(page, page.locator('main'));
   for (const scheme of ['light', 'dark'] as const) {
     const blocking = found[scheme].filter((v) => v.impact === 'serious' || v.impact === 'critical');
     expect(blocking, `axe (${scheme}) en ${name} a ${width} px`).toEqual([]);
   }
-  await shot(page, name, width);
+  if (captureAs) await shot(page, captureAs, width);
+}
+
+/** Deja `target` al comienzo de la zona visible, para que la captura enseñe lo que la prueba comprobó. */
+async function bringToTop(page: Page, target: Locator, block: 'start' | 'center' = 'start'): Promise<void> {
+  await target.evaluate((el, where) => el.scrollIntoView({ block: where }), block);
+  // Un respiro bajo el borde superior (la cabecera pegada no tapa el título).
+  if (block === 'start') await page.evaluate(() => document.querySelector('main')?.scrollBy(0, -24));
 }
 
 /** Elige la sede activa en el selector global; cambiar de sede recarga la vista. */
@@ -169,6 +168,34 @@ async function sedePlan(
   throw new Error(`${location.name} no tiene un paciente con un único plan en ${currency}`);
 }
 
+/** Cuántos días atrás se busca un abono de la sede (la API no pasa de 366 días por consulta). */
+const PAYMENT_LOOKBACK_DAYS = 120;
+
+/**
+ * Un abono vivo de la sede (la caja filtrada por `X-Location-Id`) y el número
+ * de su recibo, que se lee del propio recibo.
+ */
+async function sedePayment(
+  request: APIRequestContext,
+  session: ApiSession,
+  location: DemoLocation,
+  timeZone: string,
+): Promise<{ id: string; currency: string; receiptNumber: string }> {
+  const to = wallDay(new Date(), timeZone);
+  const from = addCivilDays(to, -PAYMENT_LOOKBACK_DAYS);
+  const res = await request.get(`${API_URL}/payments?from=${from}&to=${to}&pageSize=100`, {
+    headers: { ...session.headers, 'X-Location-Id': location.id },
+  });
+  expect(res.ok(), `GET /payments de ${location.name} falló: ${await res.text()}`).toBeTruthy();
+  const { items } = (await res.json()) as {
+    items: { id: string; currency: string; location: { id: string } }[];
+  };
+  const payment = items.find((p) => p.location.id === location.id);
+  expect(payment, `${location.name} no tiene abonos en los últimos ${PAYMENT_LOOKBACK_DAYS} días`).toBeDefined();
+  const receipt = await apiGet<{ reference: string }>(request, session, `/payments/${payment!.id}/receipt`);
+  return { id: payment!.id, currency: payment!.currency, receiptNumber: receipt.reference };
+}
+
 async function findPatientId(
   request: APIRequestContext,
   session: ApiSession,
@@ -209,7 +236,7 @@ test('the location picker lists the four seeded locations', async ({ page }) => 
     for (const name of Object.keys(DEMO_LOCATION_REGIONS)) {
       await expect(switcher.locator('option', { hasText: name }), name).toHaveCount(1);
     }
-    await checkScreen(page, 'sedes', viewport.width);
+    await checkScreen(page, 'sede-picker', viewport.width);
   }
 });
 
@@ -225,7 +252,8 @@ for (const [sedeName, region] of REGIONS) {
     const today = wallDay(new Date(), region.timeZone);
     const next = await nextAppointment(request, session, location!, region.timeZone);
     const plan = await sedePlan(request, session, location!, region.currency, region.timeZone);
-    const slug = sedeName.toLowerCase().normalize('NFD').replace(/[^a-z]+/g, '-');
+    const key = SEDE_SHOTS[sedeName];
+    const payment = await sedePayment(request, session, location!, region.timeZone);
 
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize(viewport);
@@ -249,7 +277,14 @@ for (const [sedeName, region] of REGIONS) {
       const range = `${fmt.time(next.start, region.timeZone)}–${fmt.time(next.end, region.timeZone)}`;
       const card = page.locator(`[data-testid="day-column-appointment"][data-appointment-id="${next.id}"]`);
       await expect(card).toContainText(range, { timeout: 15_000 });
-      await checkScreen(page, `${slug}-agenda`, viewport.width);
+      // En el teléfono las columnas son pestañas por profesional: la lista enseña la cita sin cambiar de pestaña.
+      if (viewport.width < 768) {
+        await page.getByRole('button', { name: 'Lista', exact: true }).click();
+        await expect(page.getByText(fmt.time(next.start, region.timeZone)).locator('visible=true').first()).toBeVisible();
+      } else {
+        await bringToTop(page, card, 'center');
+      }
+      await checkScreen(page, `agenda-${key.slug}`, viewport.width);
 
       // El importe de un plan de la sede: su moneda, con el formato de la sede.
       await page.goto(`${origin}/patients/${plan.patientId}?tab=treatment-plans`);
@@ -262,10 +297,51 @@ for (const [sedeName, region] of REGIONS) {
       await expect(total).toHaveText(moneyWithCode(plan.total, plan.currency, fmt).replace(/ /g, ' '), {
         timeout: 15_000,
       });
-      await checkScreen(page, `${slug}-plan`, viewport.width);
+      await bringToTop(page, total, 'center');
+      await checkScreen(page, `plan-${key.slug}`, viewport.width, key.plan);
+
+      // El recibo de un abono de la sede: su número de la serie de la sede y su moneda.
+      await page.goto(`${origin}/print/payments/${payment.id}/receipt`);
+      const doc = page.getByTestId('receipt-document');
+      await expect(doc).toContainText(`N.º ${payment.receiptNumber}`, { timeout: 15_000 });
+      await expect(doc).toContainText(payment.currency);
+      await checkScreen(page, `receipt-${key.slug}`, viewport.width);
     }
   });
 }
+
+test('the location settings list each location with its country, currency and zone', async ({ page }) => {
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await page.goto(`${origin}/settings/sedes`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Sedes' })).toBeVisible({ timeout: 15_000 });
+    for (const name of Object.keys(DEMO_LOCATION_REGIONS)) {
+      await expect(page.getByText(name, { exact: true }).locator('visible=true').first(), name).toBeVisible({
+        timeout: 15_000,
+      });
+    }
+    await checkScreen(page, 'settings-sedes', viewport.width);
+  }
+});
+
+test('the locations comparison lists the four locations with their currencies', async ({ page }) => {
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await page.goto(`${origin}/reportes`);
+    await expect(page.getByRole('tab', { name: 'Comparar sedes', selected: true })).toBeVisible({ timeout: 15_000 });
+    // El mes anterior trae cobros en todas las sedes (el día 1 el mes en curso aún no).
+    await page.getByLabel('Período').selectOption('last_month');
+    const rows = page.getByTestId(viewport.width >= 768 ? 'comparison-row' : 'comparison-card').locator('visible=true');
+    for (const [name, region] of REGIONS) {
+      const row = rows.filter({ hasText: name });
+      await expect(row, name).toHaveCount(1, { timeout: 15_000 });
+      await expect(row).toContainText(region.currency === 'USD' ? /USD|VES/ : region.currency, { timeout: 15_000 });
+    }
+    // La captura arranca en la tabla (o en la primera tarjeta) para que se vean las filas de las sedes.
+    await rows.first().evaluate((el) => (el.closest('table') ?? el).scrollIntoView({ block: 'start' }));
+    await checkScreen(page, 'compare-sedes', viewport.width);
+  }
+});
 
 test('the location calendar lists its sample holidays', async ({ page }) => {
   const london = locations.find((l) => l.name === 'Sede Londres');
@@ -283,7 +359,8 @@ test('the location calendar lists its sample holidays', async ({ page }) => {
         timeout: 15_000,
       });
     }
-    await checkScreen(page, 'calendario-londres', viewport.width);
+    await bringToTop(page, holidays);
+    await checkScreen(page, 'calendar-londres', viewport.width);
   }
 });
 
@@ -325,7 +402,8 @@ test('the exchange rate settings list today rate for VES, BRL and GBP', async ({
       await expect(row, `fila de hoy de ${currency}`).toHaveCount(1, { timeout: 15_000 });
       await expect(row).toContainText(fmt.number(rate, { min: 0, max: 8 }));
     }
-    await checkScreen(page, 'tasa-de-cambio', viewport.width);
+    await bringToTop(page, manual);
+    await checkScreen(page, 'exchange-rates', viewport.width);
   }
 });
 
@@ -351,7 +429,8 @@ test('a pending coverage shows its start date after today', async ({ page, reque
     });
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText(`Desde ${formatCivilDate(validFrom)}`);
-    await checkScreen(page, 'cobertura-pendiente', viewport.width);
+    await bringToTop(page, row, 'center');
+    await checkScreen(page, 'coverage-pending', viewport.width);
   }
 });
 
@@ -362,6 +441,7 @@ test('a London patient with a fixed line cannot use WhatsApp', async ({ page, re
     await page.goto(`${origin}/patients/${patientId}`);
     await expect(page.getByText('Móvil no válido', { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/^No sirve para WhatsApp/)).toBeVisible();
-    await checkScreen(page, 'whatsapp-londres', viewport.width);
+    await bringToTop(page, page.getByText('Móvil no válido', { exact: true }), 'center');
+    await checkScreen(page, 'london-fixed-phone', viewport.width);
   }
 });
