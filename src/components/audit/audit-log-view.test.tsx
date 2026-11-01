@@ -614,4 +614,121 @@ describe('AuditLogView', () => {
     await userEvent.click(within(status.closest('[role="status"]') as HTMLElement).getByRole('button'));
     expect(await screen.findByRole('combobox', { name: 'Usuario' })).toBeInTheDocument();
   });
+  describe('DX-360: qué cambió en la configuración', () => {
+    const typeEdit: AuditEvent = {
+      ...view,
+      id: 'ev-cfg-1',
+      action: 'UPDATE',
+      resourceType: 'APPOINTMENT_TYPE',
+      resourceId: 'at-1',
+      patient: null,
+      metadata: {
+        reason: 'APPOINTMENT_TYPE_UPDATED',
+        changedFields: ['color', 'durationMinutes'],
+        configChange: {
+          before: { color: '#0E7490', durationMinutes: 60 },
+          after: { color: '#B45309', durationMinutes: 75 },
+        },
+      },
+    };
+    const payerCreate: AuditEvent = {
+      ...typeEdit,
+      id: 'ev-cfg-2',
+      action: 'CREATE',
+      resourceType: 'PAYER',
+      metadata: { reason: 'PAYER_CREATED', configChange: { after: { name: 'Sanitas', active: true } } },
+    };
+    const itemDelete: AuditEvent = {
+      ...typeEdit,
+      id: 'ev-cfg-3',
+      action: 'DELETE',
+      resourceType: 'INVENTORY_ITEM',
+      metadata: { reason: 'INVENTORY_ITEM_DELETED', configChange: { before: { name: 'Guantes', sku: null } } },
+    };
+
+    /** Los pares término → definición de la lista del cambio de una fila. */
+    function pairs(row: HTMLElement): [string, string][] {
+      const list = row.querySelector('dl');
+      if (!list) throw new Error('sin lista de cambios');
+      return within(list as HTMLElement)
+        .getAllByRole('term')
+        .map((term) => [term.textContent ?? '', visibleText(term.nextElementSibling)]);
+    }
+
+    /** El texto que se ve (sin el «a» solo para el lector), con los espacios normalizados. */
+    function visibleText(node: Element | null): string {
+      const clone = node?.cloneNode(true) as HTMLElement | undefined;
+      clone?.querySelectorAll('.sr-only').forEach((n) => n.remove());
+      return (clone?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    it('edición: el recurso y cada campo con su antes y su después, en una lista de definición', async () => {
+      mockedList.mockResolvedValue(page({ items: [typeEdit] }));
+      render(<AuditLogView token="tok" />);
+      const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+      const [, row] = within(table).getAllByRole('row');
+      expect(within(row).getByText('Tipo de cita')).toBeInTheDocument();
+      expect(pairs(row)).toEqual([
+        ['Duración:', '60 → 75 min'],
+        ['Color:', '#0E7490 → #B45309'],
+      ]);
+      // La flecha no se lee como «flecha»: el lector dice «de 60 a 75 min».
+      const dd = within(row).getAllByRole('definition')[0];
+      expect(within(dd).getByText('→')).toHaveAttribute('aria-hidden');
+      expect(dd.querySelector('.sr-only')?.textContent).toBe(' a ');
+      // Sin depender del color: el valor no va pintado de un tono semántico.
+      expect(dd.className).not.toMatch(/success|danger|warning/);
+    });
+
+    it('alta: solo los valores nuevos; retiro: los anteriores; null como «—»', async () => {
+      mockedList.mockResolvedValue(page({ items: [payerCreate, itemDelete] }));
+      render(<AuditLogView token="tok" />);
+      const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+      const [, created, deleted] = within(table).getAllByRole('row');
+      expect(pairs(created)).toEqual([
+        ['Nombre:', 'Sanitas'],
+        ['Activo:', 'Sí'],
+      ]);
+      expect(created).not.toHaveTextContent('→');
+      expect(pairs(deleted)).toEqual([
+        ['Nombre:', 'Guantes'],
+        ['SKU:', '—'],
+      ]);
+    });
+
+    it('un evento sin cambio de configuración no añade lista', async () => {
+      mockedList.mockResolvedValue(page());
+      render(<AuditLogView token="tok" />);
+      const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+      expect(table.querySelector('dl')).toBeNull();
+      expect(within(table).queryByRole('term')).not.toBeInTheDocument();
+    });
+
+    it('en el teléfono, la misma lista en la tarjeta, que se parte en vez de desbordar', async () => {
+      const original = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+      try {
+        mockedList.mockResolvedValue(page({ items: [typeEdit] }));
+        render(<AuditLogView token="tok" />);
+        const cards = await screen.findByRole('list', { name: 'Registro de auditoría' });
+        const [card] = within(cards).getAllByRole('listitem');
+        expect(pairs(card)).toEqual([
+          ['Duración:', '60 → 75 min'],
+          ['Color:', '#0E7490 → #B45309'],
+        ]);
+        expect(card.querySelector('dl')?.className).toMatch(/overflow-wrap:anywhere/);
+      } finally {
+        window.matchMedia = original;
+      }
+    });
+  });
 });

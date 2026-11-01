@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// DX-350 (G1-B §8), DX-312 (§6.5) y DX-329 (§3.2): las listas de referencia que posee la API y la web copia
+// DX-350 (G1-B §8), DX-312 (§6.5), DX-329 (§3.2) y DX-340: las listas de referencia que posee la API y la web copia
 // byte a byte no pueden divergir.
 //
 //   node scripts/check-api-reference-sync.mjs [dir-de-la-api] [dir-de-la-web]
@@ -13,13 +13,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** [fuente en la API, copia en la web] (spec G1-B §8; DX-312 §6.5; DX-329 §3.2). */
+/** [fuente en la API, copia en la web] (spec G1-B §8; DX-312 §6.5; DX-329 §3.2; DX-340). */
 export const PAIRS = [
-  ['prisma/reference/iso4217-zero-decimal.json', 'src/lib/money/iso4217-zero-decimal.json'],
+  ['prisma/reference/cldr-format-digits-zero.json', 'src/lib/money/cldr-format-digits-zero.json'],
   ['prisma/reference/iana-zone-names.json', 'src/lib/locations/iana-zone-names.json'],
   ['src/shared/format/regional-format.cases.json', 'src/lib/format/regional-format.cases.json'],
   ['prisma/reference/iso3166-countries.json', 'src/lib/locations/iso3166-countries.json'],
   ['prisma/reference/phone-regions-list.json', 'src/lib/locations/phone-regions-list.json'],
+  ['src/shared/money/rounding-vectors.json', 'src/lib/money/rounding-vectors.json'],
 ];
 
 /** Mensajes de deriva de cada par; vacío si las copias son idénticas. */

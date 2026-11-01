@@ -887,6 +887,10 @@ export interface paths {
         };
         get: operations["LocationsController_list"];
         put?: never;
+        /**
+         * Crea una sede
+         * @description Queda en la auditoría (LOCATION_CREATED) con su nombre, país, moneda, zona, formato, reloj, teléfono y región telefónica por defecto (defaultPhoneRegion); nunca la dirección.
+         */
         post: operations["LocationsController_create"];
         delete?: never;
         options?: never;
@@ -1807,6 +1811,10 @@ export interface paths {
             cookie?: never;
         };
         get: operations["LocationScheduleController_get"];
+        /**
+         * Reemplaza el horario semanal de la sede en contexto
+         * @description Queda en la auditoría (LOCATION_SCHEDULE_REPLACED) con los tramos antes y después, en la sede del horario. Guardar la misma semana no deja evento.
+         */
         put: operations["LocationScheduleController_replace"];
         post?: never;
         delete?: never;
@@ -2722,7 +2730,10 @@ export interface paths {
         };
         get: operations["DomainsController_list"];
         put?: never;
-        /** Registra un dominio propio en PENDING y devuelve el TXT a publicar (72 h para verificarlo) */
+        /**
+         * Registra un dominio propio en PENDING y devuelve el TXT a publicar (72 h para verificarlo)
+         * @description Queda en la auditoría (DOMAIN_REGISTERED) con el host y el estado PENDING; el token de verificación nunca.
+         */
         post: operations["DomainsController_create"];
         delete?: never;
         options?: never;
@@ -4024,7 +4035,7 @@ export interface paths {
         put?: never;
         /**
          * Publicar una nueva versión de la política (solo ADMIN)
-         * @description Crea la versión siguiente y pasa a ser la vigente. No hay borradores ni edición.
+         * @description Crea la versión siguiente y pasa a ser la vigente. No hay borradores ni edición. Queda en la auditoría (PRIVACY_POLICY_PUBLISHED) con versión y hash antes y después y qué textos cambiaron; nunca los textos.
          */
         post: operations["PrivacyPoliciesController_publish"];
         delete?: never;
@@ -5818,6 +5829,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /**
+         * Reemplaza los ajustes de recordatorio de una sede
+         * @description Queda en la auditoría (REMINDER_SETTINGS_UPDATED) con activado y antelaciones antes y después, en esa sede. Guardar lo mismo no deja evento.
+         */
         put: operations["ReminderSettingsController_replace"];
         post?: never;
         delete?: never;
@@ -5870,7 +5885,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "CHAIR";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -6041,6 +6056,26 @@ export interface components {
             /** @description Las monedas de la cotización (ISO 4217). */
             currencies: string[];
         };
+        AuditConfigChangeDto: {
+            /**
+             * @description Valores antes del cambio (o del retiro).
+             * @example {
+             *       "durationMinutes": 30
+             *     }
+             */
+            before?: {
+                [key: string]: (string | number | boolean | (string | number)[]) | null;
+            };
+            /**
+             * @description Valores después del cambio (o del alta).
+             * @example {
+             *       "durationMinutes": 45
+             *     }
+             */
+            after?: {
+                [key: string]: (string | number | boolean | (string | number)[]) | null;
+            };
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -6074,6 +6109,8 @@ export interface components {
             staffAccess?: components["schemas"]["AuditStaffAccessChangeDto"];
             /** @description DX-402: el barrido congeló en un abono (`reason` EXCHANGE_RATE_BACKUP, `origin` JOB, sin usuario) la tasa manual de un día anterior a «manual desde», como tasa de respaldo de un día sin tasa del proveedor. Solo días y monedas; ni importes ni la tasa. */
             exchangeRateBackup?: components["schemas"]["AuditExchangeRateBackupDto"];
+            /** @description DX-360: configuración de la clínica (sedes, horario, recordatorios, dominios, política de datos, tipos de cita, pagadores, plantillas, inventario): los campos que cambiaron con su antes y después, o un lado en un alta o un retiro. El texto libre o largo (cuerpo de una plantilla, notas, motivo) solo figura en `changedFields`; nunca secretos (token de un dominio) ni datos de pacientes. */
+            configChange?: components["schemas"]["AuditConfigChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -11109,6 +11146,18 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        CurrencyDigitsDto: {
+            /**
+             * @description Minor units de ISO 4217 según la List One de SIX (RSD 2, JPY 0). Dato normativo; no se usa para redondear.
+             * @example 2
+             */
+            minorUnits: number;
+            /**
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @example 0
+             */
+            roundingDigits: number;
+        };
         TreatmentPlanRemoteAcceptanceDto: {
             /** @description Destino enmascarado (an***@dominio) */
             destinationMasked: string;
@@ -11174,6 +11223,8 @@ export interface components {
             items?: components["schemas"]["TreatmentPlanItemDto"][];
             /** @description Sum of active items price minus discount — only present on GET by id */
             total?: number;
+            /** @description DX-340: decimales de la moneda del plan (currencies). La web redondea con roundingDigits la vista previa del descuento en bloque. Solo en GET by id */
+            currencyDigits?: components["schemas"]["CurrencyDigitsDto"];
             /** @description Aceptación firmada (DX-012); null si no se firmó. Con firma, los ítems quedan congelados (409). Solo en GET by id */
             acceptance?: components["schemas"]["TreatmentPlanAcceptanceSummaryDto"] | null;
         };
@@ -11770,6 +11821,16 @@ export interface components {
             logoUrl: string | null;
         };
         CurrencyDto: {
+            /**
+             * @description Minor units de ISO 4217 según la List One de SIX (RSD 2, JPY 0). Dato normativo; no se usa para redondear.
+             * @example 2
+             */
+            minorUnits: number;
+            /**
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @example 0
+             */
+            roundingDigits: number;
             /** @description Código ISO 4217 de 3 letras. */
             code: string;
             /** @example Euro */
@@ -14639,7 +14700,7 @@ export interface components {
             policyText: string;
             /** @description Texto de la casilla GENERAL (datos personales). */
             generalText: string;
-            /** @description Texto de la casilla SENSITIVE_HEALTH. Debe decir que el titular «no está obligado» a autorizar, qué «datos sensibles» se tratan y su «finalidad» (Dec. 1377, art. 6); si falta alguna, 400. */
+            /** @description Texto de la casilla SENSITIVE_HEALTH (datos sensibles de salud): lo que el paciente autoriza de forma expresa y separada. */
             sensitiveHealthText: string;
             /** @description Texto de la casilla MARKETING (finalidades comerciales). */
             marketingText: string;
@@ -28522,7 +28583,7 @@ export interface operations {
                     "application/json": components["schemas"]["PrivacyPolicyVersionDto"];
                 };
             };
-            /** @description Texto vacío o el de datos sensibles no incluye las frases obligatorias. */
+            /** @description Algún texto está vacío. */
             400: {
                 headers: {
                     [name: string]: unknown;

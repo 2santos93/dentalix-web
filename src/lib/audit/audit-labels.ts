@@ -129,6 +129,17 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   SEDATION_RECORD: 'Hoja de sedación',
   CLOSING_QUEUE_DISMISSAL: 'Descarte de «Pendiente de cerrar»',
   PATIENT_CREDIT: 'Saldo a favor',
+  // DX-360: configuración de la clínica (el alta de sede va en LOCATION y la
+  // de dominio en TENANT_DOMAIN).
+  LOCATION_SCHEDULE: 'Horario de la sede',
+  REMINDER_SETTINGS: 'Recordatorios de la sede',
+  PRIVACY_POLICY: 'Política de datos',
+  APPOINTMENT_TYPE: 'Tipo de cita',
+  PAYER: 'Pagador',
+  CONSENT_TEMPLATE: 'Plantilla de consentimiento',
+  PRESCRIPTION_TEMPLATE: 'Plantilla de receta',
+  INVENTORY_ITEM: 'Artículo de inventario',
+  INVENTORY_MOVEMENT: 'Movimiento de inventario',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

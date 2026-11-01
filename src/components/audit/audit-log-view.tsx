@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Lock, X } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
+import { cn } from '@/lib/utils';
 import {
   listAuditEvents,
   type AuditAction,
@@ -42,6 +43,7 @@ import {
   anamnesisDetail,
   signatureRequestDetail,
 } from '@/lib/audit/audit-labels';
+import { configChangeItems, type ConfigChangeItem } from '@/lib/audit/config-change';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { screenLocation, sedeClockFor, type SedeClockError } from '@/lib/locations/sede-clock';
@@ -85,6 +87,8 @@ const copy = {
   clearFilters: 'Limpiar filtros',
   patientChip: (name: string) => `Paciente: ${name}`,
   patientFallback: 'seleccionado',
+  /** DX-360: un texto que la API no guarda (cuerpo, notas): solo que cambió. */
+  configHidden: 'cambió',
   clearPatient: 'Quitar el filtro de paciente',
   colWhen: 'Fecha y hora',
   // DX-362: la hora en la sede del evento, cuando su reloj marca otra.
@@ -298,7 +302,12 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
       .join(' ') || undefined;
 
   const rows: AuditRowData[] = clock
-    ? items.map((event) => ({ event, time: auditTime(event, clock, locationNames), detail: eventDetail(event, locationNames) }))
+    ? items.map((event) => ({
+        event,
+        time: auditTime(event, clock, locationNames),
+        detail: eventDetail(event, locationNames),
+        change: configChangeItems(event.metadata, clock.fmt),
+      }))
     : [];
   const columns = auditColumns(!patientId);
 
@@ -459,6 +468,47 @@ interface AuditRowData {
   event: AuditEvent;
   time: AuditTime;
   detail: string | null;
+  /** DX-360: el antes y el después de un cambio de configuración. */
+  change: ConfigChangeItem[] | null;
+}
+
+/**
+ * DX-360: qué cambió, campo a campo, en una lista de definición: el término es
+ * el campo y la definición su valor («60 → 75 min»). La flecha es visual; el
+ * lector oye «60 a 75 min». Sin color: el sentido lo dan el texto y la acción.
+ * `inline` para la línea 2 de la tarjeta del teléfono: los pares siguen el
+ * texto y se separan con « · »; un valor largo se parte (390 px sin scroll).
+ */
+function ConfigChangeList({ items, inline = false }: { items: ConfigChangeItem[]; inline?: boolean }) {
+  return (
+    <dl
+      className={cn(
+        'min-w-0 [overflow-wrap:anywhere]',
+        inline ? 'inline' : 't-caption mt-0.5 flex flex-col gap-0.5',
+      )}
+    >
+      {items.map((item, i) => (
+        <div key={item.field} className={inline ? 'inline' : 'min-w-0'}>
+          {inline && i > 0 ? <span aria-hidden> · </span> : null}
+          <dt className="inline font-medium text-ink">{item.label}:</dt>{' '}
+          <dd className="t-data inline">
+            <ConfigChangeValue item={item} />
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function ConfigChangeValue({ item }: { item: ConfigChangeItem }) {
+  if (item.kind === 'hidden') return <>{copy.configHidden}</>;
+  if (item.kind !== 'changed') return <>{item.value}</>;
+  return (
+    <>
+      {item.before} <span aria-hidden>→</span>
+      <span className="sr-only"> a </span> {item.after}
+    </>
+  );
 }
 
 function eventDetail(event: AuditEvent, locationNames: LocationNames | null): string | null {
@@ -570,19 +620,26 @@ function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
     {
       id: 'resource',
       header: copy.colResource,
-      cell: ({ event, detail }) => (
+      cell: ({ event, detail, change }) => (
         <div className="min-w-0">
           {AUDIT_RESOURCE_LABELS[event.resourceType]}
           {detail ? <span className="t-caption block">{detail}</span> : null}
+          {change ? <ConfigChangeList items={change} /> : null}
         </div>
       ),
-      mobileCell: ({ event, detail }) => (
+      mobileCell: ({ event, detail, change }) => (
         <>
           <span>{AUDIT_RESOURCE_LABELS[event.resourceType]}</span>
           {detail ? (
             <>
               <span aria-hidden> · </span>
               <span>{detail}</span>
+            </>
+          ) : null}
+          {change ? (
+            <>
+              <span aria-hidden> · </span>
+              <ConfigChangeList items={change} inline />
             </>
           ) : null}
         </>
