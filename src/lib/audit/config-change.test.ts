@@ -288,3 +288,35 @@ describe("DX-516: ajustes por medio de pago", () => {
     expect(configChangeText(created ?? [])).toBe("Tipo de ajuste: Recargo · Cálculo: Importe fijo");
   });
 });
+
+describe("plazo de conservación (DX-330)", () => {
+  it("se lee en español, con antes, después y unidad", () => {
+    const list = configChangeItems({
+      reason: "CLINICAL_RECORD_RETENTION_SETTINGS",
+      configChange: {
+        before: { clinicalRecordRetentionYears: 25 },
+        after: { clinicalRecordRetentionYears: 15 },
+      },
+    });
+    expect(configChangeText(list!)).toBe(
+      "Plazo de conservación de la historia clínica: 25 → 15 años",
+    );
+  });
+});
+
+describe("texto de las monedas en la auditoría (DX-517)", () => {
+  it("pinta el antes y el después de cada moneda", () => {
+    const items = configChangeItems({
+      reason: "CURRENCY_TEXTS",
+      changedFields: ["currencyTexts"],
+      configChange: {
+        before: { currencyTexts: [] },
+        after: { currencyTexts: ["EUR=€", "VES=Bs."] },
+      },
+    });
+    expect(items).toHaveLength(1);
+    const item = items![0];
+    expect(item).toMatchObject({ field: "currencyTexts", label: "Texto de las monedas", kind: "changed" });
+    expect(item.kind === "changed" ? item.after : "").toContain("VES=Bs.");
+  });
+});

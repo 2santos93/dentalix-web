@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format/currency';
+import { NO_CURRENCY_TEXTS } from '@/lib/format/currency-text';
 import { formatCivilDate, formatDate, formatDateTime } from '@/lib/format/date';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
@@ -86,6 +87,12 @@ interface PaymentReceiptDocumentProps {
 export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceiptDocumentProps) {
   const { snapshot } = receipt;
   const { clinic, location, patient, payment, plan, planBalance, cashier } = snapshot;
+  // DX-517: con el texto de cada moneda CONGELADO al emitir (ninguno en un
+  // recibo anterior o de una clínica sin textos), nunca con el de hoy: el
+  // recibo se reimprime igual.
+  const currencyTexts = snapshot.currencyTexts ?? NO_CURRENCY_TEXTS;
+  const money = (amount: number, currency: string): string =>
+    formatCurrency(amount, currency, undefined, currencyTexts);
   const narrow = format === '80mm';
   // DX-376: la tasa congelada del abono (DX-375), no la del día: reimprimir da
   // la misma. Un abono anterior aún sin congelar (LEGACY) no imprime tasa.
@@ -189,7 +196,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           </Field>
         ) : null}
         {split ? (
-          <SplitFields split={split} narrow={narrow} voided={receipt.voided} />
+          <SplitFields split={split} narrow={narrow} voided={receipt.voided} money={money} />
         ) : (
           <>
             <Field label={copy.amount}>
@@ -200,7 +207,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
                   receipt.voided && 'line-through',
                 )}
               >
-                {formatCurrency(payment.amount, payment.currency)}
+                {money(payment.amount, payment.currency)}
               </span>
             </Field>
             {payment.adjustments?.length ? (
@@ -210,12 +217,13 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
                 currency={payment.currency}
                 narrow={narrow}
                 voided={receipt.voided}
+                money={money}
               />
             ) : null}
             {frozen ? (
               <Field label={copy.equivalent(frozen.rate.currency)}>
                 <span className={cn('font-semibold tabular-nums', receipt.voided && 'line-through')}>
-                  {formatCurrency(frozen.equivalent, frozen.rate.currency)}
+                  {money(frozen.equivalent, frozen.rate.currency)}
                 </span>
               </Field>
             ) : null}
@@ -225,7 +233,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
                 <dd className="break-words tabular-nums">
                   {frozen
                     ? copy.rateApplied(
-                        ratePairLabel(payment.currency, frozen.rate, (amount, currency) => formatCurrency(amount, currency)),
+                        ratePairLabel(payment.currency, frozen.rate, money),
                         paymentRateCopy.source[frozen.rate.source],
                         formatCivilDate(frozen.rate.date),
                       )
@@ -254,7 +262,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
         <Field label={plan ? copy.balanceAfter : copy.openingBalanceAfter}>
           <span className="tabular-nums">
             {planBalance
-              ? formatCurrency(planBalance.balance, planBalance.currency)
+              ? money(planBalance.balance, planBalance.currency)
               : copy.balanceUnavailable}
           </span>
         </Field>
@@ -283,17 +291,20 @@ function SplitFields({
   split,
   narrow,
   voided,
+  money,
 }: {
   split: NonNullable<PaymentReceipt['split']>;
   narrow: boolean;
   voided: boolean;
+  /** El formato de importes del recibo (con los textos de moneda de su foto). */
+  money: (amount: number, currency: string) => string;
 }) {
   return (
     <>
       <Field label={copy.splitTotal(split.total.currency)}>
         {split.total.amount !== null ? (
           <span className={cn('font-semibold tabular-nums', narrow ? 'text-base' : 'text-lg', voided && 'line-through')}>
-            {formatCurrency(split.total.amount, split.total.currency)}
+            {money(split.total.amount, split.total.currency)}
           </span>
         ) : (
           <span className="text-xs text-[#4b5563]">{copy.splitTotalMissing}</span>
@@ -315,17 +326,17 @@ function SplitFields({
                   ) : null}
                 </span>
                 <span className={cn('text-right tabular-nums', voided && 'line-through')}>
-                  <span className="font-semibold">{formatCurrency(line.amount, line.currency)}</span>
+                  <span className="font-semibold">{money(line.amount, line.currency)}</span>
                   {line.currency !== split.total.currency ? (
                     <span className="block text-xs text-[#4b5563]">
                       {line.equivalentAmount !== null
-                        ? copy.splitEquivalent(formatCurrency(line.equivalentAmount, split.total.currency))
+                        ? copy.splitEquivalent(money(line.equivalentAmount, split.total.currency))
                         : copy.splitWithoutRate}
                     </span>
                   ) : null}
                 </span>
                 {line.adjustments?.length ? (
-                  <AdjustmentList lines={line.adjustments} amount={line.amount} currency={line.currency} voided={voided} />
+                  <AdjustmentList lines={line.adjustments} amount={line.amount} currency={line.currency} voided={voided} money={money} />
                 ) : null}
               </li>
             ))}
@@ -347,18 +358,20 @@ function ReceiptAdjustments({
   currency,
   narrow,
   voided,
+  money,
 }: {
   lines: PaymentAdjustmentLine[];
   amount: number;
   currency: string;
   narrow: boolean;
   voided: boolean;
+  money: (amount: number, currency: string) => string;
 }) {
   return (
     <div data-testid="receipt-adjustments" className={cn('min-w-0', !narrow && 'sm:col-span-2')}>
       <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">{copy.adjustments}</dt>
       <dd>
-        <AdjustmentList lines={lines} amount={amount} currency={currency} voided={voided} />
+        <AdjustmentList lines={lines} amount={amount} currency={currency} voided={voided} money={money} />
       </dd>
     </div>
   );
@@ -369,11 +382,13 @@ function AdjustmentList({
   amount,
   currency,
   voided,
+  money,
 }: {
   lines: PaymentAdjustmentLine[];
   amount: number;
   currency: string;
   voided: boolean;
+  money: (amount: number, currency: string) => string;
 }) {
   return (
     <ul className="mt-1 flex w-full flex-col gap-0.5 text-xs">
@@ -383,16 +398,16 @@ function AdjustmentList({
             {line.label}
             <span className="text-[#4b5563]">
               {' '}
-              · {PAYMENT_ADJUSTMENT_TYPE_LABELS[line.type]} · {adjustmentBasisText(line)}
+              · {PAYMENT_ADJUSTMENT_TYPE_LABELS[line.type]} · {adjustmentBasisText(line, money)}
             </span>
           </span>
-          <span className={cn('tabular-nums', voided && 'line-through')}>{signedAdjustmentAmount(line)}</span>
+          <span className={cn('tabular-nums', voided && 'line-through')}>{signedAdjustmentAmount(line, money)}</span>
         </li>
       ))}
       <li className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-[#e5e7eb] pt-0.5 font-semibold">
         <span>{copy.collected}</span>
         <span className={cn('tabular-nums', voided && 'line-through')}>
-          {formatCurrency(collectedAmount(amount, lines), currency)}
+          {money(collectedAmount(amount, lines), currency)}
         </span>
       </li>
     </ul>

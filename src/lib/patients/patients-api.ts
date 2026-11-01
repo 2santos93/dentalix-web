@@ -104,13 +104,17 @@ export interface Patient {
   /** DEPRECADO (DX-203), solo lectura. */
   guardianDocNumber?: string | null;
   createdById: string | null;
-  // DX-039 · retención de la HC (15 años por defecto, ampliable). Opcionales: los
-  // fixtures anteriores no los traen; la API siempre los manda.
+  // DX-039 · retención de la HC (el plazo de la clínica, ampliable por paciente).
+  // Opcionales: los fixtures anteriores no los traen; la API siempre los manda.
   lastAttentionAt?: string | null;
   retentionExtended?: RetentionExtension;
   /** Último día (incluido, `YYYY-MM-DD`); null sin atenciones o PERMANENT. */
   retentionUntil?: string | null;
   underRetention?: boolean;
+  /** DX-330: plazo vigente de la clínica en años (NONE); DOUBLE es el doble. */
+  clinicRetentionYears?: number;
+  /** DX-330: la fecha de fin sale del plazo anterior de la clínica (se redujo). */
+  retentionFromPreviousTerm?: boolean;
   partiallySuppressedAt?: string | null;
   // DX-128 · canal de los recordatorios, opt-in de WhatsApp y baja. El bloque
   // «Comunicaciones» los lee de `GET /patients/:id/communication`; aquí van
@@ -211,7 +215,7 @@ export async function updatePatient(
 
 /**
  * `DELETE /patients/:id` — archivar (borrado blando, solo ADMIN). Con la HC en
- * retención legal responde 409 `CLINICAL_RECORD_RETENTION` con el mensaje en
+ * retención responde 409 `CLINICAL_RECORD_RETENTION` con el mensaje en
  * español y la fecha (DX-039).
  */
 export async function archivePatient(token: string, id: string): Promise<void> {

@@ -210,7 +210,7 @@ test.describe('teléfono con pantalla táctil (390 px, pointer: coarse)', () => 
     await page.getByRole('button', { name: dentist.fullName, exact: true }).click();
     await page
       .locator(`[data-testid="day-column"][aria-label="${dentist.fullName}"]`)
-      .getByRole('button', { name: `Ocupar el hueco libre de 15:00–19:00 · ${dentist.fullName}` })
+      .getByRole('button', { name: `Hueco libre · 15:00–19:00 · Ocupar con ${dentist.fullName}` })
       .click();
 
     const panel = page.getByTestId('fill-opening-panel');

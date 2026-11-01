@@ -44,6 +44,9 @@ export const PAYMENT_ADJUSTMENT_CALCULATION_LABELS: Record<PaymentAdjustmentCalc
   FIXED: 'Importe fijo',
 };
 
+/** Cómo se pinta un importe: un recibo pasa el suyo, con los textos congelados (DX-517). */
+type Money = (amount: number, currency: string) => string;
+
 /** Lo que el cálculo necesita de un ajuste configurado. */
 export type AdjustmentRule = Pick<
   PaymentMethodAdjustment,
@@ -133,16 +136,22 @@ export function adjustmentCalculationText(rule: Pick<AdjustmentRule, 'calculatio
 }
 
 /** El importe con signo de una línea: «+3,00 USD» o «−5,00 USD». */
-export function signedAdjustmentAmount(line: { type: PaymentAdjustmentType; amount: number; currency: string }): string {
-  return `${adjustmentSign(line.type) < 0 ? '−' : '+'}${formatCurrency(line.amount, line.currency)}`;
+export function signedAdjustmentAmount(
+  line: { type: PaymentAdjustmentType; amount: number; currency: string },
+  money: Money = formatCurrency,
+): string {
+  return `${adjustmentSign(line.type) < 0 ? '−' : '+'}${money(line.amount, line.currency)}`;
 }
 
 /**
  * Cómo se explica una línea congelada: «3 % de 100,00 USD» o «Importe fijo».
  * El tipo y la etiqueta van aparte.
  */
-export function adjustmentBasisText(line: Pick<ComputedAdjustment, 'calculation' | 'percent' | 'base' | 'currency'>): string {
+export function adjustmentBasisText(
+  line: Pick<ComputedAdjustment, 'calculation' | 'percent' | 'base' | 'currency'>,
+  money: Money = formatCurrency,
+): string {
   return line.calculation === 'PERCENT'
-    ? `${percentText(line.percent ?? 0)} de ${formatCurrency(line.base, line.currency)}`
+    ? `${percentText(line.percent ?? 0)} de ${money(line.base, line.currency)}`
     : PAYMENT_ADJUSTMENT_CALCULATION_LABELS.FIXED;
 }

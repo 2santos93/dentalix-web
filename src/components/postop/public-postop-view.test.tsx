@@ -42,6 +42,7 @@ describe('PublicPostOpView', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Clínica Sonrisas' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(mockedGet).toHaveBeenCalledWith('tok-1');
     expect(screen.getByRole('heading', { level: 2, name: 'Tras una extracción' })).toBeInTheDocument();
     expect(screen.getByText(/Muerde la gasa 30 minutos\./)).toHaveClass('whitespace-pre-line');
@@ -75,6 +76,7 @@ describe('PublicPostOpView', () => {
     mockedGet.mockRejectedValue(new ApiError(404, 'Enlace no encontrado'));
     render(<PublicPostOpView linkToken="tok-1" />);
     expect(await screen.findByRole('heading', { name: 'Enlace no válido' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(
       screen.getByText(
         'No encontramos este enlace. Revisa que esté completo o pide a la clínica que te lo envíe de nuevo.',
@@ -87,6 +89,7 @@ describe('PublicPostOpView', () => {
     mockedGet.mockRejectedValue(new ApiError(410, 'Este enlace ya no es válido'));
     render(<PublicPostOpView linkToken="tok-1" />);
     expect(await screen.findByRole('heading', { name: 'Este enlace ya no es válido' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(
       screen.getByText('Caducó a los 30 días. Si necesitas las indicaciones, llama a la clínica.'),
     ).toBeInTheDocument();

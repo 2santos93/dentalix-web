@@ -6,9 +6,9 @@ type Schemas = components['schemas'];
 
 // Tipos del cliente generado (`npm run codegen`), DX-439.
 export type ClosingQueue = Schemas['ClosingQueueDto'];
-export type ClosingQueueCount = Schemas['ClosingQueueCountDto'];
 export type ClosingAppointment = Schemas['ClosingAppointmentDto'];
 export type ClosingTreatment = Schemas['ClosingTreatmentDto'];
+export type ClosingKeptOverbook = Schemas['ClosingKeptOverbookDto'];
 export type ClosingQueueSection = Schemas['ClosingQueueSection'];
 export type ClosingDismissalReason = Schemas['ClosingDismissalReason'];
 export type CreateClosingDismissal = Schemas['CreateClosingDismissalDto'];
@@ -55,11 +55,6 @@ export const DISMISSAL_TEXT_MAX = 200;
 /** `GET /closing-queue` — las secciones del rol, por defecto los 14 días hasta ayer. */
 export function getClosingQueue(token: string): Promise<ClosingQueue> {
   return apiFetch<ClosingQueue>('/closing-queue', { token });
-}
-
-/** `GET /closing-queue/count` — el contador del menú. */
-export function getClosingQueueCount(token: string): Promise<ClosingQueueCount> {
-  return apiFetch<ClosingQueueCount>('/closing-queue/count', { token });
 }
 
 /** `POST /closing-queue/dismissals` — descarta UN pendiente con su motivo. */

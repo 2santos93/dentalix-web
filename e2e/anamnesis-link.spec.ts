@@ -188,7 +188,7 @@ test('la odontóloga revisa a 1440, acepta y la alerta aparece en la ficha', asy
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, dentist.email, password);
   await page.goto(`${origin}/patients`);
-  const navEntry = page.getByRole('link', { name: 'Anamnesis por revisar · 1' }).first();
+  const navEntry = page.getByRole('link', { name: 'Anamnesis 1 · por revisar' }).first();
   await expect(navEntry).toBeVisible();
   await navEntry.click();
   await expect(page.getByRole('heading', { level: 1, name: 'Anamnesis por revisar' })).toBeVisible();

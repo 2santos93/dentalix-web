@@ -1,3 +1,5 @@
+import { wallInstant } from '../../src/lib/time/wall-clock';
+
 /**
  * Fechas y horas de la SEDE en los specs (DX-070, TST-008).
  *
@@ -82,15 +84,6 @@ export function sedeTodayZone(now = new Date()): string {
  */
 export const SEDE_TODAY_TZ = process.env.E2E_SEDE_TODAY_TZ ?? sedeTodayZone();
 
-/** Desfase `±HH:MM` (o `Z`) de `zone` el día `day`. */
-function zoneOffset(day: string, zone: string): string {
-  const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
-    .formatToParts(new Date(`${day}T12:00:00Z`))
-    .find((p) => p.type === 'timeZoneName')?.value;
-  if (!name || name === 'GMT') return 'Z';
-  return name.slice(3);
-}
-
 /** `YYYY-MM-DD` de un instante, en la zona de la sede. */
 export function sedeDate(at: Date, zone = SEDE_TZ): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(at);
@@ -123,9 +116,19 @@ export function birthDateTurnedLastMonth(years: number, today: string): string {
   return `${birthYear}-${String(birthMonth).padStart(2, '0')}-15`;
 }
 
-/** El instante de `day` (`YYYY-MM-DD`) a la hora `hhmm` (`HH:MM`) de la sede. */
+/**
+ * El instante de `day` (`YYYY-MM-DD`) a la hora `hhmm` (`HH:MM`) de la sede.
+ *
+ * DX-520: con `wallInstant` del producto, el desfase es el de ESA hora y no el
+ * del mediodía UTC del día: el día de un cambio de horario (Nueva York el
+ * 1-nov-2026 o el 14-mar-2027, Berlín el 25-oct-2026) las horas de antes del
+ * cambio salían corridas una hora. Hora repetida → la primera; hora que no
+ * existe → corrida hacia delante, como la agenda.
+ */
 export function atSede(day: string, hhmm: string, zone = SEDE_TZ): Date {
-  return new Date(`${day}T${hhmm}:00${zoneOffset(day, zone)}`);
+  const match = /^(\d{2}):(\d{2})$/.exec(hhmm);
+  if (!match) throw new RangeError(`Hora no válida: ${hhmm}`);
+  return wallInstant(day, Number(match[1]) * 60 + Number(match[2]), zone);
 }
 
 /** `HH:MM` como lo pinta la app (`toLocaleTimeString('es', …)`), en la sede. */

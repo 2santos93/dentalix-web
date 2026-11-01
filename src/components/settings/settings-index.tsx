@@ -87,15 +87,14 @@ function IndexSection({ section }: { section: SettingsSection }) {
                 href={href}
                 // Nombre = la etiqueta; la línea de apoyo, descripción: la
                 // lista de enlaces del lector de pantalla no lee frases.
-                aria-labelledby={labelId}
-                aria-describedby={descriptionId}
+                aria-labelledby={`${labelId} ${descriptionId}`}
                 className="flex min-h-11 items-center gap-3 px-4 py-3 transition-colors hover:bg-canvas focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text"
               >
                 <Icon className="size-4 shrink-0 text-muted" aria-hidden />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span id={labelId} className="text-sm font-medium text-ink">
                     {label}
-                  </span>
+                  </span>{' '}
                   <span id={descriptionId} className="text-sm text-pretty text-muted">
                     {description}
                   </span>

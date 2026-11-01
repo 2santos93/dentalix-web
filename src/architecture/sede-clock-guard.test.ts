@@ -110,7 +110,6 @@ const MIGRATED = [
   'components/appointments/move-appointment-dialog.tsx',
   'components/appointments/openings-dialog.tsx',
   'components/appointments/schedule-block-dialog.tsx',
-  'components/appointments/week-agenda.tsx',
   'components/appointments/week-time-grid.tsx',
   'components/treatment-plans/schedule-visit-dialog.tsx',
   'components/treatment-plans/unscheduled-plans-view.tsx',

@@ -67,6 +67,8 @@ export async function findOpenings(
     to: string;
     durationMinutes: number;
     patientId?: string;
+    /** DX-509-bis: la cita que se mueve no tapa su propia hora. */
+    excludeAppointmentId?: string;
   },
 ): Promise<Openings> {
   const search = new URLSearchParams({
@@ -77,5 +79,6 @@ export async function findOpenings(
     durationMinutes: String(params.durationMinutes),
   });
   if (params.patientId) search.set('patientId', params.patientId);
+  if (params.excludeAppointmentId) search.set('excludeAppointmentId', params.excludeAppointmentId);
   return apiFetch<Openings>(`/appointments/openings?${search.toString()}`, { token });
 }

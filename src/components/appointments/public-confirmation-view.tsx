@@ -268,7 +268,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
         )}
 
         {state.kind === 'invalid' && (
-          <Notice icon={LinkIcon} title={copy.invalidTitle} message={copy.invalidMessage} />
+          <Notice headingLevel={1} icon={LinkIcon} title={copy.invalidTitle} message={copy.invalidMessage} />
         )}
 
         {state.kind === 'ready' && (

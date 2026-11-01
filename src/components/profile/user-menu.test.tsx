@@ -1,3 +1,4 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { render, screen, waitFor } from '@testing-library/react';
 import { setupUser } from '@/lib/test/user';
 import { UserMenu } from './user-menu';
@@ -45,6 +46,31 @@ describe('UserMenu', () => {
   });
   afterEach(() => {
     mockAccessToken = 'T';
+  });
+
+  it('DX-297 audits initials and image/fallback states with account purpose and full identity', async () => {
+    const snapshots = [];
+    for (const variant of ['compact', 'rail'] as const) {
+      const view = render(<UserMenu variant={variant} />);
+      await screen.findByText('AG');
+      expect(screen.getByRole('button')).toHaveAccessibleName('AG · Cuenta · Ana Gómez');
+      snapshots.push({ html: view.container.innerHTML, selector: 'button[aria-haspopup="menu"]' });
+      view.unmount();
+    }
+    auditRenderedControls(snapshots);
+  });
+
+  it('DX-297 retains full account identity with an image and a loading fallback', async () => {
+    (getMe as jest.Mock).mockReturnValueOnce(new Promise(() => {}));
+    const loading = render(<UserMenu variant="compact" />);
+    expect(screen.getByRole('button', { name: 'Cuenta' })).toHaveTextContent('·');
+    auditRenderedControls([{ html: loading.container.innerHTML, selector: 'button' }]);
+    loading.unmount();
+    (getMe as jest.Mock).mockResolvedValueOnce({ id: 'u1', fullName: 'Ana Gómez', avatarUrl: '/synthetic-avatar.png', memberships: [] });
+    const image = render(<UserMenu variant="compact" />);
+    await waitFor(() => expect(image.container.querySelector('img')).not.toBeNull());
+    expect(screen.getByRole('button', { name: 'Cuenta · Ana Gómez' })).toBeInTheDocument();
+    auditRenderedControls([{ html: image.container.innerHTML, selector: 'button' }]);
   });
 
   it('muestra el nombre y el rol del usuario', async () => {

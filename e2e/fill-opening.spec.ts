@@ -137,7 +137,7 @@ test('1440 px: cancelar una cita → «Ocupar este hueco» → «Asignar» → l
 
   // Cancelar la cita de Gabi desde su detalle.
   await column(page, dentist.fullName)
-    .getByRole('button', { name: new RegExp(`Detalle de la cita de 10:00–10:30 · Gabi ${last}`) })
+    .getByRole('button', { name: new RegExp(`^10:00–10:30 · Gabi ${last}.*Detalle de la cita`) })
     .click();
   const detail = page.getByRole('dialog').filter({ hasText: 'Estado' });
   await chooseAppointmentStatus(detail.getByRole('combobox', { name: /^Estado: / }), 'Cancelada');
@@ -168,7 +168,7 @@ test('1440 px: cancelar una cita → «Ocupar este hueco» → «Asignar» → l
   await expect(panel).toBeHidden({ timeout: 10_000 });
   await expect(
     column(page, dentist.fullName).getByRole('button', {
-      name: new RegExp(`Detalle de la cita de 10:00–10:30 · Ana ${last}`),
+      name: new RegExp(`^10:00–10:30 · Ana ${last}.*Detalle de la cita`),
     }),
   ).toBeVisible({ timeout: 10_000 });
 });
@@ -182,7 +182,7 @@ test('390 px: el hueco libre abre la hoja a pantalla completa y Elena se adelant
   await page.getByRole('button', { name: dentist.fullName, exact: true }).click();
 
   const gap = column(page, dentist.fullName).getByRole('button', {
-    name: `Ocupar el hueco libre de 15:00–19:00 · ${dentist.fullName}`,
+    name: `Hueco libre · 15:00–19:00 · Ocupar con ${dentist.fullName}`,
   });
   await gap.focus();
   await page.keyboard.press('Enter');
@@ -202,7 +202,7 @@ test('390 px: el hueco libre abre la hoja a pantalla completa y Elena se adelant
   await expect(panel).toBeHidden({ timeout: 10_000 });
   await expect(
     column(page, dentist.fullName).getByRole('button', {
-      name: new RegExp(`Detalle de la cita de 15:00–15:30 · Elena ${last}`),
+      name: new RegExp(`^15:00–15:30 · Elena ${last}.*Detalle de la cita`),
     }),
   ).toBeVisible({ timeout: 10_000 });
 });

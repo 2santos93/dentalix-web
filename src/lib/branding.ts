@@ -1,4 +1,5 @@
 import { apiUrl } from '@/lib/api/api-base';
+import { readCurrencyTexts, type CurrencyTexts } from '@/lib/format/currency-text';
 
 // `primaryColor` is tenant-admin-settable data crossing a trust boundary and
 // gets spliced raw into a `<style>` tag in layout.tsx. Validate it here, at
@@ -11,9 +12,15 @@ export interface Branding {
   name: string | null;
   /** Logo de la clínica (A4: el shell autenticado lo enseña). Solo http(s). */
   logoUrl: string | null;
+  /**
+   * DX-517: texto propio de cada moneda (código ISO → texto); vacío = el
+   * código. `null` = no se supo (sin clínica en el host o la marca falló): el
+   * navegador lo pide (`CurrencyTextsSync`).
+   */
+  currencyTexts: CurrencyTexts | null;
 }
 
-const EMPTY: Branding = { primaryColor: null, name: null, logoUrl: null };
+const EMPTY: Branding = { primaryColor: null, name: null, logoUrl: null, currencyTexts: null };
 
 /** Solo URLs http(s) absolutas: nada de `javascript:` ni `data:` en un `src`. */
 function safeLogoUrl(raw: unknown): string | null {
@@ -49,6 +56,8 @@ export async function fetchBranding(tenant: string | null, host?: string | null)
       primaryColor,
       name: typeof data.name === 'string' && data.name.trim() ? data.name : null,
       logoUrl: safeLogoUrl(data.logoUrl),
+      // Dato de la clínica que cruza una frontera: solo códigos ISO con un texto válido.
+      currencyTexts: readCurrencyTexts(data.currencyTexts),
     };
   } catch {
     return EMPTY;

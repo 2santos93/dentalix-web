@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// DX-350 (G1-B §8), DX-312 (§6.5), DX-329 (§3.2) y DX-340: las listas de referencia que posee la API y la web copia
+// DX-350 (G1-B §8), DX-312 (§6.5), DX-329 (§3.2), DX-340 y DX-517: las listas de referencia que posee la API y la web copia
 // byte a byte no pueden divergir.
 //
 //   node scripts/check-api-reference-sync.mjs [dir-de-la-api] [dir-de-la-web]
@@ -23,6 +23,8 @@ export const PAIRS = [
   ['src/shared/money/rounding-vectors.json', 'src/lib/money/rounding-vectors.json'],
   // DX-516: vectores de los ajustes por medio de pago.
   ['src/modules/payment-methods/domain/payment-adjustment-vectors.json', 'src/lib/payments/payment-adjustment-vectors.json'],
+  // DX-517: vectores del texto propio de cada moneda.
+  ['src/shared/format/currency-text.cases.json', 'src/lib/format/currency-text.cases.json'],
 ];
 
 /** Mensajes de deriva de cada par; vacío si las copias son idénticas. */

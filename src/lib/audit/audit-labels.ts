@@ -721,7 +721,27 @@ function exchangeRateSourceDetail(from: string, to: string): string | null {
   return `Tasa de cambio: ${before} → ${after}`;
 }
 
+/**
+ * DX-330: «Conservación de la historia clínica · 2 historias mantienen su fecha».
+ * Solo la bajada; la subida la pinta `configChangeItems` (antes y después).
+ */
+function retentionSettingsDetail(metadata: AuditMetadata): string | null {
+  const change = metadata.retentionTermChange;
+  if (!change || change.direction !== 'DOWN') return null;
+  const n = change.protectedPatients;
+  if (!Number.isInteger(n) || n < 0) return null;
+  const parts = ['Conservación de la historia clínica'];
+  if (n > 0) parts.push(n === 1 ? '1 historia mantiene su fecha' : `${n} historias mantienen su fecha`);
+  if (change.withinCorrectionWindow) parts.push('corrección de una subida');
+  return parts.join(' · ');
+}
+
 export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
+  // DX-330: sin `statusChange` (el antes y el después van en `configChange`);
+  // va antes del `return null` de abajo o no llegaría nunca.
+  if (metadata.reason === 'CLINICAL_RECORD_RETENTION_SETTINGS') {
+    return retentionSettingsDetail(metadata);
+  }
   // DX-327: sin `statusChange` ni valores (son texto libre); va antes del
   // `return null` de abajo o no llegaría nunca.
   if (metadata.reason === 'DOCUMENT_TYPE_NAMES_SETTINGS') {
@@ -766,8 +786,12 @@ export function locationCalendarDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && LOCATION_CALENDAR_REASONS[metadata.reason]) ?? null;
 }
 
-/** DX-515: recibo no fiscal (el antes y el después los pinta `configChangeItems`). */
+/**
+ * DX-515: recibo no fiscal, y DX-517: el texto propio de cada moneda (el antes
+ * y el después los pinta `configChangeItems`).
+ */
 const RECEIPT_REASONS: Record<string, string> = {
+  CURRENCY_TEXTS: 'Texto de las monedas',
   RECEIPT_SETTINGS: 'Título y leyenda del recibo',
   RECEIPT_LEGEND: 'Leyenda del recibo de la sede',
   EXTERNAL_INVOICE_NUMBER: 'Nº de factura externa del abono',

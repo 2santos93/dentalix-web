@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { PaymentReceiptDocument } from './payment-receipt-document';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import type { PaymentReceipt } from '@/lib/payments/payment-receipts-api';
+import { setClinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
 
 function text(node: HTMLElement): string {
   return (node.textContent ?? '').replace(/\s/g, ' ');
@@ -342,7 +343,7 @@ describe('DX-516: ajustes por medio de pago', () => {
     fixedAmount: null,
     base: 150000,
     amount: 4500,
-    currency: 'COP',
+    currency: 'USD',
   };
   const discount = {
     type: 'DISCOUNT' as const,
@@ -352,7 +353,7 @@ describe('DX-516: ajustes por medio de pago', () => {
     fixedAmount: 1000,
     base: 150000,
     amount: 1000,
-    currency: 'COP',
+    currency: 'USD',
   };
 
   it('sin ajustes no pinta la sección (el recibo de siempre)', () => {
@@ -368,16 +369,19 @@ describe('DX-516: ajustes por medio de pago', () => {
         format={format}
         receipt={{
           ...base,
-          snapshot: { ...base.snapshot, payment: { ...base.snapshot.payment, adjustments: [tax, discount] } },
+          snapshot: {
+            ...base.snapshot,
+            payment: { ...base.snapshot.payment, amount: 150000, currency: 'USD', adjustments: [tax, discount] },
+          },
         }}
       />,
     );
     const block = screen.getByTestId('receipt-adjustments');
-    expect(text(block)).toContain('Impuesto 3 % · Impuesto · 3 % de 150.000,00 COP');
-    expect(text(block)).toContain('+4500,00 COP');
+    expect(text(block)).toContain('Impuesto 3 % · Impuesto · 3 % de 150.000,00 USD');
+    expect(text(block)).toContain('+4500,00 USD');
     expect(text(block)).toContain('Descuento efectivo · Descuento · Importe fijo');
-    expect(text(block)).toContain('−1000,00 COP');
-    expect(text(block)).toContain('Total cobrado153.500,00 COP');
+    expect(text(block)).toContain('−1000,00 USD');
+    expect(text(block)).toContain('Total cobrado153.500,00 USD');
   });
 
   it('cobro dividido: cada forma de pago lleva los ajustes de su medio', () => {
@@ -390,7 +394,7 @@ describe('DX-516: ajustes por medio de pago', () => {
                 paymentId: 'pay-1',
                 line: 1,
                 amount: 150000,
-                currency: 'COP',
+                currency: 'USD',
                 method: 'CASH',
                 paymentMethodName: 'Efectivo',
                 reference: null,
@@ -402,7 +406,7 @@ describe('DX-516: ajustes por medio de pago', () => {
                 paymentId: 'pay-2',
                 line: 2,
                 amount: 50000,
-                currency: 'COP',
+                currency: 'USD',
                 method: 'CARD',
                 paymentMethodName: 'Tarjeta',
                 reference: null,
@@ -410,14 +414,59 @@ describe('DX-516: ajustes por medio de pago', () => {
                 exchangeRate: null,
               },
             ],
-            total: { currency: 'COP', amount: 200000 },
+            total: { currency: 'USD', amount: 200000 },
           },
         })}
       />,
     );
     const lines = screen.getByTestId('receipt-split-lines');
     expect(text(lines)).toContain('Impuesto 3 %');
-    expect(text(lines)).toContain('154.500,00 COP');
+    expect(text(lines)).toContain('154.500,00 USD');
     expect(screen.getAllByText('Total cobrado')).toHaveLength(1);
+  });
+
+  it('los importes del ajuste usan el texto de moneda congelado en la foto (DX-517)', () => {
+    const base = paymentReceiptFixture();
+    render(
+      <PaymentReceiptDocument
+        receipt={{
+          ...base,
+          snapshot: {
+            ...base.snapshot,
+            currencyTexts: { USD: 'Dól.' },
+            payment: { ...base.snapshot.payment, amount: 150000, currency: 'USD', adjustments: [tax] },
+          },
+        }}
+      />,
+    );
+    const block = text(screen.getByTestId('receipt-adjustments'));
+    expect(block).toContain('+4500,00 Dól.');
+    expect(block).toContain('154.500,00 Dól.');
+    expect(block).not.toContain('USD');
+  });
+});
+
+describe('texto propio de cada moneda (DX-517)', () => {
+  afterEach(() => setClinicCurrencyTexts({}));
+
+  it('los importes usan el texto congelado en la foto del recibo', () => {
+    const receipt = paymentReceiptFixture();
+    render(
+      <PaymentReceiptDocument
+        receipt={{ ...receipt, snapshot: { ...receipt.snapshot, currencyTexts: { COP: 'Col$' } } }}
+      />,
+    );
+    const doc = screen.getByTestId('receipt-document');
+    expect(text(doc)).toContain('150.000,00 Col$');
+    expect(text(doc)).toContain('450.000,00 Col$');
+    expect(text(doc)).not.toContain('COP');
+  });
+
+  it('un recibo emitido sin textos se reimprime igual aunque la clínica los configure después', () => {
+    setClinicCurrencyTexts({ COP: 'Col$' });
+    render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
+    const doc = screen.getByTestId('receipt-document');
+    expect(text(doc)).toContain('150.000,00 COP');
+    expect(text(doc)).not.toContain('Col$');
   });
 });
