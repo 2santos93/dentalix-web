@@ -55,9 +55,13 @@ const copy = {
     until
       ? `Puedes volver a ${previous} años sin ningún efecto hasta el ${until}.`
       : `Puedes volver a ${previous} años sin ningún efecto durante las 24 horas siguientes a la subida.`,
+  dialogDescription: 'Años que se conserva la historia clínica desde la última atención, en todas las sedes.',
   reduce:
     'Las historias que hoy están en retención mantienen su fecha de fin. El plazo nuevo se aplica al resto y a las atenciones que vengan.',
   reduceInWindow: 'Estás corrigiendo una subida reciente: esa subida no deja fechas fijadas.',
+  // Dentro de la ventana, bajar por debajo del plazo anterior sí protege con ese plazo anterior.
+  reduceInWindowBelow: (previous: number) =>
+    `Como bajas de ${previous} años, las historias que hoy están en retención mantienen su fecha de ${previous} años. El plazo nuevo se aplica al resto y a las atenciones que vengan.`,
   jump: 'Es un salto grande: revisa el número.',
   invalid: (min: number, max: number) =>
     `El plazo de conservación de la historia clínica tiene que ser un número entero de años entre ${min} y ${max}.`,
@@ -82,6 +86,11 @@ const copy = {
 };
 
 const loadErrorOptions = { fallback: copy.loadError, byStatus: { 404: copy.loadError } };
+
+function describedBy(...ids: Array<string | null>): string | undefined {
+  const list = ids.filter(Boolean).join(' ');
+  return list || undefined;
+}
 
 type Step = 'closed' | 'edit' | 'confirm';
 
@@ -115,7 +124,11 @@ export function ClinicalRecordRetentionSettingsSection({
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const sending = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
   const fieldId = useId();
+  const noteId = useId();
+  const jumpId = useId();
   const fmt = readyFormat(useSedeFormat(token));
   const timeZone = readyTimeZone(useSedeTimeZone(token));
 
@@ -135,6 +148,13 @@ export function ClinicalRecordRetentionSettingsSection({
       cancelled = true;
     };
   }, [token, allowed, reloadKey]);
+
+  // Al cambiar de paso el foco va al primer control del paso (Volver, en la
+  // confirmación, y no el botón destructivo); si no, Radix lo deja en el diálogo.
+  useEffect(() => {
+    if (step === 'confirm') backRef.current?.focus();
+    else if (step === 'edit') inputRef.current?.focus();
+  }, [step]);
 
   if (!allowed) {
     return (
@@ -173,6 +193,7 @@ export function ClinicalRecordRetentionSettingsSection({
   const valid = parsed !== null && parsed >= min && parsed <= max;
   const isRaise = valid && parsed > effectiveYears;
   const isReduction = valid && parsed < effectiveYears;
+  const note = isRaise || isReduction;
   const bigJump = isRaise && parsed - effectiveYears >= BIG_JUMP_YEARS;
 
   function openDialog() {
@@ -186,6 +207,13 @@ export function ClinicalRecordRetentionSettingsSection({
 
   function close() {
     setStep('closed');
+  }
+
+  function reductionDescription() {
+    if (!correctionWindow) return copy.reduce;
+    return parsed !== null && parsed < correctionWindow.previousYears
+      ? `${copy.reduceInWindow} ${copy.reduceInWindowBelow(correctionWindow.previousYears)}`
+      : copy.reduceInWindow;
   }
 
   function raiseDescription(n: number) {
@@ -266,8 +294,15 @@ export function ClinicalRecordRetentionSettingsSection({
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
-      <Dialog open={step !== 'closed'} onOpenChange={(open) => (open ? undefined : close())}>
-        <DialogContent className="max-w-md">
+      {/* Mientras se guarda no se puede descartar: el fallo (o el paso de
+          confirmación) llegaría a un diálogo ya cerrado y se perdería. */}
+      <Dialog
+        open={step !== 'closed'}
+        onOpenChange={(open) => {
+          if (!open && !saving) close();
+        }}
+      >
+        <DialogContent className="max-w-md" closeDisabled={saving}>
           {step === 'confirm' ? (
             <div className="flex flex-col gap-4">
               <DialogHeader>
@@ -276,7 +311,17 @@ export function ClinicalRecordRetentionSettingsSection({
               </DialogHeader>
               {saveError ? <InlineError variant="summary">{saveError}</InlineError> : null}
               <DialogFooter>
-                <Button type="button" variant="secondary" disabled={saving} onClick={() => setStep('edit')}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  ref={backRef}
+                  disabled={saving}
+                  className="max-sm:min-h-11"
+                  onClick={() => {
+                    setSaveError(null);
+                    setStep('edit');
+                  }}
+                >
                   {copy.back}
                 </Button>
                 <Button
@@ -294,16 +339,16 @@ export function ClinicalRecordRetentionSettingsSection({
             <form onSubmit={handleSave} noValidate className="flex flex-col gap-4">
               <DialogHeader>
                 <DialogTitle>{copy.dialogTitle}</DialogTitle>
-                <DialogDescription>
-                  {isRaise
-                    ? raiseDescription(parsed)
-                    : isReduction
-                      ? [correctionWindow ? copy.reduceInWindow : null, copy.reduce]
-                          .filter(Boolean)
-                          .join(' ')
-                      : copy.hint(min)}
-                </DialogDescription>
+                <DialogDescription>{copy.dialogDescription}</DialogDescription>
               </DialogHeader>
+              {/* Lo que pasa al guardar cambia con el número: va enlazado al
+                  campo y al botón (aria-describedby) para que un lector de
+                  pantalla lo oiga antes de confirmar. */}
+              {isRaise || isReduction ? (
+                <p id={noteId} className="text-sm text-muted">
+                  {isRaise ? raiseDescription(parsed) : reductionDescription()}
+                </p>
+              ) : null}
               <FormField htmlFor={fieldId} label={copy.fieldLabel} error={fieldError}>
                 <Input
                   id={fieldId}
@@ -312,25 +357,36 @@ export function ClinicalRecordRetentionSettingsSection({
                   min={min}
                   max={max}
                   value={draft}
+                  ref={inputRef}
                   onChange={(e) => {
                     setDraft(e.target.value);
                     setFieldError(null);
+                    setSaveError(null);
                   }}
                   disabled={saving}
                   aria-invalid={fieldError ? true : undefined}
-                  aria-describedby={fieldError ? fieldErrorId(fieldId) : undefined}
+                  aria-describedby={describedBy(fieldError ? fieldErrorId(fieldId) : null, note ? noteId : null, bigJump ? jumpId : null)}
                   className="max-sm:h-11"
                 />
               </FormField>
-              {bigJump ? <p className="text-sm text-warning-text">{copy.jump}</p> : null}
+              {bigJump ? (
+                <p id={jumpId} className="text-sm text-warning-text">
+                  {copy.jump}
+                </p>
+              ) : null}
               {saveError ? <InlineError variant="summary">{saveError}</InlineError> : null}
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button type="button" variant="secondary" disabled={saving}>
+                  <Button type="button" variant="secondary" disabled={saving} className="max-sm:min-h-11">
                     {copy.cancel}
                   </Button>
                 </DialogClose>
-                <Button type="submit" loading={saving} className="max-sm:min-h-11">
+                <Button
+                  type="submit"
+                  loading={saving}
+                  className="max-sm:min-h-11"
+                  aria-describedby={describedBy(note ? noteId : null, bigJump ? jumpId : null)}
+                >
                   {isRaise ? copy.raiseTo(parsed) : copy.save}
                 </Button>
               </DialogFooter>

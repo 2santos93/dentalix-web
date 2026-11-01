@@ -145,7 +145,7 @@ test('ADMIN: una clínica nueva está en el mínimo de la plataforma, con la sec
 
   await expect(await openSettings(page)).toHaveText(`${base} años`);
   await expect(page.getByText(/Mientras dure, el paciente no se puede archivar/).first()).toBeVisible();
-  await expect(page.getByRole('main')).not.toContainText('legal');
+  await expect(page.getByRole('main')).not.toContainText(/legal|839/i);
   await expectNoViolations(page, page.getByRole('main'), 'sección de ajustes');
 
   await page.goto(`${origin}/patients/${patientId}`);
@@ -168,6 +168,7 @@ test('ADMIN sube el plazo: ve el aviso de las 24 horas y la ficha dice el plazo 
   await expect(dialog).toContainText('24 horas');
   await expect(dialog).toContainText(`puedes volver a ${base} años sin ningún efecto`);
   await expect(dialog).toContainText('no se puede deshacer');
+  await expect(dialog).not.toContainText(/legal|839/i);
   await expectDialogInsideViewport(page, dialog);
   await expectNoViolations(page, dialog, 'diálogo, subida');
   await raiseTo(page, dialog, raised);
@@ -181,7 +182,7 @@ test('ADMIN sube el plazo: ve el aviso de las 24 horas y la ficha dice el plazo 
     timeout: 15_000,
   });
   await expect(retention(page)).toContainText(`Se conserva ${raised} años desde la última atención`);
-  await expect(retention(page)).not.toContainText('legal');
+  await expect(retention(page)).not.toContainText(/legal|839/i);
 });
 
 test('ADMIN baja dentro de la ventana: ve el texto de corrección, confirma y la ficha vuelve sin «plazo anterior»', async ({
@@ -193,9 +194,13 @@ test('ADMIN baja dentro de la ventana: ve el texto de corrección, confirma y la
 
   const dialog = await openDialogWith(page, base);
   await expect(dialog).toContainText('Estás corrigiendo una subida reciente');
+  // Volver al plazo anterior no fija ninguna fecha: el paso 1 no puede decir lo contrario.
+  await expect(dialog).not.toContainText('mantienen su fecha');
+  await expect(dialog).not.toContainText(/legal|839/i);
   await expectNoViolations(page, dialog, 'diálogo, corrección');
   await askToReduce(dialog, base, raised);
   await expectDialogInsideViewport(page, dialog);
+  await expect(dialog).not.toContainText(/legal|839/i);
   await expectNoViolations(page, dialog, 'diálogo, confirmación');
   await dialog.getByRole('button', { name: 'Reducir el plazo' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
