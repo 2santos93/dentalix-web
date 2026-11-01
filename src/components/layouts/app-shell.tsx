@@ -15,8 +15,8 @@ import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { SedeDateLocaleProvider } from '@/components/locations/sede-date-locale-provider';
 import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
-import { useAnamnesisInboxCount } from '@/components/anamnesis/use-anamnesis-inbox-count';
-import { ClosingQueueCountProvider, useClosingQueueCount } from '@/components/appointments/closing-queue-count';
+import { useClosingQueueCount } from '@/components/appointments/closing-queue-count';
+import { WorkQueuesProvider, useWorkQueueCount } from '@/components/work-queues/work-queues-context';
 import { canSeeClosingQueue } from '@/lib/appointments/closing-queue-api';
 import { useClinicBranding } from '@/components/brand/branding-context';
 import { ClinicBrand, ClinicLogo } from '@/components/brand/clinic-brand';
@@ -62,10 +62,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return <SessionLocationsProvider token={token}>
     <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
       <SedeDateLocaleProvider token={token}>
-        {/* DX-439: una sola lectura del contador para el menú y la Agenda. */}
-        <ClosingQueueCountProvider token={token} enabled={canSeeClosingQueue(getTokenRole(token))} pathname={pathname}>
+        {/* DX-503: una sola lectura de las listas de trabajo para el menú, la Agenda e Inicio. */}
+        <WorkQueuesProvider token={token} pathname={pathname}>
           <AppShellContent>{children}</AppShellContent>
-        </ClosingQueueCountProvider>
+        </WorkQueuesProvider>
       </SedeDateLocaleProvider>
     </InClinicProvider>
   </SessionLocationsProvider>;
@@ -105,11 +105,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const waitingForYou =
     role === 'DENTIST' && inClinic.view?.scope === 'MINE' ? inClinic.view.waiting.length : 0;
   // DX-099: anamnesis enviadas por los pacientes y aún sin revisar (sus sedes).
-  const anamnesisCount = useAnamnesisInboxCount(
-    accessToken,
-    role === 'ADMIN' || role === 'DENTIST' || role === 'ASSISTANT',
-    pathname,
-  );
+  // DX-503: sale de la misma lectura que «Mi día» (WorkQueuesProvider).
+  const anamnesisCount = useWorkQueueCount('ANAMNESIS_REVIEW');
   // DX-439: pendientes de cierre de las secciones de su rol, en sus sedes.
   const closingQueueCount = useClosingQueueCount();
   const closingCount = canSeeClosingQueue(role) ? closingQueueCount : 0;

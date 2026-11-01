@@ -49,18 +49,9 @@ describe('valores de pendientes', () => {
       overdueOf({ buckets: { current: 100, days0to30: 10.1, days31to60: 20.2, days61to90: 0, over90: 5 } }),
     ).toBe(35.3);
   });
-  it('cartera: nunca suma pacientes de monedas distintas', () => {
-    const value = receivablesValue(
-      {
-        asOf: '2026-08-15',
-        scope: { location: null },
-        totals: [
-          { currency: 'USD', patients: 3, balance: 0, debt: 0, credit: 0, buckets: { current: 0, days0to30: 50, days31to60: 0, days61to90: 0, over90: 0 } },
-          { currency: 'VES', patients: 2, balance: 0, debt: 0, credit: 0, buckets: { current: 10, days0to30: 0, days31to60: 0, days61to90: 0, over90: 0 } },
-        ],
-      },
-      null,
-    );
+  it('cartera: pacientes de la API y solo las monedas con algo vencido', () => {
+    // La API da el mayor por moneda (DX-503); aquí no se suma nada.
+    const value = receivablesValue({ count: 3, overdue: [{ currency: 'USD', amount: 50 }, { currency: 'VES', amount: 0 }] }, null);
     expect(value).toEqual({ value: '3 pacientes', pending: true, hint: 'Vencido: USD 50' });
   });
   it('caja sin abrir pide acción; abierta dice desde cuándo y cuántos cobros', () => {

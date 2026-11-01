@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { CalendarPlus, CornerDownLeft, Search, UserPlus, UserRound } from 'lucide-react';
+import { CalendarPlus, CornerDownLeft, ListTodo, Search, UserPlus, UserRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -30,6 +30,10 @@ const copy = {
   newPatient: 'Nuevo paciente',
   noDocument: 'Sin documento',
   settingsHint: 'Ajustes',
+  // DX-503: «Mi día» es el bloque «Pendientes» de Inicio (sin entrada propia
+  // en la barra: el presupuesto de 900 px no la admite, DESIGN.md → Navigation).
+  myDay: 'Mi día',
+  myDayHint: 'Pendientes de Inicio',
 };
 
 const PATIENT_LIMIT = 6;
@@ -154,6 +158,16 @@ export function CommandPalette({
       const label = item.fullLabel ?? item.label;
       if (!matches(label, item.tabLabel)) continue;
       result.push({ id: `nav-${item.href}`, group: 'goto', label, icon: item.icon, run: () => go(item.href) });
+    }
+    if (q && role && matches(copy.myDay, copy.myDayHint)) {
+      result.push({
+        id: 'nav-my-day',
+        group: 'goto',
+        label: copy.myDay,
+        hint: copy.myDayHint,
+        icon: ListTodo,
+        run: () => go('/dashboard#pendientes'),
+      });
     }
     // Las pantallas de Ajustes solo al escribir: sin texto, la lista es corta.
     if (q) {
