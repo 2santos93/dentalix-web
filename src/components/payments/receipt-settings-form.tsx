@@ -166,7 +166,7 @@ function ReceiptSettingsFields({
             onChange={(e) => update({ title: e.target.value })}
             aria-invalid={errorOf('title') ? true : undefined}
             aria-describedby={errorOf('title') ? fieldErrorId(titleId) : `${titleId}-hint`}
-            className="sm:max-w-96"
+            className="max-sm:min-h-11 sm:max-w-96"
           />
         </FormField>
         <FormField
@@ -194,7 +194,7 @@ function ReceiptSettingsFields({
             type="button"
             variant="secondary"
             size="sm"
-            className="self-start max-sm:w-full"
+            className="self-start max-sm:min-h-11 max-sm:w-full"
             disabled={saving}
             onClick={() => update({ legend: SUGGESTED_RECEIPT_LEGEND })}
           >
