@@ -58,6 +58,11 @@ const FIELD_LABELS: Record<string, string> = {
   generalText: "Casilla «Datos personales»",
   sensitiveHealthText: "Casilla «Datos sensibles de salud»",
   marketingText: "Casilla «Comunicaciones comerciales»",
+  // DX-515: recibo no fiscal.
+  receiptTitle: "Título del recibo",
+  receiptLegendOverride: "Leyenda propia de la sede",
+  receiptLegend: "Leyenda del recibo",
+  externalInvoiceNumber: "Nº de factura externa",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 

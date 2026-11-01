@@ -765,3 +765,14 @@ export function exchangeRateBackupDetail(metadata: AuditMetadata): string | null
 export function locationCalendarDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && LOCATION_CALENDAR_REASONS[metadata.reason]) ?? null;
 }
+
+/** DX-515: recibo no fiscal (el antes y el después los pinta `configChangeItems`). */
+const RECEIPT_REASONS: Record<string, string> = {
+  RECEIPT_SETTINGS: 'Título y leyenda del recibo',
+  RECEIPT_LEGEND: 'Leyenda del recibo de la sede',
+  EXTERNAL_INVOICE_NUMBER: 'Nº de factura externa del abono',
+};
+
+export function receiptDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && RECEIPT_REASONS[metadata.reason]) ?? null;
+}

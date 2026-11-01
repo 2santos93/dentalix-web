@@ -8,17 +8,19 @@ import { SettingsPage, SettingsSection } from '@/components/settings/settings-pa
 import { CashSettingsForm } from '@/components/cash-sessions/cash-settings-form';
 import { PaymentMethodsManager } from '@/components/payment-methods/payment-methods-manager';
 import { canManagePaymentMethods } from '@/lib/payments/payment-methods-api';
+import { ReceiptSettingsForm } from '@/components/payments/receipt-settings-form';
+import { canManageReceiptSettings } from '@/lib/payments/receipt-settings-api';
 
 const copy = {
   title: 'Caja',
   description:
-    'Cómo se abre y se cierra la caja por turno, y con qué medios de pago se cobra.',
+    'Cómo se abre y se cierra la caja por turno, con qué medios se cobra y qué dice el recibo.',
   sessionsTitle: 'Turnos de caja',
   sessionsHint: 'Cada cambio se aplica al momento.',
   checkingSession: 'Verificando sesión…',
 };
 
-/** Ajustes de caja de la clínica (DX-027) y sus medios de pago (DX-377). Solo ADMIN. */
+/** Ajustes de caja de la clínica (DX-027), sus medios de pago (DX-377) y su recibo (DX-515). Solo ADMIN. */
 export default function CashSettingsPage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -45,6 +47,8 @@ export default function CashSettingsPage() {
       </SettingsSection>
       {/* DX-377: catálogo de medios de pago de la clínica. */}
       <PaymentMethodsManager token={accessToken} allowed={canManagePaymentMethods(getTokenRole(accessToken))} />
+      {/* DX-515: título y leyenda del recibo de caja (solo ADMIN). */}
+      {canManageReceiptSettings(getTokenRole(accessToken)) ? <ReceiptSettingsForm token={accessToken} /> : null}
     </SettingsPage>
   );
 }
