@@ -81,6 +81,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-150: cobranza (gestión de cobro y compromiso de pago).
   COLLECTION_NOTE: 'Gestión de cobro',
   PAYMENT_PROMISE: 'Compromiso de pago',
+  PATIENT_RECALL: 'Recall del paciente',
+  RECALL_CONTACT: 'Contacto de recall',
   // DX-204: topes de descuento por rol y umbral del motivo.
   DISCOUNT_POLICY: 'Política de descuentos',
   // DX-210: oferta de un hueco libre a un candidato.

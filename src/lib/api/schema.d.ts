@@ -5959,6 +5959,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recall/due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lista de llamada: pacientes con el control vencido y sin cita
+         * @description Recalls activos vencidos (o que vencen en ≤ withinDays) cuyo paciente no tiene cita futura agendada o confirmada ni una en curso, en cualquier sede; sin pausa vigente ni paciente archivado. Vencimiento = MAX(último control fijado, última cita atendida) + intervalo. Ordenada por días de vencido.
+         */
+        get: operations["RecallController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall/due/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuántos pacientes hay por llamar (recall) */
+        get: operations["RecallController_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall/{recallId}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar un contacto de recall (append-only)
+         * @description Canal, desenlace y una nota corta (≤ 280, sin datos clínicos). «Agendó» (BOOKED) exige la cita creada, del mismo paciente. No se edita ni se borra: una corrección es otro contacto.
+         */
+        post: operations["RecallController_contact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/recalls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recalls del paciente y su historial de contactos
+         * @description Cada recall (uno por tipo) con su vencimiento y estado: DUE, UPCOMING, SCHEDULED (ya tiene cita), PAUSED o INACTIVE.
+         */
+        get: operations["PatientRecallsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/recalls/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Fijar (o cambiar, pausar, retirar) el recall de un tipo
+         * @description «Control cada 6 meses»: intervalo (1–36 meses), día del último control (por defecto hoy en la sede), pausa hasta un día con motivo, o `active: false` para retirarlo. Un recall por paciente y tipo.
+         */
+        put: operations["PatientRecallsController_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/work-queues/summary": {
         parameters: {
             query?: never;
@@ -5968,7 +6065,7 @@ export interface paths {
         };
         /**
          * Recuentos de las listas de trabajo del rol («Mi día»)
-         * @description Cada número es el de su lista (closing-queue/count, submissions/summary, pending-follow-up/count, unscheduled/count, waitlist, receivables/aging/summary, inventory lowStockOnly) con sus filtros por defecto, en la sede activa. ADMIN: todas. DENTIST: pendiente de cerrar (lo suyo) y anamnesis. RECEPTION: pendiente de cerrar (desenlace), presupuestos por seguir, aceptados sin agendar, lista de espera y cartera. ASSISTANT: anamnesis y bajo stock. Una lista que falla sale con `status: ERROR` y `count: null`; las demás llegan igual.
+         * @description Cada número es el de su lista (closing-queue/count, submissions/summary, pending-follow-up/count, unscheduled/count, waitlist, recall/due/count, receivables/aging/summary, inventory lowStockOnly) con sus filtros por defecto, en la sede activa. ADMIN: todas. DENTIST: pendiente de cerrar (lo suyo) y anamnesis. RECEPTION: pendiente de cerrar (desenlace), presupuestos por seguir, aceptados sin agendar, lista de espera, recall y cartera. ASSISTANT: anamnesis y bajo stock. Una lista que falla sale con `status: ERROR` y `count: null`; las demás llegan igual.
          */
         get: operations["WorkQueuesController_get"];
         put?: never;
@@ -5986,7 +6083,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "PATIENT_RECALL" | "RECALL_CONTACT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -18013,7 +18110,157 @@ export interface components {
             clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
         };
         /** @enum {string} */
-        WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECEIVABLES" | "LOW_STOCK";
+        RecallKind: "HYGIENE" | "CHECKUP";
+        /** @enum {string} */
+        RecallDueSort: "MOST_OVERDUE" | "LEAST_OVERDUE";
+        /** @enum {string} */
+        RecallContactChannel: "CALL" | "WHATSAPP_LINK" | "EMAIL" | "IN_PERSON";
+        /** @enum {string} */
+        RecallContactOutcome: "NO_ANSWER" | "LEFT_MESSAGE" | "CALL_BACK" | "WILL_BOOK" | "DECLINED" | "WRONG_NUMBER" | "BOOKED";
+        RecallLastContactDto: {
+            channel: components["schemas"]["RecallContactChannel"];
+            outcome: components["schemas"]["RecallContactOutcome"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RecallDueItemDto: {
+            /** Format: uuid */
+            recallId: string;
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            /** @description `null` sin teléfono o con baja de avisos (DX-128) */
+            patientPhone: string | null;
+            /** @description E.164 sin `+` para `https://wa.me/…` (región de la sede del paciente); `null` si no sirve o hay baja de avisos */
+            patientWhatsApp: string | null;
+            /** @description DX-128: el paciente pidió no recibir avisos. Sigue en la lista, sin contacto. */
+            reminderOptedOut: boolean;
+            kind: components["schemas"]["RecallKind"];
+            intervalMonths: number;
+            /**
+             * Format: date
+             * @description Base del vencimiento: lo fijado o la última visita atendida
+             */
+            baseDate: string;
+            /** Format: date */
+            dueAt: string;
+            /** @description Días desde el vencimiento (0 = vence hoy; negativo = faltan) */
+            daysOverdue: number;
+            /**
+             * Format: uuid
+             * @description Sede del paciente: la de su última cita atendida o, sin ella, la del recall
+             */
+            locationId: string;
+            lastContact: components["schemas"]["RecallLastContactDto"] | null;
+        };
+        RecallDuePageDto: {
+            items: components["schemas"]["RecallDueItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        RecallDueCountDto: {
+            /** @description Pacientes por llamar con esos filtros (todas las páginas) */
+            total: number;
+        };
+        CreateRecallContactDto: {
+            /** @description Llamada, enlace de WhatsApp, email o en persona */
+            channel: components["schemas"]["RecallContactChannel"];
+            /** @description No contesta, dejó mensaje, llamar luego, agendará, rechaza, número erróneo o agendó (con la cita) */
+            outcome: components["schemas"]["RecallContactOutcome"];
+            /** @description Nota corta (sin datos clínicos). No se edita ni se borra: una corrección es otro contacto. */
+            note?: string | null;
+            /**
+             * Format: uuid
+             * @description La cita creada (obligatoria con BOOKED); del mismo paciente
+             */
+            appointmentId?: string | null;
+        };
+        RecallStaffRefDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string | null;
+        };
+        RecallContactDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            recallId: string;
+            kind: components["schemas"]["RecallKind"];
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            channel: components["schemas"]["RecallContactChannel"];
+            outcome: components["schemas"]["RecallContactOutcome"];
+            note: string | null;
+            /** Format: uuid */
+            appointmentId: string | null;
+            author: components["schemas"]["RecallStaffRefDto"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /**
+         * @description DUE: por llamar · UPCOMING: aún no vence · SCHEDULED: ya tiene cita · PAUSED: pausado hasta una fecha · INACTIVE: retirado
+         * @enum {string}
+         */
+        RecallStatus: "DUE" | "UPCOMING" | "SCHEDULED" | "PAUSED" | "INACTIVE";
+        PatientRecallDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["RecallKind"];
+            intervalMonths: number;
+            /** Format: date */
+            lastDoneAt: string;
+            active: boolean;
+            /** Format: date */
+            disabledUntil: string | null;
+            disabledReason: string | null;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: date */
+            baseDate: string;
+            /** Format: date */
+            dueAt: string;
+            daysOverdue: number;
+            /** @description DUE: por llamar · UPCOMING: aún no vence · SCHEDULED: ya tiene cita · PAUSED: pausado hasta una fecha · INACTIVE: retirado */
+            status: components["schemas"]["RecallStatus"];
+            /** Format: date-time */
+            updatedAt: string;
+            updatedBy: components["schemas"]["RecallStaffRefDto"];
+        };
+        PatientRecallsDto: {
+            recalls: components["schemas"]["PatientRecallDto"][];
+            /** @description Historial de contactos, más recientes primero (hasta 50) */
+            contacts: components["schemas"]["RecallContactDto"][];
+        };
+        SetPatientRecallDto: {
+            /**
+             * @description Cada cuántos meses vuelve (p. ej. 6 = «control cada 6 meses»)
+             * @example 6
+             */
+            intervalMonths: number;
+            /**
+             * Format: date
+             * @description Día del último control o limpieza (AAAA-MM-DD, no futuro). Por defecto, hoy en la sede.
+             * @example 2026-04-10
+             */
+            lastDoneAt?: string;
+            /**
+             * @description `false` retira el recall: deja de salir en la lista
+             * @default true
+             */
+            active: boolean;
+            /**
+             * Format: date
+             * @description Pausa hasta ese día (posterior a hoy), p. ej. «tratamiento en curso». `null` la quita.
+             */
+            disabledUntil?: string | null;
+            /** @description Motivo corto de la pausa (sin datos clínicos) */
+            disabledReason?: string | null;
+        };
+        /** @enum {string} */
+        WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
         WorkQueueOverdueDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -34147,6 +34394,205 @@ export interface operations {
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo un tipo de recall (higiene o control) */
+                kind?: components["schemas"]["RecallKind"];
+                /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
+                withinDays?: number;
+                /** @description Por días de vencido: los más vencidos primero o al revés */
+                sort?: components["schemas"]["RecallDueSort"];
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa: los pacientes cuya sede (la de su última cita atendida o, sin ella, la del recall) es esta; sin ella, las sedes permitidas (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallDuePageDto"];
+                };
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_count: {
+        parameters: {
+            query?: {
+                /** @description Solo un tipo de recall (higiene o control) */
+                kind?: components["schemas"]["RecallKind"];
+                /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
+                withinDays?: number;
+            };
+            header?: {
+                /** @description Sede activa: los pacientes cuya sede (la de su última cita atendida o, sin ella, la del recall) es esta; sin ella, las sedes permitidas (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallDueCountDto"];
+                };
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_contact: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: queda en el contacto. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                recallId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecallContactDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallContactDto"];
+                };
+            };
+            /** @description Canal o desenlace inválidos, nota de más de 280, BOOKED sin cita o cita de otro paciente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recall de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientRecallsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientRecallsDto"];
+                };
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientRecallsController_set: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: la del recall nuevo y la de «hoy». */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+                kind: components["schemas"]["RecallKind"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPatientRecallDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientRecallsDto"];
+                };
+            };
+            /** @description Intervalo, fechas o motivo inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el personal clínico fija o pausa el recall de un paciente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

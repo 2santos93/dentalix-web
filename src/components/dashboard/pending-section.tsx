@@ -31,6 +31,7 @@ export const pendingCopy = {
   followUp: { label: 'Presupuestos por seguir', hint: 'Presentados hace más de 7 días, sin respuesta ni cita' },
   unscheduled: { label: 'Aceptados sin agendar', hint: 'Planes aceptados con visitas por agendar' },
   waitlist: { label: 'Pendientes por agendar', hint: 'Lista de espera: cancelaron o no vinieron' },
+  recall: { label: 'Recall por llamar', hint: 'Pacientes con el control vencido y sin cita' },
   receivables: { label: 'Cartera con saldo', hint: 'Pacientes que deben; lo vencido, por moneda' },
   receivablesOverdue: (parts: string[]) => `Vencido: ${parts.join(' · ')}`,
   receivablesNone: 'Nadie debe',
@@ -81,6 +82,8 @@ function queueRow(key: WorkQueueKey, role: ClinicRole): QueueRow {
       return { id: 'unscheduled', ...copy.unscheduled, href: '/presupuestos' };
     case 'WAITLIST':
       return { id: 'waitlist', ...copy.waitlist, href: '/agenda' };
+    case 'RECALL':
+      return { id: 'recall', ...copy.recall, href: '/recall' };
     case 'RECEIVABLES':
       return { id: 'receivables', ...copy.receivables, href: '/caja/cartera' };
     case 'LOW_STOCK':

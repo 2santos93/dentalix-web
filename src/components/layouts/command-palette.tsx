@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { CalendarPlus, CornerDownLeft, ListTodo, Search, UserPlus, UserRound } from 'lucide-react';
+import { CalendarPlus, CornerDownLeft, ListTodo, PhoneCall, Search, UserPlus, UserRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -11,6 +11,7 @@ import { visibleSettingsSections } from '@/components/settings/settings-sections
 import type { ClinicRole } from '@/lib/me/me-api';
 import { cn } from '@/lib/utils';
 import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appointment';
+import { canManageRecall } from '@/lib/recall/presentation';
 import { canSee, ALL_NAV_ITEMS } from './nav-config';
 import { useCloseOnBack } from './use-shell-media';
 
@@ -21,6 +22,8 @@ const copy = {
   placeholder: 'Buscar pacientes, secciones o acciones…',
   patients: 'Pacientes',
   goTo: 'Ir a',
+  recall: 'Recall',
+  recallHint: 'Pacientes por llamar: control vencido y sin cita',
   actions: 'Acciones',
   searching: 'Buscando pacientes…',
   searchFailed: 'No se pudo buscar pacientes. Revisa la conexión e inténtalo de nuevo.',
@@ -167,6 +170,18 @@ export function CommandPalette({
         hint: copy.myDayHint,
         icon: ListTodo,
         run: () => go('/dashboard#pendientes'),
+      });
+    }
+    // DX-015: la lista de recall no gasta entrada en la barra (presupuesto de
+    // 900 px, DESIGN.md → Navigation): se llega desde «Mi día» y desde aquí.
+    if (q && canManageRecall(role) && matches(copy.recall, copy.recallHint)) {
+      result.push({
+        id: 'nav-recall',
+        group: 'goto',
+        label: copy.recall,
+        hint: copy.recallHint,
+        icon: PhoneCall,
+        run: () => go('/recall'),
       });
     }
     // Las pantallas de Ajustes solo al escribir: sin texto, la lista es corta.

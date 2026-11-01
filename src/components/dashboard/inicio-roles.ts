@@ -24,6 +24,8 @@ const ACCESS = {
   unscheduled: ['ADMIN', 'RECEPTION'],
   /** `GET /waitlist` (APPOINTMENT_ROLES; lo agenda el mostrador). */
   waitlist: ['ADMIN', 'RECEPTION'],
+  /** `GET /recall/due/count` (RECALL_LIST_ROLES, DX-015). */
+  recall: ['ADMIN', 'RECEPTION'],
   /** `GET /cash-sessions/current` (CASH_SESSION_ROLES). */
   cash: ['ADMIN', 'RECEPTION'],
   /** `GET /receivables/aging/summary` (RECEIVABLES_ROLES). */

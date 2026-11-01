@@ -63,9 +63,9 @@ const m = {
 
 /** Lo que devuelve la API por rol (WORK_QUEUE_ROLES): la API reparte, la web pinta. */
 const QUEUES_BY_ROLE: Record<string, WorkQueueKey[]> = {
-  ADMIN: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECEIVABLES', 'LOW_STOCK'],
+  ADMIN: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECALL', 'RECEIVABLES', 'LOW_STOCK'],
   DENTIST: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW'],
-  RECEPTION: ['CLOSING_QUEUE', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECEIVABLES'],
+  RECEPTION: ['CLOSING_QUEUE', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECALL', 'RECEIVABLES'],
   ASSISTANT: ['ANAMNESIS_REVIEW', 'LOW_STOCK'],
 };
 const QUEUE_ITEMS: Record<WorkQueueKey, WorkQueueItem> = {
@@ -74,6 +74,7 @@ const QUEUE_ITEMS: Record<WorkQueueKey, WorkQueueItem> = {
   QUOTE_FOLLOW_UP: { key: 'QUOTE_FOLLOW_UP', status: 'OK', count: 2 },
   ACCEPTED_UNSCHEDULED: { key: 'ACCEPTED_UNSCHEDULED', status: 'OK', count: 0 },
   WAITLIST: { key: 'WAITLIST', status: 'OK', count: 1 },
+  RECALL: { key: 'RECALL', status: 'OK', count: 3 },
   RECEIVABLES: { key: 'RECEIVABLES', status: 'OK', count: 2, overdue: [{ currency: 'COP', amount: 780000 }] },
   LOW_STOCK: { key: 'LOW_STOCK', status: 'OK', count: 4 },
 };
@@ -413,7 +414,7 @@ describe('Inicio · ADMIN', () => {
     }));
     render(<DashboardView token={tokenForRole('ADMIN')} />);
     expect(await screen.findByText('Todo al día')).toBeInTheDocument();
-    expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 7 listas');
+    expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 8 listas');
     expect(screen.queryByRole('list', { name: 'Pendientes' })).not.toBeInTheDocument();
   });
 
