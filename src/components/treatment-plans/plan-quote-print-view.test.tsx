@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PlanQuotePrintView } from './plan-quote-print-view';
 import { getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
@@ -187,13 +187,25 @@ describe('PlanQuotePrintView (DX-012)', () => {
       expect(print).toHaveBeenCalledTimes(1);
     });
 
-    it('si las sedes no cargan, imprime igual con la cifra sin moneda y la nota', async () => {
+    it('si las sedes no cargan: cifra sin moneda y nota, aviso con Reintentar y sin abrir el diálogo solo', async () => {
       jest.mocked(listLocations).mockRejectedValue(new Error('red'));
       mockedGet.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
       expect(flat(table)).toMatch(/Precio de lista 80\.000,00(?! (EUR|COP))/);
       expect(screen.getByTestId('quote-list-price-note')).toHaveTextContent(/puede estar en otra moneda/);
+      expect(screen.getByTestId('quote-locations-error')).toHaveTextContent(/moneda de la sede/);
+      expect(print).not.toHaveBeenCalled();
+      // Reintentar: con las sedes ya leídas, el precio de lista sale en COP y se imprime.
+      jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+      fireEvent.click(within(screen.getByTestId('quote-locations-error')).getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() =>
+        expect(flat(screen.getByRole('table', { name: 'Procedimientos del presupuesto' }))).toContain(
+          'Precio de lista 80.000,00 COP',
+        ),
+      );
+      expect(screen.queryByTestId('quote-locations-error')).not.toBeInTheDocument();
+      expect(print).toHaveBeenCalledTimes(1);
     });
   });
 });
