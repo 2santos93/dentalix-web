@@ -193,11 +193,14 @@ test('el índice de Ajustes enseña Monedas y describe Caja con el recibo (DX-51
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, admin.email, password);
   await page.goto(`${origin}/settings`);
-  await expect(page.locator('a[href="/settings/caja"]')).toHaveAccessibleDescription(
-    'Cómo se abre y se cierra la caja por turno, con qué medios se cobra y qué dice el recibo.',
+  // El nombre accesible de cada entrada es título + línea de apoyo.
+  await expect(page.locator('a[href="/settings/caja"]')).toHaveAccessibleName(
+    'Caja Cómo se abre y se cierra la caja por turno, con qué medios se cobra y qué dice el recibo.',
     { timeout: 15_000 },
   );
-  await expect(page.locator('a[href="/settings/monedas"]')).toHaveAccessibleName('Monedas');
+  await expect(page.locator('a[href="/settings/monedas"]')).toHaveAccessibleName(
+    /^Monedas Cómo se escribe cada moneda en importes, recibos y mensajes\./,
+  );
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
