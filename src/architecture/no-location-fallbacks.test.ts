@@ -221,8 +221,8 @@ describe('arquitectura: calendario de la sede sin país (DX-316)', () => {
  * `lib/prescriptions/legacy-prescription-layout.ts`, que congela los textos de
  * las recetas emitidas antes de DX-324. Mira también los comentarios. Cubre
  * además las otras pantallas que tocó DX-324: Ajustes › Recetas, la ruta de
- * impresión y el perfil del personal (antes «en Colombia, RETHUS…; en España,
- * nº de colegiado»).
+ * impresión y el perfil del personal (antes un texto distinto por país con
+ * su registro profesional).
  */
 const PRESCRIPTION_LEGACY_LAYOUT = 'lib/prescriptions/legacy-prescription-layout.ts';
 const PRESCRIPTION_SCREENS = [
@@ -1330,7 +1330,7 @@ const NATIONAL_PHONE_EXAMPLE = /['"`>]\s*\(?\d{3}\)?(?: \d{2,4}){2,}\s*['"`<]/;
 /** Monedas de la región y las que salieron de ejemplo, tras «p. ej.» o «por ejemplo». */
 const CURRENCY_FOR_EXAMPLE =
   /(?:p\.\s*ej\.|por ejemplo|ej\.)[:,]?\s*[«"'(]?\d*[\s.,\d]*(?:COP|USD|EUR|VES|MXN|ARS|CLP|PEN|BRL|BOB|PYG|UYU|GTQ|CRC|DOP|GBP)\b/i;
-/** Dirección con número a la colombiana o similar: `Calle 1 # 2-3`, `Cra 15 #90-20`. */
+/** Dirección con número de estilo local o similar: `Calle 1 # 2-3`, `Cra 15 #90-20`. */
 const ADDRESS_EXAMPLE =
   /\b(?:Calle|Carrera|Cra|Cl|Kr|Avenida|Av|Diagonal|Dg|Transversal|Tv)\.?\s*\d+[A-Za-z]?\s*(?:#|N[°º.o]\.?)\s*\d/i;
 /** Ciudades que eran ejemplo de dirección o de hora (con tilde: no son ids IANA). */
