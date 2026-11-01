@@ -229,7 +229,7 @@ export function PatientRecordHeader({
                 type="button"
                 variant={editPrimary ? 'default' : 'secondary'}
                 onClick={onEdit}
-                className="max-sm:size-11 max-sm:px-0"
+                className="max-sm:min-h-11 max-sm:min-w-11 max-sm:px-0"
               >
                 <Pencil aria-hidden className="size-4" />
                 <span className="max-sm:sr-only">{copy.edit}</span>

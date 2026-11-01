@@ -281,6 +281,7 @@ inputs, small cards), **12px** (lg — cards and panels), pill for status chips 
 
 ### Buttons
 - **Shape:** 8px radius, medium weight; 40px (`sm` 32px, `lg` 44px), and **44px on touch** for every size (`pointer: coarse`).
+- **Touch sizing:** the 44px comes from the primitive (`pointer-coarse:h-11` / `size-11`, `sm` and `icon-sm` included); fine-pointer desktop keeps `sm` at 32px. To make a button 44px on a narrow window too, add `max-sm:min-h-11` (and `max-sm:min-w-11` for an icon), never `max-sm:h-11`/`max-sm:size-11`: Tailwind emits `pointer-coarse:` after `max-sm:`, so a fixed phone height loses to the primitive's on a real phone. `src/architecture/touch-target-guard.test.ts` enforces it. `e2e/touch-targets.spec.ts` (Playwright project `touch`: `hasTouch` + `isMobile`, 390px) measures the real targets.
 - **Primary** (`default`): `primary` fill + `primary-fg`, hover `primary-hover`. One per view.
 - **Secondary:** surface + 1px `border` + ink; hover `surface-sunken` with `border-input`.
 - **Outline / Ghost:** transparent; hover `surface-sunken`.
@@ -454,7 +455,9 @@ dentition). Sunken track, selected segment on surface with ink — never a solid
 `radio` semantics by default (radiogroup, one tab stop, arrows select); `toggle`
 (`aria-pressed` buttons) where e2e already finds them as buttons; `activation="manual"`
 when choosing opens a confirmation. `size sm | md`, `fullWidthOnMobile`. Sections with
-their own content use Tabs, not this.
+their own content use Tabs, not this. Track 40px (`sm` 32px) as a *minimum*, never a fixed
+height; on touch every segment is **44px** (either size) and the track grows to hold it, so a
+modal's `touchTargets` never clips a segment.
 
 ### Wizard
 `Wizard steps current onStepChange` (`ui/wizard.tsx`): from `sm`, one row of step buttons with one-line labels on a shared underline (`aria-current="step"`); below `sm`, «Paso 2 de 5 · Antecedentes» + a thin `progressbar` — labels never hyphenate. `optional: true` adds «(opcional)»; a wizard whose later steps are optional offers its final action (e.g. «Crear paciente») from step 1, in a bottom action bar that sticks on phones.
