@@ -22297,7 +22297,7 @@ export interface operations {
                 durationMinutes: number;
                 /** @description Paciente: sus otras citas también ocupan. */
                 patientId?: string;
-                /** @description DX-509-bis: la cita que se va a mover no ocupa (si no, su propia hora taparía los huecos de al lado). Una cita que no existe no cambia nada. */
+                /** @description DX-509-bis: la cita que se va a mover no ocupa (si no, su propia hora taparía los huecos de al lado). 404 si no es de esta clínica. */
                 excludeAppointmentId?: string;
             };
             header?: never;
@@ -22322,7 +22322,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Sede, profesional o paciente de otra clínica */
+            /** @description Sede, profesional, paciente o cita a excluir de otra clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
