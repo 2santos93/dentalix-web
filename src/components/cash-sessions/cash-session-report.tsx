@@ -52,6 +52,8 @@ const copy = {
   lockDateHint: 'Para el cierre contable de la sede (aún no bloquea nada).',
   blindClose: 'Cerrada con arqueo ciego.',
   paymentsTitle: 'Cobros del turno',
+  // DX-516: ajustes por medio de pago que entran con los abonos.
+  paymentAdjustments: (amount: string) => `${amount} por ajustes del medio`,
   paymentsLabel: 'Cobros del turno',
   colDate: 'Fecha',
   colPatient: 'Paciente',
@@ -105,6 +107,8 @@ interface ArqueoRow {
   method: keyof typeof PAYMENT_METHOD_LABELS;
   opening: number;
   payments: number | null;
+  /** DX-516: ajustes por medio de pago de esos cobros, con signo (0 o null: ninguno). */
+  paymentAdjustments: number | null;
   adjustments: number | null;
   outflows: number | null;
   expected: number;
@@ -129,6 +133,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
         method: line.method,
         opening: line.opening,
         payments: breakdown?.payments ?? null,
+        paymentAdjustments: breakdown?.paymentAdjustments ?? null,
         adjustments: breakdown?.adjustments ?? null,
         outflows: breakdown?.outflows ?? null,
         expected: line.expected,
@@ -143,6 +148,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
     method: line.method,
     opening: line.opening,
     payments: line.payments,
+    paymentAdjustments: line.paymentAdjustments,
     adjustments: line.adjustments,
     outflows: line.outflows,
     expected: line.expected,
@@ -266,6 +272,14 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {money(row.payments)}
+                        {/* DX-516: impuestos y recargos (+) o descuentos (−) cobrados con esos abonos. */}
+                        {row.paymentAdjustments ? (
+                          <span className="block t-caption text-muted">
+                            {copy.paymentAdjustments(
+                              `${row.paymentAdjustments > 0 ? '+' : '−'}${formatCurrency(Math.abs(row.paymentAdjustments), row.currency)}`,
+                            )}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {money(row.adjustments)}
