@@ -37,7 +37,7 @@ const DB_SKIP = 'E2E_DATABASE_URL no definido: no se puede mover a hoy la cita q
 const NOTICE = 'Tratamiento reservado en otra cita';
 
 /**
- * DX-449: la sede y el navegador van en `SEDE_TODAY_TZ` (Bogotá salvo cerca de
+ * DX-449: la sede y el navegador van en `SEDE_TODAY_TZ` (la zona de la suite salvo cerca de
  * su medianoche): las citas «de hoy que ya empezaron» caben antes de «ahora»
  * sin cruzar de día, corra la CI a la hora que corra.
  */

@@ -39,7 +39,7 @@ const reception = { fullName: 'Rita Recepción', email: `rita.flu.${suffix}@exam
 const last = `Flujo${suffix}`.slice(0, 40);
 
 /**
- * DX-449: la sede y los navegadores van en `SEDE_TODAY_TZ` (Bogotá salvo
+ * DX-449: la sede y los navegadores van en `SEDE_TODAY_TZ` (la zona de la suite salvo
  * cerca de su medianoche): la franja 23:55–23:59 de hoy queda por venir a
  * cualquier hora de la CI, sin pedir que se relance el spec.
  */

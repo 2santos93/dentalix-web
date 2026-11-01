@@ -20,7 +20,7 @@ import { fillDateRange } from './support/dates';
  * corre: Berlín y Nueva York NUNCA marcan la hora de São Paulo (en ningún
  * horario de verano), así que siempre llevan segunda hora; Buenos Aires
  * SIEMPRE la marca, así que nunca la lleva. Antes la sede de la pantalla era
- * Bogotá (UTC−5) y Nueva York coincidía con ella en invierno: la mitad del
+ * UTC−5 y Nueva York coincidía con ella en invierno: la mitad del
  * año el spec no probaba la segunda hora.
  *  1. Junto a los filtros se dice la zona con la que se leen las horas y los
  *     días (la de la sede de la pantalla) y el orden.
