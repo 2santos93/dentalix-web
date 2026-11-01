@@ -157,12 +157,12 @@ async function seed(request: APIRequestContext, tag: string) {
     kind: "PROCEDURE",
     labelEs: `Corona ${tag}`,
     color: "#3366CC",
-    defaultPrice: 100000,
+    defaultPrice: 100,
   });
   created.catalogId = catalog.id;
   const plan = await post<{ id: string }>(
     `/patients/${patient.id}/treatment-plans`,
-    { currency: "COP" },
+    { currency: "USD" },
   );
   created.planId = plan.id;
   const itemIds: string[] = [];
@@ -517,8 +517,8 @@ for (const width of [390, 1440])
       await expect(card).toContainText(
         "Visita 2 · Corona · 2 tratamientos pendientes",
       );
-      await expect(card).toContainText("COP");
-      await expect(card).toContainText("200.000");
+      await expect(card).toContainText("USD");
+      await expect(card).toContainText("200,00");
       const whatsapp = card.getByRole("link", {
         name: `WhatsApp a ${data.name}`,
       });
@@ -633,7 +633,7 @@ for (const width of [390, 1440])
       await expect(card).toContainText(
         "Visita 2 · Corona · 2 tratamientos pendientes",
       );
-      await expect(card).toContainText("200.000");
+      await expect(card).toContainText("200,00");
       await page.screenshot({
         path: `../.planning/backlog-wave-2026-10-21/qa/DX-256/cancelled-${width}-${theme}.png`,
         fullPage: true,

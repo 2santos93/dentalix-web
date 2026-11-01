@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { DEMO_CURRENCY } from './support/demo';
 
 /**
  * e2e (DX-377): medios de pago de la clínica con referencia.
@@ -26,7 +27,7 @@ const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID())
   .toLowerCase()
   .slice(0, 8);
 
-/** Paciente con un plan en COP aceptado, sembrado como ADMIN por la API. */
+/** Paciente con un plan en la moneda de la sede (USD) aceptado, sembrado como ADMIN por la API. */
 async function seedPatient(request: APIRequestContext, origin: string, tag: string): Promise<string> {
   const host = new URL(origin).host;
   const login = await request.post(`${API_URL}/auth/login`, {
@@ -55,15 +56,15 @@ async function seedPatient(request: APIRequestContext, origin: string, tag: stri
     kind: 'PROCEDURE',
     labelEs: `Corona DX377 ${tag}`,
     color: '#3366CC',
-    defaultPrice: 900_000,
+    defaultPrice: 900,
   });
   const plan = await send<{ id: string }>('post', `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   const item = await send<{ id: string }>('post', `/treatment-plans/${plan.id}/items`, {
     toothNumber: '16',
     catalogItemId: catalog.id,
-    price: 900_000,
+    price: 900,
   });
   await send('patch', `/treatment-plans/${plan.id}/items/${item.id}`, { status: 'ACCEPTED' });
   return patient.id;
@@ -128,7 +129,7 @@ for (const viewport of [
       await panel.getByRole('button', { name: 'Registrar abono' }).click();
       const dialog = page.getByRole('dialog', { name: 'Registrar abono' });
       await expect(dialog.getByLabel('Plan')).toBeVisible({ timeout: 15_000 });
-      await dialog.getByLabel('Importe').fill('50000');
+      await dialog.getByLabel('Importe').fill('50');
       await dialog.getByLabel('Método').selectOption({ label: methodName });
       return dialog;
     }

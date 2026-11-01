@@ -85,6 +85,7 @@ export interface DemoLocation {
   id: string;
   name: string;
   isActive: boolean;
+  timeZone: string | null;
 }
 
 export function demoAdminSession(request: APIRequestContext): Promise<ApiSession> {

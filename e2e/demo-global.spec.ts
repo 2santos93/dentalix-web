@@ -14,8 +14,11 @@ import {
 import { expectNoHorizontalScroll } from './support/layout';
 import { shot } from './support/qa-shot';
 import { activeSedeSelect } from './support/nav';
+import { cashCollected, choosePeriod, collectedOf, comparisonRow, nonZero } from './support/comparison';
 import { API_URL, tenantOrigin } from './support/urls';
 import { formatCivilDate } from '../src/lib/format/date';
+import { countryName } from '../src/lib/locations/countries';
+import { zoneCityName } from '../src/lib/format/zone';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
 import { addCivilDays, wallDay, wallInstant } from '../src/lib/time/wall-clock';
@@ -172,8 +175,8 @@ async function sedePlan(
 const PAYMENT_LOOKBACK_DAYS = 120;
 
 /**
- * Un abono vivo de la sede (la caja filtrada por `X-Location-Id`) y el número
- * de su recibo, que se lee del propio recibo.
+ * Un abono vivo de la sede (la caja filtrada por `X-Location-Id`, que no
+ * lista los anulados) y el número de su recibo, que se lee del propio recibo.
  */
 async function sedePayment(
   request: APIRequestContext,
@@ -249,7 +252,6 @@ for (const [sedeName, region] of REGIONS) {
     const location = locations.find((l) => l.name === sedeName);
     expect(location, `la demo no trae la sede ${sedeName}`).toBeDefined();
     const fmt = regionalFormat(region);
-    const today = wallDay(new Date(), region.timeZone);
     const next = await nextAppointment(request, session, location!, region.timeZone);
     const plan = await sedePlan(request, session, location!, region.currency, region.timeZone);
     const key = SEDE_SHOTS[sedeName];
@@ -258,7 +260,9 @@ for (const [sedeName, region] of REGIONS) {
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize(viewport);
 
-      // Agenda › Día: «hoy» es el de la zona de la sede.
+      // Agenda › Día: «hoy» es el de la zona de la sede (contado antes de abrir la agenda
+      // o al mirarla: una medianoche de la sede entre los dos no hace fallar).
+      const dayBefore = wallDay(new Date(), region.timeZone);
       await page.goto(`${origin}/agenda`);
       await chooseSede(page, sedeName);
       await page.getByRole('button', { name: 'Día', exact: true }).click();
@@ -266,11 +270,18 @@ for (const [sedeName, region] of REGIONS) {
       await page.getByRole('button', { name: 'Columnas', exact: true }).click();
       // Sin comas: el rótulo es el del idioma de la interfaz, con o sin coma tras el día de la semana.
       const periodOf = (day: string) => fmt.civilLongDate(day, { year: false }).replace(/,/g, '');
+      let today = dayBefore;
       await expect
-        .poll(async () => ((await page.getByTestId('agenda-period').textContent()) ?? '').replace(/,/g, ''), {
-          timeout: 15_000,
-        })
-        .toBe(periodOf(today));
+        .poll(
+          async () => {
+            const shown = ((await page.getByTestId('agenda-period').textContent()) ?? '').replace(/,/g, '');
+            const day = [dayBefore, wallDay(new Date(), region.timeZone)].find((d) => periodOf(d) === shown);
+            if (day) today = day;
+            return day ? 'hoy' : shown;
+          },
+          { timeout: 15_000 },
+        )
+        .toBe('hoy');
 
       // La cita, en su día de la sede y a la hora de SU zona.
       if (next.day !== today) await fillDate(page, 'Fecha', next.day);
@@ -315,27 +326,45 @@ test('the location settings list each location with its country, currency and zo
     await page.setViewportSize(viewport);
     await page.goto(`${origin}/settings/sedes`);
     await expect(page.getByRole('heading', { level: 1, name: 'Sedes' })).toBeVisible({ timeout: 15_000 });
-    for (const name of Object.keys(DEMO_LOCATION_REGIONS)) {
-      await expect(page.getByText(name, { exact: true }).locator('visible=true').first(), name).toBeVisible({
-        timeout: 15_000,
-      });
+    for (const [name, region] of REGIONS) {
+      const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: `Abrir ${name}`, exact: true }) });
+      await expect(row, name).toHaveCount(1, { timeout: 15_000 });
+      const detail = (label: string) =>
+        row
+          .locator('dl > div')
+          .filter({ has: page.getByRole('term').getByText(label, { exact: true }) })
+          .getByRole('definition');
+      await expect(detail('País'), `país de ${name}`).toHaveText(countryName(region.country)!);
+      await expect(detail('Moneda'), `moneda de ${name}`).toHaveText(region.currency);
+      // La etiqueta de la zona lleva el desfase de hoy; la ciudad no cambia con el horario de verano.
+      await expect(detail('Zona horaria'), `zona de ${name}`).toContainText(zoneCityName(region.timeZone));
     }
     await checkScreen(page, 'settings-sedes', viewport.width);
   }
 });
 
-test('the locations comparison lists the four locations with their currencies', async ({ page }) => {
+test('the locations comparison lists the four locations with their currencies', async ({ page, request }) => {
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     await page.goto(`${origin}/reportes`);
     await expect(page.getByRole('tab', { name: 'Comparar sedes', selected: true })).toBeVisible({ timeout: 15_000 });
-    // El mes anterior trae cobros en todas las sedes (el día 1 el mes en curso aún no).
-    await page.getByLabel('Período').selectOption('last_month');
+    // El mes anterior trae cobros en todas las sedes (el día 1 el mes en curso aún no), salvo
+    // las horas en que una sede por delante de Caracas ya cambió de mes: lo que cobra cada
+    // una sale de la respuesta que pinta la pantalla, contrastada con su caja (support/comparison.ts).
+    const report = await choosePeriod(page, 'last_month', locations);
     const rows = page.getByTestId(viewport.width >= 768 ? 'comparison-row' : 'comparison-card').locator('visible=true');
     for (const [name, region] of REGIONS) {
       const row = rows.filter({ hasText: name });
       await expect(row, name).toHaveCount(1, { timeout: 15_000 });
-      await expect(row).toContainText(region.currency === 'USD' ? /USD|VES/ : region.currency, { timeout: 15_000 });
+      const location = locations.find((l) => l.name === name)!;
+      const collected = nonZero(collectedOf(comparisonRow(report, name)));
+      expect(collected, `«Cobrado» de ${name} frente a su caja`).toEqual(
+        nonZero(await cashCollected(request, session, location.id, report)),
+      );
+      for (const code of Object.keys(collected)) {
+        expect(region.currency === 'USD' ? ['USD', 'VES'] : [region.currency], name).toContain(code);
+        await expect(row).toContainText(code, { timeout: 15_000 });
+      }
     }
     // La captura arranca en la tabla (o en la primera tarjeta) para que se vean las filas de las sedes.
     await rows.first().evaluate((el) => (el.closest('table') ?? el).scrollIntoView({ block: 'start' }));
@@ -397,7 +426,7 @@ test('the exchange rate settings list today rate for VES, BRL and GBP', async ({
     for (const [currency, rate] of Object.entries(rates)) {
       const row = manual
         .locator('tr, li')
-        .filter({ visible: true, hasText: fmt.civilDate(today) })
+        .filter({ visible: true, has: page.getByText(fmt.civilDate(today), { exact: true }) })
         .filter({ hasText: currency });
       await expect(row, `fila de hoy de ${currency}`).toHaveCount(1, { timeout: 15_000 });
       await expect(row).toContainText(fmt.number(rate, { min: 0, max: 8 }));
@@ -428,6 +457,7 @@ test('a pending coverage shows its start date after today', async ({ page, reque
       hasText: 'Pendiente de inicio',
     });
     await expect(row).toBeVisible({ timeout: 15_000 });
+    // La ficha pinta la fecha con `formatCivilDate` (coverage-presentation.ts), no con el formato de la sede.
     await expect(row).toContainText(`Desde ${formatCivilDate(validFrom)}`);
     await bringToTop(page, row, 'center');
     await checkScreen(page, 'coverage-pending', viewport.width);
