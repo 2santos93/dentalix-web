@@ -1,5 +1,7 @@
 import cldrFormatDigits from '@/lib/money/cldr-format-digits-zero.json';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { currencyTextFor, moneyWithCurrencyText, type CurrencyTexts } from '@/lib/format/currency-text';
+import { clinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
 
 /**
  * Lo que se pinta en lugar de un valor que depende del formato de la sede
@@ -24,8 +26,19 @@ export function sedeNumber(value: number, fmt: RegionalFormat | null): string {
  * (DX-378). Mismos decimales que `formatCurrency`: 2, o 0 en una moneda sin
  * unidad menor con importe entero. Nunca lanza: un código que Intl no acepta
  * se pinta tal cual delante de la cifra.
+ *
+ * DX-517: con un texto propio de la clínica para esa moneda («VES» → «Bs.»),
+ * ese texto en el lugar del código y en la posición del locale de la sede
+ * («Bs. 1.234,50» en `es-VE`). `texts`: el de la clínica salvo que se pase otro.
  */
-export function moneyWithCode(amount: number, currency: string, fmt: RegionalFormat): string {
+export function moneyWithCode(
+  amount: number,
+  currency: string,
+  fmt: RegionalFormat,
+  texts: CurrencyTexts = clinicCurrencyTexts(),
+): string {
+  const text = currencyTextFor(texts, currency);
+  if (text !== undefined) return moneyWithCurrencyText(amount, currency, fmt.locale, text);
   const digits = ZERO_DECIMAL.has(currency.toUpperCase()) && Number.isInteger(amount) ? 0 : 2;
   const key = `${fmt.locale}|${currency}|${digits}`;
   try {

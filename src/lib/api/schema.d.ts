@@ -2741,6 +2741,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exchange/currency-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Texto propio de cada moneda de la clínica (DX-517) */
+        get: operations["ClinicCurrencyTextsController_texts"];
+        /**
+         * Cambia el texto propio de las monedas de la clínica
+         * @description DX-517. Sustituye la lista entera; vacía = sin textos propios. El texto ocupa el lugar del código ISO en la posición que da el formato de la sede. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto.
+         */
+        put: operations["ClinicCurrencyTextsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/domains": {
         parameters: {
             query?: never;
@@ -11929,6 +11950,16 @@ export interface components {
              */
             rate: number;
         };
+        CurrencyTextEntryDto: {
+            /** @description Código ISO 4217 de una moneda del catálogo. */
+            currency: string;
+            /** @description Texto que sustituye al código en los importes: 1 a 8 caracteres en una línea (se recorta). */
+            text: string;
+        };
+        ClinicCurrencyTextsDto: {
+            /** @description El mapa entero, en orden de código. Vacío = nada configurado: los importes llevan el código ISO (DX-378). */
+            entries: components["schemas"]["CurrencyTextEntryDto"][];
+        };
         CreateDomainDto: {
             /**
              * @description Dominio propio de la clínica (no un subdominio de la plataforma).
@@ -11988,6 +12019,10 @@ export interface components {
             name: string;
             primaryColor: string;
             logoUrl: string | null;
+            /** @description DX-517: texto propio de cada moneda {código ISO → texto}; vacío = los importes llevan el código ISO. Lo usa la web para pintar todos los importes. */
+            currencyTexts: {
+                [key: string]: string;
+            };
         };
         CurrencyDto: {
             /**
@@ -12665,6 +12700,10 @@ export interface components {
              * @example Este recibo no es una factura
              */
             legend?: string;
+            /** @description DX-517: el texto propio de cada moneda que tenía la clínica al emitir (código ISO → texto), congelado. Ausente si no tenía ninguno: los importes llevan el código ISO, también al reimprimir. */
+            currencyTexts?: {
+                [key: string]: string;
+            };
         };
         PaymentReceiptDto: {
             /** Format: uuid */
@@ -25733,6 +25772,69 @@ export interface operations {
             };
             /** @description Esta tasa ya la usa al menos un abono y no se puede cambiar: el saldo de esos abonos se calculó con ella. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicCurrencyTextsController_texts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
+                };
+            };
+            /** @description Solo administración configura cómo se escribe cada moneda. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicCurrencyTextsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
+                };
+            };
+            /** @description Una moneda fuera del catálogo o repetida, un texto vacío, con saltos de línea o de más de 8 caracteres, o más de 30 monedas */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura cómo se escribe cada moneda. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

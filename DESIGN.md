@@ -364,6 +364,36 @@ shows that field's error, the preview stays silent so the message is not read tw
 A filter (e.g. Cartera's minimum balance) uses the same parser but no preview: nothing
 is saved.
 
+### Money (display)
+Every amount on screen, on paper (receipts, statements, prints) and in a user-facing CSV is
+painted by ONE helper: `formatCurrency` (`src/lib/format/currency.ts`) or, where the sede is
+known, `moneyWithCode`/`sedeMoney` (`src/lib/format/sede-number.ts`). No screen builds an
+`Intl.NumberFormat({ style: 'currency' })` of its own.
+
+**The Code Rule (DX-378).** An amount carries the ISO 4217 **code** of its currency
+(«450,00 USD», «VES 1.234,50»), never a CLDR symbol: in a multi-currency product «$» or
+«US$» do not mean the same in every country. Decimals follow DX-340 (2, or 0 for a
+currency without minor units when the amount is whole); separators follow the locale.
+
+**The Currency Text Rule (DX-517).** A clinic may say how it writes a currency it uses
+(Ajustes › Monedas, ADMIN only, audited): a map ISO code → text of 1–8 characters on one
+line («VES» → «Bs.»). When a currency has a text, that text takes the **code's place, in the
+position and with the spacing the locale gives the code** — «Bs. 1.234,50» in `es-VE`,
+«1.234,50 Bs.» in `de-DE` (`moneyWithCurrencyText`, `src/lib/format/currency-text.ts`).
+Without a text, nothing changes: the code, exactly as before.
+- The map arrives with the clinic's branding (root layout) and is set in the browser before
+  any child paints (`CurrencyTextsSync`), so the ~170 call sites never thread it. It is never
+  set on the server (module state is shared by every clinic's requests). When the server
+  cannot resolve the clinic (custom domain, `*.localhost`) the tab paints with its last
+  copy and asks the branding from the browser; a different map remounts the tree once.
+- A receipt **freezes** the map in its snapshot when issued; it is painted (screen, print,
+  email) with the frozen map, never today's: reprinting an old receipt never changes it.
+- The API formats the same way (`fmt.money(amount, currency, texts)`): the receipt email
+  and the reminder say exactly what the screen says. Web and API share golden vectors
+  (`currency-text.cases.json`, byte-for-byte copy checked in CI).
+- No country's symbol lives in code or in a default: the map starts empty.
+- A pasted amount written with the clinic's text («Bs. 1.234,50») reads like the code.
+
 ### Dates and times
 No native `<input type="date">`, `type="time"` or `type="datetime-local"`: the browser paints
 them in ITS language, not the clinic's — a Spanish receptionist on an English Chrome sees

@@ -63,6 +63,8 @@ const FIELD_LABELS: Record<string, string> = {
   receiptLegendOverride: "Leyenda propia de la sede",
   receiptLegend: "Leyenda del recibo",
   externalInvoiceNumber: "Nº de factura externa",
+  // DX-517: «VES=Bs.», una moneda por elemento.
+  currencyTexts: "Texto de las monedas",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 

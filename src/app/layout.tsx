@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { BrandingProvider } from "@/components/brand/branding-context";
+import { CurrencyTextsSync } from "@/components/brand/currency-texts-sync";
 import { Toaster } from "@/components/errors/toaster";
 import { fetchBranding } from "@/lib/branding";
 import { accentStyleSheet } from "@/lib/color/accent";
@@ -76,7 +77,8 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col bg-canvas text-ink">
         <ThemeProvider nonce={nonce}>
           <BrandingProvider value={{ name: branding.name, logoUrl: branding.logoUrl }}>
-            {children}
+            {/* DX-517: el texto propio de cada moneda, antes de pintar ningún importe. */}
+            <CurrencyTextsSync value={branding.currencyTexts}>{children}</CurrencyTextsSync>
           </BrandingProvider>
           <Toaster />
         </ThemeProvider>

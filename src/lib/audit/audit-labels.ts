@@ -766,8 +766,12 @@ export function locationCalendarDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && LOCATION_CALENDAR_REASONS[metadata.reason]) ?? null;
 }
 
-/** DX-515: recibo no fiscal (el antes y el después los pinta `configChangeItems`). */
+/**
+ * DX-515: recibo no fiscal, y DX-517: el texto propio de cada moneda (el antes
+ * y el después los pinta `configChangeItems`).
+ */
 const RECEIPT_REASONS: Record<string, string> = {
+  CURRENCY_TEXTS: 'Texto de las monedas',
   RECEIPT_SETTINGS: 'Título y leyenda del recibo',
   RECEIPT_LEGEND: 'Leyenda del recibo de la sede',
   EXTERNAL_INVOICE_NUMBER: 'Nº de factura externa del abono',

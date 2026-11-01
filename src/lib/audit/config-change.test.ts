@@ -265,3 +265,20 @@ it('DX-515: el nº de factura externa y la leyenda del recibo con su antes y des
   );
   expect(legend?.map((i) => i.label)).toEqual(['Leyenda propia de la sede', 'Leyenda del recibo']);
 });
+
+describe("texto de las monedas en la auditoría (DX-517)", () => {
+  it("pinta el antes y el después de cada moneda", () => {
+    const items = configChangeItems({
+      reason: "CURRENCY_TEXTS",
+      changedFields: ["currencyTexts"],
+      configChange: {
+        before: { currencyTexts: [] },
+        after: { currencyTexts: ["EUR=€", "VES=Bs."] },
+      },
+    });
+    expect(items).toHaveLength(1);
+    const item = items![0];
+    expect(item).toMatchObject({ field: "currencyTexts", label: "Texto de las monedas", kind: "changed" });
+    expect(item.kind === "changed" ? item.after : "").toContain("VES=Bs.");
+  });
+});
