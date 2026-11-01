@@ -85,11 +85,23 @@ async function shot(page: Page, name: string, target?: Locator): Promise<void> {
 }
 
 /** Lo que ocupa `locator` no se sale de su contenedor `within` por la derecha. */
+/**
+ * El borde derecho de `locator` no pasa del de `within`. Se espera a que el
+ * diseño se asiente: justo tras `setViewportSize` la tarjeta del teléfono ya
+ * es visible pero puede medirse aún con el ancho del escritorio (Z1: 530 px
+ * a 390 en una corrida, verde en la siguiente). Misma cota, sin margen nuevo.
+ */
 async function expectInside(locator: Locator, within: Locator): Promise<void> {
-  const inner = await locator.boundingBox();
-  const outer = await within.boundingBox();
-  expect(inner && outer, 'cajas visibles').toBeTruthy();
-  expect(inner!.x + inner!.width).toBeLessThanOrEqual(outer!.x + outer!.width + 1);
+  await expect
+    .poll(
+      async () => {
+        const inner = await locator.boundingBox();
+        const outer = await within.boundingBox();
+        return inner && outer ? inner.x + inner.width - (outer.x + outer.width + 1) : Number.POSITIVE_INFINITY;
+      },
+      { message: 'la caja queda dentro de su contenedor' },
+    )
+    .toBeLessThanOrEqual(0);
 }
 
 async function createPatient(request: Parameters<typeof registerClinicViaApi>[0], key: string, phone: string): Promise<string> {
