@@ -201,7 +201,7 @@ for (const viewport of [
     await dialog.getByRole('button', { name: 'Aplicar descuento' }).click();
     await expect(dialog).toBeHidden({ timeout: 10_000 });
     await expect(panel.getByText('Descuento aplicado a 3 ítems.')).toBeVisible();
-    await expect(panel.getByText(/Descuento −8\.?500,00/).filter({ visible: true }).first()).toBeVisible();
+    await expect(panel.getByText(/Descuento −(?:[A-Z]{3}\s)?8\.?500,00/).filter({ visible: true }).first()).toBeVisible();
 
     // --- 2. «Agregar ítem» pide el motivo por encima del 10 % (del precio:
     // sin precio ni procedimiento no hay % que comparar).
