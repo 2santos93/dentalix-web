@@ -2922,7 +2922,7 @@ export interface paths {
         };
         /**
          * Caja en CSV: abonos del período con medio y referencia
-         * @description Mismos filtros que `GET /payments` (período, método y medio) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Moneda, Importe.
+         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe.
          */
         get: operations["PaymentsController_listCashCsv"];
         put?: never;
@@ -2998,6 +2998,26 @@ export interface paths {
         };
         get: operations["PaymentsController_balance"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}/external-invoice-number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Anotar el nº de la factura fiscal externa de un abono
+         * @description Texto libre (hasta 64 caracteres en una línea); null o vacío lo quita. En un cobro dividido se guarda en todas sus líneas (un recibo, una factura). El recibo emitido no cambia. Auditado con el antes y el después.
+         */
+        put: operations["PaymentsController_updateExternalInvoiceNumber"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3139,6 +3159,47 @@ export interface paths {
          */
         get: operations["PaymentRateBacklogController_day"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-receipts/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Título y leyenda del recibo de la clínica y de cada sede (DX-515) */
+        get: operations["ReceiptSettingsController_settings"];
+        /**
+         * Cambia el título y la leyenda del recibo de la clínica
+         * @description DX-515. Vacío o null = sin configurar. Aplica a los recibos que se emitan desde ahora; queda en la auditoría con el antes y el después.
+         */
+        put: operations["ReceiptSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-receipts/settings/locations/{locationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * La leyenda propia de una sede (o volver a la de la clínica)
+         * @description DX-515. override false = la sede usa la leyenda de la clínica; true con leyenda vacía = la sede no imprime ninguna.
+         */
+        put: operations["ReceiptSettingsController_updateLocation"];
         post?: never;
         delete?: never;
         options?: never;
@@ -12014,6 +12075,8 @@ export interface components {
             /** @description DX-377: medio de pago (el inicial de su método si el abono es de una réplica anterior). */
             paymentMethod: components["schemas"]["CashPaymentMethodRefDto"] | null;
             reference: string | null;
+            /** @description DX-515: nº de la factura fiscal emitida fuera de Dentalix; null si no se anotó. */
+            externalInvoiceNumber: string | null;
             notes: string | null;
             location: components["schemas"]["CashLocationRefDto"];
             patient: components["schemas"]["CashPatientRefDto"];
@@ -12196,6 +12259,8 @@ export interface components {
             paymentMethodName: string | null;
             /** @description Referencia del pago tal como la dio el pagador (DX-377). */
             reference: string | null;
+            /** @description DX-515: nº de la factura fiscal emitida fuera de Dentalix (texto libre); null si no se anotó. */
+            externalInvoiceNumber: string | null;
             /** @description Motivo con que se confirmó una referencia repetida (DX-377); null si no se repetía. */
             duplicateReferenceReason: string | null;
             /** @description Solo en la respuesta del alta: ids de los abonos con la misma referencia y medio que se confirmaron con motivo. */
@@ -12365,6 +12430,20 @@ export interface components {
             /** @description Abonos cuya imputación fijó un ADMIN a mano */
             manualPaymentIds: string[];
             items: components["schemas"]["PlanItemBalanceDto"][];
+        };
+        ExternalInvoiceNumberDto: {
+            /**
+             * @description Nº de la factura fiscal emitida fuera de Dentalix, texto libre sin formato, hasta 64 caracteres en una línea. null o vacío lo quita.
+             * @example 00-000123
+             */
+            externalInvoiceNumber: string | null;
+        };
+        ExternalInvoiceNumberResultDto: {
+            /** Format: uuid */
+            paymentId: string;
+            externalInvoiceNumber: string | null;
+            /** @description Los abonos que lo llevan: el pedido o, en un cobro dividido, todas sus líneas. */
+            paymentIds: string[];
         };
         VoidPaymentDto: {
             /**
@@ -12550,6 +12629,16 @@ export interface components {
             split?: components["schemas"]["ReceiptSnapshotSplitDto"] | null;
             /** @example Este documento no es factura */
             legalNotice: string;
+            /**
+             * @description DX-515: el título del recibo que configuró la clínica, congelado al emitir. Ausente si no tenía (se imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title?: string;
+            /**
+             * @description DX-515: la leyenda de la clínica o de la sede, congelada al emitir. Ausente si no había: no se imprime nada, también al reimprimir un recibo anterior a que se configurara.
+             * @example Este recibo no es una factura
+             */
+            legend?: string;
         };
         PaymentReceiptDto: {
             /** Format: uuid */
@@ -12781,6 +12870,47 @@ export interface components {
             providerRateSaved: boolean;
             /** @description Abonos de ese día que necesitan esa moneda y otra distinta de USD sin tasa manual ese día: la de respaldo solo les servirá cuando se registre también la otra. */
             otherRatesMissing: components["schemas"]["PaymentRateOtherMissingDto"];
+        };
+        LocationReceiptLegendViewDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Norte */
+            name: string;
+            isActive: boolean;
+            /** @description La sede usa su propia leyenda (aunque sea ninguna). */
+            override: boolean;
+            legend: string | null;
+        };
+        ReceiptSettingsViewDto: {
+            /**
+             * @description Título del recibo de caja, hasta 60 caracteres en una línea. null o vacío = sin título propio (la web imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title: string | null;
+            /**
+             * @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna.
+             * @example Este recibo no es una factura
+             */
+            legend: string | null;
+            locations: components["schemas"]["LocationReceiptLegendViewDto"][];
+        };
+        ReceiptSettingsDto: {
+            /**
+             * @description Título del recibo de caja, hasta 60 caracteres en una línea. null o vacío = sin título propio (la web imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title: string | null;
+            /**
+             * @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna.
+             * @example Este recibo no es una factura
+             */
+            legend: string | null;
+        };
+        LocationReceiptLegendDto: {
+            /** @description true = la sede imprime SU leyenda (`legend`; vacía = ninguna) en vez de la de la clínica. false = usa la de la clínica. */
+            override: boolean;
+            /** @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna. Se ignora con override false. */
+            legend?: string | null;
         };
         CreatePaymentPlanDto: {
             /**
@@ -13101,6 +13231,11 @@ export interface components {
              * @example ABC 123
              */
             reference: string | null;
+            /**
+             * @description DX-515: nº de la factura fiscal emitida fuera de Dentalix para el abono (texto libre), o `null` si no se anotó.
+             * @example 00-000123
+             */
+            externalInvoiceNumber: string | null;
             /**
              * Format: uuid
              * @description DX-390: el cobro dividido del abono (el id de su línea 1); `null` en un abono de una sola forma de pago. Anular una línea anula el cobro entero.
@@ -25812,6 +25947,8 @@ export interface operations {
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
                 /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
                 paymentMethodId?: string;
+                /** @description DX-515: WITH = solo abonos con nº de factura externa; WITHOUT = solo los que aún no lo tienen. Sin él, todos. */
+                externalInvoice?: "WITH" | "WITHOUT";
                 page?: number;
                 pageSize?: number;
             };
@@ -25859,6 +25996,8 @@ export interface operations {
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
                 /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
                 paymentMethodId?: string;
+                /** @description DX-515: WITH = solo abonos con nº de factura externa; WITHOUT = solo los que aún no lo tienen. Sin él, todos. */
+                externalInvoice?: "WITH" | "WITHOUT";
             };
             header?: {
                 /** @description Sede activa. Sin cabecera: todas las sedes de la clínica. */
@@ -26081,6 +26220,59 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PlanBalanceWithItemsDto"];
                 };
+            };
+        };
+    };
+    PaymentsController_updateExternalInvoiceNumber: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalInvoiceNumberDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalInvoiceNumberResultDto"];
+                };
+            };
+            /** @description No es texto, tiene saltos de línea o pasa de 64 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono está anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -26407,6 +26599,115 @@ export interface operations {
             };
             /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsViewDto"];
+                };
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsDto"];
+                };
+            };
+            /** @description Un texto que no es texto, con saltos de línea o demasiado largo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_updateLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationReceiptLegendDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationReceiptLegendViewDto"];
+                };
+            };
+            /** @description Leyenda con saltos de línea o demasiado larga, o id no UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

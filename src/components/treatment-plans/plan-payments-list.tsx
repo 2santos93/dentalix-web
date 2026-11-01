@@ -10,6 +10,7 @@ import { frozenRateLabel, paymentRateCopy } from '@/lib/payments/payment-rate';
 import type { Payment } from '@/lib/payments/payments-api';
 import { statusLabel } from '@/lib/status/tones';
 import { copy } from './treatment-plans-tab-copy';
+import { externalInvoiceCopy } from '@/components/payments/external-invoice-modal';
 
 /**
  * DX-375: «Sin tasa» junto al importe de un abono que no tenía tasa de su día
@@ -47,6 +48,8 @@ interface PlanPaymentsListProps {
   onAllocate?: (paymentId: string) => void;
   /** DX-375/DX-378/DX-386: formato de la sede para importe, día y tasa congelada; `null` mientras carga («—»). */
   fmt: RegionalFormat | null;
+  /** DX-515: anota el nº de la factura fiscal externa del abono (ADMIN y recepción). */
+  onExternalInvoice?: (payment: Payment) => void;
 }
 
 /** El nombre de la fila para el «⋯»: «Acciones de abono PRI-000001» (o su importe, sin serie). */
@@ -80,6 +83,7 @@ export function PlanPaymentsList({
   manualPaymentIds,
   onAllocate,
   fmt,
+  onExternalInvoice,
 }: PlanPaymentsListProps) {
   const columns: DataListColumn<Payment>[] = [
     {
@@ -91,16 +95,26 @@ export function PlanPaymentsList({
     {
       id: 'receipt',
       header: copy.colPaymentReceipt,
-      cell: (p) =>
-        p.receiptNumber ? (
-          <span className="t-id">{p.receiptNumber}</span>
-        ) : (
-          <span className="text-muted">{copy.paymentReceiptLegacy}</span>
-        ),
+      cell: (p) => (
+        <>
+          {p.receiptNumber ? (
+            <span className="t-id">{p.receiptNumber}</span>
+          ) : (
+            <span className="text-muted">{copy.paymentReceiptLegacy}</span>
+          )}
+          {/* DX-515: la factura fiscal emitida fuera, bajo su recibo. */}
+          {p.externalInvoiceNumber ? (
+            <span className="t-caption mt-0.5 block break-all font-mono text-muted">
+              {externalInvoiceCopy.inline(p.externalInvoiceNumber)}
+            </span>
+          ) : null}
+        </>
+      ),
       // En el teléfono, las marcas van en la línea 2: en la 1 recortarían la fecha.
       mobileCell: (p) => (
         <>
           {copy.paymentReceiptMobile(p.receiptNumber)}
+          {p.externalInvoiceNumber ? ` · ${externalInvoiceCopy.inline(p.externalInvoiceNumber)}` : null}
           {manualPaymentIds?.has(p.id) ? (
             <>
               {' '}
@@ -155,6 +169,9 @@ export function PlanPaymentsList({
   function actionsFor(p: Payment): RowAction[] {
     const voiding = voidingPaymentId === p.id;
     const actions: RowAction[] = [{ label: copy.receiptAction, onSelect: () => onReceipt(p.id) }];
+    if (onExternalInvoice) {
+      actions.push({ label: externalInvoiceCopy.action, onSelect: () => onExternalInvoice(p) });
+    }
     if (onAllocate) {
       actions.push({
         label: copy.allocationAction,

@@ -35,6 +35,7 @@ import {
   cancellationDetail,
   healthRegistrationDetail,
   clinicSettingsDetail,
+  receiptDetail,
   exchangeRateBackupDetail,
   locationCalendarDetail,
   patientFlowDetail,
@@ -529,6 +530,7 @@ function eventDetail(event: AuditEvent, locationNames: LocationNames | null): st
     healthRegistrationDetail(event.metadata) ??
     clinicSettingsDetail(event.metadata) ??
     locationCalendarDetail(event.metadata) ??
+    receiptDetail(event.metadata) ??
     exchangeRateBackupDetail(event.metadata) ??
     anamnesisDetail(event.metadata) ??
     signatureRequestDetail(event.metadata)

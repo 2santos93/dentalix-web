@@ -245,3 +245,23 @@ describe("configChangeItems (DX-360)", () => {
     ).toBeNull();
   });
 });
+
+it('DX-515: el nº de factura externa y la leyenda del recibo con su antes y después', () => {
+  const items = configChangeItems(
+    {
+      reason: 'EXTERNAL_INVOICE_NUMBER',
+      configChange: { before: { externalInvoiceNumber: null }, after: { externalInvoiceNumber: 'F-0001' } },
+    },
+  );
+  expect(items).toEqual([expect.objectContaining({ field: 'externalInvoiceNumber', label: 'Nº de factura externa' })]);
+  const legend = configChangeItems(
+    {
+      reason: 'RECEIPT_LEGEND',
+      configChange: {
+        before: { receiptLegendOverride: false, receiptLegend: null },
+        after: { receiptLegendOverride: true, receiptLegend: 'De la sede' },
+      },
+    },
+  );
+  expect(legend?.map((i) => i.label)).toEqual(['Leyenda propia de la sede', 'Leyenda del recibo']);
+});

@@ -76,3 +76,38 @@ describe('recibo sin leyenda ni título configurados: igual que antes (DX-515)',
     expect(html(fullReceipt(), '80mm')).toMatchSnapshot();
   });
 });
+
+describe('recibo con título y leyenda congelados al emitir (DX-515)', () => {
+  function withTexts(): PaymentReceipt {
+    const base = paymentReceiptFixture();
+    return {
+      ...base,
+      snapshot: { ...base.snapshot, title: 'Recibo de pago', legend: 'Este recibo no es una factura' },
+    };
+  }
+
+  it.each(['a4', '80mm'] as const)('la leyenda y el título salen en %s', (format) => {
+    const { container, getByRole, getByTestId } = render(
+      <PaymentReceiptDocument receipt={withTexts()} format={format} />,
+    );
+    expect(getByRole('heading', { level: 1 })).toHaveTextContent('Recibo de pago');
+    expect(getByTestId('receipt-legend')).toHaveTextContent('Este recibo no es una factura');
+    // El pie fijo sigue.
+    expect(container).toHaveTextContent('Este documento no es factura');
+    expect(container.innerHTML).toMatchSnapshot();
+  });
+
+  it('solo cambia el título y la línea de la leyenda: el resto del marcado es el de siempre', () => {
+    const plain = html(paymentReceiptFixture(), 'a4');
+    const texts = html(withTexts(), 'a4')
+      .replace('Recibo de pago', 'Recibo de caja')
+      .replace(/<p data-testid="receipt-legend"[^>]*>[^<]*<\/p>/, '');
+    expect(texts).toBe(plain);
+  });
+
+  it('un recibo antiguo (foto sin leyenda) no la añade aunque la clínica la configure después', () => {
+    const { queryByTestId, getByRole } = render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
+    expect(queryByTestId('receipt-legend')).not.toBeInTheDocument();
+    expect(getByRole('heading', { level: 1 })).toHaveTextContent('Recibo de caja');
+  });
+});

@@ -46,6 +46,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { Disclosure } from '@/components/shared/disclosure';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
+import { ExternalInvoiceModal, type ExternalInvoiceTarget } from '@/components/payments/external-invoice-modal';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
 import { ReallocatePaymentModal } from '@/components/payments/reallocate-payment-modal';
@@ -65,7 +66,7 @@ import { ItemsTable } from './plan-items-table';
 import { PlanItemForm } from './plan-item-form';
 import { PlanMoneySummary } from './plan-money-summary';
 import { PlanPaymentFormModal } from './plan-payment-form-modal';
-import { PlanPaymentsList, paymentRowActionsButton } from './plan-payments-list';
+import { PlanPaymentsList, paymentRowActionsButton, paymentRowLabel } from './plan-payments-list';
 import {
   PAYMENTS_TRIGGER_ID,
   copy,
@@ -260,6 +261,8 @@ export function TreatmentPlansTab({
   // diálogo y su bandera de apertura. El diálogo pide el recibo a la API (su
   // foto inmutable), así que aquí no hace falta nada más del paciente.
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
+  // DX-515: el abono cuyo nº de factura fiscal externa se anota.
+  const [invoiceTarget, setInvoiceTarget] = useState<ExternalInvoiceTarget | null>(null);
 
   // Sedes de la clínica + sede activa: para decir a qué sede quedará
   // atribuido un abono nuevo y para sugerir la moneda de un plan nuevo. Se
@@ -1261,6 +1264,13 @@ export function TreatmentPlansTab({
                           manualPaymentIds={manualPaymentIds}
                           onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
                           fmt={sedeFmt}
+                          onExternalInvoice={(p) =>
+                            setInvoiceTarget({
+                              paymentId: p.id,
+                              subject: paymentRowLabel(p, sedeFmt),
+                              externalInvoiceNumber: p.externalInvoiceNumber,
+                            })
+                          }
                         />
                       </Disclosure>
 
@@ -1363,6 +1373,22 @@ export function TreatmentPlansTab({
         paymentId={receiptPaymentId}
         onOpenChange={(open) => {
           if (!open) setReceiptPaymentId(null);
+        }}
+      />
+
+      {/* DX-515: `key` por abono, para empezar con su nº actual. */}
+      <ExternalInvoiceModal
+        key={invoiceTarget?.paymentId ?? 'no-invoice-target'}
+        token={token}
+        target={invoiceTarget}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceTarget(null);
+        }}
+        onSaved={(result) => {
+          const ids = new Set(result.paymentIds);
+          setPayments((list) =>
+            list.map((p) => (ids.has(p.id) ? { ...p, externalInvoiceNumber: result.externalInvoiceNumber } : p)),
+          );
         }}
       />
 

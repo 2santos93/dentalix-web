@@ -148,6 +148,7 @@ function savedPayment(
     paymentMethodName: null,
     reference: null,
     duplicateReferenceReason: null,
+    externalInvoiceNumber: null,
     notes: null,
     splitId: null,
     splitLine: null,
