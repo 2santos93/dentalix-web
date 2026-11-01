@@ -281,7 +281,7 @@ describe('MarkDoneModal (DX-050)', () => {
         expect(mockedUpdate).toHaveBeenCalledWith('tok', 'plan-1', 'item-1', {
           performedById: 'norte',
           performedLocationId: 'loc-norte',
-          // Mediodía del 14/09 en Bogotá.
+          // Mediodía del 14/09 en la sede.
           completedAt: '2026-09-14T17:00:00.000Z',
         }),
       );

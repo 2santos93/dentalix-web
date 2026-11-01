@@ -54,11 +54,11 @@ const patientFirstName = 'Camila';
  * que pinta la UI (America/Bogota, la zona de la sede y del config).
  *
  * Ahora:
- * - la cita va a las 10:15–10:45 de un DÍA ANCLA, pasado mañana en Bogotá:
+ * - la cita va a las 10:15–10:45 de un DÍA ANCLA, pasado mañana en la sede:
  *   siempre futuro para la API (que rechaza agendar en el pasado con SU reloj)
  *   y nunca "hoy" para el navegador, sea la hora que sea;
  * - el reloj del NAVEGADOR (`page.clock`) se pone en hoy a las 23:30 y a las
- *   06:00 de Bogotá, una ejecución por hora: las dos horas en las que el spec
+ *   06:00 de la sede, una ejecución por hora: las dos horas en las que el spec
  *   anterior fallaba o rozaba el cambio de día. La agenda arranca en "hoy" y se
  *   salta al día ancla con el selector «Fecha».
  */

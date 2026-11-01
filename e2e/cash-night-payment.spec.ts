@@ -7,12 +7,12 @@ import { E2E_BROWSER_LOCALE } from './support/regional';
 import { dataList, dataListRows } from './support/data-list';
 
 /**
- * e2e (DX-097): un abono cobrado a las 20:00 en Bogotá sale en la caja de
+ * e2e (DX-097): un abono cobrado a las 20:00 en la sede sale en la caja de
  * «Hoy» de la sede.
  *
- * Las 20:00 de Bogotá son la 01:00 UTC del día SIGUIENTE. Antes la API cortaba
+ * Las 20:00 de la sede son la 01:00 UTC del día SIGUIENTE. Antes la API cortaba
  * los días a medianoche UTC y la web pedía el día del navegador: con el
- * navegador en Bogotá, la caja de «hoy» no lo listaba. Ahora la API corta cada
+ * navegador en la sede, la caja de «hoy» no lo listaba. Ahora la API corta cada
  * día a medianoche de la zona de la sede (la de su horario) y la web toma
  * «hoy» de la sede, no del navegador.
  *

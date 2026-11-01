@@ -25,7 +25,7 @@ const decline = declinePublicSlotOffer as jest.Mock;
 const CLINIC = { name: 'Clínica Sonrisa', primaryColor: '#7C3AED', logoUrl: null };
 const DETAILS = {
   patientFirstName: 'Ana',
-  // 10:00 en Bogotá.
+  // 10:00 en la sede.
   start: '2026-10-20T15:00:00.000Z',
   end: '2026-10-20T15:30:00.000Z',
   timeZone: 'America/Bogota',

@@ -21,13 +21,13 @@ const mockedBacklog = jest.mocked(getRateBacklog);
 beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
-  // Sede en Bogotá (UTC-5) con formato es-CO.
+  // Sede en la sede (UTC-5) con formato es-CO.
   mockedLocations.mockResolvedValue([clinicLocation()]);
 });
 
 describe('RateBacklogNotice (DX-380)', () => {
   it('al ADMIN le dice cuántos abonos llevan más de 24 h sin tasa, desde qué día de la sede y adónde ir', async () => {
-    // 02:00 UTC del 29 = 21:00 del 28 en Bogotá: el día es el de la sede.
+    // 02:00 UTC del 29 = 21:00 del 28 en la sede: el día es el de la sede.
     mockedBacklog.mockResolvedValue({ count: 3, oldestSince: '2026-10-29T02:00:00.000Z' });
     render(<RateBacklogNotice token={tokenForRole('ADMIN')} />);
 

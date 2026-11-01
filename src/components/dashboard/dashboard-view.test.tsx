@@ -102,7 +102,7 @@ function render(ui: ReactElement<{ token: string }>) {
   );
 }
 
-// Sábado 15/08/2026 07:00 en Bogotá (GMT−5): citas antes y después de «ahora».
+// Sábado 15/08/2026 07:00 en la sede (GMT−5): citas antes y después de «ahora».
 const FROZEN_NOW = new Date('2026-08-15T12:00:00.000Z');
 
 const sedes: ClinicLocation[] = [
@@ -324,7 +324,7 @@ describe('Inicio · ADMIN', () => {
     expect(within(row).getByText('Saldo vencido')).toBeInTheDocument();
     expect(within(row).getByText('Agendada')).toBeInTheDocument();
     await within(row).findByText('Dra. Ana Ríos');
-    // La hora es la de la sede: 15:00Z = 10:00 a. m. en Bogotá.
+    // La hora es la de la sede: 15:00Z = 10:00 a. m. en la sede.
     expect(within(row).getByText(/10:00/)).toBeInTheDocument();
     // Pide el día civil de la sede, sin acotar a un profesional.
     expect(m.listAppointments.mock.calls[0][1]).toEqual({

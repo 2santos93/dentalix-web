@@ -14,7 +14,7 @@ import { regionalFormat } from '../src/lib/format/regional-format';
  * e2e DX-122: bloqueos de agenda y «Pendientes por agendar».
  *
  * Una clínica nueva por corrida con un odontólogo («Luis Segundo») y
- * recepción («Rita Recepción»), horario lun–vie 9–13 y 15–19 (Bogotá) y dos
+ * recepción («Rita Recepción»), horario lun–vie 9–13 y 15–19 (zona de la sede) y dos
  * pacientes. Los tests van en serie:
  * 1. recepción bloquea las vacaciones de Luis → la agenda las pinta y una
  *    cita encima se rechaza con el 409 en español;

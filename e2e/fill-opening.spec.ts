@@ -13,7 +13,7 @@ import { chooseAppointmentStatus } from './support/appointment-status';
  * e2e DX-210: «Ocupar este hueco».
  *
  * Una clínica nueva por corrida con una odontóloga («Lina Hueco») y recepción,
- * horario lun–vie 9–13 y 15–19 (Bogotá), una cita de 30 min de Gabi a las
+ * horario lun–vie 9–13 y 15–19 (zona de la sede), una cita de 30 min de Gabi a las
  * 10:00, un pendiente URGENT (Ana) y otro NORMAL (Berta) de 30 min, y una cita
  * de Elena dentro de 3 semanas marcada «Adelantar si hay hueco». En serie:
  * 1. 1440 px: recepción cancela la cita de Gabi → «Ocupar este hueco» lista a

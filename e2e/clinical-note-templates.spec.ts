@@ -21,7 +21,7 @@ import { API_URL } from './support/urls';
  *      «Resina», contesta y guarda; la evolución queda ligada a la cita. (La
  *      API no deja agendar en el pasado ni ligar una evolución a una cita de un
  *      día futuro: la cita va HOY a las 23:55–23:59 de la sede, con el reloj
- *      del navegador fijo a las 23:30 de Bogotá; DX-252, TST-030: sin
+ *      del navegador fijo a las 23:30 de la sede; DX-252, TST-030: sin
  *      `test.skip` cerca de medianoche, ver `lastSlotToday`.)
  *   3. Ficha → Historia clínica: la evolución lleva el texto con las
  *      respuestas y «Cita del <día/mes de la sede> · <profesional>»; desde «Nueva evolución»

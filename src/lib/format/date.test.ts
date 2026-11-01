@@ -77,7 +77,7 @@ describe('formatTimeInZone', () => {
 
 describe('formatDateTimeInZone (instant in a given IANA zone)', () => {
   it('renders dd/mm/yyyy HH:mm in the zone, not in the browser one', () => {
-    // 2026-10-16 03:30 UTC = 15/10 22:30 in Bogotá (UTC-5) and 05:30 in Madrid (UTC+2).
+    // 2026-10-16 03:30 UTC = 15/10 22:30 in a UTC-5 zone and 05:30 in Madrid (UTC+2).
     const instant = '2026-10-16T03:30:00.000Z';
     expect(formatDateTimeInZone(instant, 'America/Bogota')).toBe('15/10/2026 22:30');
     expect(formatDateTimeInZone(instant, 'Europe/Madrid')).toBe('16/10/2026 05:30');

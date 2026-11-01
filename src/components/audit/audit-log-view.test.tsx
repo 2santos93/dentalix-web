@@ -50,7 +50,7 @@ const SEDES = [bogota, berlin, newYork];
 
 const view: AuditEvent = {
   id: 'ev-1',
-  // 22:30 del 15/10 en Bogotá; 05:30 del 16/10 en Berlín; 23:30 en Nueva York.
+  // 22:30 del 15/10 en la sede; 05:30 del 16/10 en Berlín; 23:30 en Nueva York.
   occurredAt: '2026-10-16T03:30:00.000Z',
   action: 'VIEW',
   resourceType: 'MEDICAL_HISTORY',
@@ -537,7 +537,7 @@ describe('AuditLogView', () => {
         to: '2026-10-25T23:00:00.000Z',
       }),
     );
-    // Nunca con otra zona: ninguna consulta con el día contado en Bogotá.
+    // Nunca con otra zona: ninguna consulta con el día contado en la sede.
     expect(mockedList).not.toHaveBeenCalledWith('tok', expect.objectContaining({ from: '2026-10-24T05:00:00.000Z' }));
   });
 
