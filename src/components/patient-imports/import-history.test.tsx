@@ -108,6 +108,38 @@ it('deshacer: pide confirmación y deja el lote como deshecho', async () => {
   expect(screen.queryByRole('menuitem', { name: 'Deshacer lote' })).not.toBeInTheDocument();
 });
 
+it('DX-294: mientras deshace, «Deshaciendo…» con su avance, sin cerrar ni relanzar; al terminar, el estado final', async () => {
+  mockedList.mockResolvedValue(page());
+  let finish!: (value: Awaited<ReturnType<typeof undoImport>>) => void;
+  mockedUndo.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+  const user = userEvent.setup();
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+  await historyAction(user, 'pacientes.csv', 'Deshacer lote');
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByRole('status')).toBeEmptyDOMElement();
+  await user.click(within(dialog).getByRole('button', { name: 'Deshacer lote' }));
+
+  const busy = within(dialog).getByRole('button', { name: 'Deshaciendo…' });
+  expect(busy).toBeDisabled();
+  expect(busy).toHaveAttribute('aria-busy', 'true');
+  expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+  expect(within(dialog).getByRole('status')).toHaveTextContent(
+    'Deshaciendo el lote: retirando 1 pacientes. Puede tardar unos segundos; no cierres esta ventana.',
+  );
+  // Ni Escape lo cierra ni se puede lanzar otro.
+  await user.keyboard('{Escape}');
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  await user.click(busy);
+  expect(mockedUndo).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    finish({ ...completed, status: 'UNDONE', canUndo: false, undoneCreated: 1, undoneFilled: 1 });
+  });
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByText('Deshecho: 1 pacientes retirados, 1 fichas revertidas')).toBeInTheDocument();
+  expect(toast.success).toHaveBeenCalledWith('Lote deshecho.');
+});
+
 it('deshacer rechazado (409): el motivo en el diálogo y el lote intacto', async () => {
   mockedList.mockResolvedValue(page());
   mockedUndo.mockRejectedValue(
