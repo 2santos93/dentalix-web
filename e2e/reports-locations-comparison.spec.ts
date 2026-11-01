@@ -31,7 +31,10 @@ const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
 const ADMIN_EMAIL = process.env.E2E_DEMO_ADMIN_EMAIL ?? 'admin@demo.dentalix.app';
 const DENTIST_EMAIL = process.env.E2E_DEMO_DENTIST_EMAIL ?? 'dentista@demo.dentalix.app';
-const SEDES = ['Sede principal', 'Sede Norte'];
+const SEDES = ['Sede principal', 'Sede Norte', 'Sede São Paulo', 'Sede Londres'];
+// Las dos sedes que cobran en USD: São Paulo (BRL) y Londres (GBP) no tienen
+// importe en esa moneda, así que con ella como moneda de orden van al final.
+const SEDES_USD = ['Sede principal', 'Sede Norte'];
 
 /** Fila (1440 px) o tarjeta (390 px) de la sede `name`, por su nombre exacto. */
 function sedeRow(page: Page, name: string) {
@@ -72,8 +75,7 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   }
   const total = page.getByTestId('comparison-total');
   await expect(total.getByRole('rowheader', { name: 'Total clínica' })).toBeVisible();
-  // La demo cobra en USD: un importe por moneda, con su código (otros specs
-  // dejan en ella planes en COP, que salen con el suyo).
+  // La demo cobra en varias monedas: un importe por moneda, con su código.
   await expect(total.getByRole('cell').first()).toContainText(/\b[A-Z]{3}\b/);
   await expect(total.getByRole('cell').filter({ hasText: 'USD' }).first()).toBeVisible();
   for (const column of [
@@ -109,21 +111,41 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   await expect(page.getByRole('tooltip').filter({ visible: true })).toContainText('precio neto');
   await page.keyboard.press('Escape');
 
-  // Orden: por «Cobrado», de mayor a menor y luego al revés.
+  // Orden: por «Cobrado», de mayor a menor y luego al revés. El mes anterior
+  // trae cobros en todas las sedes (el día 1 el mes en curso aún no).
+  await page.getByLabel('Período').selectOption('last_month');
+  await expect(sedeRow(page, 'Sede Londres').getByRole('cell').nth(1)).toContainText('GBP', { timeout: 15_000 });
   const collected = table.getByRole('columnheader', { name: /^Cobrado/ });
   await expect(collected).toHaveAttribute('aria-sort', 'none');
+  // Se ordena por la primera moneda del total (`sortCurrency`): las sedes sin
+  // importe en ella van al final, en los dos sentidos (PF3).
+  const sortCode = (await total.getByRole('cell').nth(1).innerText()).match(/\b[A-Z]{3}\b/)?.[0];
+  expect(sortCode, 'el total de «Cobrado» trae al menos una moneda').toBeTruthy();
+  const withCode: string[] = [];
+  for (const name of SEDES) {
+    const text = await sedeRow(page, name).getByRole('cell').nth(1).innerText();
+    if (text.includes(sortCode!)) withCode.push(name);
+  }
+  expect(withCode.length).toBeGreaterThan(0);
+  const sedeOrder = async (among: string[]) => {
+    const names = (await rows.getByRole('rowheader').allTextContents()).map((n) => n.trim());
+    return among.filter((name) => names.includes(name)).sort((a, b) => names.indexOf(a) - names.indexOf(b));
+  };
+  const withoutLast = async () => {
+    const order = await sedeOrder(SEDES);
+    return order.slice(0, withCode.length).every((n) => withCode.includes(n));
+  };
+  // Las dos sedes en USD se invierten entre sí cuando USD es la moneda de orden
+  // (puede haber otras sedes).
+  const reverses = sortCode === 'USD';
   await table.getByRole('button', { name: 'Cobrado', exact: true }).click();
   await expect(collected).toHaveAttribute('aria-sort', 'descending');
-  // Las dos sedes sembradas cambian de orden entre sí (puede haber otras).
-  const sedeOrder = async () => {
-    const names = (await rows.getByRole('rowheader').allTextContents()).map((n) => n.trim());
-    return SEDES.filter((name) => names.includes(name)).sort((a, b) => names.indexOf(a) - names.indexOf(b));
-  };
-  const desc = await sedeOrder();
-  expect(desc).toHaveLength(SEDES.length);
+  const desc = await sedeOrder(SEDES_USD);
+  expect(await withoutLast()).toBe(true);
   await table.getByRole('button', { name: 'Cobrado', exact: true }).click();
   await expect(collected).toHaveAttribute('aria-sort', 'ascending');
-  await expect.poll(sedeOrder).toEqual([...desc].reverse());
+  if (reverses) await expect.poll(() => sedeOrder(SEDES_USD)).toEqual([...desc].reverse());
+  expect(await withoutLast()).toBe(true);
   await expect(page.getByTestId('comparison-total')).toBeVisible();
 
   // CSV con los filtros activos.

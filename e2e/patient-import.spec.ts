@@ -7,7 +7,7 @@ import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { request as httpRequest } from 'node:http';
 import { API_URL, WEB_PORT, tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
-import { demoNationalIdName } from './support/demo';
+import { demoNationalIdLabel } from './support/demo';
 
 /**
  * e2e (DX-107): Ajustes → Importar pacientes en la clínica demo, a 1440 y 390.
@@ -99,7 +99,7 @@ for (const viewport of [
     // a 390 px llegó a sacar 3 px de <main> (QA D1).
     const csv = [
       'Tipo Doc;Cédula;Nombre;Apellidos;Fecha de nacimiento;Sexo;Celular;Correo;Dirección;Observaciones',
-      `Cédula;${docA};Ana;Importada${viewport.tag};03/05/1990;F;310 123 4567;ana${suffix}@example.com;Calle 10 # 1-20;Importado de la hoja anterior`,
+      `Cédula;${docA};Ana;Importada${viewport.tag};03/05/1990;F;0416 555 0450;ana${suffix}@example.com;Calle Demo 10;Importado de la hoja anterior`,
       `Cédula;${docB};Luis;Importado${viewport.tag};;;;;;`,
       `Cédula;${docA};Ana;Repetida;;;;;;`,
       `Cédula;99${suffix};;SinNombre;31/02/1990;;;;;`,
@@ -164,7 +164,7 @@ for (const viewport of [
     // genérico, que se ve con el nombre local que le dio la clínica (V1: la
     // demo lo tiene); ni el valor ni la cabecera «Cédula» de la hoja salen por
     // su cuenta (las siglas de un solo país ya no son alias: Z1).
-    const nationalIdName = await demoNationalIdName(request);
+    const nationalIdName = await demoNationalIdLabel(request);
     await expect(page.getByText(`${nationalIdName} ${docA}`).first()).toBeVisible();
     const mainText = (await page.locator('main').innerText()).split(nationalIdName).join('');
     expect(mainText).not.toContain('Cédula');
@@ -203,8 +203,8 @@ function legacyBigCsv(rows: number, docPrefix: string): Buffer {
   for (let i = 0; i < rows; i += 1) {
     const n = String(i).padStart(5, '0');
     lines.push(
-      `Cédula;${docPrefix}${n};Paciente${n};Importado Masivo;03/05/1990;F;310 123 4567;paciente${docPrefix}${n}@example.com;` +
-        `Calle 10 # 1-20 Barrio Centro;Paciente de la lista del programa anterior importado en lote`,
+      `Cédula;${docPrefix}${n};Paciente${n};Importado Masivo;03/05/1990;F;0416 555 0451;paciente${docPrefix}${n}@example.com;` +
+        `Calle Demo 10, Centro;Paciente de la lista del programa anterior importado en lote`,
     );
   }
   return Buffer.from(lines.join('\n'), 'utf8');

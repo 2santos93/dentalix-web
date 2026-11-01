@@ -13,18 +13,18 @@ import { dataList, dataListRows } from './support/data-list';
 /**
  * e2e (DX-262, correcciones de la revisión C1 e I2) en la demo, a 1440 y 390.
  *
- *   1. Importar un paciente nuevo con un saldo migrado de 100.000 COP.
+ *   1. Importar un paciente nuevo con un saldo migrado de 100.000 VES.
  *   2. I2: volver a subir el mismo paciente (ya existe, nada que importar):
  *      el asistente deja seguir a «Saldos» y confirmar «Importar 1 saldo
- *      migrado» (25.000 COP).
+ *      migrado» (25.000 VES).
  *   3. C1: «Registrar abono» ofrece el saldo migrado como destino con su
  *      pendiente; no deja pasarse; el abono de 40.000 deja «Abonado» y
  *      «Pendiente» en la línea y el saldo del resumen baja.
  *   4. Retirar los saldos del primer lote: 409 claro (tiene abonos vivos).
  *      Los del lote de I2 (sin abonos) sí se retiran.
  *
- * QA D1: la hoja de I2 vuelve a traer deuda en COP para un paciente que ya
- * tiene un saldo migrado en COP: el dry-run no lo crea hasta marcar «Añadir
+ * QA D1: la hoja de I2 vuelve a traer deuda en VES para un paciente que ya
+ * tiene un saldo migrado en VES: el dry-run no lo crea hasta marcar «Añadir
  * aunque ya tenga saldo migrado».
  *
  * Requiere la API con worker (APP_ROLE=all) y la demo sembrada.
@@ -109,7 +109,7 @@ for (const viewport of [
     await uploadBalances(
       page,
       `saldos-abono-${viewport.name}.csv`,
-      `numero_documento;importe;moneda;fecha_antiguedad;concepto\n${doc};100.000;COP;;Cartera anterior\n`,
+      `numero_documento;importe;moneda;fecha_antiguedad;concepto\n${doc};100.000;VES;;Cartera anterior\n`,
     );
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Importar 1 paciente' }).click();
@@ -134,15 +134,15 @@ for (const viewport of [
     await uploadBalances(
       page,
       `saldos-ajuste-${viewport.name}.csv`,
-      `numero_documento;importe;moneda;fecha_antiguedad;concepto\n${doc};25.000;COP;;Ajuste de cartera\n`,
+      `numero_documento;importe;moneda;fecha_antiguedad;concepto\n${doc};25.000;VES;;Ajuste de cartera\n`,
     );
-    // QA D1: ya tiene un saldo migrado en COP del primer lote: por defecto no
+    // QA D1: ya tiene un saldo migrado en VES del primer lote: por defecto no
     // se crea otro, y la fila dice cuál. Es otra deuda: se marca la casilla y
     // la misma hoja se vuelve a validar.
     const balanceIssues = page.getByRole('table', { name: 'Errores y avisos de la hoja de saldos' });
     await expect(balanceIssues).toContainText(
       // G1-B (DX-350): el importe con el formato de la sede de la demo (el mismo helper que la API).
-      new RegExp(`ya tiene un saldo migrado vivo de ${escapeRegExp(regionalFormat(DEMO_REGION).money(100_000, 'COP'))} \\(lote «${firstFile.replace(/[.]/g, '\\.')}» del \\d{2}/\\d{2}/\\d{4}`),
+      new RegExp(`ya tiene un saldo migrado vivo de ${escapeRegExp(regionalFormat(DEMO_REGION).money(100_000, 'VES'))} \\(lote «${firstFile.replace(/[.]/g, '\\.')}» del \\d{2}/\\d{2}/\\d{4}`),
     );
     await expect(balanceIssues).toContainText('no se crea otro');
     await page.getByRole('checkbox', { name: 'Añadir aunque ya tenga saldo migrado' }).check();
@@ -167,7 +167,7 @@ for (const viewport of [
     const openings = panel.getByRole('table', { name: 'Saldos migrados' });
     await expect(openings).toBeVisible({ timeout: 15_000 });
     await expect(openings.getByRole('row')).toHaveCount(3);
-    const summary = panel.getByRole('region', { name: 'Resumen en COP' });
+    const summary = panel.getByRole('region', { name: 'Resumen en VES' });
     await expect(summary.getByTestId('balance')).toContainText('125.000,00');
 
     await panel.getByRole('button', { name: 'Registrar abono' }).click();
@@ -176,17 +176,17 @@ for (const viewport of [
     const target = dialog.getByLabel('Abonar a');
     await expect(target).toBeVisible({ timeout: 10_000 });
     const option = target.locator('option', { hasText: 'Cartera anterior' });
-    await expect(option).toHaveText(/^Saldo migrado · Cartera anterior · pendiente COP\s100\.000,00/);
+    await expect(option).toHaveText(/^Saldo migrado · Cartera anterior · pendiente VES\s100\.000,00/);
     await target.selectOption((await option.getAttribute('value')) ?? '');
     await expect(dialog.getByLabel('Moneda')).toBeDisabled();
-    await expect(dialog).toContainText(/Pendiente: COP\s100\.000,00/);
+    await expect(dialog).toContainText(/Pendiente: VES\s100\.000,00/);
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
 
     // Pasarse de lo pendiente: no se registra y se dice en español.
     const submit = dialog.getByRole('button', { name: 'Registrar abono' });
     await dialog.getByLabel('Importe').fill('100000,01');
     await submit.click();
-    await expect(dialog).toContainText(/El abono supera lo pendiente del saldo migrado: quedan COP\s100\.000,00/);
+    await expect(dialog).toContainText(/El abono supera lo pendiente del saldo migrado: quedan VES\s100\.000,00/);
 
     await dialog.getByLabel('Importe').fill('40000');
     await dialog.getByLabel('Método').selectOption({ label: 'Efectivo' });

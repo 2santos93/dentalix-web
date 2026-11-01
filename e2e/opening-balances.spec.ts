@@ -96,11 +96,11 @@ for (const viewport of [
     // Dry-run de la hoja de saldos.
     const sheet = [
       'numero_documento;importe;moneda;fecha_antiguedad;concepto',
-      `${doc};150.000;COP;${ddmmyyyy(oldDay)};Ortodoncia (programa anterior)`,
-      `${doc};50.000,50;COP;;`,
+      `${doc};150.000;VES;${ddmmyyyy(oldDay)};Ortodoncia (programa anterior)`,
+      `${doc};50.000,50;VES;;`,
       `${doc};40;USD;;`,
-      `99${suffix};100;COP;;`,
-      `${doc};-5;COP;;`,
+      `99${suffix};100;VES;;`,
+      `${doc};-5;VES;;`,
     ].join('\n');
     await page.getByLabel('Hoja de saldos (CSV o .xlsx)').setInputFiles({
       name: `saldos-${viewport.name}.csv`,
@@ -110,10 +110,10 @@ for (const viewport of [
     const totals = page.getByRole('table', { name: 'Totales por moneda' });
     await expect(totals).toBeVisible({ timeout: 30_000 });
     // QA D4: lo válido y, aparte, lo de las filas con error (el documento
-    // inexistente: 100 COP; el importe negativo no suma en ninguna).
+    // inexistente: 100 VES; el importe negativo no suma en ninguna).
     await expect(totals.getByRole('columnheader', { name: 'Total de filas válidas' })).toHaveCount(1);
-    await expect(totals.getByRole('row', { name: /COP/ })).toContainText('100,00');
-    await expect(totals.getByRole('row', { name: /COP/ })).toContainText('200.000,50');
+    await expect(totals.getByRole('row', { name: /VES/ })).toContainText('100,00');
+    await expect(totals.getByRole('row', { name: /VES/ })).toContainText('200.000,50');
     await expect(totals.getByRole('row', { name: /USD/ })).toContainText('40,00');
     const issues = page.getByRole('table', { name: 'Errores y avisos de la hoja de saldos' });
     await expect(issues).toContainText('Sumada a otra fila');
@@ -145,7 +145,7 @@ for (const viewport of [
     await expect(openings).toContainText('Ortodoncia (programa anterior)');
     await expect(openings).toContainText(ddmmyyyy(oldDay));
     await expect(openings).toContainText(`${ddmmyyyy(demoSedeDay(0))} (aprox.)`);
-    await expect(panel.getByRole('region', { name: 'Resumen en COP' }).getByTestId('balance')).toContainText(
+    await expect(panel.getByRole('region', { name: 'Resumen en VES' }).getByTestId('balance')).toContainText(
       '200.000,50',
     );
     await expectNoHorizontalScroll(page);

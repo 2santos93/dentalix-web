@@ -146,7 +146,7 @@ async function seed(request: APIRequestContext, tag: string) {
     docType: "NATIONAL_ID",
     docNumber: tag,
     sex: "F",
-    phone: "3001234567",
+    phone: "0416 555 0452",
     countryCode: "CO",
   });
   created.patientId = patient.id;
@@ -521,7 +521,7 @@ for (const width of [390, 1440])
         name: `WhatsApp a ${data.name}`,
       });
       const url = new URL((await whatsapp.getAttribute("href"))!);
-      expect(url.pathname).toBe("/573001234567");
+      expect(url.pathname).toBe("/584165550452");
       expect(url.searchParams.get("text")).not.toMatch(
         /Corona|Cirugía|Visita|tratamiento/i,
       );

@@ -27,7 +27,7 @@ const DENTIST_EMAIL = process.env.E2E_DEMO_DENTIST_EMAIL ?? 'dentista@demo.denta
 const ASSISTANT_EMAIL = process.env.E2E_DEMO_ASSISTANT_EMAIL ?? 'asistente@demo.dentalix.app';
 const RECEPTION_EMAIL = process.env.E2E_DEMO_RECEPTION_EMAIL ?? 'recepcion@demo.dentalix.app';
 // Paciente de las opciones A/B de la demo (DEMO_PLAN_OPTIONS en la API).
-const DEMO_OPTIONS_PATIENT = 'Carolina Duque Henao';
+const DEMO_OPTIONS_PATIENT = 'Carolina Durán Bello';
 
 const IMPLANT = 3_500_000;
 
