@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { test, expect } from './support/test';
 import { loginAs, waitForHydratedForm } from './support/auth';
@@ -93,4 +94,46 @@ test('activa con QR, entra con código, rechaza uno malo y un código de recuper
   await again.getByRole('button', { name: 'Verificar' }).click();
   await expect(again.getByRole('alert')).toBeVisible();
   await expect(again).toHaveURL(/\/login/);
+});
+
+test('la clínica exige el MFA: el ADMIN sin él pasa por el alta forzada al entrar, a 390 px', async ({
+  page,
+  request,
+}) => {
+  const databaseUrl = process.env.E2E_DATABASE_URL;
+  test.skip(!databaseUrl, 'E2E_DATABASE_URL no definido: no se puede encender la política sin un ADMIN con MFA');
+  test.setTimeout(120_000);
+  const suffix = randomUUID().slice(0, 8);
+  const data = {
+    subdomain: `mfaf-${suffix}`,
+    clinicName: `Clínica ${suffix}`,
+    fullName: 'Persona Alta Forzada',
+    email: `mfaf.${suffix}@example.com`,
+    password: PASSWORD,
+  };
+  await registerClinicViaApi(request, data);
+  execFileSync('psql', [
+    databaseUrl!,
+    '-c',
+    `UPDATE tenants SET "requireAdminMfa" = true WHERE subdomain = '${data.subdomain}'`,
+  ]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const origin = tenantOrigin(data.subdomain);
+  await page.goto(`${origin}/login`);
+  await waitForHydratedForm(page);
+  await page.getByLabel('Correo electrónico').fill(data.email);
+  await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+
+  const secretEl = page.getByTestId('mfa-secret');
+  await expect(secretEl).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  const secret = (await secretEl.innerText()).replace(/\s/g, '');
+  await page.getByLabel('Código de la app').fill(totpNow(secret));
+  await page.getByRole('button', { name: 'Activar y entrar' }).click();
+  await expect(page.getByTestId('mfa-recovery-codes').getByRole('listitem')).toHaveCount(10);
+  await expect(page.getByRole('button', { name: 'Entrar a Dentalix' })).toBeDisabled();
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Entrar a Dentalix' }).click();
+  await expect(page).toHaveURL(/\/patients/);
 });

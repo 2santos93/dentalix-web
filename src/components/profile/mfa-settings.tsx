@@ -59,6 +59,7 @@ const copy = {
   codesTitle: 'Guarda tus códigos de recuperación',
   codesDescription: 'Son tu forma de entrar si pierdes el móvil.',
   done: 'Listo',
+  close: 'Cerrar',
   disableTitle: 'Desactivar la verificación en dos pasos',
   disableDescription:
     'Tu cuenta quedará protegida solo con la contraseña. Se borran tus códigos de recuperación y se cierran tus demás sesiones.',
@@ -181,6 +182,7 @@ export function MfaSettings({ token }: { token: string }) {
           title={copy.disableTitle}
           description={copy.disableDescription}
           submitLabel={copy.disableSubmit}
+          destructive
           errorFallback={copy.disableError}
           onClose={() => setDialog(null)}
           onConfirm={async (password, factor) => {
@@ -352,6 +354,7 @@ function ReauthDialog({
   title,
   description,
   submitLabel,
+  destructive = false,
   errorFallback,
   onClose,
   onConfirm,
@@ -359,6 +362,7 @@ function ReauthDialog({
   title: string;
   description: string;
   submitLabel: string;
+  destructive?: boolean;
   errorFallback: string;
   onClose: () => void;
   onConfirm: (password: string, factor: SecondFactor) => Promise<void>;
@@ -401,6 +405,7 @@ function ReauthDialog({
       description={description}
       onSubmit={handleSubmit}
       submitLabel={submitLabel}
+      destructive={destructive}
       submitting={submitting}
       error={error}
     >
@@ -441,14 +446,14 @@ function ReauthDialog({
   );
 }
 
-/** Se muestran una sola vez: el diálogo no se cierra sin confirmar que se guardaron. */
+/** Se muestran una sola vez. Quien cierre sin guardarlos puede generar otros desde la fila. */
 function RecoveryCodesDialog({ codes, onClose }: { codes: string[]; onClose: () => void }) {
   const [saved, setSaved] = useState(false);
   return (
     <FormModal
       open
       onOpenChange={(open) => {
-        if (!open && saved) onClose();
+        if (!open) onClose();
       }}
       title={copy.codesTitle}
       description={copy.codesDescription}
@@ -457,6 +462,7 @@ function RecoveryCodesDialog({ codes, onClose }: { codes: string[]; onClose: () 
         onClose();
       }}
       submitLabel={copy.done}
+      cancelLabel={copy.close}
       submitDisabled={!saved}
     >
       <RecoveryCodesPanel codes={codes} saved={saved} onSavedChange={setSaved} />
