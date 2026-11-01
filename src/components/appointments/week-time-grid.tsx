@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
-import { OVERBOOKED_LABEL, OverbookedChip, showsOverbooked } from '@/components/appointments/overbooked-chip';
+import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import {
   ROW_HEIGHT_PX,
@@ -18,10 +18,6 @@ import {
   STATUS_BADGE_CLASSES,
   patientLabel,
 } from './appointment-display';
-import { overdueChipText } from '@/lib/collections/presentation';
-import { coverageChipText } from '@/lib/patients/coverage-presentation';
-import { confirmationIndicator } from '@/lib/appointments/confirmation-message';
-import { CONFIRMATION_INDICATOR_LABELS } from './appointment-display';
 import { weekDayHeader } from '@/lib/appointments/calendar-grid';
 import { formatMinute } from '@/lib/appointments/day-grid';
 import { sedeMinute, sedeTimeRange, type AgendaClock } from '@/lib/locations/sede-clock';
@@ -103,6 +99,19 @@ export function WeekTimeGrid({
     );
   const dates = weekDates(weekStart);
   const timeZone = clock.timeZone;
+  const dayLayouts = dates.map((date) =>
+    layoutLanes(
+      appointments
+        .filter((appointment) => wallDay(appointment.start, timeZone) === date)
+        .map((appointment) => ({
+          appointment,
+          start: new Date(appointment.start).getTime(),
+          end: new Date(appointment.end).getTime(),
+        })),
+    ),
+  );
+  const laneCount = Math.max(1, ...dayLayouts.flatMap((day) => day.map((item) => item.laneCount)));
+  const gutter = clock.fmt.hourCycle === 'h12' ? '5.5rem' : '4rem';
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll: a la primera cita de la semana, o a las 07:00 si no hay.
@@ -123,8 +132,14 @@ export function WeekTimeGrid({
       className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-surface"
       ref={scrollRef}
     >
-      {/* min-width fuerza scroll horizontal en pantallas chicas */}
-      <div className="grid min-w-[720px]" style={{ gridTemplateColumns: `${clock.fmt.hourCycle === 'h12' ? '5.5rem' : '4rem'} repeat(7, 1fr)` }}>
+      {/* Cada carril mantiene espacio para paciente y estado; el scroll pertenece a la rejilla. */}
+      <div
+        className="grid"
+        style={{
+          minWidth: `calc(${gutter} + ${7 * laneCount * 12}rem)`,
+          gridTemplateColumns: `${gutter} repeat(7, 1fr)`,
+        }}
+      >
         {/* Fila de encabezados (sticky-top) */}
         <div className="sticky top-0 z-20 bg-surface" />
         {dates.map((date) => (
@@ -169,7 +184,7 @@ export function WeekTimeGrid({
         </div>
 
         {/* Columnas de día */}
-        {dates.map((date) => (
+        {dates.map((date, dayIndex) => (
           <div
             key={date}
             data-testid="week-grid-day-column"
@@ -207,15 +222,7 @@ export function WeekTimeGrid({
                   />
                 );
               })}
-            {layoutLanes(
-              appointments
-                .filter((a) => wallDay(a.start, timeZone) === date)
-                .map((a) => ({
-                  appointment: a,
-                  start: new Date(a.start).getTime(),
-                  end: new Date(a.end).getTime(),
-                })),
-            ).map(({ appointment: a, lane, laneCount }) => {
+            {dayLayouts[dayIndex].map(({ appointment: a, lane, laneCount }) => {
               const { topPx, heightPx } = blockGeometry(a.start, a.end, timeZone);
               const range = sedeTimeRange(a.start, a.end, clock.of(a.locationId));
               const widthPct = 100 / laneCount;
@@ -238,25 +245,38 @@ export function WeekTimeGrid({
                     type="button"
                     data-testid="week-grid-appointment"
                     data-id={a.id}
-                    aria-label={[range, patient, STATUS_LABELS[a.status], a.appointmentType?.name, overdueChipText(a.balance), coverageChipText(a.coverage), confirmationIndicator(a) ? CONFIRMATION_INDICATOR_LABELS[confirmationIndicator(a)!] : null, showsOverbooked(a) ? OVERBOOKED_LABEL : null].filter(Boolean).join(' · ')}
+                    title={[patient, STATUS_LABELS[a.status], range, a.appointmentType?.name].filter(Boolean).join(' · ')}
                     onClick={() => onSelectAppointment(a)}
                     className={`h-full w-full overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${hasMedicalAlert ? 'pr-6' : ''} ${STATUS_BADGE_CLASSES[a.status]}`}
                   >
-                    {/* El paciente primero (lo que se busca en una columna de
-                        ~100 px); debajo, estado (icono + etiqueta del tono) y hora. */}
-                    <span className="block truncate font-semibold">{patient}</span>
-                    <span className="flex min-w-0 items-center gap-1">
-                      <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />
-                      <span className="truncate tabular-nums">{range}</span>
-                      <ConfirmationBadge appointment={a} compact />
-                      <CoverageMarker coverage={a.coverage} srText />
-                    </span>
+                    {/* En 20 px paciente y estado comparten una fila; en las demás el paciente mantiene prioridad. */}
+                    {heightPx < 40 ? (
+                      <span className="flex min-w-0 items-center gap-1 font-medium leading-none">
+                        <span className="min-w-0 truncate font-semibold">{patient}</span>{' '}
+                        <AppointmentStatusLabel status={a.status} compact />{' '}
+                        <ConfirmationBadge appointment={a} compact />{' '}
+                        <CoverageMarker coverage={a.coverage} srText />{' '}
+                        <span className="sr-only">{range}</span>
+                      </span>
+                    ) : (
+                      <>
+                        <span className="block truncate font-semibold">{patient}</span>{' '}
+                        <span className="flex min-w-0 items-center gap-1">
+                          <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />{' '}
+                          <span className="truncate tabular-nums">{range}</span>{' '}
+                          <ConfirmationBadge appointment={a} compact />{' '}
+                          <CoverageMarker coverage={a.coverage} srText />
+                        </span>
+                      </>
+                    )}{' '}
                     {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
-                    <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
+                    <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />{' '}
                     {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
-                    <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />
+                    <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />{' '}
                     {/* DX-509: solo mientras es sobrecupo. */}
-                    <OverbookedChip overbooked={a.overbooked} status={a.status} className="mt-0.5 px-1 py-0" />
+                    <OverbookedChip overbooked={a.overbooked} status={a.status} className="mt-0.5 px-1 py-0" />{' '}
+                    {heightPx < 60 && <span className="sr-only">{STATUS_LABELS[a.status]}</span>}
+                    {a.appointmentType?.name && <span className="sr-only">{a.appointmentType.name}</span>}
                   </button>
                   {hasMedicalAlert ? (
                     <MedicalAlertIndicator

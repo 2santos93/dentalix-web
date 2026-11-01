@@ -135,7 +135,7 @@ test('vista Día «Sillones»: una columna por sillón y «Sin sillón»; la cit
 
   const card = chairColumn(page, 'Sillón 1').getByTestId('day-column-appointment');
   await expect(card).toContainText('09:00–09:30');
-  await card.getByRole('button', { name: /^Detalle de la cita/ }).click();
+  await card.getByRole('button', { name: /^09:00–09:30.*Detalle de la cita/ }).click();
   await expect(page.getByTestId('appointment-chair')).toHaveText('Sillón 1');
   await page.keyboard.press('Escape');
   await expectNoHorizontalScroll(page);
