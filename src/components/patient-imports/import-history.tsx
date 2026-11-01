@@ -58,6 +58,10 @@ export const historyCopy = {
       balances ? `; se retirarán también sus ${balances} saldos migrados` : ''
     }. No se puede si alguno ya tiene citas, historia clínica, planes o pagos, o si un saldo migrado tiene abonos.`,
   undoConfirm: 'Deshacer lote',
+  // DX-294: mientras responde la API (unos segundos con lotes grandes).
+  undoConfirming: 'Deshaciendo…',
+  undoWorking: (created: string) =>
+    `Deshaciendo el lote: retirando ${created} pacientes. Puede tardar unos segundos; no cierres esta ventana.`,
   undoError: 'No se pudo deshacer el lote.',
   undoDone: 'Lote deshecho.',
   // DX-262: retirar solo los saldos migrados.
@@ -67,6 +71,9 @@ export const historyCopy = {
   undoBalancesDescription: (balances: string) =>
     `Se retirarán sus ${balances} saldos migrados del estado de cuenta y de la cartera; los pacientes no se tocan. No se puede si algún saldo ya tiene abonos: anúlalos antes.`,
   undoBalancesConfirm: 'Retirar saldos',
+  undoBalancesConfirming: 'Retirando…',
+  undoBalancesWorking: (balances: string) =>
+    `Retirando ${balances} saldos migrados. Puede tardar unos segundos; no cierres esta ventana.`,
   undoBalancesError: 'No se pudieron retirar los saldos migrados.',
   undoBalancesDone: 'Saldos migrados retirados.',
   ambiguous: (n: number, shown: string) =>
@@ -294,7 +301,9 @@ export function ImportHistory({
       <ConfirmDialog
         open={undoing !== null}
         onOpenChange={(open) => {
-          if (!open) setUndoing(null);
+          // DX-294: mientras deshace no se cierra (ni con Escape): no se
+          // pierde el resultado ni se lanza otro deshacer del mismo lote.
+          if (!open && !undoBusy) setUndoing(null);
         }}
         title={undoMode === 'balances' ? historyCopy.undoBalancesTitle : historyCopy.undoTitle}
         description={
@@ -308,10 +317,20 @@ export function ImportHistory({
             : undefined
         }
         confirmLabel={undoMode === 'balances' ? historyCopy.undoBalancesConfirm : historyCopy.undoConfirm}
+        confirmingLabel={undoMode === 'balances' ? historyCopy.undoBalancesConfirming : historyCopy.undoConfirming}
         onConfirm={() => void confirmUndo()}
         confirming={undoBusy}
         error={undoError}
-      />
+      >
+        {/* Vivo desde que se abre: el lector anuncia el avance al empezar. */}
+        <p role="status" className="text-sm text-muted empty:hidden">
+          {undoBusy && undoing
+            ? undoMode === 'balances'
+              ? historyCopy.undoBalancesWorking(n(importedBalances(undoing)))
+              : historyCopy.undoWorking(n(undoing.progress.createdCount))
+            : null}
+        </p>
+      </ConfirmDialog>
     </section>
   );
 }
