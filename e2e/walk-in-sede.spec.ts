@@ -9,6 +9,7 @@ import {
 } from './support/api';
 import { loginAs } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
+import { activeSedeSelect } from './support/nav';
 import { E2E_REGION } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -90,7 +91,7 @@ test.beforeAll(async ({ request }) => {
 /** «En clínica» de una sede: se elige en el selector global (recarga la vista). */
 async function openInClinicAt(page: Page, sedeName: string) {
   await page.goto(`${origin}/agenda/en-clinica`);
-  const switcher = page.getByRole('combobox', { name: 'Sede', exact: true });
+  const switcher = activeSedeSelect(page);
   await switcher.selectOption({ label: sedeName });
   // Cambiar de sede recarga la vista: se espera a que vuelva con ella elegida.
   await page.waitForLoadState('load');
@@ -101,7 +102,7 @@ test('1440: con «Todas las sedes» pide la sede, filtra profesionales y la urge
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/agenda`);
-  await expect(page.getByRole('combobox', { name: 'Sede', exact: true })).toHaveValue('');
+  await expect(activeSedeSelect(page)).toHaveValue('');
 
   await page.getByRole('button', { name: 'Atender sin cita' }).click();
   const dialog = page.getByRole('dialog', { name: 'Atender sin cita' });
@@ -175,7 +176,8 @@ test('390: «En clínica» › «Elegir sede» deja el foco en el selector de se
   await expect(choose).toBeVisible({ timeout: 15_000 });
   await choose.click();
 
-  const phoneSwitcher = page.getByRole('combobox', { name: /^Sede: / });
+  // El de la barra superior (el de la barra lateral está oculto a 390 px).
+  const phoneSwitcher = activeSedeSelect(page);
   await expect(phoneSwitcher).toBeFocused();
   await expect(phoneSwitcher).toHaveAccessibleName('Sede: Todas las sedes');
   await expectNoHorizontalScroll(page);
