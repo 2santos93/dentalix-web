@@ -117,17 +117,17 @@ test('el ADMIN crea un impuesto del 3 % en el efectivo desde Ajustes › Caja', 
   const dialog = page.getByRole('dialog', { name: 'Nuevo ajuste por medio de pago' });
   await dialog.getByLabel('Medio de pago').selectOption({ label: 'Efectivo' });
   await dialog.getByLabel('Etiqueta').fill('Impuesto 3 %');
-  await dialog.getByLabel('Porcentaje').fill('3');
+  await dialog.getByLabel('Porcentaje', { exact: true }).fill('3');
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     await expectDialogInsideViewport(page, dialog);
     await shoot(page, 'adjustment-modal', viewport.width);
   }
-  await dialog.getByLabel('Tipo').selectOption({ label: 'Recargo' });
+  await dialog.getByLabel('Tipo', { exact: true }).selectOption({ label: 'Recargo' });
   await expect(dialog.getByText(/En algunos lugares cobrar un recargo/)).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 900 });
   await shoot(page, 'adjustment-modal-surcharge', 1440);
-  await dialog.getByLabel('Tipo').selectOption({ label: 'Impuesto' });
+  await dialog.getByLabel('Tipo', { exact: true }).selectOption({ label: 'Impuesto' });
   await dialog.getByRole('button', { name: 'Crear ajuste' }).click();
   await expect(dialog).toBeHidden({ timeout: 15_000 });
   const list = dataList(section, 'Ajustes por medio de pago');
