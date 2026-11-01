@@ -59,8 +59,6 @@ interface PlanItemFormProps {
   /** DX-204: política de descuentos para avisar antes de enviar; `null` = decide la API. */
   discountRules: DiscountRules | null;
   role: ClinicRole | null;
-  /** DX-489: moneda del catálogo (la del «precio de lista»); `null` si no se sabe. */
-  catalogCurrency: string | null;
   /** DX-489: formato de la sede, el de los demás importes del plan; `null` mientras carga («—»). */
   fmt: RegionalFormat | null;
   /** Tras agregar: refresca el plan y el saldo (y se espera antes de reactivar el botón). */
@@ -82,7 +80,6 @@ export function PlanItemForm({
   catalogById,
   discountRules,
   role,
-  catalogCurrency,
   fmt,
   onAdded,
   submitPrimary = true,
@@ -126,6 +123,9 @@ export function PlanItemForm({
     },
   });
   const quoteReady = priceQuote.status === 'ready' ? priceQuote.quote : null;
+  // DX-502: la moneda del catálogo la dice la API (la común de TODAS las sedes
+  // activas, no solo las del usuario); sin precio resuelto, no se sabe.
+  const catalogCurrency = quoteReady?.catalogCurrency ?? null;
   const addPriceLoading = priceQuote.status === 'loading';
   const addNoDiscount = noDiscountAllowed(quoteReady);
   // Referencia de la rebaja (R1): el precio resuelto, no el de catálogo.

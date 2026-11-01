@@ -7,6 +7,7 @@ const mocked = getPriceQuote as jest.MockedFunction<typeof getPriceQuote>;
 
 const quote = (price: number): PriceQuote => ({
   basePrice: 100,
+  catalogCurrency: 'COP',
   price,
   source: 'CATALOG',
   agreementId: null,

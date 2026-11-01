@@ -29,6 +29,7 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
         subtotal: 3150000,
         listPrice: null,
         agreementName: null,
+        listPriceCurrency: null,
       },
       {
         id: 'i2',
@@ -41,6 +42,7 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
         subtotal: 150000,
         listPrice: null,
         agreementName: null,
+        listPriceCurrency: null,
       },
     ],
     totals: [{ currency: 'COP', gross: 3650000, discount: 350000, net: 3300000, agreementSaving: 0 }],

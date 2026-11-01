@@ -383,6 +383,8 @@ function quoteOf(catalogItemId: string, overrides: Partial<PriceQuote> = {}, cur
   const base = catalog.find((c) => c.id === catalogItemId)?.defaultPrice ?? null;
   return {
     basePrice: base,
+    // DX-502: el catálogo en la moneda del plan, salvo que el test diga otra.
+    catalogCurrency: currency,
     price: base,
     source: 'CATALOG',
     agreementId: null,
@@ -902,6 +904,8 @@ describe('TreatmentPlansTab', () => {
       discount: 0,
       catalogPrice: 100.55,
       basePrice: 80000,
+      // DX-502: la moneda del catálogo, congelada en el ítem por la API.
+      catalogCurrency: 'COP',
       priceSource: 'AGREEMENT_PRICE_LIST' as const,
       agreementId: 'ag-1',
       agreementName: 'Seguros Sol',
@@ -925,9 +929,26 @@ describe('TreatmentPlansTab', () => {
       expect(table).not.toHaveTextContent(/80\.000,00\sEUR|EUR\s80\.000,00/);
     });
 
+    it('DX-502: con la moneda congelada en el ítem, aunque las sedes que ve el usuario estén en otra', async () => {
+      // Un usuario restringido a una sede en USD: la moneda del catálogo es la
+      // que guardó la API (la común de TODAS las sedes), no la de su sede.
+      jest.mocked(listLocations).mockResolvedValue([{ ...clinicLocation(), currency: 'USD' }]);
+      try {
+        render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+        const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+        expect(
+          within(table).getByText(/^Convenio Seguros Sol · precio de lista COP 80\.000,00$/),
+        ).toBeInTheDocument();
+        expect(table).not.toHaveTextContent(/USD\s80\.000,00/);
+      } finally {
+        jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+      }
+    });
+
     it('el formulario dice el precio de lista en COP', async () => {
       mockedGetPriceQuote.mockResolvedValue({
         basePrice: 80000,
+        catalogCurrency: 'COP',
         price: 100.55,
         source: 'AGREEMENT_PRICE_LIST',
         agreementId: 'ag-1',
@@ -948,6 +969,7 @@ describe('TreatmentPlansTab', () => {
     it('sin lista en EUR, el aviso de precio por debajo del catálogo no pinta el catálogo en EUR', async () => {
       mockedGetPriceQuote.mockResolvedValue({
         basePrice: 80000,
+        catalogCurrency: 'COP',
         price: 80000,
         source: 'CATALOG',
         agreementId: null,
@@ -2264,8 +2286,9 @@ describe('TreatmentPlansTab', () => {
 
     // SEC-041: un precio por debajo del de catálogo cuenta como descuento.
     describe('precio por debajo del de catálogo (SEC-041)', () => {
-      // El catálogo en la moneda del plan (sedes en USD): la rebaja se puede
-      // restar. Con el catálogo en otra moneda, ver DX-489.
+      // El catálogo en la moneda del plan (el precio resuelto lo da en USD,
+      // DX-502): la rebaja se puede restar. Con el catálogo en otra moneda,
+      // ver DX-489.
       const { clinicLocation } = jest.requireActual('../../lib/test/locations');
       beforeEach(() => {
         jest.mocked(listLocations).mockResolvedValue([{ ...clinicLocation(), currency: 'USD' }]);
@@ -2406,6 +2429,8 @@ describe('TreatmentPlansTab', () => {
         {
           price: 40000,
           basePrice: 50000,
+          // El catálogo en COP (DX-502: lo dice la API); el plan, en USD.
+          catalogCurrency: 'COP',
           source: 'AGREEMENT_PERCENT',
           agreementId: 'ag-1',
           agreementName: 'Seguros Sol',
@@ -2593,6 +2618,7 @@ describe('TreatmentPlansTab', () => {
         ...item1,
         catalogPrice: 40000,
         basePrice: 50000,
+        catalogCurrency: 'COP',
         priceSource: 'AGREEMENT_PERCENT' as const,
         agreementId: 'ag-1',
         agreementName: 'Seguros Sol',
@@ -2609,6 +2635,7 @@ describe('TreatmentPlansTab', () => {
         ...item1,
         catalogPrice: 40000,
         basePrice: 50000,
+        catalogCurrency: 'COP',
         discount: 2000,
         priceSource: 'AGREEMENT_PERCENT' as const,
         agreementId: 'ag-1',

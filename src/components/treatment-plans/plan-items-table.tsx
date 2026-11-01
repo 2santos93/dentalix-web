@@ -39,11 +39,6 @@ export interface ItemsTableProps {
   catalogById: Map<string, DentalCatalogItem>;
   /** The plan's currency (`planDetail.currency`) — item prices don't carry their own currency. */
   currency: string;
-  /**
-   * DX-489: moneda del catálogo (`clinicBaseCurrency`), la del «precio de
-   * lista»; `null` si no se sabe (la cifra va sin moneda).
-   */
-  catalogCurrency: string | null;
   /** La visita cuyos ítems lista (`null` sin visitas): nombra la tabla. */
   visit: number | null;
   /** DX-343: «Cargo n de N» de cada ítem de cargo (ver `feeReferences`). */
@@ -286,7 +281,6 @@ export function ItemsTable({
   items,
   catalogById,
   currency,
-  catalogCurrency,
   updatingItemId,
   visit,
   feeRefs,
@@ -307,10 +301,14 @@ export function ItemsTable({
   fmt,
 }: ItemsTableProps) {
   // DX-489: un único formato para los importes del plan, el de la sede (el de
-  // la lista de abonos); el precio de lista, en la moneda del catálogo.
+  // la lista de abonos); el precio de lista, en la moneda del catálogo que
+  // congeló cada ítem al darlo de alta (DX-502, `catalogCurrency`).
   const money = (amount: number) => sedeMoney(amount, currency, fmt);
   const listPriceFormat = sedeListPriceFormat(fmt);
-  const listPrice: ListPriceText = (value) => formatListPrice(value, catalogCurrency, listPriceFormat);
+  const listPriceOf =
+    (item: TreatmentPlanItem): ListPriceText =>
+    (value) =>
+      formatListPrice(value, item.catalogCurrency, listPriceFormat);
   // SEC-050: el ítem de un cargo vigente no se quita, no cambia de estado ni
   // entra en «Descuento %».
   const isFee = (item: TreatmentPlanItem) => Boolean(item.cancellationFeeAppointmentId);
@@ -386,7 +384,7 @@ export function ItemsTable({
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
                   <TableCell className="tabular-nums">
                     {money(item.price)}
-                    <ItemDiscountLine item={item} money={money} listPrice={listPrice} />
+                    <ItemDiscountLine item={item} money={money} listPrice={listPriceOf(item)} />
                   </TableCell>
                   {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} fmt={fmt} /> : null}
                   <TableCell>
@@ -478,7 +476,7 @@ export function ItemsTable({
               <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">
                 {money(item.price)}
-                <ItemDiscountLine item={item} money={money} listPrice={listPrice} />
+                <ItemDiscountLine item={item} money={money} listPrice={listPriceOf(item)} />
               </p>
               {itemBalances?.has(item.id) ? (
                 <div className="mt-1">

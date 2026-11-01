@@ -2,6 +2,11 @@ import * as React from 'react';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import type { SedeClock } from '@/lib/locations/sede-clock';
 import type { PublicBudget } from '@/lib/signature-requests/signature-requests-api';
+import {
+  listPriceNote,
+  listPricesCurrency,
+  listPricesInPlanCurrency,
+} from '@/lib/treatment-plans/list-price';
 
 export const publicBudgetCopy = {
   heading: 'Presupuesto',
@@ -24,17 +29,32 @@ export const publicBudgetCopy = {
 
 const copy = publicBudgetCopy;
 
+type PublicBudgetItem = PublicBudget['items'][number];
+
+/** ¿El ítem enseña «Precio de lista»? El de un convenio, si lo guardó. */
+function hasListPrice(item: PublicBudgetItem): item is PublicBudgetItem & { listPrice: number } {
+  return item.listPrice !== null && item.agreementName !== null;
+}
+
 /**
  * El presupuesto que el paciente acepta a distancia (DX-415): la foto que se
  * envió, con importes en la moneda del plan y el formato de la sede que lo
  * envió, con el código ISO de la moneda (DX-378; sin formato de sede, «—»). En el móvil cada ítem
  * es una tarjeta (sin tabla que desborde a 390 px). Papel blanco y tinta
  * oscura, como el resto del documento, para imprimirlo igual.
+ *
+ * DX-502: el precio de lista es el del catálogo, en SU moneda
+ * (`listPriceCurrency`, congelada en la foto), nunca en la del plan. Sin
+ * moneda conocida (foto anterior a DX-502 o sedes sin moneda común) la cifra
+ * no se muestra. En cualquiera de los dos casos va la nota de referencia y no
+ * se muestra el «Ahorro por convenio», que restaría monedas distintas.
  */
 export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; clock: SedeClock | null }) {
   const fmt = clock?.fmt ?? null;
   const money = (value: number) => sedeMoney(value, budget.currency, fmt);
   const civil = (day: string) => sedeCivilDate(day, fmt);
+  const listCurrencies = budget.items.filter(hasListPrice).map((item) => item.listPriceCurrency);
+  const listInPlanCurrency = listPricesInPlanCurrency(listCurrencies, budget.currency);
 
   return (
     <div className="flex flex-col gap-4">
@@ -71,9 +91,11 @@ export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; c
                   <dd>−{money(item.discount)}</dd>
                 </div>
               ) : null}
-              {item.listPrice !== null && item.agreementName ? (
+              {hasListPrice(item) && item.listPriceCurrency ? (
                 <div>
-                  <dd>{copy.listPrice(money(item.listPrice))}</dd>
+                  <dd>
+                    {copy.listPrice(sedeMoney(item.listPrice, item.listPriceCurrency, fmt))}
+                  </dd>
                 </div>
               ) : null}
             </dl>
@@ -93,7 +115,7 @@ export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; c
               <dd>−{money(total.discount)}</dd>
             </div>
           ) : null}
-          {total.agreementSaving > 0 ? (
+          {total.agreementSaving > 0 && listInPlanCurrency ? (
             <div className="flex justify-between gap-3">
               <dt className="text-[#4b5563]">{copy.saving}</dt>
               <dd>{money(total.agreementSaving)}</dd>
@@ -105,6 +127,11 @@ export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; c
           </div>
         </dl>
       ))}
+      {listInPlanCurrency ? null : (
+        <p data-testid="public-budget-list-price-note" className="text-xs text-[#4b5563]">
+          {listPriceNote(listPricesCurrency(listCurrencies), budget.currency)}
+        </p>
+      )}
     </div>
   );
 }

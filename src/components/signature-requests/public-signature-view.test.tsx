@@ -273,6 +273,7 @@ describe('PublicSignatureView (DX-243)', () => {
           subtotal: 270000,
           listPrice: null,
           agreementName: null,
+          listPriceCurrency: null,
         },
       ],
       totals: [{ currency: 'COP', gross: 300000, discount: 30000, net: 270000, agreementSaving: 0 }],

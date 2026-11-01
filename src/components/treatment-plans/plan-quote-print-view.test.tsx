@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PlanQuotePrintView } from './plan-quote-print-view';
 import { getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
@@ -155,55 +155,46 @@ describe('PlanQuotePrintView (DX-012)', () => {
     await waitFor(() => expect(print).not.toHaveBeenCalled());
   });
 
-  describe('DX-489: el precio de lista en la moneda del catálogo', () => {
+  describe('DX-489/DX-502: el precio de lista en la moneda del catálogo', () => {
+    // DX-502: la moneda llega con cada ítem del presupuesto (la congelada al
+    // darlo de alta), no se deduce de las sedes.
     const eurQuote = () =>
       planQuoteFixture({
         currency: 'EUR',
-        items: [{ ...planQuoteFixture().items[0], unitPrice: 100.55, discount: 0, subtotal: 100.55, listPrice: 80000, agreementName: 'Plan Oro' }],
+        items: [
+          {
+            ...planQuoteFixture().items[0],
+            unitPrice: 100.55,
+            discount: 0,
+            subtotal: 100.55,
+            listPrice: 80000,
+            agreementName: 'Plan Oro',
+            listPriceCurrency: 'COP',
+          },
+        ],
         totals: [{ currency: 'EUR', gross: 100.55, discount: 0, net: 100.55, agreementSaving: 79899.45 }],
       });
     const flat = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
 
-    it('plan en EUR, sedes en COP: lo que se imprime lleva el precio de lista en COP y sin ahorro', async () => {
+    it('plan en EUR con el catálogo en COP: lo que se imprime lleva el precio de lista en COP y sin ahorro', async () => {
       mockedGet.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
       expect(flat(table)).toContain('Precio de lista 80.000,00 COP');
       expect(flat(table)).not.toContain('80.000,00 EUR');
+      expect(screen.getByTestId('quote-list-price-note')).toHaveTextContent(
+        'El precio de lista es el del catálogo de la clínica, en COP: es de referencia y no se convierte a EUR.',
+      );
       expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
       expect(print).toHaveBeenCalledTimes(1);
     });
 
-    it('no abre el diálogo de impresión hasta saber la moneda del catálogo', async () => {
-      let resolveLocations!: (value: ReturnType<typeof clinicLocation>[]) => void;
-      jest.mocked(listLocations).mockReturnValue(new Promise((resolve) => (resolveLocations = resolve)));
-      mockedGet.mockResolvedValue(eurQuote());
-      renderView();
-      await waitFor(() => expect(mockedGet).toHaveBeenCalled());
-      expect(screen.queryByTestId('quote-header')).not.toBeInTheDocument();
-      expect(print).not.toHaveBeenCalled();
-      resolveLocations([clinicLocation()]);
-      expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
-      expect(print).toHaveBeenCalledTimes(1);
-    });
-
-    it('si las sedes no cargan: cifra sin moneda y nota, aviso con Reintentar y sin abrir el diálogo solo', async () => {
+    it('no depende de las sedes: aunque no carguen o estén en otra moneda, imprime la moneda del presupuesto', async () => {
       jest.mocked(listLocations).mockRejectedValue(new Error('red'));
       mockedGet.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
-      expect(flat(table)).toMatch(/Precio de lista 80\.000,00(?! (EUR|COP))/);
-      expect(screen.getByTestId('quote-list-price-note')).toHaveTextContent(/puede estar en otra moneda/);
-      expect(screen.getByTestId('quote-locations-error')).toHaveTextContent(/moneda de la sede/);
-      expect(print).not.toHaveBeenCalled();
-      // Reintentar: con las sedes ya leídas, el precio de lista sale en COP y se imprime.
-      jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
-      fireEvent.click(within(screen.getByTestId('quote-locations-error')).getByRole('button', { name: 'Reintentar' }));
-      await waitFor(() =>
-        expect(flat(screen.getByRole('table', { name: 'Procedimientos del presupuesto' }))).toContain(
-          'Precio de lista 80.000,00 COP',
-        ),
-      );
+      expect(flat(table)).toContain('Precio de lista 80.000,00 COP');
       expect(screen.queryByTestId('quote-locations-error')).not.toBeInTheDocument();
       expect(print).toHaveBeenCalledTimes(1);
     });

@@ -27,9 +27,10 @@ export function sedeListPriceFormat(fmt: RegionalFormat | null): ListPriceFormat
 
 /**
  * DX-489: el precio de lista es el `defaultPrice` del catálogo, que es de toda
- * la clínica y no lleva moneda: su moneda es la común de las sedes activas
- * (`clinicBaseCurrency`, la misma con que lo pinta Ajustes › Catálogo). Se
- * pinta con ESA moneda, nunca con la del plan; si no se sabe (sedes en monedas
+ * la clínica: su moneda es la común de las sedes activas. DX-502: la API la
+ * congela en cada ítem al darlo de alta (`catalogCurrency` del ítem,
+ * `listPriceCurrency` del presupuesto) y es la que llega aquí. Se pinta con
+ * ESA moneda, nunca con la del plan; si no se sabe (sedes en monedas
  * distintas o sin moneda), la cifra va sin moneda.
  */
 export function formatListPrice(
@@ -47,4 +48,31 @@ export function formatListPrice(
  */
 export function listPriceInPlanCurrency(catalogCurrency: string | null, planCurrency: string): boolean {
   return catalogCurrency !== null && catalogCurrency === planCurrency;
+}
+
+/**
+ * DX-502: la moneda común de varios precios de lista (cada ítem congela la
+ * del catálogo al darlo de alta), o `null` si no comparten una o alguna no se
+ * sabe. Es la que nombra la nota de referencia.
+ */
+export function listPricesCurrency(currencies: readonly (string | null)[]): string | null {
+  const distinct = new Set(currencies);
+  if (distinct.size !== 1) return null;
+  const [only] = distinct;
+  return only ?? null;
+}
+
+/**
+ * DX-502: ¿están TODOS los precios de lista en la moneda del plan? Solo
+ * entonces no hace falta la nota y el «Ahorro por convenio» se puede mostrar.
+ */
+export function listPricesInPlanCurrency(currencies: readonly (string | null)[], planCurrency: string): boolean {
+  return currencies.every((currency) => listPriceInPlanCurrency(currency, planCurrency));
+}
+
+/** DX-489: la nota del precio de lista en otra moneda (o en una que no se sabe). */
+export function listPriceNote(catalogCurrency: string | null, planCurrency: string): string {
+  return catalogCurrency
+    ? `El precio de lista es el del catálogo de la clínica, en ${catalogCurrency}: es de referencia y no se convierte a ${planCurrency}.`
+    : `El precio de lista es el del catálogo de la clínica, que puede estar en otra moneda: es de referencia y no se convierte a ${planCurrency}.`;
 }

@@ -26,7 +26,7 @@ import {
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
-import { activeSedeCurrency, clinicBaseCurrency } from '@/lib/locations/location-settings';
+import { activeSedeCurrency } from '@/lib/locations/location-settings';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
 import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { canRecordPayments } from '@/lib/payments/billable-plans-api';
@@ -270,10 +270,6 @@ export function TreatmentPlansTab({
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   const newPlanCurrency =
     newPlanCurrencyChoice || activeSedeCurrency(locations, activeLocationId).currency || '';
-  // DX-489: el «precio de lista» es el del catálogo, cuya moneda es la común de
-  // las sedes activas (la de Ajustes › Catálogo), no la del plan. Sin sedes
-  // leídas o sin moneda común, `null`: la cifra va sin moneda.
-  const catalogCurrency = clinicBaseCurrency(locations);
 
   // DX-204: motivo del descuento del ítem nuevo, política de la clínica (para
   // avisar antes; la API la aplica) y la selección de «Descuento %».
@@ -1137,7 +1133,6 @@ export function TreatmentPlansTab({
                           visit={visit}
                           catalogById={catalogById}
                           currency={planDetail.currency}
-                          catalogCurrency={catalogCurrency}
                           feeStale={feeStale}
                           feeRefs={feeReferences(ordered)}
                           updatingItemId={updatingItemId}
@@ -1314,7 +1309,6 @@ export function TreatmentPlansTab({
                       catalogById={catalogById}
                       discountRules={discountRules}
                       role={role}
-                      catalogCurrency={catalogCurrency}
                       fmt={sedeFmt}
                       onAdded={() => Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()])}
                       submitPrimary={primary === 'addItem'}
