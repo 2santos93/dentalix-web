@@ -3058,7 +3058,7 @@ export interface paths {
         post?: never;
         /**
          * Anular un abono (con motivo; queda quién y cuándo)
-         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono). Si el abono contaba para un compromiso de pago cumplido del paciente en su moneda y ya no queda cubierto, el compromiso vuelve a OPEN (o BROKEN si su día ya pasó en la zona de su sede), en la misma transacción y auditado (DX-215).
+         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. Exige acceso a la sede persistida del abono, también sin cabecera o en vista consolidada. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono). Si el abono contaba para un compromiso de pago cumplido del paciente en su moneda y ya no queda cubierto, el compromiso vuelve a OPEN (o BROKEN si su día ya pasó en la zona de su sede), en la misma transacción y auditado (DX-215).
          */
         delete: operations["PaymentsController_remove"];
         options?: never;
@@ -10169,13 +10169,26 @@ export interface components {
             professionalSpecialty?: string;
         };
         StaffLocationsDto: {
-            /** @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío */
+            /**
+             * @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío
+             * @example false
+             */
             all: boolean;
-            /** @description Sedes activas en las que puede trabajar. Con `all: false` y vacío, sus sedes ya no están activas */
+            /**
+             * @description Sedes activas en las que puede trabajar. Con `all: false` y vacío, sus sedes ya no están activas
+             * @example [
+             *       "c6a90d5a-9b1c-4b1e-8e41-d3125c016078"
+             *     ]
+             */
             locationIds: string[];
         };
         ReplaceStaffLocationsDto: {
-            /** @description Sedes activas de esta clínica. [] = todas. Los duplicados se ignoran */
+            /**
+             * @description Sedes activas de esta clínica. [] = todas. Los duplicados se ignoran. Se asignan con PUT /staff/:userId/locations tras la invitación; crear invitaciones y PATCH /staff/:userId no aceptan locationIds
+             * @example [
+             *       "c6a90d5a-9b1c-4b1e-8e41-d3125c016078"
+             *     ]
+             */
             locationIds: string[];
         };
         ScheduleRangeDto: {
@@ -26462,7 +26475,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Rol sin acceso a pagos */
+            /** @description Rol sin acceso a pagos o abono de una sede no permitida */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -26514,7 +26527,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Rol sin acceso a pagos, o RECEPTION anulando un abono de otro usuario o de otro día */
+            /** @description Sede del abono no permitida (LOCATION_NOT_ALLOWED), rol sin acceso a pagos, o RECEPTION anulando un abono de otro usuario o de otro día */
             403: {
                 headers: {
                     [name: string]: unknown;
