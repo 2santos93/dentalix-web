@@ -65,6 +65,45 @@ jest.mock('../../lib/payments/payment-methods-api', () => ({
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
+    // DX-516: un medio con un impuesto del 3 % y un descuento fijo en USD.
+    {
+      id: 'pm-cash-usd',
+      name: 'Efectivo divisas',
+      kind: 'CASH',
+      active: true,
+      requiresReference: false,
+      legacyMethod: null,
+      adjustments: [
+        {
+          id: 'adj-tax',
+          paymentMethodId: 'pm-cash-usd',
+          type: 'TAX',
+          label: 'Impuesto 3 %',
+          calculation: 'PERCENT',
+          percent: 3,
+          fixedAmount: null,
+          fixedCurrency: null,
+          active: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'adj-off',
+          paymentMethodId: 'pm-cash-usd',
+          type: 'SURCHARGE',
+          label: 'Apagado',
+          calculation: 'PERCENT',
+          percent: 50,
+          fixedAmount: null,
+          fixedCurrency: null,
+          active: false,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
   ]),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({
@@ -72,8 +111,8 @@ jest.mock('../../lib/locations/locations-api', () => ({
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
-    { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
+    { code: 'COP', name: 'Peso colombiano', symbol: '$', roundingDigits: 2 },
+    { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$', roundingDigits: 2 },
     { code: 'VES', name: 'Bolívar', symbol: 'Bs' },
   ]),
 }));
@@ -362,6 +401,24 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   expect(onRecorded).toHaveBeenCalledWith(
     expect.stringMatching(/^Abono registrado: COP\s150\.000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
   );
+});
+
+it('DX-516: sin ajustes en el medio no se pinta nada; con ellos, el ajuste sobre el importe y el total a cobrar', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '100');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Transferencia');
+  expect(within(dialog).queryByText('Ajustes de este medio de pago')).not.toBeInTheDocument();
+
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Efectivo divisas');
+  const preview = await within(dialog).findByRole('region', { name: 'Ajustes de este medio de pago' });
+  expect(within(preview).getByText('Impuesto 3 %')).toBeInTheDocument();
+  expect(within(preview).queryByText('Apagado')).not.toBeInTheDocument();
+  expect(await within(preview).findByText('+3,00 COP')).toBeInTheDocument();
+  expect(within(preview).getByText('103,00 COP')).toBeInTheDocument();
 });
 
 it('DX-377: un medio que pide referencia la exige antes de llamar a la API', async () => {
