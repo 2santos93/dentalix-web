@@ -158,4 +158,18 @@ describe('decimales por moneda sin lista en la web (GLOBAL-G1 R7, DX-340)', () =
     ]);
     expect(cldrFormatDigits.cldrDigitsZero).toHaveLength(28);
   });
+
+  it('RSD retains reviewed whole-dinar rounding and cap truncation, distinct from cents', () => {
+    const rsd = digitsOf('RSD');
+    const eur = digitsOf('EUR');
+    // 123.45 * 7.5% = 9.25875: policy rounds to 9 RSD, versus 9.26 in cents.
+    expect(discountForPercent(123.45, 7.5, rsd, 10)).toBe(9);
+    expect(discountForPercent(123.45, 7.5, eur, 10)).toBe(9.26);
+    // At the 7.5% role cap, cent rounding would exceed the cap and truncates.
+    expect(discountForPercent(123.45, 7.5, rsd, 7.5)).toBe(9);
+    expect(discountForPercent(123.45, 7.5, eur, 7.5)).toBe(9.25);
+    // At 7%, the maximum 8.6415 truncates to 8 RSD (8.64 in cents).
+    expect(discountForPercent(123.45, 7.5, rsd, 7)).toBe(8);
+    expect(discountForPercent(123.45, 7.5, eur, 7)).toBe(8.64);
+  });
 });

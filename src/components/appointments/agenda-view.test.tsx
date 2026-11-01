@@ -941,7 +941,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     expect(await screen.findByTestId('coverage-detail-line')).toHaveTextContent(expected);
@@ -969,7 +969,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     await screen.findByLabelText(/estado/i);
@@ -1006,7 +1006,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     // Tras generar, el refresh trae la cita ya marcada como pendiente.
@@ -1055,7 +1055,7 @@ describe('AgendaView', () => {
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     expect(await screen.findByRole('region', { name: 'Indicaciones' })).toBeInTheDocument();
@@ -1581,7 +1581,7 @@ describe('AgendaView', () => {
       );
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       const [gap] = await screen.findAllByRole('button', {
-        name: /^Ocupar el hueco libre de 14:00–18:00 · Dra\. Ana Ríos$/,
+        name: /^Hueco libre · 14:00–18:00 · Ocupar con Dra\. Ana Ríos$/,
       });
       await user.click(gap);
 

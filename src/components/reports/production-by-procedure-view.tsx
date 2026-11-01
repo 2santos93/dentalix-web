@@ -210,7 +210,7 @@ function LineRow({
               aria-label={productionCopy.openRow(row.code, row.label, row.currency)}
               className="flex min-h-8 flex-col items-start rounded text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              <span className="text-xs tabular-nums text-muted">{row.code}</span>
+              <span className="text-xs tabular-nums text-muted">{row.code}</span>{' '}
               <span className="font-medium text-primary-text underline-offset-2 hover:underline">{row.label}</span>
             </button>
           </th>

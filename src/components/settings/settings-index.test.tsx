@@ -1,3 +1,5 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
+import { SETTINGS_SECTIONS } from './settings-sections';
 import { render, screen, within } from '@testing-library/react';
 import { SettingsIndex, splitSettingsColumns } from './settings-index';
 import { visibleSettingsSections } from './settings-sections';
@@ -24,7 +26,7 @@ describe('SettingsIndex (DX-282)', () => {
     ]);
     expect(screen.getAllByRole('link')).toHaveLength(27);
     expect(
-      within(screen.getByRole('list', { name: 'Tu cuenta' })).getByRole('link', { name: 'Mi perfil' }),
+      within(screen.getByRole('list', { name: 'Tu cuenta' })).getByRole('link', { name: /^Mi perfil Tu nombre/ }),
     ).toHaveAttribute('href', '/settings/profile');
 
     // Cada sección es una lista con nombre: el lector de pantalla dice dónde está.
@@ -56,14 +58,20 @@ describe('SettingsIndex (DX-282)', () => {
     expect(screen.queryByRole('link', { name: /Accesos de soporte/ })).not.toBeInTheDocument();
   });
 
-  it('cada entrada lleva una línea que dice para qué sirve', () => {
+  it('cada entrada incluye título y apoyo visible en el nombre, con límite de palabra real', () => {
     render(<SettingsIndex token={tokenForRole('ADMIN')} />);
-    // El nombre es la etiqueta; la línea de apoyo va como descripción, para que
-    // la lista de enlaces de un lector de pantalla no lea frases enteras.
-    const link = screen.getByRole('link', { name: 'Caja' });
-    expect(link).toHaveAccessibleDescription(
-      'Cómo se abre y se cierra la caja por turno, con qué medios se cobra y qué dice el recibo.',
-    );
+    for (const { entries } of SETTINGS_SECTIONS) for (const { label, description } of entries) {
+      const link = screen.getByRole('link', { name: `${label} ${description}` });
+      expect(link.textContent).toBe(`${label} ${description}`);
+    }
+  });
+
+  it('las entradas reales pasan axe con su CSS a ancho móvil y escritorio', () => {
+    const view = render(<SettingsIndex token={tokenForRole('ADMIN')} />);
+    auditRenderedControls([390, 1440].flatMap(width => ['light', 'dark'].map(theme => ({
+      html: `<div class="${theme}" style="width:${width}px">${view.container.innerHTML}</div>`, selector: 'a',
+      viewport: { width, height: 900 },
+    }))));
   });
 });
 

@@ -48,7 +48,7 @@ export function ProviderColumnsPicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="secondary" size="sm" disabled={disabled} aria-label={copy.label}>
+        <Button type="button" variant="secondary" size="sm" disabled={disabled} aria-label={`${copy.trigger(selected.length)} · ${copy.label}`}>
           <Users aria-hidden /> {copy.trigger(selected.length)}
           <ChevronDown aria-hidden />
         </Button>

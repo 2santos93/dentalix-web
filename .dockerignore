@@ -19,6 +19,7 @@ docs
 Dockerfile
 .dockerignore
 playwright.config.ts
+playwright.public.config.ts
 jest.config.ts
 jest.setup.ts
 **/*.test.ts

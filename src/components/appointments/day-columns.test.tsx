@@ -1,3 +1,4 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DayColumns } from './day-columns';
@@ -101,6 +102,18 @@ function renderColumns(props: Partial<React.ComponentProps<typeof DayColumns>> =
 }
 
 describe('DayColumns (DX-121)', () => {
+  it('DX-297 audits visible card words in order without losing provider or clinical chips', () => {
+    renderColumns({ appointments: [{ ...endo, wantsEarlier: true,
+      balance: { hasOverdue: true, overdueDays: 40 },
+      attendance: { noShows: 2, lateCancellations: 1 },
+      coverage: { status: 'EXPIRED', payerName: 'Synthetic payer', planName: null, validTo: '2030-01-01' },
+    }] });
+    const card = screen.getByText('María López').closest('button')!;
+    auditRenderedControls([{ html: document.body.innerHTML, selector: 'button[aria-label*="Detalle de la cita"]' }]);
+    expect(card).toHaveAccessibleName(/09:00–10:30 · Adelantar si hay hueco · María López · Endodoncia · Agendada · Saldo vencido · 40 días · 2 inasistencias · 1 cancelación tardía/);
+    expect(card).toHaveAccessibleName(/Dra. Ana Ríos/);
+    expect(card).toHaveAccessibleName(/Cobertura vencida/);
+  });
   it('pinta una columna por profesional con sus citas', () => {
     renderColumns();
     const columns = screen.getAllByTestId('day-column');
@@ -235,7 +248,7 @@ describe('DayColumns (DX-121)', () => {
   it('el detalle se abre con el nombre accesible de la cita', async () => {
     const user = userEvent.setup();
     const { onSelectAppointment } = renderColumns();
-    await user.click(screen.getByRole('button', { name: /detalle de la cita de 09:00–10:30 · maría lópez/i }));
+    await user.click(screen.getByRole('button', { name: /^09:00–10:30 · maría lópez.*detalle de la cita/i }));
     expect(onSelectAppointment).toHaveBeenCalledWith(endo);
   });
 
@@ -370,7 +383,7 @@ describe('DayColumns · chip «Saldo vencido» (DX-150)', () => {
     const chips = screen.getAllByTestId('overdue-chip');
     expect(chips).toHaveLength(1);
     expect(chips[0]).toHaveTextContent('Saldo vencido · 40 días');
-    expect(screen.getByRole('button', { name: /Saldo vencido · 40 días$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /09:00–10:30 · María López · Endodoncia · Agendada · Saldo vencido · 40 días.*Detalle de la cita · Dra\. Ana Ríos$/ })).toBeInTheDocument();
   });
 });
 
@@ -402,7 +415,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     const onFillOpening = jest.fn();
     renderColumns({ onFillOpening, now: BEFORE, appointments: [endo] });
     const gap = screen.getByRole('button', {
-      name: 'Ocupar el hueco libre de 10:30–13:00 · Dra. Ana Ríos',
+      name: 'Hueco libre · 10:30–13:00 · Ocupar con Dra. Ana Ríos',
     });
     await userEvent.click(gap);
     expect(onFillOpening).toHaveBeenCalledWith('prov-1', {
@@ -467,19 +480,19 @@ describe('«Ocupar este hueco» (DX-210)', () => {
 
   it('el chip va en la línea de la hora y el nombre no se encoge: en una cita corta se siguen leyendo', () => {
     renderColumns({ appointments: [{ ...endo, wantsEarlier: true }] });
-    const card = screen.getByRole('button', { name: /^Detalle de la cita de / });
+    const card = screen.getByRole('button', { name: / · Detalle de la cita · Dra\. Ana Ríos/ });
     const chip = within(card).getByTestId('wants-earlier-chip');
     const time = within(card).getByText(/^\d{2}:\d{2}–\d{2}:\d{2}$/);
     // Misma fila que la hora: no añade altura a la tarjeta de 30 min.
     expect(time.parentElement).toContainElement(chip);
     expect(time.parentElement).toHaveClass('shrink-0');
-    expect(within(card).getByText('María López')).toHaveClass('shrink-0');
+    expect(within(card).getByText('María López')).toHaveClass('truncate');
   });
 
   it('el nombre accesible de la tarjeta dice «Adelantar si hay hueco» (el aria-label tapa el chip)', () => {
     renderColumns({ appointments: [{ ...endo, wantsEarlier: true }] });
     expect(
-      screen.getByRole('button', { name: /^Detalle de la cita de .* · Adelantar si hay hueco$/ }),
+      screen.getByRole('button', { name: /^09:00–10:30 · Adelantar si hay hueco · María López · Endodoncia · Agendada · Detalle de la cita · Dra\. Ana Ríos$/ }),
     ).toBeInTheDocument();
   });
 });
@@ -538,7 +551,7 @@ describe('DayColumns: alertas médicas (DX-247)', () => {
 it.each(['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const)('DX-242: Día %s anuncia estado y tipo', (status) => {
   const labels = { SCHEDULED:'Agendada', CONFIRMED:'Confirmada', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No asistió', ARRIVED:'En espera', IN_CHAIR:'En sillón', READY_FOR_CHECKOUT:'Listo para cobrar' };
   renderColumns({ appointments:[appointment({ id:'status', status })] });
-  expect(screen.getByRole('button', { name: new RegExp('Detalle.*' + labels[status]) })).toHaveAccessibleName(expect.stringContaining('Endodoncia'));
+  expect(screen.getByRole('button', { name: new RegExp(labels[status] + '.*Detalle') })).toHaveAccessibleName(expect.stringContaining('Endodoncia'));
 });
 
 describe('DayColumns con el reloj de la sede (DX-378)', () => {
@@ -554,7 +567,7 @@ describe('DayColumns con el reloj de la sede (DX-378)', () => {
     // La franja empieza a las 08:30 (horario 9–19 con media hora de margen).
     expect(card).toHaveStyle({ top: `${30 * PX_PER_MINUTE}px` });
     expect(
-      screen.getByRole('button', { name: /detalle de la cita de 9:00 a\. m\. – 10:30 a\. m\. · maría lópez/i }),
+      screen.getByRole('button', { name: /^9:00 a\. m\. – 10:30 a\. m\. · maría lópez.*detalle de la cita/i }),
     ).toBeInTheDocument();
     expect(screen.getByText('9:00 a. m.')).toBeInTheDocument();
     expect(screen.getByText('12:00 p. m.')).toBeInTheDocument();
@@ -567,7 +580,7 @@ describe('DayColumns con el reloj de la sede (DX-378)', () => {
       appointments: [{ ...nine, locationId: 'madrid' }],
     });
     // 13:00 UTC del 3 de marzo son las 14:00 en Madrid.
-    expect(screen.getByRole('button', { name: /detalle de la cita de 14:00–15:30/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^14:00–15:30.*detalle de la cita/i })).toBeInTheDocument();
   });
 
   it('el arrastre suelta en la hora de la sede, no en la del navegador', () => {
@@ -628,7 +641,7 @@ describe('DayColumns por sillón (DX-211)', () => {
     expect(within(columns[2]).getByText('Juan López')).toBeInTheDocument();
     // El detalle sigue nombrando al profesional de la cita.
     expect(
-      screen.getByRole('button', { name: /detalle de la cita de .* · maría lópez · dra\. ana ríos/i }),
+      screen.getByRole('button', { name: /maría lópez · .*detalle de la cita · dra\. ana ríos/i }),
     ).toBeInTheDocument();
   });
 
