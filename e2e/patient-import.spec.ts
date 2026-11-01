@@ -150,8 +150,11 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Continuar sin saldos' }).click();
     await expect(page.getByText(/autorización de datos pendiente/)).toBeVisible();
     await page.getByRole('button', { name: 'Importar 2 pacientes' }).click();
-    await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('2 de 2 filas procesadas')).toBeVisible();
+    // El avance de ESTE lote, no el «Importado» de otro lote del historial
+    // (los de otros specs comparten la demo): el lote puede seguir en cola.
+    const progress = page.getByRole('region', { name: `Importación de pacientes-${viewport.name}.csv` });
+    await expect(progress.getByText('Importado', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(progress.getByText('2 de 2 filas procesadas')).toBeVisible();
     await expectNoHorizontalScroll(page);
     await expectNoHorizontalScrollIn(page, 'main');
     await shoot(page, `dx107-importado-${viewport.name}`);
