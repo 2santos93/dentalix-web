@@ -16,6 +16,9 @@ import {
   type AppointmentType,
 } from '@/lib/appointments/appointment-types-api';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
+import { listChairs, type Chair } from '@/lib/chairs/chairs-api';
+import { proposeProvider } from '@/lib/chairs/chair-columns';
+import { getActiveLocationId } from '@/lib/locations/location-store';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import {
   getLocationSchedule,
@@ -91,6 +94,11 @@ const copy = {
   typeOption: (name: string, minutes: number) => `${name} · ${minutes} min`,
   typeHint: 'El tipo fija la duración: la hora de fin se calcula sola.',
   typesFieldError: 'No se pudieron cargar',
+  // DX-211: sillón opcional; al elegirlo se propone su profesional.
+  chairLabel: 'Sillón (opcional)',
+  chairNone: 'Sin sillón',
+  chairHint: 'Si el profesional está vacío, se propone el del sillón.',
+  chairsFieldError: 'No se pudieron cargar',
   submit: 'Agendar cita',
   submitting: 'Guardando…',
   patientsFieldError: 'No se pudieron cargar',
@@ -165,6 +173,8 @@ interface AppointmentFormProps {
   defaultEndTime?: string;
   /** DX-121: pre-selecciona el profesional (p. ej. «Nueva cita» de su columna). */
   defaultProviderId?: string;
+  /** DX-211: pre-selecciona el sillón (p. ej. «Nueva cita» de su columna). */
+  defaultChairId?: string;
 }
 
 /**
@@ -189,6 +199,7 @@ export function AppointmentForm({
   defaultStartTime,
   defaultEndTime,
   defaultProviderId,
+  defaultChairId,
   defaultPatient,
   defaultReason,
   planItemIds,
@@ -224,6 +235,15 @@ export function AppointmentForm({
   const [typesReloadKey, setTypesReloadKey] = useState(0);
   const [appointmentTypeId, setAppointmentTypeId] = useState('');
 
+  // DX-211: sillones ACTIVOS de la sede de la cita (la indicada o la activa).
+  // Opcional: sin sede concreta («Todas las sedes») o sin sillones, no sale.
+  const [chairLocationId] = useState(() => locationId ?? getActiveLocationId());
+  const [chairs, setChairs] = useState<Chair[]>([]);
+  const [chairsLoaded, setChairsLoaded] = useState(false);
+  const [chairsError, setChairsError] = useState(false);
+  const [chairsReloadKey, setChairsReloadKey] = useState(0);
+  const [chairId, setChairId] = useState(defaultChairId ?? '');
+
   // Lo escrito en el campo (puede ir a medias: «0002-11-01» mientras se teclea
   // el año) y el día civil que vale para todo lo demás.
   const [dateDraft, setDate] = useState(defaultDate ?? '');
@@ -250,7 +270,7 @@ export function AppointmentForm({
   // Si cambia la cita (paciente, profesional, tipo, día u horas), «Agendar
   // igualmente» ya no vale: reintentaría la cita ANTERIOR. El panel solo se
   // ofrece para la cita que chocó; si no, hay que volver a enviar.
-  const slotKey = [patientId, providerId, appointmentTypeId, date, startTime, endTime, locationId ?? ''].join('|');
+  const slotKey = [patientId, providerId, appointmentTypeId, date, startTime, endTime, locationId ?? '', chairId].join('|');
   const [overridableKey, setOverridableKey] = useState<string | null>(null);
   const overrideFor = overridable !== null && overridableKey === slotKey ? overridable : null;
   // Al aparecer el motivo, el foco va a él (teclado y lector de pantalla).
@@ -351,6 +371,54 @@ export function AppointmentForm({
     };
   }, [token, typesReloadKey]);
 
+  useEffect(() => {
+    if (!chairLocationId) return;
+    let cancelled = false;
+    listChairs(token, chairLocationId)
+      .then((res) => {
+        if (cancelled) return;
+        setChairs(res);
+        setChairsLoaded(true);
+        setChairsError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setChairsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, chairLocationId, chairsReloadKey]);
+
+  // Un sillón que no está entre los activos de la sede (desactivado, o de
+  // otra sede) no se puede elegir: se descarta en vez de enviarlo.
+  if (chairsLoaded && chairId !== '' && !chairs.some((c) => c.id === chairId)) {
+    setChairId('');
+  }
+
+  // «Nueva cita» desde la columna de un sillón: su profesional, si no hay otro.
+  const [proposedFor, setProposedFor] = useState<string | null>(null);
+  if (defaultChairId && proposedFor !== defaultChairId && chairs.length > 0 && staff.length > 0) {
+    setProposedFor(defaultChairId);
+    setProviderId(
+      proposeProvider(
+        providerId,
+        chairs.find((c) => c.id === defaultChairId) ?? null,
+        staff.map((m) => m.userId),
+      ),
+    );
+  }
+
+  function handleChairChange(id: string) {
+    setChairId(id);
+    setProviderId(
+      proposeProvider(
+        providerId,
+        chairs.find((c) => c.id === id) ?? null,
+        staff.map((m) => m.userId),
+      ),
+    );
+  }
+
   const selectedType = types.find((t) => t.id === appointmentTypeId) ?? null;
 
   /** Con tipo elegido, la hora de fin es inicio + su duración. */
@@ -385,6 +453,7 @@ export function AppointmentForm({
     setReason('');
     setWantsEarlier(false);
     setAppointmentTypeId('');
+    setChairId('');
   }
 
   function handlePatientSelect(patient: Patient) {
@@ -462,6 +531,7 @@ export function AppointmentForm({
         start,
         end,
         ...(appointmentTypeId ? { appointmentTypeId } : {}),
+        ...(chairId ? { chairId } : {}),
         ...(reason.trim() ? { reason: reason.trim() } : {}),
         ...(wantsEarlier ? { wantsEarlier: true } : {}),
       };
@@ -685,6 +755,39 @@ export function AppointmentForm({
           </NativeSelect>
         )}
       </div>
+
+      {chairsError ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-ink">{copy.chairLabel}</span>
+          <FieldError
+            label={copy.chairsFieldError}
+            onRetry={() => setChairsReloadKey((k) => k + 1)}
+            className="h-10 w-full"
+          />
+        </div>
+      ) : chairs.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="appointment-chair" className="text-sm font-medium text-ink">
+            {copy.chairLabel}
+          </label>
+          <NativeSelect
+            id="appointment-chair"
+            value={chairId}
+            onChange={(e) => handleChairChange(e.target.value)}
+            aria-describedby="appointment-chair-hint"
+          >
+            <option value="">{copy.chairNone}</option>
+            {chairs.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </NativeSelect>
+          <p id="appointment-chair-hint" className="text-xs text-muted">
+            {copy.chairHint}
+          </p>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-1">
         <label htmlFor="appointment-type" className="text-sm font-medium text-ink">

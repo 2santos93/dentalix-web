@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { configure, render, screen, waitFor, within } from '@testing-library/react';
+import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readDate, readTime, typeDate, typeTime } from './date-segments-for-tests';
 import { AgendaView } from './agenda-view';
@@ -20,6 +20,8 @@ import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listOpeningCandidates } from '@/lib/appointments/opening-candidates';
 import { getRoster } from '@/lib/locations/provider-schedule-api';
 import { setActiveLocationId } from '@/lib/locations/location-store';
+import { listChairs } from '@/lib/chairs/chairs-api';
+import { notifyError } from '@/components/errors/notify';
 
 // Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
 // pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
@@ -63,6 +65,16 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
   updateAppointment: jest.fn(),
 }));
 // DX-279: la vista previa del aviso del diálogo de cancelar.
+// DX-211: el aviso de fondo sigue siendo el real; se espía para comprobarlo.
+jest.mock('../errors/notify', () => {
+  const actual = jest.requireActual('../errors/notify');
+  return { ...actual, notifyError: jest.fn(actual.notifyError) };
+});
+// DX-211: sillones de la sede activa (por defecto, ninguno).
+jest.mock('../../lib/chairs/chairs-api', () => ({
+  ...jest.requireActual('../../lib/chairs/chairs-api'),
+  listChairs: jest.fn().mockResolvedValue([]),
+}));
 jest.mock('../../lib/cancellations/cancellation', () => ({
   ...jest.requireActual('../../lib/cancellations/cancellation'),
   getCancellationPreview: jest.fn().mockResolvedValue({
@@ -1649,4 +1661,98 @@ describe('AgendaView con el reloj de la sede (DX-378)', () => {
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
     expect(mockedListAppointments).not.toHaveBeenCalled();
   });
+
+  // DX-211: «Columnas: Profesionales | Sillones» en la vista Día.
+  describe('columnas por sillón (DX-211)', () => {
+    const mockedListChairs = listChairs as jest.MockedFunction<typeof listChairs>;
+    const token = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const base = {
+      tenantId: 't1',
+      locationId: 'loc-1',
+      defaultProviderId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const chairs = [
+      { ...base, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, active: true },
+      { ...base, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, active: true },
+      { ...base, id: 'ch-off', name: 'Viejo', sortOrder: 2, active: false },
+    ];
+
+    afterEach(() => {
+      window.localStorage.clear();
+      mockedListChairs.mockReset();
+      mockedListChairs.mockResolvedValue([]);
+    });
+
+    async function openDay() {
+      const user = userEvent.setup();
+      await renderAgenda(<AgendaView token={token} />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await screen.findAllByTestId('day-column');
+      return user;
+    }
+
+    it('sin sillones en la sede, el conmutador no aparece', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([]);
+      await openDay();
+      await waitFor(() => expect(mockedListChairs).toHaveBeenCalledWith(token, 'loc-1', { includeInactive: true }));
+      expect(screen.queryByRole('button', { name: 'Sillones' })).not.toBeInTheDocument();
+    });
+
+    it('con sillones: columnas por sillón activo en su orden más «Sin sillón», sin pedir por profesional, y se recuerda', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListChairs.mockResolvedValue(chairs);
+      mockedListAppointments.mockResolvedValue([
+        appointment({ id: 'apt-c', chairId: 'ch-2', chair: { id: 'ch-2', name: 'Sillón 2', active: true } }),
+        appointment({ id: 'apt-n', providerId: 'staff-2' }),
+      ]);
+      const user = await openDay();
+      await user.click(await screen.findByRole('button', { name: 'Sillones' }));
+      await waitFor(() =>
+        expect(screen.getByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument(),
+      );
+      expect(screen.getAllByTestId('day-column-header').map((h) => h.textContent)).toEqual([
+        expect.stringContaining('Sillón 1'),
+        expect.stringContaining('Sillón 2'),
+        expect.stringContaining('Sin sillón'),
+      ]);
+      const last = mockedListAppointments.mock.calls.at(-1)?.[1];
+      expect(last).not.toHaveProperty('providerIds');
+      expect(window.localStorage.getItem('dentalix.agenda.columnsBy.u1')).toBe('chairs');
+    });
+
+    it('revisión B4: con la preferencia «Sillones», si los sillones no cargan avisa con Reintentar', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([]);
+      mockedListChairs.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(chairs);
+      await openDay();
+      await waitFor(() =>
+        expect(notifyError).toHaveBeenCalledWith(
+          'No pudimos cargar los sillones de la sede: la agenda se ve por profesional.',
+          expect.objectContaining({ onRetry: expect.any(Function) }),
+        ),
+      );
+      const { onRetry } = (notifyError as jest.Mock).mock.calls.at(-1)[1] as { onRetry: () => void };
+      act(() => onRetry());
+      expect(await screen.findByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument();
+    });
+
+    it('la preferencia guardada abre la vista por sillón', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListChairs.mockResolvedValue(chairs);
+      mockedListAppointments.mockResolvedValue([]);
+      await openDay();
+      expect(await screen.findByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument();
+    });
+  });
 });
+
