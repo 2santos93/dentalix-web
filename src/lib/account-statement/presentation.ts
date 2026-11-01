@@ -109,11 +109,19 @@ export function movementReferenceLabel(movement: Pick<AccountStatementMovement, 
  * referencia del pago, para el estado de cuenta que se entrega al paciente.
  */
 export function movementMethodLabel(
-  movement: Pick<AccountStatementMovement, 'method' | 'paymentMethod' | 'reference'>,
+  movement: Pick<AccountStatementMovement, 'method' | 'paymentMethod' | 'reference'> &
+    Partial<Pick<AccountStatementMovement, 'externalInvoiceNumber'>>,
 ): string {
-  const reference = movementReferenceLabel(movement);
-  const name = movementMediumName(movement);
-  return reference ? `${name} · ${reference}` : name;
+  return [movementMediumName(movement), movementReferenceLabel(movement), movementInvoiceLabel(movement)]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** DX-515: «Fact. 00-0123», el nº de la factura fiscal emitida fuera, o `null`. */
+export function movementInvoiceLabel(
+  movement: Partial<Pick<AccountStatementMovement, 'externalInvoiceNumber'>>,
+): string | null {
+  return movement.externalInvoiceNumber ? `Fact. ${movement.externalInvoiceNumber}` : null;
 }
 
 /**

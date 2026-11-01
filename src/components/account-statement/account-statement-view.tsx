@@ -17,6 +17,7 @@ import {
   methodLabel,
   movementMediumName,
   movementReferenceLabel,
+  movementInvoiceLabel,
   movementDestination,
   openingAsOfLabel,
   openingNoteFor,
@@ -559,10 +560,17 @@ function StatementBody({
                         {movementReferenceLabel(m)}
                       </span>
                     ) : null}
+                    {/* DX-515: la factura fiscal emitida fuera. */}
+                    {movementInvoiceLabel(m) ? (
+                      <span className="t-caption mt-1 block break-all font-mono text-muted">
+                        <span className="sr-only"> · </span>
+                        {movementInvoiceLabel(m)}
+                      </span>
+                    ) : null}
                   </>
                 ),
                 mobileCell: (m) =>
-                  [m.method ? movementMediumName(m) : methodLabel(null), movementReferenceLabel(m)]
+                  [m.method ? movementMediumName(m) : methodLabel(null), movementReferenceLabel(m), movementInvoiceLabel(m)]
                     .filter(Boolean)
                     .join(' · '),
               },

@@ -152,8 +152,11 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Continuar sin saldos' }).click();
     await expect(page.getByText(/autorización de datos pendiente/)).toBeVisible();
     await page.getByRole('button', { name: 'Importar 2 pacientes' }).click();
-    await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('2 de 2 filas procesadas')).toBeVisible();
+    // El avance de ESTE lote, no el «Importado» de otro lote del historial
+    // (los de otros specs comparten la demo): el lote puede seguir en cola.
+    const progress = page.getByRole('region', { name: `Importación de pacientes-${viewport.name}.csv` });
+    await expect(progress.getByText('Importado', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(progress.getByText('2 de 2 filas procesadas')).toBeVisible();
     await expectNoHorizontalScroll(page);
     await expectNoHorizontalScrollIn(page, 'main');
     await shoot(page, `dx107-importado-${viewport.name}`);
@@ -181,8 +184,30 @@ for (const viewport of [
     await page.getByRole('menuitem', { name: 'Deshacer lote', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('Se retirarán los 2 pacientes');
+    // DX-294: mientras la API deshace (aquí la retenemos), «Deshaciendo…» con
+    // su avance; ni Escape cierra el diálogo ni se puede lanzar otro.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let undoCalls = 0;
+    await page.route(/\/api\/v1\/patient-imports\/[^/]+\/undo$/, async (route) => {
+      undoCalls += 1;
+      await held;
+      await route.continue();
+    });
     await dialog.getByRole('button', { name: 'Deshacer lote' }).click();
+    const busy = dialog.getByRole('button', { name: 'Deshaciendo…' });
+    await expect(busy).toBeDisabled();
+    await expect(dialog.getByRole('status')).toHaveText(
+      'Deshaciendo el lote: retirando 2 pacientes. Puede tardar unos segundos; no cierres esta ventana.',
+    );
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await shoot(page, `dx294-deshaciendo-${viewport.name}`);
+    release();
     await expect(dialog).toBeHidden();
+    await page.unroute(/\/api\/v1\/patient-imports\/[^/]+\/undo$/);
+    expect(undoCalls).toBe(1);
     await expect(row).toContainText('Deshecho: 2 pacientes retirados');
     expect(await patientsWithDoc(request, host, docA)).toHaveLength(0);
     await expectNoHorizontalScroll(page);
@@ -308,9 +333,21 @@ test('legacy «Tipo Doc» Cédula, DX-107 × DX-259: un CSV de 10.000 pacientes 
   await row.getByRole('button', { name: /^Acciones de/ }).click();
     await page.getByRole('menuitem', { name: 'Deshacer lote', exact: true }).click();
   const dialog = page.getByRole('dialog');
+  // DX-294: el deshacer de 10.000 recién importados responde por el proxy de
+  // la web (corte a 30 s) con 200, de una vez y en pocos segundos.
+  const undone = page.waitForResponse(
+    (r) => /\/api\/v1\/patient-imports\/[^/]+\/undo$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST',
+    { timeout: 60_000 },
+  );
+  const startedAt = Date.now();
   await dialog.getByRole('button', { name: 'Deshacer lote' }).click();
-  await expect(dialog).toBeHidden({ timeout: 60_000 });
-  await expect(row).toContainText('Deshecho', { timeout: 60_000 });
+  const res = await undone;
+  const undoMs = Date.now() - startedAt;
+  console.info(`[DX-294] deshacer 10.000 por la web: ${res.status()} en ${undoMs} ms`);
+  expect(res.status(), await res.text()).toBe(200);
+  expect(undoMs, 'muy por debajo del corte de 30 s del proxy').toBeLessThan(15_000);
+  await expect(dialog).toBeHidden();
+  await expect(row).toContainText(/Deshecho: 10[.\s\u202f]?000 pacientes retirados/);
 });
 
 /**

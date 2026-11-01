@@ -13,12 +13,12 @@ jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
   getInClinic: jest.fn(),
 }));
-// DX-439: el contador de «Pendiente de cerrar» (un fallo deja 0).
-jest.mock('../../lib/appointments/closing-queue-api', () => ({
-  ...jest.requireActual('../../lib/appointments/closing-queue-api'),
-  getClosingQueueCount: jest.fn().mockResolvedValue({ total: 0 }),
+// DX-439 / DX-503: los contadores del menú salen de `GET /work-queues/summary`.
+jest.mock('../../lib/work-queues/work-queues-api', () => ({
+  ...jest.requireActual('../../lib/work-queues/work-queues-api'),
+  getWorkQueuesSummary: jest.fn().mockResolvedValue({ generatedAt: '', items: [] }),
 }));
-import { getClosingQueueCount } from '../../lib/appointments/closing-queue-api';
+import { getWorkQueuesSummary } from '../../lib/work-queues/work-queues-api';
 jest.mock('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light', setTheme: jest.fn() }),
 }));
@@ -476,7 +476,10 @@ describe('AppShell', () => {
   it('DX-439: «Pendiente de cerrar» lleva su contador en la barra lateral, la hoja «Más» y la paleta', async () => {
     const user = userEvent.setup();
     mockAccessToken = tokenForRole('RECEPTION');
-    (getClosingQueueCount as jest.Mock).mockResolvedValueOnce({ total: 3 });
+    (getWorkQueuesSummary as jest.Mock).mockResolvedValueOnce({
+      generatedAt: '',
+      items: [{ key: 'CLOSING_QUEUE', status: 'OK', count: 3 }],
+    });
     try {
       render(
         <AppShell>
@@ -498,7 +501,46 @@ describe('AppShell', () => {
       await user.type(palette.getByRole('combobox'), 'cerrar');
       expect(palette.getByRole('option', { name: 'Pendiente de cerrar' })).toBeInTheDocument();
     } finally {
-      (getClosingQueueCount as jest.Mock).mockResolvedValue({ total: 0 });
+      (getWorkQueuesSummary as jest.Mock).mockResolvedValue({ generatedAt: '', items: [] });
+    }
+  });
+
+  it('DX-503: el menú pide solo sus listas (pendiente de cerrar y anamnesis) en una lectura', async () => {
+    mockAccessToken = tokenForRole('DENTIST');
+    (getWorkQueuesSummary as jest.Mock).mockClear();
+    (getWorkQueuesSummary as jest.Mock).mockResolvedValueOnce({
+      generatedAt: '',
+      items: [
+        { key: 'CLOSING_QUEUE', status: 'OK', count: 2 },
+        { key: 'ANAMNESIS_REVIEW', status: 'OK', count: 7 },
+      ],
+    });
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    const aside = within(document.querySelector('aside') as HTMLElement);
+    expect(await aside.findByRole('link', { name: 'Pendiente de cerrar · 2' })).toBeInTheDocument();
+    expect(aside.getByRole('link', { name: 'Anamnesis por revisar · 7' })).toBeInTheDocument();
+    expect(getWorkQueuesSummary).toHaveBeenCalledWith(expect.any(String), ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW']);
+  });
+
+  it('DX-503: la asistente no sondea «Pendiente de cerrar»; recepción no sondea anamnesis', async () => {
+    for (const [role, keys] of [
+      ['ASSISTANT', ['ANAMNESIS_REVIEW']],
+      ['RECEPTION', ['CLOSING_QUEUE']],
+    ] as const) {
+      mockAccessToken = tokenForRole(role);
+      (getWorkQueuesSummary as jest.Mock).mockClear();
+      const { unmount } = render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      await waitFor(() => expect(getWorkQueuesSummary).toHaveBeenCalled());
+      for (const call of (getWorkQueuesSummary as jest.Mock).mock.calls) expect(call[1]).toEqual(keys);
+      unmount();
     }
   });
 

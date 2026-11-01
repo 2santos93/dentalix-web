@@ -2922,7 +2922,7 @@ export interface paths {
         };
         /**
          * Caja en CSV: abonos del período con medio y referencia
-         * @description Mismos filtros que `GET /payments` (período, método y medio) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Moneda, Importe.
+         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe.
          */
         get: operations["PaymentsController_listCashCsv"];
         put?: never;
@@ -2998,6 +2998,26 @@ export interface paths {
         };
         get: operations["PaymentsController_balance"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}/external-invoice-number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Anotar el nº de la factura fiscal externa de un abono
+         * @description Texto libre (hasta 64 caracteres en una línea); null o vacío lo quita. En un cobro dividido se guarda en todas sus líneas (un recibo, una factura). El recibo emitido no cambia. Auditado con el antes y el después.
+         */
+        put: operations["PaymentsController_updateExternalInvoiceNumber"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3139,6 +3159,47 @@ export interface paths {
          */
         get: operations["PaymentRateBacklogController_day"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-receipts/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Título y leyenda del recibo de la clínica y de cada sede (DX-515) */
+        get: operations["ReceiptSettingsController_settings"];
+        /**
+         * Cambia el título y la leyenda del recibo de la clínica
+         * @description DX-515. Vacío o null = sin configurar. Aplica a los recibos que se emitan desde ahora; queda en la auditoría con el antes y el después.
+         */
+        put: operations["ReceiptSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-receipts/settings/locations/{locationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * La leyenda propia de una sede (o volver a la de la clínica)
+         * @description DX-515. override false = la sede usa la leyenda de la clínica; true con leyenda vacía = la sede no imprime ninguna.
+         */
+        put: operations["ReceiptSettingsController_updateLocation"];
         post?: never;
         delete?: never;
         options?: never;
@@ -5892,6 +5953,26 @@ export interface paths {
          * @description Registra la baja del paciente (`reminderOptOutAt`, origen LINK) y la audita sin actor. Repetirlo responde lo mismo sin escribir.
          */
         post: operations["PublicReminderOptOutsController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-queues/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recuentos de las listas de trabajo del rol («Mi día»)
+         * @description Cada número es el de su lista (closing-queue/count, submissions/summary, pending-follow-up/count, unscheduled/count, waitlist, receivables/aging/summary, inventory lowStockOnly) con sus filtros por defecto, en la sede activa. ADMIN: todas. DENTIST: pendiente de cerrar (lo suyo) y anamnesis. RECEPTION: pendiente de cerrar (desenlace), presupuestos por seguir, aceptados sin agendar, lista de espera y cartera. ASSISTANT: anamnesis y bajo stock. Una lista que falla sale con `status: ERROR` y `count: null`; las demás llegan igual.
+         */
+        get: operations["WorkQueuesController_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9927,6 +10008,12 @@ export interface components {
             wantsEarlier?: boolean;
             /** @description DX-446: «Mover igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. El motivo queda en `appointment_reserved_overrides`; `audit_event` (`reservedSlotOverride`) solo guarda el id de esa fila y los bloques. */
             overrideReason?: string;
+            /** @description DX-509: al reactivar (desde CANCELLED o NO_SHOW) una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional, `true` la mantiene en sobrecupo a sabiendas (`audit_event` `WALK_IN_OVERBOOK_KEPT`). Sin él ese caso es 409 `OVERBOOK_SLOT_TAKEN`. Con el hueco libre deja de ser sobrecupo sola (`WALK_IN_OVERBOOK_CLEARED`); moverla a otra hora u otro profesional también. En cualquier otro cambio se ignora. */
+            keepOverbooked?: boolean;
+        };
+        UndoArrivalDto: {
+            /** @description DX-509: para una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional, `true` la deja agendada y en sobrecupo a sabiendas (`audit_event` `WALK_IN_OVERBOOK_KEPT`). Sin él ese caso es 409 `OVERBOOK_SLOT_TAKEN`. Con el hueco libre deja de ser sobrecupo sola (`WALK_IN_OVERBOOK_CLEARED`). Se ignora en una cita que no es sobrecupo. */
+            keepOverbooked?: boolean;
         };
         MoveToOpeningDto: {
             /** Format: date-time */
@@ -12014,6 +12101,8 @@ export interface components {
             /** @description DX-377: medio de pago (el inicial de su método si el abono es de una réplica anterior). */
             paymentMethod: components["schemas"]["CashPaymentMethodRefDto"] | null;
             reference: string | null;
+            /** @description DX-515: nº de la factura fiscal emitida fuera de Dentalix; null si no se anotó. */
+            externalInvoiceNumber: string | null;
             notes: string | null;
             location: components["schemas"]["CashLocationRefDto"];
             patient: components["schemas"]["CashPatientRefDto"];
@@ -12196,6 +12285,8 @@ export interface components {
             paymentMethodName: string | null;
             /** @description Referencia del pago tal como la dio el pagador (DX-377). */
             reference: string | null;
+            /** @description DX-515: nº de la factura fiscal emitida fuera de Dentalix (texto libre); null si no se anotó. */
+            externalInvoiceNumber: string | null;
             /** @description Motivo con que se confirmó una referencia repetida (DX-377); null si no se repetía. */
             duplicateReferenceReason: string | null;
             /** @description Solo en la respuesta del alta: ids de los abonos con la misma referencia y medio que se confirmaron con motivo. */
@@ -12365,6 +12456,20 @@ export interface components {
             /** @description Abonos cuya imputación fijó un ADMIN a mano */
             manualPaymentIds: string[];
             items: components["schemas"]["PlanItemBalanceDto"][];
+        };
+        ExternalInvoiceNumberDto: {
+            /**
+             * @description Nº de la factura fiscal emitida fuera de Dentalix, texto libre sin formato, hasta 64 caracteres en una línea. null o vacío lo quita.
+             * @example 00-000123
+             */
+            externalInvoiceNumber: string | null;
+        };
+        ExternalInvoiceNumberResultDto: {
+            /** Format: uuid */
+            paymentId: string;
+            externalInvoiceNumber: string | null;
+            /** @description Los abonos que lo llevan: el pedido o, en un cobro dividido, todas sus líneas. */
+            paymentIds: string[];
         };
         VoidPaymentDto: {
             /**
@@ -12550,6 +12655,16 @@ export interface components {
             split?: components["schemas"]["ReceiptSnapshotSplitDto"] | null;
             /** @example Este documento no es factura */
             legalNotice: string;
+            /**
+             * @description DX-515: el título del recibo que configuró la clínica, congelado al emitir. Ausente si no tenía (se imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title?: string;
+            /**
+             * @description DX-515: la leyenda de la clínica o de la sede, congelada al emitir. Ausente si no había: no se imprime nada, también al reimprimir un recibo anterior a que se configurara.
+             * @example Este recibo no es una factura
+             */
+            legend?: string;
         };
         PaymentReceiptDto: {
             /** Format: uuid */
@@ -12781,6 +12896,47 @@ export interface components {
             providerRateSaved: boolean;
             /** @description Abonos de ese día que necesitan esa moneda y otra distinta de USD sin tasa manual ese día: la de respaldo solo les servirá cuando se registre también la otra. */
             otherRatesMissing: components["schemas"]["PaymentRateOtherMissingDto"];
+        };
+        LocationReceiptLegendViewDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Norte */
+            name: string;
+            isActive: boolean;
+            /** @description La sede usa su propia leyenda (aunque sea ninguna). */
+            override: boolean;
+            legend: string | null;
+        };
+        ReceiptSettingsViewDto: {
+            /**
+             * @description Título del recibo de caja, hasta 60 caracteres en una línea. null o vacío = sin título propio (la web imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title: string | null;
+            /**
+             * @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna.
+             * @example Este recibo no es una factura
+             */
+            legend: string | null;
+            locations: components["schemas"]["LocationReceiptLegendViewDto"][];
+        };
+        ReceiptSettingsDto: {
+            /**
+             * @description Título del recibo de caja, hasta 60 caracteres en una línea. null o vacío = sin título propio (la web imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title: string | null;
+            /**
+             * @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna.
+             * @example Este recibo no es una factura
+             */
+            legend: string | null;
+        };
+        LocationReceiptLegendDto: {
+            /** @description true = la sede imprime SU leyenda (`legend`; vacía = ninguna) en vez de la de la clínica. false = usa la de la clínica. */
+            override: boolean;
+            /** @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna. Se ignora con override false. */
+            legend?: string | null;
         };
         CreatePaymentPlanDto: {
             /**
@@ -13101,6 +13257,11 @@ export interface components {
              * @example ABC 123
              */
             reference: string | null;
+            /**
+             * @description DX-515: nº de la factura fiscal emitida fuera de Dentalix para el abono (texto libre), o `null` si no se anotó.
+             * @example 00-000123
+             */
+            externalInvoiceNumber: string | null;
             /**
              * Format: uuid
              * @description DX-390: el cobro dividido del abono (el id de su línea 1); `null` en un abono de una sola forma de pago. Anular una línea anula el cobro entero.
@@ -17851,6 +18012,32 @@ export interface components {
             optedOutAt: string | null;
             clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
         };
+        /** @enum {string} */
+        WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECEIVABLES" | "LOW_STOCK";
+        WorkQueueOverdueDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Lo exigible ya vencido en esa moneda */
+            amount: number;
+        };
+        WorkQueueItemDto: {
+            key: components["schemas"]["WorkQueueKey"];
+            /**
+             * @description `ERROR`: esa lista no se pudo contar ahora (las demás sí); el cliente avisa y reintenta
+             * @enum {string}
+             */
+            status: "OK" | "ERROR";
+            /** @description El mismo número que el `/count` (o el `total`) de la lista; `null` si `ERROR`. En RECEIVABLES, pacientes con saldo (el mayor por moneda: no se suman monedas). */
+            count: number | null;
+            /** @description Solo RECEIVABLES: lo vencido por moneda, sin convertir */
+            overdue?: components["schemas"]["WorkQueueOverdueDto"][];
+        };
+        WorkQueuesSummaryDto: {
+            /** Format: date-time */
+            generatedAt: string;
+            /** @description Las listas del rol en la sede activa (sin cabecera, las sedes permitidas), en el orden de la bandeja */
+            items: components["schemas"]["WorkQueueItemDto"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -21999,7 +22186,10 @@ export interface operations {
     AppointmentsController_walkIn: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-510: UUID estable por intento de «Atender sin cita» (doble clic, reintento de red). Repetir la MISMA petición con la misma clave devuelve la cita original (sin un segundo paciente ni una segunda cita, `patientCreated: false`); otros datos con la misma clave son 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con la cita (sin caducidad, como en abonos y gastos). */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -22041,6 +22231,13 @@ export interface operations {
             };
             /** @description `NO_RESERVED_SLOT` (`canOverbook`): no queda hueco reservado libre hoy, se puede reintentar con `overbookReason`; `PATIENT_DUPLICATE` (`existingPatientId` y `existingPatient` con `id`, `firstName`, `lastName`): el documento del alta mínima ya es de otro paciente (se comprueba antes que el hueco); sin tipo urgente activo; un bloqueo que no deja agendar; el paciente ya está en otra cita a esa hora; u otra persona ocupó el hueco a la vez */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IDEMPOTENCY_KEY_REUSED`: la Idempotency-Key ya creó una atención sin cita con otros datos (otro paciente, profesional, triaje, motivo o sede) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22232,7 +22429,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200) */
+            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200). DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`) al reactivar una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22308,7 +22505,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UndoArrivalDto"];
+            };
+        };
         responses: {
             /** @description DX-200 «Deshacer llegada»: el paciente marcado «Llegó» por error vuelve al estado que tenía (SCHEDULED o CONFIRMED) y se borra `arrivedAt`. Solo desde ARRIVED (antes de pasar al sillón); queda en auditoría (`ARRIVAL_UNDONE`). */
             200: {
@@ -22333,7 +22534,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La cita no está en espera (ya pasó al sillón, o nunca llegó), o cambió mientras tanto */
+            /** @description La cita no está en espera (ya pasó al sillón, o nunca llegó), o cambió mientras tanto. DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`): la urgencia es un sobrecupo y su hora ya la ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25812,6 +26013,8 @@ export interface operations {
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
                 /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
                 paymentMethodId?: string;
+                /** @description DX-515: WITH = solo abonos con nº de factura externa; WITHOUT = solo los que aún no lo tienen. Sin él, todos. */
+                externalInvoice?: "WITH" | "WITHOUT";
                 page?: number;
                 pageSize?: number;
             };
@@ -25859,6 +26062,8 @@ export interface operations {
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
                 /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
                 paymentMethodId?: string;
+                /** @description DX-515: WITH = solo abonos con nº de factura externa; WITHOUT = solo los que aún no lo tienen. Sin él, todos. */
+                externalInvoice?: "WITH" | "WITHOUT";
             };
             header?: {
                 /** @description Sede activa. Sin cabecera: todas las sedes de la clínica. */
@@ -26081,6 +26286,59 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PlanBalanceWithItemsDto"];
                 };
+            };
+        };
+    };
+    PaymentsController_updateExternalInvoiceNumber: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalInvoiceNumberDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalInvoiceNumberResultDto"];
+                };
+            };
+            /** @description No es texto, tiene saltos de línea o pasa de 64 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono está anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -26407,6 +26665,115 @@ export interface operations {
             };
             /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsViewDto"];
+                };
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsDto"];
+                };
+            };
+            /** @description Un texto que no es texto, con saltos de línea o demasiado largo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_updateLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationReceiptLegendDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationReceiptLegendViewDto"];
+                };
+            };
+            /** @description Leyenda con saltos de línea o demasiado larga, o id no UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33780,6 +34147,38 @@ export interface operations {
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WorkQueuesController_get: {
+        parameters: {
+            query?: {
+                /** @description Solo estas listas (separadas por comas), p. ej. el contador del menú. Acota las del rol; una lista que el rol no tiene no sale nunca. */
+                keys?: components["schemas"]["WorkQueueKey"][];
+            };
+            header?: {
+                /** @description Sede activa; sin ella, las sedes permitidas al usuario (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkQueuesSummaryDto"];
+                };
+            };
+            /** @description Una clave de lista desconocida */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

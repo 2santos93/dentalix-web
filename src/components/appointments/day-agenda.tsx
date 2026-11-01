@@ -1,6 +1,7 @@
 'use client';
 import type { ReactNode } from 'react';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
@@ -278,6 +279,8 @@ export function DayAgenda({
                       <OverdueChip balance={appointment.balance} />
                       <CoverageChip coverage={appointment.coverage} compact />
                       <AttendanceBadge counts={appointment.attendance} />
+                      {/* DX-509: solo mientras es sobrecupo. */}
+                      <OverbookedChip overbooked={appointment.overbooked} status={appointment.status} />
                     </span>
                     {renderActions?.(appointment)}
                   </td>
@@ -353,6 +356,7 @@ export function DayAgenda({
               <OverdueChip balance={appointment.balance} className="mt-2" />
               <CoverageChip coverage={appointment.coverage} compact className="mt-2" />
               <AttendanceBadge counts={appointment.attendance} className="mt-2" />
+              <OverbookedChip overbooked={appointment.overbooked} status={appointment.status} className="mt-2" />
               {renderActions?.(appointment)}
               {(onStatusChange || onSelectAppointment) && (
                 <div className="mt-3 flex items-center justify-between gap-2">

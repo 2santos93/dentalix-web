@@ -78,6 +78,13 @@ export interface Appointment {
    */
   chairId?: string | null;
   chair?: ChairSummary | null;
+  /**
+   * DX-470/DX-509: urgencia atendida en sobrecupo (no ocupa la hora del
+   * profesional). Deja de serlo al moverla, o al deshacer la llegada o
+   * reactivarla con su hora libre. Opcional aquí solo para no obligar a los
+   * dobles de los tests a llevarlo.
+   */
+  overbooked?: boolean;
   createdAt: string;
   updatedAt: string;
   /**

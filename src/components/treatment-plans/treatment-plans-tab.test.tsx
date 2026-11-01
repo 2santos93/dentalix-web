@@ -303,6 +303,7 @@ const payment1: Payment = {
   paymentMethodName: null,
   reference: null,
   duplicateReferenceReason: null,
+  externalInvoiceNumber: null,
   notes: null,
   createdById: null,
   createdAt: '2026-01-05T00:00:00.000Z',

@@ -119,6 +119,7 @@ function savedSplit(): SplitPayment {
     paymentMethodName: 'Efectivo',
     reference: null,
     duplicateReferenceReason: null,
+    externalInvoiceNumber: null,
     notes: null,
     splitId: 'pay-1',
     splitLine: n,

@@ -126,7 +126,8 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
         </div>
         <div className={cn(!narrow && 'sm:text-right')}>
           <h1 id="receipt-title" className="text-xl font-semibold tracking-tight">
-            {copy.title}
+            {/* DX-515: el título que la clínica tenía al emitir (de la foto). */}
+            {snapshot.title ?? copy.title}
           </h1>
           <p className="text-lg font-semibold tabular-nums">{copy.number(receipt.reference)}</p>
           {receipt.legacy ? (
@@ -143,6 +144,17 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           </p>
         </div>
       </header>
+
+      {/* DX-515: la leyenda que la clínica o la sede tenía al emitir (de la
+          foto): sin ella no se pinta nada y el recibo queda como antes. */}
+      {snapshot.legend ? (
+        <p
+          data-testid="receipt-legend"
+          className="mt-4 break-words border border-[#111827] px-3 py-2 text-center text-xs font-semibold"
+        >
+          {snapshot.legend}
+        </p>
+      ) : null}
 
       {receipt.voided ? (
         <div

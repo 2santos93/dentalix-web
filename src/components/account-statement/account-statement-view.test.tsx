@@ -386,6 +386,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       paymentMethodName: null,
       reference: null,
       duplicateReferenceReason: null,
+      externalInvoiceNumber: null,
       notes: null,
       createdById: 'u-recep',
       createdAt: '2026-10-16T12:00:00.000Z',

@@ -1,26 +1,20 @@
 'use client';
 import Link from 'next/link';
-import { ChevronRight, RotateCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCircle2, ChevronDown, ChevronRight, RotateCw } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { moneyWithCode } from '@/lib/format/sede-number';
 import { ANAMNESIS_HREF } from '@/components/layouts/nav-config';
-import { getAnamnesisInboxSummary } from '@/lib/anamnesis/anamnesis-api';
-import { listWaitlist } from '@/lib/appointments/waitlist-api';
 import { getCurrentCashSession, type CurrentCashSession } from '@/lib/cash-sessions/cash-sessions-api';
-import { listInventoryItems } from '@/lib/inventory/inventory-api';
+import type { WorkQueueItem, WorkQueueKey } from '@/lib/work-queues/work-queues-api';
+import { useWorkQueuesView } from '@/components/work-queues/work-queues-context';
+import { EmptyState } from '@/components/shared/empty-state';
+import { SectionError } from '@/components/errors/section-error';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import {
-  getClosingQueueCount,
-  getFollowUpCount,
-  getReceivablesSummary,
-  getUnscheduledCount,
-  overdueOf,
-  type ReceivablesSummary,
-} from './inicio-api';
-import { canSeeBlock, type InicioBlock } from './inicio-roles';
+import { canSeeBlock } from './inicio-roles';
 import { useLoad, type LoadState } from './use-load';
 
 export const pendingCopy = {
@@ -47,6 +41,13 @@ export const pendingCopy = {
   cashNeedsSede: 'Elige una sede',
   cashPayments: (n: string, one: boolean) => (one ? `${n} cobro` : `${n} cobros`),
   lowStock: { label: 'Bajo stock', hint: 'Insumos en su mínimo o por debajo' },
+  // DX-503: las listas a 0 se pliegan; todas a 0, estado vacío.
+  allClearTitle: 'Todo al día',
+  allClearDescription: 'Ninguna de tus listas espera una acción ahora mismo.',
+  folded: (n: number) => (n === 1 ? 'Al día: 1 lista' : `Al día: ${n} listas`),
+  foldedShow: 'Ver',
+  foldedHide: 'Ocultar',
+  sectionError: 'No se pudieron contar tus listas de trabajo.',
 };
 const copy = pendingCopy;
 
@@ -60,38 +61,63 @@ interface RowValue {
   hint?: string;
 }
 
-interface Row {
-  block: InicioBlock;
+/** Una lista de trabajo de «Mi día» (DX-503): su fila y a dónde lleva. */
+interface QueueRow {
   id: string;
   label: string;
   hint: string;
   href: string;
-  load: () => Promise<RowValue>;
-  /** Clave de recarga además de la sede. */
-  key?: string;
-  /** No se puede pedir (p. ej. la caja sin sede): se pinta este valor sin llamar. */
-  fixed?: RowValue;
+}
+
+function queueRow(key: WorkQueueKey, role: ClinicRole): QueueRow {
+  switch (key) {
+    case 'CLOSING_QUEUE':
+      return { id: 'closing', ...(role === 'DENTIST' ? copy.closingMine : copy.closing), href: '/agenda/pendiente-de-cerrar' };
+    case 'ANAMNESIS_REVIEW':
+      return { id: 'anamnesis', ...copy.anamnesis, href: ANAMNESIS_HREF };
+    case 'QUOTE_FOLLOW_UP':
+      return { id: 'follow-up', ...copy.followUp, href: '/presupuestos' };
+    case 'ACCEPTED_UNSCHEDULED':
+      return { id: 'unscheduled', ...copy.unscheduled, href: '/presupuestos' };
+    case 'WAITLIST':
+      return { id: 'waitlist', ...copy.waitlist, href: '/agenda' };
+    case 'RECEIVABLES':
+      return { id: 'receivables', ...copy.receivables, href: '/caja/cartera' };
+    case 'LOW_STOCK':
+      return { id: 'low-stock', ...copy.lowStock, href: '/inventory' };
+  }
 }
 
 function count(n: number, fmt: RegionalFormat | null): RowValue {
   return n > 0 ? { value: fmt ? fmt.number(n) : String(n), pending: true } : { value: copy.upToDate, pending: false };
 }
 
-export function receivablesValue(summary: ReceivablesSummary, fmt: RegionalFormat | null): RowValue {
-  const patients = summary.totals.reduce((sum, t) => Math.max(sum, t.patients), 0);
-  // Las monedas no se suman: un paciente puede deber en dos, así que el número
-  // de la derecha es el mayor de cada moneda (nunca una suma que lo cuente dos veces).
-  const overdue = summary.totals
-    .map((t) => ({ currency: t.currency, amount: overdueOf(t) }))
+/**
+ * La cartera de «Mi día»: pacientes con saldo (la API ya da el mayor por
+ * moneda: nunca una suma que cuente dos veces a quien debe en dos) y lo
+ * vencido por moneda, sin convertir.
+ */
+export function receivablesValue(
+  item: { count: number; overdue?: { currency: string; amount: number }[] },
+  fmt: RegionalFormat | null,
+): RowValue {
+  if (item.count === 0) return { value: copy.upToDate, pending: false, hint: copy.receivablesNone };
+  const overdue = (item.overdue ?? [])
     .filter((t) => t.amount > 0)
     .map((t) => (fmt ? moneyWithCode(t.amount, t.currency, fmt) : `${t.currency} ${t.amount}`));
-  if (patients === 0) return { value: copy.upToDate, pending: false, hint: copy.receivablesNone };
-  const n = fmt ? fmt.number(patients) : String(patients);
+  const n = fmt ? fmt.number(item.count) : String(item.count);
   return {
-    value: copy.patients(n, patients === 1),
+    value: copy.patients(n, item.count === 1),
     pending: true,
     hint: overdue.length > 0 ? copy.receivablesOverdue(overdue) : undefined,
   };
+}
+
+function queueValue(item: WorkQueueItem, fmt: RegionalFormat | null): RowValue | null {
+  if (item.status !== 'OK' || item.count === null) return null;
+  return item.key === 'RECEIVABLES'
+    ? receivablesValue({ count: item.count, overdue: item.overdue }, fmt)
+    : count(item.count, fmt);
 }
 
 export function cashValue(current: CurrentCashSession, timeZone: string, fmt: RegionalFormat | null): RowValue {
@@ -109,6 +135,18 @@ export function cashValue(current: CurrentCashSession, timeZone: string, fmt: Re
   };
 }
 
+/** Ancla de «Mi día» dentro de Inicio (la paleta ⌘K lleva aquí). */
+export const PENDING_ANCHOR = 'pendientes';
+
+/**
+ * «Pendientes» de Inicio = «Mi día» (DX-503): los recuentos de las listas de
+ * trabajo del rol en la sede activa, de UNA lectura de `GET /work-queues/summary`
+ * (la misma que pinta los contadores del menú y de la Agenda). Las listas con
+ * algo van arriba; las que están a 0 se pliegan en «Al día» (se despliegan con
+ * teclado); si todas lo están, estado vacío. Una lista que no se pudo contar
+ * avisa en su fila con Reintentar y las demás se pintan. La caja no es una
+ * lista sino un estado: va aparte, con su propia lectura.
+ */
 export function PendingSection({
   token,
   role,
@@ -122,84 +160,146 @@ export function PendingSection({
   timeZone: string;
   fmt: RegionalFormat | null;
 }) {
-  const rows: Row[] = [
-    {
-      block: 'closingQueue',
-      id: 'closing',
-      ...(role === 'DENTIST' ? copy.closingMine : copy.closing),
-      href: '/agenda/pendiente-de-cerrar',
-      load: async () => count((await getClosingQueueCount(token)).total, fmt),
-    },
-    {
-      block: 'cash',
-      id: 'cash',
-      ...copy.cash,
-      href: '/caja',
-      load: async () => cashValue(await getCurrentCashSession(token), timeZone, fmt),
-      fixed: activeLocationId ? undefined : { value: copy.cashNeedsSede, pending: false },
-    },
-    {
-      block: 'anamnesis',
-      id: 'anamnesis',
-      ...copy.anamnesis,
-      href: ANAMNESIS_HREF,
-      load: async () => count((await getAnamnesisInboxSummary(token)).submitted, fmt),
-    },
-    {
-      block: 'followUp',
-      id: 'follow-up',
-      ...copy.followUp,
-      href: '/presupuestos',
-      load: async () => count((await getFollowUpCount(token)).total, fmt),
-    },
-    {
-      block: 'unscheduled',
-      id: 'unscheduled',
-      ...copy.unscheduled,
-      href: '/presupuestos',
-      load: async () => count((await getUnscheduledCount(token)).total, fmt),
-    },
-    {
-      block: 'waitlist',
-      id: 'waitlist',
-      ...copy.waitlist,
-      href: '/agenda',
-      load: async () => count((await listWaitlist(token, { pageSize: 1 })).total, fmt),
-    },
-    {
-      block: 'receivables',
-      id: 'receivables',
-      ...copy.receivables,
-      href: '/caja/cartera',
-      load: async () => receivablesValue(await getReceivablesSummary(token), fmt),
-    },
-    {
-      block: 'lowStock',
-      id: 'low-stock',
-      ...copy.lowStock,
-      href: '/inventory',
-      load: async () => count((await listInventoryItems(token, { lowStockOnly: true, pageSize: 1 })).total, fmt),
-    },
-  ].filter((row) => canSeeBlock(row.block as InicioBlock, role)) as Row[];
+  const view = useWorkQueuesView();
+  const [unfolded, setUnfolded] = useState(false);
+  // «Mi día» desde la paleta (⌘K) llega con el ancla: la sección se monta
+  // después de la zona de la sede, así que el navegador no la encuentra solo.
+  useEffect(() => {
+    if (window.location.hash !== `#${PENDING_ANCHOR}`) return;
+    document.getElementById(PENDING_ANCHOR)?.scrollIntoView({ block: 'start' });
+  }, []);
+  const showCash = canSeeBlock('cash', role);
+  const scopeKey = `${activeLocationId ?? 'all'}|${fmt ? 'fmt' : 'raw'}`;
 
-  if (rows.length === 0) return null;
+  const items = view.status === 'ready' ? view.items : [];
+  const active = items.filter((i) => i.status === 'ERROR' || (i.count ?? 0) > 0);
+  const clear = items.filter((i) => i.status === 'OK' && i.count === 0);
+  const foldId = 'inicio-pending-folded';
+
+  const cash = showCash ? (
+    <CashRow token={token} activeLocationId={activeLocationId} timeZone={timeZone} fmt={fmt} scopeKey={scopeKey} />
+  ) : null;
 
   return (
-    <section aria-labelledby="inicio-pending-title" className="flex flex-col gap-3">
+    <section id={PENDING_ANCHOR} aria-labelledby="inicio-pending-title" className="flex scroll-mt-6 flex-col gap-3">
       <SectionHeader titleId="inicio-pending-title" title={copy.heading} description={copy.description} />
-      <ul aria-label={copy.listLabel} className="divide-y divide-border-subtle overflow-hidden rounded-xl border border-border bg-surface">
-        {rows.map((row) => (
-          <PendingRow key={row.id} row={row} scopeKey={`${activeLocationId ?? 'all'}|${fmt ? 'fmt' : 'raw'}`} />
-        ))}
-      </ul>
+      {cash ? <ul aria-label={copy.cash.label} className={listClass}>{cash}</ul> : null}
+      {view.status === 'error' ? (
+        <SectionError description={copy.sectionError} onRetry={view.retry} />
+      ) : view.status === 'loading' ? (
+        <ul aria-label={copy.listLabel} aria-busy="true" className={listClass} data-testid="pending-loading">
+          {[0, 1, 2].map((n) => (
+            <li key={n} className="flex min-h-14 items-center gap-3 px-4 py-2.5 sm:px-5">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-56 max-w-full" />
+              </div>
+              <Skeleton className="h-4 w-10 shrink-0" aria-label={copy.loading(copy.listLabel)} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <>
+          {active.length === 0 ? (
+            <EmptyState
+              role="status"
+              icon={<CheckCircle2 aria-hidden />}
+              title={copy.allClearTitle}
+              description={copy.allClearDescription}
+            />
+          ) : (
+            <ul aria-label={copy.listLabel} className={listClass}>
+              {active.map((item) => (
+                <QueueListRow key={item.key} row={queueRow(item.key, role)} item={item} fmt={fmt} onRetry={view.retry} />
+              ))}
+            </ul>
+          )}
+          {clear.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                aria-expanded={unfolded}
+                aria-controls={foldId}
+                onClick={() => setUnfolded((v) => !v)}
+                className="flex min-h-11 items-center justify-between gap-3 rounded-md px-1 text-left text-sm text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-primary sm:min-h-9"
+                data-testid="pending-folded-toggle"
+              >
+                <span>{copy.folded(clear.length)}</span>
+                <span className="flex items-center gap-1 text-xs">
+                  {unfolded ? copy.foldedHide : copy.foldedShow}
+                  <ChevronDown aria-hidden className={cn('size-4 transition-transform', unfolded && 'rotate-180')} />
+                </span>
+              </button>
+              <ul id={foldId} hidden={!unfolded} aria-label={copy.upToDate} className={listClass}>
+                {clear.map((item) => (
+                  <QueueListRow key={item.key} row={queueRow(item.key, role)} item={item} fmt={fmt} onRetry={view.retry} />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </>
+      )}
     </section>
   );
 }
 
-function PendingRow({ row, scopeKey }: { row: Row; scopeKey: string }) {
-  const load = useLoad(row.load, `${row.id}|${scopeKey}|${row.key ?? ''}`, !row.fixed, copy.rowError);
-  const state: LoadState<RowValue> = row.fixed ? { status: 'ready', data: row.fixed } : load;
-  const ready = state.status === 'ready' ? state.data : null;
+const listClass = 'divide-y divide-border-subtle overflow-hidden rounded-xl border border-border bg-surface';
+
+function CashRow({
+  token,
+  activeLocationId,
+  timeZone,
+  fmt,
+  scopeKey,
+}: {
+  token: string;
+  activeLocationId: string | null;
+  timeZone: string;
+  fmt: RegionalFormat | null;
+  scopeKey: string;
+}) {
+  const fixed = activeLocationId ? undefined : { value: copy.cashNeedsSede, pending: false };
+  const load = useLoad(
+    async () => cashValue(await getCurrentCashSession(token), timeZone, fmt),
+    `cash|${scopeKey}`,
+    !fixed,
+    copy.rowError,
+  );
+  const state: LoadState<RowValue> = fixed ? { status: 'ready', data: fixed } : load;
+  return (
+    <PendingRow
+      row={{ id: 'cash', ...copy.cash, href: '/caja' }}
+      state={state.status === 'ready' ? { ready: state.data } : state.status === 'error' ? 'error' : 'loading'}
+      onRetry={load.reload}
+    />
+  );
+}
+
+function QueueListRow({
+  row,
+  item,
+  fmt,
+  onRetry,
+}: {
+  row: QueueRow;
+  item: WorkQueueItem;
+  fmt: RegionalFormat | null;
+  onRetry: () => void;
+}) {
+  const value = queueValue(item, fmt);
+  return <PendingRow row={row} state={value ? { ready: value } : 'error'} onRetry={onRetry} />;
+}
+
+function PendingRow({
+  row,
+  state,
+  onRetry,
+}: {
+  row: QueueRow;
+  state: { ready: RowValue } | 'error' | 'loading';
+  onRetry: () => void;
+}) {
+  const ready = typeof state === 'object' ? state.ready : null;
   const hint = ready?.hint ?? row.hint;
 
   return (
@@ -213,12 +313,12 @@ function PendingRow({ row, scopeKey }: { row: Row; scopeKey: string }) {
         </Link>
         <span className="text-pretty text-xs text-muted">{hint}</span>
       </div>
-      {state.status === 'error' ? (
+      {state === 'error' ? (
         <span className="relative z-[1] flex shrink-0 items-center gap-1 text-xs text-danger-text">
           <span role="status">{copy.rowError}</span>
           <button
             type="button"
-            onClick={load.reload}
+            onClick={onRetry}
             aria-label={copy.retry(row.label)}
             className="inline-flex size-9 items-center justify-center rounded-md text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-primary max-md:size-11"
           >

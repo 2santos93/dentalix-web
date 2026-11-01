@@ -129,7 +129,9 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByText(/También se crearán 2 saldos migrados/)).toBeVisible();
     await page.getByRole('button', { name: 'Importar 1 paciente' }).click();
-    await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    // El avance de ESTE lote, no el «Importado» de otro lote del historial.
+    const progress = page.getByRole('region', { name: `Importación de pacientes-saldos-${viewport.name}.csv` });
+    await expect(progress.getByText('Importado', { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Saldos migrados: 2 de 2')).toBeVisible();
     await expectNoHorizontalScroll(page);
     await shoot(page, `dx262-importado-${viewport.name}`);

@@ -1,5 +1,6 @@
 import {
   exchangeRateBackupDetail,
+  receiptDetail,
   cancellationDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
@@ -680,5 +681,15 @@ describe('exchangeRateBackupDetail (DX-402)', () => {
     expect(signatureRequestDetail({ reason: 'OTRA_COSA' })).toBeNull();
     expect(isPatientOptOut({ reason: 'SIGNATURE_PATIENT_SIGNED', origin: 'LINK' })).toBe(true);
     expect(isPatientOptOut({ reason: 'SIGNATURE_REQUEST_SENT' })).toBe(false);
+  });
+});
+
+describe('recibo no fiscal en la auditoría (DX-515)', () => {
+  it.each([
+    ['RECEIPT_SETTINGS', 'Título y leyenda del recibo'],
+    ['RECEIPT_LEGEND', 'Leyenda del recibo de la sede'],
+    ['EXTERNAL_INVOICE_NUMBER', 'Nº de factura externa del abono'],
+  ])('%s → %s', (reason, text) => {
+    expect(receiptDetail({ reason })).toBe(text);
   });
 });
