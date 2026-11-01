@@ -43,6 +43,40 @@ jobs:
       - run: npx jest --ci
       - run: npm run build
 
+  # DX-495 (TST-062): fronteras de calendario. El cambio de mes del 31-10 al
+  # 01-11 dejó en rojo `expenses-summary-view` (DX-466) y ningún job corría el
+  # Jest con la hora en una frontera. Este lo corre con el reloj de jest
+  # fijado (FAKE_NOW, en proceso: `jest.calendar-clock.ts`) a:
+  #   - fin-de-mes:      el último día 31 ya empezado, 23:59:30 UTC (sin diciembre);
+  #   - medianoche-sede: el día 1 del mes en curso, 05:01 UTC (00:01 en Bogotá);
+  #   - fin-de-anio:     el 31 de diciembre más cercano, 23:59:30 UTC.
+  # Las fechas salen de `calendarBoundary` (src/lib/test/calendar-clock.ts),
+  # igual que en el job del mismo nombre de la API. El reloj arranca en esa
+  # hora en cada fichero de test y avanza; los tests que fijan el suyo
+  # (`jest.useFakeTimers` + `setSystemTime`) no cambian.
+  calendar-boundaries:
+    name: Fronteras de calendario (${{ matrix.boundary }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        boundary: [fin-de-mes, medianoche-sede, fin-de-anio]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - name: Jest con FAKE_NOW=${{ matrix.boundary }}
+        env:
+          FAKE_NOW: ${{ matrix.boundary }}
+          TZ: UTC
+        run: npx jest --ci
+
   # DX-083: la imagen de producción (Dockerfile, `output: 'standalone'`) se
   # construye UNA vez en cada PR, sin publicarla, y la prueba de humo la
   # arranca contra dos APIs (falsas) distintas cambiando solo API_URL y
