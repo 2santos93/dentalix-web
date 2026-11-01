@@ -1,5 +1,6 @@
 import type { components } from '@/lib/api/schema';
 import { formatCurrency } from '@/lib/format/currency';
+import { formatPercent } from '@/lib/format/percent';
 import {
   basisPoints,
   bigCents,
@@ -122,7 +123,7 @@ export function collectedAmount(
 
 /** «3 %», «7,5 %»: hasta 2 decimales, con la coma de los importes. */
 export function percentText(percent: number): string {
-  return `${new Intl.NumberFormat('es', { maximumFractionDigits: 2 }).format(percent)} %`;
+  return formatPercent(percent);
 }
 
 /** «3 %» o «2,00 USD»: cómo se calcula un ajuste configurado. */
