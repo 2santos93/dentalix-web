@@ -182,7 +182,7 @@ test('390 px: el hueco libre abre la hoja a pantalla completa y Elena se adelant
   await page.getByRole('button', { name: dentist.fullName, exact: true }).click();
 
   const gap = column(page, dentist.fullName).getByRole('button', {
-    name: `Ocupar el hueco libre de 15:00–19:00 · ${dentist.fullName}`,
+    name: `Hueco libre · 15:00–19:00 · Ocupar con ${dentist.fullName}`,
   });
   await gap.focus();
   await page.keyboard.press('Enter');

@@ -1581,7 +1581,7 @@ describe('AgendaView', () => {
       );
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       const [gap] = await screen.findAllByRole('button', {
-        name: /^Ocupar el hueco libre de 14:00–18:00 · Dra\. Ana Ríos$/,
+        name: /^Hueco libre · 14:00–18:00 · Ocupar con Dra\. Ana Ríos$/,
       });
       await user.click(gap);
 

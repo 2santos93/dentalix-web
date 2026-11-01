@@ -78,8 +78,9 @@ const copy = {
   blockLegend: 'Horario bloqueado (vacaciones, reunión, almuerzo…)',
   blockRemove: (label: string) => `Quitar bloqueo: ${label}`,
   freeGap: 'Hueco libre',
+  // Empieza por el texto visible del botón («Hueco libre · rango»): label-in-name.
   freeGapFor: (range: string, provider: string) =>
-    `Ocupar el hueco libre de ${range} · ${provider}`,
+    `Hueco libre · ${range} · Ocupar con ${provider}`,
   fillCancelledFor: (range: string, patient: string) =>
     `Ocupar el hueco de la cita cancelada de ${range} · ${patient}`,
   fillCancelled: 'Ocupar este hueco',

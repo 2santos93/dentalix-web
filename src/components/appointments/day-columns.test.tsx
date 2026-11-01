@@ -415,7 +415,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     const onFillOpening = jest.fn();
     renderColumns({ onFillOpening, now: BEFORE, appointments: [endo] });
     const gap = screen.getByRole('button', {
-      name: 'Ocupar el hueco libre de 10:30–13:00 · Dra. Ana Ríos',
+      name: 'Hueco libre · 10:30–13:00 · Ocupar con Dra. Ana Ríos',
     });
     await userEvent.click(gap);
     expect(onFillOpening).toHaveBeenCalledWith('prov-1', {
