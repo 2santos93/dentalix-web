@@ -14102,6 +14102,43 @@ export interface components {
             /** @description Del más antiguo al más reciente; como mucho 200 */
             items: components["schemas"]["ClosingTreatmentDto"][];
         };
+        ClosingKeptOverbookDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @example Ana Pérez */
+            patientName: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            status: components["schemas"]["AppointmentStatus"];
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /**
+             * @description Zona IANA de la sede: la hora se pinta en ella
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /** Format: uuid */
+            professionalId: string;
+            professionalName: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se decidió mantenerla en sobrecupo (la última vez)
+             */
+            keptAt: string;
+            /** @description Quién lo decidió */
+            keptByName: string | null;
+        };
+        ClosingKeptOverbookSectionDto: {
+            /** @description Cuántos hay (exacto) */
+            total: number;
+            /** @description Del más antiguo al más reciente; como mucho 200 */
+            items: components["schemas"]["ClosingKeptOverbookDto"][];
+        };
         ClosingLocationOptionDto: {
             /** Format: uuid */
             id: string;
@@ -14124,6 +14161,8 @@ export interface components {
             treatment: components["schemas"]["ClosingTreatmentSectionDto"] | null;
             /** @description Citas de días anteriores aún «en la clínica» (llegó, en sillón, listo para cobrar): las cierra DX-237, aquí solo se cuentan. null sin la sección 1. */
             staleInClinic: number | null;
+            /** @description DX-509-bis: urgencias del período que siguen en sobrecupo porque alguien decidió mantenerlas (`WALK_IN_OVERBOOK_KEPT` al deshacer la llegada o reactivarlas) y no están canceladas: compartieron la hora del profesional con otra cita. Informativo: no suma en `total` ni en el contador y no se descarta. Mismas sedes, período y profesional que las secciones (un DENTIST, las suyas). */
+            keptOverbooks: components["schemas"]["ClosingKeptOverbookSectionDto"];
             /** @description Suma de las secciones visibles */
             total: number;
             /** @description Sedes que puede filtrar el usuario */
@@ -22258,6 +22297,8 @@ export interface operations {
                 durationMinutes: number;
                 /** @description Paciente: sus otras citas también ocupan. */
                 patientId?: string;
+                /** @description DX-509-bis: la cita que se va a mover no ocupa (si no, su propia hora taparía los huecos de al lado). Una cita que no existe no cambia nada. */
+                excludeAppointmentId?: string;
             };
             header?: never;
             path?: never;

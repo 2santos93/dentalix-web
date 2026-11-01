@@ -92,6 +92,26 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
   await expect(page).toHaveURL(/\/inventory$/);
 });
 
+test('DX-503-bis: al abrir Inicio sale UNA lectura de las listas (todas), no la del menú antes', async ({ page }) => {
+  await loginAs(page, origin, admin.email, PASSWORD);
+  const reads: string[] = [];
+  page.on('request', (req) => {
+    if (req.url().includes('/work-queues/summary')) reads.push(req.url());
+  });
+  await page.goto(`${origin}/dashboard`);
+  const pending = page.getByRole('region', { name: 'Pendientes' });
+  await expect(pending.getByTestId('pending-low-stock-value')).toHaveText('1', { timeout: 30_000 });
+  // Lo que tarde en llegar una segunda (el sondeo es de un minuto: no cuenta).
+  await page.waitForLoadState('networkidle');
+  expect(reads).toHaveLength(1);
+  expect(reads[0]).not.toContain('keys=');
+  // Fuera de Inicio, el menú vuelve a pedir solo sus listas.
+  await page.getByRole('link', { name: 'Pacientes' }).first().click();
+  await expect(page).toHaveURL(/\/patients/);
+  await expect.poll(() => reads.length).toBeGreaterThan(1);
+  expect(reads.at(-1)).toContain('keys=');
+});
+
 test('ADMIN: una lista que falla avisa en su fila con Reintentar y las demás siguen', async ({ page }) => {
   let broken = true;
   await page.route('**/work-queues/summary', async (route) => {
