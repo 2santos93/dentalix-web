@@ -5,6 +5,10 @@ import { applyBulkDiscount } from '@/lib/discounts/discounts-api';
 import type { TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { ApiError } from '@/lib/api/client';
 import { ITEM_WITHOUT_DISCOUNT } from '@/components/treatment-plans/plan-fixture';
+import { regionalFormat } from '@/lib/format/regional-format';
+
+/** DX-489: el formato de la sede, el de los demás importes del plan. */
+const FMT = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
 
 jest.mock('../../lib/discounts/discounts-api', () => ({ applyBulkDiscount: jest.fn() }));
 const mockedApply = applyBulkDiscount as jest.MockedFunction<typeof applyBulkDiscount>;
@@ -58,6 +62,7 @@ function renderModal(
       procedureOf={() => 'Corona'}
       rules={RULES}
       role={role}
+      fmt={FMT}
       onApplied={onApplied}
     />,
   );
@@ -75,9 +80,9 @@ describe('BulkDiscountModal (DX-204)', () => {
     await userEvent.type(percentInput(), '10');
     const texts = previews();
     // 8.500; 12.345,7 → 12.346 superaría el 10 %: 12.345; 100,5 → 100.
-    expect(texts[0]).toMatch(/−8\.?500,00/);
-    expect(texts[1]).toMatch(/−12\.345,00/);
-    expect(texts[2]).toMatch(/−100,00/);
+    expect(texts[0]).toMatch(/^COP\s85\.000,00 → −COP\s8\.500,00$/);
+    expect(texts[1]).toMatch(/−COP\s12\.345,00/);
+    expect(texts[2]).toMatch(/−COP\s100,00/);
   });
 
   it('en EUR redondea a céntimos', async () => {
@@ -91,7 +96,7 @@ describe('BulkDiscountModal (DX-204)', () => {
   it('DX-340: RSD redondea con los dígitos del contrato (123,45 × 7,5 % = 9, no 9,26)', async () => {
     renderModal('ADMIN', 'RSD', [item('i1', '11', 123.45)]);
     await userEvent.type(percentInput(), '7,5');
-    expect(previews()[0]).toMatch(/−9\D/);
+    expect(previews()[0]).toMatch(/−RSD\s9$/);
     expect(previews()[0]).not.toMatch(/9,26/);
   });
 

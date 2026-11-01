@@ -1340,6 +1340,7 @@ export function TreatmentPlansTab({
           procedureOf={(item) => procedureName(item, catalogById)}
           rules={discountRules}
           role={role}
+          fmt={sedeFmt}
           onApplied={(updated, skippedNoDiscount) => {
             setSelectedItemIds(new Set());
             // DX-105: lo que no admite descuento se salta; se dice cuántos.

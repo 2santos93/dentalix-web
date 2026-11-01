@@ -181,6 +181,7 @@ export function PaymentPlanSection({
         onOpenChange={setShowCreate}
         token={token}
         plan={{ id: planId, currency: planCurrency, billable }}
+        money={(amount, code) => sedeMoney(amount, code, fmt)}
         onCreated={async () => {
           await refetch();
           setShowCreate(false);

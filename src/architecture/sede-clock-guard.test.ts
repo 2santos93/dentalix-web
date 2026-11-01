@@ -141,6 +141,7 @@ const MONEY_WITH_CODE = [
   'components/treatment-plans/plan-item-form.tsx',
   'components/treatment-plans/payment-plan-section.tsx',
   'components/treatment-plans/price-quote-line.tsx',
+  'components/discounts/bulk-discount-modal.tsx',
 ];
 
 /** Los nombres que el fichero importa de `@/lib/format/currency`. */
