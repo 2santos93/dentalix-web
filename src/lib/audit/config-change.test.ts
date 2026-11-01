@@ -265,3 +265,26 @@ it('DX-515: el nº de factura externa y la leyenda del recibo con su antes y des
   );
   expect(legend?.map((i) => i.label)).toEqual(['Leyenda propia de la sede', 'Leyenda del recibo']);
 });
+
+describe("DX-516: ajustes por medio de pago", () => {
+  it("pinta el tipo y el cálculo en palabras y el antes y el después", () => {
+    const items = configChangeItems(
+      {
+        reason: "PAYMENT_METHOD_ADJUSTMENT_UPDATED",
+        changedFields: ["adjustmentLabel", "percent"],
+        configChange: {
+          before: { adjustmentLabel: "Impuesto 3 %", percent: 3 },
+          after: { adjustmentLabel: "Impuesto 10 %", percent: 10 },
+        },
+      },
+    );
+    expect(items?.map((i) => i.label)).toEqual(["Ajuste", "Porcentaje"]);
+    const created = configChangeItems(
+      {
+        reason: "PAYMENT_METHOD_ADJUSTMENT_CREATED",
+        configChange: { after: { adjustmentType: "SURCHARGE", calculation: "FIXED" } },
+      },
+    );
+    expect(configChangeText(created ?? [])).toBe("Tipo de ajuste: Recargo · Cálculo: Importe fijo");
+  });
+});

@@ -771,6 +771,9 @@ const RECEIPT_REASONS: Record<string, string> = {
   RECEIPT_SETTINGS: 'Título y leyenda del recibo',
   RECEIPT_LEGEND: 'Leyenda del recibo de la sede',
   EXTERNAL_INVOICE_NUMBER: 'Nº de factura externa del abono',
+  // DX-516: ajustes por medio de pago (sobre el medio).
+  PAYMENT_METHOD_ADJUSTMENT_CREATED: 'Ajuste por medio de pago creado',
+  PAYMENT_METHOD_ADJUSTMENT_UPDATED: 'Ajuste por medio de pago cambiado',
 };
 
 export function receiptDetail(metadata: AuditMetadata): string | null {
