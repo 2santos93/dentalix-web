@@ -3,15 +3,16 @@ import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectTouchTarget } from './support/touch-targets';
+import { DEMO_CURRENCY } from './support/demo';
 
 /**
  * e2e (DX-390): cobro dividido en varias formas de pago con un solo recibo.
  *
  * Contra la clínica DEMO sembrada (`npm run seed:demo` en la API), con sus
  * medios iniciales y «Pago móvil» (pide referencia):
- *   - recepción abre «Registrar abono», cobra una parte en efectivo en pesos y
- *     pulsa «Añadir otra forma de pago» para el resto por «Pago móvil» en
- *     dólares; el modal enseña el total y lo pendiente en la moneda del plan;
+ *   - recepción abre «Registrar abono», cobra una parte en efectivo en dólares
+ *     (la moneda del plan y de la sede principal) y pulsa «Añadir otra forma de
+ *     pago» para otra parte por «Pago móvil» en bolívares; el modal enseña el total y lo pendiente en la moneda del plan;
  *   - sin la referencia que pide el medio, el error sale en su campo;
  *   - el cobro deja dos abonos con el MISMO recibo, y ese recibo lleva las dos
  *     formas de pago.
@@ -34,7 +35,7 @@ interface Seeded {
   headers: Record<string, string>;
 }
 
-/** Paciente con un plan en COP aceptado, sembrado como ADMIN por la API. */
+/** Paciente con un plan en la moneda de la sede (USD) aceptado, sembrado como ADMIN por la API. */
 async function seedPatient(request: APIRequestContext, origin: string, tag: string): Promise<Seeded> {
   const host = new URL(origin).host;
   const login = await request.post(`${API_URL}/auth/login`, {
@@ -63,15 +64,15 @@ async function seedPatient(request: APIRequestContext, origin: string, tag: stri
     kind: 'PROCEDURE',
     labelEs: `Corona DX390 ${tag}`,
     color: '#3366CC',
-    defaultPrice: 900_000,
+    defaultPrice: 900,
   });
   const plan = await send<{ id: string }>('post', `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   const item = await send<{ id: string }>('post', `/treatment-plans/${plan.id}/items`, {
     toothNumber: '16',
     catalogItemId: catalog.id,
-    price: 900_000,
+    price: 900,
   });
   await send('patch', `/treatment-plans/${plan.id}/items/${item.id}`, { status: 'ACCEPTED' });
   return { patientId: patient.id, planId: plan.id, headers };
@@ -115,10 +116,10 @@ for (const viewport of [
     await expect(dialog.getByLabel('Plan')).toBeVisible({ timeout: 15_000 });
 
     // Primera forma de pago: efectivo en la moneda del plan.
-    await dialog.locator('#rp-amount').fill('100000');
+    await dialog.locator('#rp-amount').fill('100');
     await dialog.locator('#rp-method').selectOption({ label: 'Efectivo' });
 
-    // «Añadir otra forma de pago»: el resto por «Pago móvil» en dólares.
+    // «Añadir otra forma de pago»: otra parte por «Pago móvil» en bolívares (20 USD a la tasa de la demo).
     const add = dialog.getByRole('button', { name: 'Añadir otra forma de pago' });
     if (viewport.width === 390) {
       // Medido con el diálogo en reposo (su entrada escala el contenido).
@@ -126,15 +127,15 @@ for (const viewport of [
     }
     await add.click();
     const second = dialog.getByTestId('split-line-2');
-    await second.getByLabel('Importe').fill('20');
-    await second.getByLabel('Moneda').selectOption('USD');
+    await second.getByLabel('Importe').fill('5000');
+    await second.getByLabel('Moneda').selectOption('VES');
     await second.getByLabel('Método').selectOption({ label: 'Pago móvil' });
 
     // Total y pendiente en la moneda del plan.
     const summary = dialog.getByTestId('split-summary');
-    await expect(summary).toContainText('Cobro en la moneda del plan (COP)');
+    await expect(summary).toContainText(`Cobro en la moneda del plan (${DEMO_CURRENCY})`);
     await expect(summary).toContainText('Pendiente del plan');
-    await expect(summary).toContainText(/900\.000,00/);
+    await expect(summary).toContainText(/900,00/);
     await expectNoHorizontalScroll(page);
 
     // La referencia que pide el medio se marca en SU campo.
@@ -162,10 +163,10 @@ for (const viewport of [
       split: { lines: { currency: string; paymentMethodName: string }[]; total: { currency: string } } | null;
     };
     expect(body.split?.lines.map((l) => [l.currency, l.paymentMethodName])).toEqual([
-      ['COP', 'Efectivo'],
-      ['USD', 'Pago móvil'],
+      [DEMO_CURRENCY, 'Efectivo'],
+      ['VES', 'Pago móvil'],
     ]);
-    expect(body.split?.total.currency).toBe('COP');
+    expect(body.split?.total.currency).toBe(DEMO_CURRENCY);
     await expectNoHorizontalScroll(page);
     await context.close();
   });

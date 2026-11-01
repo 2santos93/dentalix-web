@@ -1,6 +1,7 @@
 'use client';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import { StatusBadge, patientLabel } from './appointment-display';
+import { OverbookedChip } from './overbooked-chip';
 import { SectionError } from '@/components/errors/section-error';
 import { sedeTimeRange, type AgendaClock } from '@/lib/locations/sede-clock';
 import { addCivilDays, wallDay } from '@/lib/time/wall-clock';
@@ -123,6 +124,8 @@ export function WeekAgenda({
                       <StatusBadge status={appointment.status} />
                     </div>
                     <p className="mt-1 text-ink">{patientLabel(appointment, patientNames)}</p>
+                    {/* DX-509: solo mientras es sobrecupo. */}
+                    <OverbookedChip overbooked={appointment.overbooked} status={appointment.status} className="mt-1" />
                   </li>
                 ))
               )}

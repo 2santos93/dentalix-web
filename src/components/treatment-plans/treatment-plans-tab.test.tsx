@@ -45,6 +45,7 @@ import { getPaymentAllocations, replacePaymentAllocations } from '@/lib/payments
 import { presentPlan } from '@/lib/treatment-plans/plan-options-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { getPlanVisits } from '@/lib/treatment-plans/plan-visits-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -302,6 +303,7 @@ const payment1: Payment = {
   paymentMethodName: null,
   reference: null,
   duplicateReferenceReason: null,
+  externalInvoiceNumber: null,
   notes: null,
   createdById: null,
   createdAt: '2026-01-05T00:00:00.000Z',
@@ -356,21 +358,6 @@ async function pickRowAction(
 ): Promise<void> {
   await user.click(within(row).getByRole('button', { name: /^Acciones de abono/ }));
   await user.click(await screen.findByRole('menuitem', { name: item }));
-}
-
-const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
-/**
- * `Intl.NumberFormat`'s `es` output places a NBSP (` `) between the
- * amount and the `US$` symbol. Testing Library's default text normalizer
- * collapses whitespace (including NBSP, matched by `\s`) in the DOM node's
- * text content down to a plain space before comparing — but it does NOT run
- * that same normalization over a plain-string query — so asserting against
- * the raw formatter output (still carrying the NBSP) never matches. This
- * mirrors what the component renders, then swaps the NBSP for a regular
- * space so the query matches what `getByText` actually compares against.
- */
-function expectedCurrencyText(amount: number): string {
-  return currencyFormatter.format(amount).replace(/\u00A0/g, ' ');
 }
 
 /**
@@ -485,6 +472,48 @@ describe('TreatmentPlansTab', () => {
     expect(await screen.findByText(/este plan todavía no tiene ítems/i)).toBeInTheDocument();
   });
 
+  // DX-340: el total del plan es la suma de sus líneas y se pinta con los
+  // decimales de su moneda (JPY sin decimales; EUR con céntimos).
+  it.each([
+    {
+      currency: 'JPY',
+      lines: [
+        { price: 12345, discount: 926 },
+        { price: 8001, discount: 600 },
+        { price: 99, discount: 7 },
+      ],
+      total: 18912,
+      shown: /^18\.912\sJPY$|^JPY\s18\.912$/,
+    },
+    {
+      currency: 'EUR',
+      lines: [
+        { price: 123.45, discount: 9.26 },
+        { price: 0.99, discount: 0.07 },
+        { price: 80.01, discount: 6 },
+      ],
+      total: 189.12,
+      shown: /^EUR\s189,12$/,
+    },
+  ])('$currency: el total es la suma de las líneas y lleva los decimales de la moneda', async ({ currency, lines, total, shown }) => {
+    const items = lines.map((line, i) => ({ ...item2, id: `item-${i}`, toothNumber: String(11 + i), ...line }));
+    const detail = {
+      ...plan({ id: 'plan-1', currency }),
+      items,
+      total,
+      currencyDigits: currency === 'JPY' ? { minorUnits: 0, roundingDigits: 0 } : { minorUnits: 2, roundingDigits: 2 },
+    };
+    mockedListPlans.mockResolvedValue([plan({ id: 'plan-1', currency })]);
+    mockedGetPlan.mockResolvedValue(detail);
+
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+
+    const label = await screen.findByText('Total');
+    const figure = label.parentElement?.textContent?.replace('Total', '').replace(/\s/g, ' ').trim() ?? '';
+    expect(figure).toMatch(shown);
+    expect(figure.includes(',00')).toBe(false);
+  });
+
   it("renders a plan's items with the total equal to the sum of the items' prices", async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedGetPlan.mockResolvedValue(plan1Detail);
@@ -500,7 +529,7 @@ describe('TreatmentPlansTab', () => {
     // Total must equal the sum of the two items' prices (130000), formatted
     // as currency — not hardcoded independently of `item1`/`item2`.
     const expectedTotal = item1.price + item2.price;
-    expect(screen.getByText(expectedCurrencyText(expectedTotal))).toBeInTheDocument();
+    expect(screen.getByText(sedeCurrencyText(expectedTotal))).toBeInTheDocument();
   });
 
   it('DX-191: «Registrar implante» en los ítems aceptados o realizados lleva a Implantes con el ítem y el diente', async () => {
@@ -724,7 +753,7 @@ describe('TreatmentPlansTab', () => {
     // in its table cell + mobile card, so an unscoped query would match 3
     // nodes.
     const totalRow = screen.getByText('Total').closest('div') as HTMLElement;
-    expect(within(totalRow).getByText(expectedCurrencyText(item2.price))).toBeInTheDocument();
+    expect(within(totalRow).getByText(sedeCurrencyText(item2.price))).toBeInTheDocument();
   });
 
   it('cancelling the "quitar ítem" confirmation leaves the item alone — removeItem is never called', async () => {
@@ -853,17 +882,107 @@ describe('TreatmentPlansTab', () => {
     // equal the items total, which also renders in the "Total" row above, so
     // an unscoped `getByText` on the formatted amount would match twice.
     const billableCard = (await screen.findByText('A pagar')).closest('div') as HTMLElement;
-    expect(within(billableCard).getByText(expectedCurrencyText(balance1.billable))).toBeInTheDocument();
+    expect(within(billableCard).getByText(sedeCurrencyText(balance1.billable))).toBeInTheDocument();
     const paidCard = screen.getByText('Pagado').closest('div') as HTMLElement;
-    expect(within(paidCard).getByText(expectedCurrencyText(balance1.paid))).toBeInTheDocument();
+    expect(within(paidCard).getByText(sedeCurrencyText(balance1.paid))).toBeInTheDocument();
     const balanceCard = screen.getByText('Saldo').closest('div') as HTMLElement;
-    expect(within(balanceCard).getByText(expectedCurrencyText(balance1.balance))).toBeInTheDocument();
+    expect(within(balanceCard).getByText(sedeCurrencyText(balance1.balance))).toBeInTheDocument();
 
     const paymentsTable = await openPaymentsTable(user);
     expect(within(paymentsTable).getByText(sedeCurrencyText(payment1.amount))).toBeInTheDocument();
     expect(within(paymentsTable).getByText('Efectivo')).toBeInTheDocument();
     // DX-386: importe y día de cada abono con el formato de la sede y el código ISO.
     expect(paymentsTable).not.toHaveTextContent('US$');
+  });
+
+  // DX-489: plan en EUR y catálogo en COP (la moneda de las sedes del fixture).
+  describe('DX-489: plan en EUR con el catálogo en COP', () => {
+    const eurItem = {
+      ...item1,
+      price: 100.55,
+      discount: 0,
+      catalogPrice: 100.55,
+      basePrice: 80000,
+      priceSource: 'AGREEMENT_PRICE_LIST' as const,
+      agreementId: 'ag-1',
+      agreementName: 'Seguros Sol',
+    };
+    const eurPlan = plan({ id: 'plan-1', currency: 'EUR' });
+    const eurText = (amount: number) => sedeCurrencyText(amount, 'EUR');
+
+    beforeEach(() => {
+      mockedListPlans.mockResolvedValue([eurPlan]);
+      mockedGetPlan.mockResolvedValue({ ...eurPlan, items: [eurItem], total: 100.55 });
+      mockedGetPlanBalance.mockResolvedValue({ ...balance1, planCurrency: 'EUR', billable: 100.55, paid: 100.55, balance: 0 });
+      mockedListPayments.mockResolvedValue([{ ...payment1, amount: 100.55, currency: 'EUR' }]);
+    });
+
+    it('el ítem pinta el precio de lista en COP, nunca en EUR', async () => {
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(
+        within(table).getByText(/^Convenio Seguros Sol · precio de lista COP 80\.000,00$/),
+      ).toBeInTheDocument();
+      expect(table).not.toHaveTextContent(/80\.000,00\sEUR|EUR\s80\.000,00/);
+    });
+
+    it('el formulario dice el precio de lista en COP', async () => {
+      mockedGetPriceQuote.mockResolvedValue({
+        basePrice: 80000,
+        price: 100.55,
+        source: 'AGREEMENT_PRICE_LIST',
+        agreementId: 'ag-1',
+        agreementName: 'Seguros Sol',
+        allowDiscount: true,
+        currency: 'EUR',
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      expect(
+        await screen.findByText(/^Convenio \(lista de precios\) · Seguros Sol · precio de lista COP 80\.000,00$/),
+      ).toBeInTheDocument();
+    });
+
+    it('sin lista en EUR, el aviso de precio por debajo del catálogo no pinta el catálogo en EUR', async () => {
+      mockedGetPriceQuote.mockResolvedValue({
+        basePrice: 80000,
+        price: 80000,
+        source: 'CATALOG',
+        agreementId: null,
+        agreementName: null,
+        allowDiscount: true,
+        currency: 'EUR',
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText('Precio', { exact: true });
+      await user.clear(field);
+      await user.type(field, '100,55');
+      const notice = await screen.findByText(/^Precio de catálogo: COP 80\.000,00, en otra moneda y sin convertir\./);
+      expect(notice).toBeInTheDocument();
+      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/EUR\s80\.000|Rebaja de/);
+    });
+
+    it('el mismo importe sale con UN formato en el resumen, la tabla y la lista de abonos', async () => {
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      const totalCard = (await screen.findByText('Total')).closest('div') as HTMLElement;
+      expect(within(totalCard).getByText(eurText(100.55))).toBeInTheDocument();
+      const paidCard = (await screen.findByText('Pagado')).closest('div') as HTMLElement;
+      expect(within(paidCard).getByText(eurText(100.55))).toBeInTheDocument();
+      expect(within(table).getAllByText(eurText(100.55)).length).toBeGreaterThan(0);
+      const paymentsTable = await openPaymentsTable(user);
+      expect(within(paymentsTable).getByText(eurText(100.55))).toBeInTheDocument();
+      // Ni el formato de `formatCurrency` («100,55 EUR») ni un símbolo.
+      expect(document.body).not.toHaveTextContent(/100,55\sEUR|100,55\s€/);
+    });
   });
 
   it('DX-097: la fecha por defecto del abono es hoy en la sede, no en el navegador (20:30 en Bogotá = 01:30Z)', async () => {
@@ -945,7 +1064,7 @@ describe('TreatmentPlansTab', () => {
 
     await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mockedListPayments).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText(expectedCurrencyText(updatedBalance.paid))).toBeInTheDocument();
+    expect(await screen.findByText(sedeCurrencyText(updatedBalance.paid))).toBeInTheDocument();
   });
 
   it('DX-377: el abono del plan usa los medios de la clínica, exige la referencia y confirma la repetida con motivo', async () => {
@@ -1091,7 +1210,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       await screen.findByRole('table', { name: /ítems de la visita/i });
       const billableCard = (await screen.findByText('A pagar')).closest('div') as HTMLElement;
-      expect(within(billableCard).getByText(expectedCurrencyText(balance1.billable))).toBeInTheDocument();
+      expect(within(billableCard).getByText(sedeCurrencyText(balance1.billable))).toBeInTheDocument();
 
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, status: 'CANCELLED' });
       mockedListPlans.mockResolvedValue([{ ...plan1, status: 'CANCELLED' }]);
@@ -1100,7 +1219,7 @@ describe('TreatmentPlansTab', () => {
 
       await waitFor(() => {
         const card = screen.getByText('A pagar').closest('div') as HTMLElement;
-        expect(within(card).getByText(expectedCurrencyText(0))).toBeInTheDocument();
+        expect(within(card).getByText(sedeCurrencyText(0))).toBeInTheDocument();
       });
     });
 
@@ -1894,7 +2013,7 @@ describe('TreatmentPlansTab', () => {
 
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(
-        within(table).getByText(`Descuento −${expectedCurrencyText(5000)}`),
+        within(table).getByText(`Descuento −${sedeCurrencyText(5000)}`),
       ).toBeInTheDocument();
 
       await user.type(screen.getByLabelText(/código fdi/i), '16');
@@ -2146,6 +2265,16 @@ describe('TreatmentPlansTab', () => {
 
     // SEC-041: un precio por debajo del de catálogo cuenta como descuento.
     describe('precio por debajo del de catálogo (SEC-041)', () => {
+      // El catálogo en la moneda del plan (sedes en USD): la rebaja se puede
+      // restar. Con el catálogo en otra moneda, ver DX-489.
+      const { clinicLocation } = jest.requireActual('../../lib/test/locations');
+      beforeEach(() => {
+        jest.mocked(listLocations).mockResolvedValue([{ ...clinicLocation(), currency: 'USD' }]);
+      });
+      afterEach(() => {
+        jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+      });
+
       async function openForm(token: string) {
         mockedListPlans.mockResolvedValue([plan1]);
         mockedGetPlan.mockResolvedValue(plan1Detail);
@@ -2174,7 +2303,7 @@ describe('TreatmentPlansTab', () => {
 
         await typePrice(user, '40000');
         expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
-        expect(screen.getByText(/Rebaja de 10\.000,00 .* sobre 50\.000,00/)).toBeInTheDocument();
+        expect(screen.getByText(/Rebaja de USD 10\.000,00 sobre USD 50\.000,00/)).toBeInTheDocument();
         // 20 % > 10 %: el motivo es obligatorio aunque no haya descuento.
         expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
@@ -2250,7 +2379,7 @@ describe('TreatmentPlansTab', () => {
         mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [reduced, item2] });
         render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
         const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-        expect(within(table).getByText(/Rebaja −10\.000,00 .* \(catálogo 60\.000,00/)).toBeInTheDocument();
+        expect(within(table).getByText(/Rebaja −USD 10\.000,00 \(catálogo USD 60\.000,00/)).toBeInTheDocument();
         expect(within(table).getByText('Motivo: Paciente frecuente')).toBeInTheDocument();
       });
     });
@@ -2311,7 +2440,7 @@ describe('TreatmentPlansTab', () => {
       );
       const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
       await waitFor(() => expect(price.value).toBe('40000'));
-      expect(await screen.findByText(/Convenio · Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
+      expect(await screen.findByText(/Convenio · Seguros Sol · precio de lista COP 50\.000,00$/)).toBeInTheDocument();
     });
 
     it('la línea de origen queda atada al campo de precio (aria-describedby)', async () => {
@@ -2473,7 +2602,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [withAgreement, item2] });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
+      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista COP 50\.000,00$/)).toBeInTheDocument();
     });
 
     it('un ítem con convenio y descuento muestra la línea del convenio Y la del descuento', async () => {
@@ -2490,8 +2619,8 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [both, item2] });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
-      expect(within(table).getByText(/Descuento −2000,00/)).toBeInTheDocument();
+      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista COP 50\.000,00$/)).toBeInTheDocument();
+      expect(within(table).getByText(/Descuento −USD 2\.000,00/)).toBeInTheDocument();
     });
 
     it('el ítem con lista de precios de la sede lo dice solo si el precio de lista difiere', async () => {
@@ -2609,7 +2738,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
       await within(await itemsTable()).findAllByText('Cobrado');
       const figure = within(moneySummary()).getByText('Sin imputar').closest('div') as HTMLElement;
-      expect(within(figure).getByText(expectedCurrencyText(12500))).toBeInTheDocument();
+      expect(within(figure).getByText(sedeCurrencyText(12500))).toBeInTheDocument();
       expect(figure).toHaveTextContent('Abonos que todavía no cubren ningún ítem.');
     });
 
@@ -2971,5 +3100,108 @@ describe('TreatmentPlansTab', () => {
       await user.click(await screen.findByRole('button', { name: /^registrar abono$/i }));
       expect(screen.getByLabelText<HTMLSelectElement>(/^moneda$/i).value).toBe('JPY');
     });
+  });
+});
+
+// D2: UNA primaria (botón `default`) con el plan abierto, elegida por su estado.
+describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
+  const dentist = `h.${btoa(JSON.stringify({ sub: 'u-den', tenantId: 't1', role: 'DENTIST' }))}.s`;
+  const assistant = `h.${btoa(JSON.stringify({ sub: 'u-asis', tenantId: 't1', role: 'ASSISTANT' }))}.s`;
+  const admin = `h.${btoa(JSON.stringify({ sub: 'u-admin', tenantId: 't1', role: 'ADMIN' }))}.s`;
+  const isPrimary = (el: HTMLElement) => /(^|\s)bg-primary(\s|$)/.test(el.className);
+  const primaries = () => screen.getAllByRole('button').filter(isPrimary);
+
+  beforeEach(() => {
+    mockedListCatalogItems.mockReset();
+    mockedListCatalogItems.mockResolvedValue(catalog);
+    mockedListCurrencies.mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]);
+    jest.mocked(listStaff).mockResolvedValue([]);
+    jest.mocked(getPlanVisits).mockResolvedValue({ planId: 'plan-1', items: [], visitIntervals: {}, visits: [] });
+    mockedGetPlan.mockReset();
+    mockedListPlans.mockReset();
+    mockedGetPlanBalance.mockReset();
+    mockedGetPlanBalance.mockResolvedValue(emptyBalance());
+    mockedListPayments.mockReset();
+    mockedListPayments.mockResolvedValue([]);
+    mockedGetPaymentPlan.mockResolvedValue(null);
+    mockedGetDiscountPolicy.mockRejectedValue(new Error('sin política'));
+    mockedGetPriceQuote.mockImplementation(async (_t, _p, { catalogItemId, currency }) =>
+      quoteOf(catalogItemId, {}, currency),
+    );
+  });
+
+  function show(status: import('@/lib/treatment-plans/treatment-plans-api').TreatmentPlanStatus, items = [item1, item2]) {
+    const p = plan({ id: 'plan-1', status });
+    mockedListPlans.mockResolvedValue([p]);
+    mockedGetPlan.mockResolvedValue({ ...p, items, total: 0 });
+  }
+
+  it('DRAFT con ítems (odontólogo): «Agregar ítem» es la única; «Aceptar con firma» va en secundario', async () => {
+    show('DRAFT');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const accept = await screen.findByRole('button', { name: /aceptar con firma/i });
+    const add = await screen.findByRole('button', { name: /^agregar ítem$/i });
+    expect(isPrimary(add)).toBe(true);
+    expect(isPrimary(accept)).toBe(false);
+    expect(primaries()).toEqual([add]);
+  });
+
+  it('PRESENTED (odontólogo): «Aceptar con firma» es la única; «Agregar ítem» y «Enviar a aceptar» en secundario', async () => {
+    show('PRESENTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const accept = await screen.findByRole('button', { name: /aceptar con firma/i });
+    const add = await screen.findByRole('button', { name: /^agregar ítem$/i });
+    expect(isPrimary(accept)).toBe(true);
+    expect(isPrimary(add)).toBe(false);
+    expect(primaries()).toEqual([accept]);
+  });
+
+  it('PRESENTED (asistente, que no decide): «Agregar ítem» es la única', async () => {
+    show('PRESENTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={assistant} />);
+    const add = await screen.findByRole('button', { name: /^agregar ítem$/i });
+    expect(screen.queryByRole('button', { name: /aceptar con firma/i })).not.toBeInTheDocument();
+    expect(primaries()).toEqual([add]);
+  });
+
+  it('ACCEPTED con una visita sin cita: «Agendar visita 1» es la única', async () => {
+    const accepted = [{ ...item1, status: 'ACCEPTED' as const }, { ...item2, status: 'ACCEPTED' as const }];
+    show('ACCEPTED', accepted);
+    jest.mocked(getPlanVisits).mockResolvedValue({
+      planId: 'plan-1',
+      items: [],
+      visitIntervals: {},
+      visits: [
+        {
+          number: 1,
+          label: null,
+          minDaysAfterPrevious: 0,
+          minimumDate: '2026-01-10T00:00:00.000Z',
+          minimumDay: '2026-01-10',
+          planItemIds: accepted.map((i) => i.id),
+        },
+      ],
+    });
+    render(<TreatmentPlansTab patientId="pat-1" token={admin} />);
+    const schedule = await screen.findByRole('button', { name: /agendar visita 1/i });
+    await waitFor(() => expect(isPrimary(schedule)).toBe(true));
+    expect(primaries()).toEqual([schedule]);
+  });
+
+  it('ACCEPTED todo agendado y con saldo (ADMIN): «Registrar abono» es la única', async () => {
+    show('ACCEPTED', [{ ...item1, status: 'ACCEPTED' as const }]);
+    jest.mocked(getPlanVisits).mockResolvedValue({ planId: 'plan-1', items: [], visitIntervals: {}, visits: [] });
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    render(<TreatmentPlansTab patientId="pat-1" token={admin} />);
+    const pay = await screen.findByRole('button', { name: /^registrar abono$/i });
+    await waitFor(() => expect(isPrimary(pay)).toBe(true));
+    expect(primaries()).toEqual([pay]);
+  });
+
+  it('REJECTED: ninguna primaria', async () => {
+    show('REJECTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+    expect(primaries()).toEqual([]);
   });
 });

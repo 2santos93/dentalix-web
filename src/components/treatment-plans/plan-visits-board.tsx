@@ -30,6 +30,8 @@ export function PlanVisitsBoard({
   role,
   onChanged,
   renderItems,
+  primaryScheduling = false,
+  onSchedulableChange,
 }: {
   token: string;
   plan: TreatmentPlan;
@@ -44,6 +46,13 @@ export function PlanVisitsBoard({
     items: TreatmentPlanItem[],
     context: { visit: number | null; ordered: TreatmentPlanItem[] },
   ) => React.ReactNode;
+  /**
+   * D2: «Agendar visita N» de la PRIMERA visita con ítems sin cita es la
+   * primaria de la vista (plan aceptado). Las demás visitas, secundario.
+   */
+  primaryScheduling?: boolean;
+  /** Avisa si hay alguna visita por agendar (la pestaña elige la primaria). */
+  onSchedulableChange?: (hasSchedulable: boolean) => void;
 }) {
   const editable =
     (role === "DENTIST" || role === "ADMIN") &&
@@ -124,6 +133,15 @@ export function PlanVisitsBoard({
       assignments.some((a) => a.visit === number && a.itemId === i.id),
     );
   const ordered = numbers.flatMap(itemsOf);
+  // La primera visita con ítems pendientes sin cita (solo en ACCEPTED: la API
+  // no devuelve `planItemIds` en otro estado).
+  const firstSchedulable = numbers.find(
+    (n) => (scheduledVisit(n)?.planItemIds.length ?? 0) > 0,
+  );
+  const hasSchedulable = firstSchedulable !== undefined;
+  useEffect(() => {
+    onSchedulableChange?.(hasSchedulable);
+  }, [hasSchedulable, onSchedulableChange]);
   function move(itemId: string, visit: number) {
     setDirty(true);
     setAssignments((prev) =>
@@ -223,7 +241,11 @@ export function PlanVisitsBoard({
                 {visit && visit.planItemIds.length > 0 ? (
                   <Button
                     type="button"
-                    variant="secondary"
+                    variant={
+                      primaryScheduling && number === firstSchedulable
+                        ? "default"
+                        : "secondary"
+                    }
                     className="min-h-11"
                     disabled={dirty}
                     onClick={() => setBooking(number)}

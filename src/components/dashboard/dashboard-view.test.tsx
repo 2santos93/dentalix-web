@@ -1,4 +1,5 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import { DashboardView } from './dashboard-view';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
@@ -6,8 +7,6 @@ import { listCurrencies } from '@/lib/reference/currencies-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listAppointments, type ListAppointment } from '@/lib/appointments/appointments-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
-import { getAnamnesisInboxSummary } from '@/lib/anamnesis/anamnesis-api';
-import { listWaitlist } from '@/lib/appointments/waitlist-api';
 import { getCurrentCashSession } from '@/lib/cash-sessions/cash-sessions-api';
 import { listInventoryItems } from '@/lib/inventory/inventory-api';
 import {
@@ -18,13 +17,10 @@ import {
 import { clinicLocation } from '@/lib/test/locations';
 import { tokenForRole } from '@/lib/test/data-consents';
 import { cashSessionFixture } from '@/lib/test/cash-session';
-import {
-  getClosingQueueCount,
-  getFollowUpCount,
-  getReceivablesSummary,
-  getUnscheduledCount,
-  type ReceivablesSummary,
-} from './inicio-api';
+import { getReceivablesSummary, type ReceivablesSummary } from './inicio-api';
+import { getWorkQueuesSummary, type WorkQueueItem, type WorkQueueKey } from '@/lib/work-queues/work-queues-api';
+import { WorkQueuesProvider } from '@/components/work-queues/work-queues-context';
+import { getTokenRole } from '@/lib/auth/token-role';
 
 // jest.mock no reescribe alias: rutas relativas (convención del repo).
 jest.mock('../../lib/dashboard/dashboard-api', () => ({ getDashboard: jest.fn() }));
@@ -32,8 +28,11 @@ jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn
 jest.mock('../../lib/appointments/staff-api', () => ({ listStaff: jest.fn() }));
 jest.mock('../../lib/appointments/appointments-api', () => ({ listAppointments: jest.fn() }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
-jest.mock('../../lib/anamnesis/anamnesis-api', () => ({ getAnamnesisInboxSummary: jest.fn() }));
-jest.mock('../../lib/appointments/waitlist-api', () => ({ listWaitlist: jest.fn() }));
+// DX-503: los recuentos de «Pendientes» salen de una sola lectura agregada.
+jest.mock('../../lib/work-queues/work-queues-api', () => ({
+  ...jest.requireActual('../../lib/work-queues/work-queues-api'),
+  getWorkQueuesSummary: jest.fn(),
+}));
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({ getCurrentCashSession: jest.fn() }));
 jest.mock('../../lib/inventory/inventory-api', () => ({ listInventoryItems: jest.fn() }));
 jest.mock('../../lib/reports/reports-api', () => ({
@@ -42,9 +41,6 @@ jest.mock('../../lib/reports/reports-api', () => ({
 }));
 jest.mock('./inicio-api', () => ({
   ...jest.requireActual('./inicio-api'),
-  getClosingQueueCount: jest.fn(),
-  getFollowUpCount: jest.fn(),
-  getUnscheduledCount: jest.fn(),
   getReceivablesSummary: jest.fn(),
 }));
 // Los avisos de ADMIN tienen sus propias pruebas y sus propias llamadas.
@@ -57,17 +53,54 @@ const m = {
   listStaff: jest.mocked(listStaff),
   listAppointments: jest.mocked(listAppointments),
   listLocations: jest.mocked(listLocations),
-  anamnesis: jest.mocked(getAnamnesisInboxSummary),
-  waitlist: jest.mocked(listWaitlist),
   cash: jest.mocked(getCurrentCashSession),
   inventory: jest.mocked(listInventoryItems),
   comparison: jest.mocked(getLocationsComparison),
   production: jest.mocked(getProductionByProcedure),
-  closing: jest.mocked(getClosingQueueCount),
-  followUp: jest.mocked(getFollowUpCount),
-  unscheduled: jest.mocked(getUnscheduledCount),
   receivables: jest.mocked(getReceivablesSummary),
+  workQueues: jest.mocked(getWorkQueuesSummary),
 };
+
+/** Lo que devuelve la API por rol (WORK_QUEUE_ROLES): la API reparte, la web pinta. */
+const QUEUES_BY_ROLE: Record<string, WorkQueueKey[]> = {
+  ADMIN: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECEIVABLES', 'LOW_STOCK'],
+  DENTIST: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW'],
+  RECEPTION: ['CLOSING_QUEUE', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECEIVABLES'],
+  ASSISTANT: ['ANAMNESIS_REVIEW', 'LOW_STOCK'],
+};
+const QUEUE_ITEMS: Record<WorkQueueKey, WorkQueueItem> = {
+  CLOSING_QUEUE: { key: 'CLOSING_QUEUE', status: 'OK', count: 3 },
+  ANAMNESIS_REVIEW: { key: 'ANAMNESIS_REVIEW', status: 'OK', count: 5 },
+  QUOTE_FOLLOW_UP: { key: 'QUOTE_FOLLOW_UP', status: 'OK', count: 2 },
+  ACCEPTED_UNSCHEDULED: { key: 'ACCEPTED_UNSCHEDULED', status: 'OK', count: 0 },
+  WAITLIST: { key: 'WAITLIST', status: 'OK', count: 1 },
+  RECEIVABLES: { key: 'RECEIVABLES', status: 'OK', count: 2, overdue: [{ currency: 'COP', amount: 780000 }] },
+  LOW_STOCK: { key: 'LOW_STOCK', status: 'OK', count: 4 },
+};
+function queuesFor(
+  token: string,
+  keys?: readonly WorkQueueKey[],
+  override: Partial<Record<WorkQueueKey, WorkQueueItem>> = {},
+) {
+  const role = getTokenRole(token) ?? 'ADMIN';
+  return {
+    generatedAt: FROZEN_NOW.toISOString(),
+    items: QUEUES_BY_ROLE[role]
+      .filter((k) => !keys || keys.includes(k))
+      .map((k) => override[k] ?? QUEUE_ITEMS[k]),
+  };
+}
+/** Las lecturas COMPLETAS (las de «Mi día»; las del menú llevan `keys`). */
+const fullReads = () => m.workQueues.mock.calls.filter(([, keys]) => keys === undefined).length;
+
+/** Inicio vive dentro del AppShell, que da la lectura compartida de las listas. */
+function render(ui: ReactElement<{ token: string }>) {
+  return rtlRender(
+    <WorkQueuesProvider token={ui.props.token} pathname="/dashboard">
+      {ui}
+    </WorkQueuesProvider>,
+  );
+}
 
 // Sábado 15/08/2026 07:00 en Bogotá (GMT−5): citas antes y después de «ahora».
 const FROZEN_NOW = new Date('2026-08-15T12:00:00.000Z');
@@ -235,10 +268,7 @@ beforeEach(() => {
   m.listAppointments.mockResolvedValue(todayAppointments);
   m.getDashboard.mockResolvedValue(dashboard());
   m.comparison.mockResolvedValue(comparison());
-  m.closing.mockResolvedValue({ total: 3, outcome: 1, evolution: 1, treatment: 1 });
-  m.followUp.mockResolvedValue({ total: 2 });
-  m.unscheduled.mockResolvedValue({ total: 0 });
-  m.waitlist.mockResolvedValue({ items: [], total: 1, page: 1, pageSize: 1 } as never);
+  m.workQueues.mockImplementation(async (token, keys) => queuesFor(token, keys));
   m.receivables.mockResolvedValue(receivables);
   m.inventory.mockResolvedValue({
     items: [{ id: 'i1', name: 'Guantes de nitrilo', unit: 'caja', stock: 1, minStock: 5, lowStock: true }],
@@ -246,7 +276,6 @@ beforeEach(() => {
     page: 1,
     pageSize: 8,
   } as never);
-  m.anamnesis.mockResolvedValue({ submitted: 5 });
   m.cash.mockResolvedValue({
     locationId: 'loc-1',
     settings: { requireOpenSession: false, blindClose: false },
@@ -327,15 +356,71 @@ describe('Inicio · ADMIN', () => {
     );
   });
 
-  it('una fila que falla no tumba las demás y se reintenta sola', async () => {
-    m.followUp.mockRejectedValueOnce(new Error('network'));
+  it('una lista que falla avisa en su fila con Reintentar y las demás se pintan', async () => {
+    let failed = false;
+    m.workQueues.mockImplementation(async (token, keys) => {
+      if (keys === undefined && !failed) {
+        failed = true;
+        return queuesFor(token, keys, { QUOTE_FOLLOW_UP: { key: 'QUOTE_FOLLOW_UP', status: 'ERROR', count: null } });
+      }
+      return queuesFor(token, keys);
+    });
     render(<DashboardView token={tokenForRole('ADMIN')} />);
     const row = await screen.findByTestId('pending-follow-up');
     await within(row).findByText('No se pudo cargar');
     expect(await pendingValue('closing')).toHaveTextContent('3');
+    expect(await pendingValue('waitlist')).toHaveTextContent('1');
+    const before = fullReads();
     await userEvent.click(within(row).getByRole('button', { name: 'Volver a cargar «Presupuestos por seguir»' }));
     expect(await pendingValue('follow-up')).toHaveTextContent('2');
-    expect(m.followUp).toHaveBeenCalledTimes(2);
+    expect(fullReads()).toBe(before + 1);
+  });
+
+  it('si no se pueden contar las listas: error de sección con Reintentar (la caja sigue)', async () => {
+    let fail = true;
+    m.workQueues.mockImplementation(async (token, keys) => {
+      if (keys === undefined && fail) throw new Error('network');
+      return queuesFor(token, keys);
+    });
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const pending = await screen.findByRole('region', { name: 'Pendientes' });
+    expect(await within(pending).findByRole('alert')).toHaveTextContent('No se pudieron contar tus listas de trabajo.');
+    expect(await pendingValue('cash')).toHaveTextContent('Elige una sede');
+    fail = false;
+    await userEvent.click(within(pending).getByRole('button', { name: 'Reintentar' }));
+    expect(await pendingValue('closing')).toHaveTextContent('3');
+  });
+
+  it('las listas a 0 se pliegan en «Al día» y se despliegan con teclado', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const toggle = await screen.findByTestId('pending-folded-toggle');
+    expect(toggle).toHaveTextContent('Al día: 1 lista');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('pending-unscheduled')).not.toBeVisible();
+    toggle.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('pending-unscheduled')).toBeVisible();
+    expect(screen.getByTestId('pending-unscheduled-value')).toHaveTextContent('Al día');
+  });
+
+  it('todas a 0: estado vacío «Todo al día», con las listas plegadas', async () => {
+    m.workQueues.mockImplementation(async (token, keys) => ({
+      generatedAt: FROZEN_NOW.toISOString(),
+      items: queuesFor(token, keys).items.map((i) =>
+        i.key === 'RECEIVABLES' ? { ...i, count: 0, overdue: [] } : { ...i, count: 0 },
+      ),
+    }));
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    expect(await screen.findByText('Todo al día')).toBeInTheDocument();
+    expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 7 listas');
+    expect(screen.queryByRole('list', { name: 'Pendientes' })).not.toBeInTheDocument();
+  });
+
+  it('una sola lectura completa alimenta «Mi día» (sin un /count por lista)', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    expect(await pendingValue('closing')).toHaveTextContent('3');
+    expect(fullReads()).toBe(1);
   });
 
   it('Resultados del período: cobrado convertido (hasta + 1 día) y los indicadores frente al período anterior', async () => {
@@ -410,7 +495,6 @@ describe('Inicio · RECEPTION', () => {
     expect(screen.queryByRole('region', { name: 'Cartera por antigüedad' })).not.toBeInTheDocument();
     expect(m.getDashboard).not.toHaveBeenCalled();
     expect(m.comparison).not.toHaveBeenCalled();
-    expect(m.anamnesis).not.toHaveBeenCalled();
     expect(m.inventory).not.toHaveBeenCalled();
   });
 });
@@ -426,7 +510,7 @@ describe('Inicio · DENTIST', () => {
     const production = await screen.findByTestId('production-COP');
     expect(production).toHaveTextContent('7 procedimientos');
     expect(m.production.mock.calls[0][1]).toEqual({ from: '2026-08-01', to: '2026-08-15' });
-    for (const fn of [m.getDashboard, m.comparison, m.followUp, m.receivables, m.cash, m.inventory, m.listStaff]) {
+    for (const fn of [m.getDashboard, m.comparison, m.receivables, m.cash, m.inventory, m.listStaff]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });
@@ -442,7 +526,6 @@ describe('Inicio · ASSISTANT', () => {
     expect(gloves).toHaveTextContent('Faltan 4');
     expect(within(lowStock).getByText('Se muestran 1 de 4.')).toBeInTheDocument();
     expect(screen.queryByTestId('pending-closing')).not.toBeInTheDocument();
-    expect(m.closing).not.toHaveBeenCalled();
     expect(m.getDashboard).not.toHaveBeenCalled();
   });
 });

@@ -34,7 +34,7 @@ const TREND_CLASS = {
  * con una flecha que dice hacia dónde se movió (arriba, abajo o igual) y un
  * color que dice si eso es bueno según el indicador (`trend`). El color nunca va
  * solo: la flecha y el signo dan la dirección, y el lector de pantalla oye
- * «Mejora: +20 % frente a 100.000,00 COP». Los indicadores que ya son un %
+ * «Mejora: +20 % frente a 1.000,00 USD». Los indicadores que ya son un %
  * varían en puntos: «Empeora: +2 p.p. frente a 8 %».
  *
  * Cuando la variación no sería honesta no se pinta un porcentaje:

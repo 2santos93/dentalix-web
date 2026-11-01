@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { LocationSwitcher, shortSedeLabel } from './location-switcher';
+import { LocationSwitcher, focusLocationSwitcher, shortSedeLabel } from './location-switcher';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import {
@@ -229,6 +229,51 @@ describe('LocationSwitcher', () => {
       expect(await screen.findByRole('combobox', { name: 'Sede: Todas las sedes' })).toBeInTheDocument();
       expect(screen.getByText('Todas')).toBeInTheDocument();
     });
+  });
+});
+
+describe('focusLocationSwitcher (DX-486, FE-107)', () => {
+  /** jsdom no maqueta: se simula qué selector se ve (la barra lateral va con display:none). */
+  function showOnly(visible: HTMLElement) {
+    jest.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (this: HTMLElement) {
+      return (this === visible ? [new DOMRect(0, 0, 100, 44)] : []) as unknown as DOMRectList;
+    });
+  }
+  afterEach(() => jest.restoreAllMocks());
+
+  it('a 390 px enfoca el selector del teléfono («Sede: …»), no el de la barra lateral oculta', async () => {
+    mockedList.mockResolvedValue([sede('l1', 'Sede principal'), sede('l2', 'Sede norte')]);
+    render(
+      <>
+        <LocationSwitcher variant="block" />
+        <LocationSwitcher variant="phone" />
+      </>,
+    );
+    const phone = await screen.findByRole('combobox', { name: 'Sede: Todas las sedes' });
+    showOnly(phone);
+    expect(focusLocationSwitcher()).toBe(true);
+    expect(phone).toHaveFocus();
+  });
+
+  it('en escritorio enfoca el de la barra lateral', async () => {
+    mockedList.mockResolvedValue([sede('l1', 'Sede principal'), sede('l2', 'Sede norte')]);
+    render(
+      <>
+        <LocationSwitcher variant="block" />
+        <LocationSwitcher variant="phone" />
+      </>,
+    );
+    const block = await screen.findByRole('combobox', { name: 'Sede' });
+    showOnly(block);
+    expect(focusLocationSwitcher()).toBe(true);
+    expect(block).toHaveFocus();
+  });
+
+  it('sin selector visible no mueve el foco y lo dice (quien llama deja el foco donde estaba)', () => {
+    render(<button type="button">Antes</button>);
+    screen.getByRole('button', { name: 'Antes' }).focus();
+    expect(focusLocationSwitcher()).toBe(false);
+    expect(screen.getByRole('button', { name: 'Antes' })).toHaveFocus();
   });
 });
 

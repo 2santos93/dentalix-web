@@ -9,6 +9,15 @@ describe('formatCurrency', () => {
     expect(formatCurrency(1234567.5, 'USD')).toMatch(/1[.,]234/);
   });
 
+  it('pinta siempre el código ISO, nunca un símbolo (DX-378)', () => {
+    expect(formatCurrency(450, 'USD').replace(/\s/g, ' ')).toBe('450,00 USD');
+    expect(formatCurrency(80000, 'EUR').replace(/\s/g, ' ')).toBe('80.000,00 EUR');
+    expect(formatCurrency(10, 'VES').replace(/\s/g, ' ')).toBe('10,00 VES');
+    for (const code of ['USD', 'EUR', 'MXN', 'GBP', 'JPY', 'BRL', 'VES']) {
+      expect(formatCurrency(1234.5, code)).not.toMatch(/[$€£¥]|Bs/);
+    }
+  });
+
   it('siempre pinta dos decimales, también en COP (ICU reciente le da 0)', () => {
     expect(formatCurrency(150000.5, 'COP').replace(/\s/g, ' ')).toMatch(/150\.000,50/);
     expect(formatCurrency(1800000, 'COP').replace(/\s/g, ' ')).toMatch(/1\.800\.000,00/);

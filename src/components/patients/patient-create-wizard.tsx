@@ -109,7 +109,7 @@ function historyHasContent(history: ClinicalHistoryValue): boolean {
       (history.conditions && history.conditions.length > 0) ||
       (history.medications && history.medications.length > 0) ||
       (history.habits && Object.keys(history.habits).length > 0) ||
-      history.embarazo ||
+      history.pregnancy !== undefined ||
       history.semanasEmbarazo !== undefined ||
       (history.familyHistory && history.familyHistory.trim() !== '') ||
       (history.notes && history.notes.trim() !== ''),
@@ -173,7 +173,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
 
   const [history, setHistory] = useState<ClinicalHistoryValue>({});
 
-  // Autorización Ley 1581 (DX-037): ninguna casilla empieza marcada.
+  // Autorización de tratamiento de datos (DX-037): ninguna casilla empieza marcada.
   const [consentSelection, setConsentSelection] = useState(EMPTY_SELECTION);
   const [consentPolicy, setConsentPolicy] = useState<PrivacyPolicyVersion | null>(null);
 

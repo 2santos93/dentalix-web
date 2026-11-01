@@ -74,7 +74,7 @@ export const exchangeRateCopy = {
   inUse: 'Usada en abonos',
   inUseHelp: 'Ya la usa al menos un abono: no se puede cambiar.',
   correct: 'Corregir',
-  /** Nombre de la fila para su «⋯»: «Acciones de COP del 30/10/2026». */
+  /** Nombre de la fila para su «⋯»: «Acciones de EUR del 30/10/2026». */
   rowLabel: (currency: string, date: string) => `${currency} del ${date}`,
   rateCorrected: (currency: string) => `Tasa de ${currency} corregida.`,
   unknownAuthor: 'Usuario no disponible',

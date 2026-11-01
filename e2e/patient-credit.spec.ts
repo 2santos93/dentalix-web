@@ -19,7 +19,7 @@ import { openPatientTab } from './support/patient-tabs';
 const API = API_URL;
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
-const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
+const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
 const money = (amount: number) => usd.format(amount);
 
 async function seed(request: APIRequestContext, origin: string, token: string, tag: string) {

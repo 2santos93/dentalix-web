@@ -39,7 +39,7 @@ interface ClinicalEntryAddendumModalProps {
 }
 
 /**
- * Modal para añadir una adenda (DX-038, Res. 1995/1999 art. 18). Pide motivo y
+ * Modal para añadir una adenda (DX-038: la evolución no se reescribe). Pide motivo y
  * texto; autor y fecha los pone el servidor. Se monta solo mientras está
  * abierto, así que cada apertura empieza con el formulario vacío.
  */

@@ -86,7 +86,7 @@ describe('PatientEditModal', () => {
 
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     const [, , input] = mockedUpdate.mock.calls[0];
-    expect(input).not.toHaveProperty('insurerEps');
+    expect(input).not.toHaveProperty('legacyInsurerName');
   });
 
   it('ya no ofrece «Aseguradora / EPS»: la cobertura se edita en su sección (DX-153)', () => {
@@ -218,21 +218,6 @@ describe('PatientEditModal', () => {
     await user.click(screen.getByRole('button', { name: /guardar/i }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     expect(mockedUpdate.mock.calls[0][2]).toEqual({ docType: 'PASSPORT' });
-  });
-
-  it('legacy code from an older API seeds its generic type and is not sent back unchanged', async () => {
-    mockedUpdate.mockResolvedValue(patient);
-    const user = userEvent.setup();
-    const legacy = { ...patient, docType: 'CE' } as unknown as Patient;
-    render(
-      <PatientEditModal open patient={legacy} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
-    );
-    expect(screen.getByLabelText(/tipo de documento/i)).toHaveValue('RESIDENCE_PERMIT');
-
-    await user.type(screen.getByLabelText(/ocupación/i), 'Docente');
-    await user.click(screen.getByRole('button', { name: /guardar/i }));
-    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
-    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('docType');
   });
 
   it('changing the type clears the label field', async () => {

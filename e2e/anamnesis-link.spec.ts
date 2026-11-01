@@ -34,7 +34,7 @@ const reception = { fullName: 'Rita Recepción', email: `rita.anam.${suffix}@exa
 const lastName = `Anamnesis${suffix}`.slice(0, 40);
 const docNumber = `AN${suffix}`.slice(0, 20);
 const POLICY = {
-  policyText: 'Política de tratamiento de datos de la clínica (Ley 1581).',
+  policyText: 'Política de tratamiento de datos de la clínica.',
   generalText: 'Autorizo el tratamiento de mis datos personales.',
   sensitiveHealthText:
     'Autorizo el tratamiento de mis datos sensibles de salud (historia clínica). No está obligado a autorizarlo. Finalidad: la atención odontológica.',

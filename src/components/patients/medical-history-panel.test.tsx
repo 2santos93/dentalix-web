@@ -38,6 +38,7 @@ const latest: MedicalHistory = {
   conditions: [],
   medications: [],
   habits: null,
+  pregnancy: null,
   dentalHistory: null,
   surgeries: [],
   vitalSigns: null,
@@ -165,7 +166,7 @@ describe('MedicalHistoryPanel', () => {
     expect(screen.getByRole('button', { name: 'Actualizar anamnesis' })).toBeInTheDocument();
   });
 
-  it('un embarazo «false» guardado no se presenta como «No»: queda «Sin responder»', async () => {
+  it('embarazo sin responder (también una versión anterior sin «Sí») se abre «Sin responder», nunca «No»', async () => {
     mockedGet.mockResolvedValue(latest);
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
@@ -173,6 +174,29 @@ describe('MedicalHistoryPanel', () => {
     const g = screen.getByRole('radiogroup', { name: 'Embarazo' });
     expect(within(g).getByRole('radio', { name: 'Sin responder' })).toBeChecked();
     expect(within(g).getByRole('radio', { name: 'No' })).not.toBeChecked();
+  });
+
+  it('un «No» elegido al embarazo vuelve «No» al reabrir y se ve en el resumen', async () => {
+    mockedGet.mockResolvedValue({ ...latest, pregnancy: 'NO' });
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    const term = await screen.findByText('Embarazo', { selector: 'dt' });
+    expect(term.nextElementSibling).toHaveTextContent('No');
+    await openForm(user);
+    const g = screen.getByRole('radiogroup', { name: 'Embarazo' });
+    expect(within(g).getByRole('radio', { name: 'No' })).toBeChecked();
+  });
+
+  it('el resumen de hábitos dice los «Sí» y, aparte, los «No sabe»', async () => {
+    mockedGet.mockResolvedValue({
+      ...latest,
+      habits: { tabaquismo: { estado: 'SI' }, alcohol: { estado: 'DESCONOCE' }, bruxismo: 'NO' },
+    });
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    const term = await screen.findByText('Hábitos', { selector: 'dt' });
+    expect(term.nextElementSibling).toHaveTextContent('Fuma');
+    expect(term.nextElementSibling).toHaveTextContent('No sabe: Consume alcohol');
+    expect(term.nextElementSibling).not.toHaveTextContent('Bruxismo');
   });
 
   it('cancelar con cambios pide confirmación y, al descartar, vuelve al resumen sin guardar', async () => {
@@ -236,6 +260,7 @@ describe('MedicalHistoryPanel', () => {
   it('carries forward embarazo/semanasEmbarazo across versions (safety flag, not just for display)', async () => {
     const pregnant: MedicalHistory = {
       ...latest,
+      pregnancy: 'SI',
       safetyFlags: { ...latest.safetyFlags, embarazo: true, semanasEmbarazo: 20 },
     };
     mockedGet.mockResolvedValue(pregnant);
@@ -258,7 +283,7 @@ describe('MedicalHistoryPanel', () => {
 
     await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
     const [, , input] = mockedSave.mock.calls[0];
-    expect(input.embarazo).toBe(true);
+    expect(input.pregnancy).toBe('SI');
     expect(input.semanasEmbarazo).toBe(20);
   });
 

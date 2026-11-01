@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import {
+  Armchair,
   ArrowLeftRight,
   BadgePercent,
   BellRing,
@@ -30,6 +31,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+import { canManageChairs } from '@/lib/chairs/chairs-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
 import { canManageAgreements } from '@/lib/agreements/agreements-api';
@@ -154,6 +156,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Duración y color de cada tipo de cita.',
         icon: CalendarClock,
         visible: canManageAppointmentTypes,
+      },
+      // DX-211.
+      {
+        href: '/settings/sillones',
+        label: 'Sillones',
+        description: 'Los sillones de cada sede, su orden en la agenda y su profesional por defecto.',
+        icon: Armchair,
+        visible: canManageChairs,
       },
       // DX-026.
       {

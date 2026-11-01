@@ -2,6 +2,9 @@ import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { formatCurrency } from '../src/lib/format/currency';
+import { regionalFormat } from '../src/lib/format/regional-format';
+import { moneyWithCode } from '../src/lib/format/sede-number';
+import { E2E_REGION } from './support/regional';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
@@ -11,12 +14,12 @@ import { API_URL, tenantOrigin } from './support/urls';
  * e2e DX-105: listas de precios y convenios.
  *
  * ADMIN crea (por la UI) la lista «Tarifa» en COP y le pone precio a un
- * procedimiento («Editar precio»), y el convenio «Sura −20 %» (el pagador se
+ * procedimiento («Editar precio»), y el convenio «Surco −20 %» (el pagador se
  * crea por la API, con la cobertura del paciente: SEC-047). RECEPCIÓN asigna
  * el convenio en la ficha —el diálogo elige la cobertura vigente— y ve el chip
- * «Convenio: Sura −20 %». El DENTISTA abre la pestaña Plan, crea un plan en
+ * «Convenio: Surco −20 %». El DENTISTA abre la pestaña Plan, crea un plan en
  * COP, elige el procedimiento y el precio llega precargado con el −20 % y la
- * línea de origen «Convenio · Sura −20 %»; la fila del plan y el presupuesto
+ * línea de origen «Convenio · Surco −20 %»; la fila del plan y el presupuesto
  * imprimible dicen «Convenio» y «Ahorro por convenio». Todo a 390 px sin
  * scroll horizontal y con los diálogos dentro de la pantalla.
  *
@@ -31,9 +34,9 @@ const admin = { fullName: 'Ana Titular', email: `ana.conv.${suffix}@example.com`
 const reception = { fullName: 'Rita Recepción', email: `rita.conv.${suffix}@example.com` };
 const dentist = { fullName: 'Daniel Odontólogo', email: `dani.conv.${suffix}@example.com` };
 const lastName = `Convenio${suffix}`.slice(0, 40);
-const payerName = 'Sura EPS';
+const payerName = 'Surco Salud';
 const listName = 'Tarifa';
-const agreementName = 'Sura −20 %';
+const agreementName = 'Surco −20 %';
 const procedureLabel = `Corona DX105 ${suffix}`.slice(0, 40);
 const CATALOG_PRICE = 150_000;
 const LIST_PRICE = 140_000;
@@ -43,6 +46,8 @@ const SAVING = CATALOG_PRICE - AGREEMENT_PRICE;
 const money = (amount: number): string => formatCurrency(amount, 'COP');
 // Solo la cifra («120.000,00»): entre ella y «COP» va un espacio duro.
 const figure = (amount: number): string => money(amount).split(/\s/)[0];
+/** La pestaña del plan pinta sus importes con el formato de la sede (DX-386, DX-489). */
+const sedeMoney = (amount: number): string => moneyWithCode(amount, 'COP', regionalFormat(E2E_REGION));
 
 const QA_DIR = path.resolve(process.env.DX105_QA_DIR ?? 'e2e/.qa-shots');
 const QA = process.env.DX105_QA_SHOTS === '1';
@@ -97,7 +102,7 @@ test.beforeAll(async ({ request }) => {
   // registra el ADMIN, así que recepción puede asignar el convenio con ella.
   await apiPost(request, session, `/patients/${patientId}/coverages`, {
     payerId: payer.id,
-    planName: 'Plan Sura',
+    planName: 'Plan Surco',
     memberNumber: '1020304050',
   });
 });
@@ -183,7 +188,7 @@ test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento;
   await expectNoHorizontalScroll(page);
 });
 
-test('ADMIN crea el convenio «Sura −20 %» y lo ve activo; a 390 px sin scroll horizontal', async ({ page }) => {
+test('ADMIN crea el convenio «Surco −20 %» y lo ve activo; a 390 px sin scroll horizontal', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: 'light' });
   await loginAs(page, origin, admin.email, password);
@@ -222,7 +227,7 @@ test('ADMIN crea el convenio «Sura −20 %» y lo ve activo; a 390 px sin scrol
   await expect(modal390).toBeHidden();
 });
 
-test('RECEPCIÓN asigna el convenio en la ficha: sección y chip «Convenio: Sura −20 %»; a 390 px cabe', async ({
+test('RECEPCIÓN asigna el convenio en la ficha: sección y chip «Convenio: Surco −20 %»; a 390 px cabe', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -300,7 +305,7 @@ test('el DENTISTA abre el plan: el precio llega precargado con el convenio, la f
   await expect(price).toHaveValue(String(AGREEMENT_PRICE), { timeout: 10_000 });
   const source = form.getByText(/^Convenio · /);
   await expect(source).toContainText(agreementName);
-  await expect(source).toContainText(`precio de lista ${money(CATALOG_PRICE)}`);
+  await expect(source).toContainText(`precio de lista ${sedeMoney(CATALOG_PRICE)}`);
   await expectNoHorizontalScroll(page);
   await price.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await shot(page, 'plan-precio-convenio-1440');
@@ -309,9 +314,9 @@ test('el DENTISTA abre el plan: el precio llega precargado con el convenio, la f
   const itemRow = panel.locator('table tbody tr').filter({ has: page.getByRole('cell', { name: '21', exact: true }) });
   await expect(itemRow).toBeVisible({ timeout: 10_000 });
   await expect(itemRow).toContainText(procedureLabel);
-  await expect(itemRow).toContainText(money(AGREEMENT_PRICE));
+  await expect(itemRow).toContainText(sedeMoney(AGREEMENT_PRICE));
   await expect(itemRow).toContainText(`Convenio ${agreementName}`);
-  await expect(itemRow).toContainText(`precio de lista ${money(CATALOG_PRICE)}`);
+  await expect(itemRow).toContainText(`precio de lista ${sedeMoney(CATALOG_PRICE)}`);
 
   // Presupuesto imprimible: «Convenio» y «Ahorro por convenio».
   const [printPage] = await Promise.all([

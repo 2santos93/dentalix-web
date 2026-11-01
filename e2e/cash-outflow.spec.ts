@@ -39,9 +39,9 @@ const RECEPTION_EMAIL = process.env.E2E_DEMO_RECEPTION_EMAIL ?? 'recepcion@demo.
 const origin = tenantOrigin(DEMO_SUBDOMAIN);
 const FLOAT = 200_000;
 
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP' });
+const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
 function figure(amount: number): string {
-  return cop.format(amount).split(/\s/)[0];
+  return usd.format(amount).split(/\s/)[0];
 }
 
 interface ExpectedLine {
@@ -78,7 +78,7 @@ const suffix = rawSuffix
   .slice(0, 8);
 
 function cashLine(lines: ExpectedLine[] | null | undefined): ExpectedLine | undefined {
-  return (lines ?? []).find((l) => l.currency === 'COP' && l.method === 'CASH');
+  return (lines ?? []).find((l) => l.currency === 'USD' && l.method === 'CASH');
 }
 
 async function sessionDetail(request: APIRequestContext, session: ApiSession, id: string): Promise<SessionDetail> {
@@ -130,7 +130,7 @@ function outflowViaApi(
   return request
     .post(`${API_URL}/cash-sessions/current/outflows`, {
       headers: { ...reception.headers, 'Idempotency-Key': randomUUID() },
-      data: { category, amount, currency: 'COP', ...(supplier ? { supplier } : {}) },
+      data: { category, amount, currency: 'USD', ...(supplier ? { supplier } : {}) },
     })
     .then(async (res) => {
       expect(res.ok(), `salida por la API falló: ${await res.text()}`).toBeTruthy();
@@ -210,7 +210,7 @@ for (const viewport of [
     });
 
     try {
-      await apiPost(page.request, reception, '/cash-sessions/open', { floats: [{ currency: 'COP', amount: FLOAT }] });
+      await apiPost(page.request, reception, '/cash-sessions/open', { floats: [{ currency: 'USD', amount: FLOAT }] });
       await openShifts(page);
       await expect(page.getByText('Salidas del turno: 0')).toBeVisible();
       if (narrow) await expectNoHorizontalScroll(page);
@@ -234,7 +234,7 @@ for (const viewport of [
       await page.emulateMedia({ colorScheme: 'light' });
       await dialog.getByRole('button', { name: 'Registrar salida' }).click();
       await expect(dialog).toBeHidden({ timeout: 15_000 });
-      await expect(page.getByText(/Salida de caja de 8\.?000,00\sCOP registrada\./)).toBeVisible();
+      await expect(page.getByText(/Salida de caja de 8\.?000,00\sUSD registrada\./)).toBeVisible();
       await expect(page.getByText('Salidas del turno: 1')).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText(figure(FLOAT - 8_000)).first()).toBeVisible();
 
@@ -258,7 +258,7 @@ for (const viewport of [
       // Cierra cuadrando: lo esperado ya resta las salidas.
       await page.getByRole('button', { name: 'Cerrar caja' }).click();
       const close = page.getByRole('dialog', { name: 'Cerrar caja' });
-      await close.getByLabel('Contado en efectivo (COP)').fill(String(expected));
+      await close.getByLabel('Contado en efectivo (USD)').fill(String(expected));
       await expect(close.getByTestId('row-difference')).toContainText('Cuadra');
       await close.getByRole('button', { name: 'Cerrar caja' }).click();
       await expect(page.getByText('Caja cerrada: el arqueo quedó guardado.')).toBeVisible({ timeout: 15_000 });
@@ -306,7 +306,7 @@ test('arqueo ciego: la tarjeta cuenta las salidas sin enseñar lo esperado', asy
   const { admin, reception } = await startClean(page.request);
   try {
     await setBlindClose(page.request, admin, true);
-    await apiPost(page.request, reception, '/cash-sessions/open', { floats: [{ currency: 'COP', amount: FLOAT }] });
+    await apiPost(page.request, reception, '/cash-sessions/open', { floats: [{ currency: 'USD', amount: FLOAT }] });
     await outflowViaApi(page.request, reception, 'Mensajería', 9_000);
     await openShifts(page);
     await expect(page.getByText('Salidas del turno: 1')).toBeVisible();
@@ -332,13 +332,13 @@ for (const viewport of [
     await closeOwnSession(page.request, admin);
 
     try {
-      await apiPost(page.request, admin, '/cash-sessions/open', { floats: [{ currency: 'COP', amount: 100_000 }] });
+      await apiPost(page.request, admin, '/cash-sessions/open', { floats: [{ currency: 'USD', amount: 100_000 }] });
       await openExpenses(page);
 
       await page.getByRole('button', { name: 'Nuevo gasto' }).click();
       const form = page.getByRole('dialog', { name: 'Nuevo gasto' });
       await expect(form.getByRole('option', { name: 'Mensajería' })).toBeAttached({ timeout: 15_000 });
-      await form.getByLabel('Moneda').selectOption('COP');
+      await form.getByLabel('Moneda').selectOption('USD');
       await form.getByLabel('Categoría').selectOption('Mensajería');
       await form.getByLabel('Proveedor').fill(supplier);
       await form.getByLabel('Importe').fill('30000');
@@ -405,11 +405,11 @@ for (const viewport of [
     try {
       // Recepción: un turno con una salida de 15.000, cerrado cuadrando.
       const shift = await apiPost<{ id: string }>(page.request, reception, '/cash-sessions/open', {
-        floats: [{ currency: 'COP', amount: FLOAT }],
+        floats: [{ currency: 'USD', amount: FLOAT }],
       });
       await outflowViaApi(page.request, reception, 'Papelería', 15_000, supplier);
       await apiPost(page.request, reception, `/cash-sessions/${shift.id}/close`, {
-        counts: [{ currency: 'COP', method: 'CASH', counted: FLOAT - 15_000 }],
+        counts: [{ currency: 'USD', method: 'CASH', counted: FLOAT - 15_000 }],
       });
       const before = await sessionDetail(page.request, admin, shift.id);
       expect(before.status).toBe('CLOSED');

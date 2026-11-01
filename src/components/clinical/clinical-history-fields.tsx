@@ -9,17 +9,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   AnswerGroup,
-  YES_NO_CHOICES,
-  answerFromBoolean,
-  booleanFromAnswer,
+  TRI_STATE_CHOICES,
+  answerOfChoice,
+  choiceOf,
 } from '@/components/clinical/answer-group';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 
 const copy = {
   pregnant: 'Embarazo', weeksPregnant: 'Semanas de embarazo', notes: 'Notas',
-  // El API guarda el embarazo como bandera (`safetyFlags.embarazo`): un «No»
-  // y una pregunta sin hacer se leen igual. Se dice, en vez de pintar «No».
-  pregnancyHint: 'Solo el «Sí» queda en la versión: al reabrirla, un «No» se verá «Sin responder».',
 };
 
 // `notes` is a section like the rest so a multi-step consumer (the create
@@ -53,19 +50,19 @@ export function ClinicalHistoryFields({ value, onChange, sections = ALL_SECTIONS
             <AnswerGroup
               id="ch-embarazo"
               legend={copy.pregnant}
-              value={answerFromBoolean(value.embarazo)}
-              choices={YES_NO_CHOICES}
-              hint={copy.pregnancyHint}
+              value={choiceOf(value.pregnancy)}
+              choices={TRI_STATE_CHOICES}
               onChange={(a) => {
-                const embarazo = booleanFromAnswer(a);
+                const pregnancy = answerOfChoice(a);
                 onChange({
                   ...value,
-                  embarazo,
-                  semanasEmbarazo: embarazo ? value.semanasEmbarazo : undefined,
+                  pregnancy,
+                  // Las semanas solo acompañan a un «Sí».
+                  semanasEmbarazo: pregnancy === 'SI' ? value.semanasEmbarazo : undefined,
                 });
               }}
             >
-              {value.embarazo && (
+              {value.pregnancy === 'SI' && (
                 <FormField htmlFor="ch-semanas-embarazo" label={copy.weeksPregnant}>
                   <Input
                     id="ch-semanas-embarazo"

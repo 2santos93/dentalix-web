@@ -11,7 +11,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 /**
  * e2e DX-153: catálogo de pagadores (Ajustes) y cobertura del paciente.
  *
- * ADMIN crea «Sura EPS» (sistema público de salud) y un pagador de cada tipo,
+ * ADMIN crea «Surco Salud» (sistema público de salud) y un pagador de cada tipo,
  * sin que ninguno pida país (DX-326); RECEPCIÓN añade una cobertura vencida desde la ficha
  * (fila «Vencida» + chip «Cobertura vencida» en la cabecera), la pone vigente
  * y el chip desaparece; vencida otra vez por la API, el chip sale en la
@@ -32,7 +32,7 @@ const admin = { fullName: 'Ana Titular', email: `ana.cob.${suffix}@example.com` 
 const reception = { fullName: 'Rita Recepción', email: `rita.cob.${suffix}@example.com` };
 const lastName = `Cobertura${suffix}`.slice(0, 40);
 const otherLastName = `SinPlan${suffix}`.slice(0, 40);
-const payerName = 'Sura EPS';
+const payerName = 'Surco Salud';
 const payerOption = `${payerName} · Sistema público de salud`;
 const twoDaysAgo = sedeDayFromToday(-2);
 const tomorrow = sedeDayFromToday(1);
@@ -110,7 +110,7 @@ function coverageSection(page: Page) {
   return page.getByTestId('patient-coverage');
 }
 
-test('ADMIN crea «Sura EPS» en Ajustes y la ve activa; a 390 px sin scroll horizontal', async ({
+test('ADMIN crea «Surco Salud» en Ajustes y la ve activa; a 390 px sin scroll horizontal', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -373,7 +373,7 @@ test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda 
   await expect(page.getByText('Cobertura vencida').or(page.locator('[title="Cobertura vencida"]')).locator('visible=true').first()).toBeVisible();
 });
 
-test('el listado de pacientes filtrado por «Sura EPS» muestra solo a ese paciente', async ({ page }) => {
+test('el listado de pacientes filtrado por «Surco Salud» muestra solo a ese paciente', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: 'light' });
   await loginAs(page, origin, reception.email, password);

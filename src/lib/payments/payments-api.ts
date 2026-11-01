@@ -177,5 +177,7 @@ function cashSearch(params: CashPaymentsCsvQuery): URLSearchParams {
   const search = new URLSearchParams({ from: params.from, to: params.to });
   if (params.method) search.set('method', params.method);
   if (params.paymentMethodId) search.set('paymentMethodId', params.paymentMethodId);
+  // DX-515: con o sin nº de factura externa.
+  if (params.externalInvoice) search.set('externalInvoice', params.externalInvoice);
   return search;
 }

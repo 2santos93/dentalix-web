@@ -120,3 +120,36 @@ it('DX-395: el impreso nombra el medio de la clínica y la referencia, no el mé
   expect(movements).toHaveTextContent('Tarjeta');
   expect(movements).toHaveTextContent('Sin método');
 });
+
+// DX-340: el estado de cuenta pinta cada plan con los decimales de su moneda.
+it.each([
+  { currency: 'JPY', budgeted: 18912, paid: 5000, balance: 13912, shown: ['18.912', '13.912'], cents: false },
+  { currency: 'EUR', budgeted: 189.12, paid: 50.5, balance: 138.62, shown: ['189,12', '138,62'], cents: true },
+])('$currency: presupuestado y saldo con los decimales de su moneda', ({ currency, budgeted, paid, balance, shown, cents }) => {
+  const base = accountStatementFixture();
+  const plan = { ...base.plans[0], currency, budgeted, paid, balance };
+  render(
+    <AccountStatementDocument
+      statement={{
+        ...base,
+        summary: [
+          {
+            ...base.summary[1],
+            currency,
+            budgeted,
+            paid,
+            balance,
+          },
+        ],
+        plans: [plan],
+        movements: [],
+        installments: [],
+      }}
+    />,
+  );
+  const row = screen.getAllByRole('row').find((r) => money(r.textContent).includes(shown[0]));
+  expect(row).toBeDefined();
+  const rowText = money(row?.textContent);
+  for (const figure of shown) expect(rowText).toContain(figure);
+  expect(/\d,\d\d\b/.test(rowText)).toBe(cents);
+});

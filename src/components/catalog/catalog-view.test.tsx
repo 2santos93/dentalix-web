@@ -584,7 +584,7 @@ describe('CatalogView', () => {
     render(<CatalogView token="tok" />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     await waitFor(() => expect(within(table).getByText('80.000,00 COP')).toBeInTheDocument());
-    expect(within(table).queryByText(/US\$/)).not.toBeInTheDocument();
+    expect(within(table).queryByText(/US\$|USD/)).not.toBeInTheDocument();
   });
 
   it('una clínica en España ve los precios en euros', async () => {
@@ -592,7 +592,7 @@ describe('CatalogView', () => {
     mockedList.mockResolvedValue(page([item1]));
     render(<CatalogView token="tok" />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
-    await waitFor(() => expect(within(table).getByText('80.000,00 €')).toBeInTheDocument());
+    await waitFor(() => expect(within(table).getByText('80.000,00 EUR')).toBeInTheDocument());
   });
 
   it('una clínica con sedes en Colombia y España pinta el importe sin moneda, elija la sede que elija', async () => {
@@ -616,7 +616,7 @@ describe('CatalogView', () => {
     const table = await screen.findByRole('table', { name: /catálogo/i });
     await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
     await waitFor(() => expect(within(table).getByText('80.000,00')).toBeInTheDocument());
-    expect(within(table).queryByText(/€|COP|US\$/)).not.toBeInTheDocument();
+    expect(within(table).queryByText(/€|EUR|COP|US\$|USD/)).not.toBeInTheDocument();
   });
 
   it('sin sedes cargadas pinta el importe sin moneda, nunca en USD', async () => {
@@ -625,7 +625,7 @@ describe('CatalogView', () => {
     render(<CatalogView token="tok" />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     await waitFor(() => expect(within(table).getByText('80.000,00')).toBeInTheDocument());
-    expect(within(table).queryByText(/US\$/)).not.toBeInTheDocument();
+    expect(within(table).queryByText(/US\$|USD/)).not.toBeInTheDocument();
   });
 
   it('JPY location shows JPY without decimals', async () => {
@@ -650,11 +650,11 @@ describe('CatalogView', () => {
       ),
     ).toBeInTheDocument();
     expect(within(table).getByText('80.000,00')).toBeInTheDocument();
-    expect(within(table).queryByText(/COP|US\$/)).not.toBeInTheDocument();
+    expect(within(table).queryByText(/COP|US\$|USD/)).not.toBeInTheDocument();
 
     mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', currency: 'EUR' })]);
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
-    await waitFor(() => expect(within(table).getByText('80.000,00 €')).toBeInTheDocument());
+    await waitFor(() => expect(within(table).getByText('80.000,00 EUR')).toBeInTheDocument());
   });
 
   // DX-063: un 500 de la API no llega a la pantalla como «Internal server error».

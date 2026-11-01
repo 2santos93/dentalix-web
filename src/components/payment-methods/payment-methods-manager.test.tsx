@@ -150,7 +150,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
     await screen.findByRole('table', { name: 'Medios de pago' });
     // jsdom no mide: se comprueba la altura táctil por debajo de sm. Editar y
     // Desactivar viven en el «⋯» (DataList: 44 px en la tarjeta del teléfono).
-    expect(screen.getByRole('button', { name: 'Nuevo medio' }).className).toContain('max-sm:h-11');
+    expect(screen.getByRole('button', { name: 'Nuevo medio' }).className).toContain('max-sm:min-h-11');
     await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog.className).toContain('max-sm:[&_select]:h-11');

@@ -6,10 +6,14 @@ import { Building2, Lock, MessageCircle, Phone } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   listPendingFollowUp,
-  type PendingFollowUpItem,
   type PendingFollowUpPage,
 } from '@/lib/treatment-plans/plan-options-api';
 import { followUpWhatsAppHref } from '@/lib/treatment-plans/plan-options';
+import {
+  followUpAmount,
+  groupFollowUp,
+  type FollowUpGroup,
+} from '@/lib/treatment-plans/follow-up-groups';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { getActiveLocationId } from '@/lib/locations/location-store';
@@ -41,6 +45,8 @@ export const pendingFollowUpCopy = {
   colPhone: 'Teléfono',
   colActions: 'Acciones',
   noOption: 'Plan único',
+  optionCount: (n: number) => `${n} opciones`,
+  optionsLabel: (name: string) => `Opciones presentadas a ${name}`,
   daysAgo: (n: number) => (n === 1 ? 'hace 1 día' : `hace ${n} días`),
   call: (name: string, phone: string) => `Llamar a ${name}: ${phone}`,
   noPhone: 'Sin teléfono',
@@ -48,8 +54,12 @@ export const pendingFollowUpCopy = {
   whatsappLabel: (name: string) => `WhatsApp a ${name}`,
   noWhatsApp: 'El teléfono no sirve para WhatsApp',
   reject: 'Marcar rechazado',
+  rejectAll: (n: number) => `Marcar rechazadas las ${n} opciones`,
+  rejectOne: (label: string) => `Marcar rechazada: ${label}`,
   rejectSubject: (label: string | null, name: string) => `${label ?? 'Plan único'} · ${name}`,
+  rejectAllSubject: (n: number, name: string) => `Las ${n} opciones · ${name}`,
   rejected: 'Presupuesto marcado como rechazado.',
+  rejectedAll: (n: number) => `${n} opciones marcadas como rechazadas.`,
   // Sin «Intenta de nuevo.»: `AsyncSection` → `SectionError` trae su botón.
   loadError: 'No pudimos cargar los presupuestos por seguir.',
   badRequest: 'La antigüedad elegida no es válida.',
@@ -78,7 +88,9 @@ function telHref(phone: string): string {
  * presentados hace más de N días, sin aceptar y sin cita futura, de la sede
  * activa o de toda la clínica, con el monto en la moneda de cada plan, el
  * teléfono, un WhatsApp prellenado y «Marcar rechazado» con motivo. Mismo
- * patrón de lista que la caja (`CashRegisterView`).
+ * patrón de lista que la caja (`CashRegisterView`). D2: una fila por
+ * conversación — las alternativas A/B del mismo plan van anidadas en una sola
+ * fila (rango de montos, un solo Llamar/WhatsApp), y la API pagina por grupo.
  */
 export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
   const [olderThanDays, setOlderThanDays] = useState<number>(AGE_OPTIONS[0]);
@@ -89,7 +101,10 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
   const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [clinicName, setClinicName] = useState<string | null>(null);
-  const [rejecting, setRejecting] = useState<PendingFollowUpItem | null>(null);
+  // Lo que se rechaza: una opción o todas las del grupo (D2).
+  const [rejecting, setRejecting] = useState<{ key: string; planIds: string[]; subject: string } | null>(
+    null,
+  );
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -144,9 +159,44 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
     setPage(1);
   }
 
-  const items = data?.items ?? [];
+  // D2: una fila por conversación (las opciones A/B del mismo plan juntas).
+  const groups = groupFollowUp(data?.items ?? []);
 
-  const columns: DataListColumn<PendingFollowUpItem>[] = [
+  function rejectActions(group: FollowUpGroup) {
+    const open = (planIds: string[], subject: string) => () => {
+      setNotice(null);
+      setRejecting({ key: `${group.key}:${planIds.join(',')}`, planIds, subject });
+    };
+    if (group.options.length === 1) {
+      const only = group.options[0];
+      return [
+        {
+          label: copy.reject,
+          destructive: true,
+          onSelect: open([only.planId], copy.rejectSubject(only.optionLabel, group.patientName)),
+        },
+      ];
+    }
+    // Lo habitual al llamar es un «no» a todo; quien se queda pensando una
+    // opción descarta solo la otra (la que acepte se acepta en su ficha).
+    return [
+      {
+        label: copy.rejectAll(group.options.length),
+        destructive: true,
+        onSelect: open(
+          group.options.map((o) => o.planId),
+          copy.rejectAllSubject(group.options.length, group.patientName),
+        ),
+      },
+      ...group.options.map((o) => ({
+        label: copy.rejectOne(o.optionLabel ?? copy.noOption),
+        destructive: true,
+        onSelect: open([o.planId], copy.rejectSubject(o.optionLabel, group.patientName)),
+      })),
+    ];
+  }
+
+  const columns: DataListColumn<FollowUpGroup>[] = [
     {
       id: 'patient',
       header: copy.colPatient,
@@ -163,15 +213,35 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
     {
       id: 'option',
       header: copy.colOption,
-      cell: (row) => <span className="text-muted">{row.optionLabel ?? copy.noOption}</span>,
-      mobileCell: (row) => row.optionLabel ?? copy.noOption,
+      cell: (row) =>
+        row.options.length === 1 ? (
+          <span className="text-muted">{row.options[0].optionLabel ?? copy.noOption}</span>
+        ) : (
+          // Las opciones anidadas, cada una con su monto: quien llama ve de
+          // qué hablar sin abrir la ficha.
+          <span className="flex flex-col gap-0.5">
+            <span className="font-medium text-ink">{copy.optionCount(row.options.length)}</span>
+            <ul aria-label={copy.optionsLabel(row.patientName)} className="flex flex-col gap-0.5">
+              {row.options.map((o) => (
+                // Una línea por opción (Z1): a 1440 px el monto bajaba solo a otra línea.
+                <li key={o.planId} className="t-caption whitespace-nowrap text-muted tabular-nums">
+                  {o.optionLabel ?? copy.noOption} · {formatCurrency(o.total, o.currency)}
+                </li>
+              ))}
+            </ul>
+          </span>
+        ),
+      mobileCell: (row) =>
+        row.options.length === 1
+          ? (row.options[0].optionLabel ?? copy.noOption)
+          : row.options.map((o) => o.optionLabel ?? copy.noOption).join(' / '),
     },
     {
       id: 'amount',
       header: copy.colAmount,
       numeric: true,
       mobile: 'trailing',
-      cell: (row) => <span className="font-medium text-ink">{formatCurrency(row.total, row.currency)}</span>,
+      cell: (row) => <span className="whitespace-nowrap font-medium text-ink">{followUpAmount(row.options)}</span>,
     },
     {
       id: 'presented',
@@ -233,7 +303,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
               loading={loading}
               error={loadError}
               onRetry={() => setReloadKey((k) => k + 1)}
-              isEmpty={items.length === 0}
+              isEmpty={groups.length === 0}
               emptyTitle={copy.empty}
               emptyDescription={copy.emptyHint}
               skeleton={<TableSkeleton rows={4} />}
@@ -243,20 +313,11 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
                   rechazado» cierra la conversación: va en el «⋯», con su motivo. */}
               <DataList
                 label={copy.tableLabel}
-                rows={items}
+                rows={groups}
                 columns={columns}
-                getRowKey={(row) => row.planId}
+                getRowKey={(row) => row.key}
                 getRowLabel={(row) => row.patientName}
-                rowActions={(row) => [
-                  {
-                    label: copy.reject,
-                    destructive: true,
-                    onSelect: () => {
-                      setNotice(null);
-                      setRejecting(row);
-                    },
-                  },
-                ]}
+                rowActions={rejectActions}
               />
             </AsyncSection>
 
@@ -275,17 +336,23 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
 
       {rejecting ? (
         <RejectPlanModal
-          key={rejecting.planId}
+          key={rejecting.key}
           open
           onOpenChange={(open) => {
-            if (!open) setRejecting(null);
+            if (!open) {
+              setRejecting(null);
+              // Con varias opciones, alguna pudo quedar rechazada antes de un
+              // fallo: la lista se relee para no ofrecerla otra vez.
+              if (rejecting.planIds.length > 1) setReloadKey((k) => k + 1);
+            }
           }}
           token={token}
-          planId={rejecting.planId}
-          subject={copy.rejectSubject(rejecting.optionLabel, rejecting.patientName)}
+          planId={rejecting.planIds}
+          subject={rejecting.subject}
           onRejected={() => {
+            const n = rejecting.planIds.length;
             setRejecting(null);
-            setNotice(copy.rejected);
+            setNotice(n > 1 ? copy.rejectedAll(n) : copy.rejected);
             setReloadKey((k) => k + 1);
           }}
         />
@@ -295,7 +362,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
 }
 
 /** Llamar (\`tel:\`) y WhatsApp prellenado: el bloque de contacto de la fila. */
-function ContactLinks({ row, clinicName }: { row: PendingFollowUpItem; clinicName: string | null }) {
+function ContactLinks({ row, clinicName }: { row: FollowUpGroup; clinicName: string | null }) {
   if (!row.patientPhone) return <span className="text-muted">{copy.noPhone}</span>;
   const whatsapp = followUpWhatsAppHref(row, clinicName);
   return (

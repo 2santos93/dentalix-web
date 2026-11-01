@@ -20,8 +20,8 @@ jest.mock('../../lib/payers/payers-api', () => ({
 const mockedList = listPatients as jest.MockedFunction<typeof listPatients>;
 const mockedPayers = listPayers as jest.MockedFunction<typeof listPayers>;
 
-const sura = { id: 'py1', name: 'Sura EPS' } as Payer;
-const colsanitas = { id: 'py2', name: 'Colsanitas' } as Payer;
+const surco = { id: 'py1', name: 'Surco Salud' } as Payer;
+const colsanavida = { id: 'py2', name: 'Colsanavida' } as Payer;
 
 const maria: Patient = {
   id: 'p1',
@@ -50,7 +50,7 @@ describe('PatientsView', () => {
     mockedList.mockReset();
     mockedList.mockResolvedValue(page([maria]));
     mockedPayers.mockReset();
-    mockedPayers.mockResolvedValue([sura, colsanitas]);
+    mockedPayers.mockResolvedValue([surco, colsanavida]);
   });
 
   it('la accion primaria vive en la barra de filtros, no colgada del titulo', async () => {
@@ -141,7 +141,7 @@ describe('PatientsView', () => {
       const options = within(select).getAllByRole('option');
       expect(options[0]).toHaveTextContent('Todas');
       expect(options[0]).toHaveValue('');
-      expect(options[1]).toHaveTextContent('Sura EPS');
+      expect(options[1]).toHaveTextContent('Surco Salud');
       expect(mockedPayers).toHaveBeenCalledWith('tok');
     });
 

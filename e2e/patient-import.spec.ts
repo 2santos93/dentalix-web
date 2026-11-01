@@ -7,6 +7,7 @@ import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { request as httpRequest } from 'node:http';
 import { API_URL, WEB_PORT, tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { demoNationalIdLabel } from './support/demo';
 
 /**
  * e2e (DX-107): Ajustes → Importar pacientes en la clínica demo, a 1440 y 390.
@@ -29,6 +30,8 @@ import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/
  *
  * Requiere la API con worker (APP_ROLE=all) y la demo sembrada
  * (`npm run seed:demo`). Con E2E_QA_DIR guarda capturas en claro y oscuro.
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
@@ -87,7 +90,7 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900, tag: '1' },
   { name: 'movil', width: 390, height: 844, tag: '2' },
 ]) {
-  test(`legacy «Tipo Doc» CC y columna «Cédula»: importar, revisar, confirmar y deshacer un lote (${viewport.name})`, async ({ page, request }) => {
+  test(`legacy «Tipo Doc» Cédula y columna «Cédula»: importar, revisar, confirmar y deshacer un lote (${viewport.name})`, async ({ page, request }) => {
     test.setTimeout(150_000);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const origin = tenantOrigin(DEMO_SUBDOMAIN);
@@ -98,10 +101,10 @@ for (const viewport of [
     // a 390 px llegó a sacar 3 px de <main> (QA D1).
     const csv = [
       'Tipo Doc;Cédula;Nombre;Apellidos;Fecha de nacimiento;Sexo;Celular;Correo;Dirección;Observaciones',
-      `CC;${docA};Ana;Importada${viewport.tag};03/05/1990;F;310 123 4567;ana${suffix}@example.com;Calle 10 # 1-20;Importado de la hoja anterior`,
-      `CC;${docB};Luis;Importado${viewport.tag};;;;;;`,
-      `CC;${docA};Ana;Repetida;;;;;;`,
-      `CC;99${suffix};;SinNombre;31/02/1990;;;;;`,
+      `Cédula;${docA};Ana;Importada${viewport.tag};03/05/1990;F;0416 555 0450;ana${suffix}@example.com;Calle Demo 10;Importado de la hoja anterior`,
+      `Cédula;${docB};Luis;Importado${viewport.tag};;;;;;`,
+      `Cédula;${docA};Ana;Repetida;;;;;;`,
+      `Cédula;99${suffix};;SinNombre;31/02/1990;;;;;`,
     ].join('\n');
 
     await webLogin(page, origin);
@@ -149,8 +152,11 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Continuar sin saldos' }).click();
     await expect(page.getByText(/autorización de datos pendiente/)).toBeVisible();
     await page.getByRole('button', { name: 'Importar 2 pacientes' }).click();
-    await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('2 de 2 filas procesadas')).toBeVisible();
+    // El avance de ESTE lote, no el «Importado» de otro lote del historial
+    // (los de otros specs comparten la demo): el lote puede seguir en cola.
+    const progress = page.getByRole('region', { name: `Importación de pacientes-${viewport.name}.csv` });
+    await expect(progress.getByText('Importado', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(progress.getByText('2 de 2 filas procesadas')).toBeVisible();
     await expectNoHorizontalScroll(page);
     await expectNoHorizontalScrollIn(page, 'main');
     await shoot(page, `dx107-importado-${viewport.name}`);
@@ -159,9 +165,15 @@ for (const viewport of [
     expect(created).toBeTruthy();
     await page.goto(`${origin}/patients/${created.id}`);
     await expect(page.getByText('Importado desde archivo')).toBeVisible();
-    // DX-327: el sinónimo antiguo «CC» se guarda como el tipo genérico, sin nombre propio.
-    await expect(page.getByText(`Documento nacional ${docA}`).first()).toBeVisible();
-    await expect(page.locator('main')).not.toContainText('Cédula');
+    // DX-327: el alias de uso en muchos países «Cédula» se guarda como el tipo
+    // genérico, que se ve con el nombre local que le dio la clínica (V1: la
+    // demo lo tiene); ni el valor ni la cabecera «Cédula» de la hoja salen por
+    // su cuenta (las siglas de un solo país ya no son alias: Z1).
+    const nationalIdName = await demoNationalIdLabel(request);
+    await expect(page.getByText(`${nationalIdName} ${docA}`).first()).toBeVisible();
+    const mainText = (await page.locator('main').innerText()).split(nationalIdName).join('');
+    expect(mainText).not.toContain('Cédula');
+    expect(mainText).not.toMatch(/\bCC\b/);
     await expect(page.getByText(/Pendiente · importado sin autorización/)).toBeVisible();
 
     // Historial: deshacer el lote.
@@ -172,8 +184,30 @@ for (const viewport of [
     await page.getByRole('menuitem', { name: 'Deshacer lote', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('Se retirarán los 2 pacientes');
+    // DX-294: mientras la API deshace (aquí la retenemos), «Deshaciendo…» con
+    // su avance; ni Escape cierra el diálogo ni se puede lanzar otro.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let undoCalls = 0;
+    await page.route(/\/api\/v1\/patient-imports\/[^/]+\/undo$/, async (route) => {
+      undoCalls += 1;
+      await held;
+      await route.continue();
+    });
     await dialog.getByRole('button', { name: 'Deshacer lote' }).click();
+    const busy = dialog.getByRole('button', { name: 'Deshaciendo…' });
+    await expect(busy).toBeDisabled();
+    await expect(dialog.getByRole('status')).toHaveText(
+      'Deshaciendo el lote: retirando 2 pacientes. Puede tardar unos segundos; no cierres esta ventana.',
+    );
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await shoot(page, `dx294-deshaciendo-${viewport.name}`);
+    release();
     await expect(dialog).toBeHidden();
+    await page.unroute(/\/api\/v1\/patient-imports\/[^/]+\/undo$/);
+    expect(undoCalls).toBe(1);
     await expect(row).toContainText('Deshecho: 2 pacientes retirados');
     expect(await patientsWithDoc(request, host, docA)).toHaveLength(0);
     await expectNoHorizontalScroll(page);
@@ -196,14 +230,14 @@ function legacyBigCsv(rows: number, docPrefix: string): Buffer {
   for (let i = 0; i < rows; i += 1) {
     const n = String(i).padStart(5, '0');
     lines.push(
-      `CC;${docPrefix}${n};Paciente${n};Importado Masivo;03/05/1990;F;310 123 4567;paciente${docPrefix}${n}@example.com;` +
-        `Calle 10 # 1-20 Barrio Centro;Paciente de la lista del programa anterior importado en lote`,
+      `Cédula;${docPrefix}${n};Paciente${n};Importado Masivo;03/05/1990;F;0416 555 0451;paciente${docPrefix}${n}@example.com;` +
+        `Calle Demo 10, Centro;Paciente de la lista del programa anterior importado en lote`,
     );
   }
   return Buffer.from(lines.join('\n'), 'utf8');
 }
 
-test('legacy «Tipo Doc» CC, DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 MB) sube con progreso, se valida y se importa', async ({
+test('legacy «Tipo Doc» Cédula, DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 MB) sube con progreso, se valida y se importa', async ({
   page,
 }) => {
   test.setTimeout(300_000);
@@ -299,9 +333,21 @@ test('legacy «Tipo Doc» CC, DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 
   await row.getByRole('button', { name: /^Acciones de/ }).click();
     await page.getByRole('menuitem', { name: 'Deshacer lote', exact: true }).click();
   const dialog = page.getByRole('dialog');
+  // DX-294: el deshacer de 10.000 recién importados responde por el proxy de
+  // la web (corte a 30 s) con 200, de una vez y en pocos segundos.
+  const undone = page.waitForResponse(
+    (r) => /\/api\/v1\/patient-imports\/[^/]+\/undo$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST',
+    { timeout: 60_000 },
+  );
+  const startedAt = Date.now();
   await dialog.getByRole('button', { name: 'Deshacer lote' }).click();
-  await expect(dialog).toBeHidden({ timeout: 60_000 });
-  await expect(row).toContainText('Deshecho', { timeout: 60_000 });
+  const res = await undone;
+  const undoMs = Date.now() - startedAt;
+  console.info(`[DX-294] deshacer 10.000 por la web: ${res.status()} en ${undoMs} ms`);
+  expect(res.status(), await res.text()).toBe(200);
+  expect(undoMs, 'muy por debajo del corte de 30 s del proxy').toBeLessThan(15_000);
+  await expect(dialog).toBeHidden();
+  await expect(row).toContainText(/Deshecho: 10[.\s\u202f]?000 pacientes retirados/);
 });
 
 /**

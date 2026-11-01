@@ -170,4 +170,88 @@ describe('PendingFollowUpView (DX-040)', () => {
     );
     expect(await screen.findByText('No hay presupuestos por seguir.')).toBeInTheDocument();
   });
+
+  describe('D2: una fila por conversación (opciones A/B agrupadas)', () => {
+    const optionA = item();
+    const optionB = item({
+      planId: 'plan-b',
+      optionLabel: 'Opción B: puente',
+      total: 3450000,
+      presentedAt: '2026-10-08T15:00:00.000Z',
+      daysSincePresented: 8,
+    });
+    const other = item({
+      planId: 'plan-x',
+      optionGroupId: null,
+      optionLabel: null,
+      patientId: 'pat-2',
+      patientName: 'Mateo Díaz',
+      total: 800000,
+    });
+
+    it('las opciones del mismo grupo van en UNA fila: rango, opciones anidadas y un solo WhatsApp', async () => {
+      // La API ya pagina por grupo: `total` cuenta conversaciones (2), no opciones (3).
+      mockedList.mockResolvedValue(page([optionA, optionB, other], 2));
+      render(<PendingFollowUpView token="tok" />);
+      const rows = await screen.findAllByRole('row', { name: /Carolina Ruiz/ });
+      expect(rows).toHaveLength(1);
+      const row = rows[0];
+      expect(within(row).getByText('2 opciones')).toBeInTheDocument();
+      const nested = within(row).getByRole('list', { name: 'Opciones presentadas a Carolina Ruiz' });
+      expect(within(nested).getAllByRole('listitem').map((li) => money(li.textContent))).toEqual([
+        money(`Opción A: implante · ${formatCurrency(5300000, 'COP')}`),
+        money(`Opción B: puente · ${formatCurrency(3450000, 'COP')}`),
+      ]);
+      expect(money(row.textContent)).toContain(
+        money(`${formatCurrency(3450000, 'COP')} – ${formatCurrency(5300000, 'COP')}`),
+      );
+      // La antigüedad es la de la opción más antigua.
+      expect(within(row).getByText('hace 9 días')).toBeInTheDocument();
+      expect(within(row).getAllByRole('link', { name: /WhatsApp a Carolina Ruiz/ })).toHaveLength(1);
+      expect(screen.getByRole('row', { name: /Mateo Díaz/ })).toBeInTheDocument();
+      expect(screen.getByText('2 presupuestos')).toBeInTheDocument();
+    });
+
+    it('«Marcar rechazadas las 2 opciones» rechaza cada opción con el mismo motivo', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValueOnce(page([optionA, optionB], 1)).mockResolvedValue(page([]));
+      mockedReject.mockResolvedValue({ id: 'x', status: 'REJECTED' } as never);
+      render(<PendingFollowUpView token="tok" />);
+      const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+      await user.click(within(row).getByRole('button', { name: 'Acciones de Carolina Ruiz' }));
+      // También se puede descartar una sola opción.
+      expect(
+        await screen.findByRole('menuitem', { name: 'Marcar rechazada: Opción B: puente' }),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole('menuitem', { name: 'Marcar rechazadas las 2 opciones' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Marcar como rechazado' });
+      expect(within(dialog).getByText('Las 2 opciones · Carolina Ruiz')).toBeInTheDocument();
+      await user.click(within(dialog).getByRole('radio', { name: 'Precio' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Marcar rechazado' }));
+      await waitFor(() => expect(mockedReject).toHaveBeenCalledTimes(2));
+      expect(mockedReject).toHaveBeenNthCalledWith(1, 'tok', 'plan-a', { reason: 'PRICE' });
+      expect(mockedReject).toHaveBeenNthCalledWith(2, 'tok', 'plan-b', { reason: 'PRICE' });
+      expect(await screen.findByText('2 opciones marcadas como rechazadas.')).toBeInTheDocument();
+    });
+
+    it('si falla a medias, lo dice y el reintento no repite la opción ya rechazada', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(page([optionA, optionB], 1));
+      mockedReject
+        .mockResolvedValueOnce({ id: 'plan-a', status: 'REJECTED' } as never)
+        .mockRejectedValueOnce(new Error('red'))
+        .mockResolvedValueOnce({ id: 'plan-b', status: 'REJECTED' } as never);
+      render(<PendingFollowUpView token="tok" />);
+      const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+      await user.click(within(row).getByRole('button', { name: 'Acciones de Carolina Ruiz' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Marcar rechazadas las 2 opciones' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Marcar como rechazado' });
+      await user.click(within(dialog).getByRole('radio', { name: 'Precio' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Marcar rechazado' }));
+      expect(await within(dialog).findByText(/Se marcaron 1 de 2 opciones/)).toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Marcar rechazado' }));
+      await waitFor(() => expect(mockedReject).toHaveBeenCalledTimes(3));
+      expect(mockedReject).toHaveBeenLastCalledWith('tok', 'plan-b', { reason: 'PRICE' });
+    });
+  });
 });

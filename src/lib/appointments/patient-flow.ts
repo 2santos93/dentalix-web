@@ -172,10 +172,19 @@ export async function getInClinic(token: string, locationId: string): Promise<In
   });
 }
 
-/** `POST /appointments/:id/undo-arrival`: vuelve al estado previo y borra la hora. */
-export async function undoArrival(token: string, id: string): Promise<Appointment> {
+/**
+ * `POST /appointments/:id/undo-arrival`: vuelve al estado previo y borra la
+ * hora. DX-509: `keepOverbooked` deja en sobrecupo, a sabiendas, una urgencia
+ * cuya hora ya ocupa otra cita (tras el 409 `OVERBOOK_SLOT_TAKEN`).
+ */
+export async function undoArrival(
+  token: string,
+  id: string,
+  options: { keepOverbooked?: boolean } = {},
+): Promise<Appointment> {
   return apiFetch<Appointment>(`/appointments/${id}/undo-arrival`, {
     method: 'POST',
     token,
+    ...(options.keepOverbooked ? { body: { keepOverbooked: true } } : {}),
   });
 }

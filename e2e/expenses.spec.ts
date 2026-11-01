@@ -7,6 +7,8 @@ import { apiLogin, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
+import { DEMO_CURRENCY, DEMO_REGION } from './support/demo';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e (DX-274): la pantalla «Gastos» de la sede (solo ADMIN).
@@ -115,7 +117,7 @@ async function expenseViaApi(
 ): Promise<{ id: string }> {
   const res = await page.request.post(`${API_URL}/expenses`, {
     headers: { ...admin.headers, 'Idempotency-Key': randomUUID() },
-    data: { currency: 'COP', ...body },
+    data: { currency: DEMO_CURRENCY, ...body },
   });
   expect(res.ok(), `gasto por la API falló: ${await res.text()}`).toBeTruthy();
   return (await res.json()) as { id: string };
@@ -164,11 +166,11 @@ for (const viewport of [
     await expect(form.getByRole('option', { name: 'Laboratorio' })).toBeAttached({ timeout: 15_000 });
     await form.getByRole('button', { name: 'Registrar gasto' }).click();
     await expect(form.getByText('Elige una categoría.')).toBeVisible();
-    await form.getByLabel('Moneda').selectOption('COP');
+    await form.getByLabel('Moneda').selectOption(DEMO_CURRENCY);
     await form.getByLabel('Categoría').selectOption('Laboratorio');
     await form.getByLabel('Proveedor').fill(supplier);
     await form.getByLabel('Descripción').fill('Coronas de zirconio, paciente de prueba');
-    await form.getByLabel('Importe').fill('150000');
+    await form.getByLabel('Importe').fill('150');
     await auditBothSchemes(page, evidence, `expense-form-${viewport.width}`, form);
     await form.getByRole('button', { name: 'Registrar gasto' }).click();
     await expect(form).toBeHidden({ timeout: 15_000 });
@@ -180,7 +182,7 @@ for (const viewport of [
     const listing = page.getByRole(narrow ? 'list' : 'table', { name: /^Gastos del periodo/ });
     await expect(listing).toContainText(supplier);
     await expect(listing).toContainText('Pendiente');
-    await expect(listing).toContainText('150.000,00');
+    await expect(listing).toContainText('150,00');
     if (narrow) await expectNoHorizontalScroll(page);
     await auditBothSchemes(page, evidence, `expenses-list-${viewport.width}`, page.locator('main'));
 
@@ -206,22 +208,22 @@ for (const viewport of [
     // Un pago parcial por transferencia.
     await detail.getByRole('button', { name: 'Registrar pago' }).click();
     const pay = page.getByRole('dialog', { name: 'Registrar pago' });
-    await expect(pay.getByText(/Pendiente: 150\.000,00/)).toBeVisible();
+    await expect(pay.getByText(/Pendiente: 150,00/)).toBeVisible();
     await pay.getByLabel('Medio de pago').selectOption({ label: 'Transferencia' });
     await expect(pay.getByLabel('Desde mi caja abierta')).toHaveCount(0);
-    await pay.getByLabel('Importe (COP)').fill('200000');
+    await pay.getByLabel(`Importe (${DEMO_CURRENCY})`).fill('200');
     await pay.getByRole('button', { name: 'Registrar pago' }).click();
     await expect(pay.getByText(/El pago supera lo pendiente del gasto/)).toBeVisible();
-    await pay.getByLabel('Importe (COP)').fill('50000');
+    await pay.getByLabel(`Importe (${DEMO_CURRENCY})`).fill('50');
     await pay.getByRole('button', { name: 'Registrar pago' }).click();
     await expect(pay).toBeHidden({ timeout: 15_000 });
-    await expect(detail.getByText(/Pago de 50\.000,00\sCOP registrado\./)).toBeVisible();
+    await expect(detail.getByText(/Pago de 50,00\sUSD registrado\./)).toBeVisible();
     await expect(detail.getByText(/Transferencia/)).toBeVisible();
     await expect(detail).toContainText('Parcial');
     await auditBothSchemes(page, evidence, `expense-detail-${viewport.width}`, detail);
 
     // Anular el pago: el motivo es obligatorio.
-    await detail.getByRole('button', { name: /^Anular pago de 50\.000,00/ }).click();
+    await detail.getByRole('button', { name: /^Anular pago de 50,00/ }).click();
     const voidPayment = page.getByRole('dialog', { name: '¿Anular este pago?' });
     await voidPayment.getByRole('button', { name: 'Anular pago' }).click();
     await expect(voidPayment.getByText('Escribe el motivo (al menos 5 caracteres).')).toBeVisible();
@@ -270,8 +272,8 @@ for (const viewport of [
 
     // Dos gastos de hoy en la sede principal.
     const today = await sedeToday(page, admin);
-    await expenseViaApi(page, admin, { category: 'Insumos clínicos', supplier, amount: 1_000, invoiceDate: today });
-    await expenseViaApi(page, admin, { category: 'Papelería', supplier, amount: 43_210, invoiceDate: today });
+    await expenseViaApi(page, admin, { category: 'Insumos clínicos', supplier, amount: 100, invoiceDate: today });
+    await expenseViaApi(page, admin, { category: 'Papelería', supplier, amount: 432.1, invoiceDate: today });
 
     // Lo que dice la API del resumen es lo que tiene que pintar la pantalla.
     const summary = page.waitForResponse((res) => /\/expenses\/summary\?/.test(res.url()) && res.ok());
@@ -288,20 +290,18 @@ for (const viewport of [
     };
     const month = today.slice(0, 7);
     const row = rows.find(
-      (r) => r.month === month && r.currency === 'COP' && r.categories.some((c) => c.category === 'Papelería'),
+      (r) => r.month === month && r.currency === DEMO_CURRENCY && r.categories.some((c) => c.category === 'Papelería'),
     );
     expect(row, `fila del resumen de ${month} con Papelería`).toBeTruthy();
     const papeleria = row!.categories.find((c) => c.category === 'Papelería')!;
-    expect(papeleria.amount).toBeGreaterThanOrEqual(43_210);
+    expect(papeleria.amount).toBeGreaterThanOrEqual(432.1);
 
     const table = page.getByRole('table', { name: 'Ingresos y gastos por mes, sede y moneda' });
     await expect(table).toBeVisible({ timeout: 15_000 });
-    const totalText = new Intl.NumberFormat('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-      row!.expensesTotal,
-    );
+    const totalText = regionalFormat(DEMO_REGION).number(row!.expensesTotal, { min: 2, max: 2 });
     const toggle = table.getByRole('button', {
-      // DX-378 (FE-078): separadores de la sede (es-CO) y siempre el código de la moneda, nunca «$».
-      name: new RegExp(`^Ver gastos por categoría de .+, ${row!.locationName}: COP\\s${totalText.replace(/\./g, '\\.')}`),
+      // DX-378 (FE-078): separadores de la sede (es-VE) y siempre el código de la moneda, nunca «$».
+      name: new RegExp(`^Ver gastos por categoría de .+, ${row!.locationName}: ${DEMO_CURRENCY}\\s${totalText.replace(/\./g, '\\.')}`),
     });
     await expect(toggle).toBeVisible();
     if (narrow) await expectNoHorizontalScroll(page);

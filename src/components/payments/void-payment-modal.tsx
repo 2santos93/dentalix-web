@@ -39,7 +39,7 @@ interface VoidPaymentModalProps {
   error: string | null;
   /** Recepción: solo puede anular abonos suyos del día (lo decide la API). */
   restrictedToOwnToday: boolean;
-  /** Qué abono se anula, p. ej. «12.345 COP · 16/10/2026 · Ana Gómez». */
+  /** Qué abono se anula, p. ej. «123,45 USD · 16/10/2026 · Ana Gómez». */
   subject?: string;
   /** DX-390: formas de pago del cobro dividido al que pertenece el abono (se anulan juntas). */
   splitLines?: number;

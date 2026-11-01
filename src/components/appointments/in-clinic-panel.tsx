@@ -27,6 +27,7 @@ import {
 } from '@/lib/appointments/plan-item-reservations';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { focusLocationSwitcher } from '@/components/locations/location-switcher';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -98,24 +99,6 @@ interface InClinicPanelProps {
    * de sede visible de la app; quien pinta el panel en una hoja la cierra antes.
    */
   onChooseLocation?: () => void;
-}
-
-/**
- * Enfoca el selector de sede global visible (barra lateral en escritorio,
- * barra superior en el teléfono) y abre su lista si el navegador lo permite.
- * El panel no duplica el selector: hay UNA sede activa en la app.
- */
-export function focusLocationSwitcher(): void {
-  const select = Array.from(document.querySelectorAll<HTMLSelectElement>('select[aria-label="Sede"]')).find(
-    (el) => el.getClientRects().length > 0,
-  );
-  if (!select) return;
-  select.focus();
-  try {
-    select.showPicker?.();
-  } catch {
-    // Sin gesto del usuario o sin soporte: queda enfocado, que basta.
-  }
 }
 
 /**

@@ -8,8 +8,9 @@ import { tenantOrigin } from './support/urls';
  * e2e (DX-063): con la API respondiendo un 500 «Internal server error», las
  * pantallas de Pacientes, Catálogo y Caja dicen qué falló EN ESPAÑOL, en su
  * estado de sección (escalón 1) y con «Reintentar»; al reintentar con la API
- * ya sana, la pantalla carga. El catálogo de la clínica demo (sede en Colombia)
- * pinta los precios en COP, no en USD. Escritorio (1440px) y móvil (390px).
+ * ya sana, la pantalla carga. El catálogo de la clínica demo, con sedes en USD,
+ * BRL y GBP (DX-335), no tiene una moneda común: pinta el precio de catálogo
+ * sin código, nunca en una moneda que no es la suya. Escritorio (1440px) y móvil (390px).
  *
  * El fallo se fuerza interceptando la petición del navegador con `page.route`
  * (mismo origen, `/api/v1/...`), así no hace falta romper la API real.
@@ -114,10 +115,13 @@ for (const viewport of [
       await page.unroute(matcher, handler);
 
       if (screen.name === 'catalogo') {
-        // La clínica demo tiene su sede en Colombia: precios en COP, nunca US$.
-        await expect(page.getByText(/\d\sCOP$/).first()).toBeVisible();
+        // Las sedes de la demo cobran en monedas distintas (`clinicBaseCurrency`
+        // es null): el precio de catálogo sale sin código («450,00»), nunca con
+        // una moneda que no es la suya ni con símbolo («US$», DX-378).
+        await expect(page.getByText(/^\d{1,3}(?:\.\d{3})*,\d{2}$/).first()).toBeVisible();
         await expect(page.getByText(/US\$/)).toHaveCount(0);
-        await screenshot(page, `catalogo-cop-${viewport.width}.png`, testInfo.outputPath('qa'));
+        await expect(page.getByText(/\d\s(?:[A-Z]{3}|€|Bs|R\$|£)$/)).toHaveCount(0);
+        await screenshot(page, `catalogo-precios-${viewport.width}.png`, testInfo.outputPath('qa'));
       }
     }
   });

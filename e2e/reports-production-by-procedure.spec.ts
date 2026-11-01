@@ -61,9 +61,11 @@ test('ADMIN a 1440 px: filas por categoría y código, totales por moneda, detal
   const rows = page.getByTestId('production-row');
   await expect(rows.first()).toBeVisible();
   await expect(page.getByTestId('production-subtotal').first()).toBeVisible();
-  // La demo cobra en COP: un total por moneda, nunca mezclado.
+  // La demo factura en USD (y sus otras sedes en BRL y GBP): un total por
+  // moneda, nunca mezclado con otro código.
   const totals = page.getByTestId('production-total');
-  await expect(totals.first()).toContainText('COP');
+  await expect(totals.filter({ hasText: 'USD' })).toHaveCount(1);
+  await expect(totals.filter({ hasText: 'USD' })).not.toContainText(/\b(?!USD\b)[A-Z]{3}\b/);
   // DX-305: el «Sin atribuir» de la demo no tiene fecha: aviso bajo la tabla,
   // no una fila.
   await expect(page.getByTestId('production-undated')).toContainText('sin fecha («Sin atribuir»');

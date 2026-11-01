@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { configure, render, screen, waitFor, within } from '@testing-library/react';
+import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readDate, readTime, typeDate, typeTime } from './date-segments-for-tests';
 import { AgendaView } from './agenda-view';
@@ -20,6 +20,8 @@ import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listOpeningCandidates } from '@/lib/appointments/opening-candidates';
 import { getRoster } from '@/lib/locations/provider-schedule-api';
 import { setActiveLocationId } from '@/lib/locations/location-store';
+import { listChairs } from '@/lib/chairs/chairs-api';
+import { notifyError } from '@/components/errors/notify';
 
 // Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
 // pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
@@ -63,6 +65,16 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
   updateAppointment: jest.fn(),
 }));
 // DX-279: la vista previa del aviso del diálogo de cancelar.
+// DX-211: el aviso de fondo sigue siendo el real; se espía para comprobarlo.
+jest.mock('../errors/notify', () => {
+  const actual = jest.requireActual('../errors/notify');
+  return { ...actual, notifyError: jest.fn(actual.notifyError) };
+});
+// DX-211: sillones de la sede activa (por defecto, ninguno).
+jest.mock('../../lib/chairs/chairs-api', () => ({
+  ...jest.requireActual('../../lib/chairs/chairs-api'),
+  listChairs: jest.fn().mockResolvedValue([]),
+}));
 jest.mock('../../lib/cancellations/cancellation', () => ({
   ...jest.requireActual('../../lib/cancellations/cancellation'),
   getCancellationPreview: jest.fn().mockResolvedValue({
@@ -450,6 +462,79 @@ describe('AgendaView', () => {
     expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
   });
 
+  describe('urgencia en sobrecupo (DX-509)', () => {
+    async function openList(user: ReturnType<typeof userEvent.setup>) {
+      await renderAgenda(<AgendaView token="tok" />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      return screen.findByRole('table', { name: /agenda del día/i });
+    }
+
+    it('el distintivo «Sobrecupo» sale solo mientras lo es (no en una normal ni en una cancelada)', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([
+        appointment({ id: 'urg', patientFirstName: 'Úrsula', patientLastName: 'Pérez', overbooked: true, status: 'ARRIVED' }),
+        appointment({
+          id: 'normal',
+          patientFirstName: 'Berta',
+          patientLastName: 'Gil',
+          start: '2026-03-10T10:00:00.000Z',
+          end: '2026-03-10T10:30:00.000Z',
+          overbooked: false,
+        }),
+        appointment({
+          id: 'cancelada',
+          patientFirstName: 'Carla',
+          patientLastName: 'Ruiz',
+          start: '2026-03-10T11:00:00.000Z',
+          end: '2026-03-10T11:30:00.000Z',
+          overbooked: true,
+          status: 'CANCELLED',
+        }),
+      ]);
+      const user = userEvent.setup();
+      const table = await openList(user);
+      const rows = within(table).getAllByRole('row').slice(1);
+      const chipIn = (name: RegExp) =>
+        within(rows.find((r) => name.test(r.textContent ?? ''))!).queryByTestId('overbooked-chip');
+      expect(chipIn(/Úrsula/)).toHaveTextContent('Sobrecupo');
+      expect(chipIn(/Berta/)).toBeNull();
+      expect(chipIn(/Carla/)).toBeNull();
+    });
+
+    it('reactivar con su hora ocupada: pregunta y «Mantener en sobrecupo» reenvía con keepOverbooked', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      const cancelled = appointment({ id: 'urg', overbooked: true, status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
+      mockedListAppointments.mockResolvedValue([cancelled]);
+      mockedUpdateAppointment
+        .mockRejectedValueOnce(
+          new ApiError(
+            409,
+            'Esta urgencia se atendió en sobrecupo y su hora ya la ocupa otra cita del profesional. Muévela a otra hora o mantenla como sobrecupo.',
+            { code: 'OVERBOOK_SLOT_TAKEN' },
+          ),
+        )
+        .mockResolvedValueOnce({ ...cancelled, status: 'SCHEDULED' });
+      const user = userEvent.setup();
+      const table = await openList(user);
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
+
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      expect(dialog).toHaveTextContent('mantenla como sobrecupo');
+      expect(mockedUpdateAppointment).toHaveBeenCalledTimes(1);
+      await user.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
+      await waitFor(() =>
+        expect(mockedUpdateAppointment).toHaveBeenLastCalledWith('tok', 'urg', {
+          status: 'SCHEDULED',
+          keepOverbooked: true,
+        }),
+      );
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Su hora ya está ocupada' })).not.toBeInTheDocument(),
+      );
+    });
+  });
+
   it('keeps the row\'s status select disabled until the in-place refresh actually resolves, not just until the PATCH settles (review fix)', async () => {
     mockedListStaff.mockResolvedValue(staff);
 
@@ -827,18 +912,18 @@ describe('AgendaView', () => {
   it.each([
     [
       'vencida',
-      { status: 'EXPIRED' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: '2026-01-31' },
-      'Cobertura: Sura EPS · venció el 31/01/2026',
+      { status: 'EXPIRED' as const, payerName: 'Surco Salud', planName: 'Plan Oro', validTo: '2026-01-31' },
+      'Cobertura: Surco Salud · venció el 31/01/2026',
     ],
     [
       'vigente con plan',
-      { status: 'ACTIVE' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: null },
-      'Cobertura: Sura EPS · Plan Oro',
+      { status: 'ACTIVE' as const, payerName: 'Surco Salud', planName: 'Plan Oro', validTo: null },
+      'Cobertura: Surco Salud · Plan Oro',
     ],
     [
       'pendiente de inicio',
-      { status: 'NOT_STARTED' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: null },
-      'Cobertura: Sura EPS · pendiente de inicio',
+      { status: 'NOT_STARTED' as const, payerName: 'Surco Salud', planName: 'Plan Oro', validTo: null },
+      'Cobertura: Surco Salud · pendiente de inicio',
     ],
   ])('Día: el detalle muestra la línea de cobertura (%s)', async (_label, coverage, expected) => {
     const future = new Date(Date.now() + 3 * 24 * 3600_000);
@@ -1649,4 +1734,98 @@ describe('AgendaView con el reloj de la sede (DX-378)', () => {
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
     expect(mockedListAppointments).not.toHaveBeenCalled();
   });
+
+  // DX-211: «Columnas: Profesionales | Sillones» en la vista Día.
+  describe('columnas por sillón (DX-211)', () => {
+    const mockedListChairs = listChairs as jest.MockedFunction<typeof listChairs>;
+    const token = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const base = {
+      tenantId: 't1',
+      locationId: 'loc-1',
+      defaultProviderId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const chairs = [
+      { ...base, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, active: true },
+      { ...base, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, active: true },
+      { ...base, id: 'ch-off', name: 'Viejo', sortOrder: 2, active: false },
+    ];
+
+    afterEach(() => {
+      window.localStorage.clear();
+      mockedListChairs.mockReset();
+      mockedListChairs.mockResolvedValue([]);
+    });
+
+    async function openDay() {
+      const user = userEvent.setup();
+      await renderAgenda(<AgendaView token={token} />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await screen.findAllByTestId('day-column');
+      return user;
+    }
+
+    it('sin sillones en la sede, el conmutador no aparece', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([]);
+      await openDay();
+      await waitFor(() => expect(mockedListChairs).toHaveBeenCalledWith(token, 'loc-1', { includeInactive: true }));
+      expect(screen.queryByRole('button', { name: 'Sillones' })).not.toBeInTheDocument();
+    });
+
+    it('con sillones: columnas por sillón activo en su orden más «Sin sillón», sin pedir por profesional, y se recuerda', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListChairs.mockResolvedValue(chairs);
+      mockedListAppointments.mockResolvedValue([
+        appointment({ id: 'apt-c', chairId: 'ch-2', chair: { id: 'ch-2', name: 'Sillón 2', active: true } }),
+        appointment({ id: 'apt-n', providerId: 'staff-2' }),
+      ]);
+      const user = await openDay();
+      await user.click(await screen.findByRole('button', { name: 'Sillones' }));
+      await waitFor(() =>
+        expect(screen.getByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument(),
+      );
+      expect(screen.getAllByTestId('day-column-header').map((h) => h.textContent)).toEqual([
+        expect.stringContaining('Sillón 1'),
+        expect.stringContaining('Sillón 2'),
+        expect.stringContaining('Sin sillón'),
+      ]);
+      const last = mockedListAppointments.mock.calls.at(-1)?.[1];
+      expect(last).not.toHaveProperty('providerIds');
+      expect(window.localStorage.getItem('dentalix.agenda.columnsBy.u1')).toBe('chairs');
+    });
+
+    it('revisión B4: con la preferencia «Sillones», si los sillones no cargan avisa con Reintentar', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([]);
+      mockedListChairs.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(chairs);
+      await openDay();
+      await waitFor(() =>
+        expect(notifyError).toHaveBeenCalledWith(
+          'No pudimos cargar los sillones de la sede: la agenda se ve por profesional.',
+          expect.objectContaining({ onRetry: expect.any(Function) }),
+        ),
+      );
+      const { onRetry } = (notifyError as jest.Mock).mock.calls.at(-1)[1] as { onRetry: () => void };
+      act(() => onRetry());
+      expect(await screen.findByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument();
+    });
+
+    it('la preferencia guardada abre la vista por sillón', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListChairs.mockResolvedValue(chairs);
+      mockedListAppointments.mockResolvedValue([]);
+      await openDay();
+      expect(await screen.findByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument();
+    });
+  });
 });
+

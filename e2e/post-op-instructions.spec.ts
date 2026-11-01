@@ -244,7 +244,8 @@ for (const viewport of VIEWPORTS) {
     await page.getByRole('button', { name: /^Día$/ }).click();
     await fillDate(page, 'Fecha', slot.day);
     await page
-      .getByRole('button', { name: new RegExp(`^${slot.label}.*Detalle de la cita`) })
+      // Columnas (escritorio): la hora visible primero; Lista (teléfono, K4): «Detalle de la cita de …».
+      .getByRole('button', { name: new RegExp(`^${slot.label}.*Detalle de la cita|^Detalle de la cita de ${slot.label}`) })
       .locator('visible=true')
       .first()
       .click();

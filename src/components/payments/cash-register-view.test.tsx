@@ -103,6 +103,7 @@ const anaCash: CashPayment = {
   method: 'CASH',
   paymentMethod: null,
   reference: null,
+  externalInvoiceNumber: null,
   notes: null,
   location: { id: 'loc-1', name: 'Sede principal' },
   patient: { id: 'pat-1', fullName: 'Ana Gómez' },
@@ -591,9 +592,10 @@ describe('anular desde la caja (DX-057)', () => {
     const table = await screen.findByRole('table', { name: /abonos/i });
 
     const ana = within(table).getByRole('row', { name: /ana gómez/i });
-    expect(await rowMenuItems(user, ana)).toEqual(['Recibo', 'Anular']);
+    // DX-515: «Factura externa» en todas las filas (ADMIN y recepción).
+    expect(await rowMenuItems(user, ana)).toEqual(['Recibo', 'Factura externa', 'Anular']);
     const beto = within(table).getByRole('row', { name: /beto ruiz/i });
-    expect(await rowMenuItems(user, beto)).toEqual(['Recibo']);
+    expect(await rowMenuItems(user, beto)).toEqual(['Recibo', 'Factura externa']);
   });
 
   it('revisión DX-390: una forma de pago de un cobro dividido avisa que se anula el cobro entero', async () => {
@@ -914,4 +916,26 @@ it('DX-262: un abono contra el saldo migrado dice «Saldo migrado» y su concept
   // QA D2: la columna nombra el destino (un plan o un saldo migrado).
   expect(within(table).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
   expect(within(table).queryByRole('columnheader', { name: 'Plan' })).not.toBeInTheDocument();
+});
+
+describe('factura fiscal externa en la caja (DX-515)', () => {
+  it('pinta el nº bajo el medio y filtra la tabla y el CSV con o sin él', async () => {
+    mockedList.mockResolvedValue(response({ items: [{ ...anaCash, externalInvoiceNumber: 'F-0001' }, betoCard] }));
+    mockedCsv.mockResolvedValue('Fecha,Sede\r\n');
+    const user = userEvent.setup();
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    const ana = within(table).getByRole('row', { name: /ana gómez/i });
+    expect(within(ana).getByText('Fact. F-0001')).toBeInTheDocument();
+    const beto = within(table).getByRole('row', { name: /beto ruiz/i });
+    expect(within(beto).queryByText(/Fact\./)).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Factura externa' }), 'Sin nº de factura externa');
+    const today = presetRange('today');
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith('tok', { ...today, externalInvoice: 'WITHOUT', page: 1 }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Exportar CSV' }));
+    await waitFor(() => expect(mockedCsv).toHaveBeenCalledWith('tok', { ...today, externalInvoice: 'WITHOUT' }));
+  });
 });

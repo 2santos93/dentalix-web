@@ -30,6 +30,14 @@ if (webServerMode !== 'none' && !webServerCommand[webServerMode]) {
   throw new Error(`E2E_WEB_SERVER="${webServerMode}" no es válido: usa dev, start o none.`);
 }
 
+// Chromium ya instalado en el sistema (p. ej. cuando no se puede descargar el
+// de Playwright): PLAYWRIGHT_CHROMIUM_EXECUTABLE=/ruta/a/chrome.
+const chromiumLaunchOptions = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+  ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+  : {};
+/** El único spec del proyecto `touch` (DX-485). */
+const TOUCH_SPEC = /touch-targets\.spec\.ts$/;
+
 export default defineConfig({
   testDir: './e2e',
   // DX-337: rojo si la suite deja sedes o personal de más en la clínica demo.
@@ -62,13 +70,24 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      // DX-485: el spec táctil corre solo en su proyecto (abajo), no dos veces.
+      testIgnore: TOUCH_SPEC,
       use: {
         ...devices['Desktop Chrome'],
-        // Chromium ya instalado en el sistema (p. ej. cuando no se puede descargar
-        // el de Playwright): PLAYWRIGHT_CHROMIUM_EXECUTABLE=/ruta/a/chrome.
-        launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
-          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
-          : {},
+        launchOptions: chromiumLaunchOptions,
+      },
+    },
+    {
+      // DX-485 (FE-098): un teléfono con dedo (`hasTouch` + `isMobile`, que
+      // activan `pointer: coarse`) a 390 px. SOLO el spec de objetivos
+      // táctiles: la suite entera no se repite aquí (la E2E de CI ya va
+      // justa de tiempo, OPS-053).
+      name: 'touch',
+      testMatch: TOUCH_SPEC,
+      use: {
+        ...devices['Pixel 7'],
+        viewport: { width: 390, height: 844 },
+        launchOptions: chromiumLaunchOptions,
       },
     },
   ],

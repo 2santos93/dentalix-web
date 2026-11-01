@@ -150,7 +150,7 @@ export function SplitLineFields({
           onClick={onRemove}
           disabled={disabled}
           aria-label={copy.removeLine(n)}
-          className="text-muted hover:text-ink max-sm:h-11"
+          className="text-muted hover:text-ink max-sm:min-h-11"
         >
           <Trash2 aria-hidden />
           {copy.remove}

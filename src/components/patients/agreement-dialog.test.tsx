@@ -26,7 +26,7 @@ const mockedAgreements = listAgreements as jest.MockedFunction<typeof listAgreem
 const mockedCoverages = listCoverages as jest.MockedFunction<typeof listCoverages>;
 const mockedAssign = assignPatientAgreement as jest.MockedFunction<typeof assignPatientAgreement>;
 
-const sanitas = { id: 'pay-1', name: 'Sanitas', type: 'PUBLIC_SYSTEM' as const };
+const sanavida = { id: 'pay-1', name: 'Sanavida', type: 'PUBLIC_SYSTEM' as const };
 const axa = { id: 'pay-2', name: 'Axa', type: 'PREPAID_PLAN' as const };
 const cortesia = { id: 'pay-3', name: 'Cortesía', type: 'OTHER' as const };
 
@@ -59,12 +59,12 @@ describe('AgreementDialog (DX-105)', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockedAgreements.mockResolvedValue([
-      agreementDto('ag1', 'Sanitas 2026', sanitas),
+      agreementDto('ag1', 'Sanavida 2026', sanavida),
       agreementDto('ag2', 'Axa Empresas', axa),
-      agreementDto('ag3', 'Viejo', sanitas, { active: false }),
+      agreementDto('ag3', 'Viejo', sanavida, { active: false }),
     ]);
     mockedCoverages.mockResolvedValue([
-      coverageFor('c1', sanitas, 'Salud Plus'),
+      coverageFor('c1', sanavida, 'Salud Plus'),
       coverageFor('c2', axa, null),
     ]);
   });
@@ -72,7 +72,7 @@ describe('AgreementDialog (DX-105)', () => {
   it('pide un convenio antes de guardar', async () => {
     renderDialog();
     const user = setupUser();
-    await screen.findByRole('option', { name: /Sanitas 2026/ });
+    await screen.findByRole('option', { name: /Sanavida 2026/ });
     await user.click(screen.getByRole('button', { name: 'Asignar' }));
     expect(await screen.findByText('Elige un convenio.')).toBeInTheDocument();
     expect(mockedAssign).not.toHaveBeenCalled();
@@ -82,20 +82,20 @@ describe('AgreementDialog (DX-105)', () => {
     renderDialog();
     const user = setupUser();
     const dialog = await screen.findByRole('dialog');
-    await screen.findByRole('option', { name: /Sanitas 2026/ });
+    await screen.findByRole('option', { name: /Sanavida 2026/ });
     expect(within(dialog).queryByRole('option', { name: /Viejo/ })).not.toBeInTheDocument();
 
     const coverage = within(dialog).getByLabelText('Cobertura vinculada');
     expect(within(coverage).getAllByRole('option')).toHaveLength(1);
 
     await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
-    const sanitasCoverage = within(dialog).getByLabelText('Cobertura del pagador');
+    const sanavidaCoverage = within(dialog).getByLabelText('Cobertura del pagador');
     expect(
-      within(sanitasCoverage).getByRole('option', {
-        name: 'Sanitas · Salud Plus',
+      within(sanavidaCoverage).getByRole('option', {
+        name: 'Sanavida · Salud Plus',
       }),
     ).toBeInTheDocument();
-    expect(within(sanitasCoverage).queryByRole('option', { name: /Axa/ })).not.toBeInTheDocument();
+    expect(within(sanavidaCoverage).queryByRole('option', { name: /Axa/ })).not.toBeInTheDocument();
     expect(dialog).not.toHaveTextContent('88123456');
 
     await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag2');
@@ -108,14 +108,14 @@ describe('AgreementDialog (DX-105)', () => {
 
   it('al cambiar de pagador la cobertura pasa a la del nuevo pagador', async () => {
     mockedCoverages.mockResolvedValue([
-      coverageFor('c1', sanitas, 'Salud Plus'),
+      coverageFor('c1', sanavida, 'Salud Plus'),
       coverageFor('c2', axa, null),
       coverageFor('c3', axa, 'Oro'),
     ]);
     renderDialog();
     const user = setupUser();
     const dialog = await screen.findByRole('dialog');
-    await screen.findByRole('option', { name: /Sanitas 2026/ });
+    await screen.findByRole('option', { name: /Sanavida 2026/ });
     await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
     expect(within(dialog).getByLabelText('Cobertura del pagador')).toHaveValue('c1');
     await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag2');
@@ -127,7 +127,7 @@ describe('AgreementDialog (DX-105)', () => {
     const { onSaved, onOpenChange } = renderDialog();
     const user = setupUser();
     const dialog = await screen.findByRole('dialog');
-    await screen.findByRole('option', { name: /Sanitas 2026/ });
+    await screen.findByRole('option', { name: /Sanavida 2026/ });
     await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
     await user.selectOptions(within(dialog).getByLabelText('Cobertura del pagador'), 'c1');
     await typeDate(user, within(dialog).getByRole('group', { name: 'Vigente hasta' }), '2027-01-31');
@@ -151,7 +151,7 @@ describe('AgreementDialog (DX-105)', () => {
     renderDialog();
     const user = setupUser();
     const dialog = await screen.findByRole('dialog');
-    await screen.findByRole('option', { name: /Sanitas 2026/ });
+    await screen.findByRole('option', { name: /Sanavida 2026/ });
     await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
     await typeDate(user, within(dialog).getByRole('group', { name: 'Vigente desde' }), '2027-03-01');
     await typeDate(user, within(dialog).getByRole('group', { name: 'Vigente hasta' }), '2027-01-01');
@@ -169,12 +169,12 @@ describe('AgreementDialog (DX-105)', () => {
       patientAgreement({
         agreement: {
           id: 'ag1',
-          name: 'Sanitas 2026',
+          name: 'Sanavida 2026',
           kind: 'PERCENT_DISCOUNT',
           active: false,
           validFrom: null,
           validTo: null,
-          payer: sanitas,
+          payer: sanavida,
         },
         coverageId: 'c1',
         status: 'INACTIVE',
@@ -197,7 +197,7 @@ describe('AgreementDialog (DX-105)', () => {
       renderDialog(null, 'RECEPTION');
       const user = setupUser();
       const dialog = await screen.findByRole('dialog');
-      await screen.findByRole('option', { name: /Sanitas 2026/ });
+      await screen.findByRole('option', { name: /Sanavida 2026/ });
       await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
       const coverage = within(dialog).getByLabelText('Cobertura del pagador');
       expect(coverage).toHaveValue('c1');
@@ -217,13 +217,13 @@ describe('AgreementDialog (DX-105)', () => {
 
     it('con varias coberturas pide elegir una antes de guardar', async () => {
       mockedCoverages.mockResolvedValue([
-        coverageFor('c1', sanitas, 'Salud Plus'),
-        coverageFor('c4', sanitas, 'Básico'),
+        coverageFor('c1', sanavida, 'Salud Plus'),
+        coverageFor('c4', sanavida, 'Básico'),
       ]);
       renderDialog(null, 'DENTIST');
       const user = setupUser();
       const dialog = await screen.findByRole('dialog');
-      await screen.findByRole('option', { name: /Sanitas 2026/ });
+      await screen.findByRole('option', { name: /Sanavida 2026/ });
       await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
       await user.click(within(dialog).getByRole('button', { name: 'Asignar' }));
       expect(
@@ -238,16 +238,16 @@ describe('AgreementDialog (DX-105)', () => {
 
     it('sin cobertura vigente del pagador explica por qué y no deja asignar', async () => {
       mockedCoverages.mockResolvedValue([
-        coverageFor('c1', sanitas, 'Salud Plus', 'EXPIRED'),
+        coverageFor('c1', sanavida, 'Salud Plus', 'EXPIRED'),
         coverageFor('c2', axa, null),
       ]);
       renderDialog(null, 'ADMIN');
       const user = setupUser();
       const dialog = await screen.findByRole('dialog');
-      await screen.findByRole('option', { name: /Sanitas 2026/ });
+      await screen.findByRole('option', { name: /Sanavida 2026/ });
       await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
       expect(within(dialog).getByRole('alert')).toHaveTextContent(
-        'El paciente no tiene una cobertura vigente de «Sanitas». Añádela en «Coberturas» y vuelve a asignar el convenio.',
+        'El paciente no tiene una cobertura vigente de «Sanavida». Añádela en «Coberturas» y vuelve a asignar el convenio.',
       );
       expect(within(dialog).queryByLabelText('Cobertura del pagador')).not.toBeInTheDocument();
       expect(within(dialog).getByRole('button', { name: 'Asignar' })).toBeDisabled();
@@ -256,15 +256,15 @@ describe('AgreementDialog (DX-105)', () => {
 
     it('SEC-049: con solo la cobertura que registró él y sin verificar, explica que falta la verificación', async () => {
       mockedCoverages.mockResolvedValue([
-        { ...coverageFor('c1', sanitas, 'Salud Plus'), declaredById: 'u-recepcion' },
+        { ...coverageFor('c1', sanavida, 'Salud Plus'), declaredById: 'u-recepcion' },
       ]);
       renderDialog(null, 'RECEPTION', tokenFor('u-recepcion'));
       const user = setupUser();
       const dialog = await screen.findByRole('dialog');
-      await screen.findByRole('option', { name: /Sanitas 2026/ });
+      await screen.findByRole('option', { name: /Sanavida 2026/ });
       await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
       expect(within(dialog).getByRole('alert')).toHaveTextContent(
-        'La cobertura de «Sanitas» la registraste tú y aún no la ha verificado un administrador: pide a un administrador que la verifique en «Coberturas» (o que asigne él el convenio).',
+        'La cobertura de «Sanavida» la registraste tú y aún no la ha verificado un administrador: pide a un administrador que la verifique en «Coberturas» (o que asigne él el convenio).',
       );
       expect(within(dialog).getByRole('button', { name: 'Asignar' })).toBeDisabled();
     });
@@ -273,7 +273,7 @@ describe('AgreementDialog (DX-105)', () => {
       mockedAssign.mockResolvedValue(patientAgreement());
       mockedCoverages.mockResolvedValue([
         {
-          ...coverageFor('c1', sanitas, 'Salud Plus'),
+          ...coverageFor('c1', sanavida, 'Salud Plus'),
           declaredById: 'u-recepcion',
           verifiedAt: '2026-10-20T15:00:00.000Z',
         },
@@ -281,7 +281,7 @@ describe('AgreementDialog (DX-105)', () => {
       renderDialog(null, 'RECEPTION', tokenFor('u-recepcion'));
       const user = setupUser();
       const dialog = await screen.findByRole('dialog');
-      await screen.findByRole('option', { name: /Sanitas 2026/ });
+      await screen.findByRole('option', { name: /Sanavida 2026/ });
       await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
       expect(within(dialog).getByLabelText('Cobertura del pagador')).toHaveValue('c1');
       await user.click(within(dialog).getByRole('button', { name: 'Asignar' }));
@@ -330,7 +330,7 @@ describe('AgreementDialog (DX-105)', () => {
     });
 
     it('M2: con una cobertura migrada del pagador OTHER, un no-ADMIN la elige y asigna', async () => {
-      mockedAgreements.mockResolvedValue([agreementDto('ag9', 'Sura migrada', cortesia)]);
+      mockedAgreements.mockResolvedValue([agreementDto('ag9', 'Surco migrada', cortesia)]);
       mockedCoverages.mockResolvedValue([
         coverageFor('c7', cortesia, 'Plan migrado', 'ACTIVE', true),
         coverageFor('c8', cortesia, 'Manual'),
@@ -339,7 +339,7 @@ describe('AgreementDialog (DX-105)', () => {
       renderDialog(null, 'RECEPTION');
       const user = setupUser();
       const dialog = await screen.findByRole('dialog');
-      await screen.findByRole('option', { name: /Sura migrada/ });
+      await screen.findByRole('option', { name: /Surco migrada/ });
       await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag9');
       const coverage = within(dialog).getByLabelText('Cobertura del pagador');
       expect(coverage).toHaveValue('c7');

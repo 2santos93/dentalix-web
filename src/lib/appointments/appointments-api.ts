@@ -5,6 +5,7 @@ import type { AppointmentTypeSummary } from './appointment-types-api';
 import type { OverdueBalance } from '@/lib/collections/collections-api';
 import type { CoverageSummary } from '@/lib/patients/patients-api';
 import type { MedicalAlertFlags } from '@/lib/clinical/medical-alerts';
+import type { ChairSummary } from '@/lib/chairs/chairs-api';
 
 export type CreateAppointmentInput = components['schemas']['CreateAppointmentDto'];
 export type UpdateAppointmentInput = components['schemas']['UpdateAppointmentDto'];
@@ -70,6 +71,20 @@ export interface Appointment {
   arrivedAt?: string | null;
   seatedAt?: string | null;
   readyForCheckoutAt?: string | null;
+  /**
+   * DX-211: sillón de la cita (null = sin sillón) y su nombre embebido, con
+   * `active: false` si se desactivó después. Opcionales aquí solo para no
+   * obligar a los dobles de los tests a llevarlos.
+   */
+  chairId?: string | null;
+  chair?: ChairSummary | null;
+  /**
+   * DX-470/DX-509: urgencia atendida en sobrecupo (no ocupa la hora del
+   * profesional). Deja de serlo al moverla, o al deshacer la llegada o
+   * reactivarla con su hora libre. Opcional aquí solo para no obligar a los
+   * dobles de los tests a llevarlo.
+   */
+  overbooked?: boolean;
   createdAt: string;
   updatedAt: string;
   /**
@@ -150,6 +165,8 @@ export async function listAppointments(
   // DX-121: columnas de la vista Día; se repite el parámetro (hasta 12).
   for (const id of params.providerIds ?? []) search.append('providerIds', id);
   if (params.locationId) search.set('locationId', params.locationId);
+  // DX-211: solo las citas de estos sillones (se repite el parámetro).
+  for (const id of params.chairIds ?? []) search.append('chairIds', id);
 
   return apiFetch<ListAppointment[]>(`/appointments?${search.toString()}`, {
     token,

@@ -1,5 +1,6 @@
 import {
   exchangeRateBackupDetail,
+  receiptDetail,
   cancellationDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
@@ -14,6 +15,7 @@ import {
   staffLoginDetail,
   cashSessionDetail,
   sedationDetail,
+  chairDetail,
   scheduleChangeDetail,
   patientFlowDetail,
   planItemAttributionDetail,
@@ -54,6 +56,24 @@ describe('etiquetas de auditoría', () => {
   it('AUDIT_RESOURCE_LABELS.CLINIC_SETTINGS is Ajustes de la clínica', () => {
     // DX-328: la mayoría de edad de la clínica se audita como ajuste de la clínica.
     expect(AUDIT_RESOURCE_LABELS.CLINIC_SETTINGS).toBe('Ajustes de la clínica');
+  });
+
+  it('DX-360: los recursos de configuración de la clínica tienen su etiqueta y salen en el filtro', () => {
+    const expected = {
+      LOCATION_SCHEDULE: 'Horario de la sede',
+      REMINDER_SETTINGS: 'Recordatorios de la sede',
+      PRIVACY_POLICY: 'Política de datos',
+      APPOINTMENT_TYPE: 'Tipo de cita',
+      PAYER: 'Pagador',
+      CONSENT_TEMPLATE: 'Plantilla de consentimiento',
+      PRESCRIPTION_TEMPLATE: 'Plantilla de receta',
+      INVENTORY_ITEM: 'Artículo de inventario',
+      INVENTORY_MOVEMENT: 'Movimiento de inventario',
+    } as const;
+    for (const [resource, label] of Object.entries(expected)) {
+      expect(AUDIT_RESOURCE_LABELS[resource as keyof typeof expected]).toBe(label);
+      expect(AUDIT_RESOURCE_OPTIONS).toContain(resource);
+    }
   });
 
   it('las opciones no repiten valores', () => {
@@ -108,6 +128,15 @@ describe('implantSearchDetail (DX-191)', () => {
     );
     expect(staffLoginDetail({ reason: 'REMINDER_OPT_OUT' })).toBeNull();
     expect(staffLoginDetail({})).toBeNull();
+  });
+});
+
+describe('chairDetail (DX-211)', () => {
+  it('nombra el orden, la desactivación y la reactivación de un sillón', () => {
+    expect(chairDetail({ reason: 'CHAIR_ORDER' })).toBe('Orden de los sillones');
+    expect(chairDetail({ reason: 'CHAIR_DEACTIVATED' })).toBe('Sillón desactivado');
+    expect(chairDetail({ reason: 'CHAIR_REACTIVATED' })).toBe('Sillón reactivado');
+    expect(chairDetail({ reason: 'SEDATION_VITALS' })).toBeNull();
   });
 });
 
@@ -652,5 +681,15 @@ describe('exchangeRateBackupDetail (DX-402)', () => {
     expect(signatureRequestDetail({ reason: 'OTRA_COSA' })).toBeNull();
     expect(isPatientOptOut({ reason: 'SIGNATURE_PATIENT_SIGNED', origin: 'LINK' })).toBe(true);
     expect(isPatientOptOut({ reason: 'SIGNATURE_REQUEST_SENT' })).toBe(false);
+  });
+});
+
+describe('recibo no fiscal en la auditoría (DX-515)', () => {
+  it.each([
+    ['RECEIPT_SETTINGS', 'Título y leyenda del recibo'],
+    ['RECEIPT_LEGEND', 'Leyenda del recibo de la sede'],
+    ['EXTERNAL_INVOICE_NUMBER', 'Nº de factura externa del abono'],
+  ])('%s → %s', (reason, text) => {
+    expect(receiptDetail({ reason })).toBe(text);
   });
 });

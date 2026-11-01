@@ -12,7 +12,7 @@ import {
   type RegionalSettingsValues,
 } from '@/lib/locations/regional-settings';
 import { countryName } from '@/lib/locations/countries';
-import { countryTimeZones, timeZoneInCountry } from '@/lib/locations/country-regional';
+import { countryCurrencyAlternatives, countryTimeZones, timeZoneInCountry } from '@/lib/locations/country-regional';
 import {
   localeChoices,
   localeName,
@@ -50,6 +50,8 @@ export const regionalSettingsFieldsCopy = {
   preview: (sample: string) => `Vista previa: ${sample}`,
   proposal: {
     currency: (country: string, value: string) => `En ${country} se usa ${value}.`,
+    /** V1: otra moneda de uso en el país, a un clic de la propuesta (`VE` → VES). */
+    alternativeCurrency: (country: string, value: string) => `En ${country} también se usa ${value}.`,
     timeZone: (country: string, value: string) => `Zona de ${country}: ${value}.`,
     locale: (country: string, value: string) => `Formato de ${country}: ${value}.`,
   },
@@ -172,6 +174,15 @@ export function RegionalSettingsFields({
     countryTimeZones(values.country).length > 0 &&
     !timeZoneInCountry(values.timeZone, values.country);
 
+  // V1: otras monedas de uso en el país (dato de `country-regional`), a un
+  // clic mientras la moneda es la que propone el país (alta, o al cambiar de
+  // país). Nunca se elige sola.
+  const currencyFromCountry = sources.currency === 'country' || Boolean(proposals.currency);
+  const alternativeCurrencies =
+    currencyFromCountry && country
+      ? countryCurrencyAlternatives(values.country).filter((code) => code !== values.currency && code !== proposals.currency)
+      : [];
+
   function proposalRow(field: 'currency' | 'timeZone' | 'locale', shown: string) {
     const value = proposals[field];
     if (!value || !country || !onAcceptProposal) return null;
@@ -232,6 +243,20 @@ export function RegionalSettingsFields({
           ariaDescribedBy={describedBy('currency', `${id('currency')}-hint`)}
         />
         {proposalRow('currency', proposals.currency ?? '')}
+        {alternativeCurrencies.map((code) => (
+          <div key={code} className="flex flex-wrap items-center gap-x-2 text-xs text-muted" data-alternative-currency={code}>
+            <span>{copy.proposal.alternativeCurrency(country as string, code)}</span>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-xs"
+              onClick={() => onChange('currency', code)}
+            >
+              {copy.useProposal.currency(code)}
+            </Button>
+          </div>
+        ))}
       </FormField>
 
       <FormField

@@ -1,4 +1,4 @@
-import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
+import cldrFormatDigits from '@/lib/money/cldr-format-digits-zero.json';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 
 /**
@@ -7,8 +7,8 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
  */
 export const NO_SEDE_FORMAT = '—';
 
-/** Monedas que se pintan sin decimales cuando el importe es entero (misma regla que `formatCurrency`). */
-const ZERO_DECIMAL: ReadonlySet<string> = new Set(iso4217ZeroDecimal.minorUnitsZero);
+/** Monedas que se pintan sin decimales cuando el importe es entero (dígitos de formato CLDR 47; misma regla que `formatCurrency`). */
+const ZERO_DECIMAL: ReadonlySet<string> = new Set(cldrFormatDigits.cldrDigitsZero);
 const BIDI_MARKS_RE = /[‎‏؜]/g;
 const codeFormatters = new Map<string, Intl.NumberFormat>();
 
@@ -19,7 +19,7 @@ export function sedeNumber(value: number, fmt: RegionalFormat | null): string {
 
 /**
  * Un importe con los separadores de la sede y SIEMPRE el código ISO de su
- * moneda («COP 2.195.000,00», «2.195.000,00 COP», «USD 1,234.50»), nunca un
+ * moneda («MXN 2.195.000,00», «2.195.000,00 MXN», «USD 1,234.50»), nunca un
  * símbolo: en un producto bimonetario «$» no dice si son pesos o dólares
  * (DX-378). Mismos decimales que `formatCurrency`: 2, o 0 en una moneda sin
  * unidad menor con importe entero. Nunca lanza: un código que Intl no acepta

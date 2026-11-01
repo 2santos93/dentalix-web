@@ -41,6 +41,7 @@ import {
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
 import { freeGaps } from '@/lib/appointments/opening-candidates';
 import { WANTS_EARLIER_LABEL, WantsEarlierChip } from '@/components/appointments/wants-earlier-chip';
+import { OVERBOOKED_LABEL, OverbookedChip, showsOverbooked } from '@/components/appointments/overbooked-chip';
 import {
   STATUS_LABELS,
   patientLabel,
@@ -55,6 +56,9 @@ import { statusTone, TONE_CLASSES } from '@/lib/status/tones';
 // Copy as constants (i18n-ready, es-first).
 const copy = {
   gridLabel: 'Agenda del día por profesional',
+  gridLabelByChair: 'Agenda del día por sillón',
+  chairPicker: 'Sillón visible',
+  newAppointmentIn: (chair: string) => `Nueva cita en ${chair}`,
   loading: 'Cargando agenda…',
   loadError: 'No pudimos cargar la agenda.',
   retry: 'Reintentar',
@@ -141,6 +145,13 @@ interface DayColumnsProps {
    * no trabaja allí ese día (toda la columna).
    */
   providerRanges?: Record<string, MinuteRangeDto[] | null>;
+  /**
+   * DX-211: columnas por SILLÓN en vez de por profesional (`providers` queda
+   * solo para nombrar al profesional de cada cita). Sin arrastre ni huecos
+   * libres por profesional; «Nueva cita» y el clic en un hueco pasan el id de
+   * la columna (el sillón, o la de «Sin sillón»).
+   */
+  chairColumns?: { columns: { id: string; label: string }[]; columnOf: (a: Appointment) => string };
 }
 
 interface DragState {
@@ -194,7 +205,15 @@ export function DayColumns({
   canFillOpening = () => true,
   now: nowProp,
   providerRanges = {},
+  chairColumns,
 }: DayColumnsProps) {
+  const byChair = chairColumns !== undefined;
+  const columns = byChair
+    ? chairColumns.columns
+    : providers.map((p) => ({ id: p.userId, label: p.fullName }));
+  const columnOf = byChair ? chairColumns.columnOf : (a: Appointment) => a.providerId;
+  // DX-211: en la vista por sillón no se arrastra (porción siguiente); «Mover a…» sigue.
+  const canDrag = canMove && !byChair;
   const [mountedAt] = useState(() => new Date());
   const now = nowProp ?? mountedAt;
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
@@ -216,8 +235,7 @@ export function DayColumns({
   );
   const bands = closedBands(hours, weekday, span);
   const gridHeight = (span.end - span.start) * PX_PER_MINUTE;
-  const active =
-    providers.find((p) => p.userId === activeProviderId)?.userId ?? providers[0]?.userId ?? null;
+  const active = columns.find((c) => c.id === activeProviderId)?.id ?? columns[0]?.id ?? null;
 
   // Arrastre: los movimientos se escuchan en `window` (el puntero sale de la
   // tarjeta y de su columna). Escape lo cancela sin mover nada.
@@ -286,7 +304,7 @@ export function DayColumns({
   function startDrag(e: React.PointerEvent<HTMLDivElement>, appointment: Appointment) {
     // Solo ratón: en táctil el gesto es desplazar la página, y para eso está
     // «Mover a…». Solo botón principal.
-    if (!canMove || e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (!canDrag || e.pointerType !== 'mouse' || e.button !== 0) return;
     if ((e.target as HTMLElement).closest('[data-no-drag]')) return;
     const rect = e.currentTarget.getBoundingClientRect();
     setDrag({
@@ -321,7 +339,7 @@ export function DayColumns({
       <div role="status" aria-live="polite" className="flex flex-col gap-3">
         <span className="sr-only">{copy.loading}</span>
         <div className="flex gap-3" aria-hidden>
-          {Array.from({ length: Math.max(1, Math.min(providers.length, 4)) }, (_, i) => (
+          {Array.from({ length: Math.max(1, Math.min(columns.length, 4)) }, (_, i) => (
             <div key={i} className={cn('flex flex-1 flex-col gap-2', i > 0 && 'hidden sm:flex')}>
               <Skeleton className="h-8 w-full" />
               <Skeleton className="h-64 w-full" />
@@ -336,7 +354,7 @@ export function DayColumns({
     return <SectionError description={error} onRetry={onRetry} retryLabel={copy.retry} />;
   }
 
-  const scrolls = providers.length > MAX_COLUMNS_WITHOUT_SCROLL;
+  const scrolls = columns.length > MAX_COLUMNS_WITHOUT_SCROLL;
   const providerName = (id: string) => providers.find((p) => p.userId === id)?.fullName ?? '';
   const hourMarks: number[] = [];
   for (let m = Math.ceil(span.start / 60) * 60; m < span.end; m += 60) hourMarks.push(m);
@@ -347,15 +365,15 @@ export function DayColumns({
       <SegmentedControl
         semantics="toggle"
         className="sm:hidden"
-        aria-label={copy.providerPicker}
+        aria-label={byChair ? copy.chairPicker : copy.providerPicker}
         value={active ?? ''}
         onValueChange={setActiveProviderId}
-        options={providers.map((p) => ({ value: p.userId, label: p.fullName }))}
+        options={columns.map((c) => ({ value: c.id, label: c.label }))}
       />
 
       <div
         role="region"
-        aria-label={copy.gridLabel}
+        aria-label={byChair ? copy.gridLabelByChair : copy.gridLabel}
         tabIndex={scrolls ? 0 : undefined}
         className={cn(
           'rounded-lg border border-border bg-surface',
@@ -370,25 +388,25 @@ export function DayColumns({
               : 'sm:[grid-template-columns:var(--hours)_repeat(var(--cols),minmax(0,1fr))]',
           )}
           // Con 12 h, «12:30 p. m.» necesita más sitio que «12:30».
-          style={{ '--cols': providers.length, '--hours': fmt.hourCycle === 'h12' ? '5.5rem' : '3.5rem' } as React.CSSProperties}
+          style={{ '--cols': columns.length, '--hours': fmt.hourCycle === 'h12' ? '5.5rem' : '3.5rem' } as React.CSSProperties}
         >
           {/* Cabecera: nombre y nº de citas por columna. */}
           <div className="sticky left-0 z-10 border-b border-border bg-surface-sunken" />
-          {providers.map((p) => {
-            const count = appointments.filter((a) => a.providerId === p.userId).length;
+          {columns.map((p) => {
+            const count = appointments.filter((a) => columnOf(a) === p.id).length;
             return (
               <div
-                key={p.userId}
+                key={p.id}
                 data-testid="day-column-header"
                 className={cn(
                   'min-w-0 border-b border-l border-border bg-surface-sunken px-3 py-2',
-                  p.userId !== active && 'hidden sm:block',
+                  p.id !== active && 'hidden sm:block',
                 )}
               >
-                <p className="truncate text-sm font-semibold text-ink">{p.fullName}</p>
+                <p className="truncate text-sm font-semibold text-ink">{p.label}</p>
                 <p className="text-xs tabular-nums text-ink/80">{copy.appointmentsCount(count)}</p>
                 {(() => {
-                  const ranges = providerRanges[p.userId] ?? null;
+                  const ranges = byChair ? null : (providerRanges[p.id] ?? null);
                   if (ranges === null) return null;
                   return (
                     <p data-testid="provider-hours" className="truncate text-xs tabular-nums text-muted">
@@ -413,8 +431,8 @@ export function DayColumns({
             ))}
           </div>
 
-          {providers.map((p) => {
-            const columnAppointments = appointments.filter((a) => a.providerId === p.userId);
+          {columns.map((p) => {
+            const columnAppointments = appointments.filter((a) => columnOf(a) === p.id);
             const laid = layoutLanes(
               columnAppointments.map((a) => ({
                 appointment: a,
@@ -422,20 +440,22 @@ export function DayColumns({
                 end: minuteOfDay(a.start, timeZone) + Math.max(durationMinutes(a), 5),
               })),
             );
-            const dragTarget = drag?.started && drag.target?.providerId === p.userId ? drag.target : null;
+            const dragTarget = drag?.started && drag.target?.providerId === p.id ? drag.target : null;
+            // Por sillón, solo los bloqueos de toda la sede (los de un
+            // profesional no son de ningún sillón).
             const columnBlocks = blocks.filter((block) =>
-              blockShownInColumn(block, p.userId, activeLocationId),
+              blockShownInColumn(block, p.id, activeLocationId),
             );
-            const ranges = providerRanges[p.userId] ?? null;
+            const ranges = byChair ? null : (providerRanges[p.id] ?? null);
             const offBands = outsideBands(ranges, span);
-            const fills = onFillOpening !== undefined && canFillOpening(p.userId);
+            const fills = !byChair && onFillOpening !== undefined && canFillOpening(p.id);
             const gaps = fills
               ? freeGaps({
                   date,
                   hours,
                   appointments: columnAppointments,
                   blocks: columnBlocks,
-                  providerId: p.userId,
+                  providerId: p.id,
                   activeLocationId,
                   now,
                   timeZone,
@@ -444,19 +464,19 @@ export function DayColumns({
               : [];
             return (
               <div
-                key={p.userId}
+                key={p.id}
                 ref={(el) => {
-                  if (el) columnRefs.current.set(p.userId, el);
-                  else columnRefs.current.delete(p.userId);
+                  if (el) columnRefs.current.set(p.id, el);
+                  else columnRefs.current.delete(p.id);
                 }}
-                data-provider-id={p.userId}
+                {...(byChair ? { 'data-chair-column': p.id } : { 'data-provider-id': p.id })}
                 data-testid="day-column"
-                aria-label={p.fullName}
+                aria-label={p.label}
                 role="group"
-                onClick={(e) => handleColumnClick(e, p.userId)}
+                onClick={(e) => handleColumnClick(e, p.id)}
                 className={cn(
                   'relative min-w-0 border-l border-border',
-                  p.userId !== active && 'hidden sm:block',
+                  p.id !== active && 'hidden sm:block',
                 )}
                 style={{
                   height: gridHeight,
@@ -553,8 +573,8 @@ export function DayColumns({
                       key={gap.start}
                       type="button"
                       data-testid="free-gap"
-                      aria-label={copy.freeGapFor(range, p.fullName)}
-                      onClick={() => onFillOpening?.(p.userId, { start: gap.start, end: gap.end })}
+                      aria-label={copy.freeGapFor(range, p.label)}
+                      onClick={() => onFillOpening?.(p.id, { start: gap.start, end: gap.end })}
                       className="absolute inset-x-1 z-[1] flex h-6 items-center justify-center gap-1 rounded-md border border-dashed border-border bg-surface/80 px-2 text-xs font-medium text-muted transition-colors hover:border-primary hover:text-primary-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                       // Centrado en el hueco: no tapa «Sin citas hoy» de arriba.
                       style={{ top: top + Math.max(0, (height - 24) / 2) }}
@@ -580,8 +600,8 @@ export function DayColumns({
                       type="button"
                       size="sm"
                       variant="secondary"
-                      aria-label={copy.newAppointmentFor(p.fullName)}
-                      onClick={() => onNewAppointment(p.userId)}
+                      aria-label={byChair ? copy.newAppointmentIn(p.label) : copy.newAppointmentFor(p.label)}
+                      onClick={() => onNewAppointment(p.id)}
                     >
                       <CalendarPlus aria-hidden /> {copy.newAppointment}
                     </Button>
@@ -610,7 +630,7 @@ export function DayColumns({
                         // alerta (DX-247) no se recorta en las citas de 15 min.
                         'group absolute rounded-md border text-left',
                         !colors && 'border-border bg-surface-sunken text-ink',
-                        canMove && 'cursor-grab active:cursor-grabbing',
+                        canDrag && 'cursor-grab active:cursor-grabbing',
                         (dragging || pendingId === a.id) && 'opacity-50',
                         inactive && 'opacity-60',
                       )}
@@ -628,13 +648,14 @@ export function DayColumns({
                           aria-label={[
                             // Visible card words first; append supporting context after them.
                             range,
+                            showsOverbooked(a) ? OVERBOOKED_LABEL : null,
                             wantsEarlier ? WANTS_EARLIER_LABEL : null,
                             patient,
                             a.appointmentType?.name,
                             STATUS_LABELS[a.status],
                             overdueChipText(a.balance),
                             attendanceBadgeText(a.attendance),
-                            copy.detailFor(p.fullName),
+                            copy.detailFor(byChair ? providerName(a.providerId) : p.label),
                             coverageChipText(a.coverage),
                             medicalAlertSummary(a.medicalAlerts),
                           ]
@@ -653,6 +674,8 @@ export function DayColumns({
                               seguir viéndose en las citas de 30 min. */}
                           <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
                             <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>{' '}
+                            {/* DX-509: solo mientras es sobrecupo. */}
+                            <OverbookedChip overbooked={a.overbooked} status={a.status} className="min-w-0 py-0" />{' '}
                             <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
                             <CoverageMarker coverage={a.coverage} />
                           </span>{' '}
@@ -704,7 +727,7 @@ export function DayColumns({
                             // La hora de la cita, como el detalle y el aviso
                             // «Cita cancelada.»; el hueco libre más largo que
                             // la rodea tiene su propio botón.
-                            onFillOpening?.(p.userId, { start: a.start, end: a.end }, a.locationId)
+                            onFillOpening?.(p.id, { start: a.start, end: a.end }, a.locationId)
                           }
                           className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary-text shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
@@ -755,7 +778,7 @@ export function DayColumns({
         </p>
       )}
 
-      {providers.some((p) => (providerRanges[p.userId] ?? null) !== null) && (
+      {!byChair && providers.some((p) => (providerRanges[p.userId] ?? null) !== null) && (
         <p className="flex items-center gap-2 text-xs text-muted">
           <span
             aria-hidden

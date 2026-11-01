@@ -371,6 +371,7 @@ function PatientDetailView() {
         patient={loading ? null : patient}
         loading={loading}
         onEdit={() => setEditing(true)}
+        editPrimary={activeTab === 'data'}
         menuActions={menuActions}
         retention={patient && !loading ? retentionChip(patient) : null}
         medicalAlerts={medicalAlerts.data}

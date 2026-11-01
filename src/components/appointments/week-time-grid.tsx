@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import {
   ROW_HEIGHT_PX,
@@ -271,7 +272,9 @@ export function WeekTimeGrid({
                     {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
                     <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />{' '}
                     {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
-                    <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />
+                    <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />{' '}
+                    {/* DX-509: solo mientras es sobrecupo. */}
+                    <OverbookedChip overbooked={a.overbooked} status={a.status} className="mt-0.5 px-1 py-0" />{' '}
                     {heightPx < 60 && <span className="sr-only">{STATUS_LABELS[a.status]}</span>}
                     {a.appointmentType?.name && <span className="sr-only">{a.appointmentType.name}</span>}
                   </button>

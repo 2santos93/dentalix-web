@@ -2,10 +2,12 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatCurrency } from '@/lib/format/currency';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 import { parseDecimalInput } from '@/lib/format/money';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
+import type { RoundingDigits } from '@/lib/money/line-rounding';
 import { applyBulkDiscount } from '@/lib/discounts/discounts-api';
 import {
   capFor,
@@ -29,13 +31,15 @@ export const bulkDiscountCopy = {
   title: 'Descuento %',
   description: (n: number) =>
     n === 1
-      ? 'Se aplica al ítem seleccionado, sobre su precio, redondeado a la unidad de la moneda del plan.'
-      : `Se aplica a los ${n} ítems seleccionados, a cada uno sobre su precio, redondeado a la unidad de la moneda del plan.`,
+      ? 'Se aplica al ítem seleccionado, sobre su precio, redondeado a los decimales de la moneda del plan.'
+      : `Se aplica a los ${n} ítems seleccionados, a cada uno sobre su precio, redondeado a los decimales de la moneda del plan.`,
   percent: 'Porcentaje de descuento',
   percentHint: (cap: number) => `Tu rol permite hasta un ${cap} % por ítem. 0 quita el descuento.`,
   invalidPercent: 'Escribe un porcentaje entre 0 y 100, con hasta 2 decimales.',
   previewLabel: 'Cómo quedan los ítems',
   previewRow: (tooth: string) => `Diente ${tooth}`,
+  /** Sin los decimales de la moneda (API anterior a DX-340): lo calcula la API al aplicar. */
+  previewPending: 'se calcula al aplicar',
   submit: 'Aplicar descuento',
   skipped: (n: number) =>
     n === 1
@@ -50,11 +54,18 @@ interface BulkDiscountModalProps {
   token: string;
   planId: string;
   currency: string;
+  /**
+   * DX-340: decimales del redondeo por línea de la moneda del plan, del
+   * contrato (`currencyDigits.roundingDigits`); `null` si la API no los manda.
+   */
+  roundingDigits: RoundingDigits | null;
   items: TreatmentPlanItem[];
   /** Nombre del procedimiento de cada ítem (para la vista previa). */
   procedureOf: (item: TreatmentPlanItem) => string;
   rules: DiscountRules;
   role: ClinicRole | null;
+  /** DX-489: el formato de la sede, el de los demás importes del plan; `null` mientras carga («—»). */
+  fmt: RegionalFormat | null;
   /** `skippedNoDiscount`: ítems cuya prestación no admite descuentos (DX-105). */
   onApplied: (items: TreatmentPlanItem[], skippedNoDiscount: number) => void;
 }
@@ -70,8 +81,9 @@ function parsePercent(text: string): number | null {
 
 /**
  * «Descuento %» sobre los ítems seleccionados del plan (DX-204). La vista
- * previa usa el mismo redondeo y el mismo tope que la API (COP sin
- * decimales, EUR a céntimos, nunca por encima del tope del rol ítem a ítem);
+ * previa usa el mismo redondeo y el mismo tope que la API (los
+ * `roundingDigits` de la moneda que da la API: JPY sin decimales, EUR a
+ * céntimos; nunca por encima del tope del rol ítem a ítem);
  * la API vuelve a comprobarlo todo y sus mensajes llegan en español. El padre
  * lo monta con una `key` por apertura.
  */
@@ -81,10 +93,12 @@ export function BulkDiscountModal({
   token,
   planId,
   currency,
+  roundingDigits,
   items,
   procedureOf,
   rules,
   role,
+  fmt,
   onApplied,
 }: BulkDiscountModalProps) {
   // Sin rol conocido, la web no adivina el tope: lo decide la API.
@@ -99,9 +113,20 @@ export function BulkDiscountModal({
   const percent = parsePercent(percentText);
   const preview = items.map((item) => ({
     item,
-    discount: percent === null ? 0 : discountForPercent(item.price, percent, currency, cap),
+    // Sin dígitos del contrato no se pinta el importe (lo da la API al aplicar).
+    discount: percent === null ? 0 : discountForPercent(item.price, percent, roundingDigits ?? 0, cap),
   }));
-  const reasonRequired = preview.some((p) => needsReason(rules, p.item.price, p.discount));
+  // Sin dígitos del contrato, el motivo se pide si CUALQUIER redondeo posible
+  // (0, 1 o 2 decimales) lo exigiría: nunca se deja enviar algo que la API
+  // rechazaría por falta de motivo.
+  const candidateDigits: readonly RoundingDigits[] = roundingDigits === null ? [0, 1, 2] : [roundingDigits];
+  const reasonRequired =
+    percent !== null &&
+    items.some((item) =>
+      candidateDigits.some((digits) =>
+        needsReason(rules, item.price, discountForPercent(item.price, percent, digits, cap)),
+      ),
+    );
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -178,7 +203,8 @@ export function BulkDiscountModal({
                 {procedureOf(item)}
               </span>
               <span className="tabular-nums text-muted" data-testid="bulk-discount-preview">
-                {formatCurrency(item.price, currency)} → −{formatCurrency(discount, currency)}
+                {sedeMoney(item.price, currency, fmt)} →{' '}
+                {roundingDigits === null ? bulkDiscountCopy.previewPending : `−${sedeMoney(discount, currency, fmt)}`}
               </span>
             </li>
           ))}

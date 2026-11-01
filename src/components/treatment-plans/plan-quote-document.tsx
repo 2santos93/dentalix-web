@@ -4,6 +4,11 @@ import { SURFACE_LABELS } from '@/lib/odontogram/surface-labels';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
+import {
+  PRINTED_LIST_PRICE_FORMAT,
+  formatListPrice,
+  listPriceInPlanCurrency,
+} from '@/lib/treatment-plans/list-price';
 
 const copy = {
   title: 'Presupuesto de tratamiento',
@@ -18,6 +23,11 @@ const copy = {
   agreementValue: (name: string, payer: string) => `${name} · ${payer}`,
   listPrice: (amount: string) => `Precio de lista ${amount}`,
   agreementSaving: 'Ahorro por convenio',
+  // DX-489: el precio de lista es el del catálogo, en su moneda.
+  listPriceNote: (catalogCurrency: string | null, planCurrency: string) =>
+    catalogCurrency
+      ? `El precio de lista es el del catálogo de la clínica, en ${catalogCurrency}: es de referencia y no se convierte a ${planCurrency}.`
+      : `El precio de lista es el del catálogo de la clínica, que puede estar en otra moneda: es de referencia y no se convierte a ${planCurrency}.`,
   noProfessional: 'Sin asignar',
   tableCaption: 'Procedimientos del presupuesto',
   colTooth: 'Diente',
@@ -62,10 +72,15 @@ const money = (value: number, currency: string) => formatCurrency(value, currenc
 const discount = (value: number, currency: string) =>
   value > 0 ? `−${money(value, currency)}` : copy.noDiscount;
 
-/** «Precio de lista» solo cuando el precio cobrado es otro (convenio o lista de la sede). */
-function listPriceOf(item: PlanQuoteItem, currency: string): string | null {
-  return item.listPrice !== null && item.listPrice !== item.unitPrice
-    ? copy.listPrice(money(item.listPrice, currency))
+/** ¿El ítem lleva «Precio de lista»? Solo cuando el precio cobrado es otro (convenio o lista de la sede). */
+function hasListPrice(item: PlanQuoteItem): item is PlanQuoteItem & { listPrice: number } {
+  return item.listPrice !== null && item.listPrice !== item.unitPrice;
+}
+
+/** «Precio de lista» en la moneda del catálogo (DX-489), nunca en la del plan. */
+function listPriceOf(item: PlanQuoteItem, catalogCurrency: string | null): string | null {
+  return hasListPrice(item)
+    ? copy.listPrice(formatListPrice(item.listPrice, catalogCurrency, PRINTED_LIST_PRICE_FORMAT))
     : null;
 }
 
@@ -94,6 +109,12 @@ export interface QuoteSecondCurrency {
 
 interface PlanQuoteDocumentProps {
   quote: PlanQuote;
+  /**
+   * DX-489: moneda del catálogo (`clinicBaseCurrency`), la del precio de
+   * lista; `null` si no se sabe. Si no es la del plan, el precio de lista va
+   * en la suya, con una nota, y no se pinta el «Ahorro por convenio».
+   */
+  catalogCurrency: string | null;
   /** DX-376: total orientativo en otra moneda; sin ella, el presupuesto no cambia. */
   secondCurrency?: QuoteSecondCurrency | null;
 }
@@ -109,8 +130,10 @@ interface PlanQuoteDocumentProps {
  * papel blanco y tinta oscura explícitos, también en modo oscuro. En pantalla
  * estrecha la tabla se apila en tarjetas; en papel siempre es tabla.
  */
-export function PlanQuoteDocument({ quote, secondCurrency = null }: PlanQuoteDocumentProps) {
+export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = null }: PlanQuoteDocumentProps) {
   const { acceptance, currency } = quote;
+  const listInPlanCurrency = listPriceInPlanCurrency(catalogCurrency, currency);
+  const listPriceNote = !listInPlanCurrency && quote.items.some(hasListPrice);
   const organization=new Map((quote.visitOrganization??[]).map(v=>[v.itemId,v]));
   const orderedItems=[...quote.items].sort((a,b)=>(organization.get(a.id)?.visit??1)-(organization.get(b.id)?.visit??1));
   const visitTitle=(id:string)=>{const v=organization.get(id);return `Visita ${v?.visit??1}${v?.label?' · '+v.label:''}${v?.minDaysAfterPrevious?' · intervalo mínimo '+v.minDaysAfterPrevious+' días':''}`;};
@@ -208,7 +231,7 @@ export function PlanQuoteDocument({ quote, secondCurrency = null }: PlanQuoteDoc
               </tr>
             ) : (
               orderedItems.map((item,index) => {
-                const listLine = listPriceOf(item, currency);
+                const listLine = listPriceOf(item, catalogCurrency);
                 return (
                 <React.Fragment key={item.id}>{startsVisit(index)?<tr><th scope="rowgroup" colSpan={6} className="border-b border-[#d1d5db] bg-[#f3f4f6] py-3 text-left font-semibold">{visitTitle(item.id)}</th></tr>:null}<tr className="quote-item border-b border-[#e5e7eb] align-top">
                   <td className="py-2 pr-3 font-medium tabular-nums">{item.toothNumber || copy.noTooth}</td>
@@ -238,7 +261,7 @@ export function PlanQuoteDocument({ quote, secondCurrency = null }: PlanQuoteDoc
             <li className="py-6 text-center text-sm text-[#4b5563]">{copy.emptyItems}</li>
           ) : (
             orderedItems.map((item,index) => {
-              const listLine = listPriceOf(item, currency);
+              const listLine = listPriceOf(item, catalogCurrency);
               return (
               <li key={item.id} className="py-3 text-sm">
                 {startsVisit(index)?<h2 className="mb-3 text-base font-semibold">{visitTitle(item.id)}</h2>:null}
@@ -276,7 +299,7 @@ export function PlanQuoteDocument({ quote, secondCurrency = null }: PlanQuoteDoc
                 <dt className="text-[#4b5563]">{copy.discounts}</dt>
                 <dd className="tabular-nums">{discount(total.discount, total.currency)}</dd>
               </div>
-              {total.agreementSaving > 0 ? (
+              {total.agreementSaving > 0 && listInPlanCurrency ? (
                 <div className="flex justify-between gap-4" data-testid={`quote-saving-${total.currency}`}>
                   <dt className="text-[#4b5563]">{copy.agreementSaving}</dt>
                   <dd className="tabular-nums">{money(total.agreementSaving, total.currency)}</dd>
@@ -300,6 +323,11 @@ export function PlanQuoteDocument({ quote, secondCurrency = null }: PlanQuoteDoc
             </React.Fragment>
           ))}
         </dl>
+        {listPriceNote ? (
+          <p data-testid="quote-list-price-note" className="mt-2 ml-auto max-w-xs text-xs text-[#4b5563]">
+            {copy.listPriceNote(catalogCurrency, currency)}
+          </p>
+        ) : null}
         {secondCurrency ? (
           <p data-testid="quote-second-currency" className="mt-2 ml-auto max-w-xs text-xs text-[#4b5563]">
             {copy.secondRate(

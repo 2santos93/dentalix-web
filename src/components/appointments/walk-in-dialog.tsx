@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useId, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { MapPin, Search } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ApiError, NetworkError, type ExistingPatientRef } from '@/lib/api/api-error';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
@@ -9,7 +9,11 @@ import { getPatient, listPatients, type Patient, type DocType } from '@/lib/pati
 import { DOC_TYPES, docTypeOptionLabel } from '@/lib/patients/doc-type';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
+import { useSessionLocations } from '@/lib/locations/session-locations';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import {
+  IDEMPOTENCY_KEY_REUSED,
   NO_RESERVED_SLOT,
   OVERBOOK_REASON_MAX,
   PATIENT_DUPLICATE,
@@ -49,6 +53,14 @@ export const walkInCopy = {
   searching: 'Buscando…',
   noMatch: 'Nadie coincide. Puedes darlo de alta como paciente nuevo.',
   searchError: 'No pudimos buscar pacientes.',
+  // DX-486: la sede de la urgencia, a la vista (y obligatoria con «Todas las sedes»).
+  location: 'Sede',
+  locationPlaceholder: 'Elige dónde se atiende',
+  locationHint: 'Estás viendo todas las sedes: la urgencia queda en la que elijas.',
+  locationsLoading: 'Cargando sedes…',
+  locationsError: 'No pudimos cargar las sedes.',
+  atLocation: (name: string) => `Se atiende en ${name}.`,
+  missingLocation: 'Elige la sede.',
   change: 'Cambiar',
   noDoc: 'Sin documento',
   firstName: 'Nombre',
@@ -64,6 +76,7 @@ export const walkInCopy = {
   providerPlaceholder: 'Elige quién lo atiende',
   providersLoading: 'Cargando profesionales…',
   providersError: 'No pudimos cargar los profesionales.',
+  providerNeedsLocation: 'Elige primero la sede',
   noProviders: 'Nadie atiende en esta sede.',
   triage: 'Señales de triaje',
   triageHint: 'Marca lo que refiere el paciente.',
@@ -80,7 +93,10 @@ export const walkInCopy = {
   duplicateLoadError: 'No pudimos cargar ese paciente. Búscalo en «Ya es paciente».',
   submit: 'Atender',
   submitOverbook: 'Atender en sobrecupo',
-  missingPatient: 'Elige un paciente o escribe nombre, apellido y teléfono.',
+  missingPatient: 'Busca y elige al paciente, o pasa a «Paciente nuevo».',
+  missingFirstName: 'Escribe el nombre.',
+  missingLastName: 'Escribe el apellido.',
+  missingPhone: 'Escribe el teléfono para poder avisarle.',
   missingProvider: 'Elige el profesional.',
   error: 'No pudimos registrar la urgencia. Intenta de nuevo.',
   retry: 'Reintentar',
@@ -92,7 +108,10 @@ interface WalkInDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
-  /** Sede de la urgencia (la del panel o la activa); la API la valida. */
+  /**
+   * Sede de la urgencia (la del panel o la activa); la API la valida. `null`
+   * («Todas las sedes» o «Mis sedes»): el diálogo la pide entre las de la sesión.
+   */
   locationId: string | null;
   /** El profesional que propone (el de la columna o el filtro). */
   defaultProviderId?: string | null;
@@ -108,13 +127,26 @@ function phoneDigits(value: string): number {
 }
 
 /** Quien atiende en la sede: odontólogos y administración (como la agenda). */
-function providersAt(staff: StaffMember[], locationId: string | null): StaffMember[] {
+function providersAt(staff: StaffMember[], locationId: string): StaffMember[] {
   return staff.filter(
-    (s) =>
-      (s.role === 'DENTIST' || s.role === 'ADMIN') &&
-      (s.locationIds === null || locationId === null || s.locationIds.includes(locationId)),
+    (s) => (s.role === 'DENTIST' || s.role === 'ADMIN') && (s.locationIds === null || s.locationIds.includes(locationId)),
   );
 }
+
+/**
+ * Orden de los campos en pantalla: tras validar, el foco va al primero con
+ * error (clave de `validate()` → id del control).
+ */
+const FIELD_ORDER: [string, string][] = [
+  ['location', 'location'],
+  ['patient', 'search'],
+  ['firstName', 'first'],
+  ['lastName', 'last'],
+  ['phone', 'phone'],
+  ['provider', 'provider'],
+  ['note', 'note'],
+  ['reason', 'reason'],
+];
 
 /**
  * DX-470 «Atender sin cita» (formulario en modal): paciente existente o alta
@@ -129,8 +161,9 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
   const [mode, setMode] = useState<Mode>('existing');
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query.trim(), 300);
-  const [results, setResults] = useState<Patient[] | null>(null);
-  const [searchError, setSearchError] = useState(false);
+  // La respuesta lleva la consulta a la que contesta: con otra consulta en el
+  // campo no se enseña (ni se puede elegir) nada de la anterior.
+  const [search, setSearch] = useState<{ query: string; items: Patient[] | null; error: boolean } | null>(null);
   const [searchKey, setSearchKey] = useState(0);
   const [patient, setPatient] = useState<Pick<Patient, 'id' | 'firstName' | 'lastName' | 'docNumber'> | null>(null);
   const [firstName, setFirstName] = useState('');
@@ -141,6 +174,11 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
   const [staffError, setStaffError] = useState(false);
   const [staffKey, setStaffKey] = useState(0);
+  const requestLocations = useSessionLocations(token);
+  const [locations, setLocations] = useState<ClinicLocation[] | null>(null);
+  const [locationsError, setLocationsError] = useState(false);
+  const [locationsKey, setLocationsKey] = useState(0);
+  const [pickedLocationId, setPickedLocationId] = useState('');
   const [providerId, setProviderId] = useState(defaultProviderId ?? '');
   const [flags, setFlags] = useState<TriageFlag[]>([]);
   const [note, setNote] = useState('');
@@ -156,7 +194,18 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
   // Sin red o servidor caído: el banner ofrece reenviar lo ya escrito.
   const [retryable, setRetryable] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // Tras validar con errores: llevar el foco al primero cuando ya se pintó.
+  const focusFirstError = useRef(false);
   const [submitting, setSubmitting] = useState(false);
+  // DX-510: una Idempotency-Key por intento (lo que dura el modal abierto):
+  // un doble clic, Enter repetido o «Reintentar» tras un corte de red
+  // devuelven la misma cita, nunca un segundo paciente ni una segunda cita.
+  // Un 409 (sin hueco reservado, documento repetido) no registra nada, así
+  // que seguir con la misma clave tras corregir es correcto.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  // El botón se deshabilita al pintar `submitting`; esto corta el segundo
+  // envío que llega antes (doble Enter en el mismo tick).
+  const inFlight = useRef(false);
   // DX-327: el nombre local de cada tipo de documento de la clínica.
   const docTypeNames = useDocumentTypeNames(token);
 
@@ -177,25 +226,61 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
     };
   }, [open, token, staffKey]);
 
+  // Las sedes de la sesión: para nombrar la activa o, sin ella, elegir una.
+  // Como el selector de sede: solo activas y, con sedes acotadas, las suyas.
+  const allowedKey = getTokenAllowedLocationIds(token)?.join(',') ?? null;
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    requestLocations()
+      .then((data) => {
+        if (cancelled) return;
+        const allowed = allowedKey === null ? null : allowedKey.split(',');
+        setLocations(data.filter((l) => l.isActive && (allowed === null || allowed.includes(l.id))));
+        setLocationsError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLocationsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, requestLocations, allowedKey, locationsKey]);
+
   useEffect(() => {
     if (!open || mode !== 'existing' || patient || debounced.length < 2) return;
     let cancelled = false;
     listPatients(token, { query: debounced, pageSize: 8 })
       .then((res) => {
-        if (cancelled) return;
-        setResults(res.items);
-        setSearchError(false);
+        if (!cancelled) setSearch({ query: debounced, items: res.items, error: false });
       })
       .catch(() => {
-        if (!cancelled) setSearchError(true);
+        if (!cancelled) setSearch({ query: debounced, items: null, error: true });
       });
     return () => {
       cancelled = true;
     };
   }, [open, mode, patient, debounced, token, searchKey]);
 
-  const providers = staff ? providersAt(staff, locationId) : [];
-  const searchShown = debounced.length >= 2;
+  // Sede fija: la activa o, si la sesión solo tiene una, esa. Si no, la elegida.
+  const fixedLocationId = locationId ?? (locations?.length === 1 ? locations[0].id : null);
+  const effectiveLocationId = fixedLocationId ?? (pickedLocationId || null);
+  const fixedLocationName = fixedLocationId ? locations?.find((l) => l.id === fixedLocationId)?.name ?? null : null;
+  const providers = staff && effectiveLocationId ? providersAt(staff, effectiveLocationId) : [];
+  // Un profesional que no atiende en la sede (el de la columna, o tras
+  // cambiar de sede) no cuenta como elegido.
+  const selectedProviderId = providers.some((p) => p.userId === providerId) ? providerId : '';
+  const typedQuery = query.trim();
+  const searchShown = typedQuery.length >= 2;
+  const searchAnswer = search?.query === typedQuery ? search : null;
+
+  const focusFirstInvalid = useCallback(() => {
+    if (!focusFirstError.current) return;
+    focusFirstError.current = false;
+    const first = FIELD_ORDER.find(([key]) => fieldErrors[key]);
+    if (first) document.getElementById(`${ids}-${first[1]}`)?.focus();
+  }, [fieldErrors, ids]);
+  useEffect(focusFirstInvalid, [focusFirstInvalid]);
 
   function toggleFlag(flag: TriageFlag, checked: boolean) {
     setFlags((current) => (checked ? [...current, flag] : current.filter((f) => f !== flag)));
@@ -203,15 +288,16 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
 
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {};
+    if (!effectiveLocationId) errors.location = walkInCopy.missingLocation;
     if (mode === 'existing' && !patient) errors.patient = walkInCopy.missingPatient;
     if (mode === 'new') {
-      if (!firstName.trim()) errors.firstName = walkInCopy.missingPatient;
-      if (!lastName.trim()) errors.lastName = walkInCopy.missingPatient;
+      if (!firstName.trim()) errors.firstName = walkInCopy.missingFirstName;
+      if (!lastName.trim()) errors.lastName = walkInCopy.missingLastName;
       // Más estricto que la API (5 caracteres): con 5 dígitos siempre pasa.
-      if (!phone.trim()) errors.phone = walkInCopy.missingPatient;
+      if (!phone.trim()) errors.phone = walkInCopy.missingPhone;
       else if (phoneDigits(phone) < PHONE_MIN_DIGITS) errors.phone = walkInCopy.phoneTooShort;
     }
-    if (!providerId) errors.provider = walkInCopy.missingProvider;
+    if (!selectedProviderId) errors.provider = walkInCopy.missingProvider;
     if (note.trim().length > TRIAGE_NOTE_MAX) errors.note = walkInCopy.noteTooLong;
     if (overbook && !validOverbookReason(reason)) errors.reason = walkInCopy.overbookInvalid;
     return errors;
@@ -224,13 +310,17 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
 
   /** Valida y envía lo que hay en el formulario (también desde «Reintentar»). */
   async function submit() {
+    if (inFlight.current) return;
     const errors = validate();
     setFieldErrors(errors);
     setError(null);
     setRetryable(false);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      focusFirstError.current = true;
+      return;
+    }
     const input: CreateWalkInInput = {
-      providerId,
+      providerId: selectedProviderId,
       triageFlags: TRIAGE_FLAGS.filter((f) => flags.includes(f)),
       ...(note.trim() ? { triageNote: note.trim() } : {}),
       ...(overbook ? { overbookReason: reason.trim() } : {}),
@@ -247,9 +337,10 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
             },
           }),
     };
+    inFlight.current = true;
     setSubmitting(true);
     try {
-      const result = await createWalkIn(token, input, locationId);
+      const result = await createWalkIn(token, input, effectiveLocationId, idempotencyKey);
       notifyInClinicChanged();
       onCreated?.(result);
       onOpenChange(false);
@@ -263,11 +354,20 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
           message: apiErrorMessage(err, walkInCopy.duplicateTitle),
           patient: err.existingPatient,
         });
+      } else if (err instanceof ApiError && err.code === IDEMPOTENCY_KEY_REUSED) {
+        // Esta clave ya registró la urgencia con otros datos (p. ej. la
+        // respuesta se perdió y luego se cambió el formulario): se dice, el
+        // panel «En clínica» se refresca para verla y un envío deliberado
+        // después ya es otro intento.
+        setError(apiErrorMessage(err, walkInCopy.error));
+        setIdempotencyKey(crypto.randomUUID());
+        notifyInClinicChanged();
       } else {
         setError(apiErrorMessage(err, walkInCopy.error));
         setRetryable(err instanceof NetworkError || (err instanceof ApiError && err.status >= 500));
       }
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   }
@@ -307,6 +407,54 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
       touchTargets
     >
       <div className="flex min-w-0 flex-col gap-4" data-testid="walk-in-dialog">
+        {fixedLocationId ? (
+          fixedLocationName ? (
+            <p className="flex min-w-0 items-center gap-2 text-sm text-ink" data-testid="walk-in-location">
+              <MapPin aria-hidden className="size-4 shrink-0 text-muted" />
+              <span className="min-w-0 break-words">{walkInCopy.atLocation(fixedLocationName)}</span>
+            </p>
+          ) : null
+        ) : (
+          <FormField
+            htmlFor={id('location')}
+            label={walkInCopy.location}
+            hint={walkInCopy.locationHint}
+            hintId={id('location-hint')}
+            error={fieldErrors.location}
+          >
+            {locationsError ? (
+              // Con el id del campo en «Reintentar»: «Atender» lleva ahí el foco.
+              <FieldError label={walkInCopy.locationsError} onRetry={() => setLocationsKey((k) => k + 1)} retryLabel={walkInCopy.retry} retryId={id('location')} />
+            ) : locations === null ? (
+              <NativeSelect id={id('location')} disabled value="">
+                <option value="">{walkInCopy.locationsLoading}</option>
+              </NativeSelect>
+            ) : (
+              <NativeSelect
+                id={id('location')}
+                value={pickedLocationId}
+                aria-required
+                onChange={(e) => {
+                  setPickedLocationId(e.target.value);
+                  setFieldErrors((errs) => ({ ...errs, location: '' }));
+                  // El 409 «sin hueco reservado» era de la otra sede: en esta
+                  // puede haber hueco, así que no se fuerza el sobrecupo.
+                  setOverbook(false);
+                  setOverbookMessage(null);
+                  setReason('');
+                }}
+                aria-invalid={fieldErrors.location ? true : undefined}
+                aria-describedby={fieldErrors.location ? fieldErrorId(id('location')) : id('location-hint')}
+              >
+                <option value="">{walkInCopy.locationPlaceholder}</option>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </NativeSelect>
+            )}
+          </FormField>
+        )}
+
         <SegmentedControl
           aria-label={walkInCopy.patientMode}
           value={mode}
@@ -350,15 +498,22 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
               </div>
               {!searchShown ? (
                 <p className="text-xs text-muted">{walkInCopy.searchHint}</p>
-              ) : searchError ? (
-                <FieldError label={walkInCopy.searchError} onRetry={() => setSearchKey((k) => k + 1)} retryLabel={walkInCopy.retry} />
-              ) : results === null ? (
+              ) : searchAnswer?.error ? (
+                <FieldError
+                  label={walkInCopy.searchError}
+                  onRetry={() => {
+                    setSearch(null);
+                    setSearchKey((k) => k + 1);
+                  }}
+                  retryLabel={walkInCopy.retry}
+                />
+              ) : !searchAnswer?.items ? (
                 <p role="status" className="text-xs text-muted">{walkInCopy.searching}</p>
-              ) : results.length === 0 ? (
+              ) : searchAnswer.items.length === 0 ? (
                 <p role="status" className="text-sm text-muted">{walkInCopy.noMatch}</p>
               ) : (
                 <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border" aria-label={walkInCopy.search}>
-                  {results.map((p) => (
+                  {searchAnswer.items.map((p) => (
                     <li key={p.id}>
                       <button
                         type="button"
@@ -423,17 +578,22 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
 
         <FormField htmlFor={id('provider')} label={walkInCopy.provider} error={fieldErrors.provider}>
           {staffError ? (
-            <FieldError label={walkInCopy.providersError} onRetry={() => setStaffKey((k) => k + 1)} retryLabel={walkInCopy.retry} />
+            <FieldError label={walkInCopy.providersError} onRetry={() => setStaffKey((k) => k + 1)} retryLabel={walkInCopy.retry} retryId={id('provider')} />
           ) : staff === null ? (
             <NativeSelect id={id('provider')} disabled value="">
               <option value="">{walkInCopy.providersLoading}</option>
             </NativeSelect>
+          ) : !effectiveLocationId ? (
+            <NativeSelect id={id('provider')} disabled value="">
+              <option value="">{walkInCopy.providerNeedsLocation}</option>
+            </NativeSelect>
           ) : providers.length === 0 ? (
-            <p role="status" className="text-sm text-muted">{walkInCopy.noProviders}</p>
+            // Sin control que enfocar: el aviso recibe el foco tras «Atender».
+            <p id={id('provider')} tabIndex={-1} role="status" className="text-sm text-muted">{walkInCopy.noProviders}</p>
           ) : (
             <NativeSelect
               id={id('provider')}
-              value={providerId}
+              value={selectedProviderId}
               onChange={(e) => setProviderId(e.target.value)}
               aria-invalid={fieldErrors.provider ? true : undefined}
               aria-describedby={fieldErrors.provider ? fieldErrorId(id('provider')) : undefined}

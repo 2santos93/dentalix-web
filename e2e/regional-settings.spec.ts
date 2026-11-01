@@ -58,6 +58,7 @@ function zeroDecimal(amount: number, currency: string): string {
   return new Intl.NumberFormat('es', {
     style: 'currency',
     currency,
+    currencyDisplay: 'code',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);

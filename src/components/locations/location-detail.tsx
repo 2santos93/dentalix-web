@@ -23,6 +23,7 @@ import { SettingRow, SettingRows, SettingsPage, SettingsSection } from '@/compon
 import { LocationFormModal } from './location-form-modal';
 import { LocationRegistrationForm } from './location-registration-form';
 import { CancellationPolicySettings } from './cancellation-policy-settings';
+import { LocationReceiptLegendForm } from './location-receipt-legend-form';
 import { isUnconfigured, locationsListCopy } from './locations-list';
 import { needsRegionalReview } from './regional-review-notice';
 
@@ -161,6 +162,16 @@ export function LocationDetail({ token, locationId }: { token: string; locationI
 
             {/* DX-279: solo ADMIN (la API responde 403 al resto). */}
             {canEdit ? <CancellationPolicySettings token={token} locationId={location.id} /> : null}
+
+            {/* DX-515: la leyenda del recibo de la sede (solo ADMIN). */}
+            {canEdit ? (
+              <LocationReceiptLegendForm
+                key={location.id}
+                token={token}
+                locationId={location.id}
+                locationName={location.name}
+              />
+            ) : null}
 
             {/* DX-316: el calendario sigue su propia regla (la de la API). */}
             {canOpenCalendar ? (

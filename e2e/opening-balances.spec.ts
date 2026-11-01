@@ -6,6 +6,7 @@ import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 import { openPatientTab } from './support/patient-tabs';
+import { DEMO_TIME_ZONE } from './support/demo';
 
 /**
  * e2e (DX-262): paso «Saldos» del asistente de importación en la demo, a 1440
@@ -21,6 +22,8 @@ import { openPatientTab } from './support/patient-tabs';
  *   5. Deshacer el lote desde el historial.
  *
  * Requiere la API con worker (APP_ROLE=all) y la demo sembrada.
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
@@ -54,9 +57,9 @@ async function webLogin(page: Page, origin: string): Promise<void> {
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 10_000 });
 }
 
-/** Día civil en Bogotá desplazado `days` (la demo está en Colombia). */
-function bogotaDay(days: number): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(
+/** Día civil de la sede demo (Caracas) desplazado `days`. */
+function demoSedeDay(days: number): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: DEMO_TIME_ZONE }).format(
     new Date(Date.now() + days * 86_400_000),
   );
 }
@@ -68,20 +71,20 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900, tag: '1' },
   { name: 'movil', width: 390, height: 844, tag: '2' },
 ]) {
-  test(`legacy «Tipo Doc» CC: hoja de saldos: dry-run, importar, estado de cuenta y deshacer (${viewport.name})`, async ({ page }) => {
+  test(`legacy «Tipo Doc» Cédula: hoja de saldos: dry-run, importar, estado de cuenta y deshacer (${viewport.name})`, async ({ page }) => {
     test.setTimeout(150_000);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const origin = tenantOrigin(DEMO_SUBDOMAIN);
     const doc = `62${viewport.tag}${suffix}1`;
     const lastName = `Migrado${viewport.tag}${suffix}`;
-    const oldDay = bogotaDay(-75);
+    const oldDay = demoSedeDay(-75);
 
     await webLogin(page, origin);
     await page.goto(`${origin}/settings/importar-pacientes`);
     await page.getByLabel('Archivo de pacientes (CSV o .xlsx)').setInputFiles({
       name: `pacientes-saldos-${viewport.name}.csv`,
       mimeType: 'text/csv',
-      buffer: Buffer.from(`Tipo Doc;Cédula;Nombre;Apellidos\nCC;${doc};Sara;${lastName}\n`, 'utf8'),
+      buffer: Buffer.from(`Tipo Doc;Cédula;Nombre;Apellidos\nCédula;${doc};Sara;${lastName}\n`, 'utf8'),
     });
     await page.getByRole('button', { name: 'Validar archivo' }).click();
     await page
@@ -95,11 +98,11 @@ for (const viewport of [
     // Dry-run de la hoja de saldos.
     const sheet = [
       'numero_documento;importe;moneda;fecha_antiguedad;concepto',
-      `${doc};150.000;COP;${ddmmyyyy(oldDay)};Ortodoncia (programa anterior)`,
-      `${doc};50.000,50;COP;;`,
+      `${doc};150.000;VES;${ddmmyyyy(oldDay)};Ortodoncia (programa anterior)`,
+      `${doc};50.000,50;VES;;`,
       `${doc};40;USD;;`,
-      `99${suffix};100;COP;;`,
-      `${doc};-5;COP;;`,
+      `99${suffix};100;VES;;`,
+      `${doc};-5;VES;;`,
     ].join('\n');
     await page.getByLabel('Hoja de saldos (CSV o .xlsx)').setInputFiles({
       name: `saldos-${viewport.name}.csv`,
@@ -109,10 +112,10 @@ for (const viewport of [
     const totals = page.getByRole('table', { name: 'Totales por moneda' });
     await expect(totals).toBeVisible({ timeout: 30_000 });
     // QA D4: lo válido y, aparte, lo de las filas con error (el documento
-    // inexistente: 100 COP; el importe negativo no suma en ninguna).
+    // inexistente: 100 VES; el importe negativo no suma en ninguna).
     await expect(totals.getByRole('columnheader', { name: 'Total de filas válidas' })).toHaveCount(1);
-    await expect(totals.getByRole('row', { name: /COP/ })).toContainText('100,00');
-    await expect(totals.getByRole('row', { name: /COP/ })).toContainText('200.000,50');
+    await expect(totals.getByRole('row', { name: /VES/ })).toContainText('100,00');
+    await expect(totals.getByRole('row', { name: /VES/ })).toContainText('200.000,50');
     await expect(totals.getByRole('row', { name: /USD/ })).toContainText('40,00');
     const issues = page.getByRole('table', { name: 'Errores y avisos de la hoja de saldos' });
     await expect(issues).toContainText('Sumada a otra fila');
@@ -126,7 +129,9 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByText(/También se crearán 2 saldos migrados/)).toBeVisible();
     await page.getByRole('button', { name: 'Importar 1 paciente' }).click();
-    await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    // El avance de ESTE lote, no el «Importado» de otro lote del historial.
+    const progress = page.getByRole('region', { name: `Importación de pacientes-saldos-${viewport.name}.csv` });
+    await expect(progress.getByText('Importado', { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Saldos migrados: 2 de 2')).toBeVisible();
     await expectNoHorizontalScroll(page);
     await shoot(page, `dx262-importado-${viewport.name}`);
@@ -143,8 +148,8 @@ for (const viewport of [
     await expect(openings).toBeVisible({ timeout: 15_000 });
     await expect(openings).toContainText('Ortodoncia (programa anterior)');
     await expect(openings).toContainText(ddmmyyyy(oldDay));
-    await expect(openings).toContainText(`${ddmmyyyy(bogotaDay(0))} (aprox.)`);
-    await expect(panel.getByRole('region', { name: 'Resumen en COP' }).getByTestId('balance')).toContainText(
+    await expect(openings).toContainText(`${ddmmyyyy(demoSedeDay(0))} (aprox.)`);
+    await expect(panel.getByRole('region', { name: 'Resumen en VES' }).getByTestId('balance')).toContainText(
       '200.000,50',
     );
     await expectNoHorizontalScroll(page);

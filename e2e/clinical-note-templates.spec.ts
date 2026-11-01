@@ -128,7 +128,7 @@ for (const viewport of VIEWPORTS) {
     await page.getByRole('button', { name: 'Registrar evolución' }).click();
 
     const evolution = page.getByRole('dialog', { name: 'Registrar evolución' });
-    await expect(evolution.getByText(new RegExp(`^Cita del \\d{2}/\\d{2} · ${ownerName}$`))).toBeVisible();
+    await expect(evolution.getByText(new RegExp(`^Cita del \\d{1,2}/\\d{1,2} · ${ownerName}$`))).toBeVisible();
     await evolution.getByRole('radio', { name: /Resina/ }).click();
     await evolution.getByRole('radio', { name: 'O', exact: true }).check();
     await evolution.getByRole('checkbox', { name: 'Adhesivo universal' }).check();
@@ -145,7 +145,7 @@ for (const viewport of VIEWPORTS) {
     await page.goto(`${origin}/patients/${patient.id}?tab=clinical-history`);
     await expect(page.getByText(expected).locator('visible=true')).toBeVisible({ timeout: 15_000 });
     await expect(
-      page.getByText(new RegExp(`^Cita del \\d{2}/\\d{2} · ${ownerName}$`)).locator('visible=true'),
+      page.getByText(new RegExp(`^Cita del \\d{1,2}/\\d{1,2} · ${ownerName}$`)).locator('visible=true'),
     ).toBeVisible();
 
     await page.getByRole('button', { name: 'Nueva evolución' }).click();

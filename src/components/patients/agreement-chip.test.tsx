@@ -3,14 +3,14 @@ import { AgreementChip } from './agreement-chip';
 
 const summary = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED' | 'INACTIVE') => ({
   status,
-  agreementName: 'Sanitas 2026',
-  payerName: 'Sanitas',
+  agreementName: 'Sanavida 2026',
+  payerName: 'Sanavida',
 });
 
 describe('AgreementChip (DX-105)', () => {
   it('con convenio vigente muestra «Convenio: nombre»', () => {
     render(<AgreementChip agreement={summary('ACTIVE')} />);
-    expect(screen.getByTestId('agreement-chip')).toHaveTextContent('Convenio: Sanitas 2026');
+    expect(screen.getByTestId('agreement-chip')).toHaveTextContent('Convenio: Sanavida 2026');
   });
 
   it.each(['NONE', 'EXPIRED', 'NOT_STARTED', 'INACTIVE'] as const)(

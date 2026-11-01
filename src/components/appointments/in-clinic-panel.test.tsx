@@ -88,7 +88,12 @@ function view(overrides: Partial<InClinicView> = {}): InClinicView {
 function Harness({ role }: { role: ClinicRole }) {
   const state = useInClinic('T');
   const runner = usePatientFlow('T', state.reload);
-  return <InClinicPanel state={state} role={role} runner={runner} />;
+  return (
+    <>
+      <InClinicPanel state={state} role={role} runner={runner} />
+      {runner.overbookDialog}
+    </>
+  );
 }
 
 function staticState(overrides: Partial<InClinicState>): InClinicState {
@@ -491,6 +496,74 @@ describe('InClinicPanel (DX-200)', () => {
       expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }),
     );
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+  });
+
+  describe('«Deshacer llegada» de una urgencia en sobrecupo (DX-509)', () => {
+    const SLOT_TAKEN = () =>
+      apiErrorFromBody(
+        409,
+        {
+          statusCode: 409,
+          code: 'OVERBOOK_SLOT_TAKEN',
+          canKeepOverbooked: true,
+          message:
+            'Esta urgencia se atendió en sobrecupo y su hora ya la ocupa otra cita del profesional. Muévela a otra hora o mantenla como sobrecupo.',
+        },
+        null,
+      );
+
+    it('su hora ocupada: pregunta; «Mantener en sobrecupo» reintenta con keepOverbooked y relee', async () => {
+      mockedGet.mockResolvedValue(
+        view({ waiting: [item({ appointmentId: 'a1', walkIn: true, urgent: true, overbooked: true })] }),
+      );
+      mockedUndo.mockRejectedValueOnce(SLOT_TAKEN()).mockResolvedValueOnce({} as never);
+      render(<Harness role="RECEPTION" />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Deshacer llegada' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      expect(dialog).toHaveTextContent('su hora ya la ocupa otra cita del profesional');
+      // No es un fallo en segundo plano: sin toast de error.
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockedUndo).toHaveBeenCalledTimes(1);
+      // El intento rechazado ya releyó el panel (como cualquier paso).
+      await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
+      await waitFor(() => expect(mockedUndo).toHaveBeenLastCalledWith('T', 'a1', { keepOverbooked: true }));
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Su hora ya está ocupada' })).not.toBeInTheDocument(),
+      );
+      expect(toast.success).toHaveBeenCalledWith('Se deshizo la llegada de Ana Ríos. Sigue en sobrecupo.');
+      await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(3));
+    });
+
+    it('«Volver» no cambia nada', async () => {
+      mockedGet.mockResolvedValue(
+        view({ waiting: [item({ appointmentId: 'a1', walkIn: true, urgent: true, overbooked: true })] }),
+      );
+      mockedUndo.mockRejectedValueOnce(SLOT_TAKEN());
+      render(<Harness role="RECEPTION" />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Deshacer llegada' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Volver' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mockedUndo).toHaveBeenCalledTimes(1);
+    });
+
+    it('si mantenerla también falla, el diálogo lo dice y sigue abierto', async () => {
+      mockedGet.mockResolvedValue(
+        view({ waiting: [item({ appointmentId: 'a1', walkIn: true, urgent: true, overbooked: true })] }),
+      );
+      mockedUndo
+        .mockRejectedValueOnce(SLOT_TAKEN())
+        .mockRejectedValueOnce(new ApiError(409, 'La cita cambió mientras tanto.', {}));
+      render(<Harness role="RECEPTION" />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Deshacer llegada' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
+      expect(await within(dialog).findByText('La cita cambió mientras tanto.')).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Su hora ya está ocupada' })).toBeInTheDocument();
+    });
   });
 
   it('un refresco que falla con datos en pantalla los conserva (aviso en segundo plano)', () => {

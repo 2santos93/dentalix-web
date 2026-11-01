@@ -8,7 +8,7 @@ import {
 
 describe('coverageChipText (DX-153)', () => {
   it('solo avisa cuando la cobertura venció', () => {
-    const base = { payerName: 'Sanitas', planName: null, validTo: null };
+    const base = { payerName: 'Sanavida', planName: null, validTo: null };
     expect(coverageChipText({ ...base, status: 'EXPIRED' })).toBe(COVERAGE_EXPIRED_LABEL);
     expect(coverageChipText({ ...base, status: 'ACTIVE' })).toBe('');
     expect(coverageChipText({ ...base, status: 'NOT_STARTED' })).toBe('');
@@ -56,16 +56,16 @@ describe('coverageStatusBadge (DX-153)', () => {
 });
 
 describe('coverageDetailText (DX-153)', () => {
-  const base = { payerName: 'Sura EPS', planName: 'Plan X', validTo: '2026-01-31' };
+  const base = { payerName: 'Surco Salud', planName: 'Plan X', validTo: '2026-01-31' };
   it('vigente: pagador y plan', () => {
-    expect(coverageDetailText({ ...base, status: 'ACTIVE' })).toBe('Cobertura: Sura EPS · Plan X');
+    expect(coverageDetailText({ ...base, status: 'ACTIVE' })).toBe('Cobertura: Surco Salud · Plan X');
   });
   it('vencida: pagador y fecha de vencimiento', () => {
-    expect(coverageDetailText({ ...base, status: 'EXPIRED' })).toMatch(/^Cobertura: Sura EPS · venció el /);
+    expect(coverageDetailText({ ...base, status: 'EXPIRED' })).toMatch(/^Cobertura: Surco Salud · venció el /);
   });
   it('pendiente de inicio: lo dice en vez de mostrar el plan como vigente', () => {
     expect(coverageDetailText({ ...base, status: 'NOT_STARTED' })).toBe(
-      'Cobertura: Sura EPS · pendiente de inicio',
+      'Cobertura: Surco Salud · pendiente de inicio',
     );
   });
   it('sin cobertura o sin pagador: vacío', () => {

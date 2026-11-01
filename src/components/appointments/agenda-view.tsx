@@ -37,6 +37,16 @@ import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calend
 import { DayAgenda } from '@/components/appointments/day-agenda';
 import { CoverageDetailLine } from '@/components/appointments/coverage-detail-line';
 import { DayColumns } from '@/components/appointments/day-columns';
+import { listChairs, type Chair } from '@/lib/chairs/chairs-api';
+import {
+  NO_CHAIR_COLUMN,
+  chairColumnOf,
+  chairColumns as buildChairColumns,
+  chairDisplayName,
+  readColumnsBy,
+  writeColumnsBy,
+  type ColumnsBy,
+} from '@/lib/chairs/chair-columns';
 import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
 import { CompletedExitModal } from '@/components/appointments/completed-exit-modal';
@@ -85,9 +95,12 @@ import {
 import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair, FileDown, Siren } from 'lucide-react';
 import { ContingencyAgendaDialog, contingencyCopy } from '@/components/appointments/contingency-agenda-dialog';
 import { WalkInDialog, walkInCopy } from '@/components/appointments/walk-in-dialog';
-import { canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
+import { OVERBOOK_SLOT_TAKEN, canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
+import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
+import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import { canDownloadContingencyAgenda } from '@/lib/appointments/contingency-agenda-api';
-import { InClinicPanel, focusLocationSwitcher, inClinicCopy } from '@/components/appointments/in-clinic-panel';
+import { InClinicPanel, inClinicCopy } from '@/components/appointments/in-clinic-panel';
+import { focusLocationSwitcher } from '@/components/locations/location-switcher';
 import {
   dismissReservedToasts,
   PatientFlowActions,
@@ -115,6 +128,7 @@ import { FieldError } from '@/components/errors/field-error';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
+import { ApiError } from '@/lib/api/api-error';
 import {
   Sheet,
   SheetContent,
@@ -173,6 +187,8 @@ const copy = {
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericRefreshError: 'No pudimos actualizar la agenda.',
   genericStatusChangeError: 'No pudimos cambiar el estado de la cita.',
+  /** DX-509: reactivada a sabiendas en sobrecupo. */
+  reactivatedOverbooked: 'Cita reactivada. Sigue en sobrecupo.',
   /** Selected-day appointment count, shown above the day panel in the month view. */
   dayCount: (n: number) => (n === 0 ? 'Sin citas' : n === 1 ? '1 cita' : `${n} citas`),
   noProviders: 'No hay profesionales activos en esta clínica.',
@@ -180,6 +196,11 @@ const copy = {
   dayLayoutLabel: 'Presentación del día',
   dayColumns: 'Columnas',
   dayList: 'Lista',
+  // DX-211: columnas por profesional o por sillón (solo si la sede tiene sillones).
+  columnsByLabel: 'Columnas',
+  columnsByProviders: 'Profesionales',
+  columnsByChairs: 'Sillones',
+  chairsError: 'No pudimos cargar los sillones de la sede: la agenda se ve por profesional.',
   genericMoveError: 'No pudimos mover la cita.',
   moved: 'Cita movida.',
   // DX-210: «Ocupar este hueco» tras cancelar.
@@ -192,6 +213,7 @@ const copy = {
   wantsEarlierError: 'No pudimos cambiar «Adelantar si hay hueco».',
   selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
   statusLabel: 'Estado',
+  detailChair: 'Sillón',
   detailProvider: 'Profesional',
   detailType: 'Tipo',
   detailReason: 'Motivo',
@@ -401,6 +423,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const dayLayout: DayLayout = pickedDayLayout ?? (phone ? 'list' : 'columns');
   // `null` = todavía la selección por defecto (se deriva del personal).
   const [pickedColumnIds, setPickedColumnIds] = useState<string[] | null>(null);
+  // DX-211: «Columnas: Profesionales | Sillones», recordado por usuario.
+  const [columnsBy, setColumnsBy] = useState<ColumnsBy>(() => readColumnsBy(getTokenUserId(token)));
+  // Sillones de la sede activa (también los inactivos: sus citas los nombran).
+  // Best-effort: sin ellos la agenda sigue por profesional.
+  const [chairs, setChairs] = useState<Chair[]>([]);
+  const [chairsReloadKey, setChairsReloadKey] = useState(0);
   // Horario de la sede activa (sombreado de la vista en columnas). Best-effort:
   // si no se puede leer no se sombrea nada; el servidor sigue validando (422).
   const [hours, setHours] = useState<BusinessHours | null>(null);
@@ -467,7 +495,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   // (no start/end) when the form is opened via the "Nueva cita" toggle
   // instead.
   const [slotPrefill, setSlotPrefill] = useState<
-    { date: string; startTime?: string; endTime?: string; providerId?: string } | null
+    { date: string; startTime?: string; endTime?: string; providerId?: string; chairId?: string } | null
   >(null);
   // The appointment whose detail sheet (status change + confirmación por
   // enlace) is open — set by `WeekTimeGrid`'s `onSelectAppointment` and by the
@@ -558,6 +586,28 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     };
   }, [token, rosterWanted, activeLocationId, selectedDate, appointmentsReloadKey]);
 
+  // DX-211: sillones de la sede activa (en «Todas las sedes» no hay columnas por sillón).
+  useEffect(() => {
+    if (!token || activeLocationId === null) return;
+    let cancelled = false;
+    listChairs(token, activeLocationId, { includeInactive: true })
+      .then((data) => {
+        if (!cancelled) setChairs(data);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setChairs([]);
+        // Quien trabaja por sillón se entera (escalón 3, con Reintentar); a
+        // quien no, no le cambia nada.
+        if (readColumnsBy(getTokenUserId(token)) === 'chairs') {
+          notifyError(copy.chairsError, { onRetry: () => setChairsReloadKey((k) => k + 1) });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, activeLocationId, chairsReloadKey]);
+
   // Sedes (para «Bloquear horario»). Best-effort: sin ellas se puede bloquear
   // a un profesional en todas las sedes.
   useEffect(() => {
@@ -582,6 +632,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     .map((id) => staff.find((s) => s.userId === id))
     .filter((s): s is StaffMember => s !== undefined);
   const columnsMode = viewMode === 'day' && dayLayout === 'columns';
+  // DX-211: la vista por sillón solo existe si la sede tiene alguno activo.
+  const hasChairs = chairs.some((c) => c.active);
+  const chairMode = columnsMode && hasChairs && columnsBy === 'chairs';
   // DX-233: el cuadrante solo vale para el día que se mira (uno viejo, de otro
   // día, no oculta ni sombrea nada). Quien tiene citas activas ese día se ve
   // siempre: ocultarlo escondería citas reales agendadas fuera de horario.
@@ -598,7 +651,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const providerRanges: Record<string, MinuteRangeDto[] | null> = Object.fromEntries(
     columnProviders.map((p) => [p.userId, rosterDayOf(dayRoster, p.userId, selectedDate)?.locationRanges ?? null]),
   );
-  const columnsKey = columnsMode ? columnIds.join(',') : '';
+  // Por sillón se pide toda la sede (incluidas las citas sin sillón).
+  const columnsKey = columnsMode && !chairMode ? columnIds.join(',') : '';
   // Solo en columnas importa esperar al personal (en las demás vistas no se
   // vuelve a pedir la agenda cuando termina de cargar).
   const waitingForStaff = columnsMode && staffLoading;
@@ -617,7 +671,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     if (!token) return;
     // En columnas hace falta saber qué profesionales pedir: se espera al
     // personal; sin ninguno no hay nada que cargar (se avisa en la vista).
-    if (waitingForStaff || (columnsMode && columnsKey === '')) return;
+    if (waitingForStaff || (columnsMode && !chairMode && columnsKey === '')) return;
     let cancelled = false;
     async function load() {
       setAppointmentsLoading(true);
@@ -626,9 +680,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
         const data = await listAppointments(token, {
           from,
           to,
-          ...(columnsMode
-            ? { providerIds: columnsKey.split(',') }
-            : { providerId: providerId || undefined }),
+          ...(chairMode
+            ? {}
+            : columnsMode
+              ? { providerIds: columnsKey.split(',') }
+              : { providerId: providerId || undefined }),
         });
         if (cancelled) return;
         setAppointments(data);
@@ -644,7 +700,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     return () => {
       cancelled = true;
     };
-  }, [token, providerId, selectedDate, viewMode, appointmentsReloadKey, columnsMode, columnsKey, waitingForStaff, timeZone]);
+  }, [token, providerId, selectedDate, viewMode, appointmentsReloadKey, columnsMode, chairMode, columnsKey, waitingForStaff, timeZone]);
 
   // DX-122: bloqueos del rango visible (Día y Semana; el Mes no los pinta).
   // Si fallan, la agenda sigue siendo correcta: aviso con Reintentar (escalón 3).
@@ -752,9 +808,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     return listAppointments(token, {
       from,
       to,
-      ...(columnsMode && columnsKey !== ''
-        ? { providerIds: columnsKey.split(',') }
-        : { providerId: providerId || undefined }),
+      ...(chairMode
+        ? {}
+        : columnsMode && columnsKey !== ''
+          ? { providerIds: columnsKey.split(',') }
+          : { providerId: providerId || undefined }),
     })
       .then((data) => {
         setAppointments(data);
@@ -783,6 +841,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
 
   // DX-200: un paso del flujo (desde la tarjeta, el detalle o el panel)
   // refresca la agenda y el panel; por la ref, con los filtros vigentes.
+  // DX-509: «Mantener en sobrecupo» al reactivar (el de «Deshacer llegada»
+  // lo lleva el runner del flujo).
+  const [keepOverbooked, setKeepOverbooked] = useState<KeepOverbookedPrompt | null>(null);
   const flow = usePatientFlow(token, () => {
     setInClinicReloadKey((k) => k + 1);
     void refreshAppointmentsInPlaceRef.current();
@@ -834,6 +895,26 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     });
     setDetailAppointment(null);
     setShowForm(true);
+  }
+
+  /** DX-211: «Nueva cita» de la columna de un sillón (sin profesional: lo propone el sillón). */
+  function handleNewFromChair(columnId: string, startTime?: string) {
+    setSlotPrefill({
+      date: selectedDate,
+      // Solo un sillón activo se puede elegir (los inactivos salen como
+      // columna por sus citas, pero no admiten citas nuevas).
+      ...(columnId !== NO_CHAIR_COLUMN && chairs.some((c) => c.id === columnId && c.active)
+        ? { chairId: columnId }
+        : {}),
+      ...(startTime ? { startTime, endTime: addMinutesToTime(startTime, 30) } : {}),
+    });
+    setDetailAppointment(null);
+    setShowForm(true);
+  }
+
+  function selectColumnsBy(value: ColumnsBy) {
+    setColumnsBy(value);
+    writeColumnsBy(getTokenUserId(token), value);
   }
 
   /**
@@ -975,6 +1056,19 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       await updateAppointment(token, id, { status });
       await afterStatusChange();
     } catch (err) {
+      // DX-509: reactivar una urgencia en sobrecupo cuya hora ya ocupa otra
+      // cita: la decisión de mantenerla en sobrecupo es explícita.
+      if (err instanceof ApiError && err.code === OVERBOOK_SLOT_TAKEN) {
+        setKeepOverbooked({
+          message: apiErrorMessage(err, copy.genericStatusChangeError),
+          confirm: async () => {
+            await updateAppointment(token, id, { status, keepOverbooked: true });
+            toast.success(copy.reactivatedOverbooked);
+            await afterStatusChange();
+          },
+        });
+        return;
+      }
       notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
         onRetry: () => handleStatusChange(id, status),
       });
@@ -1169,7 +1263,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               onRetry={() => setStaffReloadKey((k) => k + 1)}
               className="h-10"
             />
-          ) : columnsMode ? (
+          ) : chairMode ? null : columnsMode ? (
             <ProviderColumnsPicker
               staff={staff}
               selected={columnIds}
@@ -1209,6 +1303,24 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 { value: 'list' as const, label: copy.dayList },
               ]}
             />
+          ) : null}
+          {columnsMode && hasChairs ? (
+            <div className="flex items-center gap-2">
+              <span id="agenda-columns-by" className="t-label shrink-0 text-muted">
+                {copy.columnsByLabel}
+              </span>
+              <SegmentedControl
+                semantics="toggle"
+                size="sm"
+                aria-labelledby="agenda-columns-by"
+                value={columnsBy}
+                onValueChange={selectColumnsBy}
+                options={[
+                  { value: 'providers' as const, label: copy.columnsByProviders },
+                  { value: 'chairs' as const, label: copy.columnsByChairs },
+                ]}
+              />
+            </div>
           ) : null}
           {!wide ? (
             <div className="flex w-full gap-2 sm:ml-auto sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
@@ -1396,6 +1508,29 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 renderActions={renderFlowActions}
                 providerName={staffName}
               />
+            ) : chairMode ? (
+              <DayColumns
+                date={selectedDate}
+                clock={clock}
+                providers={staff}
+                chairColumns={{
+                  columns: buildChairColumns(chairs, appointments),
+                  columnOf: chairColumnOf,
+                }}
+                appointments={appointments}
+                hours={hours}
+                loading={appointmentsLoading}
+                error={appointmentsLoadError}
+                onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+                canMove={canMove}
+                onSelectAppointment={openAppointmentDetail}
+                onMoveRequest={requestMove}
+                onDrop={(a, target) => void handleDrop(a, target)}
+                onNewAppointment={handleNewFromChair}
+                pendingId={movePendingId}
+                blocks={blocks}
+                activeLocationId={activeLocationId}
+              />
             ) : !staffLoading && !staffError && columnProviders.length === 0 ? (
               <p role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center text-sm text-muted">
                 {copy.noProviders}
@@ -1488,6 +1623,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             providers={staff}
             hours={hours}
             onMoved={handleMoved}
+            chairs={chairs.filter((c) => c.locationId === movingAppointment.locationId)}
           />
         )}
 
@@ -1512,6 +1648,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               defaultStartTime={slotPrefill?.startTime}
               defaultEndTime={slotPrefill?.endTime}
               defaultProviderId={slotPrefill?.providerId}
+              defaultChairId={slotPrefill?.chairId}
             />
           </DialogContent>
         </Dialog>
@@ -1581,6 +1718,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 <AppointmentMedicalAlerts flags={liveDetailAppointment.medicalAlerts} />
                 {/* DX-279: inasistencias y cancelaciones tardías del paciente (12 meses). */}
                 <AttendanceBadge counts={liveDetailAppointment.attendance} className="self-start" />
+                {/* DX-509: la urgencia sigue sin ocupar la hora del profesional. */}
+                <OverbookedChip
+                  overbooked={liveDetailAppointment.overbooked}
+                  status={liveDetailAppointment.status}
+                  className="self-start"
+                />
                 {liveDetailAppointment.status === 'CANCELLED' &&
                 cancellationSummary(liveDetailAppointment) ? (
                   <p className="text-sm text-muted" data-testid="cancellation-summary">
@@ -1592,6 +1735,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   {staffName(liveDetailAppointment.providerId) ? (
                     <DescriptionItem label={copy.detailProvider}>
                       {staffName(liveDetailAppointment.providerId)}
+                    </DescriptionItem>
+                  ) : null}
+                  {/* DX-211: el sillón de la cita, con «(inactivo)» si se desactivó. */}
+                  {liveDetailAppointment.chair ? (
+                    <DescriptionItem label={copy.detailChair}>
+                      <span data-testid="appointment-chair">{chairDisplayName(liveDetailAppointment.chair)}</span>
                     </DescriptionItem>
                   ) : null}
                   {liveDetailAppointment.appointmentType ? (
@@ -1767,11 +1916,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           <SheetContent
             className="top-0 h-dvh max-h-none rounded-none border-t-0 sm:w-[26rem]"
             onCloseAutoFocus={(event) => {
-              // «Elegir sede»: al cerrar la hoja, el foco va al selector de sede.
+              // «Elegir sede»: al cerrar la hoja, el foco va al selector de sede
+              // visible (en el teléfono, el de la barra superior). Si no hay
+              // ninguno a la vista, vuelve al botón que abrió la hoja.
               if (!chooseLocationOnClose.current) return;
               chooseLocationOnClose.current = false;
-              event.preventDefault();
-              focusLocationSwitcher();
+              if (focusLocationSwitcher()) event.preventDefault();
             }}
           >
             <SheetHeader className="sr-only">
@@ -1840,6 +1990,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           defaultLocationId={activeLocationId}
         />
       ) : null}
+
+      {flow.overbookDialog}
+      <KeepOverbookedDialog prompt={keepOverbooked} onClose={() => setKeepOverbooked(null)} />
 
       {showWalkIn ? (
         <WalkInDialog

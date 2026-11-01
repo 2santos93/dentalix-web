@@ -36,7 +36,7 @@ const patientFirstName = 'Rosa';
 const patientLastName = `EstadoCuenta${suffix}`;
 
 // Mismo formateador que la app (`formatCurrency`, locale `es`).
-const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
+const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
 function money(amount: number): string {
   return usd.format(amount);
 }

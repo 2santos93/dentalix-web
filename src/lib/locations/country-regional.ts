@@ -9,6 +9,8 @@ import { browserCountry, canonicalLocale, canonicalTimeZone } from './regional-s
 
 interface CountryRegionalData {
   currencies: Record<string, string>;
+  /** Otras monedas de uso general en el país, además de la propuesta (`VE` → `['VES']`). */
+  currencyAlternatives: Record<string, string[]>;
   zones: Record<string, string[]>;
   icuZoneCountries: Record<string, string>;
 }
@@ -29,13 +31,23 @@ const ZONE_COUNTRIES: ReadonlyMap<string, readonly string[]> = (() => {
 })();
 
 /**
- * Moneda ISO 4217 de uso general en el país (`VE` → `VES`, `EC` → `USD`), para
+ * Moneda ISO 4217 de uso general en el país (`VE` → `USD`, `EC` → `USD`), para
  * proponerla al dar de alta una sede; `null` si no hay una que la API admita
  * (p. ej. las de tres decimales). Es una sugerencia: la sede puede cobrar en
  * cualquier otra.
  */
 export function countryCurrency(country: string): string | null {
   return DATA.currencies[country] ?? null;
+}
+
+/**
+ * Otras monedas de uso general en el país, además de `countryCurrency`, para
+ * ofrecerlas con un clic en el alta (`VE` → `['VES']`: se propone USD, que es
+ * en lo que trabajan sobre todo las clínicas allí, y el bolívar queda a un
+ * clic). Vacío en casi todos los países. Dato, no regla: nada se elige solo.
+ */
+export function countryCurrencyAlternatives(country: string): readonly string[] {
+  return DATA.currencyAlternatives[country] ?? [];
 }
 
 /** Zonas IANA del país, en el orden de la base de zonas (`VE` → `['America/Caracas']`). */

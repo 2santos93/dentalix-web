@@ -111,7 +111,9 @@ export function SegmentedControl<V extends string>({
       data-testid={testId}
       className={cn(
         'inline-flex max-w-full shrink-0 items-stretch gap-0.5 overflow-x-auto rounded-lg border border-border bg-surface-sunken p-0.5',
-        size === 'sm' ? 'h-8' : 'h-10',
+        // Alto mínimo, no fijo: en táctil (o con `touchTargets` de un modal) los
+        // segmentos crecen a 44 px y el carril crece con ellos, sin recortarlos.
+        size === 'sm' ? 'min-h-8' : 'min-h-10',
         fullWidthOnMobile && 'flex w-full sm:inline-flex sm:w-auto',
         className,
       )}
@@ -143,6 +145,7 @@ export function SegmentedControl<V extends string>({
             className={cn(
               'focus-ring inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
               size === 'sm' ? 'px-2.5 text-xs' : 'px-3 text-sm',
+              'pointer-coarse:min-h-11',
               fullWidthOnMobile && 'flex-1 sm:flex-none',
               selected
                 ? 'bg-surface text-ink shadow-lift'

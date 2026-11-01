@@ -1,17 +1,10 @@
 import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { getAnamnesisInboxSummary } from '@/lib/anamnesis/anamnesis-api';
 import { AppShell } from './app-shell';
-import { getClosingQueueCount } from '@/lib/appointments/closing-queue-api';
 import { getInClinic } from '@/lib/appointments/patient-flow';
 import { BrandingProvider } from '@/components/brand/branding-context';
 
-jest.mock('../../lib/anamnesis/anamnesis-api', () => ({ getAnamnesisInboxSummary: jest.fn().mockResolvedValue({ submitted: 0 }) }));
-jest.mock('../../lib/appointments/closing-queue-api', () => ({
-  ...jest.requireActual('../../lib/appointments/closing-queue-api'),
-  getClosingQueueCount: jest.fn().mockResolvedValue({ total: 0, outcome: 0, evolution: 0, treatment: 0 }),
-}));
 let mockPathname = '/patients';
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
@@ -21,7 +14,12 @@ jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
   getInClinic: jest.fn(),
 }));
-// DX-439: el contador de «Pendiente de cerrar» (un fallo deja 0).
+// DX-439 / DX-503: los contadores del menú salen de `GET /work-queues/summary`.
+jest.mock('../../lib/work-queues/work-queues-api', () => ({
+  ...jest.requireActual('../../lib/work-queues/work-queues-api'),
+  getWorkQueuesSummary: jest.fn().mockResolvedValue({ generatedAt: '', items: [] }),
+}));
+import { getWorkQueuesSummary } from '../../lib/work-queues/work-queues-api';
 jest.mock('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light', setTheme: jest.fn() }),
 }));
@@ -59,13 +57,15 @@ describe('AppShell', () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockAccessToken = 'T';
-    jest.mocked(getAnamnesisInboxSummary).mockResolvedValue({ submitted: 0 });
-    jest.mocked(getClosingQueueCount).mockResolvedValue({ total: 0, outcome: 0, evolution: 0, treatment: 0 });
+    jest.mocked(getWorkQueuesSummary).mockResolvedValue({ generatedAt: '', items: [] });
   });
 
   it('DX-297 separates the visible anamnesis label and badge in expanded and rail navigation', async () => {
     mockAccessToken = tokenForRole('ADMIN');
-    jest.mocked(getAnamnesisInboxSummary).mockResolvedValue({ submitted: 12 });
+    jest.mocked(getWorkQueuesSummary).mockResolvedValue({
+      generatedAt: '',
+      items: [{ key: 'ANAMNESIS_REVIEW', status: 'OK', count: 12 }],
+    } as Awaited<ReturnType<typeof getWorkQueuesSummary>>);
     const view = render(<AppShell><h1>Synthetic</h1></AppShell>);
     await waitFor(() => expect(screen.getAllByTestId('anamnesis-inbox-count')[0]).toHaveTextContent('12'));
     const snapshots = [{ html: view.container.innerHTML, selector: 'a[href="/anamnesis-por-revisar"]' }];
@@ -77,7 +77,10 @@ describe('AppShell', () => {
 
   it('DX-439: el contador de cierre mantiene el límite de palabra en navegación expandida y rail', async () => {
     mockAccessToken = tokenForRole('ADMIN');
-    jest.mocked(getClosingQueueCount).mockResolvedValue({ total: 12, outcome: 12, evolution: 0, treatment: 0 });
+    jest.mocked(getWorkQueuesSummary).mockResolvedValue({
+      generatedAt: '',
+      items: [{ key: 'CLOSING_QUEUE', status: 'OK', count: 12 }],
+    } as Awaited<ReturnType<typeof getWorkQueuesSummary>>);
     const view = render(<AppShell><h1>Synthetic</h1></AppShell>);
     await screen.findAllByRole('link', { name: 'Pendiente de cerrar 12' });
     const expandedText = screen.getByRole('link', { name: 'Pendiente de cerrar 12' }).textContent;
@@ -496,7 +499,7 @@ describe('AppShell', () => {
         </AppShell>,
       );
       const aside = within(document.querySelector('aside') as HTMLElement);
-      await user.click(aside.getByRole('button', { name: 'Buscar' }));
+      await user.click(aside.getByRole('button', { name: /^Buscar… (⌘K|Ctrl K)$/ }));
       expect(await screen.findByTestId('command-palette')).toBeInTheDocument();
       // Esc la cierra aunque el foco esté en el combobox expandido.
       await user.keyboard('{Escape}');
@@ -507,7 +510,10 @@ describe('AppShell', () => {
   it('DX-439: «Pendiente de cerrar» lleva su contador en la barra lateral, la hoja «Más» y la paleta', async () => {
     const user = userEvent.setup();
     mockAccessToken = tokenForRole('RECEPTION');
-    (getClosingQueueCount as jest.Mock).mockResolvedValueOnce({ total: 3 });
+    (getWorkQueuesSummary as jest.Mock).mockResolvedValueOnce({
+      generatedAt: '',
+      items: [{ key: 'CLOSING_QUEUE', status: 'OK', count: 3 }],
+    });
     try {
       render(
         <AppShell>
@@ -529,7 +535,46 @@ describe('AppShell', () => {
       await user.type(palette.getByRole('combobox'), 'cerrar');
       expect(palette.getByRole('option', { name: 'Pendiente de cerrar' })).toBeInTheDocument();
     } finally {
-      (getClosingQueueCount as jest.Mock).mockResolvedValue({ total: 0 });
+      (getWorkQueuesSummary as jest.Mock).mockResolvedValue({ generatedAt: '', items: [] });
+    }
+  });
+
+  it('DX-503: el menú pide solo sus listas (pendiente de cerrar y anamnesis) en una lectura', async () => {
+    mockAccessToken = tokenForRole('DENTIST');
+    (getWorkQueuesSummary as jest.Mock).mockClear();
+    (getWorkQueuesSummary as jest.Mock).mockResolvedValueOnce({
+      generatedAt: '',
+      items: [
+        { key: 'CLOSING_QUEUE', status: 'OK', count: 2 },
+        { key: 'ANAMNESIS_REVIEW', status: 'OK', count: 7 },
+      ],
+    });
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    const aside = within(document.querySelector('aside') as HTMLElement);
+    expect(await aside.findByRole('link', { name: 'Pendiente de cerrar 2' })).toBeInTheDocument();
+    expect(aside.getByRole('link', { name: 'Anamnesis 7 · por revisar' })).toBeInTheDocument();
+    expect(getWorkQueuesSummary).toHaveBeenCalledWith(expect.any(String), ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW']);
+  });
+
+  it('DX-503: la asistente no sondea «Pendiente de cerrar»; recepción no sondea anamnesis', async () => {
+    for (const [role, keys] of [
+      ['ASSISTANT', ['ANAMNESIS_REVIEW']],
+      ['RECEPTION', ['CLOSING_QUEUE']],
+    ] as const) {
+      mockAccessToken = tokenForRole(role);
+      (getWorkQueuesSummary as jest.Mock).mockClear();
+      const { unmount } = render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      await waitFor(() => expect(getWorkQueuesSummary).toHaveBeenCalled());
+      for (const call of (getWorkQueuesSummary as jest.Mock).mock.calls) expect(call[1]).toEqual(keys);
+      unmount();
     }
   });
 

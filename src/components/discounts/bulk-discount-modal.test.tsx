@@ -5,6 +5,10 @@ import { applyBulkDiscount } from '@/lib/discounts/discounts-api';
 import type { TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { ApiError } from '@/lib/api/client';
 import { ITEM_WITHOUT_DISCOUNT } from '@/components/treatment-plans/plan-fixture';
+import { regionalFormat } from '@/lib/format/regional-format';
+
+/** DX-489: el formato de la sede, el de los demás importes del plan. */
+const FMT = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
 
 jest.mock('../../lib/discounts/discounts-api', () => ({ applyBulkDiscount: jest.fn() }));
 const mockedApply = applyBulkDiscount as jest.MockedFunction<typeof applyBulkDiscount>;
@@ -35,7 +39,15 @@ function item(id: string, tooth: string, price: number): TreatmentPlanItem {
 
 const ITEMS = [item('i1', '11', 85000), item('i2', '21', 123457), item('i3', '36', 1005)];
 
-function renderModal(role: 'DENTIST' | 'ADMIN', currency = 'COP', items = ITEMS) {
+// DX-340: los dígitos de redondeo los manda la API (`currencyDigits`).
+const DIGITS: Record<string, 0 | 2> = { COP: 0, EUR: 2, RSD: 0, JPY: 0 };
+
+function renderModal(
+  role: 'DENTIST' | 'ADMIN',
+  currency = 'COP',
+  items = ITEMS,
+  roundingDigits: 0 | 2 | null = DIGITS[currency],
+) {
   const onApplied = jest.fn();
   const onOpenChange = jest.fn();
   render(
@@ -45,10 +57,12 @@ function renderModal(role: 'DENTIST' | 'ADMIN', currency = 'COP', items = ITEMS)
       token="tok"
       planId="plan-1"
       currency={currency}
+      roundingDigits={roundingDigits}
       items={items}
       procedureOf={() => 'Corona'}
       rules={RULES}
       role={role}
+      fmt={FMT}
       onApplied={onApplied}
     />,
   );
@@ -66,9 +80,9 @@ describe('BulkDiscountModal (DX-204)', () => {
     await userEvent.type(percentInput(), '10');
     const texts = previews();
     // 8.500; 12.345,7 → 12.346 superaría el 10 %: 12.345; 100,5 → 100.
-    expect(texts[0]).toMatch(/−8\.?500,00/);
-    expect(texts[1]).toMatch(/−12\.345,00/);
-    expect(texts[2]).toMatch(/−100,00/);
+    expect(texts[0]).toMatch(/^COP\s85\.000,00 → −COP\s8\.500,00$/);
+    expect(texts[1]).toMatch(/−COP\s12\.345,00/);
+    expect(texts[2]).toMatch(/−COP\s100,00/);
   });
 
   it('en EUR redondea a céntimos', async () => {
@@ -77,6 +91,37 @@ describe('BulkDiscountModal (DX-204)', () => {
     const texts = previews();
     expect(texts[0]).toMatch(/6,42/);
     expect(texts[1]).toMatch(/9,26/);
+  });
+
+  it('DX-340: RSD redondea con los dígitos del contrato (123,45 × 7,5 % = 9, no 9,26)', async () => {
+    renderModal('ADMIN', 'RSD', [item('i1', '11', 123.45)]);
+    await userEvent.type(percentInput(), '7,5');
+    expect(previews()[0]).toMatch(/−RSD\s9$/);
+    expect(previews()[0]).not.toMatch(/9,26/);
+  });
+
+  it('DX-340: sin dígitos en el contrato no adivina el redondeo: lo calcula la API al aplicar', async () => {
+    mockedApply.mockResolvedValue({ items: ITEMS, skippedNoDiscount: 0 });
+    renderModal('ADMIN', 'COP', [item('i1', '11', 85000)], null);
+    await userEvent.type(percentInput(), '5');
+    expect(previews()[0]).toContain(bulkDiscountCopy.previewPending);
+    await userEvent.click(screen.getByRole('button', { name: 'Aplicar descuento' }));
+    await waitFor(() => expect(mockedApply).toHaveBeenCalled());
+  });
+
+  it('DX-340: sin dígitos en el contrato el motivo se pide si CUALQUIER redondeo lo exigiría', async () => {
+    // 10 % de 999: a céntimos es 99,90 (justo el 10 %, sin motivo), pero
+    // redondeado a la unidad es 100 (10,01 %, con motivo). Sin saber la
+    // moneda, se pide el motivo.
+    renderModal('ADMIN', 'COP', [item('i1', '11', 999)], null);
+    await userEvent.type(percentInput(), '10');
+    expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+  });
+
+  it('DX-340: con dígitos a céntimos, ese mismo 10 % de 999 no pide motivo', async () => {
+    renderModal('ADMIN', 'EUR', [item('i1', '11', 999)], 2);
+    await userEvent.type(percentInput(), '10');
+    expect(screen.queryByText('Por encima del 10 % el motivo es obligatorio.')).not.toBeInTheDocument();
   });
 
   it('DX-241: el porcentaje sigue la regla decimal de los importes («7.5» = «7,5»; lo ambiguo no se envía)', async () => {

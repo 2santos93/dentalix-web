@@ -133,13 +133,21 @@ interface PatientRecordHeaderProps {
   attendance?: PatientAttendanceSummary | null;
   attendanceFailed?: boolean;
   onRetryAttendance?: () => void;
+  /**
+   * D2: «Editar datos» es la primaria solo donde editar los datos ES la tarea
+   * (la pestaña «Datos»). En las demás pestañas la primaria es de la pestaña
+   * (p. ej. «Agregar ítem» o «Aceptar con firma» en el plan) y esta baja a
+   * secundaria: una primaria por vista.
+   */
+  editPrimary?: boolean;
 }
 
 /**
  * Cabecera compacta de la ficha del paciente (SPEC → Plantillas → Ficha):
  * vuelta a la lista, nombre (`t-display`), una línea de identidad (edad ·
  * documento · teléfono) con la marca de alcance, UNA fila de chips y, a la
- * derecha, la única acción primaria («Editar datos») y el menú «⋯».
+ * derecha, «Editar datos» (primaria en la pestaña «Datos», secundaria en las
+ * demás, que traen la suya: D2) y el menú «⋯».
  *
  * Fila de chips, en orden de riesgo: alertas clínicas primero (la misma alerta
  * que la agenda, con su panel, y cada alerta como chip de peligro para leerla
@@ -166,6 +174,7 @@ export function PatientRecordHeader({
   attendance,
   attendanceFailed = false,
   onRetryAttendance,
+  editPrimary = true,
 }: PatientRecordHeaderProps) {
   const items = patient ? identityItems(patient) : [];
   const alertSeverity = patient ? medicalAlertSeverity(medicalAlerts) : null;
@@ -216,7 +225,12 @@ export function PatientRecordHeader({
             <div className="flex shrink-0 items-center gap-2">
               {/* En el móvil, solo el icono (el nombre accesible no cambia): el
                   nombre del paciente necesita el ancho. */}
-              <Button type="button" onClick={onEdit} className="max-sm:size-11 max-sm:px-0">
+              <Button
+                type="button"
+                variant={editPrimary ? 'default' : 'secondary'}
+                onClick={onEdit}
+                className="max-sm:min-h-11 max-sm:min-w-11 max-sm:px-0"
+              >
                 <Pencil aria-hidden className="size-4" />
                 <span className="max-sm:sr-only">{copy.edit}</span>
               </Button>

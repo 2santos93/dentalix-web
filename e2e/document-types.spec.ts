@@ -46,7 +46,7 @@ let receptionEmail: string;
 let templateTitle: string;
 
 // Mismo formateador que la app (`formatCurrency`, locale `es`): solo la cifra.
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP' });
+const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP', currencyDisplay: 'code' });
 const figure = (amount: number) => cop.format(amount).split(/\s/)[0];
 
 /**

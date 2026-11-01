@@ -32,10 +32,10 @@ export const responsiblesCopy = {
   loadError: 'No pudimos cargar los responsables del paciente.',
   emptyTitle: 'Sin responsable registrado',
   emptyHint:
-    'Añade a quien paga o recibe los avisos: la madre, el acudiente o un familiar. Puede ser otro paciente o un contacto sin ficha.',
+    'Añade a quien paga o recibe los avisos: la madre, el tutor legal o un familiar. Puede ser otro paciente o un contacto sin ficha.',
   payer: 'Pagador principal',
   notices: 'Recibe avisos',
-  migrated: 'Antes en «Acudiente»',
+  migrated: 'Copiado de la ficha antigua',
   isPatient: 'Paciente',
   edit: 'Editar',
   remove: 'Quitar',

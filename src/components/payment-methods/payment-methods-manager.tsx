@@ -178,7 +178,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           {loading || error ? '' : copy.count(methods.length)}
         </p>
         {/* Secundaria: los medios son un catálogo de apoyo dentro de Ajustes › Caja. */}
-        <Button type="button" variant="secondary" onClick={() => openModal(null)} className="w-full max-sm:h-11 sm:w-auto">
+        <Button type="button" variant="secondary" onClick={() => openModal(null)} className="w-full max-sm:min-h-11 sm:w-auto">
           <Plus aria-hidden />
           {copy.newMethod}
         </Button>

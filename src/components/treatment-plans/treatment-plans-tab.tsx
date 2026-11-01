@@ -26,7 +26,7 @@ import {
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
-import { activeSedeCurrency } from '@/lib/locations/location-settings';
+import { activeSedeCurrency, clinicBaseCurrency } from '@/lib/locations/location-settings';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
 import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { canRecordPayments } from '@/lib/payments/billable-plans-api';
@@ -46,6 +46,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { Disclosure } from '@/components/shared/disclosure';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
+import { ExternalInvoiceModal, type ExternalInvoiceTarget } from '@/components/payments/external-invoice-modal';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
 import { ReallocatePaymentModal } from '@/components/payments/reallocate-payment-modal';
@@ -53,17 +54,19 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { BulkDiscountModal, bulkDiscountCopy } from '@/components/discounts/bulk-discount-modal';
+import { contractRoundingDigits } from '@/lib/money/line-rounding';
 import { VoidCancellationFeeModal } from '@/components/appointments/fee-reason-modal';
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanVisitsBoard } from './plan-visits-board';
 import { PlanQuoteActions } from './plan-quote-actions';
+import { planPrimaryAction } from '@/lib/treatment-plans/plan-primary-action';
 import { PlanOptionsPanel } from './plan-options-panel';
 import { MarkDoneModal } from './mark-done-modal';
 import { ItemsTable } from './plan-items-table';
 import { PlanItemForm } from './plan-item-form';
 import { PlanMoneySummary } from './plan-money-summary';
 import { PlanPaymentFormModal } from './plan-payment-form-modal';
-import { PlanPaymentsList, paymentRowActionsButton } from './plan-payments-list';
+import { PlanPaymentsList, paymentRowActionsButton, paymentRowLabel } from './plan-payments-list';
 import {
   PAYMENTS_TRIGGER_ID,
   copy,
@@ -258,6 +261,8 @@ export function TreatmentPlansTab({
   // diálogo y su bandera de apertura. El diálogo pide el recibo a la API (su
   // foto inmutable), así que aquí no hace falta nada más del paciente.
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
+  // DX-515: el abono cuyo nº de factura fiscal externa se anota.
+  const [invoiceTarget, setInvoiceTarget] = useState<ExternalInvoiceTarget | null>(null);
 
   // Sedes de la clínica + sede activa: para decir a qué sede quedará
   // atribuido un abono nuevo y para sugerir la moneda de un plan nuevo. Se
@@ -268,6 +273,10 @@ export function TreatmentPlansTab({
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   const newPlanCurrency =
     newPlanCurrencyChoice || activeSedeCurrency(locations, activeLocationId).currency || '';
+  // DX-489: el «precio de lista» es el del catálogo, cuya moneda es la común de
+  // las sedes activas (la de Ajustes › Catálogo), no la del plan. Sin sedes
+  // leídas o sin moneda común, `null`: la cifra va sin moneda.
+  const catalogCurrency = clinicBaseCurrency(locations);
 
   // DX-204: motivo del descuento del ítem nuevo, política de la clínica (para
   // avisar antes; la API la aplica) y la selección de «Descuento %».
@@ -404,8 +413,11 @@ export function TreatmentPlansTab({
   // external system — a plain `useEffect` doing these `setState` calls
   // unconditionally on every run trips `react-hooks/set-state-in-effect`.
   const [prevSelectedPlanId, setPrevSelectedPlanId] = useState<string | null>(null);
+  // D2: lo informa `PlanVisitsBoard` (¿queda alguna visita por agendar?).
+  const [hasSchedulableVisit, setHasSchedulableVisit] = useState(false);
   if (selectedPlanId !== prevSelectedPlanId) {
     setPrevSelectedPlanId(selectedPlanId);
+    setHasSchedulableVisit(false);
     setPlanDetail(null);
     // Balance/abonos (PAY-T4) — same rationale: a different plan is a
     // genuinely different resource, and an in-progress abono form must not
@@ -848,6 +860,21 @@ export function TreatmentPlansTab({
   const discountable = Boolean(planDetail) && !signed && !closed && planDetail?.status !== 'ACCEPTED';
   const statusChoices = planDetail ? patchableStatuses(planDetail.status, role) : [];
   const optionGroup = selectedPlan ? optionGroupOf(plans, selectedPlan) : [];
+  // D2: UNA primaria con el plan abierto, elegida por su estado (borrador →
+  // «Agregar ítem», presentado → «Aceptar con firma», aceptado → «Agendar
+  // visita N» o cobrar). Todo lo demás del plan va en secundario.
+  const primary = planDetail
+    ? planPrimaryAction({
+        status: planDetail.status,
+        role,
+        signed,
+        itemCount: planDetail.items?.length ?? 0,
+        canAddItems: !closed && catalogItems.length > 0,
+        hasSchedulableVisit,
+        canBill: canSeeBilling && billable,
+        balance: planBalance?.balance ?? null,
+      })
+    : null;
 
   // Sin planes, crear el primero ES la acción de la pestaña (primaria); con
   // planes, la primaria del bloque es «Agregar ítem» y «Nuevo plan» baja a
@@ -993,6 +1020,7 @@ export function TreatmentPlansTab({
                 plan={planDetail}
                 role={role}
                 onAccepted={handlePlanAccepted}
+                acceptPrimary={primary === 'accept'}
               />
 
               {/* La opción que se le presenta al paciente (DX-040): presentar,
@@ -1014,6 +1042,7 @@ export function TreatmentPlansTab({
                 total={planDetail.total ?? 0}
                 currency={planDetail.currency}
                 balance={planBalance}
+                fmt={sedeFmt}
               />
               {/* La nota de alcance califica la región entera, por eso va
                   pegada debajo y no repetida en cada número. */}
@@ -1103,12 +1132,15 @@ export function TreatmentPlansTab({
                       plan={planDetail}
                       role={role}
                       onChanged={refreshPlanDetail}
+                      primaryScheduling={primary === 'scheduleVisit'}
+                      onSchedulableChange={setHasSchedulableVisit}
                       renderItems={(visitItems, { visit, ordered }) => (
                         <ItemsTable
                           items={visitItems}
                           visit={visit}
                           catalogById={catalogById}
                           currency={planDetail.currency}
+                          catalogCurrency={catalogCurrency}
                           feeStale={feeStale}
                           feeRefs={feeReferences(ordered)}
                           updatingItemId={updatingItemId}
@@ -1158,7 +1190,7 @@ export function TreatmentPlansTab({
                     actions={
                       <Button
                         type="button"
-                        variant="secondary"
+                        variant={primary === 'registerPayment' ? 'default' : 'secondary'}
                         size="sm"
                         onClick={openPaymentForm}
                         disabled={!billable}
@@ -1232,6 +1264,13 @@ export function TreatmentPlansTab({
                           manualPaymentIds={manualPaymentIds}
                           onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
                           fmt={sedeFmt}
+                          onExternalInvoice={(p) =>
+                            setInvoiceTarget({
+                              paymentId: p.id,
+                              subject: paymentRowLabel(p, sedeFmt),
+                              externalInvoiceNumber: p.externalInvoiceNumber,
+                            })
+                          }
                         />
                       </Disclosure>
 
@@ -1243,6 +1282,7 @@ export function TreatmentPlansTab({
                           billable={planBalance.billable}
                           canCreate={billable}
                           refreshSignal={paymentPlanRefreshSignal}
+                          fmt={sedeFmt}
                         />
                       </div>
                     </>
@@ -1284,7 +1324,10 @@ export function TreatmentPlansTab({
                       catalogById={catalogById}
                       discountRules={discountRules}
                       role={role}
+                      catalogCurrency={catalogCurrency}
+                      fmt={sedeFmt}
                       onAdded={() => Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()])}
+                      submitPrimary={primary === 'addItem'}
                     />
                   )}
                 </div>
@@ -1302,10 +1345,12 @@ export function TreatmentPlansTab({
           token={token}
           planId={planDetail.id}
           currency={planDetail.currency}
+          roundingDigits={contractRoundingDigits(planDetail.currencyDigits)}
           items={(planDetail.items ?? []).filter((i) => selectedItemIds.has(i.id))}
           procedureOf={(item) => procedureName(item, catalogById)}
           rules={discountRules}
           role={role}
+          fmt={sedeFmt}
           onApplied={(updated, skippedNoDiscount) => {
             setSelectedItemIds(new Set());
             // DX-105: lo que no admite descuento se salta; se dice cuántos.
@@ -1328,6 +1373,22 @@ export function TreatmentPlansTab({
         paymentId={receiptPaymentId}
         onOpenChange={(open) => {
           if (!open) setReceiptPaymentId(null);
+        }}
+      />
+
+      {/* DX-515: `key` por abono, para empezar con su nº actual. */}
+      <ExternalInvoiceModal
+        key={invoiceTarget?.paymentId ?? 'no-invoice-target'}
+        token={token}
+        target={invoiceTarget}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceTarget(null);
+        }}
+        onSaved={(result) => {
+          const ids = new Set(result.paymentIds);
+          setPayments((list) =>
+            list.map((p) => (ids.has(p.id) ? { ...p, externalInvoiceNumber: result.externalInvoiceNumber } : p)),
+          );
         }}
       />
 

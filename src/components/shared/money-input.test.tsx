@@ -60,7 +60,7 @@ describe('MoneyInput (DX-241)', () => {
     // Mientras se teclea no cambia: el lector lo anuncia una vez, no por tecla.
     expect(preview()).toBeEmptyDOMElement();
     act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
-    expect(preview()).toHaveTextContent(/^Se guardará: 150,50\sUS\$$/);
+    expect(preview()).toHaveTextContent(/^Se guardará: 150,50\sUSD$/);
   });
 
   it('el campo apunta a la vista previa con aria-describedby, junto al error que pase el formulario', () => {
@@ -106,6 +106,6 @@ describe('MoneyInput (DX-241)', () => {
 
   it('sin requirePositive, «0» se guarda como 0 (fondo de caja, arqueo)', () => {
     render(<Harness initial="0" />);
-    expect(preview()).toHaveTextContent(/^Se guardará: 0,00\sUS\$$/);
+    expect(preview()).toHaveTextContent(/^Se guardará: 0,00\sUSD$/);
   });
 });

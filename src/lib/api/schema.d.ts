@@ -206,6 +206,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/subdomains/{slug}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ¿Se puede registrar esta dirección web?
+         * @description Con las mismas reglas que POST /auth/register. «available» no la reserva: el envío del registro puede seguir dando 409 si otra clínica la toma antes.
+         */
+        get: operations["PublicSubdomainsController_availability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff/invitations": {
         parameters: {
             query?: never;
@@ -528,7 +548,7 @@ export interface paths {
         put?: never;
         /**
          * Supresión parcial de datos no clínicos (solo ADMIN)
-         * @description DX-039. Para un paciente cuya HC está en retención (y por eso no se puede archivar): vacía teléfono, email, dirección, notas administrativas y contacto de emergencia, y retira la autorización de marketing vigente. Conserva la HC y la identificación que exige (nombre, documento, nacimiento, sexo, residencia, estado civil, ocupación, aseguradora, médico y acudiente). Motivo obligatorio. 409 `NOT_UNDER_RETENTION` si la HC no está en retención (se archiva).
+         * @description DX-039. Para un paciente cuya HC está en retención (y por eso no se puede archivar): vacía teléfono, email, dirección, notas administrativas y contacto de emergencia, y retira la autorización de marketing vigente. Conserva la HC y la identificación que exige (nombre, documento, nacimiento, sexo, residencia, estado civil, ocupación, aseguradora, médico y tutor). Motivo obligatorio. 409 `NOT_UNDER_RETENTION` si la HC no está en retención (se archiva).
          */
         post: operations["PatientsController_suppress"];
         delete?: never;
@@ -887,6 +907,10 @@ export interface paths {
         };
         get: operations["LocationsController_list"];
         put?: never;
+        /**
+         * Crea una sede
+         * @description Queda en la auditoría (LOCATION_CREATED) con su nombre, país, moneda, zona, formato, reloj, teléfono y región telefónica por defecto (defaultPhoneRegion); nunca la dirección.
+         */
         post: operations["LocationsController_create"];
         delete?: never;
         options?: never;
@@ -1807,6 +1831,10 @@ export interface paths {
             cookie?: never;
         };
         get: operations["LocationScheduleController_get"];
+        /**
+         * Reemplaza el horario semanal de la sede en contexto
+         * @description Queda en la auditoría (LOCATION_SCHEDULE_REPLACED) con los tramos antes y después, en la sede del horario. Guardar la misma semana no deja evento.
+         */
         put: operations["LocationScheduleController_replace"];
         post?: never;
         delete?: never;
@@ -1977,6 +2005,86 @@ export interface paths {
         /** Activa o quita el modo estricto (cita fuera del horario del profesional → 409) */
         put: operations["ScheduleRosterController_update"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chairs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ChairsController_list"];
+        put?: never;
+        post: operations["ChairsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chairs/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ChairsController_reorder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chairs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["ChairsController_update"];
+        trace?: never;
+    };
+    "/api/v1/chairs/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ChairsController_deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chairs/{id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ChairsController_reactivate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2642,7 +2750,10 @@ export interface paths {
         };
         get: operations["DomainsController_list"];
         put?: never;
-        /** Registra un dominio propio en PENDING y devuelve el TXT a publicar (72 h para verificarlo) */
+        /**
+         * Registra un dominio propio en PENDING y devuelve el TXT a publicar (72 h para verificarlo)
+         * @description Queda en la auditoría (DOMAIN_REGISTERED) con el host y el estado PENDING; el token de verificación nunca.
+         */
         post: operations["DomainsController_create"];
         delete?: never;
         options?: never;
@@ -2811,7 +2922,7 @@ export interface paths {
         };
         /**
          * Caja en CSV: abonos del período con medio y referencia
-         * @description Mismos filtros que `GET /payments` (período, método y medio) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Moneda, Importe.
+         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe.
          */
         get: operations["PaymentsController_listCashCsv"];
         put?: never;
@@ -2887,6 +2998,26 @@ export interface paths {
         };
         get: operations["PaymentsController_balance"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}/external-invoice-number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Anotar el nº de la factura fiscal externa de un abono
+         * @description Texto libre (hasta 64 caracteres en una línea); null o vacío lo quita. En un cobro dividido se guarda en todas sus líneas (un recibo, una factura). El recibo emitido no cambia. Auditado con el antes y el después.
+         */
+        put: operations["PaymentsController_updateExternalInvoiceNumber"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3028,6 +3159,47 @@ export interface paths {
          */
         get: operations["PaymentRateBacklogController_day"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-receipts/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Título y leyenda del recibo de la clínica y de cada sede (DX-515) */
+        get: operations["ReceiptSettingsController_settings"];
+        /**
+         * Cambia el título y la leyenda del recibo de la clínica
+         * @description DX-515. Vacío o null = sin configurar. Aplica a los recibos que se emitan desde ahora; queda en la auditoría con el antes y el después.
+         */
+        put: operations["ReceiptSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-receipts/settings/locations/{locationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * La leyenda propia de una sede (o volver a la de la clínica)
+         * @description DX-515. override false = la sede usa la leyenda de la clínica; true con leyenda vacía = la sede no imprime ninguna.
+         */
+        put: operations["ReceiptSettingsController_updateLocation"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3944,7 +4116,7 @@ export interface paths {
         put?: never;
         /**
          * Publicar una nueva versión de la política (solo ADMIN)
-         * @description Crea la versión siguiente y pasa a ser la vigente. No hay borradores ni edición.
+         * @description Crea la versión siguiente y pasa a ser la vigente. No hay borradores ni edición. Queda en la auditoría (PRIVACY_POLICY_PUBLISHED) con versión y hash antes y después y qué textos cambiaron; nunca los textos.
          */
         post: operations["PrivacyPoliciesController_publish"];
         delete?: never;
@@ -5738,6 +5910,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /**
+         * Reemplaza los ajustes de recordatorio de una sede
+         * @description Queda en la auditoría (REMINDER_SETTINGS_UPDATED) con activado y antelaciones antes y después, en esa sede. Guardar lo mismo no deja evento.
+         */
         put: operations["ReminderSettingsController_replace"];
         post?: never;
         delete?: never;
@@ -5783,6 +5959,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/work-queues/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recuentos de las listas de trabajo del rol («Mi día»)
+         * @description Cada número es el de su lista (closing-queue/count, submissions/summary, pending-follow-up/count, unscheduled/count, waitlist, receivables/aging/summary, inventory lowStockOnly) con sus filtros por defecto, en la sede activa. ADMIN: todas. DENTIST: pendiente de cerrar (lo suyo) y anamnesis. RECEPTION: pendiente de cerrar (desenlace), presupuestos por seguir, aceptados sin agendar, lista de espera y cartera. ASSISTANT: anamnesis y bajo stock. Una lista que falla sale con `status: ERROR` y `count: null`; las demás llegan igual.
+         */
+        get: operations["WorkQueuesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5790,7 +5986,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -5961,6 +6157,26 @@ export interface components {
             /** @description Las monedas de la cotización (ISO 4217). */
             currencies: string[];
         };
+        AuditConfigChangeDto: {
+            /**
+             * @description Valores antes del cambio (o del retiro).
+             * @example {
+             *       "durationMinutes": 30
+             *     }
+             */
+            before?: {
+                [key: string]: (string | number | boolean | (string | number)[]) | null;
+            };
+            /**
+             * @description Valores después del cambio (o del alta).
+             * @example {
+             *       "durationMinutes": 45
+             *     }
+             */
+            after?: {
+                [key: string]: (string | number | boolean | (string | number)[]) | null;
+            };
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -5994,6 +6210,8 @@ export interface components {
             staffAccess?: components["schemas"]["AuditStaffAccessChangeDto"];
             /** @description DX-402: el barrido congeló en un abono (`reason` EXCHANGE_RATE_BACKUP, `origin` JOB, sin usuario) la tasa manual de un día anterior a «manual desde», como tasa de respaldo de un día sin tasa del proveedor. Solo días y monedas; ni importes ni la tasa. */
             exchangeRateBackup?: components["schemas"]["AuditExchangeRateBackupDto"];
+            /** @description DX-360: configuración de la clínica (sedes, horario, recordatorios, dominios, política de datos, tipos de cita, pagadores, plantillas, inventario): los campos que cambiaron con su antes y después, o un lado en un alta o un retiro. El texto libre o largo (cuerpo de una plantilla, notas, motivo) solo figura en `changedFields`; nunca secretos (token de un dominio) ni datos de pacientes. */
+            configChange?: components["schemas"]["AuditConfigChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -6011,7 +6229,7 @@ export interface components {
             locationId: string | null;
             /**
              * @description Zona IANA de la sede del evento (o de la sede principal): la hora se muestra en ella.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
             actor: components["schemas"]["AuditActorDto"] | null;
@@ -6028,7 +6246,7 @@ export interface components {
             nextCursor: string | null;
             /**
              * @description Zona de la sede activa (o de la principal), para interpretar los días de los filtros.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
         };
@@ -6131,6 +6349,20 @@ export interface components {
             /** @description Token del enlace recibido por email. */
             token: string;
             password: string;
+        };
+        /**
+         * @description available = se puede registrar; taken = ya es de una clínica (también dada de baja); invalid = no cumple el formato (minúsculas, números y guiones, 1–63, sin guion al principio ni al final); reserved = dirección de la plataforma (www, api…).
+         * @enum {string}
+         */
+        SubdomainAvailability: "available" | "taken" | "invalid" | "reserved";
+        SubdomainAvailabilityDto: {
+            /**
+             * @description La dirección tal como se registraría (sin espacios, en minúsculas). Vacía si la ruta era desmesurada.
+             * @example sonrisa
+             */
+            subdomain: string;
+            /** @description available = se puede registrar; taken = ya es de una clínica (también dada de baja); invalid = no cumple el formato (minúsculas, números y guiones, 1–63, sin guion al principio ni al final); reserved = dirección de la plataforma (www, api…). */
+            status: components["schemas"]["SubdomainAvailability"];
         };
         CreateInvitationDto: {
             fullName: string;
@@ -6260,25 +6492,56 @@ export interface components {
             esAlerta: boolean;
         };
         SmokingDto: {
-            activo: boolean;
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            estado: "SI" | "NO" | "DESCONOCE";
+            /** @description Solo con «Sí». */
             porDia?: number;
+            /** @description Solo con «Sí». */
             anios?: number;
         };
         AlcoholDto: {
-            activo: boolean;
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            estado: "SI" | "NO" | "DESCONOCE";
+            /** @description Solo con «Sí». */
             frecuencia?: string;
         };
         OralHygieneDto: {
             cepilladoPorDia?: number;
-            hilo?: boolean;
-            enjuague?: boolean;
-            cremaConFluor?: boolean;
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            hilo?: "SI" | "NO" | "DESCONOCE";
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            enjuague?: "SI" | "NO" | "DESCONOCE";
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            cremaConFluor?: "SI" | "NO" | "DESCONOCE";
         };
         HabitsDto: {
             tabaquismo?: components["schemas"]["SmokingDto"];
             alcohol?: components["schemas"]["AlcoholDto"];
-            sustancias?: boolean;
-            bruxismo?: boolean;
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            sustancias?: "SI" | "NO" | "DESCONOCE";
+            /**
+             * @description SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder» (nunca se lee como «No»).
+             * @enum {string}
+             */
+            bruxismo?: "SI" | "NO" | "DESCONOCE";
             higieneOral?: components["schemas"]["OralHygieneDto"];
             dieta?: string;
         };
@@ -6313,6 +6576,11 @@ export interface components {
             talla?: number;
             glucometria?: number;
         };
+        /**
+         * @description Embarazo: SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder». Solo el «Sí» enciende la alerta.
+         * @enum {string}
+         */
+        AnamnesisAnswerStatus: "SI" | "NO" | "DESCONOCE";
         SaveMedicalHistoryDto: {
             allergies?: components["schemas"]["AllergyDto"][];
             /** @description Solo las condiciones que se contestaron (Sí / No / No sabe). Una condición del checklist que no figura está «Sin responder»: nunca se interpreta como «No». */
@@ -6324,7 +6592,14 @@ export interface components {
             vitalSigns?: components["schemas"]["VitalSignsDto"];
             familyHistory?: string;
             notes?: string;
+            /** @description Embarazo: SI / NO / DESCONOCE («No sabe»). Ausente = «Sin responder». Solo el «Sí» enciende la alerta. */
+            pregnancy?: components["schemas"]["AnamnesisAnswerStatus"];
+            /**
+             * @deprecated
+             * @description Deprecado: usar `pregnancy`. Solo `true` dice algo («Sí»); `false` se trata como sin responder. Si viene `pregnancy`, manda `pregnancy`.
+             */
             embarazo?: boolean;
+            /** @description Solo con `pregnancy` = SI. */
             semanasEmbarazo?: number;
         };
         CreatePatientDto: {
@@ -6438,7 +6713,7 @@ export interface components {
             emergencyContactPhone: string | null;
             /**
              * @deprecated
-             * @description DEPRECADO (DX-203), solo lectura: el acudiente es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
+             * @description DEPRECADO (DX-203), solo lectura: el tutor es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
              */
             guardianName: string | null;
             /**
@@ -6557,7 +6832,7 @@ export interface components {
             emergencyContactPhone: string | null;
             /**
              * @deprecated
-             * @description DEPRECADO (DX-203), solo lectura: el acudiente es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
+             * @description DEPRECADO (DX-203), solo lectura: el tutor es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
              */
             guardianName: string | null;
             /**
@@ -6720,7 +6995,7 @@ export interface components {
             emergencyContactPhone: string | null;
             /**
              * @deprecated
-             * @description DEPRECADO (DX-203), solo lectura: el acudiente es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
+             * @description DEPRECADO (DX-203), solo lectura: el tutor es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
              */
             guardianName: string | null;
             /**
@@ -6975,7 +7250,7 @@ export interface components {
             relationship: components["schemas"]["ResponsibleRelationship"];
             isPayer: boolean;
             receivesNotices: boolean;
-            /** @description Copiado del acudiente antiguo de la ficha (guardianName, DEPRECADO). */
+            /** @description Copiado del tutor antiguo de la ficha (guardianName, DEPRECADO). */
             migratedFromGuardian: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -7175,7 +7450,7 @@ export interface components {
             isPrimary: boolean;
             notes: string | null;
             /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTHER. */
-            migratedFromInsurerEps: boolean;
+            migratedFromLegacyInsurer: boolean;
             /**
              * Format: uuid
              * @description SEC-049: quién puso por última vez el pagador o el nº de afiliado (en las anteriores, quien la creó). Un rol que no es ADMIN no puede asignar un convenio con una cobertura que declaró él y nadie verificó.
@@ -7619,7 +7894,7 @@ export interface components {
         PriceListDto: {
             /** Format: uuid */
             id: string;
-            /** @example Convenio Sura EPS */
+            /** @example Convenio Empresa Alfa */
             name: string;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -7691,6 +7966,7 @@ export interface components {
             removed: number;
         };
         SafetyFlagsDto: {
+            /** @description DERIVADA: true solo con un «Sí» explícito al embarazo (`pregnancy`). No dice si se contestó «No». */
             embarazo: boolean;
             semanasEmbarazo?: number;
             anticoagulantes: boolean;
@@ -7719,6 +7995,8 @@ export interface components {
             conditions: components["schemas"]["ConditionDto"][];
             medications: components["schemas"]["MedicationDto"][];
             habits: components["schemas"]["HabitsDto"] | null;
+            /** @description Embarazo: SI / NO / DESCONOCE; null = sin responder. En las versiones anteriores a este campo solo se guardaba el «Sí»: allí null puede ser «No» o no preguntado (nunca se inventa un «No»). */
+            pregnancy: components["schemas"]["AnamnesisAnswerStatus"] | null;
             dentalHistory: components["schemas"]["DentalHistoryDto"] | null;
             surgeries: components["schemas"]["SurgeryDto"][];
             vitalSigns: components["schemas"]["VitalSignsDto"] | null;
@@ -7806,7 +8084,7 @@ export interface components {
             today: string;
             /**
              * @description Zona IANA de esa sede.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
             lastReview: components["schemas"]["AnamnesisLastReviewDto"] | null;
@@ -8917,8 +9195,16 @@ export interface components {
             planItemIds?: string[];
             /** Format: uuid */
             patientId: string;
-            /** Format: uuid */
-            providerId: string;
+            /**
+             * Format: uuid
+             * @description Profesional de la cita. DX-211: opcional si viene `chairId` con profesional por defecto (se toma el del sillón); el elegido manda siempre. Sin ninguno, 400.
+             */
+            providerId?: string;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita. De esta clínica (si no, 404), de la sede de la cita y activo (si no, 400). Otra cita viva en ese sillón y franja: 409 «El sillón X ya está ocupado de HH:MM a HH:MM» (horas de la sede). Sin él, nada cambia.
+             */
+            chairId?: string;
             /** Format: date-time */
             start: string;
             /**
@@ -8960,6 +9246,14 @@ export interface components {
          * @enum {string}
          */
         TriageFlag: "PAIN" | "SWELLING" | "INFECTION" | "FEVER" | "BLEEDING" | "TRAUMA";
+        ChairSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sillón 1 */
+            name: string;
+            /** @description false = el sillón se desactivó después: se muestra «(inactivo)». */
+            active: boolean;
+        };
         /**
          * @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede).
          * @enum {string}
@@ -9002,7 +9296,7 @@ export interface components {
             locationName: string | null;
             /**
              * @description Zona IANA de esa sede: la fecha se muestra en ella. null si no está permitida.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string | null;
             /**
@@ -9144,6 +9438,13 @@ export interface components {
             walkIn: boolean;
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita; null = sin sillón.
+             */
+            chairId: string | null;
+            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9265,6 +9566,13 @@ export interface components {
             walkIn: boolean;
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita; null = sin sillón.
+             */
+            chairId: string | null;
+            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9401,6 +9709,13 @@ export interface components {
             walkIn: boolean;
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita; null = sin sillón.
+             */
+            chairId: string | null;
+            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9436,7 +9751,7 @@ export interface components {
             end: string;
         };
         OpeningsDto: {
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             durationMinutes: number;
             openings: components["schemas"]["OpeningDto"][];
@@ -9494,7 +9809,7 @@ export interface components {
             date: string;
             /** Format: uuid */
             locationId: string;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             /**
              * @description G1-B: formato regional (BCP 47) de la sede: las horas se pintan con él.
@@ -9636,6 +9951,13 @@ export interface components {
             walkIn: boolean;
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita; null = sin sillón.
+             */
+            chairId: string | null;
+            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9653,6 +9975,11 @@ export interface components {
              * @description DX-121: mover la cita a otro profesional de la clínica. Mismas reglas que reagendar: solape 409, horario de la sede 422, y anula el enlace de confirmación.
              */
             providerId?: string;
+            /**
+             * Format: uuid
+             * @description DX-211: cambiar el sillón (de la sede de la cita y activo; si no, 400/404) o quitarlo con null. Al cambiarlo o reagendar una cita con sillón se mira que esté libre en la franja (409 con su nombre y horas). Cambiar solo el sillón no anula el enlace de confirmación; queda auditado como movimiento.
+             */
+            chairId?: string | null;
             /**
              * @description DX-200: flujo en la clínica sin saltos (409 si no): ARRIVED desde SCHEDULED/CONFIRMED y solo el día de la cita (RECEPTION, ASSISTANT, ADMIN; fija `arrivedAt`); IN_CHAIR desde ARRIVED y READY_FOR_CHECKOUT desde IN_CHAIR (DENTIST, ASSISTANT, ADMIN; fijan `seatedAt` / `readyForCheckoutAt`); la salida a COMPLETED (o CANCELLED si se fue sin pasar al sillón) desde el flujo, RECEPTION, ASSISTANT, ADMIN. Nunca NO_SHOW desde el flujo; para volver a agendada, `POST /appointments/:id/undo-arrival`. Las horas las pone el servidor. Rol sin permiso: 403. DX-273: salir de COMPLETED (a cualquier otro estado) solo ADMIN y DENTIST, con `statusReason` (403 / 400).
              * @enum {string}
@@ -9681,6 +10008,12 @@ export interface components {
             wantsEarlier?: boolean;
             /** @description DX-446: «Mover igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. El motivo queda en `appointment_reserved_overrides`; `audit_event` (`reservedSlotOverride`) solo guarda el id de esa fila y los bloques. */
             overrideReason?: string;
+            /** @description DX-509: al reactivar (desde CANCELLED o NO_SHOW) una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional, `true` la mantiene en sobrecupo a sabiendas (`audit_event` `WALK_IN_OVERBOOK_KEPT`). Sin él ese caso es 409 `OVERBOOK_SLOT_TAKEN`. Con el hueco libre deja de ser sobrecupo sola (`WALK_IN_OVERBOOK_CLEARED`); moverla a otra hora u otro profesional también. En cualquier otro cambio se ignora. */
+            keepOverbooked?: boolean;
+        };
+        UndoArrivalDto: {
+            /** @description DX-509: para una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional, `true` la deja agendada y en sobrecupo a sabiendas (`audit_event` `WALK_IN_OVERBOOK_KEPT`). Sin él ese caso es 409 `OVERBOOK_SLOT_TAKEN`. Con el hueco libre deja de ser sobrecupo sola (`WALK_IN_OVERBOOK_CLEARED`). Se ignora en una cita que no es sobrecupo. */
+            keepOverbooked?: boolean;
         };
         MoveToOpeningDto: {
             /** Format: date-time */
@@ -10157,7 +10490,7 @@ export interface components {
             id: string;
             /** @example Sede Norte */
             name: string;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
         };
         RosterAssignmentDto: {
@@ -10206,6 +10539,60 @@ export interface components {
         ProviderScheduleSettingsDto: {
             /** @description false (defecto): una cita fuera del horario del profesional se agenda con el aviso PROVIDER_OFF_SCHEDULE. true: se rechaza con 409. */
             strictProviderSchedule: boolean;
+        };
+        ChairDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sillón 1 */
+            name: string;
+            /** @description Orden de la columna en la agenda; empate por nombre. */
+            sortOrder: number;
+            /**
+             * Format: uuid
+             * @description Profesional que se propone al elegir el sillón en una cita (solo si aún no hay profesional elegido).
+             */
+            defaultProviderId: string | null;
+            /** @description false = desactivado: no se ofrece para citas nuevas ni sale como columna; sus citas lo conservan. */
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateChairDto: {
+            /**
+             * Format: uuid
+             * @description Sede del sillón.
+             */
+            locationId: string;
+            /** @example Sillón 1 */
+            name: string;
+            /** @description Por defecto, al final de la sede. */
+            sortOrder?: number;
+            /**
+             * Format: uuid
+             * @description Profesional por defecto: un miembro activo que atiende pacientes en la sede.
+             */
+            defaultProviderId?: string | null;
+        };
+        ReorderChairsDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @description TODOS los sillones de la sede (activos o no), cada uno una vez, en el orden de las columnas. */
+            chairIds: string[];
+        };
+        UpdateChairDto: {
+            name?: string;
+            sortOrder?: number;
+            /**
+             * Format: uuid
+             * @description null quita el profesional por defecto.
+             */
+            defaultProviderId?: string | null;
         };
         /**
          * @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER).
@@ -10471,7 +10858,7 @@ export interface components {
             start: string;
             /** Format: date-time */
             end: string;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             /** @description DX-233: el profesional del hueco no trabaja todo ese hueco en la sede según su horario (entonces no hay candidatos). Sin `providerId`, false. */
             providerOffSchedule: boolean;
@@ -10616,11 +11003,11 @@ export interface components {
             start: string;
             /** Format: date-time */
             end: string;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             /**
              * @description Locale de la sede: la página pinta el día y la hora como la sede.
-             * @example es-CO
+             * @example es
              */
             locale: string | null;
             /** @example h12 */
@@ -10819,13 +11206,15 @@ export interface components {
             itemCount: number;
         };
         PendingFollowUpPageDto: {
+            /** @description Las opciones de los grupos de esta página: las de un mismo grupo (`optionGroupId`) salen seguidas y nunca se parten entre páginas */
             items: components["schemas"]["PendingFollowUpItemDto"][];
+            /** @description Grupos por seguir (un plan suelto es su propio grupo): lo que se pagina con page/pageSize */
             total: number;
             page: number;
             pageSize: number;
         };
         PendingFollowUpCountDto: {
-            /** @description Planes por seguir con esos filtros (todas las páginas) */
+            /** @description Presupuestos por seguir con esos filtros (todas las páginas), contando las opciones A/B de un plan como uno solo */
             total: number;
         };
         CreateTreatmentPlanDto: {
@@ -10926,6 +11315,18 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        CurrencyDigitsDto: {
+            /**
+             * @description Minor units de ISO 4217 según la List One de SIX (RSD 2, JPY 0). Dato normativo; no se usa para redondear.
+             * @example 2
+             */
+            minorUnits: number;
+            /**
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @example 0
+             */
+            roundingDigits: number;
+        };
         TreatmentPlanRemoteAcceptanceDto: {
             /** @description Destino enmascarado (an***@dominio) */
             destinationMasked: string;
@@ -10991,6 +11392,8 @@ export interface components {
             items?: components["schemas"]["TreatmentPlanItemDto"][];
             /** @description Sum of active items price minus discount — only present on GET by id */
             total?: number;
+            /** @description DX-340: decimales de la moneda del plan (currencies). La web redondea con roundingDigits la vista previa del descuento en bloque. Solo en GET by id */
+            currencyDigits?: components["schemas"]["CurrencyDigitsDto"];
             /** @description Aceptación firmada (DX-012); null si no se firmó. Con firma, los ítems quedan congelados (409). Solo en GET by id */
             acceptance?: components["schemas"]["TreatmentPlanAcceptanceSummaryDto"] | null;
         };
@@ -11587,6 +11990,16 @@ export interface components {
             logoUrl: string | null;
         };
         CurrencyDto: {
+            /**
+             * @description Minor units de ISO 4217 según la List One de SIX (RSD 2, JPY 0). Dato normativo; no se usa para redondear.
+             * @example 2
+             */
+            minorUnits: number;
+            /**
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @example 0
+             */
+            roundingDigits: number;
             /** @description Código ISO 4217 de 3 letras. */
             code: string;
             /** @example Euro */
@@ -11688,6 +12101,8 @@ export interface components {
             /** @description DX-377: medio de pago (el inicial de su método si el abono es de una réplica anterior). */
             paymentMethod: components["schemas"]["CashPaymentMethodRefDto"] | null;
             reference: string | null;
+            /** @description DX-515: nº de la factura fiscal emitida fuera de Dentalix; null si no se anotó. */
+            externalInvoiceNumber: string | null;
             notes: string | null;
             location: components["schemas"]["CashLocationRefDto"];
             patient: components["schemas"]["CashPatientRefDto"];
@@ -11870,6 +12285,8 @@ export interface components {
             paymentMethodName: string | null;
             /** @description Referencia del pago tal como la dio el pagador (DX-377). */
             reference: string | null;
+            /** @description DX-515: nº de la factura fiscal emitida fuera de Dentalix (texto libre); null si no se anotó. */
+            externalInvoiceNumber: string | null;
             /** @description Motivo con que se confirmó una referencia repetida (DX-377); null si no se repetía. */
             duplicateReferenceReason: string | null;
             /** @description Solo en la respuesta del alta: ids de los abonos con la misma referencia y medio que se confirmaron con motivo. */
@@ -12039,6 +12456,20 @@ export interface components {
             /** @description Abonos cuya imputación fijó un ADMIN a mano */
             manualPaymentIds: string[];
             items: components["schemas"]["PlanItemBalanceDto"][];
+        };
+        ExternalInvoiceNumberDto: {
+            /**
+             * @description Nº de la factura fiscal emitida fuera de Dentalix, texto libre sin formato, hasta 64 caracteres en una línea. null o vacío lo quita.
+             * @example 00-000123
+             */
+            externalInvoiceNumber: string | null;
+        };
+        ExternalInvoiceNumberResultDto: {
+            /** Format: uuid */
+            paymentId: string;
+            externalInvoiceNumber: string | null;
+            /** @description Los abonos que lo llevan: el pedido o, en un cobro dividido, todas sus líneas. */
+            paymentIds: string[];
         };
         VoidPaymentDto: {
             /**
@@ -12224,6 +12655,16 @@ export interface components {
             split?: components["schemas"]["ReceiptSnapshotSplitDto"] | null;
             /** @example Este documento no es factura */
             legalNotice: string;
+            /**
+             * @description DX-515: el título del recibo que configuró la clínica, congelado al emitir. Ausente si no tenía (se imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title?: string;
+            /**
+             * @description DX-515: la leyenda de la clínica o de la sede, congelada al emitir. Ausente si no había: no se imprime nada, también al reimprimir un recibo anterior a que se configurara.
+             * @example Este recibo no es una factura
+             */
+            legend?: string;
         };
         PaymentReceiptDto: {
             /** Format: uuid */
@@ -12455,6 +12896,47 @@ export interface components {
             providerRateSaved: boolean;
             /** @description Abonos de ese día que necesitan esa moneda y otra distinta de USD sin tasa manual ese día: la de respaldo solo les servirá cuando se registre también la otra. */
             otherRatesMissing: components["schemas"]["PaymentRateOtherMissingDto"];
+        };
+        LocationReceiptLegendViewDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Norte */
+            name: string;
+            isActive: boolean;
+            /** @description La sede usa su propia leyenda (aunque sea ninguna). */
+            override: boolean;
+            legend: string | null;
+        };
+        ReceiptSettingsViewDto: {
+            /**
+             * @description Título del recibo de caja, hasta 60 caracteres en una línea. null o vacío = sin título propio (la web imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title: string | null;
+            /**
+             * @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna.
+             * @example Este recibo no es una factura
+             */
+            legend: string | null;
+            locations: components["schemas"]["LocationReceiptLegendViewDto"][];
+        };
+        ReceiptSettingsDto: {
+            /**
+             * @description Título del recibo de caja, hasta 60 caracteres en una línea. null o vacío = sin título propio (la web imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title: string | null;
+            /**
+             * @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna.
+             * @example Este recibo no es una factura
+             */
+            legend: string | null;
+        };
+        LocationReceiptLegendDto: {
+            /** @description true = la sede imprime SU leyenda (`legend`; vacía = ninguna) en vez de la de la clínica. false = usa la de la clínica. */
+            override: boolean;
+            /** @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna. Se ignora con override false. */
+            legend?: string | null;
         };
         CreatePaymentPlanDto: {
             /**
@@ -12775,6 +13257,11 @@ export interface components {
              * @example ABC 123
              */
             reference: string | null;
+            /**
+             * @description DX-515: nº de la factura fiscal emitida fuera de Dentalix para el abono (texto libre), o `null` si no se anotó.
+             * @example 00-000123
+             */
+            externalInvoiceNumber: string | null;
             /**
              * Format: uuid
              * @description DX-390: el cobro dividido del abono (el id de su línea 1); `null` en un abono de una sola forma de pago. Anular una línea anula el cobro entero.
@@ -13155,7 +13642,7 @@ export interface components {
             address: string | null;
             /**
              * @description IANA de la sede.
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
         };
@@ -13336,7 +13823,7 @@ export interface components {
             isActive: boolean;
             /**
              * @description Zona con la que la sede corta sus días (null en el total)
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string | null;
             /** @description ¿Hubo producción, cobros o citas (atendidas o no-show) en el período? */
@@ -13517,7 +14004,7 @@ export interface components {
             locationName: string;
             /**
              * @description Zona de la sede donde se realizó: la fecha se pinta con ella
-             * @example America/Bogota
+             * @example UTC
              */
             timeZone: string;
             /** @example 16 */
@@ -13963,7 +14450,7 @@ export interface components {
             /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
             differences: components["schemas"]["CashMoneyDto"][];
             notes: string | null;
-            /** @example America/Bogota */
+            /** @example UTC */
             timeZone: string;
             /** @description Arqueo ciego para quien consulta: `expected` y `payments` vienen a null hasta cerrar. */
             blindHidden: boolean;
@@ -14456,7 +14943,7 @@ export interface components {
             policyText: string;
             /** @description Texto de la casilla GENERAL (datos personales). */
             generalText: string;
-            /** @description Texto de la casilla SENSITIVE_HEALTH. Debe decir que el titular «no está obligado» a autorizar, qué «datos sensibles» se tratan y su «finalidad» (Dec. 1377, art. 6); si falta alguna, 400. */
+            /** @description Texto de la casilla SENSITIVE_HEALTH (datos sensibles de salud): lo que el paciente autoriza de forma expresa y separada. */
             sensitiveHealthText: string;
             /** @description Texto de la casilla MARKETING (finalidades comerciales). */
             marketingText: string;
@@ -17525,6 +18012,32 @@ export interface components {
             optedOutAt: string | null;
             clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
         };
+        /** @enum {string} */
+        WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECEIVABLES" | "LOW_STOCK";
+        WorkQueueOverdueDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Lo exigible ya vencido en esa moneda */
+            amount: number;
+        };
+        WorkQueueItemDto: {
+            key: components["schemas"]["WorkQueueKey"];
+            /**
+             * @description `ERROR`: esa lista no se pudo contar ahora (las demás sí); el cliente avisa y reintenta
+             * @enum {string}
+             */
+            status: "OK" | "ERROR";
+            /** @description El mismo número que el `/count` (o el `total`) de la lista; `null` si `ERROR`. En RECEIVABLES, pacientes con saldo (el mayor por moneda: no se suman monedas). */
+            count: number | null;
+            /** @description Solo RECEIVABLES: lo vencido por moneda, sin convertir */
+            overdue?: components["schemas"]["WorkQueueOverdueDto"][];
+        };
+        WorkQueuesSummaryDto: {
+            /** Format: date-time */
+            generatedAt: string;
+            /** @description Las listas del rol en la sede activa (sin cabecera, las sedes permitidas), en el orden de la bandeja */
+            items: components["schemas"]["WorkQueueItemDto"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -17924,6 +18437,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSubdomainsController_availability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubdomainAvailabilityDto"];
+                };
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
@@ -21561,6 +22102,8 @@ export interface operations {
                 providerId?: string;
                 /** @description DX-121: columnas de la vista Día. Hasta 12 ids del personal activo de la clínica (otro id da 400). Se repite el parámetro: ?providerIds=a&providerIds=b. */
                 providerIds?: string[];
+                /** @description DX-211: solo las citas de estos sillones (activos o no) de la sede de la agenda (`locationId` o X-Location-Id; sin sede, 400). Un sillón de otra sede o clínica da 400. Hasta 12; se repite el parámetro: ?chairIds=a&chairIds=b. */
+                chairIds?: string[];
                 /** @description DX-121: sede de la agenda. Si falta, la del request (X-Location-Id) o todas. */
                 locationId?: string;
             };
@@ -21579,7 +22122,7 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentListItemDto"][];
                 };
             };
-            /** @description Más de 12 profesionales o alguno ajeno a la clínica */
+            /** @description Más de 12 profesionales o alguno ajeno a la clínica; DX-211: más de 12 sillones, alguno de otra sede o clínica, o `chairIds` sin sede */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21610,7 +22153,7 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentWriteDto"];
                 };
             };
-            /** @description Datos inválidos, cita en el pasado, sin hora de fin ni tipo, o tipo desactivado/ajeno */
+            /** @description Datos inválidos, cita en el pasado, sin hora de fin ni tipo, o tipo desactivado/ajeno; DX-211: sin profesional (ni el del sillón), o sillón de otra sede o desactivado */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21624,7 +22167,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita, el horario está bloqueado para ese profesional o la sede (DX-122), o es un hueco reservado para otros tipos y aún sin liberar (DX-446: `code: RESERVED_SLOT`, `canOverride` dice si quien agenda puede reintentar con `overrideReason`) */
+            /** @description Solape con otra cita (del profesional, del paciente o, DX-211, del sillón: «El sillón X ya está ocupado de HH:MM a HH:MM»), el horario está bloqueado para ese profesional o la sede (DX-122), o es un hueco reservado para otros tipos y aún sin liberar (DX-446: `code: RESERVED_SLOT`, `canOverride` dice si quien agenda puede reintentar con `overrideReason`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21643,7 +22186,10 @@ export interface operations {
     AppointmentsController_walkIn: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-510: UUID estable por intento de «Atender sin cita» (doble clic, reintento de red). Repetir la MISMA petición con la misma clave devuelve la cita original (sin un segundo paciente ni una segunda cita, `patientCreated: false`); otros datos con la misma clave son 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con la cita (sin caducidad, como en abonos y gastos). */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -21685,6 +22231,13 @@ export interface operations {
             };
             /** @description `NO_RESERVED_SLOT` (`canOverbook`): no queda hueco reservado libre hoy, se puede reintentar con `overbookReason`; `PATIENT_DUPLICATE` (`existingPatientId` y `existingPatient` con `id`, `firstName`, `lastName`): el documento del alta mínima ya es de otro paciente (se comprueba antes que el hueco); sin tipo urgente activo; un bloqueo que no deja agendar; el paciente ya está en otra cita a esa hora; u otra persona ocupó el hueco a la vez */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IDEMPOTENCY_KEY_REUSED`: la Idempotency-Key ya creó una atención sin cita con otros datos (otro paciente, profesional, triaje, motivo o sede) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21869,14 +22422,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Cita o profesional no encontrados en esta clínica */
+            /** @description Cita, profesional o sillón no encontrados en esta clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200) */
+            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200). DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`) al reactivar una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21952,7 +22505,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UndoArrivalDto"];
+            };
+        };
         responses: {
             /** @description DX-200 «Deshacer llegada»: el paciente marcado «Llegó» por error vuelve al estado que tenía (SCHEDULED o CONFIRMED) y se borra `arrivedAt`. Solo desde ARRIVED (antes de pasar al sillón); queda en auditoría (`ARRIVAL_UNDONE`). */
             200: {
@@ -21977,7 +22534,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La cita no está en espera (ya pasó al sillón, o nunca llegó), o cambió mientras tanto */
+            /** @description La cita no está en espera (ya pasó al sillón, o nunca llegó), o cambió mientras tanto. DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`): la urgencia es un sobrecupo y su hora ya la ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23073,6 +23630,265 @@ export interface operations {
             };
         };
     };
+    ChairsController_list: {
+        parameters: {
+            query: {
+                /** @description Sede de los sillones (entre las permitidas al usuario). */
+                locationId: string;
+                /** @description true = también los desactivados (pantalla de gestión). Por defecto, solo los activos. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sillones de la sede por `sortOrder` y nombre. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"][];
+                };
+            };
+            /** @description Sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChairDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"];
+                };
+            };
+            /** @description Nombre vacío o de más de 40, orden fuera de 0–999, o el profesional por defecto no atiende pacientes o no atiende en la sede */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede o profesional no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un sillón con ese nombre en la sede */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_reorder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderChairsDto"];
+            };
+        };
+        responses: {
+            /** @description Los sillones de la sede en el orden nuevo. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"][];
+                };
+            };
+            /** @description No son todos los sillones de la sede, o alguno se repite */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChairDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sillón o profesional no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un sillón con ese nombre en la sede */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Desactivado (no se borra): deja de ofrecerse para citas nuevas y de salir como columna; sus citas lo conservan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"];
+                };
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sillón no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_reactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairDto"];
+                };
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sillón no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PaymentMethodsController_list: {
         parameters: {
             query?: {
@@ -23883,7 +24699,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cuántos planes saldrían en «Presupuestos por seguir» con los mismos filtros */
+            /** @description Cuántos presupuestos (grupos de opciones) saldrían en «Presupuestos por seguir» con los mismos filtros */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -25197,6 +26013,8 @@ export interface operations {
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
                 /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
                 paymentMethodId?: string;
+                /** @description DX-515: WITH = solo abonos con nº de factura externa; WITHOUT = solo los que aún no lo tienen. Sin él, todos. */
+                externalInvoice?: "WITH" | "WITHOUT";
                 page?: number;
                 pageSize?: number;
             };
@@ -25244,6 +26062,8 @@ export interface operations {
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
                 /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
                 paymentMethodId?: string;
+                /** @description DX-515: WITH = solo abonos con nº de factura externa; WITHOUT = solo los que aún no lo tienen. Sin él, todos. */
+                externalInvoice?: "WITH" | "WITHOUT";
             };
             header?: {
                 /** @description Sede activa. Sin cabecera: todas las sedes de la clínica. */
@@ -25466,6 +26286,59 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PlanBalanceWithItemsDto"];
                 };
+            };
+        };
+    };
+    PaymentsController_updateExternalInvoiceNumber: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalInvoiceNumberDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalInvoiceNumberResultDto"];
+                };
+            };
+            /** @description No es texto, tiene saltos de línea o pasa de 64 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono está anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -25792,6 +26665,115 @@ export interface operations {
             };
             /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsViewDto"];
+                };
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsDto"];
+                };
+            };
+            /** @description Un texto que no es texto, con saltos de línea o demasiado largo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_updateLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationReceiptLegendDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationReceiptLegendViewDto"];
+                };
+            };
+            /** @description Leyenda con saltos de línea o demasiado larga, o id no UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -28078,7 +29060,7 @@ export interface operations {
                     "application/json": components["schemas"]["PrivacyPolicyVersionDto"];
                 };
             };
-            /** @description Texto vacío o el de datos sensibles no incluye las frases obligatorias. */
+            /** @description Algún texto está vacío. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -33165,6 +34147,38 @@ export interface operations {
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WorkQueuesController_get: {
+        parameters: {
+            query?: {
+                /** @description Solo estas listas (separadas por comas), p. ej. el contador del menú. Acota las del rol; una lista que el rol no tiene no sale nunca. */
+                keys?: components["schemas"]["WorkQueueKey"][];
+            };
+            header?: {
+                /** @description Sede activa; sin ella, las sedes permitidas al usuario (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkQueuesSummaryDto"];
+                };
+            };
+            /** @description Una clave de lista desconocida */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

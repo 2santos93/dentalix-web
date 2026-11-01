@@ -46,7 +46,7 @@ describe('listPatients (DX-153)', () => {
 });
 
 describe('replacePatientKeepingDerived (DX-153)', () => {
-  const cov = { status: 'EXPIRED', payerName: 'Sura EPS', planName: null, validTo: '2026-01-31' };
+  const cov = { status: 'EXPIRED', payerName: 'Surco Salud', planName: null, validTo: '2026-01-31' };
   const bal = { hasOverdue: true, overdueDays: 40 };
   it('conserva coverage y balance cuando la respuesta de la mutación no los trae', () => {
     const prev = { id: 'p1', firstName: 'A', coverage: cov, balance: bal } as unknown as Patient;
@@ -58,7 +58,7 @@ describe('replacePatientKeepingDerived (DX-153)', () => {
     expect(replacePatientKeepingDerived(null, next).coverage).toBe(cov);
   });
   it('conserva el resumen de convenio (DX-105) si la mutación no lo trae', () => {
-    const agr = { status: 'ACTIVE', agreementName: 'Convenio Sura', payerName: 'Sura EPS' } as const;
+    const agr = { status: 'ACTIVE', agreementName: 'Convenio Surco', payerName: 'Surco Salud' } as const;
     const prev = { id: 'p1', agreement: agr } as unknown as Patient;
     const next = { id: 'p1', firstName: 'B' } as unknown as Patient;
     expect(replacePatientKeepingDerived(prev, next).agreement).toBe(agr);

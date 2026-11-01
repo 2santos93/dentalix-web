@@ -1,8 +1,6 @@
 import {
   DISCOUNT_REASON_OPTIONS,
   capFor,
-  currencyDecimals,
-  ZERO_DECIMAL_CURRENCIES,
   discountForPercent,
   discountPercent,
   exceedsCap,
@@ -15,10 +13,17 @@ import {
   priceBelowCatalogCapMessage,
   type DiscountRules,
 } from './discount-rules';
-// Copia de la lista de la API: `dentalix-api/prisma/reference/iso4217.ts`
-// (generada) y `src/shared/money/currency-decimals.ts`. Si la API la regenera,
-// se copia aquí el mismo conjunto `minorUnits = 0` (R7).
-import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
+import * as discountRules from './discount-rules';
+// Copia de la referencia de FORMATO de la API (`prisma/reference/iso4217.ts`
+// → `cldr-format-digits-zero.json`, CLDR 47 fijado). Desde DX-340 el redondeo
+// no usa ninguna lista de la web: los dígitos los manda la API
+// (`currencyDigits.roundingDigits`); los de abajo son los de la referencia
+// versionada de la API, compartida en `rounding-vectors.json`.
+import cldrFormatDigits from '@/lib/money/cldr-format-digits-zero.json';
+import roundingVectors from '@/lib/money/rounding-vectors.json';
+
+const digitsOf = (code: keyof typeof roundingVectors.currencies) =>
+  roundingVectors.currencies[code].roundingDigits as 0 | 2;
 
 const RULES: DiscountRules = {
   maxPercentByRole: { ADMIN: 100, DENTIST: 10, ASSISTANT: 0, RECEPTION: 0 },
@@ -43,16 +48,16 @@ describe('reglas de descuento (DX-204)', () => {
   });
 
   it('redondeo por moneda: COP sin decimales, EUR a céntimos, tope ítem a ítem', () => {
-    expect(currencyDecimals('COP')).toBe(0);
-    expect(currencyDecimals('eur')).toBe(2);
-    expect([85000, 123457, 99999].map((p) => discountForPercent(p, 7.5, 'COP', 10))).toEqual([
+    expect(digitsOf('COP')).toBe(0);
+    expect(digitsOf('EUR')).toBe(2);
+    expect([85000, 123457, 99999].map((p) => discountForPercent(p, 7.5, digitsOf('COP'), 10))).toEqual([
       6375, 9259, 7500,
     ]);
-    expect([85.55, 123.45, 0.99].map((p) => discountForPercent(p, 7.5, 'EUR', 10))).toEqual([
+    expect([85.55, 123.45, 0.99].map((p) => discountForPercent(p, 7.5, digitsOf('EUR'), 10))).toEqual([
       6.42, 9.26, 0.07,
     ]);
-    expect(discountForPercent(1005, 10, 'COP', 10)).toBe(100);
-    expect(discountForPercent(10.05, 10, 'EUR', 10)).toBe(1);
+    expect(discountForPercent(1005, 10, digitsOf('COP'), 10)).toBe(100);
+    expect(discountForPercent(10.05, 10, digitsOf('EUR'), 10)).toBe(1);
   });
 
   it('% sobre el precio y catálogo de motivos', () => {
@@ -124,49 +129,47 @@ describe('referencia del descuento y prestaciones sin descuento (DX-105)', () =>
   });
 });
 
-describe('ZERO_DECIMAL_CURRENCIES (GLOBAL-G1, R7)', () => {
-  it('zero-decimal set matches the reviewed CLDR 47 policy snapshot', () => {
-    const expected = new Set([...iso4217ZeroDecimal.previousSet, ...iso4217ZeroDecimal.minorUnitsZero]);
-    expect([...ZERO_DECIMAL_CURRENCIES].sort()).toEqual([...expected].sort());
-    // El conjunto anterior sigue dentro, y el de la API tiene 29 códigos.
-    for (const code of ['COP', 'CLP', 'JPY', 'KRW', 'PYG', 'VND', 'XAF']) {
-      expect(ZERO_DECIMAL_CURRENCIES.has(code)).toBe(true);
-    }
-    expect(ZERO_DECIMAL_CURRENCIES.size).toBe(29);
-    // La copia coincide con la referencia versionada de la API
-    // (`prisma/reference/iso4217-zero-decimal.json`, CLDR 47), fijada aquí en
-    // literal: no se compara con el Intl del Node del host, que cambia con su
-    // versión de ICU (TST-046: RSD da 0 decimales con ICU 77 y 2 con ICU 78).
-    expect(iso4217ZeroDecimal.minorUnitsZero).toEqual([
+describe('decimales por moneda sin lista en la web (GLOBAL-G1 R7, DX-340)', () => {
+  it('la web ya no tiene lista de monedas sin decimales para redondear', () => {
+    expect('ZERO_DECIMAL_CURRENCIES' in discountRules).toBe(false);
+    expect('currencyDecimals' in discountRules).toBe(false);
+  });
+
+  it('el redondeo vigente se conserva en las monedas de la paridad: RSD, COP y JPY a 0; EUR a 2', () => {
+    // La lista fija anterior (CLDR 47 ∪ COP, CLP, JPY, KRW, PYG) es ahora
+    // `currencies.rounding_digits = 0` en la API; los vectores lo fijan para
+    // las monedas de la paridad.
+    expect(digitsOf('RSD')).toBe(0);
+    expect(digitsOf('COP')).toBe(0);
+    expect(digitsOf('JPY')).toBe(0);
+    expect(digitsOf('EUR')).toBe(2);
+    expect(discountForPercent(123.45, 7.5, digitsOf('RSD'), 100)).toBe(9);
+  });
+
+  it('formato: la copia coincide con la referencia CLDR 47 fijada, sin el Intl del host', () => {
+    // Fijada aquí en literal: no se compara con el Intl del Node del host, que
+    // cambia con su versión de ICU (TST-046: RSD da 0 decimales con ICU 77 y
+    // 2 con ICU 78).
+    expect(cldrFormatDigits.cldr).toBe('47.0');
+    expect(cldrFormatDigits.cldrDigitsZero).toEqual([
       'AFN', 'ALL', 'BIF', 'CLP', 'DJF', 'GNF', 'IRR', 'ISK', 'JPY', 'KMF',
       'KPW', 'KRW', 'LAK', 'LBP', 'MGA', 'MMK', 'PYG', 'RSD', 'RWF', 'SOS',
       'SYP', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF', 'YER',
     ]);
-    expect(currencyDecimals('RSD')).toBe(0);
-    expect(currencyDecimals('vnd')).toBe(0);
-    expect(currencyDecimals('EUR')).toBe(2);
+    expect(cldrFormatDigits.cldrDigitsZero).toHaveLength(28);
   });
 
-  it.each([...new Set([...iso4217ZeroDecimal.previousSet, ...iso4217ZeroDecimal.minorUnitsZero])])(
-    '%s retains whole-unit discount rounding and role caps under the CLDR 47 policy',
-    (code) => {
-      expect(currencyDecimals(code)).toBe(0);
-      expect(currencyDecimals(code.toLowerCase())).toBe(0);
-      expect(discountForPercent(123.45, 7.5, code, 10)).toBe(9);
-      expect(discountForPercent(123.45, 7.5, code, 7.5)).toBe(9);
-      expect(discountForPercent(123.45, 7.5, code, 7)).toBe(8);
-    },
-  );
-
   it('RSD retains reviewed whole-dinar rounding and cap truncation, distinct from cents', () => {
+    const rsd = digitsOf('RSD');
+    const eur = digitsOf('EUR');
     // 123.45 * 7.5% = 9.25875: policy rounds to 9 RSD, versus 9.26 in cents.
-    expect(discountForPercent(123.45, 7.5, 'RSD', 10)).toBe(9);
-    expect(discountForPercent(123.45, 7.5, 'EUR', 10)).toBe(9.26);
+    expect(discountForPercent(123.45, 7.5, rsd, 10)).toBe(9);
+    expect(discountForPercent(123.45, 7.5, eur, 10)).toBe(9.26);
     // At the 7.5% role cap, cent rounding would exceed the cap and truncates.
-    expect(discountForPercent(123.45, 7.5, 'RSD', 7.5)).toBe(9);
-    expect(discountForPercent(123.45, 7.5, 'EUR', 7.5)).toBe(9.25);
+    expect(discountForPercent(123.45, 7.5, rsd, 7.5)).toBe(9);
+    expect(discountForPercent(123.45, 7.5, eur, 7.5)).toBe(9.25);
     // At 7%, the maximum 8.6415 truncates to 8 RSD (8.64 in cents).
-    expect(discountForPercent(123.45, 7.5, 'RSD', 7)).toBe(8);
-    expect(discountForPercent(123.45, 7.5, 'EUR', 7)).toBe(8.64);
+    expect(discountForPercent(123.45, 7.5, rsd, 7)).toBe(8);
+    expect(discountForPercent(123.45, 7.5, eur, 7)).toBe(8.64);
   });
 });

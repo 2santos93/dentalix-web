@@ -318,7 +318,7 @@ test('DX-242: axe Día/Semana/En clínica 390/1440 claro/oscuro', async ({page},
         const geometry = await card.boundingBox();
         expect(geometry!.height).toBe(20);
         expect(geometry!.width).toBeGreaterThanOrEqual(180);
-        await expect(card).toHaveAccessibleName(/^Complet\. · Estado 3 QA · 09:00–09:15/);
+        await expect(card).toHaveAccessibleName(/^Estado 3 QA Complet\. 09:00–09:15/);
         const patient = card.getByText('Estado 3 QA', { exact: true });
         expect(await patient.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
       }

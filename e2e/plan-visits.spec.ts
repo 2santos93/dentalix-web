@@ -30,6 +30,8 @@ const password = "DemoDentalix2026!";
  * que se reutiliza entre ejecuciones y se desactiva en `afterAll`, y cada test
  * retira en `afterEach` lo que creó (citas, plan, paciente y tratamiento del
  * catálogo): así la lista «Aceptado sin agendar» de esa sede empieza vacía.
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const QA_LOCATION = "QA visitas e2e";
 let locationId: string;
@@ -146,8 +148,8 @@ async function seed(request: APIRequestContext, tag: string) {
     docType: "NATIONAL_ID",
     docNumber: tag,
     sex: "F",
-    phone: "3001234567",
-    countryCode: "CO",
+    phone: "0416 555 0452",
+    countryCode: "VE",
   });
   created.patientId = patient.id;
   const catalog = await post<{ id: string }>("/catalog/items", {
@@ -155,12 +157,12 @@ async function seed(request: APIRequestContext, tag: string) {
     kind: "PROCEDURE",
     labelEs: `Corona ${tag}`,
     color: "#3366CC",
-    defaultPrice: 100000,
+    defaultPrice: 100,
   });
   created.catalogId = catalog.id;
   const plan = await post<{ id: string }>(
     `/patients/${patient.id}/treatment-plans`,
-    { currency: "COP" },
+    { currency: "USD" },
   );
   created.planId = plan.id;
   const itemIds: string[] = [];
@@ -515,13 +517,13 @@ for (const width of [390, 1440])
       await expect(card).toContainText(
         "Visita 2 · Corona · 2 tratamientos pendientes",
       );
-      await expect(card).toContainText("COP");
-      await expect(card).toContainText("200.000");
+      await expect(card).toContainText("USD");
+      await expect(card).toContainText("200,00");
       const whatsapp = card.getByRole("link", {
         name: `WhatsApp a ${data.name}`,
       });
       const url = new URL((await whatsapp.getAttribute("href"))!);
-      expect(url.pathname).toBe("/573001234567");
+      expect(url.pathname).toBe("/584165550452");
       expect(url.searchParams.get("text")).not.toMatch(
         /Corona|Cirugía|Visita|tratamiento/i,
       );
@@ -631,7 +633,7 @@ for (const width of [390, 1440])
       await expect(card).toContainText(
         "Visita 2 · Corona · 2 tratamientos pendientes",
       );
-      await expect(card).toContainText("200.000");
+      await expect(card).toContainText("200,00");
       await page.screenshot({
         path: `../.planning/backlog-wave-2026-10-21/qa/DX-256/cancelled-${width}-${theme}.png`,
         fullPage: true,

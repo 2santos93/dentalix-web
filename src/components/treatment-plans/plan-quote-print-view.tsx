@@ -15,6 +15,8 @@ import { ratePreviewCopy } from '@/components/payments/payment-rate-preview';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
+import { clinicBaseCurrency } from '@/lib/locations/location-settings';
 
 const copy = {
   toolbar: 'Acciones del presupuesto',
@@ -89,6 +91,15 @@ export function PlanQuotePrintView({
   const today = timeZone ? sedeToday(timeZone) : '';
   const rates = useExchangeRates(token, today, second !== '' && data !== null);
   const secondResult = data && second ? secondCurrencyOf(rates, data.currency, second, today) : null;
+  // DX-489: el precio de lista va en la moneda del catálogo (la común de las
+  // sedes). Se espera a saberla para pintar e imprimir. Si las sedes no
+  // cargan, el documento se ve con la cifra sin moneda, pero con el aviso y su
+  // Reintentar, y el diálogo de impresión NO se abre solo: imprimiría algo
+  // distinto de la pestaña (sin moneda ni «Ahorro por convenio») sin decirlo.
+  const locations = useLocationsState(token);
+  const catalogCurrency = locations.status === 'ready' ? clinicBaseCurrency(locations.locations) : null;
+  const ready = data !== null && locations.status !== 'loading';
+  const autoPrint = data !== null && locations.status === 'ready';
 
   useEffect(() => {
     if (!allowed) return;
@@ -121,11 +132,11 @@ export function PlanQuotePrintView({
   }, [token, patientId, planId, reloadKey, allowed]);
 
   useEffect(() => {
-    if (data && !printed.current) {
+    if (autoPrint && !printed.current) {
       printed.current = true;
       window.print();
     }
-  }, [data]);
+  }, [autoPrint]);
 
   return (
     <div className="quote-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
@@ -158,12 +169,17 @@ export function PlanQuotePrintView({
               />
             </div>
           ) : null}
-          <Button type="button" onClick={() => window.print()} disabled={!data}>
+          <Button type="button" onClick={() => window.print()} disabled={!ready}>
             <Printer aria-hidden />
             {copy.print}
           </Button>
         </div>
       </div>
+      {data && locations.status === 'error' ? (
+        <div className="px-4 pt-3 print:hidden" data-testid="quote-locations-error">
+          <SedeConfigError kind="currency" variant="note" onRetry={locations.retry} />
+        </div>
+      ) : null}
       {data && second ? (
         <div role="status" aria-live="polite" className="px-4 pt-3 text-sm text-ink print:hidden">
           {zone.status === 'error' ? (
@@ -184,10 +200,11 @@ export function PlanQuotePrintView({
       ) : null}
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
-        {data ? (
+        {data && ready ? (
           <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
             <PlanQuoteDocument
               quote={data}
+              catalogCurrency={catalogCurrency}
               secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}
             />
           </div>

@@ -19,7 +19,6 @@ import {
   type ClinicDocumentTypeNames,
 } from '@/lib/patients/doc-type';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
-import { normalizeDocType } from '@/lib/patients/legacy-doc-type';
 import { isEmailAddress } from '@/lib/format/email';
 import { isWhatsappMobileError } from '@/lib/patients/communication-api';
 
@@ -148,12 +147,9 @@ interface PatientEditModalProps {
   docTypeNames?: ClinicDocumentTypeNames;
 }
 
-/**
- * Tipo con el que se siembra el select: el genérico, aunque una réplica
- * anterior de la API mande aún un código antiguo (fase 1 de DX-327).
- */
+/** Tipo con el que se siembra el select: el de la ficha. */
 function seededDocType(patient: Patient): Patient['docType'] {
-  return normalizeDocType(patient.docType) ?? patient.docType;
+  return patient.docType;
 }
 
 /**

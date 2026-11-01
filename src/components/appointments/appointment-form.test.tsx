@@ -13,6 +13,7 @@ import { caracasSede, utcSede } from '@/lib/test/sede-clock';
 import { wallInstant } from '@/lib/time/wall-clock';
 import { ApiError } from '@/lib/api/api-error';
 import { dateGroup, readTime, typeDate, typeTime } from './date-segments-for-tests';
+import { listChairs } from '@/lib/chairs/chairs-api';
 
 // Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
 // pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
@@ -60,6 +61,12 @@ jest.mock('../../lib/locations/provider-schedule-api', () => ({
   getRoster: jest.fn(),
   getProviderScheduleSettings: jest.fn(),
 }));
+
+// DX-211: sillones de la sede de la cita (solo con una sede concreta).
+jest.mock('../../lib/chairs/chairs-api', () => ({
+  listChairs: jest.fn().mockResolvedValue([]),
+}));
+const mockedListChairs = listChairs as jest.MockedFunction<typeof listChairs>;
 
 // DX-247: las banderas médicas del paciente elegido.
 jest.mock('../../lib/clinical/medical-alerts', () => ({
@@ -947,5 +954,100 @@ describe('AppointmentForm con el reloj de la sede (DX-378)', () => {
     mockedListLocations.mockResolvedValue([caracasSede({ timeZone: null })]);
     render(<AppointmentForm token="tok" onCreated={jest.fn()} />);
     expect(await screen.findByText('Sin zona de sede')).toBeInTheDocument();
+  });
+
+  // DX-211: sillón opcional; al elegirlo, su profesional si aún no hay uno.
+  describe('sillón', () => {
+    const chairBase = {
+      tenantId: 't1',
+      locationId: 'loc-1',
+      active: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const chairs = [
+      { ...chairBase, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, defaultProviderId: 'staff-2' },
+      { ...chairBase, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, defaultProviderId: null },
+    ];
+
+    async function renderWithChairs(props: Partial<React.ComponentProps<typeof AppointmentForm>> = {}) {
+      mockedListChairs.mockResolvedValue(chairs);
+      render(<AppointmentForm token="tok" onCreated={jest.fn()} locationId="loc-1" {...props} />);
+      await screen.findByRole('option', { name: /dra\. ana ríos/i });
+      await screen.findByRole('option', { name: 'Sillón 1' });
+      await waitFor(() =>
+        expect(dateGroup(/^fecha$/i).querySelector('[role="spinbutton"]')).not.toHaveAttribute(
+          'aria-disabled',
+          'true',
+        ),
+      );
+    }
+
+    it('sin sede concreta o sin sillones, no aparece el selector', async () => {
+      mockedListChairs.mockResolvedValue([]);
+      render(<AppointmentForm token="tok" onCreated={jest.fn()} locationId="loc-1" />);
+      await screen.findByRole('option', { name: /dra\. ana ríos/i });
+      await waitFor(() => expect(mockedListChairs).toHaveBeenCalledWith('tok', 'loc-1'));
+      expect(screen.queryByLabelText('Sillón (opcional)')).not.toBeInTheDocument();
+    });
+
+    it('al elegir un sillón con el profesional vacío, propone el suyo por defecto', async () => {
+      const user = userEvent.setup();
+      await renderWithChairs();
+      await user.selectOptions(screen.getByLabelText('Sillón (opcional)'), 'ch-1');
+      expect(screen.getByLabelText(/^profesional$/i)).toHaveValue('staff-2');
+    });
+
+    it('nunca sobrescribe un profesional ya elegido', async () => {
+      const user = userEvent.setup();
+      await renderWithChairs();
+      await user.selectOptions(screen.getByLabelText(/^profesional$/i), 'staff-1');
+      await user.selectOptions(screen.getByLabelText('Sillón (opcional)'), 'ch-1');
+      expect(screen.getByLabelText(/^profesional$/i)).toHaveValue('staff-1');
+    });
+
+    it('«Nueva cita» desde la columna de un sillón lo trae elegido con su profesional, y se envía', async () => {
+      const user = userEvent.setup();
+      mockedCreateAppointment.mockResolvedValue(createdAppointment);
+      await renderWithChairs({ defaultChairId: 'ch-1' });
+      expect(screen.getByLabelText('Sillón (opcional)')).toHaveValue('ch-1');
+      await waitFor(() => expect(screen.getByLabelText(/^profesional$/i)).toHaveValue('staff-2'));
+      await selectMariaByDoc(user);
+      await typeDate(user, /^fecha$/i, FUTURE_DATE);
+      await typeTime(user, /hora de inicio/i, '09:00');
+      await typeTime(user, /hora de fin/i, '09:30');
+      await user.click(screen.getByRole('button', { name: /agendar cita/i }));
+      await waitFor(() =>
+        expect(mockedCreateAppointment).toHaveBeenCalledWith(
+          'tok',
+          expect.objectContaining({ chairId: 'ch-1', providerId: 'staff-2' }),
+          'loc-1',
+        ),
+      );
+    });
+
+    it('revisión B1: un sillón por defecto que no está entre los activos se descarta y no se envía', async () => {
+      const user = userEvent.setup();
+      mockedCreateAppointment.mockResolvedValue(createdAppointment);
+      await renderWithChairs({ defaultChairId: 'ch-inactivo' });
+      expect(screen.getByLabelText('Sillón (opcional)')).toHaveValue('');
+      await selectMariaByDoc(user);
+      await user.selectOptions(screen.getByLabelText(/^profesional$/i), 'staff-1');
+      await typeDate(user, /^fecha$/i, FUTURE_DATE);
+      await typeTime(user, /hora de inicio/i, '09:00');
+      await typeTime(user, /hora de fin/i, '09:30');
+      await user.click(screen.getByRole('button', { name: /agendar cita/i }));
+      await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalled());
+      expect(mockedCreateAppointment.mock.calls[0][1]).not.toHaveProperty('chairId');
+    });
+
+    it('si los sillones no cargan, el campo se cambia por su error con Reintentar', async () => {
+      const user = userEvent.setup();
+      mockedListChairs.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(chairs);
+      render(<AppointmentForm token="tok" onCreated={jest.fn()} locationId="loc-1" />);
+      const retry = await screen.findByRole('button', { name: /reintentar/i });
+      await user.click(retry);
+      expect(await screen.findByLabelText('Sillón (opcional)')).toBeInTheDocument();
+    });
   });
 });

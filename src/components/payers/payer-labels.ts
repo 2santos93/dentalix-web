@@ -1,4 +1,4 @@
-import { normalizePayerType } from '@/lib/payers/legacy-payer-type';
+import { payerTypeOf } from '@/lib/payers/payer-type';
 import type { PayerType } from '@/lib/payers/payers-api';
 
 export const PAYER_TYPE_LABELS: Record<PayerType, string> = {
@@ -11,6 +11,6 @@ export const PAYER_TYPE_LABELS: Record<PayerType, string> = {
 
 /** Etiqueta del tipo; un código que no se reconoce se pinta tal cual. */
 export function payerTypeLabel(type: string): string {
-  const normalized = normalizePayerType(type);
-  return normalized === null ? type : PAYER_TYPE_LABELS[normalized];
+  const known = payerTypeOf(type);
+  return known === null ? type : PAYER_TYPE_LABELS[known];
 }

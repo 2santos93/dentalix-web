@@ -102,6 +102,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   AGREEMENT: 'Convenio',
   // DX-233: horario de un profesional por sede y sus excepciones por fecha.
   PROVIDER_SCHEDULE: 'Horario del profesional',
+  CHAIR: 'Sillón',
   // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
   MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
   // DX-243: firma a distancia (enviar, abrir, código, bloqueo, firma, anular).
@@ -128,6 +129,17 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   SEDATION_RECORD: 'Hoja de sedación',
   CLOSING_QUEUE_DISMISSAL: 'Descarte de «Pendiente de cerrar»',
   PATIENT_CREDIT: 'Saldo a favor',
+  // DX-360: configuración de la clínica (el alta de sede va en LOCATION y la
+  // de dominio en TENANT_DOMAIN).
+  LOCATION_SCHEDULE: 'Horario de la sede',
+  REMINDER_SETTINGS: 'Recordatorios de la sede',
+  PRIVACY_POLICY: 'Política de datos',
+  APPOINTMENT_TYPE: 'Tipo de cita',
+  PAYER: 'Pagador',
+  CONSENT_TEMPLATE: 'Plantilla de consentimiento',
+  PRESCRIPTION_TEMPLATE: 'Plantilla de receta',
+  INVENTORY_ITEM: 'Artículo de inventario',
+  INVENTORY_MOVEMENT: 'Movimiento de inventario',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -381,6 +393,17 @@ const SEDATION_REASONS: Record<string, string> = {
   SEDATION_VITALS: 'Toma de constantes',
   SEDATION_DISCHARGE: 'Egreso',
 };
+
+const CHAIR_REASONS: Record<string, string> = {
+  CHAIR_ORDER: 'Orden de los sillones',
+  CHAIR_DEACTIVATED: 'Sillón desactivado',
+  CHAIR_REACTIVATED: 'Sillón reactivado',
+};
+
+/** DX-211: qué se hizo con un sillón (orden, desactivar, reactivar), o null. */
+export function chairDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && CHAIR_REASONS[metadata.reason]) ?? null;
+}
 
 /** DX-407: qué parte de la hoja de sedación se registró, o null si no es de ella. */
 export function sedationDetail(metadata: AuditMetadata): string | null {
@@ -741,4 +764,15 @@ export function exchangeRateBackupDetail(metadata: AuditMetadata): string | null
 /** DX-316: qué cambió en el calendario de una sede, o null si el evento no es de él. */
 export function locationCalendarDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && LOCATION_CALENDAR_REASONS[metadata.reason]) ?? null;
+}
+
+/** DX-515: recibo no fiscal (el antes y el después los pinta `configChangeItems`). */
+const RECEIPT_REASONS: Record<string, string> = {
+  RECEIPT_SETTINGS: 'Título y leyenda del recibo',
+  RECEIPT_LEGEND: 'Leyenda del recibo de la sede',
+  EXTERNAL_INVOICE_NUMBER: 'Nº de factura externa del abono',
+};
+
+export function receiptDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && RECEIPT_REASONS[metadata.reason]) ?? null;
 }

@@ -136,18 +136,18 @@ for (const v of viewports) {
     await expect(promise.getByText(/No sabemos leer «1\.50\.0»/)).toBeVisible();
     await expect(promise.getByLabel('Importe')).toHaveAttribute('aria-invalid', 'true');
     await promise.getByLabel('Importe').fill('150,50');
-    await expect(promise.getByText(money('Se guardará: 150,50 US$'))).toBeVisible();
+    await expect(promise.getByText(money('Se guardará: 150,50 USD'))).toBeVisible();
     await promise.getByRole('button', { name: 'Guardar compromiso' }).click();
     await expect(promise).toBeHidden({ timeout: 10_000 });
     const status = debtor.getByTestId('promise-status');
     await expect(status.getByText('Abierto')).toBeVisible({ timeout: 15_000 });
-    await expect(status).toContainText(money('150,50 US$'));
+    await expect(status).toContainText(money('150,50 USD'));
     await expectNoHorizontalScroll(page);
 
     // Ficha → «Registrar abono» de «150.000» al plan en COP.
     await page.goto(`${origin}/patients/${patient.id}?tab=account-statement`);
     const block = page.getByTestId('patient-collections');
-    await expect(block.getByTestId('promise-row')).toContainText(money('150,50 US$'), { timeout: 15_000 });
+    await expect(block.getByTestId('promise-row')).toContainText(money('150,50 USD'), { timeout: 15_000 });
     const panel = page.locator('#tabpanel-account-statement');
     await panel.getByRole('button', { name: 'Registrar abono' }).click();
     const payment = page.getByRole('dialog', { name: 'Registrar abono' });
@@ -172,11 +172,11 @@ for (const v of viewports) {
     await expect(block.getByTestId('promise-row').getByText('Abierto')).toBeVisible();
     await expectNoHorizontalScroll(page);
 
-    // Cartera: el saldo en COP bajó 150.000 (no 150), y el compromiso sigue en 150,50 US$.
+    // Cartera: el saldo en COP bajó 150.000 (no 150), y el compromiso sigue en 150,50 USD.
     await page.goto(`${origin}/caja/cartera`);
     const after = debtorIn(page, v.width, patient.fullName);
     await expect(after).toContainText(money('250.000,00 COP'), { timeout: 15_000 });
-    await expect(after.getByTestId('promise-status')).toContainText(money('150,50 US$'));
+    await expect(after.getByTestId('promise-status')).toContainText(money('150,50 USD'));
     await expectNoHorizontalScroll(page);
   });
 }

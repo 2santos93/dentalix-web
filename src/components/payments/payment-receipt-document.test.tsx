@@ -27,14 +27,13 @@ it('lleva el número, la clínica y la sede, el paciente enmascarado, el abono, 
   expect(screen.queryByText(/anulado/i)).not.toBeInTheDocument();
 });
 
-// «NIT/NIF» es la línea que el recibo imprime hoy (payment-receipt-document.tsx,
-// excepción con nombre de la guarda de DX-327); se va con DX-019.
-it('sin razón social o NIT/NIF avisa «Datos fiscales pendientes» y el recibo sale igual', () => {
+// La línea fiscal dice «Id. fiscal», sin la sigla de ningún país (DX-323).
+it('sin razón social o identificación fiscal avisa «Datos fiscales pendientes» y el recibo sale igual', () => {
   render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
   expect(screen.getByText('Datos fiscales pendientes')).toBeInTheDocument();
 });
 
-it('con datos fiscales muestra razón social, NIT/NIF y dirección de la clínica', () => {
+it('con datos fiscales muestra razón social, identificación fiscal y dirección de la clínica', () => {
   const receipt = paymentReceiptFixture();
   render(
     <PaymentReceiptDocument
@@ -55,7 +54,7 @@ it('con datos fiscales muestra razón social, NIT/NIF y dirección de la clínic
   );
   const doc = screen.getByTestId('receipt-document');
   expect(doc).toHaveTextContent('Sonrisas S.A.S.');
-  expect(doc).toHaveTextContent('NIT/NIF 900123456-7');
+  expect(doc).toHaveTextContent('Id. fiscal 900123456-7');
   expect(doc).toHaveTextContent('Cra 7 # 72-10, Bogotá');
   expect(screen.queryByText('Datos fiscales pendientes')).not.toBeInTheDocument();
 });
@@ -194,7 +193,7 @@ describe('DX-376: abono en otra moneda', () => {
     const doc = text(screen.getByTestId('receipt-document'));
     expect(doc).toContain('1825,00 VES');
     expect(doc).toContain('Equivalente en USD');
-    expect(doc).toContain('50,00 US$');
+    expect(doc).toContain('50,00 USD');
     expect(doc).toContain('Tasa aplicada: 1 USD = 36,50 VES (manual, 29/10/2026)');
   });
 
@@ -207,7 +206,7 @@ describe('DX-376: abono en otra moneda', () => {
     render(<PaymentReceiptDocument receipt={inVes(other)} />);
     const doc = text(screen.getByTestId('receipt-document'));
     expect(doc).toContain('Tasa aplicada: 1 USD = 40,00 VES (automática, 30/10/2026)');
-    expect(doc).toContain('45,63 US$');
+    expect(doc).toContain('45,63 USD');
   });
 
   it('un abono «sin tasa» lo dice en lugar de la tasa y el equivalente', () => {
@@ -307,4 +306,29 @@ describe('DX-390: cobro dividido', () => {
       'Total pendiente de la tasa de cambio de alguna forma de pago.',
     );
   });
+});
+
+// DX-340: el recibo pinta el abono y el saldo con los decimales de la moneda:
+// JPY sin decimales, EUR con céntimos (los mismos totales que el plan y el
+// estado de cuenta: suma de líneas).
+it.each([
+  { currency: 'JPY', amount: 5000, billable: 18912, balance: 13912, shown: [/5\.?000 JPY/, /13\.912 JPY/], cents: false },
+  { currency: 'EUR', amount: 50.5, billable: 189.12, balance: 138.62, shown: [/50,50/, /138,62/], cents: true },
+])('$currency: abono y saldo con los decimales de su moneda', ({ currency, amount, billable, balance, shown, cents }) => {
+  const base = paymentReceiptFixture();
+  render(
+    <PaymentReceiptDocument
+      receipt={{
+        ...base,
+        snapshot: {
+          ...base.snapshot,
+          payment: { ...base.snapshot.payment, amount, currency },
+          planBalance: { currency, billable, paid: amount, balance },
+        },
+      }}
+    />,
+  );
+  const doc = text(screen.getByTestId('receipt-document'));
+  for (const figure of shown) expect(doc).toMatch(figure);
+  expect(/\d,\d\d\b/.test(doc)).toBe(cents);
 });

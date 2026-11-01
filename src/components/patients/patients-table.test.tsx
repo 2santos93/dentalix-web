@@ -17,7 +17,7 @@ const patients: Patient[] = [
     email: 'ana@example.com',
     address: null,
     notes: null,
-    coverage: { status: 'EXPIRED', payerName: 'Sura EPS', planName: null, validTo: '2026-01-01' },
+    coverage: { status: 'EXPIRED', payerName: 'Surco Salud', planName: null, validTo: '2026-01-01' },
     createdById: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -113,7 +113,7 @@ describe('PatientsTable', () => {
 
   it('la cobertura vencida se distingue; sin cobertura, guion', () => {
     render(<PatientsTable patients={patients} loading={false} />);
-    expect(screen.getByText('Sura EPS · cobertura vencida')).toHaveClass('text-danger-text');
+    expect(screen.getByText('Surco Salud · cobertura vencida')).toHaveClass('text-danger-text');
   });
 
   it('el avatar es neutro (nunca el acento)', () => {

@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { dataList, dataListRows } from './support/data-list';
+import { DEMO_CURRENCY, DEMO_REGION } from './support/demo';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e (DX-067): recepción cobra desde el ESTADO DE CUENTA, sin entrar al plan de
@@ -10,7 +12,7 @@ import { dataList, dataListRows } from './support/data-list';
  *
  * Corre contra la clínica DEMO sembrada (`npm run seed:demo` en la API), que ya
  * trae una cuenta de recepción y otra de administración:
- *   - la administradora crea por la API un paciente con un plan en COP con un
+ *   - la administradora crea por la API un paciente con un plan en la moneda de la sede (USD) con un
  *     procedimiento aceptado (lo facturable), y otro paciente sin planes;
  *   - recepción inicia sesión en la web, abre la ficha → «Estado de cuenta» →
  *     «Registrar abono»: el modal propone el plan, valida en español, registra
@@ -29,8 +31,8 @@ const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
 const RECEPTION_EMAIL = process.env.E2E_DEMO_RECEPTION_EMAIL ?? 'recepcion@demo.dentalix.app';
 const ADMIN_EMAIL = process.env.E2E_DEMO_ADMIN_EMAIL ?? 'admin@demo.dentalix.app';
 
-const PLAN_PRICE = 800_000;
-const PAYMENT = 125_000;
+const PLAN_PRICE = 800;
+const PAYMENT = 125;
 
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix
@@ -38,11 +40,11 @@ const suffix = rawSuffix
   .toLowerCase()
   .slice(0, 8);
 
-// Mismo formateador que la app (`formatCurrency`, locale `es`). Solo la cifra
-// («125.000,00»): entre ella y «COP» va un espacio duro.
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP' });
+// El formato de la sede principal (DX-378), con los dos decimales del USD
+// (DX-340). Solo la cifra («125,00»): entre ella y el código va un espacio duro.
+const sedeFormat = regionalFormat(DEMO_REGION);
 function figure(amount: number): string {
-  return cop.format(amount).split(/\s/)[0];
+  return sedeFormat.number(amount, { min: 2, max: 2 });
 }
 
 /** Siembra como ADMIN (el plan de tratamiento es clínico: recepción no lo crea). */
@@ -90,7 +92,7 @@ async function seed(
     defaultPrice: PLAN_PRICE,
   });
   const plan = await send<{ id: string }>('post', `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   const item = await send<{ id: string }>('post', `/treatment-plans/${plan.id}/items`, {
     toothNumber: '16',
@@ -143,7 +145,7 @@ for (const viewport of [
     );
     await expect(tabs.getByRole('tab', { name: 'Plan de tratamiento' })).toHaveCount(0);
     const panel = page.locator('#tabpanel-account-statement');
-    await expect(panel.getByRole('region', { name: 'Resumen en COP' })).toBeVisible({
+    await expect(panel.getByRole('region', { name: `Resumen en ${DEMO_CURRENCY}` })).toBeVisible({
       timeout: 15_000,
     });
 
@@ -155,10 +157,10 @@ for (const viewport of [
     await expect(planSelect).toBeVisible({ timeout: 10_000 });
     // El plan propuesto, nombrado sin nada clínico: fecha, estado y saldo.
     await expect(planSelect.locator('option:checked')).toHaveText(
-      /^Plan del \d{2}\/\d{2}\/\d{4} · Borrador · Saldo COP\s800\.000,00/,
+      /^Plan del \d{2}\/\d{2}\/\d{4} · Borrador · Saldo USD\s800,00/,
     );
     await expect(dialog).not.toContainText(`Corona DX067 ${tag}`);
-    await expect(dialog.getByLabel('Moneda')).toHaveValue('COP');
+    await expect(dialog.getByLabel('Moneda')).toHaveValue(DEMO_CURRENCY);
     if (viewport.width === 390) {
       // Medido al terminar la animación de entrada del diálogo.
       const box = await dialog.evaluate(async (el) => {
@@ -169,7 +171,7 @@ for (const viewport of [
       expect(box.left).toBeGreaterThanOrEqual(0);
       expect(box.right).toBeLessThanOrEqual(viewport.width);
       // El select recorta el nombre largo del plan: el saldo se lee debajo.
-      await expect(dialog).toContainText(`Saldo COP ${figure(PLAN_PRICE)}`);
+      await expect(dialog).toContainText(`Saldo ${DEMO_CURRENCY} ${figure(PLAN_PRICE)}`);
       await expectNoHorizontalScroll(page);
     }
 
@@ -185,7 +187,7 @@ for (const viewport of [
     await expect(page.getByRole('status').filter({ hasText: 'Abono registrado' })).toBeVisible();
 
     // El estado de cuenta se recarga con el abono y el saldo nuevo.
-    const summary = panel.getByRole('region', { name: 'Resumen en COP' });
+    const summary = panel.getByRole('region', { name: `Resumen en ${DEMO_CURRENCY}` });
     await expect(summary.getByTestId('paid')).toContainText(
       figure(PAYMENT),
       { timeout: 10_000 },

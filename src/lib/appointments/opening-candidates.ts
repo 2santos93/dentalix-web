@@ -174,7 +174,7 @@ export function canOfferOpenings(role: ClinicRole | null): boolean {
 
 /**
  * Texto del `wa.me`: SOLO nombre de pila, fecha, hora, sede y profesional
- * (Ley 1581 / RGPD, minimización). Nunca el motivo ni el tratamiento: un chat
+ * (minimización de datos). Nunca el motivo ni el tratamiento: un chat
  * no es un canal seguro y el mensaje se queda en el móvil del paciente.
  */
 export function offerMessage({

@@ -17,15 +17,42 @@ interface SavedEmail {
   text: string;
 }
 
+/**
+ * Marca de tiempo del buzón: se toma ANTES de la acción que provoca el email y
+ * se pasa como `since` a `linkFromMail`. El FileMailer nombra cada email
+ * `<ms>-<uuid>.json` con el reloj de la API, que corre en la misma máquina.
+ */
+export function mailMark(): number {
+  return Date.now();
+}
+
+export interface LinkFromMailOptions {
+  /**
+   * Solo cuentan los emails escritos desde esta marca (`mailMark()`). Sin
+   * ella vale cualquier email del buzón, también los de una ejecución
+   * anterior (otra BD) o de una repetición anterior del mismo spec: si el
+   * email nuevo todavía no llegó (la copia del PDF firmado pasa por dos
+   * colas y el outbox), se devolvería el viejo en vez de esperar al nuevo.
+   */
+  since?: number;
+}
+
+/** Hora (ms) del nombre `<ms>-<uuid>.json`; NaN si no tiene esa forma. */
+function writtenAt(file: string): number {
+  return Number(file.slice(0, file.indexOf('-')));
+}
+
 /** Primer grupo de `pattern` en el ÚLTIMO email a `to` que lo contenga. */
-export async function linkFromMail(to: string, pattern: RegExp): Promise<string> {
+export async function linkFromMail(to: string, pattern: RegExp, options: LinkFromMailOptions = {}): Promise<string> {
   expect(MAIL_DIR, 'E2E_MAIL_DIR no definido: usa scripts/e2e-ci.sh').toBeTruthy();
+  const { since } = options;
   let found = '';
   await expect
     .poll(
       async () => {
         const files = (await readdir(MAIL_DIR!).catch(() => [] as string[])).sort().reverse();
         for (const file of files) {
+          if (since !== undefined && !(writtenAt(file) >= since)) continue;
           // El FileMailer puede estar escribiéndolo: a medias, se relee en la siguiente vuelta.
           const email = await readFile(join(MAIL_DIR!, file), 'utf8')
             .then((raw) => JSON.parse(raw) as SavedEmail)
@@ -39,7 +66,10 @@ export async function linkFromMail(to: string, pattern: RegExp): Promise<string>
         }
         return '';
       },
-      { timeout: 20_000, message: `no llegó a ${to} un email que cumpla ${pattern}` },
+      {
+        timeout: 20_000,
+        message: `no llegó a ${to} un email que cumpla ${pattern}${since === undefined ? '' : ` desde ${new Date(since).toISOString()}`}`,
+      },
     )
     .not.toBe('');
   return found;

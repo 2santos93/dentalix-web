@@ -1,61 +1,77 @@
 import type { PublishPrivacyPolicyInput } from './data-consents-api';
 
+/** Marcadores de la plantilla que la clínica debe sustituir antes de publicar. */
+export const POLICY_TEMPLATE_PLACEHOLDERS = [
+  '[Nombre de la clínica]',
+  '[Dirección]',
+  '[Correo o teléfono de contacto]',
+  '[Normativa de protección de datos aplicable y autoridad ante la que reclamar, o borre este párrafo]',
+] as const;
+
 /**
- * Borrador con el que arranca la primera publicación: la clínica lo adapta
- * (nombre, canal de atención) antes de publicar. El texto de datos sensibles ya
- * trae las tres frases que exige el Dec. 1377 de 2013 (art. 6).
+ * Borrador neutro de la primera publicación: la clínica sustituye los textos
+ * entre corchetes y lo adapta a su marco legal. Dentalix no nombra ninguna ley
+ * ni autoridad: el párrafo «Marco legal» es donde la clínica escribe la suya
+ * si quiere (o lo borra). No se publica con un marcador sin tocar, así que el
+ * texto entre corchetes nunca llega al paciente. Dentalix no valida su
+ * contenido.
  */
 export const POLICY_TEMPLATE: PublishPrivacyPolicyInput = {
   policyText: [
-    '[Nombre de la clínica], como responsable del tratamiento, recoge y trata los datos personales de sus pacientes conforme a la Ley 1581 de 2012 y el Decreto 1377 de 2013.',
-    'Finalidades: prestar la atención odontológica, llevar la historia clínica, agendar y recordar citas, facturar y cumplir obligaciones legales.',
-    'Derechos del titular: conocer, actualizar, rectificar y suprimir sus datos, revocar la autorización y presentar quejas ante la Superintendencia de Industria y Comercio.',
-    'Canal de atención: [correo o teléfono de contacto].',
+    'Responsable del tratamiento: [Nombre de la clínica], con domicilio en [Dirección], recoge y trata los datos personales de sus pacientes.',
+    'Finalidades: prestar la atención odontológica, llevar la historia clínica, agendar y recordar citas, cobrar y facturar los servicios, y cumplir las obligaciones legales de la clínica.',
+    'Derechos del paciente: conocer, actualizar, rectificar y suprimir sus datos, y revocar esta autorización en cualquier momento, salvo lo que la clínica deba conservar por obligación legal.',
+    'Contacto: para ejercer sus derechos o hacer consultas, escriba a [Correo o teléfono de contacto].',
+    'Marco legal: [Normativa de protección de datos aplicable y autoridad ante la que reclamar, o borre este párrafo].',
   ].join('\n\n'),
   generalText:
     'Autorizo el tratamiento de mis datos personales de identificación y contacto para las finalidades descritas en la política.',
   sensitiveHealthText:
-    'Autorizo de forma expresa el tratamiento de mis datos sensibles de salud (historia clínica, odontograma, radiografías y antecedentes médicos). Se me informó que no estoy obligado a autorizar el tratamiento de datos sensibles. Finalidad: prestar la atención odontológica y conservar la historia clínica según la ley.',
+    'Autorizo de forma expresa el tratamiento de mis datos sensibles de salud (historia clínica, odontograma, radiografías y antecedentes médicos) con la finalidad de prestarme la atención odontológica y conservar mi historia clínica. Se me informó que dar esta autorización es voluntario: no estoy obligado/a a darla.',
   marketingText:
     'Autorizo recibir comunicaciones comerciales (promociones, campañas y recordatorios no clínicos) por teléfono, WhatsApp o correo. Puedo revocarlo en cualquier momento.',
 };
 
-export type SensitiveHealthElement = 'NOT_OBLIGED' | 'SENSITIVE_DATA' | 'PURPOSE';
+/** Espacios invisibles (ZWSP, ZWNJ, ZWJ, word joiner, BOM) que no cambian lo que se lee. */
+const INVISIBLE = /[\u200B\u200C\u200D\u2060\uFEFF]/g;
 
 /**
- * Guía en vivo para quien redacta: MISMO criterio que la API
- * (`missingSensitiveHealthElements` en dentalix-api), que es quien decide; aquí
- * solo se adelanta el aviso.
+ * Forma comparable de un texto: NFC, minúsculas, sin espacios invisibles, cada
+ * tramo de espacios (incluidos nbsp y saltos de línea) en un solo espacio, y
+ * sin espacios justo dentro de los corchetes.
  */
-const REQUIRED: { element: SensitiveHealthElement; label: string; pattern: RegExp }[] = [
-  {
-    element: 'NOT_OBLIGED',
-    label: 'Que el paciente «no está obligado» a autorizar',
-    pattern: /\bno\s+(esta|estoy|estas)\s+obligad[oa]s?\b|\bno\s+es\s+obligatori[oa]\b/,
-  },
-  {
-    element: 'SENSITIVE_DATA',
-    label: 'Qué «datos sensibles» se tratan',
-    pattern: /\bdatos\s+sensibles\b/,
-  },
-  {
-    element: 'PURPOSE',
-    label: 'La «finalidad» del tratamiento',
-    pattern: /\bfinalidad(es)?\b/,
-  },
-];
-
-export interface ElementCheck {
-  element: SensitiveHealthElement;
-  label: string;
-  present: boolean;
+function comparable(text: string): string {
+  return text
+    .normalize('NFC')
+    .replace(INVISIBLE, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\[ /g, '[')
+    .replace(/ \]/g, ']');
 }
 
-export function checkSensitiveHealthText(text: string): ElementCheck[] {
-  const folded = text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-  return REQUIRED.map(({ element, label, pattern }) => ({
-    element,
-    label,
-    present: pattern.test(folded),
-  }));
+type DraftField = keyof PublishPrivacyPolicyInput;
+const DRAFT_FIELDS: readonly DraftField[] = ['policyText', 'generalText', 'sensitiveHealthText', 'marketingText'];
+
+/**
+ * Marcadores de la plantilla que siguen en el borrador, en el orden de
+ * `POLICY_TEMPLATE_PLACEHOLDERS`, con los campos donde quedan. Sin distinguir
+ * mayúsculas, espacios ni espacios invisibles, para atrapar también los de una
+ * plantilla anterior o retocados. Solo busca esos literales: los corchetes
+ * propios de la clínica no cuentan.
+ */
+export function unfilledPlaceholderFields(
+  draft: PublishPrivacyPolicyInput,
+): { placeholder: string; fields: DraftField[] }[] {
+  const texts = DRAFT_FIELDS.map((field) => ({ field, text: comparable(draft[field]) }));
+  return POLICY_TEMPLATE_PLACEHOLDERS.flatMap((placeholder) => {
+    const needle = comparable(placeholder);
+    const fields = texts.filter((t) => t.text.includes(needle)).map((t) => t.field);
+    return fields.length > 0 ? [{ placeholder, fields }] : [];
+  });
+}
+
+/** Marcadores de la plantilla que siguen en algún texto del borrador. */
+export function unfilledPlaceholders(draft: PublishPrivacyPolicyInput): string[] {
+  return unfilledPlaceholderFields(draft).map((r) => r.placeholder);
 }

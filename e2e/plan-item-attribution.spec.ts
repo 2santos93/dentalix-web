@@ -4,6 +4,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 import { loginAs } from './support/auth';
 import { expectTouchTarget } from './support/touch-targets';
 import { E2E_BROWSER_LOCALE } from './support/regional';
+import { DEMO_CURRENCY, DEMO_TIME_ZONE } from './support/demo';
 
 /**
  * DX-050 · Producción atribuible. En la clínica demo (`npm run seed:demo`), la
@@ -67,9 +68,9 @@ async function seed(request: APIRequestContext, tag: string): Promise<Seeded> {
     kind: 'PROCEDURE',
     labelEs: `Resina ${tag}`,
     color: '#3366CC',
-    defaultPrice: 100000,
+    defaultPrice: 100,
   });
-  const plan = await call<{ id: string }>('post', `/patients/${patient.id}/treatment-plans`, { currency: 'COP' });
+  const plan = await call<{ id: string }>('post', `/patients/${patient.id}/treatment-plans`, { currency: DEMO_CURRENCY });
   const item = await call<{ id: string }>('post', `/treatment-plans/${plan.id}/items`, {
     toothNumber: '16',
     catalogItemId: catalog.id,
@@ -93,10 +94,10 @@ async function noOverflow(page: Page) {
   ).toBeLessThanOrEqual(0);
 }
 
-/** Hoy en Bogotá como lo pinta la ficha (dd/mm/aaaa). */
-function todayInBogota(): string {
+/** Hoy en la zona de la sede demo (Caracas) como lo pinta la ficha (dd/mm/aaaa). */
+function todayInDemoSede(): string {
   const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Bogota',
+    timeZone: DEMO_TIME_ZONE,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -151,7 +152,7 @@ for (const [width, theme] of [
     await dialog.getByRole('button', { name: 'Marcar realizado' }).click();
     await expect(dialog).toBeHidden();
 
-    const line = `Realizado por ${data.dentistName} · ${todayInBogota()} · Sede Norte`;
+    const line = `Realizado por ${data.dentistName} · ${todayInDemoSede()} · Sede Norte`;
     const attribution = page.getByText(line).locator('visible=true');
     await expect(attribution).toBeVisible();
     await attribution.scrollIntoViewIfNeeded();
@@ -226,7 +227,7 @@ test('DX-050: la dentista marca realizado (viene elegida ella), no lo corrige (4
   await dialog.getByRole('button', { name: 'Marcar realizado' }).click();
   await expect(dialog).toBeHidden();
   await expect(
-    dentist.page.getByText(new RegExp(`^Realizado por ${data.dentistName} · ${todayInBogota()}`)).locator('visible=true'),
+    dentist.page.getByText(new RegExp(`^Realizado por ${data.dentistName} · ${todayInDemoSede()}`)).locator('visible=true'),
   ).toBeVisible();
   // La dentista no corrige: ni se le ofrece ni la API lo admite.
   await expect(dentist.page.getByRole('button', { name: /^Corregir quién realizó/ })).toHaveCount(0);
@@ -255,7 +256,7 @@ test('DX-050: la dentista marca realizado (viene elegida ella), no lo corrige (4
   await correct.getByRole('button', { name: 'Guardar' }).click();
   await expect(correct).toBeHidden();
   await expect(
-    admin.page.getByText(new RegExp(`^Realizado por ${other.fullName} · ${todayInBogota()}`)).locator('visible=true'),
+    admin.page.getByText(new RegExp(`^Realizado por ${other.fullName} · ${todayInDemoSede()}`)).locator('visible=true'),
   ).toBeVisible();
   await admin.page.goto(`${origin}/settings/auditoria`);
   const row = admin.page.getByRole('row', { name: /Corrección de quién lo realizó · Otro profesional/ }).first();

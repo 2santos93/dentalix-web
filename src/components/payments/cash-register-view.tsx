@@ -46,6 +46,11 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { useVoidPayment, voidPaymentSubject } from '@/components/payments/use-void-payment';
+import {
+  ExternalInvoiceModal,
+  externalInvoiceCopy,
+  type ExternalInvoiceTarget,
+} from '@/components/payments/external-invoice-modal';
 import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 
@@ -74,6 +79,11 @@ const copy = {
   mediumInactive: (name: string) => `${name} (inactivo)`,
   mediumsError: 'No cargaron los medios',
   methodNone: 'Sin método',
+  // DX-515: abonos con o sin el nº de la factura fiscal emitida fuera.
+  invoiceLabel: 'Factura externa',
+  invoiceAll: 'Con y sin factura externa',
+  invoiceWith: 'Con nº de factura externa',
+  invoiceWithout: 'Sin nº de factura externa',
   // DX-395: la caja del período en CSV, con medio y referencia.
   export: 'Exportar CSV',
   exportError: 'No pudimos exportar la caja.',
@@ -122,7 +132,11 @@ const copy = {
   registeredOn: (date: string) => `Registrado el ${date}`,
   empty: 'No hay abonos en este período.',
   emptyHint: 'Prueba con otro rango de fechas o con otro medio de pago.',
+  invoiceSubject: (patient: string, amount: string) => `${patient} · ${amount}`,
 };
+
+/** DX-515: filtro por nº de factura externa (`ALL` = no viaja). */
+type InvoiceFilter = 'ALL' | 'WITH' | 'WITHOUT';
 
 type PeriodChoice = CashPreset | 'custom';
 /** `ALL` o el id de un medio de pago de la clínica (DX-395). */
@@ -187,6 +201,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     to: '',
   });
   const [medium, setMedium] = useState<MediumFilter>(ALL_MEDIUMS);
+  const [invoice, setInvoice] = useState<InvoiceFilter>('ALL');
+  const [invoiceTarget, setInvoiceTarget] = useState<ExternalInvoiceTarget | null>(null);
   // DX-395: todos los medios de la clínica, también los desactivados (sus
   // abonos anteriores siguen en la caja).
   const mediums = usePaymentMethods(token, true, { includeInactive: true });
@@ -222,6 +238,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           from,
           to,
           ...(medium !== ALL_MEDIUMS ? { paymentMethodId: medium } : {}),
+          ...(invoice !== 'ALL' ? { externalInvoice: invoice } : {}),
           page,
         };
         const res = await listCashPayments(token, params);
@@ -251,7 +268,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, rangeFrom, rangeTo, medium, page, reloadKey]);
+  }, [token, rangeFrom, rangeTo, medium, invoice, page, reloadKey]);
 
   // Cada cambio de filtro vuelve a la página 1 en el MISMO render que el
   // filtro (React agrupa los dos `set`), así que sale una sola petición.
@@ -281,10 +298,15 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     setPage(1);
   }
 
+  function changeInvoice(next: InvoiceFilter) {
+    setInvoice(next);
+    setPage(1);
+  }
+
   // DX-395: la caja del período en CSV, con los mismos filtros que la tabla.
   // El reintento cierra sobre el período y el medio que se exportaban: es la
   // operación que se repite, no estado de la pantalla.
-  async function exportCsv(from: string, to: string, mediumId: MediumFilter) {
+  async function exportCsv(from: string, to: string, mediumId: MediumFilter, invoiceFilter: InvoiceFilter) {
     setExporting(true);
     setExportNotice('');
     try {
@@ -292,12 +314,13 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         from,
         to,
         ...(mediumId !== ALL_MEDIUMS ? { paymentMethodId: mediumId } : {}),
+        ...(invoiceFilter !== 'ALL' ? { externalInvoice: invoiceFilter } : {}),
       });
       saveCsv(text, copy.csvFileName(from, to), { bom: true });
       setExportNotice(copy.exported);
     } catch (err) {
       notifyError(apiErrorMessage(err, { fallback: copy.exportError }), {
-        onRetry: () => void exportCsv(from, to, mediumId),
+        onRetry: () => void exportCsv(from, to, mediumId, invoiceFilter),
       });
     } finally {
       setExporting(false);
@@ -360,6 +383,11 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           {payment.reference ? (
             <span className="t-caption mt-1 block font-mono text-muted">{copy.referenceLabel(payment.reference)}</span>
           ) : null}
+          {payment.externalInvoiceNumber ? (
+            <span className="t-caption mt-1 block break-all font-mono text-muted">
+              {externalInvoiceCopy.inline(payment.externalInvoiceNumber)}
+            </span>
+          ) : null}
         </>
       ),
       // En el teléfono, el medio y su referencia (la que se busca al cuadrar).
@@ -367,6 +395,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         [
           payment.method ? (payment.paymentMethod?.name ?? PAYMENT_METHOD_LABELS[payment.method]) : null,
           payment.reference ? copy.referenceLabel(payment.reference) : null,
+          payment.externalInvoiceNumber ? externalInvoiceCopy.inline(payment.externalInvoiceNumber) : null,
         ]
           .filter(Boolean)
           .join(' · ') || null,
@@ -467,14 +496,26 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
             </NativeSelect>
           )}
 
+          <NativeSelect
+            aria-label={copy.invoiceLabel}
+            value={invoice}
+            onChange={(e) => changeInvoice(e.target.value as InvoiceFilter)}
+            className="sm:w-60"
+            selectClassName="max-sm:h-11"
+          >
+            <option value="ALL">{copy.invoiceAll}</option>
+            <option value="WITH">{copy.invoiceWith}</option>
+            <option value="WITHOUT">{copy.invoiceWithout}</option>
+          </NativeSelect>
+
           {/* La acción del listado cierra la barra, a la derecha (DESIGN.md). */}
           <Button
             type="button"
             variant="secondary"
-            onClick={() => range && void exportCsv(range.from, range.to, medium)}
+            onClick={() => range && void exportCsv(range.from, range.to, medium, invoice)}
             disabled={!range || customError !== null || forbidden}
             loading={exporting}
-            className="max-sm:h-11 max-sm:w-full sm:ml-auto"
+            className="max-sm:min-h-11 max-sm:w-full sm:ml-auto"
           >
             {copy.export}
           </Button>
@@ -542,6 +583,18 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                 getRowLabel={(payment) => copy.rowLabel(payment.patient.fullName)}
                 rowActions={(payment) => [
                   { label: copy.receiptAction, onSelect: () => setReceiptPaymentId(payment.id) },
+                  {
+                    label: externalInvoiceCopy.action,
+                    onSelect: () =>
+                      setInvoiceTarget({
+                        paymentId: payment.id,
+                        subject: copy.invoiceSubject(
+                          payment.patient.fullName,
+                          formatCurrency(payment.amount, payment.currency),
+                        ),
+                        externalInvoiceNumber: payment.externalInvoiceNumber,
+                      }),
+                  },
                   ...(payment.canVoid
                     ? [
                         {
@@ -583,6 +636,17 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         onOpenChange={(open) => {
           if (!open) setReceiptPaymentId(null);
         }}
+      />
+
+      {/* DX-515: `key` por abono; al guardar se recarga (el filtro puede sacarlo). */}
+      <ExternalInvoiceModal
+        key={invoiceTarget?.paymentId ?? 'no-invoice-target'}
+        token={token}
+        target={invoiceTarget}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceTarget(null);
+        }}
+        onSaved={() => setReloadKey((k) => k + 1)}
       />
 
       {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}

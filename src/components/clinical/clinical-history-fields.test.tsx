@@ -14,7 +14,7 @@ function Harness({
     <>
       <ClinicalHistoryFields value={v} onChange={setV} sections={sections} />
       <output data-testid="allergies-count">{v.allergies?.length ?? 0}</output>
-      <output data-testid="embarazo">{String(v.embarazo)}</output>
+      <output data-testid="embarazo">{String(v.pregnancy)}</output>
       <output data-testid="semanas">{v.semanasEmbarazo ?? ''}</output>
       <output data-testid="notes">{v.notes ?? ''}</output>
     </>
@@ -39,9 +39,24 @@ it('marca embarazo y lo refleja en el value del padre, mostrando semanas', async
   const user = userEvent.setup();
   render(<Harness />);
   await user.click(within(screen.getByRole('radiogroup', { name: 'Embarazo' })).getByRole('radio', { name: 'Sí' }));
-  expect(screen.getByTestId('embarazo')).toHaveTextContent('true');
+  expect(screen.getByTestId('embarazo')).toHaveTextContent('SI');
   await user.type(screen.getByLabelText(/semanas de embarazo/i), '12');
   expect(screen.getByTestId('semanas')).toHaveTextContent('12');
+});
+
+it('embarazo «No» y «No sabe» se guardan tal cual, sin semanas; ya no hay pista de que el «No» se pierde', async () => {
+  const user = userEvent.setup();
+  render(<Harness />);
+  const g = screen.getByRole('radiogroup', { name: 'Embarazo' });
+  await user.click(within(g).getByRole('radio', { name: 'Sí' }));
+  await user.type(screen.getByLabelText(/semanas de embarazo/i), '12');
+  await user.click(within(g).getByRole('radio', { name: 'No' }));
+  expect(screen.getByTestId('embarazo')).toHaveTextContent('NO');
+  expect(screen.getByTestId('semanas')).toHaveTextContent('');
+  expect(screen.queryByLabelText(/semanas de embarazo/i)).not.toBeInTheDocument();
+  await user.click(within(g).getByRole('radio', { name: 'No sabe' }));
+  expect(screen.getByTestId('embarazo')).toHaveTextContent('DESCONOCE');
+  expect(screen.queryByText(/se verá «Sin responder»/)).not.toBeInTheDocument();
 });
 
 it('escribe notas y las refleja en el value del padre', async () => {

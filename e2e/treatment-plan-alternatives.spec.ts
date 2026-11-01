@@ -4,6 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { openSection } from './support/nav';
+import { DEMO_CURRENCY, DEMO_REGION } from './support/demo';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e (DX-040): alternativas de plan (A/B), presentar, rechazar y
@@ -11,14 +13,16 @@ import { openSection } from './support/nav';
  *
  * Corre contra la clínica DEMO sembrada (`npm run seed:demo` en la API):
  *   - el odontólogo crea una alternativa de un plan («Opción B»), compara las
- *     dos opciones lado a lado (total en COP, nº de procedimientos, estado),
+ *     dos opciones lado a lado (total en la moneda de la sede, USD; nº de procedimientos, estado),
  *     las presenta y acepta la A: la B queda «Rechazado» (otra opción aceptada);
  *   - la asistente ve el plan, pero no tiene «Presentar» ni «Aceptado»;
  *   - recepción entra en «Presupuestos por seguir» desde el menú, ve el grupo
- *     A/B de la demo (presentado hace 9 días, sin cita) con monto, días,
+ *     A/B de la demo en UNA fila (D2; presentado hace 9 días, sin cita) con monto, días,
  *     teléfono y WhatsApp prellenado, y marca un presupuesto como rechazado
  *     con motivo: sale de la lista.
  * En escritorio (1440px) y en móvil (390px, sin scroll horizontal).
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
@@ -27,9 +31,10 @@ const DENTIST_EMAIL = process.env.E2E_DEMO_DENTIST_EMAIL ?? 'dentista@demo.denta
 const ASSISTANT_EMAIL = process.env.E2E_DEMO_ASSISTANT_EMAIL ?? 'asistente@demo.dentalix.app';
 const RECEPTION_EMAIL = process.env.E2E_DEMO_RECEPTION_EMAIL ?? 'recepcion@demo.dentalix.app';
 // Paciente de las opciones A/B de la demo (DEMO_PLAN_OPTIONS en la API).
-const DEMO_OPTIONS_PATIENT = 'Carolina Duque Henao';
+const DEMO_OPTIONS_PATIENT = 'Carolina Durán Bello';
 
-const IMPLANT = 3_500_000;
+// Tres cifras: sin separador de miles, igual en cualquier formato de la sede.
+const IMPLANT = 950;
 
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix
@@ -37,10 +42,10 @@ const suffix = rawSuffix
   .toLowerCase()
   .slice(0, 8);
 
-// Mismo formateador que la app; solo la cifra (entre ella y «COP» va un espacio duro).
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP' });
+// El formato de la sede principal (DX-378), con los dos decimales del USD (DX-340): solo la cifra.
+const sedeFormat = regionalFormat(DEMO_REGION);
 function figure(amount: number): string {
-  return cop.format(amount).split(/\s/)[0];
+  return sedeFormat.number(amount, { min: 2, max: 2 });
 }
 
 async function apiLogin(request: APIRequestContext, host: string, email: string): Promise<string> {
@@ -52,7 +57,7 @@ async function apiLogin(request: APIRequestContext, host: string, email: string)
   return ((await res.json()) as { accessToken: string }).accessToken;
 }
 
-/** Siembra como ADMIN un paciente con un plan en COP de un implante (y, si se pide, presentado). */
+/** Siembra como ADMIN un paciente con un plan en la moneda de la sede (USD) de un implante (y, si se pide, presentado). */
 async function seed(
   request: APIRequestContext,
   origin: string,
@@ -76,8 +81,9 @@ async function seed(
     docType: 'NATIONAL_ID',
     docNumber: `DX40${tag}`.slice(0, 20),
     sex: 'F',
-    phone: '3205550199',
-    countryCode: 'CO',
+    // Número nacional: se lee con la región de la sede demo (VE).
+    phone: '04125550199',
+    countryCode: 'VE',
   });
   const implant = await post<{ id: string }>('/catalog/items', {
     code: `dx40i-${tag}`,
@@ -87,7 +93,7 @@ async function seed(
     defaultPrice: IMPLANT,
   });
   const plan = await post<{ id: string }>(`/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   await post(`/treatment-plans/${plan.id}/items`, { toothNumber: '46', catalogItemId: implant.id });
   if (present) await post(`/treatment-plans/${plan.id}/present`);
@@ -233,22 +239,28 @@ for (const viewport of [
       ? page.getByRole('list', { name: 'Presupuestos presentados sin aceptar' })
       : page.getByRole('table', { name: 'Presupuestos presentados sin aceptar' });
     const rowRole = phone ? 'listitem' : 'row';
-    // El grupo A/B de la demo: dos filas del mismo paciente.
+    // D2: el grupo A/B de la demo es UNA fila (una conversación con el
+    // paciente): las dos opciones anidadas, la antigüedad de la más antigua y
+    // un solo WhatsApp.
     const demoRows = table.getByRole(rowRole).filter({ hasText: DEMO_OPTIONS_PATIENT });
-    await expect(demoRows).toHaveCount(2, { timeout: 15_000 });
-    await expect(demoRows.filter({ hasText: 'Opción A: implante' })).toContainText(/hace [89] días/);
+    await expect(demoRows).toHaveCount(1, { timeout: 15_000 });
+    await expect(demoRows).toContainText('Opción A: implante');
+    await expect(demoRows).toContainText('Opción B: puente fijo');
+    await expect(demoRows).toContainText(/hace [89] días/);
+    if (!phone) await expect(demoRows).toContainText('2 opciones');
+    await expect(demoRows.getByRole('link', { name: `WhatsApp a ${DEMO_OPTIONS_PATIENT}` })).toHaveCount(1);
     await expect(
-      demoRows.filter({ hasText: 'Opción B: puente fijo' }).getByRole('link', {
+      demoRows.getByRole('link', {
         name: `WhatsApp a ${DEMO_OPTIONS_PATIENT}`,
       }),
-    ).toHaveAttribute('href', /^https:\/\/wa\.me\/573195550110\?text=Hola%20Carolina/);
+    ).toHaveAttribute('href', /^https:\/\/wa\.me\/584125550110\?text=Hola%20Carolina/);
 
     const row = table.getByRole(rowRole).filter({ hasText: data.fullName });
     await expect(row).toContainText(figure(IMPLANT));
     await expect(row).toContainText('hace 12 días');
     await expect(row.getByRole('link', { name: `WhatsApp a ${data.fullName}` })).toHaveAttribute(
       'href',
-      /^https:\/\/wa\.me\/573205550199\?text=/,
+      /^https:\/\/wa\.me\/584125550199\?text=/,
     );
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
 

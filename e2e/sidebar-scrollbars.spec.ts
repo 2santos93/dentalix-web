@@ -62,8 +62,11 @@ for (const scrollbar of ['native', 'classic'] as const) {
       await page.emulateMedia({ colorScheme });
       await page.setViewportSize({ width: 1366, height: 768 });
       // Solo el contador es sintético; sesión, sedes y navegación usan la API real.
-      await page.route('**/medical-history/submissions/summary', (route) =>
-        route.fulfill({ json: { submitted: 12 } }));
+      // DX-503: los contadores del menú salen de `GET /work-queues/summary`.
+      await page.route('**/work-queues/summary*', (route) =>
+        route.fulfill({
+          json: { generatedAt: new Date().toISOString(), items: [{ key: 'ANAMNESIS_REVIEW', status: 'OK', count: 12 }] },
+        }));
       await signIn(page, admin.email);
       await expect(page.locator('aside').getByTestId('anamnesis-inbox-count')).toHaveText('12');
       if (scrollbar === 'classic') {

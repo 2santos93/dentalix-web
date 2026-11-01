@@ -17,6 +17,7 @@ import {
   methodLabel,
   movementMediumName,
   movementReferenceLabel,
+  movementInvoiceLabel,
   movementDestination,
   openingAsOfLabel,
   openingNoteFor,
@@ -108,7 +109,7 @@ const copy = {
   colActions: 'Acciones',
   voidAction: 'Anular',
   receiptAction: 'Recibo',
-  // El «⋯» de cada movimiento: «Acciones de abono de 150.000,00 COP del 15/10/2026».
+  // El «⋯» de cada movimiento: «Acciones de abono de 150,00 USD del 15/10/2026».
   rowLabel: (amount: string, date: string) => `abono de ${amount} del ${date}`,
   colDue: 'Vencimiento',
   colInstallment: 'Cuota',
@@ -559,10 +560,17 @@ function StatementBody({
                         {movementReferenceLabel(m)}
                       </span>
                     ) : null}
+                    {/* DX-515: la factura fiscal emitida fuera. */}
+                    {movementInvoiceLabel(m) ? (
+                      <span className="t-caption mt-1 block break-all font-mono text-muted">
+                        <span className="sr-only"> · </span>
+                        {movementInvoiceLabel(m)}
+                      </span>
+                    ) : null}
                   </>
                 ),
                 mobileCell: (m) =>
-                  [m.method ? movementMediumName(m) : methodLabel(null), movementReferenceLabel(m)]
+                  [m.method ? movementMediumName(m) : methodLabel(null), movementReferenceLabel(m), movementInvoiceLabel(m)]
                     .filter(Boolean)
                     .join(' · '),
               },

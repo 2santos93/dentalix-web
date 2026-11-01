@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { Check, FileText, X } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   CONSENT_SCOPES,
@@ -12,7 +12,7 @@ import {
   type PrivacyPolicyVersion,
   type PublishPrivacyPolicyInput,
 } from '@/lib/data-consents/data-consents-api';
-import { POLICY_TEMPLATE, checkSensitiveHealthText } from '@/lib/data-consents/policy-template';
+import { POLICY_TEMPLATE, unfilledPlaceholderFields } from '@/lib/data-consents/policy-template';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { formatDate } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -25,6 +25,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { usePrivacyPolicies } from './use-privacy-policies';
 
+/** «en la casilla «…»» para las etiquetas que empiezan por «Casilla»; «en el campo «…»» para el resto. */
+function inField(label: string): string {
+  return label.startsWith('Casilla ')
+    ? `en la casilla ${label.slice('Casilla '.length)}`
+    : `en el campo «${label}»`;
+}
+
 const copy = {
   publish: 'Publicar nueva versión',
   publishFirst: 'Publicar la política',
@@ -36,11 +43,12 @@ const copy = {
   generalText: 'Casilla «Datos personales»',
   sensitiveText: 'Casilla «Datos sensibles de salud»',
   marketingText: 'Casilla «Comunicaciones comerciales»',
-  checklist: 'El texto de datos sensibles debe informar (Dec. 1377, art. 6):',
-  present: 'incluido',
-  missing: 'falta',
+  sensitiveHint: 'Conviene que diga que autorizar es voluntario, qué datos de salud se tratan y para qué.',
   emptyRequired: 'Completa los cuatro textos antes de publicar.',
-  missingRequired: 'Al texto de datos sensibles le falta información obligatoria.',
+  placeholders: (remaining: string[]) =>
+    `Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: ${remaining.join(', ')}.`,
+  placeholderIn: (placeholder: string, labels: string[]) =>
+    `${placeholder} (${labels.map(inField).join(' y ')})`,
   genericError: 'No pudimos publicar la política. Intenta de nuevo.',
   loadError: 'No pudimos cargar la política de tratamiento de datos.',
   emptyTitle: 'La clínica aún no ha publicado su política de tratamiento de datos.',
@@ -60,6 +68,13 @@ const copy = {
 };
 
 type Draft = PublishPrivacyPolicyInput;
+
+const fieldLabels: Record<keyof Draft, string> = {
+  policyText: copy.policyText,
+  generalText: copy.generalText,
+  sensitiveHealthText: copy.sensitiveText,
+  marketingText: copy.marketingText,
+};
 
 function draftFrom(policy: PrivacyPolicyVersion | null): Draft {
   if (!policy) return { ...POLICY_TEMPLATE };
@@ -86,7 +101,6 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
 
   const current = data?.current ?? null;
   const previous = data?.history.filter((p) => p.id !== current?.id) ?? [];
-  const checks = checkSensitiveHealthText(draft.sensitiveHealthText);
 
   function openModal() {
     setDraft(draftFrom(current));
@@ -100,8 +114,17 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
       setError(copy.emptyRequired);
       return;
     }
-    if (checks.some((c) => !c.present)) {
-      setError(copy.missingRequired);
+    const remaining = unfilledPlaceholderFields(draft);
+    if (remaining.length > 0) {
+      setError(
+        copy.placeholders(
+          remaining.map(({ placeholder, fields }) => {
+            // El texto de la política es el campo principal: solo se nombran los demás.
+            const others = fields.filter((f) => f !== 'policyText').map((f) => fieldLabels[f]);
+            return others.length > 0 ? copy.placeholderIn(placeholder, others) : placeholder;
+          }),
+        ),
+      );
       return;
     }
     setSubmitting(true);
@@ -203,31 +226,15 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
           value={draft.generalText}
           onChange={(generalText) => setDraft({ ...draft, generalText })}
         />
-        <div className="flex flex-col gap-2">
-          <PolicyTextarea
-            id="pps-sensitive"
-            label={copy.sensitiveText}
-            rows={4}
-            value={draft.sensitiveHealthText}
-            onChange={(sensitiveHealthText) => setDraft({ ...draft, sensitiveHealthText })}
-            describedBy="pps-sensitive-checks"
-          />
-          <div id="pps-sensitive-checks" className="flex flex-col gap-1 text-sm">
-            <p className="text-muted">{copy.checklist}</p>
-            <ul className="flex flex-col gap-1">
-              {checks.map((c) => (
-                <li
-                  key={c.element}
-                  className={cn('flex items-center gap-2', c.present ? 'text-success-text' : 'text-danger-text')}
-                >
-                  {c.present ? <Check className="size-4" aria-hidden /> : <X className="size-4" aria-hidden />}
-                  <span className="text-ink">{c.label}</span>
-                  <span className="sr-only">: {c.present ? copy.present : copy.missing}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+        <PolicyTextarea
+          id="pps-sensitive"
+          label={copy.sensitiveText}
+          rows={4}
+          value={draft.sensitiveHealthText}
+          onChange={(sensitiveHealthText) => setDraft({ ...draft, sensitiveHealthText })}
+          hint={copy.sensitiveHint}
+          hintId="pps-sensitive-hint"
+        />
         <PolicyTextarea
           id="pps-marketing"
           label={copy.marketingText}
@@ -245,23 +252,25 @@ function PolicyTextarea({
   value,
   onChange,
   rows = 3,
-  describedBy,
+  hint,
+  hintId,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   rows?: number;
-  describedBy?: string;
+  hint?: string;
+  hintId?: string;
 }) {
   return (
-    <FormField htmlFor={id} label={label}>
+    <FormField htmlFor={id} label={label} hint={hint} hintId={hintId}>
       <Textarea
         id={id}
         rows={rows}
         required
         value={value}
-        aria-describedby={describedBy}
+        aria-describedby={hint ? hintId : undefined}
         onChange={(e) => onChange(e.target.value)}
       />
     </FormField>

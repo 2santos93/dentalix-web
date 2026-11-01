@@ -6,6 +6,10 @@ import type { ClinicRole } from '@/lib/me/me-api';
  * rol (la lista de espera y los aceptados sin agendar los lee cualquiera en la
  * API, pero los agenda el mostrador). Nunca lo amplía: un bloque que la API
  * negaría ni se pide ni se pinta. La frontera sigue en el servidor.
+ *
+ * DX-503: las listas de «Pendientes» las reparte la API
+ * (`GET /work-queues/summary`, `WORK_QUEUE_ROLES`, misma matriz); aquí quedan
+ * como documentación y para los bloques que sí pide Inicio (caja, resultados…).
  */
 const ACCESS = {
   /** `GET /appointments` (APPOINTMENT_ROLES); el odontólogo, solo las suyas. */
