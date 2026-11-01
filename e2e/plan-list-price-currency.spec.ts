@@ -143,7 +143,9 @@ for (const viewport of [
     await expect(figure('Pagado')).toHaveText(sede(LIST_PRICE_EUR, 'EUR'));
     const payments = panel.getByRole('button', { name: /abonos registrados/i });
     if ((await payments.getAttribute('aria-expanded')) === 'false') await payments.click();
-    await expect(panel.getByRole('table', { name: /abonos del plan de tratamiento/i })).toContainText(
+    // En escritorio los abonos son una tabla; a 390 px, una lista de tarjetas.
+    const paymentsRole = viewport.width === 390 ? 'list' : 'table';
+    await expect(panel.getByRole(paymentsRole, { name: /abonos del plan de tratamiento/i })).toContainText(
       sede(LIST_PRICE_EUR, 'EUR'),
     );
     await expect(panel).not.toContainText(printed(LIST_PRICE_EUR, 'EUR'));
