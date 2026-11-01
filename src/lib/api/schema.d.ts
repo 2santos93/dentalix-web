@@ -420,11 +420,35 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Historias que salen de retención legal (solo ADMIN)
-         * @description DX-039. Pacientes vivos cuya HC ya no está en retención o deja de estarlo dentro de `withinDays` (NONE: 15 años, DOUBLE: 30 años desde la última atención; PERMANENT nunca sale). Orden: la que antes vence. Paginada, con tope. Solo informa: no purga nada.
+         * Historias que salen de retención (solo ADMIN)
+         * @description DX-039. Pacientes vivos cuya HC ya no está en retención o deja de estarlo dentro de `withinDays` (NONE: el plazo de la clínica, DOUBLE: el doble, desde la última atención; PERMANENT nunca sale). Una reducción del plazo no adelanta la lista: la fecha de fin que una historia ya tenía se respeta. Orden: `lastAttentionAt` ascendente; con esa fecha fijada, una fila puede aparecer más tarde que su última atención, y `retentionUntil` es la fecha efectiva. Paginada, con tope. Solo informa: no purga nada.
          */
         get: operations["PatientsController_retentionExpiring"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/retention/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plazo de conservación de la historia clínica de la clínica
+         * @description DX-330. `effectiveYears` es el plazo que rige (el guardado, nunca por debajo del mínimo de plataforma). `correctionWindow` aparece durante las 24 horas siguientes a una subida.
+         */
+        get: operations["PatientsController_retentionSettings"];
+        /**
+         * Cambia el plazo de conservación de la historia clínica; queda en la auditoría
+         * @description DX-330. Subir aplica desde la siguiente petición. Reducir pide `confirmReduction: true`: las historias que ya estaban en retención mantienen su fecha de fin y el plazo nuevo se aplica al resto y a las atenciones nuevas. Si el valor no cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["PatientsController_updateRetention"];
         post?: never;
         delete?: never;
         options?: never;
@@ -489,7 +513,7 @@ export interface paths {
         post?: never;
         /**
          * Archivar paciente (borrado blando, solo ADMIN)
-         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención legal (15 años desde la última atención, 30 con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva, salvo que tenga citas programadas o confirmadas (409 `PATIENT_HAS_PENDING_APPOINTMENTS`: hay que cancelarlas o cerrarlas antes). DX-461: en la misma transacción anula sus enlaces públicos vivos (ofertas de hueco, firma y presupuesto a distancia, copia del PDF firmado y anamnesis): sus rutas públicas responden como a un enlace caducado y desarchivar no los reactiva. Si anuló alguno, queda un audit_event (UPDATE de PATIENT, `PATIENT_ARCHIVED_LINKS_REVOKED`) con cuántos de cada tipo.
+         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención (el plazo de la clínica desde la última atención, el doble con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva, salvo que tenga citas programadas o confirmadas (409 `PATIENT_HAS_PENDING_APPOINTMENTS`: hay que cancelarlas o cerrarlas antes). DX-461: en la misma transacción anula sus enlaces públicos vivos (ofertas de hueco, firma y presupuesto a distancia, copia del PDF firmado y anamnesis): sus rutas públicas responden como a un enlace caducado y desarchivar no los reactiva. Si anuló alguno, queda un audit_event (UPDATE de PATIENT, `PATIENT_ARCHIVED_LINKS_REVOKED`) con cuántos de cada tipo.
          */
         delete: operations["PatientsController_archive"];
         options?: never;
@@ -532,7 +556,7 @@ export interface paths {
         head?: never;
         /**
          * Cambiar la retención extendida de la HC (solo ADMIN)
-         * @description DX-039. NONE (15 años), DOUBLE (30) o PERMANENT. Motivo obligatorio: queda con el autor y la fecha en el rastro de retención del paciente; el registro de auditoría guarda quién y cuándo (sin el motivo).
+         * @description DX-039. NONE (el plazo de la clínica), DOUBLE (el doble) o PERMANENT. Motivo obligatorio: queda con el autor y la fecha en el rastro de retención del paciente; el registro de auditoría guarda quién y cuándo (sin el motivo).
          */
         patch: operations["PatientsController_changeRetention"];
         trace?: never;
@@ -6198,6 +6222,21 @@ export interface components {
                 [key: string]: (string | number | boolean | (string | number)[]) | null;
             };
         };
+        AuditRetentionTermChangeDto: {
+            /**
+             * @description Dirección según el plazo vigente.
+             * @enum {string}
+             */
+            direction: "UP" | "DOWN";
+            /** @description Pacientes que conservan una fecha posterior a la del plazo nuevo; 0 en una subida. */
+            protectedPatients: number;
+            /** @description Plazo vigente antes del cambio, en años. */
+            effectiveBefore: number;
+            /** @description Plazo vigente después del cambio, en años. */
+            effectiveAfter: number;
+            /** @description Una bajada que corrige una subida de hace menos de 24 horas. */
+            withinCorrectionWindow: boolean;
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -6233,6 +6272,8 @@ export interface components {
             exchangeRateBackup?: components["schemas"]["AuditExchangeRateBackupDto"];
             /** @description DX-360: configuración de la clínica (sedes, horario, recordatorios, dominios, política de datos, tipos de cita, pagadores, plantillas, inventario): los campos que cambiaron con su antes y después, o un lado en un alta o un retiro. El texto libre o largo (cuerpo de una plantilla, notas, motivo) solo figura en `changedFields`; nunca secretos (token de un dominio) ni datos de pacientes. */
             configChange?: components["schemas"]["AuditConfigChangeDto"];
+            /** @description DX-330: cambio del plazo de conservación de la historia clínica (`reason` CLINICAL_RECORD_RETENTION_SETTINGS): dirección, pacientes protegidos, plazos vigentes y si corrigió una subida reciente. Solo códigos y enteros. */
+            retentionTermChange?: components["schemas"]["AuditRetentionTermChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -6671,7 +6712,7 @@ export interface components {
             medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
         };
         /**
-         * @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia.
+         * @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia.
          * @enum {string}
          */
         RetentionExtension: "NONE" | "DOUBLE" | "PERMANENT";
@@ -6749,7 +6790,7 @@ export interface components {
              * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
              */
             lastAttentionAt: string | null;
-            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            /** @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
             retentionExtended: components["schemas"]["RetentionExtension"];
             /**
              * Format: date
@@ -6757,8 +6798,15 @@ export interface components {
              * @example 2039-02-28
              */
             retentionUntil: string | null;
-            /** @description Si hoy la HC está en retención legal: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
+            /** @description Si hoy la HC está en retención: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
             underRetention: boolean;
+            /**
+             * @description Plazo vigente de la clínica en años (NONE); DOUBLE es el doble. PERMANENT no caduca.
+             * @example 15
+             */
+            clinicRetentionYears: number;
+            /** @description La fecha de fin sale del plazo anterior de la clínica: se redujo y esta historia ya estaba en retención (DX-330). */
+            retentionFromPreviousTerm: boolean;
             /**
              * Format: date-time
              * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
@@ -6868,7 +6916,7 @@ export interface components {
              * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
              */
             lastAttentionAt: string | null;
-            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            /** @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
             retentionExtended: components["schemas"]["RetentionExtension"];
             /**
              * Format: date
@@ -6876,8 +6924,15 @@ export interface components {
              * @example 2039-02-28
              */
             retentionUntil: string | null;
-            /** @description Si hoy la HC está en retención legal: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
+            /** @description Si hoy la HC está en retención: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
             underRetention: boolean;
+            /**
+             * @description Plazo vigente de la clínica en años (NONE); DOUBLE es el doble. PERMANENT no caduca.
+             * @example 15
+             */
+            clinicRetentionYears: number;
+            /** @description La fecha de fin sale del plazo anterior de la clínica: se redujo y esta historia ya estaba en retención (DX-330). */
+            retentionFromPreviousTerm: boolean;
             /**
              * Format: date-time
              * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
@@ -6918,6 +6973,85 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        RetentionCorrectionWindowDto: {
+            /** @description Plazo vigente justo antes de la subida: volver a él, o a uno mayor, no fija ninguna fecha. */
+            previousYears: number;
+            /**
+             * Format: date-time
+             * @description Instante en que la ventana se cierra (subida + 24 h).
+             */
+            until: string;
+        };
+        RetentionSettingsDto: {
+            /** @description Plazo guardado por la clínica, en años. El que rige es `effectiveYears`. */
+            clinicalRecordRetentionYears: number;
+            /** @description Plazo que rige: el guardado, nunca por debajo del mínimo de plataforma. */
+            effectiveYears: number;
+            /** @description Mínimo de plataforma, en años. */
+            platformMinimumYears: number;
+            /** @description Máximo que admite la clínica, en años. */
+            maximumYears: number;
+            /** @description Presente durante las 24 horas siguientes a una subida; null si no hay ventana abierta. */
+            correctionWindow: components["schemas"]["RetentionCorrectionWindowDto"] | null;
+        };
+        RetentionReductionUnconfirmedErrorDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @example Conflict */
+            error: string;
+            /**
+             * @example RETENTION_REDUCTION_UNCONFIRMED
+             * @enum {string}
+             */
+            code: "RETENTION_REDUCTION_UNCONFIRMED";
+            message: string;
+            /** @description Plazo vigente antes del cambio. */
+            previousYears: number;
+            /** @description Plazo vigente tras el cambio. */
+            newYears: number;
+            /** @description Historias que mantendrían una fecha de fin anterior. */
+            protectedPatients: number;
+            /** @description La reducción corrige una subida de hace menos de 24 horas. */
+            withinCorrectionWindow: boolean;
+        };
+        RetentionSettingsBusyErrorDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @example Conflict */
+            error: string;
+            /**
+             * @example RETENTION_SETTINGS_BUSY
+             * @enum {string}
+             */
+            code: "RETENTION_SETTINGS_BUSY";
+            message: string;
+        };
+        UpdateRetentionSettingsDto: {
+            /**
+             * @description Plazo de conservación en años: entero entre el mínimo de plataforma y el máximo. El rango se valida en el caso de uso.
+             * @example 20
+             */
+            clinicalRecordRetentionYears: number;
+            /**
+             * @description Confirma una reducción del plazo. Sin él, reducir responde 409 `RETENTION_REDUCTION_UNCONFIRMED` y no guarda nada. En una subida o sin cambio se ignora.
+             * @enum {boolean}
+             */
+            confirmReduction?: true;
+        };
+        RetentionSettingsUpdateResultDto: {
+            /** @description Plazo guardado por la clínica, en años. El que rige es `effectiveYears`. */
+            clinicalRecordRetentionYears: number;
+            /** @description Plazo que rige: el guardado, nunca por debajo del mínimo de plataforma. */
+            effectiveYears: number;
+            /** @description Mínimo de plataforma, en años. */
+            platformMinimumYears: number;
+            /** @description Máximo que admite la clínica, en años. */
+            maximumYears: number;
+            /** @description Presente durante las 24 horas siguientes a una subida; null si no hay ventana abierta. */
+            correctionWindow: components["schemas"]["RetentionCorrectionWindowDto"] | null;
+            /** @description Historias en retención que mantienen una fecha de fin anterior tras una reducción; 0 si no hubo reducción. */
+            protectedPatients: number;
         };
         PatientSettingsDto: {
             /**
@@ -7031,7 +7165,7 @@ export interface components {
              * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
              */
             lastAttentionAt: string | null;
-            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            /** @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
             retentionExtended: components["schemas"]["RetentionExtension"];
             /**
              * Format: date
@@ -7039,8 +7173,15 @@ export interface components {
              * @example 2039-02-28
              */
             retentionUntil: string | null;
-            /** @description Si hoy la HC está en retención legal: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
+            /** @description Si hoy la HC está en retención: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
             underRetention: boolean;
+            /**
+             * @description Plazo vigente de la clínica en años (NONE); DOUBLE es el doble. PERMANENT no caduca.
+             * @example 15
+             */
+            clinicRetentionYears: number;
+            /** @description La fecha de fin sale del plazo anterior de la clínica: se redujo y esta historia ya estaba en retención (DX-330). */
+            retentionFromPreviousTerm: boolean;
             /**
              * Format: date-time
              * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
@@ -7110,7 +7251,7 @@ export interface components {
             statusCode: number;
             /** @example CLINICAL_RECORD_RETENTION */
             code: string;
-            /** @example La historia clínica de este paciente está en retención legal hasta el 28/02/2039 (…) */
+            /** @example La historia clínica de este paciente está en retención hasta el 28/02/2039 (…) */
             message: string;
             /** Format: date */
             retentionUntil: string | null;
@@ -7132,7 +7273,7 @@ export interface components {
         SetRetentionExtensionDto: {
             /** @description Motivo (obligatorio). Queda en el rastro de retención del paciente con el autor y la fecha; no se copia al registro de auditoría. */
             reason: string;
-            /** @description NONE = 15 años, DOUBLE = 30 años, PERMANENT = nunca se libera (p. ej. víctimas de violaciones de DD. HH./DIH). */
+            /** @description NONE = el plazo de la clínica, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. */
             retentionExtended: components["schemas"]["RetentionExtension"];
         };
         PartialSuppressionDto: {
@@ -18986,6 +19127,71 @@ export interface operations {
             };
         };
     };
+    PatientsController_retentionSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionSettingsDto"];
+                };
+            };
+        };
+    };
+    PatientsController_updateRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRetentionSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionSettingsUpdateResultDto"];
+                };
+            };
+            /** @description No entero o fuera del rango del mínimo de plataforma al máximo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar el plazo de conservación. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `RETENTION_REDUCTION_UNCONFIRMED`: reducir sin confirmar, sin guardar nada. `RETENTION_SETTINGS_BUSY`: otra operación con los pacientes de la clínica en curso, o la reducción tarda demasiado; no se guardó nada. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionReductionUnconfirmedErrorDto"] | components["schemas"]["RetentionSettingsBusyErrorDto"];
+                };
+            };
+        };
+    };
     PatientsController_settings: {
         parameters: {
             query?: never;
@@ -19145,7 +19351,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description HC en retención legal (`CLINICAL_RECORD_RETENTION`) o citas abiertas (`PATIENT_HAS_PENDING_APPOINTMENTS`, sin `retentionUntil`) */
+            /** @description HC en retención (`CLINICAL_RECORD_RETENTION`) o citas abiertas (`PATIENT_HAS_PENDING_APPOINTMENTS`, sin `retentionUntil`) */
             409: {
                 headers: {
                     [name: string]: unknown;

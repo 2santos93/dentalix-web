@@ -63,6 +63,8 @@ const FIELD_LABELS: Record<string, string> = {
   receiptLegendOverride: "Leyenda propia de la sede",
   receiptLegend: "Leyenda del recibo",
   externalInvoiceNumber: "Nº de factura externa",
+  // DX-330: plazo de conservación de la historia clínica.
+  clinicalRecordRetentionYears: "Plazo de conservación de la historia clínica",
   // DX-517: «VES=Bs.», una moneda por elemento.
   currencyTexts: "Texto de las monedas",
 };
@@ -72,6 +74,7 @@ const FIELD_ORDER = Object.keys(FIELD_LABELS);
 const FIELD_UNITS: Record<string, string> = {
   durationMinutes: "min",
   leadHours: "h",
+  clinicalRecordRetentionYears: "años",
 };
 
 const DOMAIN_STATUS_LABELS: Record<string, string> = {

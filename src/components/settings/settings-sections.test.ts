@@ -29,6 +29,12 @@ describe('Índice de Ajustes (DX-282)', () => {
     expect(new Set(hrefs).size).toBe(27);
   });
 
+  it('la entrada de Historia clínica dice también el plazo de conservación (DX-330)', () => {
+    const section = visibleSettingsSections('ADMIN').find((s) => s.id === 'historia');
+    const entry = section?.entries.find((e) => e.href === '/settings/historia-clinica');
+    expect(entry?.description).toBe('Vigencia de la anamnesis y cuánto tiempo se conserva la historia clínica.');
+  });
+
   it('las herramientas y los registros van aparte de las políticas', () => {
     const tools = visibleSettingsSections('ADMIN').find((section) => section.id === 'herramientas');
     expect(tools?.entries.map((entry) => entry.label)).toEqual([

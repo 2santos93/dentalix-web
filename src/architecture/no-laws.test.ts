@@ -356,3 +356,50 @@ describe('arquitectura: sin Colombia (DX-323, DX-325)', () => {
     }
   });
 });
+
+/**
+ * DX-330: el plazo de conservación de la HC es de la clínica. Ningún texto de
+ * producción de la ficha, de `lib/patients` ni de Ajustes › Historia clínica
+ * fija «15 años» ni «30 años», habla de retención «legal» o nombra una causal
+ * de un país. Sin comentarios: los de leyes son de DX-371. Los literales se
+ * arman por partes.
+ */
+const RETENTION_DIRS = ['components/patients', 'lib/patients', 'app/(app)/settings/historia-clinica'];
+const FIXED_TERM = new RegExp(
+  '\\b(?:15|30)\\s+a' + 'ños\\b|retención ' + 'legal|DD\\.\\s?' + 'HH\\.|\\bDI' + 'H\\b',
+  'i',
+);
+const fixedTermHit = (line: string): boolean => FIXED_TERM.test(codeOf(line));
+
+describe('arquitectura: el plazo de la HC es de la clínica (DX-330)', () => {
+  it('no production text of the patient record fixes a term, says «legal» or names a cause', () => {
+    const files = productionFiles().filter((path) => RETENTION_DIRS.some((dir) => rel(path).startsWith(`${dir}/`)));
+    expect(files.map(rel)).toEqual(
+      expect.arrayContaining([
+        'components/patients/patient-retention-section.tsx',
+        'components/patients/patient-record-header.tsx',
+        'lib/patients/patients-api.ts',
+      ]),
+    );
+    expect(offending(files, fixedTermHit)).toEqual([]);
+  });
+
+  it('the pattern catches a fixed term, «legal» and the cause, and skips the clinic term', () => {
+    for (const text of [
+      "hint: 'Se conserva 15 a" + "ños desde la última atención.',",
+      "double: 'Plazo doble (30 a" + "ños)',",
+      "title: 'Retención " + "legal',",
+      "NONE: 'Permanente (p. ej. víctimas de violaciones de DD. " + "HH./DI" + "H)',",
+    ]) {
+      expect({ text, caught: fixedTermHit(text) }).toEqual({ text, caught: true });
+    }
+    for (const text of [
+      '`Se conserva ${years} años desde la última atención.`',
+      "title: 'Retención',",
+      "const PERMANENT = 'Permanente (nunca se libera)';",
+      '// Se conserva 15 a' + 'ños (comentario)',
+    ]) {
+      expect({ text, caught: fixedTermHit(text) }).toEqual({ text, caught: false });
+    }
+  });
+});

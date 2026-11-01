@@ -6,6 +6,7 @@ import {
   PatientRetentionSection,
   formatCivilDate,
   retentionChip,
+  retentionHint,
   type RetentionDialog,
 } from './patient-retention-section';
 import {
@@ -34,7 +35,7 @@ const mockedSuppress = partiallySuppressPatient as jest.MockedFunction<
 >;
 
 const RETENTION_MESSAGE =
-  'La historia clínica de este paciente está en retención legal hasta el 28/02/2039 (15 años desde la última atención): no se puede archivar ni borrar. Si necesitas retirar sus datos de contacto, usa la supresión parcial.';
+  'La historia clínica de este paciente está en retención hasta el 28/02/2039 (15 años desde la última atención): no se puede archivar ni borrar. Si necesitas retirar sus datos de contacto, usa la supresión parcial.';
 
 function patient(overrides: Partial<Patient> = {}): Patient {
   return {
@@ -58,6 +59,8 @@ function patient(overrides: Partial<Patient> = {}): Patient {
     partiallySuppressedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    clinicRetentionYears: 15,
+    retentionFromPreviousTerm: false,
     ...overrides,
   };
 }
@@ -126,8 +129,8 @@ test('formatCivilDate no pasa por la zona del navegador', () => {
 test('muestra la fecha hasta la que se conserva, sin controles en la sección', () => {
   renderSection(patient());
   expect(
-    screen.getByRole('region', { name: 'Retención legal de la historia clínica' }),
-  ).toHaveTextContent('Historia en retención legal hasta 28/02/2039');
+    screen.getByRole('region', { name: 'Retención de la historia clínica' }),
+  ).toHaveTextContent('Historia en retención hasta 28/02/2039');
   // Los controles viven en el menú «⋯» de la cabecera.
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
@@ -150,30 +153,86 @@ test('chip de la cabecera: corto y neutro, con la frase del plazo de ayuda', () 
 
 test('plazo doble: el aviso cita 30 años, no 15', () => {
   renderSection(patient({ retentionExtended: 'DOUBLE', retentionUntil: '2054-02-28' }));
-  expect(screen.getByText('Historia en retención legal hasta 28/02/2054')).toBeInTheDocument();
+  expect(screen.getByText('Historia en retención hasta 28/02/2054')).toBeInTheDocument();
   expect(screen.getByText(/Plazo doble: se conserva 30 años/)).toBeInTheDocument();
   expect(screen.queryByText(/15 años/)).not.toBeInTheDocument();
+});
+
+describe('DX-330: el plazo es el de la clínica', () => {
+  const twenty = { clinicRetentionYears: 20, retentionUntil: '2044-02-28' } as const;
+
+  test('con N = 20 la sección dice 20 y el plazo doble 40, nunca 15 ni «legal»', () => {
+    const { unmount } = render(<PatientRetentionSection patient={patient(twenty)} />);
+    expect(
+      screen.getByText('Se conserva 20 años desde la última atención. Mientras dure, el paciente no se puede archivar.'),
+    ).toBeInTheDocument();
+    unmount();
+    const { container } = render(
+      <PatientRetentionSection
+        patient={patient({ ...twenty, retentionExtended: 'DOUBLE', retentionUntil: '2064-02-28' })}
+      />,
+    );
+    expect(screen.getByText('Plazo doble (40 años)')).toBeInTheDocument();
+    expect(screen.getByText(/Plazo doble: se conserva 40 años/)).toBeInTheDocument();
+    expect(container).not.toHaveTextContent(/15 años|legal/i);
+  });
+
+  test('el modal ofrece las opciones con el plazo de la clínica', async () => {
+    const user = userEvent.setup();
+    renderDialogs(patient(twenty));
+    await user.click(screen.getByRole('button', { name: 'Cambiar retención' }));
+    const dialog = await screen.findByRole('dialog');
+    const options = within(dialog)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(options).toEqual([
+      '20 años desde la última atención (plazo de la clínica)',
+      '40 años (plazo doble)',
+      'Permanente (nunca se libera)',
+    ]);
+    expect(dialog).not.toHaveTextContent(/15 años|legal|DD\. HH\./i);
+  });
+
+  test('con retentionFromPreviousTerm, la ayuda cita el plazo anterior con la fecha, en la sección y en el chip', () => {
+    const previous = patient({ ...twenty, retentionUntil: '2039-02-28', retentionFromPreviousTerm: true });
+    const hint =
+      'Se conserva hasta el 28/02/2039 por el plazo anterior de la clínica. Mientras dure, el paciente no se puede archivar.';
+    renderSection(previous);
+    expect(screen.getByText(hint)).toBeInTheDocument();
+    expect(retentionChip(previous)?.hint).toBe(hint);
+    expect(retentionHint(previous)).toBe(hint);
+  });
+
+  it('without clinicRetentionYears no number is painted', () => {
+    const old = patient({ retentionExtended: 'DOUBLE', clinicRetentionYears: undefined });
+    const { container } = render(<PatientRetentionSection patient={old} />);
+    expect(screen.getByText('Plazo doble')).toBeInTheDocument();
+    expect(container).not.toHaveTextContent(/\b(15|30|2\d|40)\s+años/);
+    expect(retentionHint(patient({ clinicRetentionYears: undefined }))).toBe(
+      'Se conserva el plazo de la clínica desde la última atención. Mientras dure, el paciente no se puede archivar.',
+    );
+  });
 });
 
 test('retención permanente, vencida y sin atenciones', () => {
   const { unmount } = render(
     <PatientRetentionSection patient={patient({ retentionExtended: 'PERMANENT', retentionUntil: null })} />,
   );
-  expect(screen.getByText('Historia en retención legal permanente')).toBeInTheDocument();
+  expect(screen.getByText('Historia en retención permanente')).toBeInTheDocument();
   expect(
     screen.getByText('Se conserva sin fecha de fin: el paciente no se puede archivar.'),
   ).toBeInTheDocument();
   expect(screen.queryByText(/15 años/)).not.toBeInTheDocument();
   unmount();
   renderSection(patient({ retentionUntil: '2020-01-01', underRetention: false }));
-  expect(screen.getByText('Retención legal vencida el 01/01/2020')).toBeInTheDocument();
+  expect(screen.getByText('Retención vencida el 01/01/2020')).toBeInTheDocument();
 });
 
 test('sin atenciones clínicas: lo dice', () => {
   renderSection(
     patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false }),
   );
-  expect(screen.getByText('Sin atenciones clínicas: sin retención legal')).toBeInTheDocument();
+  expect(screen.getByText('Sin atenciones clínicas: sin retención')).toBeInTheDocument();
 });
 
 test('archivar con la HC en retención: el 409 se muestra en español en el modal', async () => {
