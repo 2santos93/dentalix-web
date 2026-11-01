@@ -187,7 +187,7 @@ describe('RegisterForm', () => {
       expect(address()).toHaveAccessibleDescription(expect.stringContaining('Disponible'));
       expect(availabilityCalls().map(([path]) => path)).toEqual(['/public/subdomains/sonrisa/availability']);
       // El sufijo sigue a la vista.
-      expect(screen.getByText('.dentalix.app')).toBeInTheDocument();
+      expect(screen.getByText(`.${process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dentalix.app'}`)).toBeInTheDocument();
     });
 
     it('en uso: «En uso, prueba otra.» y «Continuar» no avanza', async () => {
