@@ -1,4 +1,5 @@
 'use client';
+import { usePathname } from 'next/navigation';
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { apiFetch } from '@/lib/api/client';
 import { readCurrencyTexts, type CurrencyTexts } from '@/lib/format/currency-text';
@@ -20,16 +21,25 @@ import { isPlatformHost } from '@/lib/tenant';
  *   marca desde el navegador (el proxy resuelve la clínica por el host). Si
  *   trae otro mapa, se fija y el árbol se vuelve a montar UNA vez, para que
  *   todos los importes lo usen (pasa en la primera visita de la pestaña o
- *   tras un cambio; nunca en el caso normal). En el host de la plataforma
- *   (registro, raíz) no hay clínica: no se pide, sería un 404 en la consola.
+ *   tras un cambio; nunca en el caso normal). Donde aún no hay clínica no se
+ *   pide (sería un 404 en la consola): el host de la plataforma y el registro,
+ *   que corre en el subdominio de una clínica que todavía no existe. Al salir
+ *   del registro sin recargar, sí se pide.
  */
+function isRegistration(pathname: string | null): boolean {
+  return pathname === '/register' || (pathname?.startsWith('/register/') ?? false);
+}
+
 export function CurrencyTextsSync({ value, children }: { value: CurrencyTexts | null; children: ReactNode }) {
+  const pathname = usePathname();
   const [generation, setGeneration] = useState(0);
   const [fetched, setFetched] = useState<CurrencyTexts | null>(null);
   setClinicCurrencyTexts(value ?? fetched ?? cachedClinicCurrencyTexts());
 
+  const clinicMayExist = !isRegistration(pathname);
+
   useEffect(() => {
-    if (value || isPlatformHost(window.location.host)) return;
+    if (value || !clinicMayExist || isPlatformHost(window.location.host)) return;
     let cancelled = false;
     apiFetch<{ currencyTexts?: unknown }>('/public/tenant/branding')
       .then((branding) => {
@@ -46,7 +56,7 @@ export function CurrencyTextsSync({ value, children }: { value: CurrencyTexts | 
     return () => {
       cancelled = true;
     };
-  }, [value]);
+  }, [value, clinicMayExist]);
 
   return <Fragment key={generation}>{children}</Fragment>;
 }

@@ -3,9 +3,11 @@ import { useEffect } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { CurrencyTextsSync } from './currency-texts-sync';
 import { apiFetch } from '@/lib/api/client';
+import { usePathname } from 'next/navigation';
 import { formatCurrency } from '@/lib/format/currency';
 import { clinicCurrencyTexts, setClinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
 
+jest.mock('next/navigation', () => ({ usePathname: jest.fn(() => '/dashboard') }));
 jest.mock('../../lib/api/client', () => ({
   ...jest.requireActual('../../lib/api/client'),
   apiFetch: jest.fn(),
@@ -23,6 +25,7 @@ function Amount() {
 
 beforeEach(() => {
   mockedFetch.mockReset();
+  jest.mocked(usePathname).mockReturnValue('/dashboard');
   mounts = 0;
   window.sessionStorage.clear();
   setClinicCurrencyTexts({});
@@ -75,5 +78,26 @@ describe('CurrencyTextsSync (DX-517)', () => {
     );
     await waitFor(() => expect(mockedFetch).toHaveBeenCalled());
     expect(screen.getByText('10,00 EUR')).toBeInTheDocument();
+  });
+
+  it.each(['/register', '/register/verificar/token'])(
+    'en %s la clínica aún no existe: no pide la marca, y al salir sin recargar sí',
+    async (path) => {
+      jest.mocked(usePathname).mockReturnValue(path);
+      mockedFetch.mockResolvedValue({ currencyTexts: {} });
+      const { rerender } = render(<CurrencyTextsSync value={null}>x</CurrencyTextsSync>);
+      expect(mockedFetch).not.toHaveBeenCalled();
+
+      jest.mocked(usePathname).mockReturnValue('/dashboard');
+      rerender(<CurrencyTextsSync value={null}>x</CurrencyTextsSync>);
+      await waitFor(() => expect(mockedFetch).toHaveBeenCalledTimes(1));
+    },
+  );
+
+  it('una ruta que solo empieza igual sigue pidiendo la marca', async () => {
+    jest.mocked(usePathname).mockReturnValue('/registers');
+    mockedFetch.mockResolvedValue({ currencyTexts: {} });
+    render(<CurrencyTextsSync value={null}>x</CurrencyTextsSync>);
+    await waitFor(() => expect(mockedFetch).toHaveBeenCalledTimes(1));
   });
 });

@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { CurrencyTextsSync } from './currency-texts-sync';
 import { apiFetch } from '@/lib/api/client';
 
+jest.mock('next/navigation', () => ({ usePathname: jest.fn(() => '/') }));
 jest.mock('../../lib/api/client', () => ({
   ...jest.requireActual('../../lib/api/client'),
   apiFetch: jest.fn(),
