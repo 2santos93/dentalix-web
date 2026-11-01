@@ -1,4 +1,4 @@
-import { parseTenantFromHost } from './tenant';
+import { isPlatformHost, parseTenantFromHost } from './tenant';
 
 describe('parseTenantFromHost', () => {
   it('extracts the subdomain as tenant slug', () => {
@@ -14,4 +14,16 @@ describe('parseTenantFromHost', () => {
     expect(parseTenantFromHost('localhost:3001')).toBeNull();
     expect(parseTenantFromHost(null)).toBeNull();
   });
+});
+
+describe('isPlatformHost', () => {
+  it.each(['localhost:3001', '127.0.0.1:3001', 'dentalix.local', 'www.dentalix.local', 'LOCALHOST'])(
+    '%s es de la plataforma',
+    (host) => expect(isPlatformHost(host)).toBe(true),
+  );
+
+  it.each(['clinica.localhost:3001', 'clinica.dentalix.local', 'clinica-ejemplo.com'])(
+    '%s puede tener clínica (subdominio o dominio propio)',
+    (host) => expect(isPlatformHost(host)).toBe(false),
+  );
 });

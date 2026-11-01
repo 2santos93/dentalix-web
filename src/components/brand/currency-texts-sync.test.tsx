@@ -1,3 +1,4 @@
+/** @jest-environment-options {"url": "http://clinica.localhost/"} */
 import { useEffect } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { CurrencyTextsSync } from './currency-texts-sync';

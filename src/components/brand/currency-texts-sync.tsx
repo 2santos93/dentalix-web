@@ -8,6 +8,7 @@ import {
   sameCurrencyTexts,
   setClinicCurrencyTexts,
 } from '@/lib/format/clinic-currency-texts';
+import { isPlatformHost } from '@/lib/tenant';
 
 /**
  * DX-517: fija el texto propio de cada moneda de la clínica ANTES de pintar
@@ -19,7 +20,8 @@ import {
  *   marca desde el navegador (el proxy resuelve la clínica por el host). Si
  *   trae otro mapa, se fija y el árbol se vuelve a montar UNA vez, para que
  *   todos los importes lo usen (pasa en la primera visita de la pestaña o
- *   tras un cambio; nunca en el caso normal).
+ *   tras un cambio; nunca en el caso normal). En el host de la plataforma
+ *   (registro, raíz) no hay clínica: no se pide, sería un 404 en la consola.
  */
 export function CurrencyTextsSync({ value, children }: { value: CurrencyTexts | null; children: ReactNode }) {
   const [generation, setGeneration] = useState(0);
@@ -27,7 +29,7 @@ export function CurrencyTextsSync({ value, children }: { value: CurrencyTexts | 
   setClinicCurrencyTexts(value ?? fetched ?? cachedClinicCurrencyTexts());
 
   useEffect(() => {
-    if (value) return;
+    if (value || isPlatformHost(window.location.host)) return;
     let cancelled = false;
     apiFetch<{ currencyTexts?: unknown }>('/public/tenant/branding')
       .then((branding) => {
