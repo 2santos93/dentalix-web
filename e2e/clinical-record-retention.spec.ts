@@ -7,7 +7,8 @@ import { API_URL } from './support/urls';
  * e2e (DX-039): retención de la historia clínica.
  *
  * Registra una clínica (su dueño es ADMIN) y, por la API real, crea un
- * paciente con una evolución (queda en retención 15 años) y otro sin
+ * paciente con una evolución (queda en retención por el plazo de la clínica, que
+ * se lee de la API) y otro sin
  * atenciones. En la ficha:
  *   - el badge «Historia en retención hasta DD/MM/AAAA» con la fecha que
  *     calcula la API;
@@ -83,7 +84,10 @@ for (const viewport of VIEWPORTS) {
       sex: 'M',
     });
     const detail = await page.request.get(`${API_URL}/patients/${retained.id}`, { headers });
-    const { retentionUntil } = (await detail.json()) as { retentionUntil: string };
+    const { retentionUntil, clinicRetentionYears } = (await detail.json()) as {
+      retentionUntil: string;
+      clinicRetentionYears: number;
+    };
     const until = ddmmyyyy(retentionUntil);
 
     await page.goto(`${origin}/patients/${retained.id}`);
@@ -93,6 +97,9 @@ for (const viewport of VIEWPORTS) {
     await expect(section.getByText(`Historia en retención hasta ${until}`)).toBeVisible({
       timeout: 15_000,
     });
+    // El plazo es el de la clínica, leído de la API, y la ficha no habla de ley.
+    await expect(section).toContainText(`Se conserva ${clinicRetentionYears} años desde la última atención`);
+    await expect(section).not.toContainText(/legal|839/i);
     await expectNoHorizontalScroll(page);
 
     // Las acciones de ADMIN viven en el menú «⋯» de la cabecera (UX v2 · K3).
@@ -103,6 +110,7 @@ for (const viewport of VIEWPORTS) {
     await expect(
       dialog.getByText(`está en retención hasta el ${until}`, { exact: false }),
     ).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).not.toContainText(/legal|839/i);
     await expectNoHorizontalScroll(page);
     await dialog.getByRole('button', { name: 'Cancelar' }).click();
     await expect(dialog).toBeHidden();
