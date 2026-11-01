@@ -80,4 +80,22 @@ describe('origen del precio (DX-105)', () => {
       expect(text).toBe('Convenio Seguros Sol · precio de lista 50.000,00 COP');
     });
   });
+
+  describe('DX-502: moneda del catálogo desconocida', () => {
+    const unknown = (v: number) => formatListPrice(v, null, PRINTED_LIST_PRICE_FORMAT);
+    it('el formulario oculta la cifra y lo dice', () => {
+      const text = flat(priceSourceText(quote, unknown));
+      expect(text).toBe('Convenio · Seguros Sol · precio de lista oculto: moneda del catálogo desconocida');
+      expect(text).not.toMatch(/50\.000/);
+    });
+    it('el ítem agregado también', () => {
+      const text = flat(
+        itemPriceOriginText(
+          { priceSource: 'AGREEMENT_PRICE_LIST', agreementName: 'Seguros Sol', basePrice: 50000, catalogPrice: 40 },
+          unknown,
+        ),
+      );
+      expect(text).toBe('Convenio Seguros Sol · precio de lista oculto: moneda del catálogo desconocida');
+    });
+  });
 });

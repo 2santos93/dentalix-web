@@ -945,6 +945,39 @@ describe('TreatmentPlansTab', () => {
       }
     });
 
+    it('DX-502: sin moneda del catálogo conocida, el ítem oculta la cifra y lo dice', async () => {
+      mockedGetPlan.mockResolvedValue({ ...eurPlan, items: [{ ...eurItem, catalogCurrency: null }], total: 100.55 });
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(
+        within(table).getByText(/^Convenio Seguros Sol · precio de lista oculto: moneda del catálogo desconocida$/),
+      ).toBeInTheDocument();
+      expect(table).not.toHaveTextContent(/80\.000,00/);
+    });
+
+    it('DX-502: el formulario con la moneda del catálogo desconocida tampoco pinta la cifra', async () => {
+      mockedGetPriceQuote.mockResolvedValue({
+        basePrice: 80000,
+        catalogCurrency: null,
+        price: 100.55,
+        source: 'AGREEMENT_PRICE_LIST',
+        agreementId: 'ag-1',
+        agreementName: 'Seguros Sol',
+        allowDiscount: true,
+        currency: 'EUR',
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      expect(
+        await screen.findByText(
+          /^Convenio \(lista de precios\) · Seguros Sol · precio de lista oculto: moneda del catálogo desconocida$/,
+        ),
+      ).toBeInTheDocument();
+    });
+
     it('el formulario dice el precio de lista en COP', async () => {
       mockedGetPriceQuote.mockResolvedValue({
         basePrice: 80000,
@@ -988,6 +1021,44 @@ describe('TreatmentPlansTab', () => {
       const notice = await screen.findByText(/^Precio de catálogo: COP 80\.000,00, en otra moneda y sin convertir\./);
       expect(notice).toBeInTheDocument();
       expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/EUR\s80\.000|Rebaja de/);
+    });
+
+    it('DX-502: con el catálogo en una moneda que no se sabe, el aviso no inventa cifra ni moneda', async () => {
+      mockedGetPriceQuote.mockResolvedValue({
+        basePrice: 80000,
+        catalogCurrency: null,
+        price: 80000,
+        source: 'CATALOG',
+        agreementId: null,
+        agreementName: null,
+        allowDiscount: true,
+        currency: 'EUR',
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText('Precio', { exact: true });
+      await user.clear(field);
+      await user.type(field, '100,55');
+      expect(
+        await screen.findByText(/^Precio de catálogo en una moneda que no se sabe, sin convertir\./),
+      ).toBeInTheDocument();
+      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/80\.000|Rebaja de/);
+    });
+
+    it('B4: sin precio resuelto (falló), el aviso no pinta la rebaja ni la variante «en otra moneda»', async () => {
+      mockedGetPriceQuote.mockRejectedValue(new Error('red'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText('Precio', { exact: true });
+      await user.clear(field);
+      await user.type(field, '1');
+      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/otra moneda|Rebaja de/);
     });
 
     it('el mismo importe sale con UN formato en el resumen, la tabla y la lista de abonos', async () => {

@@ -60,14 +60,23 @@ describe('PublicBudgetSummary: precio de lista en la moneda del catálogo (DX-50
     expect(document.body.textContent).not.toMatch(/79\.899/);
   });
 
-  it('sin moneda del catálogo conocida, oculta la cifra y deja la nota', () => {
+  it('sin moneda del catálogo conocida, no dice nada del precio de lista: ni cifra, ni nota, ni ahorro', () => {
     render(<PublicBudgetSummary budget={eurBudget({ listPriceCurrency: null }, 79899.45)} clock={CLOCK} />);
-    expect(screen.queryByText(/Precio de lista/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/[Pp]recio de lista/)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/80\.000/);
-    expect(text(screen.getByTestId('public-budget-list-price-note'))).toBe(
-      'El precio de lista es el del catálogo de la clínica, que puede estar en otra moneda: es de referencia y no se convierte a EUR.',
-    );
+    expect(screen.queryByTestId('public-budget-list-price-note')).not.toBeInTheDocument();
     expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
+  });
+
+  it('con un ítem en COP y otro sin moneda: la nota solo habla del que se ve', () => {
+    const budget = eurBudget();
+    budget.items.push({ ...budget.items[0], procedure: 'Resina', listPrice: 50000, listPriceCurrency: null });
+    render(<PublicBudgetSummary budget={budget} clock={CLOCK} />);
+    expect(screen.getAllByText(/Precio de lista/)).toHaveLength(1);
+    expect(document.body.textContent).not.toMatch(/50\.000/);
+    expect(text(screen.getByTestId('public-budget-list-price-note'))).toBe(
+      'El precio de lista es el del catálogo de la clínica, en COP: es de referencia y no se convierte a EUR.',
+    );
   });
 
   it('con el catálogo en la moneda del plan: precio de lista y ahorro, sin nota', () => {

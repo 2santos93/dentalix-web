@@ -7,6 +7,7 @@ import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/
 import {
   PRINTED_LIST_PRICE_FORMAT,
   formatListPrice,
+  listPriceHiddenNote,
   listPriceNote,
   listPricesCurrency,
   listPricesInPlanCurrency,
@@ -79,9 +80,10 @@ function hasListPrice(item: PlanQuoteItem): item is PlanQuoteItem & { listPrice:
  * la que congeló el ítem al darlo de alta (DX-502); sin ella, sin moneda.
  */
 function listPriceOf(item: PlanQuoteItem): string | null {
-  return hasListPrice(item)
-    ? copy.listPrice(formatListPrice(item.listPrice, item.listPriceCurrency, PRINTED_LIST_PRICE_FORMAT))
+  const amount = hasListPrice(item)
+    ? formatListPrice(item.listPrice, item.listPriceCurrency, PRINTED_LIST_PRICE_FORMAT)
     : null;
+  return amount === null ? null : copy.listPrice(amount);
 }
 
 function surfacesOf(item: PlanQuoteItem): string {
@@ -129,9 +131,11 @@ export function PlanQuoteDocument({ quote, secondCurrency = null }: PlanQuoteDoc
   // DX-502: cada precio de lista lleva la moneda del catálogo que congeló su
   // ítem (`listPriceCurrency`, de la API). Si alguno no está en la del plan
   // (o no se sabe), va con la nota y sin «Ahorro por convenio».
+  // Sin moneda conocida, la cifra se oculta y lo explica su propia nota.
   const listCurrencies = quote.items.filter(hasListPrice).map((item) => item.listPriceCurrency);
   const listInPlanCurrency = listPricesInPlanCurrency(listCurrencies, currency);
-  const showListPriceNote = !listInPlanCurrency;
+  const shownForeign = listCurrencies.filter((c): c is string => c !== null && c !== currency);
+  const hiddenListPrice = listCurrencies.includes(null);
   const organization=new Map((quote.visitOrganization??[]).map(v=>[v.itemId,v]));
   const orderedItems=[...quote.items].sort((a,b)=>(organization.get(a.id)?.visit??1)-(organization.get(b.id)?.visit??1));
   const visitTitle=(id:string)=>{const v=organization.get(id);return `Visita ${v?.visit??1}${v?.label?' · '+v.label:''}${v?.minDaysAfterPrevious?' · intervalo mínimo '+v.minDaysAfterPrevious+' días':''}`;};
@@ -321,9 +325,14 @@ export function PlanQuoteDocument({ quote, secondCurrency = null }: PlanQuoteDoc
             </React.Fragment>
           ))}
         </dl>
-        {showListPriceNote ? (
+        {shownForeign.length > 0 ? (
           <p data-testid="quote-list-price-note" className="mt-2 ml-auto max-w-xs text-xs text-[#4b5563]">
-            {listPriceNote(listPricesCurrency(listCurrencies), currency)}
+            {listPriceNote(listPricesCurrency(shownForeign), currency)}
+          </p>
+        ) : null}
+        {hiddenListPrice ? (
+          <p data-testid="quote-list-price-hidden-note" className="mt-2 ml-auto max-w-xs text-xs text-[#4b5563]">
+            {listPriceHiddenNote(currency)}
           </p>
         ) : null}
         {secondCurrency ? (

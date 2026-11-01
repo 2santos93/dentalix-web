@@ -272,14 +272,17 @@ describe('DX-489/DX-502: plan en EUR con el catálogo en COP', () => {
     expect(screen.queryByTestId('quote-saving-EUR')).not.toBeInTheDocument();
   });
 
-  it('sin saber la moneda del catálogo: la cifra sin moneda y la nota lo dice', () => {
+  it('DX-502: sin saber la moneda del catálogo, oculta la cifra y pone la nota de referencia', () => {
     render(<PlanQuoteDocument quote={eurQuote(null)} />);
     const list = screen.getByRole('list', { name: 'Procedimientos del presupuesto' });
-    expect(text(list)).toContain('Precio de lista 80.000,00');
-    expect(text(list)).not.toMatch(/Precio de lista 80\.000,00 (EUR|COP)/);
-    expect(text(screen.getByTestId('quote-list-price-note'))).toBe(
-      'El precio de lista es el del catálogo de la clínica, que puede estar en otra moneda: es de referencia y no se convierte a EUR.',
+    const table = screen.getByRole('table', { name: 'Procedimientos del presupuesto' });
+    expect(text(list)).not.toContain('Precio de lista');
+    expect(text(table)).not.toContain('Precio de lista');
+    expect(text(table)).not.toContain('80.000');
+    expect(text(screen.getByTestId('quote-list-price-hidden-note'))).toBe(
+      'El precio de lista del catálogo de la clínica no se muestra: no se sabe en qué moneda está y no se convierte a EUR.',
     );
+    expect(screen.queryByTestId('quote-list-price-note')).not.toBeInTheDocument();
     expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
   });
 
@@ -293,7 +296,7 @@ describe('DX-489/DX-502: plan en EUR con el catálogo en COP', () => {
     expect(screen.getByText('Ahorro por convenio')).toBeInTheDocument();
   });
 
-  it('DX-502: cada ítem con su moneda; con dos monedas de catálogo, la nota no nombra ninguna', () => {
+  it('DX-502: cada ítem con su moneda; con dos monedas de catálogo, la nota dice «en su moneda»', () => {
     const quote = eurQuote();
     quote.items[1] = { ...quote.items[1], listPrice: 60, listPriceCurrency: 'USD' };
     render(<PlanQuoteDocument quote={quote} />);
@@ -302,7 +305,7 @@ describe('DX-489/DX-502: plan en EUR con el catálogo en COP', () => {
     expect(text(rows.find((r) => r.textContent?.includes('Implante'))!)).toContain('Precio de lista 80.000,00 COP');
     expect(text(rows.find((r) => r.textContent?.includes('Resina'))!)).toContain('Precio de lista 60,00 USD');
     expect(text(screen.getByTestId('quote-list-price-note'))).toBe(
-      'El precio de lista es el del catálogo de la clínica, que puede estar en otra moneda: es de referencia y no se convierte a EUR.',
+      'El precio de lista es el del catálogo de la clínica, en su moneda: es de referencia y no se convierte a EUR.',
     );
     expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
   });
