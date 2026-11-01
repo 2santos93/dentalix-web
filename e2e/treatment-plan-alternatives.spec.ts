@@ -19,6 +19,8 @@ import { openSection } from './support/nav';
  *     teléfono y WhatsApp prellenado, y marca un presupuesto como rechazado
  *     con motivo: sale de la lista.
  * En escritorio (1440px) y en móvil (390px, sin scroll horizontal).
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';

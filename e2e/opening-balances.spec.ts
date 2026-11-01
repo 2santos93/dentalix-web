@@ -22,6 +22,8 @@ import { DEMO_TIME_ZONE } from './support/demo';
  *   5. Deshacer el lote desde el historial.
  *
  * Requiere la API con worker (APP_ROLE=all) y la demo sembrada.
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';

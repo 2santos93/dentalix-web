@@ -30,6 +30,8 @@ const password = "DemoDentalix2026!";
  * que se reutiliza entre ejecuciones y se desactiva en `afterAll`, y cada test
  * retira en `afterEach` lo que creó (citas, plan, paciente y tratamiento del
  * catálogo): así la lista «Aceptado sin agendar» de esa sede empieza vacía.
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const QA_LOCATION = "QA visitas e2e";
 let locationId: string;
@@ -147,7 +149,7 @@ async function seed(request: APIRequestContext, tag: string) {
     docNumber: tag,
     sex: "F",
     phone: "0416 555 0452",
-    countryCode: "CO",
+    countryCode: "VE",
   });
   created.patientId = patient.id;
   const catalog = await post<{ id: string }>("/catalog/items", {
