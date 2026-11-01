@@ -458,6 +458,43 @@ describe('WalkInDialog (DX-470)', () => {
       expect(createMock.mock.calls[0][2]).toBe('loc-norte');
     });
 
+    it('el sobrecupo pedido en una sede no se arrastra a otra: se vuelve a intentar el hueco reservado', async () => {
+      const user = userEvent.setup();
+      createMock
+        .mockRejectedValueOnce(
+          new ApiError(409, 'No queda ningún hueco reservado libre hoy para este profesional.', {
+            code: 'NO_RESERVED_SLOT',
+          }),
+        )
+        .mockResolvedValueOnce(RESULT);
+      renderDialog(null);
+      const sedeSelect = await screen.findByRole('combobox', { name: copy.location });
+      await screen.findByRole('option', { name: 'Sede Norte' });
+      await user.selectOptions(sedeSelect, 'loc-centro');
+      await fillNewPatient(user);
+      await user.selectOptions(screen.getByLabelText(copy.provider), 'dent-1');
+      await user.click(screen.getByRole('button', { name: copy.submit }));
+      await user.type(await screen.findByLabelText(copy.overbookReason), 'Dolor agudo, no puede esperar');
+
+      await user.selectOptions(sedeSelect, 'loc-norte');
+      expect(screen.queryByTestId('walk-in-overbook')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: copy.submit }));
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
+      expect(createMock.mock.calls[1][1]).not.toHaveProperty('overbookReason');
+      expect(createMock.mock.calls[1][2]).toBe('loc-norte');
+    });
+
+    it('si no cargan las sedes, «Atender» deja el foco en su «Reintentar»', async () => {
+      const user = userEvent.setup();
+      locationsMock.mockRejectedValue(new Error('boom'));
+      renderDialog(null);
+      await screen.findByText(copy.locationsError);
+      await screen.findByLabelText(copy.provider);
+      await user.click(screen.getByRole('button', { name: copy.submit }));
+      await waitFor(() => expect(screen.getAllByRole('button', { name: copy.retry })[0]).toHaveFocus());
+      expect(createMock).not.toHaveBeenCalled();
+    });
+
     it('si no cargan las sedes con «Todas las sedes»: error con «Reintentar»', async () => {
       const user = userEvent.setup();
       locationsMock.mockRejectedValueOnce(new Error('boom')).mockResolvedValue([CENTRO, NORTE]);

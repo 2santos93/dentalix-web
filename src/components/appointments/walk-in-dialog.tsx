@@ -402,7 +402,8 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
             error={fieldErrors.location}
           >
             {locationsError ? (
-              <FieldError label={walkInCopy.locationsError} onRetry={() => setLocationsKey((k) => k + 1)} retryLabel={walkInCopy.retry} />
+              // Con el id del campo en «Reintentar»: «Atender» lleva ahí el foco.
+              <FieldError label={walkInCopy.locationsError} onRetry={() => setLocationsKey((k) => k + 1)} retryLabel={walkInCopy.retry} retryId={id('location')} />
             ) : locations === null ? (
               <NativeSelect id={id('location')} disabled value="">
                 <option value="">{walkInCopy.locationsLoading}</option>
@@ -415,6 +416,11 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
                 onChange={(e) => {
                   setPickedLocationId(e.target.value);
                   setFieldErrors((errs) => ({ ...errs, location: '' }));
+                  // El 409 «sin hueco reservado» era de la otra sede: en esta
+                  // puede haber hueco, así que no se fuerza el sobrecupo.
+                  setOverbook(false);
+                  setOverbookMessage(null);
+                  setReason('');
                 }}
                 aria-invalid={fieldErrors.location ? true : undefined}
                 aria-describedby={fieldErrors.location ? fieldErrorId(id('location')) : id('location-hint')}
@@ -551,7 +557,7 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
 
         <FormField htmlFor={id('provider')} label={walkInCopy.provider} error={fieldErrors.provider}>
           {staffError ? (
-            <FieldError label={walkInCopy.providersError} onRetry={() => setStaffKey((k) => k + 1)} retryLabel={walkInCopy.retry} />
+            <FieldError label={walkInCopy.providersError} onRetry={() => setStaffKey((k) => k + 1)} retryLabel={walkInCopy.retry} retryId={id('provider')} />
           ) : staff === null ? (
             <NativeSelect id={id('provider')} disabled value="">
               <option value="">{walkInCopy.providersLoading}</option>
@@ -561,7 +567,8 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
               <option value="">{walkInCopy.providerNeedsLocation}</option>
             </NativeSelect>
           ) : providers.length === 0 ? (
-            <p role="status" className="text-sm text-muted">{walkInCopy.noProviders}</p>
+            // Sin control que enfocar: el aviso recibe el foco tras «Atender».
+            <p id={id('provider')} tabIndex={-1} role="status" className="text-sm text-muted">{walkInCopy.noProviders}</p>
           ) : (
             <NativeSelect
               id={id('provider')}
