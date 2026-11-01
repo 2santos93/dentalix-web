@@ -772,6 +772,9 @@ export function locationCalendarDetail(metadata: AuditMetadata): string | null {
  */
 const RECEIPT_REASONS: Record<string, string> = {
   CURRENCY_TEXTS: 'Texto de las monedas',
+  // DX-019: Ajustes › Datos de la clínica.
+  CLINIC_PROFILE: 'Datos de la clínica',
+  CLINIC_LOGO: 'Logo de la clínica',
   RECEIPT_SETTINGS: 'Título y leyenda del recibo',
   RECEIPT_LEGEND: 'Leyenda del recibo de la sede',
   EXTERNAL_INVOICE_NUMBER: 'Nº de factura externa del abono',

@@ -1,4 +1,6 @@
+'use client';
 import * as React from 'react';
+import { useClinicBranding } from '@/components/brand/branding-context';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { ClinicLogo } from '@/components/brand/clinic-brand';
 import { Logo } from '@/components/ui/logo';
@@ -17,6 +19,13 @@ interface AuthLayoutProps {
    * dos veces ni tapa a la clínica.
    */
   clinic: AuthClinic | null;
+  /**
+   * DX-019: la página es de la clínica del host (login, contraseña,
+   * invitación). Si el servidor no la supo (`clinic` null en `*.localhost` o
+   * un dominio propio que no resuelve), se usa la marca que pidió el
+   * navegador. El registro de una clínica nueva no lo pasa.
+   */
+  fromHost?: boolean;
   /** Lo que se hace en esta página: «Inicia sesión», «Restablecer contraseña»… */
   task: string;
   /** Línea de apoyo cuando no hay clínica (con clínica, la línea es `task`). */
@@ -47,7 +56,10 @@ export const AUTH_LINK_CLASS =
  * una foto cálida o íntima no casa con una ficha clínica ni con el color de
  * cualquier clínica.
  */
-export function AuthLayout({ clinic, task, description, caption, children, footer }: AuthLayoutProps) {
+export function AuthLayout({ clinic: serverClinic, fromHost = false, task, description, caption, children, footer }: AuthLayoutProps) {
+  const branding = useClinicBranding();
+  const clinic: AuthClinic | null =
+    serverClinic ?? (fromHost && branding.name ? { name: branding.name, logoUrl: branding.logoUrl } : null);
   const title = clinic ? clinic.name : task;
   const support = clinic ? task : description;
 

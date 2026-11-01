@@ -27,7 +27,7 @@ export default async function ResetPasswordPage({
   const { clinic } = await authContext();
 
   return (
-    <AuthLayout clinic={clinic} task={copy.task} caption={copy.caption}>
+    <AuthLayout clinic={clinic} fromHost task={copy.task} caption={copy.caption}>
       <ResetPasswordForm resetToken={token} />
     </AuthLayout>
   );

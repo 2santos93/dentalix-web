@@ -9,7 +9,7 @@ function tokenForRole(role: string): string {
 }
 
 describe('SettingsIndex (DX-282)', () => {
-  it('ADMIN: siete secciones y las 27 pantallas como enlaces', () => {
+  it('ADMIN: siete secciones y las 28 pantallas como enlaces', () => {
     render(<SettingsIndex token={tokenForRole('ADMIN')} />);
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
@@ -22,7 +22,7 @@ describe('SettingsIndex (DX-282)', () => {
       'Datos y seguridad',
       'Herramientas y registros',
     ]);
-    expect(screen.getAllByRole('link')).toHaveLength(27);
+    expect(screen.getAllByRole('link')).toHaveLength(28);
     expect(
       within(screen.getByRole('list', { name: 'Tu cuenta' })).getByRole('link', { name: 'Mi perfil' }),
     ).toHaveAttribute('href', '/settings/profile');

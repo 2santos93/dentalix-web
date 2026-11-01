@@ -1,3 +1,4 @@
+import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
 import type {
   Prescription,
   PrescriptionDocument,
@@ -112,6 +113,7 @@ export function makePrescriptionDocument(
   return {
     ...makePrescription(),
     clinicLogoUrl: null,
+    clinicFiscal: EMPTY_CLINIC_FISCAL,
     locationFormat: PRESCRIPTION_NEW_YORK_FORMAT,
     integrityOk: true,
     ...overrides,

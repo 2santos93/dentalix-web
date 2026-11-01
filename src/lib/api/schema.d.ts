@@ -392,6 +392,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/logos/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FilesController_getLogo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients": {
         parameters: {
             query?: never;
@@ -2832,6 +2848,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clinic/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Datos de la clínica (DX-019) */
+        get: operations["ClinicSettingsController_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cambia los datos de la clínica
+         * @description DX-019. Solo cambian los campos enviados; vacío o null borra un dato (salvo el nombre y el color). El identificador fiscal es texto libre, sin validar el formato de ningún país. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto.
+         */
+        patch: operations["ClinicSettingsController_update"];
+        trace?: never;
+    };
+    "/api/v1/clinic/settings/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sube el logo de la clínica
+         * @description DX-019. PNG, JPG o SVG de hasta 1 MB. El tipo se comprueba por los bytes y el fichero se re-escribe antes de guardarlo (sin metadatos; el SVG, sin scripts, enlaces ni estilos externos). Es público por diseño (marca).
+         */
+        post: operations["ClinicSettingsController_uploadLogo"];
+        /** Quita el logo de la clínica (DX-019) */
+        delete: operations["ClinicSettingsController_deleteLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/currencies": {
         parameters: {
             query?: never;
@@ -3058,7 +3116,7 @@ export interface paths {
         post?: never;
         /**
          * Anular un abono (con motivo; queda quién y cuándo)
-         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono). Si el abono contaba para un compromiso de pago cumplido del paciente en su moneda y ya no queda cubierto, el compromiso vuelve a OPEN (o BROKEN si su día ya pasó en la zona de su sede), en la misma transacción y auditado (DX-215).
+         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. Exige acceso a la sede persistida del abono, también sin cabecera o en vista consolidada. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono). Si el abono contaba para un compromiso de pago cumplido del paciente en su moneda y ya no queda cubierto, el compromiso vuelve a OPEN (o BROKEN si su día ya pasó en la zona de su sede), en la misma transacción y auditado (DX-215).
          */
         delete: operations["PaymentsController_remove"];
         options?: never;
@@ -10169,13 +10227,26 @@ export interface components {
             professionalSpecialty?: string;
         };
         StaffLocationsDto: {
-            /** @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío */
+            /**
+             * @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío
+             * @example false
+             */
             all: boolean;
-            /** @description Sedes activas en las que puede trabajar. Con `all: false` y vacío, sus sedes ya no están activas */
+            /**
+             * @description Sedes activas en las que puede trabajar. Con `all: false` y vacío, sus sedes ya no están activas
+             * @example [
+             *       "c6a90d5a-9b1c-4b1e-8e41-d3125c016078"
+             *     ]
+             */
             locationIds: string[];
         };
         ReplaceStaffLocationsDto: {
-            /** @description Sedes activas de esta clínica. [] = todas. Los duplicados se ignoran */
+            /**
+             * @description Sedes activas de esta clínica. [] = todas. Los duplicados se ignoran. Se asignan con PUT /staff/:userId/locations tras la invitación; crear invitaciones y PATCH /staff/:userId no aceptan locationIds
+             * @example [
+             *       "c6a90d5a-9b1c-4b1e-8e41-d3125c016078"
+             *     ]
+             */
             locationIds: string[];
         };
         ScheduleRangeDto: {
@@ -11541,6 +11612,16 @@ export interface components {
             label: string | null;
             minDaysAfterPrevious: number;
         };
+        ClinicFiscalDto: {
+            legalName: string | null;
+            /** @description Null = el nombre genérico («Id. fiscal»). */
+            taxIdLabel: string | null;
+            /** @description Texto libre, sin formato de ningún país. */
+            taxId: string | null;
+            address: string | null;
+            email: string | null;
+            phone: string | null;
+        };
         PlanQuoteLocationDto: {
             /** Format: uuid */
             id: string;
@@ -11643,6 +11724,8 @@ export interface components {
             currency: string;
             clinicName: string;
             clinicLogoUrl: string | null;
+            /** @description DX-019: datos fiscales de HOY (no forman parte del contenido firmado). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"];
             location: components["schemas"]["PlanQuoteLocationDto"];
             patient: components["schemas"]["PlanQuotePatientDto"];
             /** @description Profesional que creó el plan */
@@ -12023,6 +12106,45 @@ export interface components {
             currencyTexts: {
                 [key: string]: string;
             };
+        };
+        ClinicSettingsDto: {
+            /** @example Clínica Sonrisas */
+            name: string;
+            legalName: string | null;
+            /** @description Texto libre, sin formato de ningún país. */
+            taxId: string | null;
+            /** @description Null = el nombre genérico («Id. fiscal»). */
+            taxIdLabel: string | null;
+            fiscalAddress: string | null;
+            contactEmail: string | null;
+            contactPhone: string | null;
+            /** @example #0E7490 */
+            primaryColor: string;
+            /** @description URL pública del logo. */
+            logoUrl: string | null;
+            /** @description Falta la razón social o el identificador fiscal: los recibos dicen «Datos fiscales pendientes». */
+            fiscalDataPending: boolean;
+        };
+        UpdateClinicSettingsDto: {
+            /** @description Nombre comercial (obligatorio si se envía). 1..120. */
+            name?: Record<string, never>;
+            /** @description Razón social. Vacío o null = sin dato. 1..160. */
+            legalName?: string | null;
+            /** @description Identificador fiscal, texto libre sin formato de ningún país. 1..64. */
+            taxId?: string | null;
+            /** @description Cómo llama la clínica a su identificador fiscal (p. ej. «ID fiscal»). Null = el genérico. 1..40. */
+            taxIdLabel?: string | null;
+            /** @description Dirección fiscal, una línea. 1..250. */
+            fiscalAddress?: string | null;
+            /** @description Email de contacto de la clínica. */
+            contactEmail?: string | null;
+            /** @description Teléfono de contacto, texto libre. 1..40. */
+            contactPhone?: string | null;
+            /**
+             * @description Color de la marca, #RRGGBB.
+             * @example #0E7490
+             */
+            primaryColor?: Record<string, never>;
         };
         CurrencyDto: {
             /**
@@ -12566,6 +12688,8 @@ export interface components {
             legalName: string | null;
             /** @description Identificador fiscal de la clínica (DX-019). */
             taxId: string | null;
+            /** @description Nombre que la clínica da a su identificador fiscal, congelado al emitir (DX-019). Ausente = el genérico. */
+            taxIdLabel?: string;
             address: string | null;
         };
         ReceiptLocationDto: {
@@ -13118,6 +13242,8 @@ export interface components {
             /** @example Clínica Sonrisas */
             name: string;
             logoUrl: string | null;
+            /** @description DX-019: datos fiscales y de contacto. */
+            fiscal: components["schemas"]["ClinicFiscalDto"];
         };
         AccountStatementPatientDto: {
             /** Format: uuid */
@@ -17339,6 +17465,8 @@ export interface components {
             voidReason: string | null;
             items: components["schemas"]["PrescriptionItemDto"][];
             clinicLogoUrl: string | null;
+            /** @description DX-019: datos fiscales de HOY (no forman parte del hash de la receta). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"];
             /** @description Formato regional y zona actuales de la sede de la receta, para imprimirla */
             locationFormat: components["schemas"]["PrescriptionLocationFormatDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
@@ -18824,6 +18952,26 @@ export interface operations {
         };
     };
     FilesController_getAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FilesController_getLogo: {
         parameters: {
             query?: never;
             header?: never;
@@ -25993,6 +26141,145 @@ export interface operations {
             };
         };
     };
+    ClinicSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClinicSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Un texto vacío donde es obligatorio, con saltos de línea o más largo que su tope, un email sin forma nombre@dominio o un color que no es #RRGGBB */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_uploadLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description PNG, JPG o SVG de hasta 1 MB
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description El logo está vacío. / El logo supera el máximo de 1 MB. / El logo debe ser una imagen PNG, JPG o SVG. / El logo no es una imagen válida o está dañado. Expórtalo de nuevo y vuelve a subirlo. / El logo es demasiado grande: como mucho 8192 × 8192 píxeles. / El SVG no se puede usar como logo: debe ser un dibujo SVG sencillo, sin scripts, enlaces ni imágenes incrustadas. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. / El almacén de archivos no responde. Inténtalo de nuevo en unos minutos. (con Retry-After) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_deleteLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ReferenceController_currencies: {
         parameters: {
             query?: never;
@@ -26421,7 +26708,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Rol sin acceso a pagos */
+            /** @description Rol sin acceso a pagos o abono de una sede no permitida */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -26473,7 +26760,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Rol sin acceso a pagos, o RECEPTION anulando un abono de otro usuario o de otro día */
+            /** @description Sede del abono no permitida (LOCATION_NOT_ALLOWED), rol sin acceso a pagos, o RECEPTION anulando un abono de otro usuario o de otro día */
             403: {
                 headers: {
                     [name: string]: unknown;

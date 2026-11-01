@@ -14,7 +14,7 @@ export default async function ForgotPasswordPage() {
   const { clinic } = await authContext();
 
   return (
-    <AuthLayout clinic={clinic} task={copy.task} caption={copy.caption}>
+    <AuthLayout clinic={clinic} fromHost task={copy.task} caption={copy.caption}>
       <ForgotPasswordForm />
     </AuthLayout>
   );

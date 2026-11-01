@@ -1,3 +1,4 @@
+import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
 import { render, screen, within } from '@testing-library/react';
 import { AccountStatementDocument } from './account-statement-document';
 import {
@@ -48,6 +49,7 @@ it('pinta el logo de la clínica cuando existe', () => {
         clinic: {
           name: 'Clínica Sonrisas',
           logoUrl: 'https://cdn.example.com/logo.png',
+          fiscal: EMPTY_CLINIC_FISCAL,
         },
       })}
     />,

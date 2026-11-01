@@ -1,3 +1,4 @@
+import { taxIdLine } from '@/lib/clinic/clinic-settings-api';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format/currency';
 import { NO_CURRENCY_TEXTS } from '@/lib/format/currency-text';
@@ -17,9 +18,9 @@ const copy = {
   // Un «sin serie» no tuvo emisión: lo que se conserva es el alta del abono.
   registeredAt: 'Abono registrado el',
   fiscalPending: 'Datos fiscales pendientes',
-  // Excepción con nombre de la guarda de DX-327 hasta DX-019, que dará a la
-  // clínica el nombre de su identificación fiscal.
-  taxId: (value: string) => `Id. fiscal ${value}`,
+  // DX-019: con el nombre que la clínica da a su identificador (congelado en
+  // la foto); sin él, el genérico «Id. fiscal».
+  taxId: (value: string, label?: string | null) => taxIdLine(value, label),
   location: (name: string, address: string | null) => (address ? `${name} · ${address}` : name),
   voidedStamp: 'ANULADO',
   voidedDetail: (when: string, reason: string) => `Anulado el ${when}. Motivo: ${reason}`,
@@ -120,7 +121,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           ) : (
             <p className="mt-1 text-xs text-[#4b5563]">
               {clinic.legalName}
-              {clinic.taxId ? ` · ${copy.taxId(clinic.taxId)}` : null}
+              {clinic.taxId ? ` · ${copy.taxId(clinic.taxId, clinic.taxIdLabel)}` : null}
               {clinic.address ? (
                 <>
                   <br />

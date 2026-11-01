@@ -282,3 +282,23 @@ describe("texto de las monedas en la auditoría (DX-517)", () => {
     expect(item.kind === "changed" ? item.after : "").toContain("VES=Bs.");
   });
 });
+
+describe("datos de la clínica en la auditoría (DX-019)", () => {
+  it("pinta el antes y el después del identificador fiscal y del logo", () => {
+    const items = configChangeItems({
+      reason: "CLINIC_PROFILE",
+      changedFields: ["taxId", "taxIdLabel"],
+      configChange: {
+        before: { taxId: null, taxIdLabel: null },
+        after: { taxId: "J-123", taxIdLabel: "ID fiscal" },
+      },
+    });
+    expect(items?.map((i) => i.label)).toEqual(["Identificador fiscal", "Nombre del identificador fiscal"]);
+    const logo = configChangeItems({
+      reason: "CLINIC_LOGO",
+      changedFields: ["logo"],
+      configChange: { before: { logo: null }, after: { logo: "logos/x-0123456789abcdef.png" } },
+    });
+    expect(logo?.[0]).toMatchObject({ field: "logo", label: "Logo" });
+  });
+});

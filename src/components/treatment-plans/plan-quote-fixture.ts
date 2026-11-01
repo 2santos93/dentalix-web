@@ -1,3 +1,4 @@
+import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
 import type { PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 
 /** Presupuesto de ejemplo para los tests de los componentes (DX-012). */
@@ -11,6 +12,7 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
     currency: 'COP',
     clinicName: 'Clínica Sonrisas',
     clinicLogoUrl: 'https://cdn.example.com/logo.png',
+    clinicFiscal: EMPTY_CLINIC_FISCAL,
     location: { id: 'loc-1', name: 'Sede principal', address: 'Calle 93 # 14-20' },
     patient: { name: 'Ana Pérez', document: 'Documento nacional DOC-1020' },
     professionalName: 'Dra. Laura Gómez',

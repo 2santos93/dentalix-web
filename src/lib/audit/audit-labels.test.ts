@@ -690,6 +690,8 @@ describe('recibo no fiscal en la auditoría (DX-515)', () => {
     ['RECEIPT_LEGEND', 'Leyenda del recibo de la sede'],
     ['EXTERNAL_INVOICE_NUMBER', 'Nº de factura externa del abono'],
     ['CURRENCY_TEXTS', 'Texto de las monedas'],
+    ['CLINIC_PROFILE', 'Datos de la clínica'],
+    ['CLINIC_LOGO', 'Logo de la clínica'],
   ])('%s → %s', (reason, text) => {
     expect(receiptDetail({ reason })).toBe(text);
   });

@@ -65,6 +65,15 @@ const FIELD_LABELS: Record<string, string> = {
   externalInvoiceNumber: "Nº de factura externa",
   // DX-517: «VES=Bs.», una moneda por elemento.
   currencyTexts: "Texto de las monedas",
+  // DX-019: datos de la clínica.
+  legalName: "Razón social",
+  taxId: "Identificador fiscal",
+  taxIdLabel: "Nombre del identificador fiscal",
+  fiscalAddress: "Dirección fiscal",
+  contactEmail: "Email de contacto",
+  contactPhone: "Teléfono de contacto",
+  primaryColor: "Color de la marca",
+  logo: "Logo",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 

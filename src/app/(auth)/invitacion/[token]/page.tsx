@@ -26,6 +26,7 @@ export default async function AcceptInvitationPage({
   return (
     <AuthLayout
       clinic={clinic}
+      fromHost
       task={copy.task}
       caption={copy.caption}
       footer={

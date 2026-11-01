@@ -60,6 +60,24 @@ it('con datos fiscales muestra razón social, identificación fiscal y direcció
   expect(screen.queryByText('Datos fiscales pendientes')).not.toBeInTheDocument();
 });
 
+it('DX-019: el identificador sale con el nombre que le dio la clínica, congelado en la foto', () => {
+  const receipt = paymentReceiptFixture();
+  render(
+    <PaymentReceiptDocument
+      receipt={{
+        ...receipt,
+        snapshot: {
+          ...receipt.snapshot,
+          fiscalDataPending: false,
+          clinic: { name: 'Clínica Sonrisas', legalName: 'Sonrisas S.A.', taxId: 'J-1', taxIdLabel: 'ID fiscal', address: null },
+        },
+      }}
+    />,
+  );
+  expect(screen.getByTestId('receipt-document')).toHaveTextContent('Sonrisas S.A. · ID fiscal J-1');
+  expect(screen.getByTestId('receipt-document')).not.toHaveTextContent('Id. fiscal');
+});
+
 it('un abono anulado conserva su número y sale marcado ANULADO con motivo y fecha', () => {
   render(
     <PaymentReceiptDocument

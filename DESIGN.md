@@ -191,6 +191,14 @@ shifting OKLCH lightness only. The root layout injects it. Components never
 hardcode a hue and never put text in `primary` on a surface — text uses
 `primary-text`.
 
+**Choosing it (DX-019).** Ajustes › Datos de la clínica edits the color with a live
+preview of the derived family in both themes, because contrast is never at risk: only the
+exact hex may change. It warns (`lib/color/brand-color.ts`, never blocks) when white text
+misses AA on the chosen color, saying whether buttons get a darker tone or dark text, and
+when its OKLCH hue is < 30° from danger, warning or success (chroma ≥ .04). When the server
+can't resolve the clinic (`*.localhost`, some custom domains) `BrandingProvider` fetches the
+brand in the browser; after saving it swaps the brand in place, without a reload.
+
 **The One Accent Rule.** The accent marks the primary action, the active item,
 selection and focus — ≤ 10% of any screen. If a screen reads as "the teal
 screen", pull back to ink and neutrals.

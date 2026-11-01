@@ -23,10 +23,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 27 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
+  it('ADMIN ve las 28 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(27);
-    expect(new Set(hrefs).size).toBe(27);
+    expect(hrefs).toHaveLength(28);
+    expect(new Set(hrefs).size).toBe(28);
   });
 
   it('las herramientas y los registros van aparte de las políticas', () => {
@@ -120,6 +120,16 @@ describe('Monedas (DX-517)', () => {
     expect(labels.indexOf('Monedas')).toBe(labels.indexOf('Tasa de cambio') + 1);
     for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT'] as const) {
       expect(hrefsFor(role)).not.toContain('/settings/monedas');
+    }
+  });
+});
+
+describe('Datos de la clínica (DX-019)', () => {
+  it('primera entrada de «Clínica y sedes», solo para ADMIN', () => {
+    const clinic = SETTINGS_SECTIONS.find((s) => s.id === 'clinica')!;
+    expect(clinic.entries[0]).toMatchObject({ href: '/settings/clinica', label: 'Datos de la clínica' });
+    for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT'] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/clinica');
     }
   });
 });
