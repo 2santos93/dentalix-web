@@ -98,7 +98,7 @@ function identityItems(patient: Patient): IdentityItem[] {
   return items;
 }
 
-/** Chip neutro de retención legal (con la frase completa al pasar o enfocar). */
+/** Chip neutro de retención (con la frase completa al pasar o enfocar). */
 export interface RetentionChip {
   text: string;
   hint: string | null;
@@ -115,7 +115,7 @@ interface PatientRecordHeaderProps {
    * el rol; sin ninguna, no hay menú.
    */
   menuActions?: RowAction[];
-  /** DX-039: retención legal como chip neutro; `null` = sin retención que contar. */
+  /** DX-039: retención como chip neutro; `null` = sin retención que contar. */
   retention?: RetentionChip | null;
   /**
    * DX-247: banderas médicas del paciente. La cabecera encabeza todas las
@@ -153,7 +153,7 @@ interface PatientRecordHeaderProps {
  * que la agenda, con su panel, y cada alerta como chip de peligro para leerla
  * sin abrir nada), el estado de la anamnesis («Sin anamnesis» una sola vez),
  * inasistencias, saldo vencido, cobertura, convenio y, al final y en neutro,
- * la retención legal. Todo lo demás que antes vivía encima de las pestañas
+ * la retención. Todo lo demás que antes vivía encima de las pestañas
  * (tarjeta de anamnesis, dos frases repetidas, el panel de retención con tres
  * botones) se fue a las pestañas o al menú: las pestañas quedan en el primer
  * viewport también en el móvil.
@@ -333,7 +333,7 @@ export function PatientRecordHeader({
 }
 
 /**
- * Retención legal (DX-039): un estado normal y esperado, así que va al final y
+ * Retención (DX-039): un estado normal y esperado, así que va al final y
  * en neutro. La frase con el plazo sale al pasar el ratón o al enfocarlo (el
  * chip es enfocable para que el teclado también la vea); la versión completa
  * está en la pestaña «Datos».
@@ -353,7 +353,7 @@ function RetentionBadge({ chip }: { chip: RetentionChip }) {
   return chip.hint ? <Tooltip content={chip.hint}>{badge}</Tooltip> : badge;
 }
 
-/** Menú «⋯» de la cabecera: las acciones raras o legales, fuera de la vista. */
+/** Menú «⋯» de la cabecera: las acciones raras o delicadas, fuera de la vista. */
 function HeaderMenu({ actions }: { actions: RowAction[] }) {
   return (
     <DropdownMenu>

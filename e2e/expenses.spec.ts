@@ -223,7 +223,7 @@ for (const viewport of [
     await auditBothSchemes(page, evidence, `expense-detail-${viewport.width}`, detail);
 
     // Anular el pago: el motivo es obligatorio.
-    await detail.getByRole('button', { name: /^Anular el pago de 50,00/ }).click();
+    await detail.getByRole('button', { name: /^Anular pago de 50,00/ }).click();
     const voidPayment = page.getByRole('dialog', { name: '¿Anular este pago?' });
     await voidPayment.getByRole('button', { name: 'Anular pago' }).click();
     await expect(voidPayment.getByText('Escribe el motivo (al menos 5 caracteres).')).toBeVisible();

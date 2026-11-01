@@ -75,7 +75,7 @@ export const expenseDetailCopy = {
   fromCashLink: 'Ver la caja',
   paymentBy: (name: string) => `Registró ${name}`,
   voidPayment: 'Anular pago',
-  voidPaymentLabel: (amount: string, day: string) => `Anular el pago de ${amount} del ${day}`,
+  voidPaymentLabel: (amount: string, day: string) => `Anular pago de ${amount} del ${day}`,
   addPayment: 'Registrar pago',
   edit: 'Editar',
   voidExpense: 'Anular gasto',

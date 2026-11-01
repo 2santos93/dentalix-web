@@ -30,11 +30,14 @@ export function PublicNotice({
   icon: Icon,
   title,
   message,
+  headingLevel = 2,
 }: {
   icon: LucideIcon;
   title: string;
   message: string;
+  headingLevel?: 1 | 2;
 }) {
+  const Heading = headingLevel === 1 ? 'h1' : 'h2';
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface px-6 py-12 text-center">
       <span
@@ -43,7 +46,7 @@ export function PublicNotice({
       >
         <Icon className="size-5" />
       </span>
-      <h2 className="text-lg font-semibold text-ink">{title}</h2>
+      <Heading className="text-lg font-semibold text-ink">{title}</Heading>
       <p className="max-w-sm text-sm text-muted">{message}</p>
     </div>
   );

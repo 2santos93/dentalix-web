@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientRecordHeader } from './patient-record-header';
 import type { Patient } from '@/lib/patients/patients-api';
+import { retentionChip } from './patient-retention-section';
 
 function patient(overrides: Partial<Patient> = {}): Patient {
   return {
@@ -480,15 +481,34 @@ describe('PatientRecordHeader: cabecera compacta (UX v2 · K3)', () => {
     expect(screen.getByRole('button', { name: 'Editar datos' })).toBeInTheDocument();
   });
 
-  it('la retención legal es un chip neutro al final de la fila', () => {
+  it('la retención es un chip neutro al final de la fila', () => {
     render(
       <PatientRecordHeader
         patient={patient()}
         loading={false}
         onEdit={() => {}}
-        retention={{ text: 'Retención hasta 28/02/2039', hint: 'Se conserva 15 años.' }}
+        retention={{ text: 'Retención hasta 28/02/2039', hint: 'Se conserva 20 años.' }}
       />,
     );
     expect(screen.getByTestId('record-retention')).toHaveTextContent('Retención hasta 28/02/2039');
+  });
+
+  it('el chip usa la ayuda del plazo de la clínica, o la del plazo anterior (DX-330)', () => {
+    const base = patient({
+      lastAttentionAt: '2024-02-29T15:00:00.000Z',
+      retentionExtended: 'NONE',
+      retentionUntil: '2044-02-28',
+      underRetention: true,
+      clinicRetentionYears: 20,
+      retentionFromPreviousTerm: false,
+    });
+    expect(retentionChip(base)?.hint).toBe(
+      'Se conserva 20 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
+    );
+    const previous = retentionChip({ ...base, retentionUntil: '2039-02-28', retentionFromPreviousTerm: true });
+    expect(previous?.hint).toBe(
+      'Se conserva hasta el 28/02/2039 por el plazo anterior de la clínica. Mientras dure, el paciente no se puede archivar.',
+    );
+    expect(previous?.hint).not.toMatch(/15 años|legal/);
   });
 });

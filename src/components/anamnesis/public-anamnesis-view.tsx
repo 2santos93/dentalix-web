@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
-import { CheckCircle2, LinkIcon, Plus, Trash2 } from 'lucide-react';
+import { Check, CheckCircle2, LinkIcon, Plus, Trash2 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -99,6 +99,14 @@ export function PublicAnamnesisView({ linkToken }: { linkToken: string }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [done, setDone] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const doneRef = useRef<HTMLHeadingElement>(null);
+
+  // Focus only after a user-driven step change, after React commits its heading.
+  useEffect(() => {
+    if (done) doneRef.current?.focus();
+    else if (consentAccepted) headingRef.current?.focus();
+  }, [consentAccepted, done]);
 
   useEffect(() => {
     let cancelled = false;
@@ -144,7 +152,7 @@ export function PublicAnamnesisView({ linkToken }: { linkToken: string }) {
           />
         )}
 
-        {state.kind === 'gone' && <Notice icon={LinkIcon} title={copy.goneTitle} message={copy.goneMessage} />}
+        {state.kind === 'gone' && <Notice headingLevel={1} icon={LinkIcon} title={copy.goneTitle} message={copy.goneMessage} />}
 
         {state.kind === 'ready' && (
           <>
@@ -172,13 +180,13 @@ export function PublicAnamnesisView({ linkToken }: { linkToken: string }) {
                 >
                   <CheckCircle2 className="size-5" />
                 </span>
-                <h1 className="text-lg font-semibold text-ink">{copy.doneTitle}</h1>
+                <h1 ref={doneRef} tabIndex={-1} className="text-lg font-semibold text-ink">{copy.doneTitle}</h1>
                 <p className="max-w-sm text-sm text-muted">{copy.doneMessage(clinicName)}</p>
               </div>
             ) : (
               <>
                 <div className="flex flex-col gap-2">
-                  <h1 className="t-display text-ink">{copy.title}</h1>
+                  <h1 ref={headingRef} tabIndex={-1} className="t-display text-ink">{copy.title}</h1>
                   <p className="text-base text-ink">{copy.greeting(state.data.patientFirstName)}</p>
                   <p className="text-sm text-muted">{copy.intro}</p>
                   <p className="text-xs text-muted tabular-nums">
@@ -232,7 +240,7 @@ function ConsentStep({ data, onAccept }: { data: PublicAnamnesis; onAccept: () =
         aria-expanded={showPolicy}
         aria-controls={`${ids}-policy`}
         onClick={() => setShowPolicy((v) => !v)}
-        className="min-h-11 self-start text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="min-h-11 self-start text-sm font-medium text-ink underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink"
       >
         {copy.readPolicy}
       </button>
@@ -242,7 +250,7 @@ function ConsentStep({ data, onAccept }: { data: PublicAnamnesis; onAccept: () =
       <label className="flex min-h-11 items-start gap-3 text-sm text-ink">
         <input
           type="checkbox"
-          className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
+          className="mt-0.5 size-5 shrink-0 accent-[var(--color-ink)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink"
           checked={checked}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${ids}-error` : undefined}
@@ -298,10 +306,10 @@ function AnswerGroup({
         <label
           key={option}
           className={cn(
-            'flex min-h-11 cursor-pointer items-center justify-center rounded-lg border text-sm font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary',
+            'flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border text-sm transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-4 has-[:focus-visible]:outline-ink',
             value === option
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-border bg-surface text-ink hover:bg-surface-2',
+              ? 'border-primary bg-primary text-primary-foreground font-semibold'
+              : 'border-border bg-surface text-ink font-medium hover:bg-surface-2',
             invalid && value === undefined && 'border-danger/60',
           )}
         >
@@ -313,6 +321,7 @@ function AnswerGroup({
             onChange={() => onChange(option)}
             className="sr-only"
           />
+          {value === option && <Check aria-hidden="true" className="size-4 shrink-0" />}
           {labels[option]}
         </label>
       ))}
@@ -595,6 +604,7 @@ function QuestionnaireForm({
 
   return (
     <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <p className="text-sm text-ink">No cierre esta página hasta enviar.</p>
       {q.sections.map((section) => (
         <section
           key={section.key}
@@ -607,30 +617,32 @@ function QuestionnaireForm({
             </h2>
             {section.description && <p className="text-sm text-muted">{section.description}</p>}
           </div>
-          {section.questions.map((question) => {
+          {section.questions.map((question, questionIndex) => {
             const error = err(question.key);
             return (
-              <fieldset key={question.key} className="flex flex-col gap-3 border-t border-hairline pt-4 first-of-type:border-t-0 first-of-type:pt-0">
-                <legend
-                  id={fieldId(question.key)}
-                  tabIndex={-1}
-                  className="mb-3 text-base text-ink focus-visible:outline-none"
-                >
-                  {question.label}
-                </legend>
-                <AnswerGroup
-                  name={fieldId(question.key)}
-                  labelledBy={fieldId(question.key)}
-                  value={form.answers[question.key]}
-                  labels={q.answerLabels as Record<AnamnesisAnswer, string>}
-                  options={options}
-                  invalid={!!error}
-                  describedBy={error ? errorId(question.key) : undefined}
-                  onChange={(v) => setAnswer(question.key, v)}
-                />
-                {error && <InlineError id={errorId(question.key)}>{error}</InlineError>}
-                {followUp(question)}
-              </fieldset>
+              <div key={question.key} className={cn(questionIndex > 0 && 'border-t border-hairline pt-4')}>
+                <fieldset className="flex min-w-0 flex-col gap-3">
+                  <legend
+                    id={fieldId(question.key)}
+                    tabIndex={-1}
+                    className="mb-3 text-base text-ink focus-visible:outline-none"
+                  >
+                    {question.label}
+                  </legend>
+                  <AnswerGroup
+                    name={fieldId(question.key)}
+                    labelledBy={fieldId(question.key)}
+                    value={form.answers[question.key]}
+                    labels={q.answerLabels as Record<AnamnesisAnswer, string>}
+                    options={options}
+                    invalid={!!error}
+                    describedBy={error ? errorId(question.key) : undefined}
+                    onChange={(v) => setAnswer(question.key, v)}
+                  />
+                  {error && <InlineError id={errorId(question.key)}>{error}</InlineError>}
+                  {followUp(question)}
+                </fieldset>
+              </div>
             );
           })}
         </section>
@@ -641,7 +653,7 @@ function QuestionnaireForm({
           <input
             id={fieldId('declaration')}
             type="checkbox"
-            className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
+            className="mt-0.5 size-5 shrink-0 accent-[var(--color-ink)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink"
             checked={form.declaration}
             aria-invalid={err('declaration') ? true : undefined}
             aria-describedby={err('declaration') ? errorId('declaration') : undefined}

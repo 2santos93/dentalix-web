@@ -1,6 +1,7 @@
 'use client';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import { attendanceBadgeText } from '@/lib/cancellations/cancellation';
 import { overdueChipText } from '@/lib/collections/presentation';
 import { CoverageMarker } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
@@ -66,8 +67,7 @@ const copy = {
   newAppointmentFor: (name: string) => `Nueva cita con ${name}`,
   moveTo: 'Mover a…',
   moveToFor: (patient: string) => `Mover a… la cita de ${patient}`,
-  detailFor: (range: string, patient: string, provider: string) =>
-    `Detalle de la cita de ${range} · ${patient} · ${provider}`,
+  detailFor: (provider: string) => `Detalle de la cita · ${provider}`,
   closedHours: 'Fuera del horario de la sede',
   providerOffHours: 'Fuera del horario del profesional en esta sede',
   providerNotHere: 'No atiende en esta sede este día',
@@ -78,8 +78,9 @@ const copy = {
   blockLegend: 'Horario bloqueado (vacaciones, reunión, almuerzo…)',
   blockRemove: (label: string) => `Quitar bloqueo: ${label}`,
   freeGap: 'Hueco libre',
+  // Empieza por el texto visible del botón («Hueco libre · rango»): label-in-name.
   freeGapFor: (range: string, provider: string) =>
-    `Ocupar el hueco libre de ${range} · ${provider}`,
+    `Hueco libre · ${range} · Ocupar con ${provider}`,
   fillCancelledFor: (range: string, patient: string) =>
     `Ocupar el hueco de la cita cancelada de ${range} · ${patient}`,
   fillCancelled: 'Ocupar este hueco',
@@ -646,14 +647,18 @@ export function DayColumns({
                         <button
                           type="button"
                           aria-label={[
-                            copy.detailFor(range, patient, byChair ? providerName(a.providerId) : p.label),
-                            STATUS_LABELS[a.status],
+                            // Visible card words first; append supporting context after them.
+                            range,
+                            showsOverbooked(a) ? OVERBOOKED_LABEL : null,
+                            wantsEarlier ? WANTS_EARLIER_LABEL : null,
+                            patient,
                             a.appointmentType?.name,
+                            STATUS_LABELS[a.status],
                             overdueChipText(a.balance),
+                            attendanceBadgeText(a.attendance),
+                            copy.detailFor(byChair ? providerName(a.providerId) : p.label),
                             coverageChipText(a.coverage),
                             medicalAlertSummary(a.medicalAlerts),
-                            wantsEarlier ? WANTS_EARLIER_LABEL : null,
-                            showsOverbooked(a) ? OVERBOOKED_LABEL : null,
                           ]
                             .filter(Boolean)
                             .join(' · ')}
@@ -669,17 +674,17 @@ export function DayColumns({
                               vencida (DX-153) van en la fila de la hora para
                               seguir viéndose en las citas de 30 min. */}
                           <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
-                            <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>
+                            <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>{' '}
                             {/* DX-509: solo mientras es sobrecupo. */}
-                            <OverbookedChip overbooked={a.overbooked} status={a.status} className="min-w-0 py-0" />
+                            <OverbookedChip overbooked={a.overbooked} status={a.status} className="min-w-0 py-0" />{' '}
                             <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
                             <CoverageMarker coverage={a.coverage} />
-                          </span>
+                          </span>{' '}
                           <span
                             className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
                           >
                             {patient}
-                          </span>
+                          </span>{' '}
                           {/* El fondo es el color del tipo; el estado, su punto de
                               tono (nunca el acento) + la etiqueta. */}
                           <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
@@ -694,8 +699,8 @@ export function DayColumns({
                             <span className="min-w-0 truncate">
                               {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
                             </span>
-                          </span>
-                          <OverdueChip balance={a.balance} compact />
+                          </span>{' '}
+                          <OverdueChip balance={a.balance} compact />{' '}
                           {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
                           <AttendanceBadge counts={a.attendance} compact />
                         </button>

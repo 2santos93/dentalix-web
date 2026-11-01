@@ -106,7 +106,7 @@ export function PublicReminderOptOutView({ optOutToken }: { optOutToken: string 
         )}
 
         {state.kind === 'invalid' && (
-          <PublicNotice icon={LinkIcon} title={copy.invalidTitle} message={copy.invalidMessage} />
+          <PublicNotice headingLevel={1} icon={LinkIcon} title={copy.invalidTitle} message={copy.invalidMessage} />
         )}
 
         {state.kind === 'ready' && (

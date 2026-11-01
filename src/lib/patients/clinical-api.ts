@@ -58,7 +58,7 @@ export interface ClinicalEntry {
   appointmentId?: string | null;
   /** DX-170: plantilla con la que se redactó (solo procedencia). */
   templateId?: string | null;
-  /** DX-170: la cita ligada, para «Cita del dd/mm · Dra. X». */
+  /** DX-170: la cita ligada, para «Cita del <día/mes de la sede> · Dra. X». */
   appointment?: ClinicalEntryAppointment | null;
   createdAt: string;
   addenda: ClinicalEntryAddendum[];

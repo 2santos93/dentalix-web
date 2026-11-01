@@ -462,7 +462,7 @@ test('ADMIN cambia la vigencia de la anamnesis en un modal', async ({ page }) =>
   await loginAs(page, origin, admin.email, password);
   await page.goto(`${origin}/settings/historia-clinica`);
   await expect(page.getByTestId('anamnesis-validity')).toHaveText('12 meses', { timeout: 15_000 });
-  await page.getByRole('button', { name: 'Cambiar' }).click();
+  await page.getByRole('button', { name: 'Cambiar', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Cambiar la vigencia de la anamnesis' });
   await expectDialogInsideViewport(page, dialog);
   await dialog.getByLabel('Meses de vigencia').selectOption('6');

@@ -84,6 +84,12 @@ load_env() {
   # migrados (DX-262) se quedan «En cola» para siempre, y ese lote sin
   # terminar bloquea cualquier otra importación de la clínica demo.
   export APP_ROLE=all
+  # Una importación espera su turno detrás de lo que ya esté en la cola
+  # (por `runAt`). El barrido horario de la agenda de contingencia encola un
+  # trabajo por sede y la e2e crea más de cien clínicas: con los valores por
+  # defecto (4 cada 2 s) esa cola tarda más que la espera de los specs.
+  export JOBS_POLL_INTERVAL_MS=250
+  export JOBS_CONCURRENCY=16
   export DATABASE_URL
   export DIRECT_URL
   export JWT_ACCESS_TTL=900s

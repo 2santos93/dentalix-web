@@ -1,3 +1,4 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RecordPaymentModal } from './record-payment-modal';
@@ -569,4 +570,15 @@ describe('correcciones de QA (DX-390)', () => {
       'Cobro registrado: COP 100.000,00 + USD 50,00 en 2 formas de pago · 30/10/2026 · Plan del 01/08/2026 · recibo PRI-000007.',
     );
   });
+});
+
+
+it('móvil: añadir otra forma de pago conserva 44 px al terminar la animación real del diálogo', async () => {
+  const { dialog } = renderModal();
+  await within(dialog).findByLabelText('Plan');
+  expect(within(dialog).getByRole('button', { name: splitPaymentCopy.addLine })).toBeInTheDocument();
+  const [report] = auditRenderedControls([{
+    html: dialog.outerHTML, selector: '#rp-add-line', viewport: { width: 390, height: 844 },
+  }]);
+  expect(report.geometry.height).toBeGreaterThanOrEqual(44);
 });

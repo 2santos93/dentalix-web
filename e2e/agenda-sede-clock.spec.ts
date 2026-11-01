@@ -134,13 +134,13 @@ test('la agenda (día, semana, mes y detalle) pinta la hora de la sede en 12 h, 
     await openAgenda(page, 'Día', futureDay);
     const card = page.getByTestId('day-column-appointment').filter({ hasText: futurePatient });
     await expect(card).toContainText(range, { timeout: 15_000 });
-    await expect(page.getByRole('button', { name: new RegExp(`^Detalle de la cita de ${range}`) })).toBeVisible();
+    await expect(page.getByRole('button', { name: new RegExp(`^${range}.*Detalle de la cita`) })).toBeVisible();
     await expect(page.getByText('3:00 p. m.', { exact: true }).first()).toBeAttached();
     await expectNoHorizontalScroll(page);
     await shoot(page, 'agenda-dia-columnas', viewport.width);
 
     // Detalle: la misma hora.
-    await card.getByRole('button', { name: new RegExp(`^Detalle de la cita de ${range}`) }).click();
+    await card.getByRole('button', { name: new RegExp(`^${range}.*Detalle de la cita`) }).click();
     const sheet = page.getByRole('dialog', { name: futurePatient });
     await expect(sheet).toContainText(range);
     await page.keyboard.press('Escape');
@@ -155,7 +155,7 @@ test('la agenda (día, semana, mes y detalle) pinta la hora de la sede en 12 h, 
     // Semana: la cita en la columna de SU día y con su hora.
     await openAgenda(page, 'Semana', futureDay);
     const weekCard = page.getByTestId('week-grid-appointment').filter({ hasText: futurePatient });
-    await expect(weekCard).toHaveAccessibleName(new RegExp(`^${range}`), { timeout: 15_000 });
+    await expect(weekCard).toHaveAccessibleName(new RegExp(`^${futurePatient} Agend\\. ${range}`), { timeout: 15_000 });
     await expect(page.locator(`[data-testid="week-grid-day-column"]`).filter({ has: weekCard })).toHaveCount(1);
     const columns = page.getByTestId('week-grid-day-column');
     const headers = page.getByTestId('week-day-header');

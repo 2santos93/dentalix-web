@@ -260,7 +260,7 @@ export function UserMenu({
             type="button"
             // En rail el avatar es lo único que se ve: el nombre pasa al title
             // para que el hover lo revele, igual que los ítems de la nav.
-            aria-label={isRail ? (name ?? copy.account) : copy.account}
+            aria-label={[!avatarUrl && name ? initials(name) : null, copy.account, name].filter(Boolean).join(' · ')}
             title={isRail ? (name ?? copy.account) : undefined}
             className={cn(
               'flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',

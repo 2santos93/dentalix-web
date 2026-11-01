@@ -710,7 +710,7 @@ describe('AgendaView', () => {
     });
   });
 
-  it('defaults to Mes (calendar) view; switching to Semana fetches the week range and renders WeekAgenda', async () => {
+  it('defaults to Mes (calendar) view; switching to Semana fetches the week range and renders WeekTimeGrid', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
@@ -806,7 +806,7 @@ describe('AgendaView', () => {
     expect(agendaDate()).toBe('2026-03-09');
     // Back in Día view (columnas por profesional, DX-121) — with no
     // appointments mocked for this test, each column's empty state confirms
-    // it's the one rendering (WeekAgenda has no such copy).
+    // it's the one rendering (the week grid has no such copy).
     expect(await screen.findAllByText('Sin citas hoy')).toHaveLength(staff.length);
     expect(screen.queryByLabelText(/agenda de la semana/i)).not.toBeInTheDocument();
   });
@@ -941,7 +941,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     expect(await screen.findByTestId('coverage-detail-line')).toHaveTextContent(expected);
@@ -969,7 +969,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     await screen.findByLabelText(/estado/i);
@@ -1006,7 +1006,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     // Tras generar, el refresh trae la cita ya marcada como pendiente.
@@ -1055,7 +1055,7 @@ describe('AgendaView', () => {
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     expect(await screen.findByRole('region', { name: 'Indicaciones' })).toBeInTheDocument();
@@ -1581,7 +1581,7 @@ describe('AgendaView', () => {
       );
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       const [gap] = await screen.findAllByRole('button', {
-        name: /^Ocupar el hueco libre de 14:00–18:00 · Dra\. Ana Ríos$/,
+        name: /^Hueco libre · 14:00–18:00 · Ocupar con Dra\. Ana Ríos$/,
       });
       await user.click(gap);
 

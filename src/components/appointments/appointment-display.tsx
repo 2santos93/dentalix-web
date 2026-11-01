@@ -18,7 +18,7 @@ const STATUS_ICONS = {
   CANCELLED: CircleX, NO_SHOW: CircleMinus, ARRIVED: Clock,
   IN_CHAIR: Armchair, READY_FOR_CHECKOUT: Wallet,
 } satisfies Record<AppointmentStatus, typeof Calendar>;
-const STATUS_SHORT_LABELS: Record<AppointmentStatus, string> = {
+export const STATUS_SHORT_LABELS: Record<AppointmentStatus, string> = {
   SCHEDULED: 'Agend.', CONFIRMED: 'Conf.', COMPLETED: 'Complet.',
   CANCELLED: 'Cancel.', NO_SHOW: 'No asist.', ARRIVED: 'Espera',
   IN_CHAIR: 'Sillón', READY_FOR_CHECKOUT: 'Cobrar',

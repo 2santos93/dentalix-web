@@ -49,6 +49,7 @@ import {
 } from '@/lib/chairs/chair-columns';
 import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
+import { canOfferNextOpening } from '@/lib/appointments/next-opening';
 import { CompletedExitModal } from '@/components/appointments/completed-exit-modal';
 import { AppointmentStatusSelect } from '@/components/appointments/appointment-status-select';
 import { CancelAppointmentDialog } from '@/components/appointments/cancel-appointment-dialog';
@@ -229,7 +230,7 @@ const copy = {
   removeBlockError: 'No pudimos quitar el bloqueo. Intenta de nuevo.',
   blockRemoved: 'Bloqueo quitado.',
   waitlistButton: 'Pendientes',
-  waitlistButtonCount: (n: number) => `Pendientes por agendar: ${n}`,
+  waitlistButtonCount: (n: number) => `Pendientes ${n} · por agendar`,
   waitlistSheetDescription: 'Pacientes que cancelaron o no vinieron, para volver a darles cita.',
   // DX-200: panel «En clínica».
   inClinicButton: 'En clínica',
@@ -437,6 +438,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [roster, setRoster] = useState<Roster | null>(null);
   const [showAllProviders, setShowAllProviders] = useState(false);
   const [movingAppointment, setMovingAppointment] = useState<Appointment | null>(null);
+  // DX-509-bis: el arrastre de un sobrecupo que chocó abre «Mover a…» con el destino y el siguiente hueco.
+  const [moveCollision, setMoveCollision] = useState<{ target: MoveTarget; error: unknown; message: string } | null>(
+    null,
+  );
   const [movePendingId, setMovePendingId] = useState<string | null>(null);
   const role = getTokenRole(token);
   const canMove = canMoveAppointments(role);
@@ -938,6 +943,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       setAppointments((prev) =>
         prev.map((a) => (a.id === appointment.id ? appointment : a)),
       );
+      // DX-509-bis: un sobrecupo que no cabe ahí: «Mover a…» con el siguiente hueco libre.
+      if (canOfferNextOpening(appointment, err) && clock.of(appointment.locationId)) {
+        setMoveCollision({ target, error: err, message: apiErrorMessage(err, copy.genericMoveError) });
+        setMovingAppointment(appointment);
+        return;
+      }
       notifyError(apiErrorMessage(err, copy.genericMoveError), {
         onRetry: () => handleDrop(appointment, target),
       });
@@ -952,12 +963,14 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       notifyError(SEDE_LOCALE_ERROR);
       return;
     }
+    setMoveCollision(null);
     setMovingAppointment(appointment);
   }
 
   /** «Mover a…» confirmado por el servidor: cierra el modal, lo anuncia y refresca. */
   function handleMoved(updated: Appointment) {
     setMovingAppointment(null);
+    setMoveCollision(null);
     toast.success(copy.moved);
     announceAppointmentWarnings(updated);
     void refreshAppointmentsInPlace();
@@ -1338,7 +1351,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   setInClinicOpen(true);
                 }}
               >
-                <Armchair aria-hidden /> {copy.inClinicButton}
+                <Armchair aria-hidden /> {copy.inClinicButton}{' '}
                 {inClinicTotal ? <span className={counterClass}>{inClinicTotal}</span> : null}
               </Button>
               {/* DX-122: en pantallas sin panel lateral, los pendientes van en un cajón. */}
@@ -1348,7 +1361,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 aria-label={waitlistCount === null ? copy.waitlistButton : copy.waitlistButtonCount(waitlistCount)}
                 onClick={() => setWaitlistOpen(true)}
               >
-                <ListTodo aria-hidden /> {copy.waitlistButton}
+                <ListTodo aria-hidden /> {copy.waitlistButton}{' '}
                 {waitlistCount ? <span className={counterClass}>{waitlistCount}</span> : null}
               </Button>
               {canWalkIn(role) && phone ? (
@@ -1615,11 +1628,15 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             key={movingAppointment.id}
             open
             onOpenChange={(open) => {
-              if (!open) setMovingAppointment(null);
+              if (!open) {
+                setMovingAppointment(null);
+                setMoveCollision(null);
+              }
             }}
             token={token}
             appointment={movingAppointment}
             clock={movingClock}
+            collision={moveCollision}
             providers={staff}
             hours={hours}
             onMoved={handleMoved}

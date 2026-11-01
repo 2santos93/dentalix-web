@@ -1,3 +1,4 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { ExpenseDetailModal } from './expense-detail-modal';
 import { ApiError } from '@/lib/api/client';
@@ -97,6 +98,14 @@ describe('ExpenseDetailModal (DX-274)', () => {
     jest.mocked(startDownload).mockReset();
   });
 
+  it('DX-297 keeps the visible cancellation phrase and payment context in its audited name', async () => {
+    renderDetail();
+    const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental SAS' });
+    await screen.findByText(/Transferencia rechazada/);
+    auditRenderedControls([{ html: dialog.outerHTML, selector: 'button[aria-label^="Anular"]' }]);
+    expect(within(dialog).getByRole('button', { name: /^Anular pago de 50\.000,00\sCOP del 21\/10\/2026$/ })).toHaveTextContent('Anular pago');
+  });
+
   it('enseña los datos, el estado y los pagos con la caja de la salida', async () => {
     renderDetail();
     const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental SAS' });
@@ -107,7 +116,7 @@ describe('ExpenseDetailModal (DX-274)', () => {
     expect(link).toHaveAttribute('href', '/caja/turnos/cs-1');
     expect(within(dialog).getByText('Anulado por Admin Demo: Transferencia rechazada')).toBeInTheDocument();
     // Solo el pago vivo se puede anular.
-    expect(within(dialog).getAllByRole('button', { name: /Anular el pago de/ })).toHaveLength(1);
+    expect(within(dialog).getAllByRole('button', { name: /Anular pago de/ })).toHaveLength(1);
     expect(within(dialog).getByLabelText('Adjuntar soporte')).toBeInTheDocument();
   });
 
@@ -131,7 +140,7 @@ describe('ExpenseDetailModal (DX-274)', () => {
     ]);
     mockedVoidPayment.mockResolvedValue(voided);
     const { onChanged } = renderDetail();
-    await user.click(await screen.findByRole('button', { name: /Anular el pago de/ }));
+    await user.click(await screen.findByRole('button', { name: /Anular pago de/ }));
     const modal = await screen.findByRole('dialog', { name: '¿Anular este pago?' });
     await user.type(within(modal).getByLabelText('Motivo de la anulación'), 'Mal');
     await user.click(within(modal).getByRole('button', { name: 'Anular pago' }));
@@ -151,7 +160,7 @@ describe('ExpenseDetailModal (DX-274)', () => {
       ]),
     );
     renderDetail();
-    await user.click(await screen.findByRole('button', { name: /Anular el pago de/ }));
+    await user.click(await screen.findByRole('button', { name: /Anular pago de/ }));
     const modal = await screen.findByRole('dialog', { name: '¿Anular este pago?' });
     await user.type(within(modal).getByLabelText('Motivo de la anulación'), 'Error de caja');
     await user.click(within(modal).getByRole('button', { name: 'Anular pago' }));

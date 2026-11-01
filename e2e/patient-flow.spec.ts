@@ -304,12 +304,24 @@ test('DX-242: axe Día/Semana/En clínica 390/1440 claro/oscuro', async ({page},
     // K4: en el teléfono el Día abre en «Lista»; este axe recorre las columnas.
     if (width === 390) await page.getByRole('button', {name:'Columnas', exact:true}).click();
     if (width === 390) await page.getByRole('group', {name:'Profesional visible'}).getByRole('button', {name:'Odontóloga Estados QA', exact:true}).click();
-    await expect(page.getByRole('button', {name:/Detalle.*Estado 1 QA/})).toBeVisible();
-    await page.getByRole('button', {name:/Detalle.*Estado 1 QA/}).scrollIntoViewIfNeeded();
+    await expect(page.getByRole('button', {name:/Estado 1 QA.*Detalle de la cita/})).toBeVisible();
+    await page.getByRole('button', {name:/Estado 1 QA.*Detalle de la cita/}).scrollIntoViewIfNeeded();
     await check('dia');
     await page.getByRole('button', {name:'Semana', exact:true}).click();
     for (const [i,id] of qaIds.entries()) {
-      await expect(page.locator(`[data-testid="week-grid-appointment"][data-id="${id}"]`)).toHaveAccessibleName(new RegExp(qaLabels[i]));
+      const card = page.locator(`[data-testid="week-grid-appointment"][data-id="${id}"]`);
+      await expect(card).toHaveAccessibleName(new RegExp(qaLabels[i]));
+      if (i === 2) {
+        // La cita completada de 15 min antes medía 90 × 20 y la hora
+        // desaparecía entre el estado visible y el paciente del nombre.
+        await card.scrollIntoViewIfNeeded();
+        const geometry = await card.boundingBox();
+        expect(geometry!.height).toBe(20);
+        expect(geometry!.width).toBeGreaterThanOrEqual(180);
+        await expect(card).toHaveAccessibleName(/^Estado 3 QA Complet\. 09:00–09:15/);
+        const patient = card.getByText('Estado 3 QA', { exact: true });
+        expect(await patient.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+      }
     }
     await page.locator(`[data-testid="week-grid-appointment"][data-id="${qaIds[0]}"]`).scrollIntoViewIfNeeded();
     await check('semana');

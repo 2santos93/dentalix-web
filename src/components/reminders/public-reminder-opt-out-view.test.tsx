@@ -34,6 +34,7 @@ describe('PublicReminderOptOutView (DX-128)', () => {
     render(<PublicReminderOptOutView optOutToken="tok" />);
     expect(screen.getByRole('status')).toHaveTextContent('Cargando…');
     expect(await screen.findByRole('heading', { name: 'Sonrisas del Norte' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(
       screen.getByText('Hola Carolina, ¿quieres dejar de recibir los recordatorios de tus citas?'),
     ).toBeInTheDocument();
@@ -51,6 +52,7 @@ describe('PublicReminderOptOutView (DX-128)', () => {
     await user.click(await screen.findByRole('button', { name: 'Dejar de recibir recordatorios' }));
     expect(mockedConfirm).toHaveBeenCalledWith('tok');
     expect(await screen.findByRole('heading', { name: 'Listo: ya no recibirás recordatorios' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByText(/Desde el 17\/10\/2026/)).toBeInTheDocument();
   });
 
@@ -58,6 +60,7 @@ describe('PublicReminderOptOutView (DX-128)', () => {
     mockedGet.mockResolvedValue(view({ status: 'OPTED_OUT', optedOutAt: '2026-10-01T15:00:00.000Z' }));
     render(<PublicReminderOptOutView optOutToken="tok" />);
     expect(await screen.findByRole('heading', { name: 'Listo: ya no recibirás recordatorios' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -65,6 +68,7 @@ describe('PublicReminderOptOutView (DX-128)', () => {
     mockedGet.mockRejectedValue(new ApiError(404, 'Enlace de baja no encontrado'));
     render(<PublicReminderOptOutView optOutToken="tok" />);
     expect(await screen.findByRole('heading', { name: 'Este enlace caducó' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
   it('error de red al cargar: sección con reintento', async () => {
@@ -95,5 +99,6 @@ it('un404 al confirmar muestra enlace caducado sin permitir otra baja', async ()
   render(<PublicReminderOptOutView optOutToken="expired" />);
   await user.click(await screen.findByRole('button', { name: 'Dejar de recibir recordatorios' }));
   expect(await screen.findByRole('heading', { name: 'Este enlace caducó' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   expect(screen.queryByRole('button', { name: 'Dejar de recibir recordatorios' })).not.toBeInTheDocument();
 });
