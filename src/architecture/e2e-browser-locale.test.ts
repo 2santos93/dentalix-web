@@ -4,7 +4,7 @@ import ts from 'typescript';
 
 /**
  * DX-312 (P1, pre-flight m14): el navegador de la suite habla `es`, sin
- * región, para que la web no sugiera ningún país; un contexto en `es-CO`
+ * región, para que la web no sugiera ningún país; un contexto en `es-PE`
  * rellenaría un país en silencio en el alta o en «Nueva sede». Todo
  * `locale` de las opciones del navegador (`use`/`test.use`, `newContext`,
  * `newPage`, `launchPersistentContext`) es `E2E_BROWSER_LOCALE`, salvo en
@@ -91,7 +91,7 @@ describe('arquitectura: el navegador de la suite e2e no tiene región (DX-312)',
 
   it('the check catches each browser option form and skips location data', () => {
     const synthetic = [
-      "const a = await browser.newContext({ locale: 'es-CO', timezoneId: 'UTC' });",
+      "const a = await browser.newContext({ locale: 'es-PE', timezoneId: 'UTC' });",
       "const b = await browser.newPage({ viewport, locale: 'es' });",
       "test.use({ locale: VENEZUELA.locale });",
       'const c = await chromium.launchPersistentContext(dir, { locale });',
@@ -101,7 +101,7 @@ describe('arquitectura: el navegador de la suite e2e no tiene región (DX-312)',
       "await fillRegistrationLocation(page, { country: 'ES', locale: 'es-ES' });",
     ].join('\n');
     expect(browserLocaleHits('e2e/synthetic.spec.ts', synthetic)).toEqual([
-      "e2e/synthetic.spec.ts:1: locale: 'es-CO'",
+      "e2e/synthetic.spec.ts:1: locale: 'es-PE'",
       "e2e/synthetic.spec.ts:2: locale: 'es'",
       'e2e/synthetic.spec.ts:3: locale: VENEZUELA.locale',
       'e2e/synthetic.spec.ts:4: locale',

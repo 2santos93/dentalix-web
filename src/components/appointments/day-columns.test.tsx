@@ -35,7 +35,7 @@ const providers = [
   { userId: 'prov-3', fullName: 'Dra. Sara Paz', role: 'ADMIN' as const, locationIds: null },
 ];
 const hours: BusinessHours = {
-  timezone: 'America/Bogota',
+  timezone: 'America/Caracas',
   ranges: [
     { weekday: 1, startMinute: 9 * 60, endMinute: 13 * 60 },
     { weekday: 1, startMinute: 15 * 60, endMinute: 19 * 60 },

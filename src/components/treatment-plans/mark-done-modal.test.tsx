@@ -209,7 +209,7 @@ describe('MarkDoneModal (DX-050)', () => {
     } as TreatmentPlanItem;
 
     beforeEach(() => {
-      jest.useFakeTimers({ now: new Date('2026-10-24T20:00:00Z'), advanceTimers: true });
+      jest.useFakeTimers({ now: new Date('2026-10-24T19:00:00Z'), advanceTimers: true });
     });
     afterEach(() => jest.useRealTimers());
 
@@ -282,7 +282,7 @@ describe('MarkDoneModal (DX-050)', () => {
           performedById: 'norte',
           performedLocationId: 'loc-norte',
           // Mediodía del 14/09 en la sede.
-          completedAt: '2026-09-14T17:00:00.000Z',
+          completedAt: '2026-09-14T16:00:00.000Z',
         }),
       );
       expect(props.onSaved).toHaveBeenCalled();

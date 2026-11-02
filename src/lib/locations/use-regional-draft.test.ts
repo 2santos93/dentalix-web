@@ -76,19 +76,19 @@ describe('useRegionalDraft (R1)', () => {
   });
 
   it('edit: shows what is stored, suggests nothing and never changes a stored value on its own', () => {
-    const stored = clinicLocation({ country: 'CO', currency: 'COP', timeZone: 'America/Bogota', locale: 'es-CO', hourCycle: 'h12' });
+    const stored = clinicLocation({ country: 'PE', currency: 'GBP', timeZone: 'America/Lima', locale: 'es-PE', hourCycle: 'h12' });
     const { result } = renderHook(() => useRegionalDraft(stored, () => caracasEnUs));
     expect(result.current.values).toEqual({
-      country: 'CO',
-      currency: 'COP',
-      timeZone: 'America/Bogota',
-      locale: 'es-CO',
+      country: 'PE',
+      currency: 'GBP',
+      timeZone: 'America/Lima',
+      locale: 'es-PE',
       hourCycle: 'h12',
     });
     expect(result.current.sources).toEqual({});
     act(() => result.current.change('country', 'VE'));
-    expect(result.current.values.currency).toBe('COP');
-    expect(result.current.values.timeZone).toBe('America/Bogota');
+    expect(result.current.values.currency).toBe('GBP');
+    expect(result.current.values.timeZone).toBe('America/Lima');
     expect(result.current.proposals).toEqual({ currency: 'USD', timeZone: 'America/Caracas', locale: 'es-VE' });
   });
 

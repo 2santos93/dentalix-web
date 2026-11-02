@@ -160,7 +160,7 @@ describe('RegionalSettingsFields', () => {
   });
 
   it('warns when the zone is not one of the country', async () => {
-    render(<Harness initial={{ ...EMPTY, country: 'VE', timeZone: 'America/Bogota' }} />);
+    render(<Harness initial={{ ...EMPTY, country: 'VE', timeZone: 'Europe/Madrid' }} />);
     await ready();
     expect(screen.getByLabelText('Zona horaria')).toHaveAccessibleDescription(
       expect.stringContaining('No es una zona de Venezuela: las suyas salen primero en la lista.'),

@@ -60,7 +60,7 @@ interface Scenario {
 
 /** `HH:MM` (24 h) de la sede, como el aviso. */
 function sedeClock(at: Date): string {
-  return new Intl.DateTimeFormat('es-CO', {
+  return new Intl.DateTimeFormat('es-VE', {
     timeZone: ZONE,
     hour: '2-digit',
     minute: '2-digit',
@@ -96,7 +96,7 @@ async function scenario(page: Page, name: string, base: number): Promise<Scenari
     sex: 'F',
   });
   const plan = await apiPost<{ id: string }>(request, session, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'USD',
   });
   const item = await apiPost<{ id: string }>(request, session, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '36',

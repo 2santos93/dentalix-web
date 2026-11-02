@@ -21,13 +21,13 @@ const mockedBacklog = jest.mocked(getRateBacklog);
 beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
-  // Sede en la sede (UTC-5) con formato es-CO.
+  // Sede de Caracas (UTC−4) con formato es-VE.
   mockedLocations.mockResolvedValue([clinicLocation()]);
 });
 
 describe('RateBacklogNotice (DX-380)', () => {
   it('al ADMIN le dice cuántos abonos llevan más de 24 h sin tasa, desde qué día de la sede y adónde ir', async () => {
-    // 02:00 UTC del 29 = 21:00 del 28 en la sede: el día es el de la sede.
+    // 02:00 UTC del 29 = 22:00 del 28 en la sede: el día es el de la sede.
     mockedBacklog.mockResolvedValue({ count: 3, oldestSince: '2026-10-29T02:00:00.000Z' });
     render(<RateBacklogNotice token={tokenForRole('ADMIN')} />);
 
@@ -37,7 +37,7 @@ describe('RateBacklogNotice (DX-380)', () => {
     const link = within(notice).getByRole('link', { name: rateBacklogCopy.link });
     expect(link).toHaveAttribute('href', '/settings/tasa-de-cambio');
     // Sin datos del paciente ni importes: solo el recuento y el día.
-    expect(notice).not.toHaveTextContent(/\$|USD|COP/);
+    expect(notice).not.toHaveTextContent(/\$|USD|VES/);
   });
 
   it('en singular con un abono', async () => {

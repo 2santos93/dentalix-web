@@ -167,7 +167,7 @@ async function openAllocation(page: Page, panel: Locator): Promise<Locator> {
 }
 
 async function receptionSees(browser: Browser, origin: string, viewport: { width: number; height: number }, data: Seeded, email: string) {
-  const context = await browser.newContext({ viewport, locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Bogota' });
+  const context = await browser.newContext({ viewport, locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Caracas' });
   const page = await context.newPage();
   try {
     await loginAs(page, origin, email, password);

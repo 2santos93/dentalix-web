@@ -21,7 +21,7 @@ const expired: PatientMedicalAlerts = {
   validityMonths: 12,
   anamnesisExpiresOn: '2026-08-01',
   today: '2026-10-20',
-  timeZone: 'America/Bogota',
+  timeZone: 'America/Caracas',
   lastReview: { kind: 'UPDATED', at: '2025-08-01T12:00:00.000Z', byName: 'Dra. Ruiz' },
 };
 

@@ -989,7 +989,7 @@ describe('AgendaView', () => {
     mockedCreateConfirmationLink.mockResolvedValue({
       url: 'http://demo.localhost:3001/confirmar/tok',
       expiresAt: start,
-      whatsappPhone: '573105550101',
+      whatsappPhone: '584145550101',
       appointment: {
         patientFirstName: 'María',
         start,
@@ -1021,7 +1021,7 @@ describe('AgendaView', () => {
     );
     expect(screen.getByRole('link', { name: /abrir whatsapp/i })).toHaveAttribute(
       'href',
-      expect.stringMatching(/^https:\/\/wa\.me\/573105550101\?text=/),
+      expect.stringMatching(/^https:\/\/wa\.me\/584145550101\?text=/),
     );
     await waitFor(() =>
       expect(screen.getAllByTestId('appointment-confirmation-indicator').length).toBeGreaterThan(0),
@@ -1219,7 +1219,7 @@ describe('AgendaView', () => {
           from: params.weekStart,
           to: params.weekStart,
           locationId: 'loc-1',
-          locations: [{ id: 'loc-1', name: 'Sede principal', timeZone: 'America/Bogota' }],
+          locations: [{ id: 'loc-1', name: 'Sede principal', timeZone: 'America/Caracas' }],
           providers: [
             {
               providerId: 'staff-1',
@@ -1509,7 +1509,7 @@ describe('AgendaView', () => {
     const FIXED_NOW = new Date(2026, 5, 15, 12, 0, 0);
     const today = '2026-06-15';
     const hours = {
-      timezone: 'America/Bogota',
+      timezone: 'America/Caracas',
       ranges: [{ weekday: FIXED_NOW.getDay(), startMinute: 14 * 60, endMinute: 18 * 60 }],
     };
     const sedes = [utcSede({ id: 'loc-1', name: 'Sede principal' }), utcSede({ id: 'loc-2', name: 'Sede Norte' })];
@@ -1559,7 +1559,7 @@ describe('AgendaView', () => {
       mockedCandidates.mockImplementation((_t, slot) =>
         Promise.resolve({
           ...slot,
-          timeZone: 'America/Bogota',
+          timeZone: 'America/Caracas',
           providerOffSchedule: false,
           linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
           linkOfferOpen: true,
@@ -1618,7 +1618,7 @@ describe('AgendaView', () => {
         providerOffSchedule: false,
         linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
         linkOfferOpen: true,
-        timeZone: 'America/Bogota',
+        timeZone: 'America/Caracas',
         offerCap: 2,
         items: [],
         truncated: false,

@@ -56,8 +56,8 @@ describe('valores de pendientes', () => {
   });
   it('caja sin abrir pide acción; abierta dice desde cuándo y cuántos cobros', () => {
     const closed = { locationId: 'l', settings: { requireOpenSession: false, blindClose: false }, session: null } as CurrentCashSession;
-    expect(cashValue(closed, 'America/Bogota', null)).toEqual({ value: 'Sin abrir', pending: true, tone: 'warning' });
+    expect(cashValue(closed, 'America/Caracas', null)).toEqual({ value: 'Sin abrir', pending: true, tone: 'warning' });
     const open = { ...closed, session: cashSessionFixture() } as CurrentCashSession;
-    expect(cashValue(open, 'America/Bogota', null).value).toMatch(/^Abierta desde/);
+    expect(cashValue(open, 'America/Caracas', null).value).toMatch(/^Abierta desde/);
   });
 });

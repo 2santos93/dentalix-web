@@ -45,7 +45,7 @@ const LAST_NIGHT: ContingencyNightly = {
   current: true,
   forDate: '2026-11-02',
   // 02:10 en la sede.
-  generatedAt: '2026-11-02T07:10:00.000Z',
+  generatedAt: '2026-11-02T06:10:00.000Z',
   appointmentCount: 3,
 };
 

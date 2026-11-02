@@ -76,7 +76,7 @@ const QUEUE_ITEMS: Record<WorkQueueKey, WorkQueueItem> = {
   ACCEPTED_UNSCHEDULED: { key: 'ACCEPTED_UNSCHEDULED', status: 'OK', count: 0 },
   WAITLIST: { key: 'WAITLIST', status: 'OK', count: 1 },
   RECALL: { key: 'RECALL', status: 'OK', count: 3 },
-  RECEIVABLES: { key: 'RECEIVABLES', status: 'OK', count: 2, overdue: [{ currency: 'COP', amount: 780000 }] },
+  RECEIVABLES: { key: 'RECEIVABLES', status: 'OK', count: 2, overdue: [{ currency: 'VES', amount: 780000 }] },
   LOW_STOCK: { key: 'LOW_STOCK', status: 'OK', count: 4 },
 };
 function queuesFor(
@@ -104,12 +104,12 @@ function render(ui: ReactElement<{ token: string }>) {
   );
 }
 
-// Sábado 15/08/2026 07:00 en la sede (GMT−5): citas antes y después de «ahora».
-const FROZEN_NOW = new Date('2026-08-15T12:00:00.000Z');
+// Sábado 15/08/2026 07:00 en la sede (GMT−4): citas antes y después de «ahora».
+const FROZEN_NOW = new Date('2026-08-15T11:00:00.000Z');
 
 const sedes: ClinicLocation[] = [
-  clinicLocation({ id: 'loc-1', name: 'Sede principal' }),
-  clinicLocation({ id: 'loc-2', name: 'Sede Norte', createdAt: '2026-02-01T00:00:00.000Z' }),
+  clinicLocation({ id: 'loc-1', name: 'Sede principal', currency: 'VES' }),
+  clinicLocation({ id: 'loc-2', name: 'Sede Norte', currency: 'VES', createdAt: '2026-02-01T00:00:00.000Z' }),
 ];
 
 function appointment(overrides: Partial<ListAppointment>): ListAppointment {
@@ -121,8 +121,8 @@ function appointment(overrides: Partial<ListAppointment>): ListAppointment {
     patientFirstName: 'María',
     patientLastName: 'López',
     providerId: 'staff-1',
-    start: '2026-08-15T14:00:00.000Z',
-    end: '2026-08-15T14:30:00.000Z',
+    start: '2026-08-15T13:00:00.000Z',
+    end: '2026-08-15T13:30:00.000Z',
     status: 'SCHEDULED',
     reason: null,
     planItemIds: [],
@@ -133,13 +133,13 @@ function appointment(overrides: Partial<ListAppointment>): ListAppointment {
 }
 
 const todayAppointments: ListAppointment[] = [
-  appointment({ id: 'a1', start: '2026-08-15T13:00:00.000Z', status: 'COMPLETED' }),
+  appointment({ id: 'a1', start: '2026-08-15T12:00:00.000Z', status: 'COMPLETED' }),
   appointment({
     id: 'a2',
     patientId: 'p-2',
     patientFirstName: 'Luis',
     patientLastName: 'Pérez',
-    start: '2026-08-15T15:00:00.000Z',
+    start: '2026-08-15T14:00:00.000Z',
     status: 'SCHEDULED',
     medicalAlerts: {
       hasCriticalAlert: true,
@@ -150,9 +150,9 @@ const todayAppointments: ListAppointment[] = [
     },
     balance: { hasOverdue: true, overdueDays: 40 },
   }),
-  appointment({ id: 'a3', start: '2026-08-15T16:00:00.000Z', status: 'CONFIRMED' }),
-  appointment({ id: 'a4', start: '2026-08-15T17:00:00.000Z', status: 'ARRIVED' }),
-  appointment({ id: 'a5', start: '2026-08-15T18:00:00.000Z', status: 'CANCELLED' }),
+  appointment({ id: 'a3', start: '2026-08-15T15:00:00.000Z', status: 'CONFIRMED' }),
+  appointment({ id: 'a4', start: '2026-08-15T16:00:00.000Z', status: 'ARRIVED' }),
+  appointment({ id: 'a5', start: '2026-08-15T17:00:00.000Z', status: 'CANCELLED' }),
 ];
 
 function dashboard(): Dashboard {
@@ -161,10 +161,10 @@ function dashboard(): Dashboard {
     incomes: {
       from: '2026-08-01T00:00:00.000Z',
       to: '2026-08-16T00:00:00.000Z',
-      currency: 'COP',
+      currency: 'VES',
       totalConverted: 1250000,
       count: 12,
-      byCurrency: { COP: 1000000, USD: 60 },
+      byCurrency: { VES: 1000000, USD: 60 },
     },
     lowStockItems: { count: 0, items: [] },
     upcomingAppointments: [],
@@ -180,13 +180,13 @@ const metric = (value: number, previous: number, change: number, trend: 'BETTER'
 });
 function comparison(locations = 1): LocationsComparison {
   const metrics = {
-    production: [{ currency: 'COP', ...metric(3000000, 2500000, 20, 'BETTER') }],
-    collected: [{ currency: 'COP', ...metric(1000000, 900000, 11.1, 'BETTER') }],
-    collectionRate: [{ currency: 'COP', ...metric(33.3, 36, -2.7, 'WORSE') }],
+    production: [{ currency: 'VES', ...metric(3000000, 2500000, 20, 'BETTER') }],
+    collected: [{ currency: 'VES', ...metric(1000000, 900000, 11.1, 'BETTER') }],
+    collectionRate: [{ currency: 'VES', ...metric(33.3, 36, -2.7, 'WORSE') }],
     completedAppointments: metric(40, 38, 5.3, 'BETTER'),
     noShowRate: metric(5, 7, -2, 'BETTER'),
     newPatients: metric(6, 6, 0, 'EQUAL'),
-    averageTicket: [{ currency: 'COP', ...metric(75000, 65789, 14, 'BETTER') }],
+    averageTicket: [{ currency: 'VES', ...metric(75000, 65789, 14, 'BETTER') }],
     occupancy: metric(64, 60, 4, 'BETTER'),
   };
   const kpi = (key: string, label: string, unit: string, changeUnit: string) => ({
@@ -202,7 +202,7 @@ function comparison(locations = 1): LocationsComparison {
     locationId: id,
     name,
     isActive: true,
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     hasActivity: true,
     previousPeriodUnattributed: false,
     metrics,
@@ -236,7 +236,7 @@ const receivables: ReceivablesSummary = {
   scope: { location: null },
   totals: [
     {
-      currency: 'COP',
+      currency: 'VES',
       patients: 2,
       balance: 880000,
       debt: 880000,
@@ -263,7 +263,7 @@ beforeEach(() => {
   for (const fn of Object.values(m)) fn.mockReset();
   m.listLocations.mockResolvedValue(sedes);
   m.listCurrencies.mockResolvedValue([
-    { code: 'COP', name: 'Peso', symbol: '$' },
+    { code: 'VES', name: 'Bolívar', symbol: 'Bs.' },
     { code: 'USD', name: 'Dólar', symbol: '$' },
   ]);
   m.listStaff.mockResolvedValue([{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST', locationIds: null }] as never);
@@ -281,10 +281,10 @@ beforeEach(() => {
   m.cash.mockResolvedValue({
     locationId: 'loc-1',
     settings: { requireOpenSession: false, blindClose: false },
-    session: cashSessionFixture({ openedAt: '2026-08-15T13:02:00.000Z' }),
+    session: cashSessionFixture({ openedAt: '2026-08-15T12:02:00.000Z' }),
   } as never);
   m.production.mockResolvedValue({
-    totals: [{ currency: 'COP', count: 7, gross: 900000, discounts: 50000, net: 850000, averageNet: 121428 }],
+    totals: [{ currency: 'VES', count: 7, gross: 900000, discounts: 50000, net: 850000, averageNet: 121428 }],
   } as never);
 });
 
@@ -299,7 +299,7 @@ describe('Inicio · ADMIN', () => {
     const scope = await screen.findByTestId('dashboard-scope');
     expect(scope).toHaveTextContent('Todas las sedes');
     expect(await within(scope).findByTestId('dashboard-zone-note')).toHaveTextContent(
-      /^Días en hora de .+ \(UTC−5\) \(Sede principal\)\.$/,
+      /^Días en hora de .+ \(UTC−4\) \(Sede principal\)\.$/,
     );
     const change = within(scope).getByRole('link', { name: 'Cambiar zona' });
     expect(change).toHaveAttribute('href', '/settings/sedes?sede=loc-1');
@@ -326,12 +326,12 @@ describe('Inicio · ADMIN', () => {
     expect(within(row).getByText('Saldo vencido')).toBeInTheDocument();
     expect(within(row).getByText('Agendada')).toBeInTheDocument();
     await within(row).findByText('Dra. Ana Ríos');
-    // La hora es la de la sede: 15:00Z = 10:00 a. m. en la sede.
+    // La hora es la de la sede: 14:00Z = 10:00 a. m. en la sede.
     expect(within(row).getByText(/10:00/)).toBeInTheDocument();
     // Pide el día civil de la sede, sin acotar a un profesional.
     expect(m.listAppointments.mock.calls[0][1]).toEqual({
-      from: '2026-08-15T05:00:00.000Z',
-      to: '2026-08-16T04:59:59.999Z',
+      from: '2026-08-15T04:00:00.000Z',
+      to: '2026-08-16T03:59:59.999Z',
       providerId: undefined,
     });
   });
@@ -428,13 +428,13 @@ describe('Inicio · ADMIN', () => {
   it('Resultados del período: cobrado convertido (hasta + 1 día) y los indicadores frente al período anterior', async () => {
     render(<DashboardView token={tokenForRole('ADMIN')} />);
     await waitFor(() => expect(m.getDashboard).toHaveBeenCalledTimes(1));
-    expect(m.getDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-08-01', to: '2026-08-16', currency: 'COP' });
+    expect(m.getDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-08-01', to: '2026-08-16', currency: 'VES' });
     expect(m.comparison.mock.calls[0][1]).toEqual({ from: '2026-08-01', to: '2026-08-15', compare: 'previous' });
     const period = screen.getByRole('region', { name: 'Resultados del período' });
     const incomes = await within(period).findByTestId('dashboard-incomes');
-    expect(incomes).toHaveTextContent('Cobrado, en COP');
+    expect(incomes).toHaveTextContent('Cobrado, en VES');
     expect(incomes).toHaveTextContent('12 abonos');
-    expect(incomes).toHaveTextContent('Cada abono en otra moneda, a COP con la tasa de su día.');
+    expect(incomes).toHaveTextContent('Cada abono en otra moneda, a VES con la tasa de su día.');
     const production = await within(period).findByTestId('dashboard-kpi-production');
     expect(production).toHaveTextContent('Producción');
     expect(production).toHaveTextContent(/Mejora: \+20\s?% frente a/);
@@ -453,11 +453,11 @@ describe('Inicio · ADMIN', () => {
 
   it('Cartera por antigüedad: los cinco tramos por moneda y lo vencido', async () => {
     render(<DashboardView token={tokenForRole('ADMIN')} />);
-    const aging = await screen.findByTestId('aging-COP');
+    const aging = await screen.findByTestId('aging-VES');
     expect(aging).toHaveTextContent('2 pacientes');
     expect(aging).toHaveTextContent('Por vencer');
     expect(aging).toHaveTextContent('Más de 90 días');
-    expect(within(aging).getByRole('img', { name: 'Reparto por antigüedad de lo que se debe en COP' })).toBeInTheDocument();
+    expect(within(aging).getByRole('img', { name: 'Reparto por antigüedad de lo que se debe en VES' })).toBeInTheDocument();
   });
 
   it('un error de Hoy es del bloque (escalón 1) y su reintento vuelve a pedir', async () => {
@@ -509,7 +509,7 @@ describe('Inicio · DENTIST', () => {
     expect(m.listAppointments.mock.calls[0][1]).toMatchObject({ providerId: 'u1' });
     expect(await pendingValue('closing')).toHaveTextContent('3');
     expect(await pendingValue('anamnesis')).toHaveTextContent('5');
-    const production = await screen.findByTestId('production-COP');
+    const production = await screen.findByTestId('production-VES');
     expect(production).toHaveTextContent('7 procedimientos');
     expect(m.production.mock.calls[0][1]).toEqual({ from: '2026-08-01', to: '2026-08-15' });
     for (const fn of [m.getDashboard, m.comparison, m.receivables, m.cash, m.inventory, m.listStaff]) {

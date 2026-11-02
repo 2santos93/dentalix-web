@@ -90,9 +90,9 @@ describe('medical-alerts (DX-247)', () => {
   });
 
   it('«hoy» es el de la sede, no el del navegador', () => {
-    const sede = { today: '2026-10-20', timeZone: 'America/Bogota' };
-    // 23:30 del 20/10 en la sede (04:30 UTC del 21/10): hoy en la sede.
-    const late = { kind: 'NO_CHANGES' as const, at: '2026-10-21T04:30:00.000Z', byName: 'X' };
+    const sede = { today: '2026-10-20', timeZone: 'America/Caracas' };
+    // 23:30 del 20/10 en la sede (03:30 UTC del 21/10): hoy en la sede.
+    const late = { kind: 'NO_CHANGES' as const, at: '2026-10-21T03:30:00.000Z', byName: 'X' };
     expect(confirmedToday(late, sede)).toBe(true);
     expect(confirmedToday(late, { today: '2026-10-21', timeZone: 'UTC' })).toBe(true);
     expect(confirmedToday({ ...late, at: '2026-10-19T15:00:00.000Z' }, sede)).toBe(false);

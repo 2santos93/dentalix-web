@@ -48,7 +48,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
-const SEDE_ZONE = 'America/Bogota';
+const SEDE_ZONE = 'America/Caracas';
 const presetRange = (preset: Parameters<typeof presetRangeIn>[0]) => presetRangeIn(preset, SEDE_ZONE);
 
 jest.mock('../../lib/payments/payments-api', () => ({
@@ -100,7 +100,7 @@ const anaCash: CashPayment = {
   registeredOn: '2026-10-15',
   registeredToday: true,
   amount: 150000.5,
-  currency: 'COP',
+  currency: 'VES',
   method: 'CASH',
   paymentMethod: null,
   reference: null,
@@ -150,20 +150,20 @@ function response(overrides: Partial<CashPaymentsResponse> = {}): CashPaymentsRe
       count: 2,
       adjustments: [],
       collected: [
-        { currency: 'COP', total: 150000.5 },
+        { currency: 'VES', total: 150000.5 },
         { currency: 'USD', total: 50.25 },
       ],
       byCurrency: [
-        { currency: 'COP', total: 150000.5, count: 1 },
+        { currency: 'VES', total: 150000.5, count: 1 },
         { currency: 'USD', total: 50.25, count: 1 },
       ],
       // DX-377: el resumen se pinta por medio de pago de la clínica.
       byPaymentMethod: [
-        { paymentMethodId: 'pm-cash', name: 'Efectivo', currency: 'COP', total: 150000.5, count: 1 },
+        { paymentMethodId: 'pm-cash', name: 'Efectivo', currency: 'VES', total: 150000.5, count: 1 },
         { paymentMethodId: 'pm-card', name: 'Tarjeta', currency: 'USD', total: 50.25, count: 1 },
       ],
       byMethod: [
-        { method: 'CASH', currency: 'COP', total: 150000.5, count: 1 },
+        { method: 'CASH', currency: 'VES', total: 150000.5, count: 1 },
         { method: 'CARD', currency: 'USD', total: 50.25, count: 1 },
       ],
     },
@@ -171,7 +171,7 @@ function response(overrides: Partial<CashPaymentsResponse> = {}): CashPaymentsRe
   };
 }
 
-// Normaliza los espacios duros de Intl (es: "150.000,50 COP" lleva U+00A0).
+// Normaliza los espacios duros de Intl (es: "150.000,50 VES" lleva U+00A0).
 function money(text: string | null | undefined): string {
   return (text ?? '').replace(/\s/g, ' ');
 }
@@ -190,7 +190,7 @@ beforeEach(() => {
       id: 'loc-1',
       name: 'Sede principal',
       address: null,
-      country: 'CO',
+      country: 'VE',
       isActive: true,
       timeZone: SEDE_ZONE,
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -229,9 +229,9 @@ it('resume el período por moneda y por método en un registro, no en tarjetas',
     name: /resumen del período/i,
   });
   const byCurrency = within(summary).getByRole('list', { name: /por moneda/i });
-  const cop = within(byCurrency).getByText('COP').closest('li');
-  expect(money(cop?.textContent)).toMatch(/150\.000,50/);
-  expect(money(cop?.textContent)).toMatch(/1 abono(?!s)/);
+  const ves = within(byCurrency).getByText('VES').closest('li');
+  expect(money(ves?.textContent)).toMatch(/150\.000,50/);
+  expect(money(ves?.textContent)).toMatch(/1 abono(?!s)/);
 
   const byMethod = within(summary).getByRole('list', { name: /por método/i });
   const card = within(byMethod).getByText('Tarjeta').closest('li');
@@ -271,7 +271,7 @@ it('DX-516: sin ajustes no hay bloque nuevo; con ellos, lo cobrado por fila y en
       ...base.summary,
       adjustments: [{ currency: 'USD', type: 'TAX', total: 3, count: 1 }],
       collected: [
-        { currency: 'COP', total: 150000.5 },
+        { currency: 'VES', total: 150000.5 },
         { currency: 'USD', total: 103 },
       ],
     },
@@ -691,7 +691,7 @@ describe('anular desde la caja (DX-057)', () => {
       name: /anular este abono/i,
     });
     // Dice QUÉ abono se anula: monto, fecha y paciente.
-    expect(money(dialog.textContent)).toMatch(/150\.000,50 COP · 15\/10\/2026 · Ana Gómez/);
+    expect(money(dialog.textContent)).toMatch(/150\.000,50 VES · 15\/10\/2026 · Ana Gómez/);
 
     await user.click(within(dialog).getByLabelText(/motivo/i));
     await user.paste(REASON);
@@ -850,9 +850,9 @@ describe('días de la sede (DX-097)', () => {
     jest.useRealTimers();
   });
 
-  it('«Hoy» es el día de la sede, no el del navegador: a las 22:30 de Bogotá (03:30Z del día siguiente) pide ese día', async () => {
+  it('«Hoy» es el día de la sede, no el del navegador: a las 22:30 de Caracas (02:30Z del día siguiente) pide ese día', async () => {
     jest.useFakeTimers({
-      now: new Date('2026-10-16T03:30:00.000Z'),
+      now: new Date('2026-10-16T02:30:00.000Z'),
       advanceTimers: true,
     });
     mockedList.mockResolvedValue(response());
@@ -939,7 +939,7 @@ describe('días de la sede (DX-097)', () => {
         items: [
           {
             ...anaCash,
-            paidAt: '2026-10-16T01:00:00.000Z',
+            paidAt: '2026-10-16T00:00:00.000Z',
             paidOn: '2026-10-15',
           },
         ],

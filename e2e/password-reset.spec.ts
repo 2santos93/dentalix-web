@@ -81,7 +81,7 @@ test.describe('Recuperar la contraseña', () => {
     // Otra sesión abierta (otro dispositivo) antes del restablecimiento.
     const otherDevice = await browser.newContext({
       locale: E2E_BROWSER_LOCALE,
-      timezoneId: 'America/Bogota',
+      timezoneId: 'America/Caracas',
     });
     try {
       const other = await otherDevice.newPage();

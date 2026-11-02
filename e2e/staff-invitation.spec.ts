@@ -74,7 +74,7 @@ test('un ADMIN invita, otra sesión acepta en /invitacion/[token] y entra con su
   // --- 2. Otra sesión (otro contexto, sin cookies del ADMIN) acepta ---
   const inviteeContext = await browser.newContext({
     locale: E2E_BROWSER_LOCALE,
-    timezoneId: 'America/Bogota',
+    timezoneId: 'America/Caracas',
   });
   try {
     const other = await inviteeContext.newPage();
@@ -168,7 +168,7 @@ test('«Reenviar invitación» pide confirmación, avisa y deja inservible el en
   await expect.poll(() => invitationLinkFor(invitee.email)).not.toBe(oldLink);
 
   // El enlace anterior ya no sirve.
-  const other = await browser.newContext({ locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Bogota' });
+  const other = await browser.newContext({ locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Caracas' });
   try {
     const visitor = await other.newPage();
     await visitor.goto(oldLink);

@@ -266,7 +266,7 @@ describe('AppointmentForm', () => {
       validityMonths: 12,
       anamnesisExpiresOn: '2027-01-01',
   today: '2026-10-20',
-  timeZone: 'America/Bogota',
+  timeZone: 'America/Caracas',
       lastReview: null,
     });
   });
@@ -404,7 +404,7 @@ describe('AppointmentForm', () => {
       validityMonths: 12,
       anamnesisExpiresOn: '2027-01-01',
   today: '2026-10-20',
-  timeZone: 'America/Bogota',
+  timeZone: 'America/Caracas',
       lastReview: null,
     });
     const user = userEvent.setup();
@@ -426,7 +426,7 @@ describe('AppointmentForm', () => {
       validityMonths: 12,
       anamnesisExpiresOn: null,
       today: '2026-10-20',
-      timeZone: 'America/Bogota',
+      timeZone: 'America/Caracas',
       lastReview: null,
     });
     const user = userEvent.setup();
@@ -470,7 +470,7 @@ describe('AppointmentForm', () => {
     function hoursForFutureDate() {
       const weekday = new Date(`${FUTURE_DATE}T00:00:00`).getDay();
       return {
-        timezone: 'America/Bogota',
+        timezone: 'America/Caracas',
         ranges: [{ weekday, startMinute: 9 * 60, endMinute: 13 * 60 }],
       };
     }
@@ -525,7 +525,7 @@ describe('AppointmentForm', () => {
       // Horario que solo abre OTRO día que el de FUTURE_DATE.
       const weekday = new Date(`${FUTURE_DATE}T00:00:00`).getDay();
       mockedGetSchedule.mockResolvedValue({
-        timezone: 'America/Bogota',
+        timezone: 'America/Caracas',
         ranges: [{ weekday: (weekday + 1) % 7, startMinute: 540, endMinute: 780 }],
       });
       const user = userEvent.setup();

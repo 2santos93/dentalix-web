@@ -42,7 +42,7 @@ function entry(overrides: Partial<WaitlistEntry> & { id: string }): WaitlistEntr
     patientId: 'pat-1',
     patientFirstName: 'Berta',
     patientLastName: 'Gil',
-    patientPhone: '3105550101',
+    patientPhone: '4145550101',
     sourceAppointmentId: 'apt-1',
     sourceAppointment: {
       start: new Date('2031-03-03T10:00:00').toISOString(),
@@ -115,9 +115,9 @@ describe('WaitlistPanel (DX-122)', () => {
     expect(within(items[0]).getByText('Prefiere: Mañanas')).toBeInTheDocument();
     expect(within(items[1]).getByText(/^Canceló la cita del/)).toBeInTheDocument();
     expect(within(items[1]).getByText('Desde hoy · 45 min')).toBeInTheDocument();
-    expect(within(items[1]).getByRole('link', { name: 'Llamar al 3105550101' })).toHaveAttribute(
+    expect(within(items[1]).getByRole('link', { name: 'Llamar al 4145550101' })).toHaveAttribute(
       'href',
-      'tel:3105550101',
+      'tel:4145550101',
     );
     expect(screen.getByText('2 pacientes')).toBeInTheDocument();
     // Un solo botón primario por vista (DESIGN.md): «Buscar hueco» es secundario.
@@ -169,7 +169,7 @@ describe('WaitlistPanel (DX-122)', () => {
       end: new Date('2031-03-10T12:00:00').toISOString(),
     };
     mockedOpenings.mockResolvedValue({
-      timeZone: 'America/Bogota',
+      timeZone: 'America/Caracas',
       durationMinutes: 45,
       openings: [opening],
       truncated: false,
@@ -211,7 +211,7 @@ describe('WaitlistPanel (DX-122)', () => {
   it('si otra persona ya la agendó (409), la saca de la lista y lo avisa', async () => {
     mockedList.mockResolvedValue(page([berta]));
     mockedOpenings.mockResolvedValue({
-      timeZone: 'America/Bogota',
+      timeZone: 'America/Caracas',
       durationMinutes: 45,
       openings: [
         { start: new Date('2031-03-10T09:00:00').toISOString(), end: new Date('2031-03-10T12:00:00').toISOString() },

@@ -88,10 +88,10 @@ jest.mock('../../lib/payments/payments-api', () => ({
   voidPayment: jest.fn(),
 }));
 // DX-051: la imputación de un abono (modal «Imputar abono», solo ADMIN).
-// Una sede en la sede (fixture explícito): la fecha por defecto del abono es su «hoy».
+// Una sede en Caracas (fixture explícito): la fecha por defecto del abono es su «hoy».
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
-  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation({ currency: 'VES' })]),
 }));
 jest.mock('../../lib/payments/payment-allocations-api', () => ({
   getPaymentAllocations: jest.fn(),
@@ -131,7 +131,7 @@ jest.mock('../../lib/exchange/exchange-settings-api', () => ({
   getExchangeRateSettings: jest.fn().mockResolvedValue({ source: 'MANUAL', manualSince: '2026-10-01', baseCurrency: 'USD' }),
 }));
 jest.mock('../../lib/exchange/exchange-api', () => ({
-  getExchangeRates: jest.fn().mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: { COP: 4000 } }),
+  getExchangeRates: jest.fn().mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: { VES: 4000 } }),
 }));
 // Recibo de caja (DX-136): el diálogo pide el recibo a la API.
 // DX-377: medios de pago activos de la clínica (el formulario de abono).
@@ -365,10 +365,10 @@ async function pickRowAction(
 
 /**
  * DX-386: la lista de abonos, «Cobrado»/«Pendiente» por ítem y la
- * previsualización del cobro van con el formato de la sede del fixture (es-CO)
+ * previsualización del cobro van con el formato de la sede del fixture (es-VE)
  * y el código ISO («USD 50.000,00»), nunca con el símbolo.
  */
-const SEDE_FMT = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+const SEDE_FMT = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 function sedeCurrencyText(amount: number, currency = 'USD'): string {
   return moneyWithCode(amount, currency, SEDE_FMT).replace(/\u00A0/g, ' ');
 }
@@ -428,7 +428,7 @@ describe('TreatmentPlansTab', () => {
     mockedListCurrencies.mockReset();
     mockedListCurrencies.mockResolvedValue([
       { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
-      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+      { code: 'VES', name: 'Bolívar venezolano', symbol: 'Bs.' },
     ]);
     mockedGetPaymentPlan.mockReset();
     // Default: no active payment plan — PaymentPlanSection renders its empty
@@ -465,9 +465,9 @@ describe('TreatmentPlansTab', () => {
     await user.click(screen.getByRole('button', { name: /nuevo plan/i }));
 
     // GLOBAL-G1 (R14): sin sede activa, la moneda común de la clínica (la del
-    // fixture de sede, COP), nunca USD por defecto.
+    // fixture de sede, VES), nunca USD por defecto.
     await waitFor(() =>
-      expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'COP' }),
+      expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'VES' }),
     );
     await waitFor(() => expect(mockedListPlans).toHaveBeenCalledTimes(2));
     // The new plan is auto-selected -> its (empty) detail is fetched.
@@ -791,9 +791,9 @@ describe('TreatmentPlansTab', () => {
     mockedListPayments.mockResolvedValue([
       {
         ...payment1,
-        id: 'pay-cop',
+        id: 'pay-ves',
         amount: 200000,
-        currency: 'COP',
+        currency: 'VES',
         exchangeRateCurrency: 'USD',
         exchangeRateStatus: 'FROZEN',
         adjustments: [],
@@ -823,8 +823,8 @@ describe('TreatmentPlansTab', () => {
     const paymentsTable = await openPaymentsTable(user);
 
     expect(
-      // DX-378: con el formato de la sede (es-CO del fixture) y el código ISO.
-      await within(paymentsTable).findByText(/Tasa congelada: 1 USD = COP\s4\.000,00 · manual · 05\/01\/2026/),
+      // DX-378: con el formato de la sede (es-VE del fixture) y el código ISO.
+      await within(paymentsTable).findByText(/Tasa congelada: 1 USD = VES\s4\.000,00 · manual · 05\/01\/2026/),
     ).toBeInTheDocument();
     expect(within(paymentsTable).getByText(paymentRateCopy.missing)).toBeInTheDocument();
   });
@@ -902,8 +902,8 @@ describe('TreatmentPlansTab', () => {
     expect(paymentsTable).not.toHaveTextContent('US$');
   });
 
-  // DX-489: plan en EUR y catálogo en COP (la moneda de las sedes del fixture).
-  describe('DX-489: plan en EUR con el catálogo en COP', () => {
+  // DX-489: plan en EUR y catálogo en VES (la moneda de las sedes del fixture).
+  describe('DX-489: plan en EUR con el catálogo en VES', () => {
     const eurItem = {
       ...item1,
       price: 100.55,
@@ -924,16 +924,16 @@ describe('TreatmentPlansTab', () => {
       mockedListPayments.mockResolvedValue([{ ...payment1, amount: 100.55, currency: 'EUR' }]);
     });
 
-    it('el ítem pinta el precio de lista en COP, nunca en EUR', async () => {
+    it('el ítem pinta el precio de lista en VES, nunca en EUR', async () => {
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(
-        within(table).getByText(/^Convenio Seguros Sol · precio de lista COP 80\.000,00$/),
+        within(table).getByText(/^Convenio Seguros Sol · precio de lista VES 80\.000,00$/),
       ).toBeInTheDocument();
       expect(table).not.toHaveTextContent(/80\.000,00\sEUR|EUR\s80\.000,00/);
     });
 
-    it('el formulario dice el precio de lista en COP', async () => {
+    it('el formulario dice el precio de lista en VES', async () => {
       mockedGetPriceQuote.mockResolvedValue({
         basePrice: 80000,
         price: 100.55,
@@ -949,7 +949,7 @@ describe('TreatmentPlansTab', () => {
       await user.type(screen.getByLabelText(/código fdi/i), '16');
       await user.click(screen.getByRole('radio', { name: /resina/i }));
       expect(
-        await screen.findByText(/^Convenio \(lista de precios\) · Seguros Sol · precio de lista COP 80\.000,00$/),
+        await screen.findByText(/^Convenio \(lista de precios\) · Seguros Sol · precio de lista VES 80\.000,00$/),
       ).toBeInTheDocument();
     });
 
@@ -971,7 +971,7 @@ describe('TreatmentPlansTab', () => {
       const field = screen.getByLabelText('Precio', { exact: true });
       await user.clear(field);
       await user.type(field, '100,55');
-      const notice = await screen.findByText(/^Precio de catálogo: COP 80\.000,00, en otra moneda y sin convertir\./);
+      const notice = await screen.findByText(/^Precio de catálogo: VES 80\.000,00, en otra moneda y sin convertir\./);
       expect(notice).toBeInTheDocument();
       expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/EUR\s80\.000|Rebaja de/);
     });
@@ -992,8 +992,8 @@ describe('TreatmentPlansTab', () => {
     });
   });
 
-  it('DX-097: la fecha por defecto del abono es hoy en la sede, no en el navegador (20:30 en Bogotá = 01:30Z)', async () => {
-    jest.useFakeTimers({ now: new Date('2026-10-16T01:30:00.000Z'), advanceTimers: true });
+  it('DX-097: la fecha por defecto del abono es hoy en la sede, no en el navegador (20:30 en Caracas = 00:30Z)', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-16T00:30:00.000Z'), advanceTimers: true });
     try {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue(plan1Detail);
@@ -1006,7 +1006,7 @@ describe('TreatmentPlansTab', () => {
       expect(await screen.findByText('A pagar')).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
 
-      // La sede del fixture está en la sede: el día es el 15, aunque en UTC ya
+      // La sede del fixture está en Caracas: el día es el 15, aunque en UTC ya
       // sea el 16.
       expect(paymentDateValue()).toBe('2026-10-15');
     } finally {
@@ -1038,8 +1038,8 @@ describe('TreatmentPlansTab', () => {
     // its (mocked `listCurrencies`) options to load in first. Scoped to this
     // select specifically: the "Nuevo plan" currency select above also
     // renders the same options once loaded.
-    await waitFor(() => expect(currencySelect.querySelector('option[value="COP"]')).not.toBeNull());
-    await user.selectOptions(currencySelect, 'COP');
+    await waitFor(() => expect(currencySelect.querySelector('option[value="VES"]')).not.toBeNull());
+    await user.selectOptions(currencySelect, 'VES');
 
     await user.type(screen.getByLabelText(/^monto$/i), '25000');
 
@@ -1047,11 +1047,11 @@ describe('TreatmentPlansTab', () => {
     const preview = await screen.findByTestId('rp-rate-preview');
     await waitFor(() => expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Equivalente en USDUSD 6,25'));
     expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Pendiente tras el abonoUSD 79.993,75');
-    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Tasa: 1 USD = COP 4\.000,00 · manual · \d{2}\/\d{2}\/\d{4}/);
+    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Tasa: 1 USD = VES 4\.000,00 · manual · \d{2}\/\d{2}\/\d{4}/);
     // DX-386: el mismo formato que la «Tasa congelada» de cada abono, sin «US$».
     expect(preview).not.toHaveTextContent('US$');
 
-    const newPayment = { ...payment1, id: 'pay-2', amount: 25000, currency: 'COP' };
+    const newPayment = { ...payment1, id: 'pay-2', amount: 25000, currency: 'VES' };
     const updatedBalance = { ...balance1, paid: balance1.paid + 25000, balance: balance1.balance - 25000 };
     mockedRecordPayment.mockResolvedValue(newPayment);
     mockedGetPlanBalance.mockResolvedValueOnce(updatedBalance);
@@ -1064,7 +1064,7 @@ describe('TreatmentPlansTab', () => {
     expect(tokenArg).toBe(tok);
     expect(planIdArg).toBe('plan-1');
     expect(input.amount).toBe(25000);
-    expect(input.currency).toBe('COP');
+    expect(input.currency).toBe('VES');
     // DX-097: el día civil, sin hora (la API lo guarda al mediodía de la sede).
     expect(input.paidAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(input.method).toBeUndefined();
@@ -2279,7 +2279,7 @@ describe('TreatmentPlansTab', () => {
         jest.mocked(listLocations).mockResolvedValue([{ ...clinicLocation(), currency: 'USD' }]);
       });
       afterEach(() => {
-        jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+        jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
       });
 
       async function openForm(token: string) {
@@ -2447,7 +2447,7 @@ describe('TreatmentPlansTab', () => {
       );
       const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
       await waitFor(() => expect(price.value).toBe('40000'));
-      expect(await screen.findByText(/Convenio · Seguros Sol · precio de lista COP 50\.000,00$/)).toBeInTheDocument();
+      expect(await screen.findByText(/Convenio · Seguros Sol · precio de lista VES 50\.000,00$/)).toBeInTheDocument();
     });
 
     it('la línea de origen queda atada al campo de precio (aria-describedby)', async () => {
@@ -2609,7 +2609,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [withAgreement, item2] });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista COP 50\.000,00$/)).toBeInTheDocument();
+      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista VES 50\.000,00$/)).toBeInTheDocument();
     });
 
     it('un ítem con convenio y descuento muestra la línea del convenio Y la del descuento', async () => {
@@ -2626,7 +2626,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [both, item2] });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista COP 50\.000,00$/)).toBeInTheDocument();
+      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista VES 50\.000,00$/)).toBeInTheDocument();
       expect(within(table).getByText(/Descuento −USD 2\.000,00/)).toBeInTheDocument();
     });
 
@@ -2768,7 +2768,7 @@ describe('TreatmentPlansTab', () => {
           {
             paymentId: 'p9',
             amount: 150000,
-            currency: 'COP',
+            currency: 'VES',
             paidOn: '2026-10-30',
           },
         ],
@@ -3032,7 +3032,7 @@ describe('TreatmentPlansTab', () => {
   });
   describe('moneda del plan (GLOBAL-G1, R14)', () => {
     const mockedLocations = jest.mocked(listLocations);
-    const tokyo = clinicLocation({ id: 'loc-jp', name: 'Tokio', country: 'CO', currency: 'JPY', timeZone: 'Asia/Tokyo' });
+    const tokyo = clinicLocation({ id: 'loc-jp', name: 'Tokio', country: 'VE', currency: 'JPY', timeZone: 'Asia/Tokyo' });
     const madrid = clinicLocation({ id: 'loc-es', name: 'Madrid', country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid' });
 
     beforeEach(() => {
@@ -3045,7 +3045,7 @@ describe('TreatmentPlansTab', () => {
     });
     afterEach(() => {
       window.localStorage.clear();
-      mockedLocations.mockResolvedValue([clinicLocation()]);
+      mockedLocations.mockResolvedValue([clinicLocation({ currency: 'VES' })]);
     });
 
     it('new plan at a JPY location is created in JPY', async () => {
@@ -3081,9 +3081,9 @@ describe('TreatmentPlansTab', () => {
       await waitFor(() => expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'EUR' }));
     });
 
-    it('location without currency leaves the plan currency empty, never COP or USD', async () => {
+    it('location without currency leaves the plan currency empty, never VES or USD', async () => {
       window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
-      mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'CO', currency: null })]);
+      mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'VE', currency: null })]);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       await screen.findByText(/todavía no tiene un plan de tratamiento/i);

@@ -9,7 +9,7 @@ import { clinicLocation } from './locations';
  * navegador.
  */
 export function utcSede(overrides: Partial<ClinicLocation> = {}): ClinicLocation {
-  return clinicLocation({ timeZone: 'UTC', locale: 'es-CO', hourCycle: 'h23', ...overrides });
+  return clinicLocation({ timeZone: 'UTC', locale: 'es-VE', hourCycle: 'h23', ...overrides });
 }
 
 /** Sede de Caracas (UTC−4) en 12 h: el reloj de las pruebas de DX-378. */

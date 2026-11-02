@@ -50,13 +50,13 @@ async function seedNightPayment(page: Page, tag: string): Promise<Seeded> {
     sex: 'F',
   });
   const plan = await apiPost<{ id: string }>(page.request, admin, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'USD',
   });
   const day = sedeDayFromToday(-1);
   const paidAt = atSede(day, '20:00');
   const saved = await apiPost<{ paidAt: string }>(page.request, admin, `/treatment-plans/${plan.id}/payments`, {
     amount: 97_000,
-    currency: 'COP',
+    currency: 'USD',
     paidAt: paidAt.toISOString(),
     method: 'CASH',
   });
@@ -101,7 +101,7 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900 },
   { name: 'móvil', width: 390, height: 844 },
 ]) {
-  test(`un abono a las 20:00 de Bogotá sale en la caja de «Hoy» de la sede (${viewport.name})`, async ({ page }) => {
+  test(`un abono a las 20:00 de Caracas sale en la caja de «Hoy» de la sede (${viewport.name})`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const seeded = await seedNightPayment(page, String(viewport.width));
     await expectNightPaymentToday(page, seeded);

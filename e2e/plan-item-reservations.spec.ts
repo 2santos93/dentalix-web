@@ -59,7 +59,7 @@ interface Scenario {
 /** «30/10/2026 a las 09:00» de la sede. */
 function wall(at: Date): string {
   const p = Object.fromEntries(
-    new Intl.DateTimeFormat('es-CO', {
+    new Intl.DateTimeFormat('es-VE', {
       timeZone: ZONE,
       day: '2-digit',
       month: '2-digit',
@@ -101,7 +101,7 @@ async function scenario(page: Page, name: string, offsetMin: number): Promise<Sc
     sex: 'F',
   });
   const plan = await apiPost<{ id: string }>(request, session, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'USD',
   });
   const item = await apiPost<{ id: string }>(request, session, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '36',

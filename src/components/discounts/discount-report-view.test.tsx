@@ -21,7 +21,7 @@ jest.mock('../../lib/auth/token-role', () => ({ getTokenRole: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('../../lib/locations/use-sede-time-zone', () => ({
   ...jest.requireActual('../../lib/locations/use-sede-time-zone'),
-  useSedeTimeZone: jest.fn(() => ({ status: 'ready', timeZone: 'America/Bogota' })),
+  useSedeTimeZone: jest.fn(() => ({ status: 'ready', timeZone: 'America/Caracas' })),
   sedeToday: () => '2026-10-17',
 }));
 jest.mock('../../lib/appointments/staff-api', () => ({
@@ -55,7 +55,7 @@ function row(overrides: Partial<DiscountReportItem> = {}): DiscountReportItem {
     patientName: 'Ana Pérez',
     toothNumber: '36',
     procedure: 'Corona libre de metal',
-    currency: 'COP',
+    currency: 'USD',
     catalogPrice: null,
     price: 1200000,
     priceReduction: 0,
@@ -91,7 +91,7 @@ function report(items: DiscountReportItem[], overrides: Partial<DiscountReport> 
     totals: items.length
       ? [
           {
-            currency: 'COP',
+            currency: 'USD',
             items: items.length,
             gross: 1200000,
             discount: 180000,
@@ -134,7 +134,7 @@ function mockPhone(): () => void {
 describe('DiscountReportView (DX-204)', () => {
   beforeEach(() => {
     mockedReport.mockReset();
-    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Bogota' });
+    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Caracas' });
     mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'es-ES', hourCycle: 'h23' }) });
     mockedCsv.mockReset();
     mockedRole.mockReturnValue('ADMIN');
@@ -144,9 +144,9 @@ describe('DiscountReportView (DX-204)', () => {
     mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'en-US', hourCycle: 'h12' }) });
     mockedReport.mockResolvedValue(report([row()]));
     render(<DiscountReportView token="tok" />);
-    const summary = await screen.findByTestId('discount-total-COP');
+    const summary = await screen.findByTestId('discount-total-USD');
     expect(within(summary).getByText('15%')).toBeInTheDocument();
-    expect(within(summary).getByText(/^COP\s180,000\.00$/)).toBeInTheDocument();
+    expect(within(summary).getByText(/^USD\s180,000\.00$/)).toBeInTheDocument();
     expect(within(await findRow()).getByText(/^\d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument();
   });
 
@@ -168,12 +168,12 @@ describe('DiscountReportView (DX-204)', () => {
         page: 1,
       }),
     );
-    const summary = await screen.findByTestId('discount-total-COP');
+    const summary = await screen.findByTestId('discount-total-USD');
     expect(within(summary).getByText('15 %')).toBeInTheDocument();
     expect(within(summary).getByText(/180\.000,00/)).toBeInTheDocument();
     expect(screen.getByTestId('scope-marker')).toHaveTextContent('Sede principal');
     // La moneda y los ítems encabezan la fila del resumen; no son una métrica más.
-    expect(within(summary).getByText('COP · 1 ítem')).toBeInTheDocument();
+    expect(within(summary).getByText('USD · 1 ítem')).toBeInTheDocument();
     const tableRow = await findRow();
     expect(within(tableRow).getByRole('link', { name: 'Ana Pérez' })).toHaveAttribute(
       'href',
@@ -229,15 +229,15 @@ describe('DiscountReportView (DX-204)', () => {
     mockedReport.mockResolvedValue(
       report([agreed], {
         totals: [],
-        agreementTotals: [{ currency: 'COP', items: 1, reduction: 2000000 }],
+        agreementTotals: [{ currency: 'USD', items: 1, reduction: 2000000 }],
       }),
     );
     render(<DiscountReportView token="tok" />);
     // M1: las rebajas de convenio tienen su propio total, aparte de DX-204.
-    const summary = await screen.findByTestId('agreement-total-COP');
-    expect(within(summary).getByText('COP · 1 ítem con rebaja de convenio')).toBeInTheDocument();
+    const summary = await screen.findByTestId('agreement-total-USD');
+    expect(within(summary).getByText('USD · 1 ítem con rebaja de convenio')).toBeInTheDocument();
     expect(within(summary).getByText(/2\.000\.000,00/)).toBeInTheDocument();
-    expect(screen.queryByTestId('discount-total-COP')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('discount-total-USD')).not.toBeInTheDocument();
     const tableRow = await findRow();
     expect(within(tableRow).getByText(/Convenio «Cortesía socios»/)).toHaveTextContent(/−\s?2\.000\.000,00.*100 %/);
     expect(within(tableRow).getByText('Convenio asignado por Dr. Owner')).toBeInTheDocument();
@@ -269,7 +269,7 @@ describe('DiscountReportView (DX-204)', () => {
             createdByName: 'Dra. Ríos',
           }),
         ],
-        { totals: [], agreementTotals: [{ currency: 'COP', items: 1, reduction: 10000 }] },
+        { totals: [], agreementTotals: [{ currency: 'USD', items: 1, reduction: 10000 }] },
       ),
     );
     render(<DiscountReportView token="tok" />);
@@ -321,7 +321,7 @@ describe('DiscountReportView (DX-204)', () => {
               agreementAssignedByName: 'Dr. Owner',
             }),
           ],
-          { totals: [], agreementTotals: [{ currency: 'COP', items: 1, reduction: 2000000 }] },
+          { totals: [], agreementTotals: [{ currency: 'USD', items: 1, reduction: 2000000 }] },
         ),
       );
       render(<DiscountReportView token="tok" />);
