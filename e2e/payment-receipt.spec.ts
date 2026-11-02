@@ -255,6 +255,70 @@ test('un abono anulado conserva su número y su recibo sale ANULADO con motivo y
   await printPage.close();
 });
 
+// DX-521: el recibo se pinta con la zona y el formato de SU SEDE, no con los del navegador.
+test.describe('recibo con el navegador en otra zona que la sede', () => {
+  // 16 h de diferencia con la sede principal de la demo: la hora y a veces el día cambian.
+  const BROWSER_ZONE = 'Pacific/Auckland';
+  test.use({ timezoneId: BROWSER_ZONE });
+
+  test('la hora emitida sale en la zona de la sede y los importes con el código de su moneda', async ({ page }) => {
+    expect(BROWSER_ZONE).not.toBe(DEMO_REGION.timeZone);
+    const origin = tenantOrigin(DEMO_SUBDOMAIN);
+    const host = new URL(origin).host;
+    const data = await seed(page.request, host, `${suffix}zone`, [55]);
+    const [payment] = data.payments;
+    const admin = { 'X-Tenant-Host': host, Authorization: `Bearer ${await apiLogin(page.request, host, ADMIN_EMAIL)}` };
+    const res = await page.request.get(`${API_URL}/payments/${payment.id}/receipt`, { headers: admin });
+    expect(res.ok(), `GET recibo falló: ${await res.text()}`).toBeTruthy();
+    const receipt = (await res.json()) as { issuedAt: string; regional: { timeZone: string } | null };
+    expect(receipt.regional?.timeZone).toBe(DEMO_REGION.timeZone);
+
+    const issued = new Date(receipt.issuedAt);
+    const inSede = sedeFormat.dateTime(issued, DEMO_REGION.timeZone);
+    const inBrowser = sedeFormat.dateTime(issued, BROWSER_ZONE);
+    expect(inBrowser).not.toBe(inSede);
+
+    // La vista imprimible no debe abrir el diálogo de impresión del navegador.
+    await page.context().addInitScript(() => {
+      window.print = () => undefined;
+    });
+    await webLogin(page, origin, RECEPTION_EMAIL);
+    const dialog = await openReceiptFromStatement(page, origin, data.patientId, payment.amount);
+    const doc = dialog.getByTestId('receipt-document');
+    await expect(doc).toContainText(`Emitido ${inSede}`);
+    await expect(doc).not.toContainText(inBrowser);
+    // El importe con el formato de la sede y su código de moneda, nunca con el símbolo «$».
+    await expect(doc).toContainText(figure(payment.amount));
+    await expect(doc).not.toContainText('$');
+
+    // La vista imprimible (A4 y tirilla de 80 mm), en tema claro y oscuro: la hora de la sede,
+    // la hoja siempre blanca y nada que desborde en horizontal.
+    for (const [name, format] of [
+      ['Imprimir A4', 'a4'],
+      ['Tirilla 80 mm', '80mm'],
+    ] as const) {
+      const [printPage] = await Promise.all([
+        page.context().waitForEvent('page'),
+        dialog.getByRole('link', { name: new RegExp(name) }).click(),
+      ]);
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await printPage.emulateMedia({ colorScheme });
+        const printed = printPage.getByTestId('receipt-document');
+        const label = `${format} ${colorScheme}`;
+        await expect(printed, label).toContainText(`Emitido ${inSede}`, { timeout: 15_000 });
+        await expect(printed, label).not.toContainText(inBrowser);
+        await expect(printed, label).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+        const { scrollWidth, clientWidth } = await printed.evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(scrollWidth, label).toBeLessThanOrEqual(clientWidth);
+      }
+      await printPage.close();
+    }
+  });
+});
+
 test('un rol sin permiso de cobro recibe 403 en español y la vista imprimible lo dice', async ({ page }) => {
   const origin = tenantOrigin(DEMO_SUBDOMAIN);
   const host = new URL(origin).host;

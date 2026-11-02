@@ -121,7 +121,7 @@ test('sin configurar: la fila de VES vacía, el ejemplo con el código y el reci
     await shoot(page, 'monedas-empty', viewport.width, ves);
   }
   const doc = await openPrint(page, payments.before);
-  expect(flat(await doc.textContent())).toContain('1234,50 VES');
+  expect(flat(await doc.textContent())).toContain('VES 1.234,50');
 });
 
 test('el ADMIN escribe «Bs.»: la caja y el recibo nuevo lo usan; el anterior se reimprime igual', async ({
@@ -167,7 +167,7 @@ test('el ADMIN escribe «Bs.»: la caja y el recibo nuevo lo usan; el anterior s
 
   // El recibo nuevo congela «Bs.»; el anterior se reimprime con el código.
   const after = await openPrint(page, payments.after);
-  expect(flat(await after.textContent())).toContain('2000,00 Bs.');
+  expect(flat(await after.textContent())).toContain('Bs. 2.000,00');
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
@@ -175,7 +175,7 @@ test('el ADMIN escribe «Bs.»: la caja y el recibo nuevo lo usan; el anterior s
   }
   const before = await openPrint(page, payments.before);
   const beforeText = flat(await before.textContent());
-  expect(beforeText).toContain('1234,50 VES');
+  expect(beforeText).toContain('VES 1.234,50');
   expect(beforeText).not.toContain('Bs.');
 });
 
