@@ -225,7 +225,7 @@ export function LocationsList({
                     size="sm"
                     onClick={() => openModal(location)}
                     aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
-                    className="max-sm:min-h-11"
+                    className="border-border-input max-sm:min-h-11"
                   >
                     {needsRegionalReview(location) ? copy.review : copy.edit}
                   </Button>
