@@ -255,6 +255,40 @@ test('un abono anulado conserva su número y su recibo sale ANULADO con motivo y
   await printPage.close();
 });
 
+// DX-521: el recibo se pinta con la zona y el formato de SU SEDE, no con los del navegador.
+test.describe('recibo con el navegador en otra zona que la sede', () => {
+  // 16 h de diferencia con la sede principal de la demo: la hora y a veces el día cambian.
+  const BROWSER_ZONE = 'Pacific/Auckland';
+  test.use({ timezoneId: BROWSER_ZONE });
+
+  test('la hora emitida sale en la zona de la sede y los importes con el código de su moneda', async ({ page }) => {
+    expect(BROWSER_ZONE).not.toBe(DEMO_REGION.timeZone);
+    const origin = tenantOrigin(DEMO_SUBDOMAIN);
+    const host = new URL(origin).host;
+    const data = await seed(page.request, host, `${suffix}zone`, [55]);
+    const [payment] = data.payments;
+    const admin = { 'X-Tenant-Host': host, Authorization: `Bearer ${await apiLogin(page.request, host, ADMIN_EMAIL)}` };
+    const res = await page.request.get(`${API_URL}/payments/${payment.id}/receipt`, { headers: admin });
+    expect(res.ok(), `GET recibo falló: ${await res.text()}`).toBeTruthy();
+    const receipt = (await res.json()) as { issuedAt: string; regional: { timeZone: string } | null };
+    expect(receipt.regional?.timeZone).toBe(DEMO_REGION.timeZone);
+
+    const issued = new Date(receipt.issuedAt);
+    const inSede = sedeFormat.dateTime(issued, DEMO_REGION.timeZone);
+    const inBrowser = sedeFormat.dateTime(issued, BROWSER_ZONE);
+    expect(inBrowser).not.toBe(inSede);
+
+    await webLogin(page, origin, RECEPTION_EMAIL);
+    const dialog = await openReceiptFromStatement(page, origin, data.patientId, payment.amount);
+    const doc = dialog.getByTestId('receipt-document');
+    await expect(doc).toContainText(`Emitido ${inSede}`);
+    await expect(doc).not.toContainText(inBrowser);
+    // El importe con el formato de la sede y su código de moneda, nunca con el símbolo «$».
+    await expect(doc).toContainText(figure(payment.amount));
+    await expect(doc).not.toContainText('$');
+  });
+});
+
 test('un rol sin permiso de cobro recibe 403 en español y la vista imprimible lo dice', async ({ page }) => {
   const origin = tenantOrigin(DEMO_SUBDOMAIN);
   const host = new URL(origin).host;
