@@ -14,6 +14,7 @@ import {
 import { expectNoHorizontalScroll } from './support/layout';
 import { shot } from './support/qa-shot';
 import { activeSedeSelect } from './support/nav';
+import { dataList, dataListRows } from './support/data-list';
 import { cashCollected, choosePeriod, collectedOf, comparisonRow, nonZero } from './support/comparison';
 import { API_URL, tenantOrigin } from './support/urls';
 import { formatCivilDate } from '../src/lib/format/date';
@@ -42,6 +43,8 @@ import type { ApiSession } from './support/api';
  *
  *  7. Ajustes › Sedes, «Comparar sedes» y el recibo de un abono de cada sede
  *     (su número de la serie de la sede y su moneda).
+ *
+ *  8. Ajustes › Listas de precios con el formato de cada sede (DX-522), leyendo una lista del seed.
  *
  * Nada se crea ni se cambia (abrir un recibo solo deja su evento de auditoría): no hay limpieza que hacer. Cada pantalla, sin
  * scroll horizontal y con axe sin violaciones serias ni críticas, en claro y
@@ -317,6 +320,51 @@ for (const [sedeName, region] of REGIONS) {
       await expect(doc).toContainText(`N.º ${payment.receiptNumber}`, { timeout: 15_000 });
       await expect(doc).toContainText(payment.currency);
       await checkScreen(page, `receipt-${key.slug}`, viewport.width);
+    }
+  });
+}
+
+/**
+ * Una lista de precios activa de la demo con un procedimiento que tiene precio de lista y de catálogo,
+ * leída tal como la deja el seed (no se crea nada: cada sede ya puede tener su lista activa).
+ */
+async function demoPricedItem(
+  request: APIRequestContext,
+  session: ApiSession,
+): Promise<{ listId: string; currency: string; code: string; price: number; defaultPrice: number }> {
+  const lists = await apiGet<{ id: string; currency: string; active: boolean }[]>(request, session, '/price-lists');
+  for (const list of lists.filter((l) => l.active)) {
+    const { items } = await apiGet<{
+      items: { code: string; price: number | null; defaultPrice: number | null }[];
+    }>(request, session, `/price-lists/${list.id}/items?pageSize=100`);
+    const row = items.find((i) => i.price !== null && i.defaultPrice !== null);
+    if (row) {
+      return { listId: list.id, currency: list.currency, code: row.code, price: row.price!, defaultPrice: row.defaultPrice! };
+    }
+  }
+  throw new Error('la demo no trae una lista de precios activa con un procedimiento con precio de lista y de catálogo');
+}
+
+for (const [sedeName, region] of REGIONS) {
+  // DX-522: Ajustes › Listas de precios pinta los importes con el formato de la sede activa y el
+  // código ISO de la lista (nunca el símbolo ni un idioma fijo). Solo lee la lista que trae el seed.
+  test(`the price list shows its amounts in the format of the location: ${sedeName}`, async ({ page, request }) => {
+    test.setTimeout(120_000);
+    const fmt = regionalFormat(region);
+    const found = await demoPricedItem(request, session);
+    const money = (amount: number) => moneyWithCode(amount, found.currency, fmt).replace(/\s/g, ' ');
+
+    for (const viewport of VIEWPORTS) {
+      await page.setViewportSize(viewport);
+      await page.goto(`${origin}/agenda`);
+      await chooseSede(page, sedeName);
+      await page.goto(`${origin}/settings/listas-de-precios/${found.listId}`);
+      // La lista va paginada: se busca por código, que a 390 px no se pinta en la fila.
+      await page.getByLabel('Buscar por código, nombre o categoría').fill(found.code);
+      const row = dataListRows(dataList(page, 'Precios de la lista')).filter({ hasText: money(found.price) });
+      await expect(row.first()).toBeVisible({ timeout: 15_000 });
+      await expect(row.first()).toContainText(money(found.defaultPrice));
+      await checkScreen(page, `price-list-${SEDE_SHOTS[sedeName].slug}`, viewport.width);
     }
   });
 }

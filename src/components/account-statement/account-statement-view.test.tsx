@@ -82,9 +82,9 @@ it('pide el estado de cuenta del paciente y pinta el resumen por moneda', async 
 
   const ves = await screen.findByRole('region', { name: /resumen en VES/i });
   expect(mockedGet).toHaveBeenCalledWith('tok', 'pat-1');
-  expect(money(within(ves).getByTestId('budgeted').textContent)).toContain('3.000.000');
+  expect(money(within(ves).getByTestId('budgeted').textContent)).toContain('VES 3.000.000,00');
   expect(money(within(ves).getByTestId('paid').textContent)).toContain('1.200.000');
-  expect(money(within(ves).getByTestId('balance').textContent)).toContain('1.800.000');
+  expect(money(within(ves).getByTestId('balance').textContent)).toContain('VES 1.800.000,00');
 
   // Vencido destacado: importe y número de cuotas, en tono de peligro.
   const overdue = within(ves).getByTestId('overdue');

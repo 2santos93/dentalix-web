@@ -219,14 +219,14 @@ test('recepción anota el nº de factura externa en la caja y filtra por él', a
   await filter.selectOption({ label: 'Con nº de factura externa' });
   await expect(rowWith('10.000')).toHaveCount(0, { timeout: 15_000 });
   await expect(rowWith('20.000')).toHaveCount(1);
-  await expect(rowWith('5000')).toHaveCount(0);
+  await expect(rowWith('5.000')).toHaveCount(0);
   await filter.selectOption({ label: 'Sin nº de factura externa' });
   await expect(rowWith('20.000')).toHaveCount(0, { timeout: 15_000 });
   await expect(rowWith('10.000')).toHaveCount(1);
-  await expect(rowWith('5000')).toHaveCount(1);
+  await expect(rowWith('5.000')).toHaveCount(1);
   await expect(rowWith('Fact.')).toHaveCount(0);
 
-  // «5000»: el formato «es» no agrupa los miles de cuatro cifras.
+  // «5.000»: la caja pinta con el formato de la sede, que sí agrupa los miles (DX-522).
   // El recibo de ese abono no cambia: no lleva el nº externo.
   await openPrint(page, payments.after);
   await expect(page.getByTestId('receipt-document')).not.toContainText('A/2026 #00-77');

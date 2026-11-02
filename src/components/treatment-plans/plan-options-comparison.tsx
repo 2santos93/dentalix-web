@@ -2,7 +2,8 @@
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
 import { getPlan, type TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -46,6 +47,8 @@ export function PlanOptionsComparison({
   currentPlanKey = '',
   onSelect,
 }: PlanOptionsComparisonProps) {
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
   const headingId = useId();
   const [details, setDetails] = useState<TreatmentPlan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +115,7 @@ export function PlanOptionsComparison({
                     <div className="flex items-baseline justify-between gap-3">
                       <dt className="t-label text-muted">{copy.total}</dt>
                       <dd className="text-base font-semibold text-ink tabular-nums">
-                        {formatCurrency(option.total ?? 0, option.currency)}
+                        {sedeMoney(option.total ?? 0, option.currency, fmt)}
                       </dd>
                     </div>
                   </dl>

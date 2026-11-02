@@ -9,7 +9,10 @@ import {
 } from '@/lib/price-lists/price-lists-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/price-lists/price-lists-api', () => ({
   ...jest.requireActual('../../lib/price-lists/price-lists-api'),
   listPriceLists: jest.fn(),
@@ -67,6 +70,7 @@ describe('PriceListItemsView (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedLists.mockResolvedValue([list]);
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-VE' })]);
     mockedItems.mockResolvedValue(page([profilaxis, resina]));
     mockedReplace.mockResolvedValue({ upserted: 1, removed: 0 });
   });
@@ -90,8 +94,8 @@ describe('PriceListItemsView (DX-105)', () => {
     const rows = within(table).getAllByRole('row');
     expect(rows[1]).toHaveTextContent('PROF');
     expect(rows[1]).toHaveTextContent('Preventiva');
-    expect(rows[1]).toHaveTextContent(/80\.000/);
-    expect(rows[1]).toHaveTextContent(/60\.000/);
+    expect(rows[1]).toHaveTextContent(/USD\s80\.000,00/);
+    expect(rows[1]).toHaveTextContent(/USD\s60\.000,00/);
     expect(rows[2]).toHaveTextContent('Sin precio');
     expect(mockedItems).toHaveBeenCalledWith('tok', 'pl-1', { page: 1, pageSize: 20 });
     expect(screen.getByRole('link', { name: 'Listas de precios' })).toHaveAttribute(
@@ -220,7 +224,7 @@ describe('PriceListItemsView (DX-105)', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Quitar precio' }));
     expect(await within(dialog).findByText('No pudimos quitar el precio.')).toBeInTheDocument();
-    expect(within(table).getAllByRole('row', { hidden: true })[1]).toHaveTextContent(/60\.000/);
+    expect(within(table).getAllByRole('row', { hidden: true })[1]).toHaveTextContent(/USD\s60\.000,00/);
   });
 
   it('busca con debounce desde la página 1 y pagina', async () => {

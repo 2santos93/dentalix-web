@@ -2,8 +2,10 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PlanOptionsComparison } from './plan-options-comparison';
 import { getPlan, type TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
-import { formatCurrency } from '@/lib/format/currency';
 
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   getPlan: jest.fn(),
 }));
@@ -50,7 +52,10 @@ function money(text: string | null | undefined): string {
 }
 
 describe('PlanOptionsComparison (DX-040)', () => {
-  beforeEach(() => mockedGetPlan.mockReset());
+  beforeEach(() => {
+    mockedGetPlan.mockReset();
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-VE' })]);
+  });
 
   it('compara las opciones lado a lado: total en SU moneda, nº de ítems y estado', async () => {
     details();
@@ -58,11 +63,11 @@ describe('PlanOptionsComparison (DX-040)', () => {
       <PlanOptionsComparison token="tok" options={[optionA, optionB]} currentPlanId="a" onSelect={jest.fn()} />,
     );
     const a = await screen.findByRole('listitem', { name: 'Opción A: implante' });
-    expect(money(a.textContent)).toContain(money(formatCurrency(5300000, 'VES')));
+    await waitFor(() => expect(money(a.textContent)).toContain(money('VES 5.300.000,00')));
     expect(within(a).getByText('2 procedimientos')).toBeInTheDocument();
     expect(within(a).getByText('Presentado')).toBeInTheDocument();
     const b = screen.getByRole('listitem', { name: 'Opción B: puente' });
-    expect(money(b.textContent)).toContain(money(formatCurrency(1450.5, 'USD')));
+    await waitFor(() => expect(money(b.textContent)).toContain(money('USD 1.450,50')));
     expect(within(b).getByText('3 procedimientos')).toBeInTheDocument();
     // Monedas distintas: no se suman ni se convierten; se avisa.
     expect(

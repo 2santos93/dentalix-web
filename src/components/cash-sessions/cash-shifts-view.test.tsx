@@ -114,7 +114,7 @@ describe('CashShiftsView (DX-027)', () => {
     expect(rows).toHaveLength(3);
     expect(within(rows[1]).getByText('Abierta')).toBeInTheDocument();
     expect(within(rows[2]).getByText('Cerrada')).toBeInTheDocument();
-    expect(within(rows[2]).getByText(/-1\.?000,00/)).toBeInTheDocument();
+    expect(within(rows[2]).getByText(/USD-1\.000,00/)).toBeInTheDocument();
     // Toda la fila abre el turno; el informe de un cierre va en «⋯» (el turno abierto no lo tiene).
     expect(within(rows[2]).getByRole('link', { name: /^\d{2}\/\d{2}\/\d{4}/ })).toHaveAttribute('href', '/caja/turnos/cs-0');
     expect(within(rows[1]).queryByRole('button', { name: /^Acciones de turno/ })).not.toBeInTheDocument();
@@ -162,7 +162,7 @@ describe('CashShiftsView (DX-027)', () => {
 
     await waitFor(() => expect(mockedOutflow).toHaveBeenCalledTimes(1));
     expect(mockedOutflow.mock.calls[0][3]).toBe('loc-1');
-    expect(await screen.findByText(/Salida de caja de 8\.?000,00\sUSD registrada\./)).toBeInTheDocument();
+    expect(await screen.findByText(/Salida de caja de USD\s8\.000,00 registrada\./)).toBeInTheDocument();
     expect(await screen.findByText('Salidas del turno: 1')).toBeInTheDocument();
   });
 
@@ -191,7 +191,7 @@ describe('CashShiftsView (DX-027)', () => {
     });
     mockedList.mockResolvedValue(page([]));
     render(<CashShiftsView token={token} />);
-    expect(await screen.findByText(/-20\.?000,00/)).toHaveClass('text-danger-text');
+    expect(await screen.findByText(/USD-20\.000,00/)).toHaveClass('text-danger-text');
   });
 
   it('si la lista falla, la caja actual sigue a mano y la lista se reintenta', async () => {

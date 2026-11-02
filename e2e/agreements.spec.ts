@@ -147,7 +147,7 @@ test('ADMIN crea la lista «Tarifa» en USD y le pone precio a un procedimiento;
   // La fila abre «Editar precio».
   await itemRow.getByRole('button', { name: procedureLabel, exact: true }).click();
   const priceDialog = page.getByRole('dialog', { name: 'Editar precio' });
-  await expect(priceDialog).toContainText(`Precio de catálogo: ${money(CATALOG_PRICE)}`);
+  await expect(priceDialog).toContainText(`Precio de catálogo: ${sedeMoney(CATALOG_PRICE)}`);
   await priceDialog.getByLabel('Precio de lista').fill(String(LIST_PRICE));
   await priceDialog.getByRole('button', { name: 'Guardar' }).click();
   await expect(priceDialog).toBeHidden({ timeout: 10_000 });

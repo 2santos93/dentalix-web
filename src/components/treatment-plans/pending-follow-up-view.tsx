@@ -18,7 +18,8 @@ import { listLocations, type ClinicLocation } from '@/lib/locations/locations-ap
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { formatDate } from '@/lib/format/date';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -93,6 +94,8 @@ function telHref(phone: string): string {
  * fila (rango de montos, un solo Llamar/WhatsApp), y la API pagina por grupo.
  */
 export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
   const [olderThanDays, setOlderThanDays] = useState<number>(AGE_OPTIONS[0]);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<PendingFollowUpPage | null>(null);
@@ -225,7 +228,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
               {row.options.map((o) => (
                 // Una línea por opción (Z1): a 1440 px el monto bajaba solo a otra línea.
                 <li key={o.planId} className="t-caption whitespace-nowrap text-muted tabular-nums">
-                  {o.optionLabel ?? copy.noOption} · {formatCurrency(o.total, o.currency)}
+                  {o.optionLabel ?? copy.noOption} · {sedeMoney(o.total, o.currency, fmt)}
                 </li>
               ))}
             </ul>
@@ -241,7 +244,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
       header: copy.colAmount,
       numeric: true,
       mobile: 'trailing',
-      cell: (row) => <span className="whitespace-nowrap font-medium text-ink">{followUpAmount(row.options)}</span>,
+      cell: (row) => <span className="whitespace-nowrap font-medium text-ink">{followUpAmount(row.options, (amount, code) => sedeMoney(amount, code, fmt))}</span>,
     },
     {
       id: 'presented',
