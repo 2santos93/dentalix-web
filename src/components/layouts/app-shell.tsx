@@ -351,13 +351,18 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
         {/* Barra superior SOLO en el teléfono: marca de la clínica, sede,
             búsqueda y cuenta. El título de la pantalla es su propio H1 (no
             se repite aquí). */}
-        <header className="flex shrink-0 items-center gap-1 border-b border-border bg-surface pl-4 pr-2 pt-[env(safe-area-inset-top)] md:hidden">
-          <div className="flex h-14 min-w-0 flex-1 items-center">
-            <ShellBrand name={branding.name} logoUrl={branding.logoUrl} />
+        <header className="group/phonebar flex shrink-0 items-center gap-1 border-b border-border bg-surface pl-4 pr-2 pt-[env(safe-area-inset-top)] md:hidden">
+          {/* DX-523: con selector de sede, la marca se queda en su logo o sus
+              iniciales y la sede usa el ancho libre, con el nombre entero. */}
+          <div className="flex h-14 min-w-0 flex-1 items-center group-has-[[data-location-switcher]]/phonebar:flex-none">
+            <span className="contents group-has-[[data-location-switcher]]/phonebar:hidden">
+              <ShellBrand name={branding.name} logoUrl={branding.logoUrl} />
+            </span>
+            <span className="hidden group-has-[[data-location-switcher]]/phonebar:contents">
+              <BrandMark name={branding.name} logoUrl={branding.logoUrl} />
+              {branding.name && <span className="sr-only">{branding.name}</span>}
+            </span>
           </div>
-          {/* La sede, compacta (pin + rótulo corto, nombre entero en el nombre
-              accesible): la marca de la clínica se queda el ancho y ya no se
-              cortan las dos a 390 px. */}
           <LocationSwitcher variant="phone" />
           <button
             type="button"
