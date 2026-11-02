@@ -37,6 +37,14 @@ for (const { width, height } of VIEWPORTS) {
       password: PASSWORD,
     };
     await registerClinicViaApi(request, home);
+    // Un nombre sin espacios no puede ensanchar el panel a 390 px.
+    const longName = `Clínica${suffix}${'x'.repeat(40)}`;
+    await registerClinicViaApi(request, {
+      ...home,
+      subdomain: `plat-larga-${suffix}`,
+      clinicName: longName,
+      email: `larga.${suffix}@example.com`,
+    });
     execFileSync('psql', [
       databaseUrl!,
       '-v',
@@ -56,6 +64,7 @@ for (const { width, height } of VIEWPORTS) {
       await shot(page, `platform-${step}`, width);
     });
     await expect(page.getByText('Quedan 10')).toBeVisible();
+    await expect(page.getByText(longName)).toBeVisible();
     await expectNoHorizontalScroll(page);
     await shot(page, 'platform-panel', width);
 
