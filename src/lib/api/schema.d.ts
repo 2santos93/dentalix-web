@@ -226,6 +226,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Completa el login con el código de la app o un código de recuperación
+         * @description Queda en la auditoría de la clínica: LOGIN (`MFA_TOTP` / `MFA_RECOVERY_CODE`) o LOGIN_FAILED (`INVALID_MFA_CODE`). Un código de la app vale una sola vez; uno de recuperación, también.
+         */
+        post: operations["LoginMfaController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Alta forzada: genera el secreto (pendiente) y el otpauth URI */
+        post: operations["LoginMfaController_startEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Alta forzada: confirma con un código, activa la verificación y abre la sesión
+         * @description Devuelve los 10 códigos de recuperación (una sola vez). Queda auditado (UPDATE STAFF_MEMBER `MFA_ENABLED` y LOGIN `MFA_ENROLLED`).
+         */
+        post: operations["LoginMfaController_confirmEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/security-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Política de seguridad de la clínica */
+        get: operations["SecurityPolicyController_get"];
+        /**
+         * Cambia la política de seguridad de la clínica (solo ADMIN)
+         * @description Para exigir el MFA a los ADMIN, quien lo cambia debe tener ya el suyo activo (409 si no). Queda en la auditoría con el antes y el después.
+         */
+        put: operations["SecurityPolicyController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff/invitations": {
         parameters: {
             query?: never;
@@ -376,6 +454,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado de tu verificación en dos pasos */
+        get: operations["MyMfaController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inicia el alta: con tu contraseña, genera el secreto (pendiente) y el otpauth URI para el QR */
+        post: operations["MyMfaController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirma el alta con un código de la app: la activa, devuelve 10 códigos de recuperación y cierra tus demás sesiones
+         * @description Queda en la auditoría (UPDATE STAFF_MEMBER, `MFA_ENABLED`) sin secreto ni códigos.
+         */
+        post: operations["MyMfaController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desactiva la verificación: contraseña actual + código de la app (o de recuperación); cierra tus demás sesiones
+         * @description No se puede si es obligatoria para ti (cuenta de soporte o clínica que la exige a los ADMIN). Queda en la auditoría (`MFA_DISABLED`).
+         */
+        post: operations["MyMfaController_disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Genera 10 códigos de recuperación nuevos (los anteriores dejan de valer): contraseña + código
+         * @description Queda en la auditoría (`MFA_RECOVERY_CODES_REGENERATED`).
+         */
+        post: operations["MyMfaController_regenerate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/avatars/{name}": {
         parameters: {
             query?: never;
@@ -384,6 +556,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["FilesController_getAvatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/logos/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FilesController_getLogo"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2147,6 +2335,38 @@ export interface paths {
         patch: operations["PaymentMethodsController_update"];
         trace?: never;
     };
+    "/api/v1/payment-methods/{id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PaymentMethodsController_addAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-methods/{id}/adjustments/{adjustmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PaymentMethodsController_changeAdjustment"];
+        trace?: never;
+    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -2851,6 +3071,48 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinic/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Datos de la clínica (DX-019) */
+        get: operations["ClinicSettingsController_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cambia los datos de la clínica
+         * @description DX-019. Solo cambian los campos enviados; vacío o null borra un dato (salvo el nombre y el color). El identificador fiscal es texto libre, sin validar el formato de ningún país. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto.
+         */
+        patch: operations["ClinicSettingsController_update"];
+        trace?: never;
+    };
+    "/api/v1/clinic/settings/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sube el logo de la clínica
+         * @description DX-019. PNG, JPG o WebP de hasta 1 MB. El tipo se comprueba por los bytes y el fichero se re-escribe antes de guardarlo (sin metadatos). SVG no se admite. Es público por diseño (marca).
+         */
+        post: operations["ClinicSettingsController_uploadLogo"];
+        /** Quita el logo de la clínica (DX-019) */
+        delete: operations["ClinicSettingsController_deleteLogo"];
         options?: never;
         head?: never;
         patch?: never;
@@ -6004,6 +6266,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recall/due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lista de llamada: pacientes con el control vencido y sin cita
+         * @description Recalls activos vencidos (o que vencen en ≤ withinDays) cuyo paciente no tiene cita futura agendada o confirmada ni una en curso, en cualquier sede; sin pausa vigente ni paciente archivado. Vencimiento = MAX(último control fijado, última cita atendida) + intervalo. Ordenada por días de vencido.
+         */
+        get: operations["RecallController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall/due/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuántos pacientes hay por llamar (recall) */
+        get: operations["RecallController_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall/{recallId}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar un contacto de recall (append-only)
+         * @description Canal, desenlace y una nota corta (≤ 280, sin datos clínicos). «Agendó» (BOOKED) exige la cita creada, del mismo paciente. No se edita ni se borra: una corrección es otro contacto.
+         */
+        post: operations["RecallController_contact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/recalls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recalls del paciente y su historial de contactos
+         * @description Cada recall (uno por tipo) con su vencimiento y estado: DUE, UPCOMING, SCHEDULED (ya tiene cita), PAUSED o INACTIVE.
+         */
+        get: operations["PatientRecallsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/recalls/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Fijar (o cambiar, pausar, retirar) el recall de un tipo
+         * @description «Control cada 6 meses»: intervalo (1–36 meses), día del último control (por defecto hoy en la sede), pausa hasta un día con motivo, o `active: false` para retirarlo. Un recall por paciente y tipo.
+         */
+        put: operations["PatientRecallsController_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/work-queues/summary": {
         parameters: {
             query?: never;
@@ -6013,7 +6372,7 @@ export interface paths {
         };
         /**
          * Recuentos de las listas de trabajo del rol («Mi día»)
-         * @description Cada número es el de su lista (closing-queue/count, submissions/summary, pending-follow-up/count, unscheduled/count, waitlist, receivables/aging/summary, inventory lowStockOnly) con sus filtros por defecto, en la sede activa. ADMIN: todas. DENTIST: pendiente de cerrar (lo suyo) y anamnesis. RECEPTION: pendiente de cerrar (desenlace), presupuestos por seguir, aceptados sin agendar, lista de espera y cartera. ASSISTANT: anamnesis y bajo stock. Una lista que falla sale con `status: ERROR` y `count: null`; las demás llegan igual.
+         * @description Cada número es el de su lista (closing-queue/count, submissions/summary, pending-follow-up/count, unscheduled/count, waitlist, recall/due/count, receivables/aging/summary, inventory lowStockOnly) con sus filtros por defecto, en la sede activa. ADMIN: todas. DENTIST: pendiente de cerrar (lo suyo) y anamnesis. RECEPTION: pendiente de cerrar (desenlace), presupuestos por seguir, aceptados sin agendar, lista de espera, recall y cartera. ASSISTANT: anamnesis y bajo stock. Una lista que falla sale con `status: ERROR` y `count: null`; las demás llegan igual.
          */
         get: operations["WorkQueuesController_get"];
         put?: never;
@@ -6031,7 +6390,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "PATIENT_RECALL" | "RECALL_CONTACT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -6360,18 +6719,6 @@ export interface components {
             /** @description Subdominio de la clínica recién creada */
             subdomain: string;
         };
-        LoginDto: {
-            /** @example ana@clinica.com */
-            email: string;
-            password: string;
-            /**
-             * @description SEC-008: código TOTP de 6 dígitos. Solo para el acceso de soporte (break-glass) de un superadmin a una clínica en la que no es miembro; en cualquier otro login se ignora.
-             * @example 123456
-             */
-            mfaCode?: string;
-            /** @description SEC-008: motivo del acceso de soporte (10–500 caracteres). La clínica lo ve en «Accesos de soporte». */
-            breakGlassReason?: string;
-        };
         AuthTokensDto: {
             accessToken: string;
             /** @description Solo sin `X-Refresh-Transport: cookie` (clientes antiguos). En modo cookie el refresh viaja en la cookie HttpOnly `dentalix_rt` (Path=/api/v1/auth) y no se devuelve aquí. Nunca en un acceso break-glass. */
@@ -6383,6 +6730,29 @@ export interface components {
              * @description SEC-008: caducidad del token break-glass (ISO 8601).
              */
             expiresAt?: string;
+        };
+        MfaChallengeDto: {
+            /**
+             * @description `MFA_REQUIRED`: pide el código de la app (o uno de recuperación) en POST /auth/login/mfa. `MFA_ENROLLMENT_REQUIRED`: la clínica (o la cuenta de soporte) exige la verificación y aún no está activa: alta forzada en /auth/login/mfa/enrollment.
+             * @enum {string}
+             */
+            mfa: "MFA_REQUIRED" | "MFA_ENROLLMENT_REQUIRED";
+            /** @description Token intermedio de un solo uso (5 min; 10 en el alta). No da acceso a ninguna ruta de datos. */
+            mfaToken: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        LoginDto: {
+            /** @example ana@clinica.com */
+            email: string;
+            password: string;
+            /**
+             * @description SEC-008: código TOTP de 6 dígitos. Solo para el acceso de soporte (break-glass) de un superadmin a una clínica en la que no es miembro; en cualquier otro login se ignora.
+             * @example 123456
+             */
+            mfaCode?: string;
+            /** @description SEC-008: motivo del acceso de soporte (10–500 caracteres). La clínica lo ve en «Accesos de soporte». */
+            breakGlassReason?: string;
         };
         RefreshDto: Record<string, never>;
         LogoutDto: Record<string, never>;
@@ -6425,6 +6795,50 @@ export interface components {
             subdomain: string;
             /** @description available = se puede registrar; taken = ya es de una clínica (también dada de baja); invalid = no cumple el formato (minúsculas, números y guiones, 1–63, sin guion al principio ni al final); reserved = dirección de la plataforma (www, api…). */
             status: components["schemas"]["SubdomainAvailability"];
+        };
+        VerifyLoginMfaDto: {
+            /**
+             * @description Código de 6 dígitos de la app.
+             * @example 123456
+             */
+            code?: string;
+            /**
+             * @description Uno de los códigos de recuperación (cada uno vale una sola vez).
+             * @example ABCD-EFGH-IJKL-MNOP
+             */
+            recoveryCode?: string;
+            /** @description El `mfaToken` que devolvió POST /auth/login. */
+            mfaToken: string;
+        };
+        StartLoginMfaEnrollmentDto: {
+            /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
+            mfaToken: string;
+        };
+        MfaEnrollmentDto: {
+            /**
+             * @description Secreto en base32 para escribirlo a mano en la app. Solo en esta respuesta.
+             * @example JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+             */
+            secret: string;
+            /** @example otpauth://totp/Dentalix:ana%40clinica.com?secret=JBSWY3DPEHPK3PXP&issuer=Dentalix&algorithm=SHA1&digits=6&period=30 */
+            otpauthUri: string;
+        };
+        ConfirmLoginMfaEnrollmentDto: {
+            /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
+            mfaToken: string;
+            /** @example 123456 */
+            code: string;
+        };
+        MfaEnrolledSessionDto: {
+            accessToken: string;
+            /** @description Solo sin `X-Refresh-Transport: cookie` (ver AuthTokensDto). */
+            refreshToken?: string;
+            /** @description 10 códigos de recuperación de un solo uso. No se vuelven a mostrar. */
+            recoveryCodes: string[];
+        };
+        SecurityPolicyDto: {
+            /** @description DX-021: exige la verificación en dos pasos a los ADMIN de la clínica. Quien no la tenga pasa por el alta forzada en su próximo inicio de sesión. */
+            requireAdminMfa: boolean;
         };
         CreateInvitationDto: {
             fullName: string;
@@ -6500,6 +6914,54 @@ export interface components {
         AvatarResponseDto: {
             /** @description URL absoluta y estable del avatar (FILES_PUBLIC_BASE_URL vigente + clave) */
             avatarUrl: string;
+        };
+        MyMfaStatusDto: {
+            enabled: boolean;
+            /** Format: date-time */
+            enabledAt: string | null;
+            /** @description Códigos de recuperación sin usar (0 sin MFA). */
+            recoveryCodesRemaining: number;
+            /** @description Obligatorio para ti en esta clínica (cuenta de soporte de Dentalix, o ADMIN de una clínica que lo exige): no se puede desactivar. */
+            required: boolean;
+        };
+        StartMyMfaDto: {
+            /** @description Contraseña actual (re-autenticación). */
+            currentPassword: string;
+        };
+        ConfirmMyMfaDto: {
+            /** @example 123456 */
+            code: string;
+        };
+        MyMfaEnabledDto: {
+            enabled: boolean;
+            /** Format: date-time */
+            enabledAt: string | null;
+            /** @description Códigos de recuperación sin usar (0 sin MFA). */
+            recoveryCodesRemaining: number;
+            /** @description Obligatorio para ti en esta clínica (cuenta de soporte de Dentalix, o ADMIN de una clínica que lo exige): no se puede desactivar. */
+            required: boolean;
+            recoveryCodes: string[];
+            /** @description Access token nuevo: activar el MFA cierra tus demás sesiones (tokenVersion + 1). En modo cookie el refresh nuevo llega en la cookie. */
+            accessToken: string;
+            refreshToken?: string;
+        };
+        ReauthMfaDto: {
+            /**
+             * @description Código de 6 dígitos de la app.
+             * @example 123456
+             */
+            code?: string;
+            /**
+             * @description Uno de los códigos de recuperación (cada uno vale una sola vez).
+             * @example ABCD-EFGH-IJKL-MNOP
+             */
+            recoveryCode?: string;
+            /** @description Contraseña actual (re-autenticación). */
+            currentPassword: string;
+        };
+        RecoveryCodesDto: {
+            /** @description 10 códigos de un solo uso. Solo se muestran en esta respuesta. */
+            recoveryCodes: string[];
         };
         /** @enum {string} */
         DocType: "NATIONAL_ID" | "PASSPORT" | "RESIDENCE_PERMIT" | "TAX_ID" | "OTHER";
@@ -10779,6 +11241,35 @@ export interface components {
          * @enum {string}
          */
         PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+        /**
+         * @description Impuesto, recargo o descuento (genéricos).
+         * @enum {string}
+         */
+        PaymentAdjustmentType: "TAX" | "SURCHARGE" | "DISCOUNT";
+        /** @enum {string} */
+        PaymentAdjustmentCalculation: "PERCENT" | "FIXED";
+        PaymentMethodAdjustmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            paymentMethodId: string;
+            /** @description Impuesto, recargo o descuento (genéricos). */
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label: string;
+            calculation: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Porcentaje (0, 100] con hasta 2 decimales; solo PERCENT. */
+            percent: number | null;
+            /** @description Importe fijo; solo FIXED. */
+            fixedAmount: number | null;
+            /** @description Moneda del importe fijo: el ajuste solo se aplica a abonos en esa moneda. */
+            fixedCurrency: string | null;
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         PaymentMethodDto: {
             /** Format: uuid */
             id: string;
@@ -10791,6 +11282,8 @@ export interface components {
             requiresReference: boolean;
             /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
             legacyMethod: components["schemas"]["PaymentMethod"] | null;
+            /** @description DX-516: sus ajustes (activos o no; hasta 5 activos). Vacío por defecto. */
+            adjustments: components["schemas"]["PaymentMethodAdjustmentDto"][];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -10813,6 +11306,34 @@ export interface components {
             active?: boolean;
             /** @description Sin indicarlo, no pide referencia. */
             requiresReference?: boolean;
+        };
+        CreatePaymentAdjustmentDto: {
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label: string;
+            calculation: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Con PERCENT: (0, 100], hasta 2 decimales. */
+            percent?: number | null;
+            /** @description Con FIXED: > 0, con los decimales de redondeo de su moneda (DX-340). */
+            fixedAmount?: number | null;
+            /** @description Con FIXED: moneda del catálogo. */
+            fixedCurrency?: string | null;
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
+        };
+        UpdatePaymentAdjustmentDto: {
+            type?: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label?: string;
+            calculation?: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Con PERCENT: (0, 100], hasta 2 decimales. */
+            percent?: number | null;
+            /** @description Con FIXED: > 0, con los decimales de redondeo de su moneda (DX-340). */
+            fixedAmount?: number | null;
+            /** @description Con FIXED: moneda del catálogo. */
+            fixedCurrency?: string | null;
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
         };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
@@ -11695,6 +12216,16 @@ export interface components {
             label: string | null;
             minDaysAfterPrevious: number;
         };
+        ClinicFiscalDto: {
+            legalName: string | null;
+            /** @description Null = el nombre genérico («Id. fiscal»). */
+            taxIdLabel: string | null;
+            /** @description Texto libre, sin formato de ningún país. */
+            taxId: string | null;
+            address: string | null;
+            email: string | null;
+            phone: string | null;
+        };
         PlanQuoteLocationDto: {
             /** Format: uuid */
             id: string;
@@ -11783,7 +12314,7 @@ export interface components {
             /** @description Organización clínica actual; separada del contenido firmado. */
             visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
             /**
-             * @description 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
+             * @description 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
              * @enum {number}
              */
             version: 1 | 2;
@@ -11797,6 +12328,8 @@ export interface components {
             currency: string;
             clinicName: string;
             clinicLogoUrl: string | null;
+            /** @description DX-019: datos fiscales. Aceptado: los congelados al firmar; null si no los llevaba (nunca los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             location: components["schemas"]["PlanQuoteLocationDto"];
             patient: components["schemas"]["PlanQuotePatientDto"];
             /** @description Profesional que creó el plan */
@@ -12178,6 +12711,45 @@ export interface components {
                 [key: string]: string;
             };
         };
+        ClinicSettingsDto: {
+            /** @example Clínica Sonrisas */
+            name: string;
+            legalName: string | null;
+            /** @description Texto libre, sin formato de ningún país. */
+            taxId: string | null;
+            /** @description Null = el nombre genérico («Id. fiscal»). */
+            taxIdLabel: string | null;
+            fiscalAddress: string | null;
+            contactEmail: string | null;
+            contactPhone: string | null;
+            /** @example #0E7490 */
+            primaryColor: string;
+            /** @description URL pública del logo. */
+            logoUrl: string | null;
+            /** @description Falta la razón social o el identificador fiscal: los recibos dicen «Datos fiscales pendientes». */
+            fiscalDataPending: boolean;
+        };
+        UpdateClinicSettingsDto: {
+            /** @description Nombre comercial (obligatorio si se envía). 1..120. */
+            name?: Record<string, never>;
+            /** @description Razón social. Vacío o null = sin dato. 1..160. */
+            legalName?: string | null;
+            /** @description Identificador fiscal, texto libre sin formato de ningún país. 1..64. */
+            taxId?: string | null;
+            /** @description Cómo llama la clínica a su identificador fiscal (p. ej. «ID fiscal»). Null = el genérico. 1..40. */
+            taxIdLabel?: string | null;
+            /** @description Dirección fiscal, una línea. 1..250. */
+            fiscalAddress?: string | null;
+            /** @description Email de contacto de la clínica. */
+            contactEmail?: string | null;
+            /** @description Teléfono de contacto, texto libre. 1..40. */
+            contactPhone?: string | null;
+            /**
+             * @description Color de la marca, #RRGGBB.
+             * @example #0E7490
+             */
+            primaryColor?: Record<string, never>;
+        };
         CurrencyDto: {
             /**
              * @description Minor units de ISO 4217 según la List One de SIX (RSD 2, JPY 0). Dato normativo; no se usa para redondear.
@@ -12254,6 +12826,22 @@ export interface components {
             /** @example Saldo migrado */
             concept: string;
         };
+        PaymentAdjustmentLineDto: {
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label: string;
+            calculation: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Con PERCENT. */
+            percent: number | null;
+            /** @description Con FIXED. */
+            fixedAmount: number | null;
+            /** @description El importe del abono sobre el que se calculó. */
+            base: number;
+            /** @description Importe del ajuste (> 0), en la moneda del abono. */
+            amount: number;
+            /** @description Código ISO 4217 (la moneda del abono). */
+            currency: string;
+        };
         CashPaymentDto: {
             /** Format: uuid */
             id: string;
@@ -12309,6 +12897,13 @@ export interface components {
              * @example 2
              */
             splitLines: number | null;
+            /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
+            adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
+            /**
+             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`.
+             * @example 103
+             */
+            collectedAmount: number;
         };
         CashScopeDto: {
             /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
@@ -12353,6 +12948,27 @@ export interface components {
             /** @example 2 */
             count: number;
         };
+        CashAdjustmentTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /**
+             * @description Suma (en positivo) sin convertir.
+             * @example 3
+             */
+            total: number;
+            /**
+             * @description Número de líneas de ajuste.
+             * @example 1
+             */
+            count: number;
+        };
+        CashCollectedTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @example 103 */
+            total: number;
+        };
         CashPaymentsSummaryDto: {
             /** @description Número de abonos del período */
             count: number;
@@ -12362,6 +12978,10 @@ export interface components {
             byMethod: components["schemas"]["CashMethodTotalDto"][];
             /** @description DX-377: total por medio de pago de la clínica y moneda. */
             byPaymentMethod: components["schemas"]["CashPaymentMethodTotalDto"][];
+            /** @description DX-516: ajustes por medio de pago de los abonos del período, por moneda y tipo (vacío sin ajustes). */
+            adjustments: components["schemas"]["CashAdjustmentTotalDto"][];
+            /** @description DX-516: lo cobrado por moneda: abonos + impuestos + recargos − descuentos (sin ajustes, igual que `byCurrency`). */
+            collected: components["schemas"]["CashCollectedTotalDto"][];
         };
         CashPaymentsResponseDto: {
             items: components["schemas"]["CashPaymentDto"][];
@@ -12505,6 +13125,13 @@ export interface components {
             frozenRate: components["schemas"]["FrozenExchangeRateDto"] | null;
             /** @description DX-375: la tasa del abono. NOT_NEEDED: está en la moneda de su destino. FROZEN: congeló su tasa al registrarse (o el barrido, si se cobró sin tasa) y saldos y totales la usan siempre, aunque la tasa cambie después. MISSING: «sin tasa»: no había tasa de su día; no cuenta en el saldo del plan hasta que se registre (Ajustes › Tasa de cambio) y el barrido de cada minuto la congele. LEGACY: anterior a la tasa congelada y aún sin congelar: se convierte con la tasa de su día, como antes, hasta que el barrido la congele. */
             exchangeRateStatus: components["schemas"]["PaymentExchangeRateStatus"];
+            /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
+            adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
+            /**
+             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`.
+             * @example 103
+             */
+            collectedAmount: number;
         };
         SplitPaymentLineDto: {
             /** @example 50 */
@@ -12700,6 +13327,8 @@ export interface components {
             reference: string | null;
             /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
             equivalentAmount: number | null;
+            /** @description DX-516: ajustes del medio de esta línea; ausente si no tiene ninguno. */
+            adjustments?: components["schemas"]["PaymentAdjustmentLineDto"][];
             /** @description Como `exchangeRate` del recibo, para esta línea. */
             exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
         };
@@ -12720,6 +13349,8 @@ export interface components {
             legalName: string | null;
             /** @description Identificador fiscal de la clínica (DX-019). */
             taxId: string | null;
+            /** @description Nombre que la clínica da a su identificador fiscal, congelado al emitir (DX-019). Ausente = el genérico. */
+            taxIdLabel?: string;
             address: string | null;
         };
         ReceiptLocationDto: {
@@ -12765,6 +13396,8 @@ export interface components {
              * @example 2026-10-17
              */
             paidOn: string;
+            /** @description DX-516: ajustes por medio de pago congelados al emitir; ausente sin ajustes, en los recibos anteriores y en un cobro dividido (van en cada línea). */
+            adjustments?: components["schemas"]["PaymentAdjustmentLineDto"][];
         };
         ReceiptPlanDto: {
             /** Format: uuid */
@@ -12818,6 +13451,8 @@ export interface components {
             reference: string | null;
             /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
             equivalentAmount: number | null;
+            /** @description DX-516: ajustes del medio de esta línea; ausente si no tiene ninguno. */
+            adjustments?: components["schemas"]["PaymentAdjustmentLineDto"][];
         };
         ReceiptSnapshotSplitDto: {
             lines: components["schemas"]["ReceiptSplitLineDto"][];
@@ -13293,6 +13928,8 @@ export interface components {
             /** @example Clínica Sonrisas */
             name: string;
             logoUrl: string | null;
+            /** @description DX-019: datos fiscales y de contacto. */
+            fiscal: components["schemas"]["ClinicFiscalDto"];
         };
         AccountStatementPatientDto: {
             /** Format: uuid */
@@ -14470,12 +15107,14 @@ export interface components {
             /** @description Abonos del turno que cuentan */
             payments: number;
             paymentsCount: number;
+            /** @description DX-516: ajustes por medio de pago de esos abonos, con signo (impuestos y recargos +, descuentos −); 0 sin ajustes. */
+            paymentAdjustments: number;
             /** @description Ajustes que entraron en esta caja (con signo) */
             adjustments: number;
             /** @description Salidas de caja menor del turno (DX-274), en positivo: se restan. Solo en efectivo. */
             outflows: number;
             outflowsCount: number;
-            /** @description opening + payments + adjustments − outflows (puede ser negativo) */
+            /** @description opening + payments + paymentAdjustments + adjustments − outflows (puede ser negativo) */
             expected: number;
         };
         CashSessionPaymentDto: {
@@ -14499,6 +15138,8 @@ export interface components {
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
+            /** @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). */
+            collectedAmount: number;
         };
         CashVoidedPaymentDto: {
             /** Format: uuid */
@@ -14521,6 +15162,8 @@ export interface components {
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
+            /** @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). */
+            collectedAmount: number;
             /** Format: date-time */
             voidedAt: string | null;
             voidedBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -17314,6 +17957,8 @@ export interface components {
             professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
+            /** @description DX-019: datos fiscales congelados al emitir; null = la receta se imprime sin ellos (nunca con los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             locationName: string;
             locationAddress: string | null;
             notes: string | null;
@@ -17531,6 +18176,8 @@ export interface components {
             professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
+            /** @description DX-019: datos fiscales congelados al emitir; null = la receta se imprime sin ellos (nunca con los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             locationName: string;
             locationAddress: string | null;
             notes: string | null;
@@ -18266,7 +18913,157 @@ export interface components {
             clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
         };
         /** @enum {string} */
-        WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECEIVABLES" | "LOW_STOCK";
+        RecallKind: "HYGIENE" | "CHECKUP";
+        /** @enum {string} */
+        RecallDueSort: "MOST_OVERDUE" | "LEAST_OVERDUE";
+        /** @enum {string} */
+        RecallContactChannel: "CALL" | "WHATSAPP_LINK" | "EMAIL" | "IN_PERSON";
+        /** @enum {string} */
+        RecallContactOutcome: "NO_ANSWER" | "LEFT_MESSAGE" | "CALL_BACK" | "WILL_BOOK" | "DECLINED" | "WRONG_NUMBER" | "BOOKED";
+        RecallLastContactDto: {
+            channel: components["schemas"]["RecallContactChannel"];
+            outcome: components["schemas"]["RecallContactOutcome"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RecallDueItemDto: {
+            /** Format: uuid */
+            recallId: string;
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            /** @description `null` sin teléfono o con baja de avisos (DX-128) */
+            patientPhone: string | null;
+            /** @description E.164 sin `+` para `https://wa.me/…` (región de la sede del paciente); `null` si no sirve o hay baja de avisos */
+            patientWhatsApp: string | null;
+            /** @description DX-128: el paciente pidió no recibir avisos. Sigue en la lista, sin contacto. */
+            reminderOptedOut: boolean;
+            kind: components["schemas"]["RecallKind"];
+            intervalMonths: number;
+            /**
+             * Format: date
+             * @description Base del vencimiento: lo fijado o la última visita atendida
+             */
+            baseDate: string;
+            /** Format: date */
+            dueAt: string;
+            /** @description Días desde el vencimiento (0 = vence hoy; negativo = faltan) */
+            daysOverdue: number;
+            /**
+             * Format: uuid
+             * @description Sede del paciente: la de su última cita atendida o, sin ella, la del recall
+             */
+            locationId: string;
+            lastContact: components["schemas"]["RecallLastContactDto"] | null;
+        };
+        RecallDuePageDto: {
+            items: components["schemas"]["RecallDueItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        RecallDueCountDto: {
+            /** @description Pacientes por llamar con esos filtros (todas las páginas) */
+            total: number;
+        };
+        CreateRecallContactDto: {
+            /** @description Llamada, enlace de WhatsApp, email o en persona */
+            channel: components["schemas"]["RecallContactChannel"];
+            /** @description No contesta, dejó mensaje, llamar luego, agendará, rechaza, número erróneo o agendó (con la cita) */
+            outcome: components["schemas"]["RecallContactOutcome"];
+            /** @description Nota corta (sin datos clínicos). No se edita ni se borra: una corrección es otro contacto. */
+            note?: string | null;
+            /**
+             * Format: uuid
+             * @description La cita creada (obligatoria con BOOKED); del mismo paciente
+             */
+            appointmentId?: string | null;
+        };
+        RecallStaffRefDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string | null;
+        };
+        RecallContactDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            recallId: string;
+            kind: components["schemas"]["RecallKind"];
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            channel: components["schemas"]["RecallContactChannel"];
+            outcome: components["schemas"]["RecallContactOutcome"];
+            note: string | null;
+            /** Format: uuid */
+            appointmentId: string | null;
+            author: components["schemas"]["RecallStaffRefDto"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /**
+         * @description DUE: por llamar · UPCOMING: aún no vence · SCHEDULED: ya tiene cita · PAUSED: pausado hasta una fecha · INACTIVE: retirado
+         * @enum {string}
+         */
+        RecallStatus: "DUE" | "UPCOMING" | "SCHEDULED" | "PAUSED" | "INACTIVE";
+        PatientRecallDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["RecallKind"];
+            intervalMonths: number;
+            /** Format: date */
+            lastDoneAt: string;
+            active: boolean;
+            /** Format: date */
+            disabledUntil: string | null;
+            disabledReason: string | null;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: date */
+            baseDate: string;
+            /** Format: date */
+            dueAt: string;
+            daysOverdue: number;
+            /** @description DUE: por llamar · UPCOMING: aún no vence · SCHEDULED: ya tiene cita · PAUSED: pausado hasta una fecha · INACTIVE: retirado */
+            status: components["schemas"]["RecallStatus"];
+            /** Format: date-time */
+            updatedAt: string;
+            updatedBy: components["schemas"]["RecallStaffRefDto"];
+        };
+        PatientRecallsDto: {
+            recalls: components["schemas"]["PatientRecallDto"][];
+            /** @description Historial de contactos, más recientes primero (hasta 50) */
+            contacts: components["schemas"]["RecallContactDto"][];
+        };
+        SetPatientRecallDto: {
+            /**
+             * @description Cada cuántos meses vuelve (p. ej. 6 = «control cada 6 meses»)
+             * @example 6
+             */
+            intervalMonths: number;
+            /**
+             * Format: date
+             * @description Día del último control o limpieza (AAAA-MM-DD, no futuro). Por defecto, hoy en la sede.
+             * @example 2026-04-10
+             */
+            lastDoneAt?: string;
+            /**
+             * @description `false` retira el recall: deja de salir en la lista
+             * @default true
+             */
+            active: boolean;
+            /**
+             * Format: date
+             * @description Pausa hasta ese día (posterior a hoy), p. ej. «tratamiento en curso». `null` la quita.
+             */
+            disabledUntil?: string | null;
+            /** @description Motivo corto de la pausa (sin datos clínicos) */
+            disabledReason?: string | null;
+        };
+        /** @enum {string} */
+        WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
         WorkQueueOverdueDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -18509,12 +19306,13 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Sesión (`AuthTokensDto`) o, DX-021, el paso del segundo factor (`MfaChallengeDto`: `mfa`, `mfaToken`, `expiresAt`) que se completa en `POST /auth/login/mfa` (o en `/auth/login/mfa/enrollment*` si es un alta forzada). */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensDto"];
+                    "application/json": components["schemas"]["AuthTokensDto"] | components["schemas"]["MfaChallengeDto"];
                 };
             };
             /** @description `mfaCode` no es de 6 dígitos o `breakGlassReason` no tiene 10–500 caracteres */
@@ -18728,6 +19526,209 @@ export interface operations {
             };
         };
     };
+    LoginMfaController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyLoginMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
+                };
+            };
+            /** @description Falta el código o vienen los dos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: "MFA_INVALID_CODE"` (código erróneo o ya usado) o `code: "MFA_CHALLENGE_EXPIRED"` (token intermedio caducado, usado o de otra clínica: volver a iniciar sesión) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos de esta cuenta (5 → espera creciente, el mismo contador que el MFA del superadmin) o avalancha de peticiones. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LoginMfaController_startEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartLoginMfaEnrollmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentDto"];
+                };
+            };
+            /** @description `code: "MFA_CHALLENGE_EXPIRED"` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La verificación ya está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LoginMfaController_confirmEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmLoginMfaEnrollmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrolledSessionDto"];
+                };
+            };
+            /** @description Código erróneo o sin alta pendiente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: "MFA_CHALLENGE_EXPIRED"` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos de esta cuenta (5 → espera creciente, el mismo contador que el MFA del superadmin) o avalancha de peticiones. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SecurityPolicyController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityPolicyDto"];
+                };
+            };
+            /** @description Solo la administración ve y cambia la seguridad de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SecurityPolicyController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecurityPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityPolicyDto"];
+                };
+            };
+            /** @description Solo la administración ve y cambia la seguridad de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Quien la enciende no tiene MFA activo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     StaffInvitationsController_list: {
         parameters: {
             query?: never;
@@ -18881,12 +19882,16 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Sesión (`AuthTokensDto`) o, DX-021, `{ loginRequired: true }`: aceptada, pero la cuenta necesita segundo factor y debe entrar por /login. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensDto"];
+                    "application/json": components["schemas"]["AuthTokensDto"] | {
+                        /** @enum {boolean} */
+                        loginRequired: true;
+                    };
                 };
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
@@ -19037,7 +20042,241 @@ export interface operations {
             };
         };
     };
+    MyMfaController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMfaStatusDto"];
+                };
+            };
+        };
+    };
+    MyMfaController_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartMyMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentDto"];
+                };
+            };
+            /** @description Contraseña incorrecta */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMyMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMfaEnabledDto"];
+                };
+            };
+            /** @description Código incorrecto o sin alta pendiente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos (5 → espera creciente; el mismo contador que el login). `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
+                };
+            };
+            /** @description Contraseña o código incorrectos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Obligatoria para ti */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos (5 → espera creciente; el mismo contador que el login). `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_regenerate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesDto"];
+                };
+            };
+            /** @description Contraseña o código incorrectos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos (5 → espera creciente; el mismo contador que el login). `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     FilesController_getAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FilesController_getLogo: {
         parameters: {
             query?: never;
             header?: never;
@@ -24335,6 +25574,113 @@ export interface operations {
             };
         };
     };
+    PaymentMethodsController_addAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentAdjustmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodAdjustmentDto"];
+                };
+            };
+            /** @description Etiqueta vacía o larga, porcentaje fuera de (0, 100], importe fijo sin moneda o con más decimales que su moneda. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Etiqueta repetida en el medio o tope de ajustes activos */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_changeAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                adjustmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePaymentAdjustmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodAdjustmentDto"];
+                };
+            };
+            /** @description Campo inválido (como en el alta). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio o ajuste no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Etiqueta repetida en el medio o tope de ajustes activos */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     WaitlistController_list: {
         parameters: {
             query?: {
@@ -26271,6 +27617,145 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BrandingDto"];
                 };
+            };
+        };
+    };
+    ClinicSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClinicSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Un texto vacío donde es obligatorio, con saltos de línea o más largo que su tope, un email sin forma nombre@dominio o un color que no es #RRGGBB */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_uploadLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description PNG, JPG o WebP de hasta 1 MB
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description El logo está vacío. / El logo supera el máximo de 1 MB. / El logo debe ser una imagen PNG, JPG o WebP. / El logo no es una imagen válida o está dañado. Expórtalo de nuevo y vuelve a subirlo. / El logo es demasiado grande: como mucho 8192 × 8192 píxeles. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. / El almacén de archivos no responde. Inténtalo de nuevo en unos minutos. (con Retry-After) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_deleteLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -34530,6 +36015,205 @@ export interface operations {
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo un tipo de recall (higiene o control) */
+                kind?: components["schemas"]["RecallKind"];
+                /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
+                withinDays?: number;
+                /** @description Por días de vencido: los más vencidos primero o al revés */
+                sort?: components["schemas"]["RecallDueSort"];
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa: los pacientes cuya sede (la de su última cita atendida o, sin ella, la del recall) es esta; sin ella, las sedes permitidas (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallDuePageDto"];
+                };
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_count: {
+        parameters: {
+            query?: {
+                /** @description Solo un tipo de recall (higiene o control) */
+                kind?: components["schemas"]["RecallKind"];
+                /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
+                withinDays?: number;
+            };
+            header?: {
+                /** @description Sede activa: los pacientes cuya sede (la de su última cita atendida o, sin ella, la del recall) es esta; sin ella, las sedes permitidas (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallDueCountDto"];
+                };
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_contact: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description No decide nada: se autoriza y se sella con la sede del paciente (la de la lista), no con la activa. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                recallId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecallContactDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallContactDto"];
+                };
+            };
+            /** @description Canal o desenlace inválidos, nota de más de 280, BOOKED sin cita o cita de otro paciente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. O 403 LOCATION_NOT_ALLOWED: el paciente es de una sede no permitida. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recall de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientRecallsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientRecallsDto"];
+                };
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientRecallsController_set: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: la del recall nuevo y la de «hoy». */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+                kind: components["schemas"]["RecallKind"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPatientRecallDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientRecallsDto"];
+                };
+            };
+            /** @description Intervalo, fechas o motivo inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el personal clínico fija o pausa el recall de un paciente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

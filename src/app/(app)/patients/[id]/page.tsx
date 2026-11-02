@@ -31,6 +31,8 @@ import { AnamnesisSendDialog } from '@/components/anamnesis/anamnesis-send-dialo
 import type { RowAction } from '@/components/shared/row-actions';
 import { Archive, ClipboardList, Eraser, ShieldCheck } from 'lucide-react';
 import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
+import { PatientRecallSection } from '@/components/recall/patient-recall-section';
+import { canManageRecall, canSetRecall } from '@/lib/recall/presentation';
 import { PatientResponsiblePartiesSection } from '@/components/patients/patient-responsible-parties-section';
 import { PatientAgreementSection } from '@/components/patients/patient-agreement-section';
 import { PatientCoverageSection } from '@/components/patients/patient-coverage-section';
@@ -470,6 +472,15 @@ function PatientDetailView() {
               onChanged={(c) =>
                 setPatient((prev) => (prev ? withCommunication(prev, c) : prev))
               }
+            />
+            {/* DX-015: cada cuánto vuelve y a quién se ha llamado. Lo ven todos;
+                lo fija el clínico y los contactos los registra el mostrador. */}
+            <PatientRecallSection
+              key={`recall-${patientId}`}
+              token={accessToken}
+              patient={{ id: patient.id, fullName: fullName(patient) }}
+              canSet={canSetRecall(getTokenRole(accessToken))}
+              canContact={canManageRecall(getTokenRole(accessToken))}
             />
             {/* DX-203: quién paga y quién recibe los avisos, y de quién es
                 responsable. Lo gestionan los 4 roles. */}

@@ -253,7 +253,7 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   await expect(today.getByTestId('today-toConfirm')).toHaveText('1');
 
   // --- «Pendientes»: the low-stock item counts, rows link where you act ---
-  const pending = page.getByRole('region', { name: 'Pendientes' });
+  const pending = page.getByRole('region', { name: 'Pendientes', exact: true });
   await expect(pending.getByTestId('pending-low-stock-value')).toHaveText('1');
   await expect(pending.getByRole('link', { name: 'Bajo stock' })).toHaveAttribute('href', '/inventory');
   await expect(pending.getByTestId('pending-follow-up-value')).toHaveText('Al día');

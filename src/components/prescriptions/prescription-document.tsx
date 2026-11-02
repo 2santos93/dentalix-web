@@ -1,3 +1,4 @@
+import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import * as React from 'react';
 import type { PrescriptionDocument as PrescriptionDoc } from '@/lib/prescriptions/prescriptions-api';
 import type { PrescriptionFormat } from '@/lib/prescriptions/prescription-format';
@@ -87,6 +88,8 @@ export function PrescriptionDocument({ prescription: rx, format }: PrescriptionD
           ) : null}
           <div>
             <p className="text-base font-semibold">{rx.clinicName}</p>
+            {/* DX-019: datos fiscales de la clínica (los de hoy, como el logo). */}
+            <ClinicFiscalLines fiscal={rx.clinicFiscal} />
             <p className="text-sm text-[#4b5563]">
               {rx.locationName}
               {rx.locationAddress ? ` · ${rx.locationAddress}` : ''}

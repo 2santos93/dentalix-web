@@ -1,3 +1,4 @@
+import { taxIdLine } from '@/lib/clinic/clinic-settings-api';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDate, formatDateTime } from '@/lib/format/date';
@@ -8,6 +9,13 @@ import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import { paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
 import type { PaymentReceipt, ReceiptPrintFormat } from '@/lib/payments/payment-receipts-api';
+import {
+  PAYMENT_ADJUSTMENT_TYPE_LABELS,
+  adjustmentBasisText,
+  collectedAmount,
+  signedAdjustmentAmount,
+  type PaymentAdjustmentLine,
+} from '@/lib/payments/payment-adjustments';
 
 // Copy en español (i18n-ready), como el resto de documentos imprimibles.
 const copy = {
@@ -19,9 +27,9 @@ const copy = {
   // Un «sin serie» no tuvo emisión: lo que se conserva es el alta del abono.
   registeredAt: 'Abono registrado el',
   fiscalPending: 'Datos fiscales pendientes',
-  // Excepción con nombre de la guarda de DX-327 hasta DX-019, que dará a la
-  // clínica el nombre de su identificación fiscal.
-  taxId: (value: string) => `Id. fiscal ${value}`,
+  // DX-019: con el nombre que la clínica da a su identificador (congelado en
+  // la foto); sin él, el genérico «Id. fiscal».
+  taxId: (value: string, label?: string | null) => taxIdLine(value, label),
   location: (name: string, address: string | null) => (address ? `${name} · ${address}` : name),
   voidedStamp: 'ANULADO',
   voidedDetail: (when: string, reason: string) => `Anulado el ${when}. Motivo: ${reason}`,
@@ -56,6 +64,9 @@ const copy = {
   splitEquivalent: (amount: string) => `equivale a ${amount}`,
   splitWithoutRate: 'sin tasa de su día',
   cashier: 'Recibió',
+  // DX-516: ajustes por medio de pago congelados en el abono.
+  adjustments: 'Ajustes por medio de pago',
+  collected: 'Total cobrado',
   signature: 'Firma y sello',
 };
 
@@ -208,7 +219,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           ) : (
             <p className="mt-1 text-xs text-[#4b5563]">
               {clinic.legalName}
-              {clinic.taxId ? ` · ${copy.taxId(clinic.taxId)}` : null}
+              {clinic.taxId ? ` · ${copy.taxId(clinic.taxId, clinic.taxIdLabel)}` : null}
               {clinic.address ? (
                 <>
                   <br />
@@ -288,6 +299,16 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
                 {money(payment.amount, payment.currency)}
               </span>
             </Field>
+            {payment.adjustments?.length ? (
+              <ReceiptAdjustments
+                lines={payment.adjustments}
+                amount={payment.amount}
+                currency={payment.currency}
+                narrow={narrow}
+                voided={receipt.voided}
+                money={money}
+              />
+            ) : null}
             {frozen ? (
               <Field label={copy.equivalent(frozen.rate.currency)}>
                 <span className={cn('font-semibold tabular-nums', receipt.voided && 'line-through')}>
@@ -406,11 +427,81 @@ function SplitFields({
                     </span>
                   ) : null}
                 </span>
+                {line.adjustments?.length ? (
+                  <AdjustmentList lines={line.adjustments} amount={line.amount} currency={line.currency} voided={voided} money={money} />
+                ) : null}
               </li>
             ))}
           </ol>
         </dd>
       </div>
     </>
+  );
+}
+
+/**
+ * DX-516: los ajustes por medio de pago del abono, cada uno con su etiqueta,
+ * su tipo, su base y su importe (el impuesto queda separado del precio), y lo
+ * cobrado. El «Valor» de arriba es lo que se acreditó al plan.
+ */
+function ReceiptAdjustments({
+  lines,
+  amount,
+  currency,
+  narrow,
+  voided,
+  money,
+}: {
+  lines: PaymentAdjustmentLine[];
+  amount: number;
+  currency: string;
+  narrow: boolean;
+  voided: boolean;
+  money: (amount: number, currency: string) => string;
+}) {
+  return (
+    <div data-testid="receipt-adjustments" className={cn('min-w-0', !narrow && 'sm:col-span-2')}>
+      <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">{copy.adjustments}</dt>
+      <dd>
+        <AdjustmentList lines={lines} amount={amount} currency={currency} voided={voided} money={money} />
+      </dd>
+    </div>
+  );
+}
+
+function AdjustmentList({
+  lines,
+  amount,
+  currency,
+  voided,
+  money,
+}: {
+  lines: PaymentAdjustmentLine[];
+  amount: number;
+  currency: string;
+  voided: boolean;
+  money: (amount: number, currency: string) => string;
+}) {
+  return (
+    <ul className="mt-1 flex w-full flex-col gap-0.5 text-xs">
+      {lines.map((line, index) => (
+        <li key={`${line.label}-${index}`} className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <span className="min-w-0 break-words">
+            {line.label}
+            <span className="text-[#4b5563]">
+              {' '}
+              · {PAYMENT_ADJUSTMENT_TYPE_LABELS[line.type]} · {adjustmentBasisText(line, money)}
+            </span>
+          </span>
+          <span className={cn('tabular-nums', voided && 'line-through')}>{signedAdjustmentAmount(line, money)}</span>
+        </li>
+      ))}
+      <li className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-[#e5e7eb] pt-0.5 font-semibold">
+        <span>{copy.collected}</span>
+        <span className={cn('tabular-nums', voided && 'line-through')}>
+          {money(collectedAmount(amount, lines), currency)}
+        </span>
+      </li>
+    </ul>
   );
 }

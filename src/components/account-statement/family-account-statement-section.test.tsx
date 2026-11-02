@@ -1,3 +1,4 @@
+import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { FamilyAccountStatementSection } from './family-account-statement-section';
 import { FamilyAccountStatementDocument } from './family-account-statement-document';
@@ -26,7 +27,7 @@ const amounts = (currency: string, budgeted: number, paid: number) => ({
 
 const family: FamilyAccountStatement = {
   issuedAt: '2026-10-17T15:00:00.000Z',
-  clinic: { name: 'Clínica Sonrisas', logoUrl: null },
+  clinic: { name: 'Clínica Sonrisas', logoUrl: null, fiscal: EMPTY_CLINIC_FISCAL },
   payer: { id: 'mother', firstName: 'Marta', lastName: 'Gil' },
   members: [
     {

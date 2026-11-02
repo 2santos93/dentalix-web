@@ -76,7 +76,7 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-canvas text-ink">
         <ThemeProvider nonce={nonce}>
-          <BrandingProvider value={{ name: branding.name, logoUrl: branding.logoUrl }}>
+          <BrandingProvider value={{ name: branding.name, logoUrl: branding.logoUrl, primaryColor: branding.primaryColor }}>
             {/* DX-517: el texto propio de cada moneda, antes de pintar ningún importe. */}
             <CurrencyTextsSync value={branding.currencyTexts}>{children}</CurrencyTextsSync>
           </BrandingProvider>

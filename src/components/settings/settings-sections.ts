@@ -5,6 +5,7 @@ import {
   BadgePercent,
   BellRing,
   Building2,
+  Store,
   CalendarClock,
   CalendarDays,
   ClipboardClock,
@@ -17,6 +18,7 @@ import {
   Handshake,
   History,
   IdCard,
+  KeyRound,
   Landmark,
   LifeBuoy,
   ListOrdered,
@@ -52,6 +54,8 @@ import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
 import { canReadAuditLog } from '@/lib/audit/audit-api';
+import { canManageClinicSettings } from '@/lib/clinic/clinic-settings-api';
+import { canManageSecurityPolicy } from '@/lib/auth/mfa-api';
 
 export interface SettingsEntry {
   href: string;
@@ -98,7 +102,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/profile',
         label: 'Mi perfil',
-        description: 'Tu nombre, tu foto y tu contraseña.',
+        description: 'Tu nombre, tu foto, tu contraseña y la verificación en dos pasos.',
         icon: UserRound,
       },
     ],
@@ -107,6 +111,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: 'clinica',
     title: 'Clínica y sedes',
     entries: [
+      // DX-019: marca y datos fiscales de la clínica.
+      {
+        href: '/settings/clinica',
+        label: 'Datos de la clínica',
+        description: 'Nombre, logo y color de la marca, y los datos fiscales y de contacto que salen en los documentos.',
+        icon: Store,
+        visible: canManageClinicSettings,
+      },
       // G1: alta y edición de sedes (moneda, zona, formato); DX-319: datos legales.
       {
         href: '/settings/sedes',
@@ -295,6 +307,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         label: 'Privacidad de datos',
         description: 'Política de tratamiento de datos que acepta el paciente.',
         icon: ShieldCheck,
+      },
+      // DX-021.
+      {
+        href: '/settings/seguridad',
+        label: 'Seguridad de la clínica',
+        description: 'Qué se exige para entrar a los datos de la clínica.',
+        icon: KeyRound,
+        visible: canManageSecurityPolicy,
       },
       // SEC-009.
       {

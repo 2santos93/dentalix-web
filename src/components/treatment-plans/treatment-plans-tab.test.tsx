@@ -145,6 +145,7 @@ jest.mock('../../lib/payments/payment-methods-api', () => ({
       active: true,
       requiresReference: true,
       legacyMethod: null,
+      adjustments: [],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
@@ -310,6 +311,8 @@ const payment1: Payment = {
   updatedAt: '2026-01-05T00:00:00.000Z',
   receiptNumber: 'PRI-000001',
   ...PAYMENT_IN_PLAN_CURRENCY,
+  adjustments: [],
+  collectedAmount: 50000,
 };
 
 const balance1: PlanBalance = {
@@ -793,6 +796,8 @@ describe('TreatmentPlansTab', () => {
         currency: 'COP',
         exchangeRateCurrency: 'USD',
         exchangeRateStatus: 'FROZEN',
+        adjustments: [],
+        collectedAmount: 200000,
         frozenRate: {
           currency: 'USD',
           fromPerBase: 4000,
@@ -808,6 +813,8 @@ describe('TreatmentPlansTab', () => {
         currency: 'VES',
         exchangeRateCurrency: 'USD',
         exchangeRateStatus: 'MISSING',
+        adjustments: [],
+        collectedAmount: 365,
       },
     ]);
 

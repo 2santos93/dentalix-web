@@ -1,3 +1,4 @@
+import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
 import type { AccountStatement } from '@/lib/account-statement/account-statement-api';
 
 /**
@@ -9,7 +10,7 @@ export function accountStatementFixture(
 ): AccountStatement {
   return {
     issuedAt: '2026-10-15T15:30:00.000Z',
-    clinic: { name: 'Clínica Sonrisas', logoUrl: null },
+    clinic: { name: 'Clínica Sonrisas', logoUrl: null, fiscal: EMPTY_CLINIC_FISCAL },
     patient: {
       id: 'pat-1',
       firstName: 'Ana',

@@ -9,7 +9,7 @@ import {
   sameCurrencyTexts,
   setClinicCurrencyTexts,
 } from '@/lib/format/clinic-currency-texts';
-import { isPlatformHost } from '@/lib/tenant';
+import { isPlatformHost, isRegistrationPath } from '@/lib/tenant';
 
 /**
  * DX-517: fija el texto propio de cada moneda de la clínica ANTES de pintar
@@ -26,17 +26,13 @@ import { isPlatformHost } from '@/lib/tenant';
  *   que corre en el subdominio de una clínica que todavía no existe. Al salir
  *   del registro sin recargar, sí se pide.
  */
-function isRegistration(pathname: string | null): boolean {
-  return pathname === '/register' || (pathname?.startsWith('/register/') ?? false);
-}
-
 export function CurrencyTextsSync({ value, children }: { value: CurrencyTexts | null; children: ReactNode }) {
   const pathname = usePathname();
   const [generation, setGeneration] = useState(0);
   const [fetched, setFetched] = useState<CurrencyTexts | null>(null);
   setClinicCurrencyTexts(value ?? fetched ?? cachedClinicCurrencyTexts());
 
-  const clinicMayExist = !isRegistration(pathname);
+  const clinicMayExist = !isRegistrationPath(pathname);
 
   useEffect(() => {
     if (value || !clinicMayExist || isPlatformHost(window.location.host)) return;

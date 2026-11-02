@@ -251,6 +251,17 @@ const signatureRequest = {
   COMPLETE: s('success', 'Completo'),
 } satisfies Presentations<Schemas['SignatureRequestStatus']>;
 
+// ── Recall (DX-015) ─────────────────────────────────────────────────────────
+
+/** Por llamar pide una acción; con cita está reconocido; pausado o retirado, sin juicio. */
+const recall = {
+  DUE: s('warning', 'Por llamar'),
+  UPCOMING: s('neutral', 'Al día'),
+  SCHEDULED: s('info', 'Con cita'),
+  PAUSED: s('neutral', 'En pausa'),
+  INACTIVE: s('neutral', 'Retirado'),
+} satisfies Presentations<Schemas['RecallStatus']>;
+
 export const STATUS_PRESENTATION = {
   appointment,
   punctuality,
@@ -266,6 +277,7 @@ export const STATUS_PRESENTATION = {
   installment,
   expense,
   paymentPromise,
+  recall,
   cashSession,
   paymentMethod,
   coverage,

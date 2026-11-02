@@ -266,6 +266,29 @@ it('DX-515: el nº de factura externa y la leyenda del recibo con su antes y des
   expect(legend?.map((i) => i.label)).toEqual(['Leyenda propia de la sede', 'Leyenda del recibo']);
 });
 
+describe("DX-516: ajustes por medio de pago", () => {
+  it("pinta el tipo y el cálculo en palabras y el antes y el después", () => {
+    const items = configChangeItems(
+      {
+        reason: "PAYMENT_METHOD_ADJUSTMENT_UPDATED",
+        changedFields: ["adjustmentLabel", "percent"],
+        configChange: {
+          before: { adjustmentLabel: "Impuesto 3 %", percent: 3 },
+          after: { adjustmentLabel: "Impuesto 10 %", percent: 10 },
+        },
+      },
+    );
+    expect(items?.map((i) => i.label)).toEqual(["Ajuste", "Porcentaje"]);
+    const created = configChangeItems(
+      {
+        reason: "PAYMENT_METHOD_ADJUSTMENT_CREATED",
+        configChange: { after: { adjustmentType: "SURCHARGE", calculation: "FIXED" } },
+      },
+    );
+    expect(configChangeText(created ?? [])).toBe("Tipo de ajuste: Recargo · Cálculo: Importe fijo");
+  });
+});
+
 describe("plazo de conservación (DX-330)", () => {
   it("se lee en español, con antes, después y unidad", () => {
     const list = configChangeItems({
@@ -295,5 +318,25 @@ describe("texto de las monedas en la auditoría (DX-517)", () => {
     const item = items![0];
     expect(item).toMatchObject({ field: "currencyTexts", label: "Texto de las monedas", kind: "changed" });
     expect(item.kind === "changed" ? item.after : "").toContain("VES=Bs.");
+  });
+});
+
+describe("datos de la clínica en la auditoría (DX-019)", () => {
+  it("pinta el antes y el después del identificador fiscal y del logo", () => {
+    const items = configChangeItems({
+      reason: "CLINIC_PROFILE",
+      changedFields: ["taxId", "taxIdLabel"],
+      configChange: {
+        before: { taxId: null, taxIdLabel: null },
+        after: { taxId: "J-123", taxIdLabel: "ID fiscal" },
+      },
+    });
+    expect(items?.map((i) => i.label)).toEqual(["Identificador fiscal", "Nombre del identificador fiscal"]);
+    const logo = configChangeItems({
+      reason: "CLINIC_LOGO",
+      changedFields: ["logo"],
+      configChange: { before: { logo: null }, after: { logo: "logos/x-0123456789abcdef.png" } },
+    });
+    expect(logo?.[0]).toMatchObject({ field: "logo", label: "Logo" });
   });
 });

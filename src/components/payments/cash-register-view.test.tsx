@@ -79,6 +79,7 @@ function clinicMethod(overrides: Partial<ClinicPaymentMethod>): ClinicPaymentMet
     active: true,
     requiresReference: false,
     legacyMethod: null,
+    adjustments: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -115,6 +116,8 @@ const anaCash: CashPayment = {
   openingBalance: null,
   splitId: null,
   splitLines: null,
+  adjustments: [],
+  collectedAmount: 150000.5,
 };
 const betoCard: CashPayment = {
   ...anaCash,
@@ -145,6 +148,11 @@ function response(overrides: Partial<CashPaymentsResponse> = {}): CashPaymentsRe
     scope: { location: null },
     summary: {
       count: 2,
+      adjustments: [],
+      collected: [
+        { currency: 'COP', total: 150000.5 },
+        { currency: 'USD', total: 50.25 },
+      ],
       byCurrency: [
         { currency: 'COP', total: 150000.5, count: 1 },
         { currency: 'USD', total: 50.25, count: 1 },
@@ -231,6 +239,54 @@ it('resume el período por moneda y por método en un registro, no en tarjetas',
   expect(money(card?.textContent)).toMatch(/USD/);
 });
 
+it('DX-516: sin ajustes no hay bloque nuevo; con ellos, lo cobrado por fila y en el resumen', async () => {
+  mockedList.mockResolvedValue(response());
+  const { unmount } = render(<CashRegisterView token="tok" />);
+  const plain = await screen.findByRole('region', { name: /resumen del período/i });
+  expect(within(plain).queryByRole('list', { name: 'Ajustes por medio de pago' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/^Cobrado /)).not.toBeInTheDocument();
+  unmount();
+
+  const taxed = {
+    ...betoCard,
+    amount: 100,
+    collectedAmount: 103,
+    adjustments: [
+      {
+        type: 'TAX' as const,
+        label: 'Impuesto 3 %',
+        calculation: 'PERCENT' as const,
+        percent: 3,
+        fixedAmount: null,
+        base: 100,
+        amount: 3,
+        currency: 'USD',
+      },
+    ],
+  };
+  const base = response({ items: [anaCash, taxed] });
+  mockedList.mockResolvedValue({
+    ...base,
+    summary: {
+      ...base.summary,
+      adjustments: [{ currency: 'USD', type: 'TAX', total: 3, count: 1 }],
+      collected: [
+        { currency: 'COP', total: 150000.5 },
+        { currency: 'USD', total: 103 },
+      ],
+    },
+  });
+  render(<CashRegisterView token="tok" />);
+  const table = await screen.findByRole('table', { name: /abonos/i });
+  const row = within(table).getByRole('row', { name: new RegExp(betoCard.patient.fullName, 'i') });
+  expect(money(row.textContent)).toMatch(/Cobrado 103,00/);
+  const summary = screen.getByRole('region', { name: /resumen del período/i });
+  const adjustments = within(summary).getByRole('list', { name: 'Ajustes por medio de pago' });
+  expect(money(adjustments.textContent)).toMatch(/Impuesto.*\+3,00/);
+  const collected = within(summary).getByRole('list', { name: /Cobrado/ });
+  expect(money(collected.textContent)).toMatch(/103,00/);
+});
+
 it('DX-377: cada abono muestra su medio de pago y su referencia', async () => {
   mockedList.mockResolvedValue(
     response({
@@ -275,7 +331,7 @@ it('muestra el estado vacío cuando el período no tiene abonos', async () => {
     response({
       items: [],
       total: 0,
-      summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [] },
+      summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [], adjustments: [], collected: [] },
     }),
   );
   render(<CashRegisterView token="tok" />);
@@ -748,7 +804,7 @@ describe('tras anular, la caja no se queda en una página vacía (DX-067)', () =
       response({
         items: [],
         total: 0,
-        summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [] },
+        summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [], adjustments: [], collected: [] },
       }),
     );
     render(<CashRegisterView token="tok" />);

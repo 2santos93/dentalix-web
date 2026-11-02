@@ -31,6 +31,11 @@ export function isPlatformHost(host: string): boolean {
   );
 }
 
+/** El registro corre en el subdominio de una clínica que todavía no existe. */
+export function isRegistrationPath(pathname: string | null): boolean {
+  return pathname === '/register' || (pathname?.startsWith('/register/') ?? false);
+}
+
 /**
  * Enlace al inicio de sesión de la clínica `subdomain` desde la página actual
  * (DX-029: tras confirmar el registro). Si ya estamos en su host, basta la

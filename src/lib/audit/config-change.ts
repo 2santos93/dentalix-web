@@ -3,6 +3,10 @@ import { payerTypeLabel } from "@/components/payers/payer-labels";
 import { MOVEMENT_TYPE_LABELS } from "@/components/inventory/movement-format";
 import type { RegionalFormat } from "@/lib/format/regional-format";
 import { sedeNumber } from "@/lib/format/sede-number";
+import {
+  PAYMENT_ADJUSTMENT_CALCULATION_LABELS as ADJUSTMENT_CALCULATION_LABELS,
+  PAYMENT_ADJUSTMENT_TYPE_LABELS as ADJUSTMENT_TYPE_LABELS,
+} from "@/lib/payments/payment-adjustments";
 
 type AuditMetadata = AuditEvent["metadata"];
 type ConfigSide = NonNullable<
@@ -63,10 +67,26 @@ const FIELD_LABELS: Record<string, string> = {
   receiptLegendOverride: "Leyenda propia de la sede",
   receiptLegend: "Leyenda del recibo",
   externalInvoiceNumber: "Nº de factura externa",
+  // DX-516: ajustes por medio de pago.
+  adjustmentLabel: "Ajuste",
+  adjustmentType: "Tipo de ajuste",
+  calculation: "Cálculo",
+  percent: "Porcentaje",
+  fixedAmount: "Importe fijo",
+  fixedCurrency: "Moneda del importe fijo",
   // DX-330: plazo de conservación de la historia clínica.
   clinicalRecordRetentionYears: "Plazo de conservación de la historia clínica",
   // DX-517: «VES=Bs.», una moneda por elemento.
   currencyTexts: "Texto de las monedas",
+  // DX-019: datos de la clínica.
+  legalName: "Razón social",
+  taxId: "Identificador fiscal",
+  taxIdLabel: "Nombre del identificador fiscal",
+  fiscalAddress: "Dirección fiscal",
+  contactEmail: "Email de contacto",
+  contactPhone: "Teléfono de contacto",
+  primaryColor: "Color de la marca",
+  logo: "Logo",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 
@@ -120,6 +140,10 @@ function scalar(
     );
   if (field === "status") return DOMAIN_STATUS_LABELS[value] ?? value;
   if (field === "hourCycle") return HOUR_CYCLE_LABELS[value] ?? value;
+  if (field === "adjustmentType")
+    return ADJUSTMENT_TYPE_LABELS[value as keyof typeof ADJUSTMENT_TYPE_LABELS] ?? value;
+  if (field === "calculation")
+    return ADJUSTMENT_CALCULATION_LABELS[value as keyof typeof ADJUSTMENT_CALCULATION_LABELS] ?? value;
   // El hash entero (64 hex) no se lee y desbordaría la tarjeta: basta el inicio.
   if (field === "contentHash" && value.length > 12)
     return `${value.slice(0, 12)}…`;
