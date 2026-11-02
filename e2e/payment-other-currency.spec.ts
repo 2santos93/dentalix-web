@@ -172,8 +172,8 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
   if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
 
   const expectations = [
-    { pair: '1 USD = 36,50 VES', day: YESTERDAY },
-    { pair: '1 USD = 40,00 VES', day: TODAY },
+    { pair: '1 USD = VES 36,50', day: YESTERDAY },
+    { pair: '1 USD = VES 40,00', day: TODAY },
   ];
   // UX v2: «Recibo» vive en el «⋯» de cada abono.
   const receipts = panel.getByRole('button', { name: /^Acciones de abono/ });
@@ -187,7 +187,7 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
       const doc = page.getByTestId('receipt-document');
       await expect(doc).toContainText('Tasa aplicada', { timeout: 15_000 });
       await expect(doc).toContainText(/Equivalente en USD/);
-      // `formatCurrency` separa importe y moneda con un espacio duro (U+00A0):
+      // El formato de la sede separa importe y moneda con un espacio duro (U+00A0):
       // se normaliza para comparar con el texto esperado.
       texts.push(((await doc.textContent()) ?? '').replace(/\s+/g, ' '));
       await page.keyboard.press('Escape');

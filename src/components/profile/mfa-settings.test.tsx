@@ -6,6 +6,8 @@ jest.mock('qrcode.react', () => ({ QRCodeSVG: () => <svg data-testid="qr" /> }))
 jest.mock('../../lib/auth/mfa-api', () => ({
   ...jest.requireActual('../../lib/auth/mfa-api'),
   getMyMfa: jest.fn(),
+  listTrustedDevices: jest.fn().mockResolvedValue([]),
+  revokeTrustedDevices: jest.fn().mockResolvedValue(undefined),
   startMyMfaEnrollment: jest.fn(),
   confirmMyMfaEnrollment: jest.fn(),
   disableMyMfa: jest.fn(),
@@ -84,5 +86,32 @@ describe('MfaSettings (DX-021)', () => {
     mock.getMyMfa.mockResolvedValue({ ...ON, recoveryCodesRemaining: 2 } as never);
     render(<MfaSettings token="t" />);
     expect(await screen.findByText(/Te quedan pocos códigos/)).toBeInTheDocument();
+  });
+});
+
+describe('MfaSettings: dispositivos de confianza (DX-021-bis)', () => {
+  const DEVICE = {
+    id: 'd1',
+    label: 'Chrome en macOS',
+    createdAt: '2026-10-01T10:00:00Z',
+    lastUsedAt: '2026-10-02T10:00:00Z',
+    expiresAt: '2026-10-31T10:00:00Z',
+  };
+
+  it('lista cada uno y revocarlo lo quita', async () => {
+    mock.getMyMfa.mockResolvedValue(ON as never);
+    mock.listTrustedDevices.mockResolvedValue([DEVICE]);
+    render(<MfaSettings token="tok" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Revocar Chrome en macOS' }));
+    await waitFor(() => expect(mock.revokeTrustedDevices).toHaveBeenCalledWith('tok', 'd1'));
+    expect(await screen.findByText('Ninguno')).toBeInTheDocument();
+  });
+
+  it('sin la verificación activa ni los pide', async () => {
+    mock.listTrustedDevices.mockClear();
+    mock.getMyMfa.mockResolvedValue(OFF as never);
+    render(<MfaSettings token="tok" />);
+    await screen.findByRole('button', { name: 'Activar' });
+    expect(mock.listTrustedDevices).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MfaLoginStep } from './mfa-login-step';
 
 function setup(props: Partial<React.ComponentProps<typeof MfaLoginStep>> = {}) {
@@ -41,5 +42,19 @@ describe('MfaLoginStep (DX-021)', () => {
     const { onSubmit } = setup({ locked: true });
     expect(screen.getByRole('button', { name: 'Verificar' })).toBeDisabled();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('MfaLoginStep: dispositivo de confianza (DX-021-bis)', () => {
+  it('sin `remember` no se ofrece (plataforma)', () => {
+    setup();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('con `remember`, la casilla avisa del cambio', async () => {
+    const onChange = jest.fn();
+    setup({ remember: { checked: false, onChange } });
+    await userEvent.setup().click(screen.getByRole('checkbox', { name: /durante 30 días/ }));
+    expect(onChange).toHaveBeenCalledWith(true);
   });
 });

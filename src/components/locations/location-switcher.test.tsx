@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { LocationSwitcher, focusLocationSwitcher, shortSedeLabel } from './location-switcher';
+import { LocationSwitcher, focusLocationSwitcher } from './location-switcher';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import {
@@ -208,7 +208,7 @@ describe('LocationSwitcher', () => {
   });
 
   describe('variante del teléfono (K2)', () => {
-    it('rótulo corto visible y nombre accesible «Sede: …» con el nombre entero', async () => {
+    it('rótulo visible con el nombre ENTERO y nombre accesible «Sede: …»', async () => {
       mockedList.mockResolvedValue([sede('l1', 'Sede principal'), sede('l2', 'Sede norte')]);
       setActiveLocationId('l2');
 
@@ -218,16 +218,31 @@ describe('LocationSwitcher', () => {
       expect(select).toBeInTheDocument();
       // El mismo desplegable: todas las opciones siguen ahí.
       expect(screen.getByRole('option', { name: 'Sede principal' })).toBeInTheDocument();
-      expect(screen.getByText('norte')).toBeInTheDocument();
+      expect(screen.getByText('Sede norte', { selector: 'span[aria-hidden]' })).toBeInTheDocument();
     });
 
-    it('en la vista conjunta dice «Todas»', async () => {
+    it('DX-523: un nombre de 30+ caracteres se lee entero, a dos líneas, sin recortar con puntos suspensivos', async () => {
+      const largo = 'Clínica Odontológica Altamira Caracas Centro';
+      mockedList.mockResolvedValue([sede('l1', largo), sede('l2', 'Sede norte')]);
+      setActiveLocationId('l1');
+
+      render(<LocationSwitcher variant="phone" />);
+
+      await screen.findByRole('combobox', { name: `Sede: ${largo}` });
+      const label = screen.getByText(largo, { selector: 'span[aria-hidden]' });
+      // Se envuelve (dos líneas como mucho), no se trunca en una.
+      expect(label.className).toContain('line-clamp-2');
+      expect(label.className).not.toContain('truncate');
+      expect(label.className).toContain('break-words');
+    });
+
+    it('en la vista conjunta dice «Todas las sedes»', async () => {
       mockedList.mockResolvedValue([sede('l1', 'Sede principal'), sede('l2', 'Sede norte')]);
 
       render(<LocationSwitcher variant="phone" />);
 
       expect(await screen.findByRole('combobox', { name: 'Sede: Todas las sedes' })).toBeInTheDocument();
-      expect(screen.getByText('Todas')).toBeInTheDocument();
+      expect(screen.getByText('Todas las sedes', { selector: 'span[aria-hidden]' })).toBeInTheDocument();
     });
   });
 });
@@ -274,17 +289,5 @@ describe('focusLocationSwitcher (DX-486, FE-107)', () => {
     screen.getByRole('button', { name: 'Antes' }).focus();
     expect(focusLocationSwitcher()).toBe(false);
     expect(screen.getByRole('button', { name: 'Antes' })).toHaveFocus();
-  });
-});
-
-describe('shortSedeLabel', () => {
-  it.each([
-    ['Sede Norte', 'Norte'],
-    ['Sede principal', 'principal'],
-    ['Clínica Centro Médico', 'Centro'],
-    ['Altamira', 'Altamira'],
-    ['Sede', 'Sede'],
-  ])('%s → %s', (name, short) => {
-    expect(shortSedeLabel(name)).toBe(short);
   });
 });

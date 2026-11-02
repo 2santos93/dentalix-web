@@ -11,8 +11,9 @@ import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { saveCsv } from '@/lib/files/save-csv';
 import { isValidPeriod, PERIOD_PRESETS, periodFor, type PeriodPresetKey } from '@/lib/reports/period-presets';
 import {
+  comparisonCurrencies,
   formatMetric,
-  metricValues,
+  locationAmounts,
   nextSort,
   sortCurrency,
   sortRows,
@@ -77,6 +78,10 @@ export const locationsComparisonCopy = {
   chartCollected: 'Cobrado por sede',
   chartCaption: (currency: string, others: boolean) =>
     others ? `En ${currency}; las demás monedas, en la tabla.` : `En ${currency}.`,
+  // DX-526: la moneda con la que se ordenan los importes y se dibujan las barras.
+  currency: 'Moneda para ordenar y graficar',
+  // Una sede sin importe en la moneda elegida no es un cero: se dice con palabras.
+  noCharges: (currency: string, names: string[]) => `Sin cobros en ${currency}: ${names.join(', ')}.`,
   tableLabel: 'Indicadores por sede y total de la clínica',
   cardsLabel: 'Indicadores por sede',
   location: 'Sede',
@@ -222,33 +227,50 @@ function ComparisonSkeleton() {
  * con la misma escala para poder compararlos. Solo con dos sedes o más y algo
  * que pintar: una barra sola no es un gráfico.
  */
-function SedeCharts({ data, fmt }: { data: LocationsComparison; fmt: RegionalFormat }) {
-  const currency = sortCurrency(data, 'production') ?? sortCurrency(data, 'collected');
+function SedeCharts({ data, fmt, chosen }: { data: LocationsComparison; fmt: RegionalFormat; chosen: string | null }) {
+  const currency = sortCurrency(data, 'production', chosen) ?? sortCurrency(data, 'collected', chosen);
   if (!currency || data.locations.length < 2) return null;
-  const barsOf = (key: KpiKey): RankedBar[] =>
-    data.locations.map((row) => {
-      const value = metricValues(row, key).find((m) => m.currency === currency)?.value ?? 0;
-      return {
-        key: row.locationId ?? row.name,
-        name: row.name,
-        value,
-        display: formatMetric('MONEY', value, fmt, currency),
-      };
-    });
+  // Las sedes sin importe en la moneda no son una barra en cero: se nombran aparte.
+  const barsOf = (key: KpiKey): { bars: RankedBar[]; missing: string[] } => {
+    const amounts = locationAmounts(data, key, currency);
+    return {
+      bars: amounts.flatMap(({ row, value }) =>
+        value === null
+          ? []
+          : [
+              {
+                key: row.locationId ?? row.name,
+                name: row.name,
+                value,
+                display: formatMetric('MONEY', value, fmt, currency),
+              },
+            ],
+      ),
+      missing: amounts.filter((a) => a.value === null).map((a) => a.row.name),
+    };
+  };
   const production = barsOf('production');
   const collected = barsOf('collected');
-  const all = [...production, ...collected];
-  if (all.every((b) => b.value <= 0)) return null;
+  const all = [...production.bars, ...collected.bars];
+  if (all.length === 0) return null;
   const max = Math.max(...all.map((b) => b.value));
   const others = (['production', 'collected'] as KpiKey[]).some((key) =>
     activeValues(data.total, key).some((m) => m.currency && m.currency !== currency),
   );
   const caption = copy.chartCaption(currency, others);
+  const note = (missing: string[]) =>
+    missing.length > 0 ? <p className="t-caption text-muted">{copy.noCharges(currency, missing)}</p> : null;
   return (
     <section aria-label={copy.charts}>
       <Card className="grid gap-6 p-4 sm:p-6 md:grid-cols-2 md:gap-8">
-        <RankedBars title={copy.chartProduction} caption={caption} bars={production} max={max} />
-        <RankedBars title={copy.chartCollected} caption={caption} bars={collected} max={max} />
+        <div className="flex min-w-0 flex-col gap-3">
+          <RankedBars title={copy.chartProduction} caption={caption} bars={production.bars} max={max} />
+          {note(production.missing)}
+        </div>
+        <div className="flex min-w-0 flex-col gap-3">
+          <RankedBars title={copy.chartCollected} caption={caption} bars={collected.bars} max={max} />
+          {note(collected.missing)}
+        </div>
       </Card>
     </section>
   );
@@ -278,6 +300,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
   const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
   const [compare, setCompare] = useState<CompareMode>('previous');
   const [sort, setSort] = useState<SortState | null>(null);
+  const [currencyChoice, setCurrencyChoice] = useState<string | null>(null);
   const [data, setData] = useState<LocationsComparison | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -356,7 +379,23 @@ export function LocationsComparisonView({ token }: { token: string }) {
   const kpis = data?.kpis ?? [];
   const markedCount = kpis.filter((k) => marked(k.key)).length;
   const howOf = (k: KpiDefinition) => (marked(k.key) ? `${k.howItIsCalculated} ${copy.unattributedHow}` : k.howItIsCalculated);
-  const rows = data ? sortRows(data, sort) : [];
+  const currencies = data ? comparisonCurrencies(data) : [];
+  // DX-526: la elegida si sigue en el total; si no, la primera (la API no da tasas
+  // para saber cuál suma más en valor convertido).
+  const currency = currencyChoice && currencies.includes(currencyChoice) ? currencyChoice : (currencies[0] ?? null);
+  const rows = data ? sortRows(data, sort, currency) : [];
+  const currencyField =
+    currencies.length > 1 ? (
+      <FormField htmlFor={`${ids}-currency`} label={copy.currency} className="sm:w-64">
+        <NativeSelect id={`${ids}-currency`} value={currency ?? ''} onChange={(e) => setCurrencyChoice(e.target.value)}>
+          {currencies.map((code) => (
+            <option key={code} value={code}>
+              {code}
+            </option>
+          ))}
+        </NativeSelect>
+      </FormField>
+    ) : null;
   const sortOptions: SortOption[] = [
     { value: '', label: copy.sortDefault, sort: null },
     { value: 'name', label: copy.sortByName, sort: { key: 'name', direction: 'ascending' } },
@@ -485,7 +524,9 @@ export function LocationsComparisonView({ token }: { token: string }) {
                 </div>
               ) : null}
 
-              <SedeCharts data={data} fmt={fmt} />
+              {currencyField ? <div className="flex flex-col gap-3 sm:flex-row sm:items-end">{currencyField}</div> : null}
+
+              <SedeCharts data={data} fmt={fmt} chosen={currency} />
 
               {/* Tablet y escritorio: una tabla con cabeceras ordenables y el total al pie. */}
               <Card className="overflow-hidden p-0 max-sm:hidden">

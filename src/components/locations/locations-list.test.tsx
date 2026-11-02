@@ -124,6 +124,15 @@ describe('LocationsList (G1, spec §6.3)', () => {
     expect(screen.getByRole('button', { name: 'Editar Sede Norte' })).toBeInTheDocument();
   });
 
+  it('DX-523: «Editar» está activo (no deshabilitado) y su borde se ve (border-input, no el tenue de la tarjeta)', async () => {
+    render(<LocationsList token={ADMIN} canEdit />);
+    await screen.findByText('Sede Norte');
+    const edit = screen.getByRole('button', { name: 'Editar Sede Norte' });
+    expect(edit).toBeEnabled();
+    expect(edit).not.toHaveAttribute('aria-disabled');
+    expect(edit.className).toContain('border-border-input');
+  });
+
   it('a location with null regional fields is listed «Por configurar» and the modal completes it', async () => {
     mockedList.mockResolvedValue([legacy]);
     const completed = { ...legacy, currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' as const, regionalSettingsReviewedAt: '2026-10-27T10:00:00.000Z' };
