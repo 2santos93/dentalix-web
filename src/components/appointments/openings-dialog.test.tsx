@@ -7,6 +7,7 @@ import {
   scheduleFromWaitlist,
   type WaitlistEntry,
 } from '@/lib/appointments/waitlist-api';
+import { listChairs, type Chair } from '@/lib/chairs/chairs-api';
 import { testAgendaClock } from '@/lib/test/sede-clock';
 
 /** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
@@ -16,11 +17,13 @@ jest.mock('../../lib/appointments/waitlist-api', () => ({
   findOpenings: jest.fn(),
   scheduleFromWaitlist: jest.fn(),
 }));
+jest.mock('../../lib/chairs/chairs-api', () => ({ listChairs: jest.fn() }));
 jest.mock('sonner', () => ({
   toast: { success: jest.fn(), warning: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 const mockedOpenings = findOpenings as jest.MockedFunction<typeof findOpenings>;
 const mockedSchedule = scheduleFromWaitlist as jest.MockedFunction<typeof scheduleFromWaitlist>;
+const mockedChairs = listChairs as jest.MockedFunction<typeof listChairs>;
 
 const entry = {
   id: 'wl-1',
@@ -60,6 +63,58 @@ describe('OpeningsDialog (DX-122)', () => {
     mockedOpenings.mockReset();
     mockedSchedule.mockReset();
     onEntryGone.mockReset();
+    mockedChairs.mockReset();
+    mockedChairs.mockResolvedValue([]);
+  });
+
+  describe('con sillón (DX-492)', () => {
+    const chairs = [
+      { id: 'c1', name: 'Sillón 1', active: true },
+      { id: 'c2', name: 'Sillón 2', active: true },
+    ] as Chair[];
+    const opening = {
+      start: at('2031-03-10', '09:00'),
+      end: at('2031-03-10', '10:00'),
+      chair: { id: 'c2', name: 'Sillón 2', active: true },
+    };
+    const result = { timeZone: 'UTC', durationMinutes: 30, truncated: false, openings: [opening] };
+
+    it('un sillón filtra la búsqueda; el hueco dice el libre y «Agendar aquí» lo guarda', async () => {
+      mockedChairs.mockResolvedValue(chairs);
+      mockedOpenings.mockResolvedValue(result);
+      mockedSchedule.mockResolvedValue({
+        id: 'a1',
+        start: opening.start,
+        end: opening.end,
+      } as never);
+      renderDialog();
+      const select = await screen.findByLabelText('Sillón');
+      await userEvent.selectOptions(select, 'c2');
+      await userEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+      await waitFor(() => expect(mockedOpenings).toHaveBeenCalledTimes(2));
+      expect(mockedOpenings.mock.calls[1][1]).toMatchObject({ chairIds: ['c2'] });
+      expect(await screen.findByTestId('opening-chair')).toHaveTextContent('Sillón 2');
+      await userEvent.click(screen.getByRole('button', { name: /^Agendar aquí/ }));
+      await waitFor(() => expect(mockedSchedule).toHaveBeenCalledTimes(1));
+      expect(mockedSchedule.mock.calls[0][2]).toMatchObject({ chairId: 'c2' });
+    });
+
+    it('«Cualquier sillón libre» pide todos los de la sede', async () => {
+      mockedChairs.mockResolvedValue(chairs);
+      mockedOpenings.mockResolvedValue(result);
+      renderDialog();
+      await userEvent.selectOptions(await screen.findByLabelText('Sillón'), 'any');
+      await userEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+      await waitFor(() => expect(mockedOpenings).toHaveBeenCalledTimes(2));
+      expect(mockedOpenings.mock.calls[1][1]).toMatchObject({ chairIds: ['c1', 'c2'] });
+    });
+
+    it('sin sillones en la sede no sale el campo', async () => {
+      mockedOpenings.mockResolvedValue({ ...result, openings: [] });
+      renderDialog();
+      await waitFor(() => expect(mockedChairs).toHaveBeenCalled());
+      expect(screen.queryByLabelText('Sillón')).not.toBeInTheDocument();
+    });
   });
 
   it('busca con el profesional de la entrada y agrupa los huecos por día', async () => {

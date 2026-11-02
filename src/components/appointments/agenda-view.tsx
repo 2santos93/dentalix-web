@@ -854,6 +854,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     void refreshAppointmentsInPlaceRef.current();
   });
 
+  /** DX-492: «Mover a…» desde «En clínica»: la agenda de al lado también cambia. */
+  function handleInClinicMoved() {
+    void refreshAppointmentsInPlaceRef.current();
+  }
+
   /** Botones rápidos del flujo de una cita de la agenda (DX-200). */
   function renderFlowActions(appointment: Appointment, className = 'mt-2') {
     return (
@@ -1897,7 +1902,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           aria-label={`${inClinicCopy.title} · ${waitlistCopy.title}`}
           className="sticky top-4 flex max-h-[calc(100dvh-6rem)] flex-col gap-6 divide-y divide-border-subtle overflow-y-auto overscroll-contain [&>*+*]:pt-6"
         >
-          <InClinicPanel state={inClinic} role={role} runner={flow} />
+          <InClinicPanel state={inClinic} role={role} runner={flow} token={token} onMoved={handleInClinicMoved} />
           <WaitlistPanel
             token={token}
             staff={staff}
@@ -1950,6 +1955,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 state={inClinic}
                 role={role}
                 runner={flow}
+                token={token}
+                onMoved={handleInClinicMoved}
                 onChooseLocation={() => {
                   chooseLocationOnClose.current = true;
                   setInClinicOpen(false);

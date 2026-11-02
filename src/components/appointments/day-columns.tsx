@@ -51,6 +51,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { cn } from '@/lib/utils';
+import { wallDay } from '@/lib/time/wall-clock';
 import { statusTone, TONE_CLASSES } from '@/lib/status/tones';
 
 // Copy as constants (i18n-ready, es-first).
@@ -62,7 +63,7 @@ const copy = {
   loading: 'Cargando agenda…',
   loadError: 'No pudimos cargar la agenda.',
   retry: 'Reintentar',
-  emptyColumn: 'Sin citas hoy',
+  emptyColumn: (isToday: boolean) => (isToday ? 'Sin citas hoy' : 'Sin citas este día'),
   newAppointment: 'Nueva cita',
   newAppointmentFor: (name: string) => `Nueva cita con ${name}`,
   moveTo: 'Mover a…',
@@ -596,7 +597,7 @@ export function DayColumns({
                       columnBlocks.length > 0 ? 'top-9' : 'top-2',
                     )}
                   >
-                    <p className="text-sm text-muted">{copy.emptyColumn}</p>
+                    <p className="text-sm text-muted">{copy.emptyColumn(date === wallDay(now, timeZone))}</p>
                     <Button
                       type="button"
                       size="sm"

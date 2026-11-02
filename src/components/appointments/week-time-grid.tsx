@@ -31,6 +31,7 @@ import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageMarker } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { medicalAlertSeverity } from '@/lib/clinical/medical-alerts';
+import { chairDisplayName } from '@/lib/chairs/chair-columns';
 
 const copy = {
   heading: 'Agenda de la semana',
@@ -75,6 +76,16 @@ interface WeekTimeGridProps {
    * doctora no puede tapar el día de las demás (sale como etiqueta arriba).
    */
   selectedProviderId?: string | null;
+}
+
+/** DX-492: el sillón junto al paciente; si no cabe, se recorta él primero. */
+function WeekChairLabel({ chair }: { chair: string | null }) {
+  if (!chair) return null;
+  return (
+    <span data-testid="week-appointment-chair" className="min-w-0 shrink-[20] truncate font-normal">
+      {chair}
+    </span>
+  );
 }
 
 const WHOLE_DAY = { start: 0, end: DAY_MINUTES };
@@ -227,6 +238,7 @@ export function WeekTimeGrid({
               const range = sedeTimeRange(a.start, a.end, clock.of(a.locationId));
               const widthPct = 100 / laneCount;
               const patient = patientLabel(a, patientNames);
+              const chair = a.chair ? chairDisplayName(a.chair) : null;
               // DX-247: el icono va junto a la tarjeta, no dentro (no se anidan
               // botones); también en las de 15 min (20 px de alto).
               const hasMedicalAlert = medicalAlertSeverity(a.medicalAlerts) !== null;
@@ -245,7 +257,7 @@ export function WeekTimeGrid({
                     type="button"
                     data-testid="week-grid-appointment"
                     data-id={a.id}
-                    title={[patient, STATUS_LABELS[a.status], range, a.appointmentType?.name].filter(Boolean).join(' · ')}
+                    title={[patient, STATUS_LABELS[a.status], range, a.appointmentType?.name, chair].filter(Boolean).join(' · ')}
                     onClick={() => onSelectAppointment(a)}
                     className={`h-full w-full overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${hasMedicalAlert ? 'pr-6' : ''} ${STATUS_BADGE_CLASSES[a.status]}`}
                   >
@@ -253,6 +265,7 @@ export function WeekTimeGrid({
                     {heightPx < 40 ? (
                       <span className="flex min-w-0 items-center gap-1 font-medium leading-none">
                         <span className="min-w-0 truncate font-semibold">{patient}</span>{' '}
+                        <WeekChairLabel chair={chair} />{' '}
                         <AppointmentStatusLabel status={a.status} compact />{' '}
                         <ConfirmationBadge appointment={a} compact />{' '}
                         <CoverageMarker coverage={a.coverage} srText />{' '}
@@ -260,7 +273,10 @@ export function WeekTimeGrid({
                       </span>
                     ) : (
                       <>
-                        <span className="block truncate font-semibold">{patient}</span>{' '}
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className="min-w-0 truncate font-semibold">{patient}</span>{' '}
+                          <WeekChairLabel chair={chair} />
+                        </span>{' '}
                         <span className="flex min-w-0 items-center gap-1">
                           <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />{' '}
                           <span className="truncate tabular-nums">{range}</span>{' '}

@@ -10350,6 +10350,11 @@ export interface components {
              * @description Tipo de cita urgente (activo y con «Urgencia»). Sin él, el primer tipo urgente activo por nombre.
              */
             appointmentTypeId?: string;
+            /**
+             * Format: uuid
+             * @description DX-492: sillón activo de la sede. Ocupado a la hora de la cita: 409 con su nombre y horas; de otra sede o desactivado: 400; de otra clínica: 404.
+             */
+            chairId?: string;
             /** @description Señales de triaje de recepción: PAIN (dolor), SWELLING (inflamación), INFECTION (infección), FEVER (fiebre), BLEEDING (sangrado), TRAUMA (traumatismo). Otro valor: 400. */
             triageFlags?: components["schemas"]["TriageFlag"][];
             triageNote?: string;
@@ -10488,6 +10493,8 @@ export interface components {
              * @description Fin del hueco (cabe al menos la duración pedida).
              */
             end: string;
+            /** @description DX-492: el sillón libre en todo el hueco. Solo si se pidió `chairIds`. */
+            chair?: components["schemas"]["ChairSummaryDto"];
         };
         OpeningsDto: {
             /** @example UTC */
@@ -10507,6 +10514,12 @@ export interface components {
             /** Format: uuid */
             providerId: string;
             providerName: string | null;
+            /**
+             * Format: uuid
+             * @description DX-492: el sillón de la cita.
+             */
+            chairId: string | null;
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             start: string;
             /** Format: date-time */
@@ -11563,6 +11576,11 @@ export interface components {
              * @description Si falta, el tipo de la entrada si sigue activo.
              */
             appointmentTypeId?: string;
+            /**
+             * Format: uuid
+             * @description DX-492: sillón de la sede de la entrada (el que devolvió «Buscar hueco»).
+             */
+            chairId?: string;
             reason?: string;
             notes?: string;
         };
@@ -24023,7 +24041,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description DX-470 «Atender sin cita», en una transacción: el paciente (existente por `patientId`, o alta mínima `newPatient` con nombre, apellido y teléfono) y una cita de tipo urgente DESDE AHORA ya en «En clínica» (ARRIVED, `arrivedAt` = reloj del servidor, `walkIn`), con las señales y la nota de triaje. Va al primer hueco RESERVED libre de hoy del profesional que admite el tipo urgente (DX-446); con `overbookReason`, en sobrecupo ahora (`overbooked`, motivo en `appointment_reserved_overrides`). Sede: la de X-Location-Id (o la de escritura de la sesión), entre las permitidas al usuario; autor, el del token. Queda en auditoría (`WALK_IN_PATIENT`, `WALK_IN_ARRIVAL`, `WALK_IN_OVERBOOK`) sin el triaje ni el motivo. */
+            /** @description DX-470 «Atender sin cita», en una transacción: el paciente (existente por `patientId`, o alta mínima `newPatient` con nombre, apellido y teléfono) y una cita de tipo urgente DESDE AHORA ya en «En clínica» (ARRIVED, `arrivedAt` = reloj del servidor, `walkIn`), con las señales y la nota de triaje. Va al primer hueco RESERVED libre de hoy del profesional que admite el tipo urgente (DX-446); con `overbookReason`, en sobrecupo ahora (`overbooked`, motivo en `appointment_reserved_overrides`). DX-492: `chairId` opcional, un sillón activo de la sede. Sede: la de X-Location-Id (o la de escritura de la sesión), entre las permitidas al usuario; autor, el del token. Queda en auditoría (`WALK_IN_PATIENT`, `WALK_IN_ARRIVAL`, `WALK_IN_OVERBOOK`) sin el triaje ni el motivo. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -24032,7 +24050,7 @@ export interface operations {
                     "application/json": components["schemas"]["WalkInResultDto"];
                 };
             };
-            /** @description Datos inválidos: ni `patientId` ni `newPatient` (o los dos), señales fuera de las 6, nota de más de 200, motivo del sobrecupo fuera de 5–300, tipo no urgente o desactivado, o el profesional no atiende en la sede */
+            /** @description Datos inválidos: ni `patientId` ni `newPatient` (o los dos), señales fuera de las 6, nota de más de 200, motivo del sobrecupo fuera de 5–300, tipo no urgente o desactivado, el profesional no atiende en la sede, o el sillón es de otra sede o está desactivado */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24046,14 +24064,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Paciente o profesional que no son de esta clínica */
+            /** @description Paciente, profesional o sillón que no son de esta clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description `NO_RESERVED_SLOT` (`canOverbook`): no queda hueco reservado libre hoy, se puede reintentar con `overbookReason`; `PATIENT_DUPLICATE` (`existingPatientId` y `existingPatient` con `id`, `firstName`, `lastName`): el documento del alta mínima ya es de otro paciente (se comprueba antes que el hueco); sin tipo urgente activo; un bloqueo que no deja agendar; el paciente ya está en otra cita a esa hora; u otra persona ocupó el hueco a la vez */
+            /** @description `NO_RESERVED_SLOT` (`canOverbook`): no queda hueco reservado libre hoy, se puede reintentar con `overbookReason`; `PATIENT_DUPLICATE` (`existingPatientId` y `existingPatient` con `id`, `firstName`, `lastName`): el documento del alta mínima ya es de otro paciente (se comprueba antes que el hueco); sin tipo urgente activo; un bloqueo que no deja agendar; el paciente ya está en otra cita a esa hora; el sillón está ocupado (mensaje con su nombre y horas); u otra persona ocupó el hueco a la vez */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24084,6 +24102,8 @@ export interface operations {
                 patientId?: string;
                 /** @description DX-509-bis: la cita que se va a mover no ocupa (si no, su propia hora taparía los huecos de al lado). 404 si no es de esta clínica. */
                 excludeAppointmentId?: string;
+                /** @description DX-492: sillones activos de la sede. Solo salen los huecos en los que también está libre alguno de ellos, y cada hueco dice cuál (`chair`). Uno de otra sede o desactivado da 400; de otra clínica, 404. Hasta 12; se repite el parámetro: ?chairIds=a&chairIds=b. */
+                chairIds?: string[];
             };
             header?: never;
             path?: never;
@@ -24091,7 +24111,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description DX-122 «Buscar hueco»: huecos del profesional dentro del horario de la sede (su zona horaria), fuera de bloqueos y sin solape con sus citas (ni con las del paciente, si se indica). Nunca en el pasado. */
+            /** @description DX-122 «Buscar hueco»: huecos del profesional dentro del horario de la sede (su zona horaria), fuera de bloqueos y sin solape con sus citas (ni con las del paciente, si se indica). Nunca en el pasado. DX-492: con `chairIds`, solo los huecos con alguno de esos sillones libre, y cada hueco lleva el suyo en `chair`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -24100,14 +24120,14 @@ export interface operations {
                     "application/json": components["schemas"]["OpeningsDto"];
                 };
             };
-            /** @description Fechas inválidas, al revés o más de 31 días; duración fuera de 5–480 */
+            /** @description Fechas inválidas, al revés o más de 31 días; duración fuera de 5–480; DX-492: sillón de otra sede o desactivado, o más de 12 */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Sede, profesional, paciente o cita a excluir de otra clínica */
+            /** @description Sede, profesional, paciente, cita a excluir o sillón de otra clínica */
             404: {
                 headers: {
                     [name: string]: unknown;

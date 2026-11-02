@@ -190,9 +190,16 @@ describe('DayColumns (DX-121)', () => {
     expect(within(second).getAllByTestId('free-gap')).toHaveLength(2);
   });
 
+  it('DX-492: la columna vacía de otro día dice «Sin citas este día»', () => {
+    renderColumns({ now: new Date(`${DATE}T12:00:00.000Z`), date: '2031-03-04' });
+    const third = screen.getAllByTestId('day-column')[2];
+    expect(within(third).getByText('Sin citas este día')).toBeInTheDocument();
+    expect(within(third).queryByText('Sin citas hoy')).not.toBeInTheDocument();
+  });
+
   it('columna vacía: «Sin citas hoy» y «Nueva cita» con ese profesional', async () => {
     const user = userEvent.setup();
-    const { onNewAppointment } = renderColumns();
+    const { onNewAppointment } = renderColumns({ now: new Date(`${DATE}T12:00:00.000Z`) });
     const third = screen.getAllByTestId('day-column')[2];
     expect(within(third).getByText('Sin citas hoy')).toBeInTheDocument();
     await user.click(within(third).getByRole('button', { name: 'Nueva cita con Dra. Sara Paz' }));

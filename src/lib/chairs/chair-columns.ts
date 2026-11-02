@@ -41,6 +41,27 @@ export function chairColumns(
   ];
 }
 
+/**
+ * DX-492: los sillones activos sin una cita a esta hora. Como la EXCLUDE de la
+ * API, cualquier estado menos cancelada ocupa (el servidor tiene la última
+ * palabra: 409 con el nombre del sillón).
+ */
+export function freeChairs(
+  chairs: readonly Chair[],
+  appointments: readonly { chairId?: string | null; status: string; start: string; end: string }[],
+  now: Date,
+): Chair[] {
+  const at = now.getTime();
+  const occupied = new Set(
+    appointments
+      .filter(
+        (a) => a.status !== 'CANCELLED' && new Date(a.start).getTime() <= at && at < new Date(a.end).getTime(),
+      )
+      .map((a) => a.chairId),
+  );
+  return chairs.filter((c) => c.active && !occupied.has(c.id));
+}
+
 /** La columna de una cita en la vista por sillón. */
 export function chairColumnOf(appointment: { chairId?: string | null }): string {
   return appointment.chairId ?? NO_CHAIR_COLUMN;

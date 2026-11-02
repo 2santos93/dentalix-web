@@ -32,6 +32,9 @@ const copy = {
   title: 'Mover a…',
   description: (patient: string) =>
     `Elige la fecha, la hora y el profesional para la cita de ${patient}. Se conserva la duración.`,
+  // DX-492: con sillones, el modal también lo cambia.
+  descriptionWithChair: (patient: string) =>
+    `Elige la fecha, la hora, el profesional y el sillón para la cita de ${patient}. Se conserva la duración.`,
   date: 'Fecha',
   time: 'Hora de inicio',
   provider: 'Profesional',
@@ -123,7 +126,7 @@ export function MoveAppointmentDialog({
   /** Busca el siguiente hueco; solo cuenta la última búsqueda. */
   function searchNextOpening(target: MoveTarget) {
     const id = ++search.current;
-    findNextOpening(token, appointment, target, timeZone).then(
+    findNextOpening(token, appointment, target, timeZone, chairId).then(
       (found) => {
         if (search.current === id) setNextOpening(found ? { status: 'found', target: found } : { status: 'none' });
       },
@@ -217,7 +220,7 @@ export function MoveAppointmentDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={copy.title}
-      description={copy.description(patientLabel(appointment))}
+      description={(showChair ? copy.descriptionWithChair : copy.description)(patientLabel(appointment))}
       onSubmit={handleSubmit}
       submitLabel={copy.submit}
       submitting={submitting}

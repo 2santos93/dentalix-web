@@ -42,6 +42,8 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
     patientLastName: 'Ríos',
     providerId: 'dent-1',
     providerName: 'Dra. Lina',
+    chairId: null,
+    chair: null,
     start: '2026-10-19T14:00:00.000Z',
     end: '2026-10-19T14:30:00.000Z',
     status: 'ARRIVED',
@@ -100,6 +102,46 @@ function staticState(overrides: Partial<InClinicState>): InClinicState {
   return { view: null, loading: false, error: null, localeMissing: null, noLocation: false, reload: jest.fn(), ...overrides };
 }
 const noRunner = { pendingId: null, run: jest.fn() };
+
+describe('InClinicPanel: sillón y «Mover a…» (DX-492)', () => {
+  const chair = { id: 'ch-1', name: 'Sillón 1', active: true };
+  const seated = item({ appointmentId: 'a1', chairId: 'ch-1', chair });
+
+  it('muestra el sillón de quien lo tiene y nada de quien no', () => {
+    render(
+      <InClinicPanel
+        state={staticState({ view: view({ waiting: [seated, item({ appointmentId: 'a2' })] }) })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const chairs = screen.getAllByTestId('in-clinic-chair');
+    expect(chairs).toHaveLength(1);
+    expect(chairs[0]).toHaveTextContent('Sillón 1');
+  });
+
+  it('un sillón desactivado se dice', () => {
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({ waiting: [{ ...seated, chair: { ...chair, active: false } }] }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    expect(screen.getByTestId('in-clinic-chair')).toHaveTextContent('Sillón 1 (inactivo)');
+  });
+
+  it('«Mover a…» solo con sesión', () => {
+    const state = staticState({ view: view({ waiting: [seated] }) });
+    const name = /Mover a… la cita de Ana Ríos/;
+    const { rerender } = render(<InClinicPanel state={state} role="RECEPTION" runner={noRunner} />);
+    expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    rerender(<InClinicPanel state={state} role="RECEPTION" runner={noRunner} token="T" />);
+    expect(screen.getByRole('button', { name })).toBeInTheDocument();
+  });
+});
 
 describe('InClinicPanel (DX-200)', () => {
   beforeEach(() => {

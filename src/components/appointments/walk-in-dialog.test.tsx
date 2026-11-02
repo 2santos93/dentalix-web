@@ -6,6 +6,8 @@ import { getPatient, listPatients } from '@/lib/patients/patients-api';
 import { createWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
 import { notifyInClinicChanged } from '@/lib/appointments/patient-flow';
 import { listLocations } from '@/lib/locations/locations-api';
+import { listChairs, type Chair } from '@/lib/chairs/chairs-api';
+import { listAppointments } from '@/lib/appointments/appointments-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { WalkInDialog, walkInCopy as copy } from './walk-in-dialog';
 
@@ -25,6 +27,11 @@ jest.mock('../../lib/appointments/walk-in', () => ({
 jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
+jest.mock('../../lib/chairs/chairs-api', () => ({ listChairs: jest.fn() }));
+jest.mock('../../lib/appointments/appointments-api', () => ({
+  ...jest.requireActual('../../lib/appointments/appointments-api'),
+  listAppointments: jest.fn(),
+}));
 jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
   notifyInClinicChanged: jest.fn(),
@@ -35,6 +42,8 @@ const patientsMock = listPatients as jest.MockedFunction<typeof listPatients>;
 const getPatientMock = getPatient as jest.MockedFunction<typeof getPatient>;
 const createMock = createWalkIn as jest.MockedFunction<typeof createWalkIn>;
 const locationsMock = listLocations as jest.MockedFunction<typeof listLocations>;
+const chairsMock = listChairs as jest.MockedFunction<typeof listChairs>;
+const appointmentsMock = listAppointments as jest.MockedFunction<typeof listAppointments>;
 
 const CENTRO = clinicLocation({ id: 'loc-centro', name: 'Sede Centro' });
 const NORTE = clinicLocation({ id: 'loc-norte', name: 'Sede Norte' });
@@ -77,6 +86,72 @@ beforeEach(() => {
   staffMock.mockResolvedValue(STAFF);
   patientsMock.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 8 } as never);
   locationsMock.mockResolvedValue([CENTRO, NORTE, CERRADA]);
+  chairsMock.mockResolvedValue([]);
+  appointmentsMock.mockResolvedValue([]);
+});
+
+describe('WalkInDialog con sillón (DX-492)', () => {
+  const chair = (id: string, name: string) => ({ id, name, active: true }) as Chair;
+  const ongoing = (chairId: string) =>
+    ({
+      chairId,
+      status: 'IN_CHAIR',
+      start: new Date(Date.now() - 60_000).toISOString(),
+      end: new Date(Date.now() + 60_000).toISOString(),
+    }) as never;
+
+  it('solo ofrece los sillones libres de la sede y manda el elegido', async () => {
+    const user = userEvent.setup();
+    createMock.mockResolvedValue(RESULT);
+    chairsMock.mockResolvedValue([chair('c1', 'Sillón 1'), chair('c2', 'Sillón 2')]);
+    appointmentsMock.mockResolvedValue([ongoing('c1')]);
+    renderDialog();
+    await fillNewPatient(user);
+    await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+    const select = await screen.findByLabelText(copy.chair);
+    expect(within(select).queryByRole('option', { name: 'Sillón 1' })).not.toBeInTheDocument();
+    await user.selectOptions(select, 'c2');
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    expect(createMock.mock.calls[0][1]).toMatchObject({ chairId: 'c2' });
+    expect(chairsMock).toHaveBeenCalledWith('T', 'loc-centro');
+  });
+
+  it('sin sillones en la sede no pide nada; todos ocupados, lo dice y se atiende sin sillón', async () => {
+    const user = userEvent.setup();
+    chairsMock.mockResolvedValue([chair('c1', 'Sillón 1')]);
+    appointmentsMock.mockResolvedValue([ongoing('c1')]);
+    renderDialog();
+    await screen.findByText(copy.allChairsBusy);
+    expect(within(screen.getByLabelText(copy.chair)).getAllByRole('option')).toHaveLength(1);
+    await fillNewPatient(user);
+    await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+    createMock.mockResolvedValue(RESULT);
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    expect(createMock.mock.calls[0][1]).not.toHaveProperty('chairId');
+  });
+
+  it('si choca, enseña el 409 con el nombre y vuelve a leer los libres', async () => {
+    const user = userEvent.setup();
+    chairsMock.mockResolvedValue([chair('c1', 'Sillón 1')]);
+    createMock.mockRejectedValue(new ApiError(409, 'El sillón «Sillón 1» ya está ocupado de 10:00 a 10:30'));
+    renderDialog();
+    await fillNewPatient(user);
+    await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+    await user.selectOptions(await screen.findByLabelText(copy.chair), 'c1');
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    expect(await screen.findByText(/«Sillón 1» ya está ocupado/)).toBeInTheDocument();
+    await waitFor(() => expect(chairsMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('sin poder leer los sillones, la urgencia se atiende igual', async () => {
+    chairsMock.mockRejectedValue(new Error('caído'));
+    renderDialog();
+    await screen.findByLabelText(copy.provider);
+    await waitFor(() => expect(chairsMock).toHaveBeenCalled());
+    expect(screen.queryByLabelText(copy.chair)).not.toBeInTheDocument();
+  });
 });
 
 describe('WalkInDialog (DX-470)', () => {

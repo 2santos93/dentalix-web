@@ -807,7 +807,7 @@ describe('AgendaView', () => {
     // Back in Día view (columnas por profesional, DX-121) — with no
     // appointments mocked for this test, each column's empty state confirms
     // it's the one rendering (the week grid has no such copy).
-    expect(await screen.findAllByText('Sin citas hoy')).toHaveLength(staff.length);
+    expect(await screen.findAllByText('Sin citas este día')).toHaveLength(staff.length);
     expect(screen.queryByLabelText(/agenda de la semana/i)).not.toBeInTheDocument();
   });
 

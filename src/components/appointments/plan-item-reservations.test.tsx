@@ -53,6 +53,8 @@ function item(overrides: Partial<InClinicItem> = {}): InClinicItem {
     patientLastName: 'Ríos',
     providerId: 'dent-1',
     providerName: 'Dra. Lina',
+    chairId: null,
+    chair: null,
     start: '2026-10-19T14:00:00.000Z',
     end: '2026-10-19T14:30:00.000Z',
     status: 'ARRIVED',
