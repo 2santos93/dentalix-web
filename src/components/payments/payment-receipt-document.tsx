@@ -130,7 +130,16 @@ export function receiptFormatting(
       const d = instant(value);
       return d ? fmt.date(d, timeZone) : NO_VALUE;
     },
-    civilDate: (value) => (value ? fmt.civilDate(value.slice(0, 10)) : NO_VALUE),
+    civilDate: (value) => {
+      if (!value) return NO_VALUE;
+      // Un día mal formado no rompe el documento: «—», como el helper de antes.
+      try {
+        return fmt.civilDate(value.slice(0, 10));
+      } catch (error) {
+        if (error instanceof RangeError) return NO_VALUE;
+        throw error;
+      }
+    },
     money: (amount, currency) => moneyWithCode(amount, currency, fmt, texts),
   };
 }

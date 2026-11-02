@@ -25,6 +25,13 @@ describe('receiptFormatting (DX-521)', () => {
     expect(f.dateTime('no es una fecha')).toBe('—');
   });
 
+  it('un día civil ausente o mal formado se pinta «—» sin lanzar, como el helper de antes', () => {
+    const f = receiptFormatting(CARACAS, NO_CURRENCY_TEXTS);
+    expect(f.civilDate(null)).toBe('—');
+    expect(f.civilDate('no-es-fecha')).toBe('—');
+    expect(f.civilDate('2026-13-45')).toBe('—');
+  });
+
   it.each([
     ['null', null],
     ['ausente', undefined],

@@ -278,6 +278,10 @@ test.describe('recibo con el navegador en otra zona que la sede', () => {
     const inBrowser = sedeFormat.dateTime(issued, BROWSER_ZONE);
     expect(inBrowser).not.toBe(inSede);
 
+    // La vista imprimible no debe abrir el diálogo de impresión del navegador.
+    await page.context().addInitScript(() => {
+      window.print = () => undefined;
+    });
     await webLogin(page, origin, RECEPTION_EMAIL);
     const dialog = await openReceiptFromStatement(page, origin, data.patientId, payment.amount);
     const doc = dialog.getByTestId('receipt-document');
@@ -286,6 +290,32 @@ test.describe('recibo con el navegador en otra zona que la sede', () => {
     // El importe con el formato de la sede y su código de moneda, nunca con el símbolo «$».
     await expect(doc).toContainText(figure(payment.amount));
     await expect(doc).not.toContainText('$');
+
+    // La vista imprimible (A4 y tirilla de 80 mm), en tema claro y oscuro: la hora de la sede,
+    // la hoja siempre blanca y nada que desborde en horizontal.
+    for (const [name, format] of [
+      ['Imprimir A4', 'a4'],
+      ['Tirilla 80 mm', '80mm'],
+    ] as const) {
+      const [printPage] = await Promise.all([
+        page.context().waitForEvent('page'),
+        dialog.getByRole('link', { name: new RegExp(name) }).click(),
+      ]);
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await printPage.emulateMedia({ colorScheme });
+        const printed = printPage.getByTestId('receipt-document');
+        const label = `${format} ${colorScheme}`;
+        await expect(printed, label).toContainText(`Emitido ${inSede}`, { timeout: 15_000 });
+        await expect(printed, label).not.toContainText(inBrowser);
+        await expect(printed, label).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+        const { scrollWidth, clientWidth } = await printed.evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(scrollWidth, label).toBeLessThanOrEqual(clientWidth);
+      }
+      await printPage.close();
+    }
   });
 });
 
