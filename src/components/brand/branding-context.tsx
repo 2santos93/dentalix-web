@@ -1,7 +1,9 @@
 'use client';
+import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { apiFetch } from '@/lib/api/client';
 import { accentStyleSheet } from '@/lib/color/accent';
+import { isPlatformHost, isRegistrationPath } from '@/lib/tenant';
 
 /**
  * Marca de la clínica (nombre, logo y color) que el layout raíz ya pidió en el
@@ -13,7 +15,8 @@ import { accentStyleSheet } from '@/lib/color/accent';
  * - Si el servidor no supo la clínica (`*.localhost`, un dominio propio que
  *   el servidor no resuelve, o la marca falló), el navegador la pide por el
  *   proxy, que sí resuelve la clínica por el host. Así el login y la app
- *   enseñan su logo y su color también ahí.
+ *   enseñan su logo y su color también ahí. Donde aún no hay clínica no se
+ *   pide (sería un 404 en la consola): el host de la plataforma y el registro.
  * - Ajustes › Datos de la clínica la cambia al guardar (`useSetClinicBranding`):
  *   el color, el logo y el nombre se ven al instante, sin recargar.
  */
@@ -54,9 +57,10 @@ export function BrandingProvider({ value, children }: { value: ClinicBranding; c
   const [fetched, setFetched] = React.useState<ClinicBranding | null>(null);
   const [override, setOverride] = React.useState<ClinicBranding | null>(null);
   const serverKnows = value.name !== null;
+  const clinicMayExist = !isRegistrationPath(usePathname());
 
   React.useEffect(() => {
-    if (serverKnows) return;
+    if (serverKnows || !clinicMayExist || isPlatformHost(window.location.host)) return;
     let cancelled = false;
     apiFetch<Record<string, unknown>>('/public/tenant/branding')
       .then((data) => {
@@ -68,7 +72,7 @@ export function BrandingProvider({ value, children }: { value: ClinicBranding; c
     return () => {
       cancelled = true;
     };
-  }, [serverKnows]);
+  }, [serverKnows, clinicMayExist]);
 
   const effective = override ?? (serverKnows ? value : (fetched ?? value));
   const memo = React.useMemo(
