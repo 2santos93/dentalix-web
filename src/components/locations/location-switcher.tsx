@@ -18,21 +18,7 @@ const copy = {
   // DX-089: un miembro acotado a varias sedes ve la vista conjunta de LAS SUYAS,
   // no la de la clínica entera.
   mine: 'Mis sedes',
-  // Rótulos cortos del botón del teléfono (el nombre entero va en el nombre accesible).
-  allShort: 'Todas',
-  mineShort: 'Mías',
 };
-
-/**
- * Rótulo corto de una sede para el botón del teléfono: sin el genérico «Sede»
- * delante («Sede Norte» → «Norte») y solo la primera palabra; el CSS lo
- * recorta si aun así no cabe. Nunca vacío: si todo era genérico, el nombre.
- */
-export function shortSedeLabel(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const meaningful = words.filter((w) => !/^(sede|sucursal|cl[ií]nica)$/i.test(w));
-  return (meaningful[0] ?? words[0] ?? name).replace(/[,.;:]$/, '');
-}
 
 /** Marca de los desplegables del selector de sede (`data-location-switcher`, en todas sus variantes). */
 const SWITCHER_ATTR = 'data-location-switcher';
@@ -75,8 +61,7 @@ export function focusLocationSwitcher(): boolean {
  * - `variant="inline"`: en línea, con el nombre entero hasta 12rem.
  * - `variant="compact"`: selector con nombre, hasta 8.5rem.
  * - `variant="phone"`: barra superior del teléfono (K2): pastilla de 44px con
- *   el pin y un rótulo corto («Norte», «Todas»); nombre accesible «Sede: …»
- *   con el nombre entero. Abre el mismo desplegable nativo. Deja el ancho a la
+ *   el pin y el nombre ENTERO a dos líneas (DX-523); nombre accesible «Sede: …». Abre el mismo desplegable nativo. Deja el ancho a la
  *   marca de la clínica, que antes se cortaba junto al selector.
  *
  * Con sedes acotadas (claim `loc` del token, DX-089) solo se ofrecen las
@@ -218,19 +203,16 @@ export function LocationSwitcher({
   if (variant === 'phone') {
     const activeName = locations.find((l) => l.id === active)?.name;
     const fullName = activeName ?? emptyLabel ?? copy.all;
-    const short = activeName
-      ? shortSedeLabel(activeName)
-      : emptyLabel === copy.mine
-        ? copy.mineShort
-        : copy.allShort;
     return (
       <span
         title={`${copy.label}: ${fullName}`}
-        className="relative inline-flex h-11 max-w-[6.5rem] shrink-0 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
+        className="relative inline-flex h-11 max-w-[10rem] shrink-0 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
       >
         <MapPin aria-hidden className="size-4 shrink-0" />
-        <span aria-hidden className="min-w-0 truncate text-[0.8125rem] font-medium text-ink">
-          {short}
+        {/* Nombre ENTERO a dos líneas (el táctil no tiene hover para un
+            tooltip); la barra mantiene sus 44px de alto. */}
+        <span aria-hidden className="line-clamp-2 min-w-0 break-words text-xs font-medium leading-tight text-ink">
+          {fullName}
         </span>
         <ChevronDown aria-hidden className="size-3.5 shrink-0" />
         {/* El select nativo, invisible, cubre la pastilla entera: el
