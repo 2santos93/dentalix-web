@@ -72,14 +72,15 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
     'QUOTE_FOLLOW_UP',
     'ACCEPTED_UNSCHEDULED',
     'WAITLIST',
+    'RECALL',
     'RECEIVABLES',
     'LOW_STOCK',
   ]);
   const zero = body.items.filter((i) => i.count === 0).length;
-  expect(zero).toBe(5);
+  expect(zero).toBe(6);
 
   // Las listas a 0, plegadas; se despliegan con el teclado.
-  const toggle = pending.getByRole('button', { name: /Al día: 5 listas/ });
+  const toggle = pending.getByRole('button', { name: /Al día: 6 listas/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(pending.getByTestId('pending-follow-up')).toBeHidden();
   await toggle.focus();
