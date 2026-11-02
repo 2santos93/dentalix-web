@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
@@ -20,6 +21,7 @@ const copy = {
   recoveryInvalid: 'Revisa el código: son 16 letras y números, como ABCD-EFGH-2345-6723.',
   useRecovery: '¿No tienes el móvil? Usa un código de recuperación',
   useApp: 'Usar el código de la app',
+  remember: 'No volver a pedirlo en este dispositivo durante 30 días',
   submit: 'Verificar',
   submitting: 'Verificando…',
   back: 'Volver',
@@ -36,12 +38,15 @@ export function MfaLoginStep({
   error,
   onSubmit,
   onBack,
+  remember,
 }: {
   submitting: boolean;
   locked?: boolean;
   error: string | null;
   onSubmit: (factor: SecondFactor) => void;
   onBack: () => void;
+  /** Dispositivo de confianza (DX-021-bis); sin él, no se ofrece (plataforma). */
+  remember?: { checked: boolean; onChange: (checked: boolean) => void };
 }) {
   const [useRecovery, setUseRecovery] = useState(false);
   const [value, setValue] = useState('');
@@ -104,6 +109,15 @@ export function MfaLoginStep({
       >
         {useRecovery ? copy.useApp : copy.useRecovery}
       </button>
+
+      {remember ? (
+        <Checkbox
+          label={copy.remember}
+          checked={remember.checked}
+          disabled={submitting}
+          onChange={(e) => remember.onChange(e.target.checked)}
+        />
+      ) : null}
 
       {error ? (
         <InlineError id="login-mfa-error" variant="summary">
