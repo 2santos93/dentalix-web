@@ -22,6 +22,7 @@ import {
   openingAsOfLabel,
   openingNoteFor,
   planNamer,
+  shownSummaryRows,
   statementCopy,
   voidedDetail,
 } from '@/lib/account-statement/presentation';
@@ -216,7 +217,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // UX v2 (critique-core §12): «Registrar abono» es la primaria solo cuando
   // hay algo que cobrar; sin saldo pendiente queda secundaria (un anticipo es
   // posible, pero no es la acción que la pantalla propone).
-  const owes = data?.summary.some((row) => row.balance > 0) ?? false;
+  const owes = data?.summary.some((row) => row.convertedBalance > 0) ?? false;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-4">
@@ -399,6 +400,7 @@ function StatementBody({
   // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
   const fmt = readyFormat(useSedeFormat(token));
   const money: Money = (amount, code) => sedeMoney(amount, code, fmt);
+  const summary = shownSummaryRows(statement.summary);
   return (
     <div className="flex flex-col gap-8">
       {statement.rateProviderTimedOut ? (
@@ -408,9 +410,9 @@ function StatementBody({
         />
       ) : null}
 
-      {statement.summary.length > 0 ? (
+      {summary.length > 0 ? (
         <div className="flex flex-col gap-3">
-          {statement.summary.map((row) => (
+          {summary.map((row) => (
             <CurrencySummary key={row.currency} row={row} money={money} />
           ))}
         </div>
@@ -787,7 +789,7 @@ function SubSection({ title, children }: { title: string; children: React.ReactN
  */
 function CurrencySummary({ row, money }: { row: AccountStatementSummary; money: Money }) {
   const hasOverdue = row.overdueCount > 0;
-  const inFavor = row.balance < 0;
+  const inFavor = row.convertedBalance < 0;
   return (
     <section
       aria-label={copy.summaryLabel(row.currency)}
@@ -814,10 +816,10 @@ function CurrencySummary({ row, money }: { row: AccountStatementSummary; money: 
           {money(row.budgeted, row.currency)}
         </Figure>
         <Figure label={copy.paid} testId="paid">
-          {money(row.paid, row.currency)}
+          {money(row.convertedPaid, row.currency)}
         </Figure>
         <Figure label={copy.balance} testId="balance" emphasis>
-          {money(Math.abs(row.balance), row.currency)}
+          {money(Math.abs(row.convertedBalance), row.currency)}
           {inFavor ? (
             <span className="t-caption ml-1 font-normal text-success-text">{statementCopy.inFavor}</span>
           ) : null}

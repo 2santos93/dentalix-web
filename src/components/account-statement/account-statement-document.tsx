@@ -8,6 +8,7 @@ import {
   movementDestination,
   openingAsOfLabel,
   planNamer,
+  shownSummaryRows,
   statementCopy,
   voidedDetail,
 } from '@/lib/account-statement/presentation';
@@ -83,7 +84,8 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
   const planName = planNamer(statement.plans);
   const { clinic, patient, range } = statement;
   // M1: con saldo migrado, el «Saldo» no es solo presupuestado − abonado.
-  const withOpening = statement.summary.some((row) => row.openingBalance > 0);
+  const summary = shownSummaryRows(statement.summary);
+  const withOpening = summary.some((row) => row.openingBalance > 0);
   const filtered = range.from !== null || range.to !== null;
 
   return (
@@ -144,7 +146,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
               {rateProviderCopy.printed}
             </p>
           ) : null}
-          {statement.summary.length > 0 ? (
+          {summary.length > 0 ? (
             <DocSection title={copy.summaryHeading}>
               <DocTable label={copy.summaryTable}>
                 <thead>
@@ -159,17 +161,17 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                   </tr>
                 </thead>
                 <tbody>
-                  {statement.summary.map((row) => (
+                  {summary.map((row) => (
                     <tr key={row.currency}>
                       <Th scope="row">{row.currency}</Th>
                       <Td right>{formatCurrency(row.budgeted, row.currency)}</Td>
                       {withOpening ? (
                         <Td right>{formatCurrency(row.openingBalance, row.currency)}</Td>
                       ) : null}
-                      <Td right>{formatCurrency(row.paid, row.currency)}</Td>
+                      <Td right>{formatCurrency(row.convertedPaid, row.currency)}</Td>
                       <Td right strong>
-                        {formatCurrency(Math.abs(row.balance), row.currency)}
-                        {row.balance < 0 ? ` ${statementCopy.inFavor}` : ''}
+                        {formatCurrency(Math.abs(row.convertedBalance), row.currency)}
+                        {row.convertedBalance < 0 ? ` ${statementCopy.inFavor}` : ''}
                       </Td>
                       <Td right strong={row.overdueCount > 0}>
                         {row.overdueCount > 0

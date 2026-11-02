@@ -9,7 +9,7 @@ import {
   getFamilyAccountStatement,
   type FamilyAccountStatement,
 } from '@/lib/account-statement/account-statement-api';
-import { statementCopy } from '@/lib/account-statement/presentation';
+import { shownSummaryRows, statementCopy } from '@/lib/account-statement/presentation';
 import { RELATIONSHIP_LABELS } from '@/lib/patients/responsible-parties-api';
 import { sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
@@ -121,13 +121,13 @@ export function FamilyAccountStatementSection({
                   </span>
                 </span>
                 <span className="flex flex-col text-sm tabular-nums text-ink sm:items-end">
-                  {m.summary.length === 0 ? (
+                  {shownSummaryRows(m.summary).length === 0 ? (
                     <span className="text-muted">{copy.noBalance}</span>
                   ) : (
-                    m.summary.map((s) => (
+                    shownSummaryRows(m.summary).map((s) => (
                       <span key={s.currency}>
-                        {copy.colBalance}: {sedeMoney(Math.abs(s.balance), s.currency, fmt)}
-                        {s.balance < 0 ? ` ${statementCopy.inFavor}` : ''}
+                        {copy.colBalance}: {sedeMoney(Math.abs(s.convertedBalance), s.currency, fmt)}
+                        {s.convertedBalance < 0 ? ` ${statementCopy.inFavor}` : ''}
                       </span>
                     ))
                   )}
@@ -139,7 +139,7 @@ export function FamilyAccountStatementSection({
           {data.totals.some((t) => t.openingBalance > 0) ? (
             <p className="t-caption text-muted">{statementCopy.balanceIncludesOpening}</p>
           ) : null}
-          {data.totals.map((t) => (
+          {shownSummaryRows(data.totals).map((t) => (
             <p
               key={t.currency}
               data-testid="family-total"
@@ -149,8 +149,8 @@ export function FamilyAccountStatementSection({
                 {copy.totalsHeading} ({t.currency})
               </span>
               <span>
-                {sedeMoney(Math.abs(t.balance), t.currency, fmt)}
-                {t.balance < 0 ? ` ${statementCopy.inFavor}` : ''}
+                {sedeMoney(Math.abs(t.convertedBalance), t.currency, fmt)}
+                {t.convertedBalance < 0 ? ` ${statementCopy.inFavor}` : ''}
               </span>
             </p>
           ))}

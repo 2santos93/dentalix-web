@@ -14137,7 +14137,7 @@ export interface components {
              */
             openingPending: number;
             /**
-             * @description DX-472: Σ paid de los planes en esta moneda (abonos vivos convertidos a ella, como en /balance) más los abonos a saldos migrados de esta moneda. Lo entregado en otra moneda se detalla en plans[].paidOtherCurrencies y en movements.
+             * @description Σ abonos no anulados en esta moneda, sin convertir: lo entregado en ella, la cifra de la cartera. Lo que cuadra con plans[] es convertedPaid.
              * @example 1200000
              */
             paid: number;
@@ -14147,10 +14147,20 @@ export interface components {
              */
             creditMovements: number;
             /**
-             * @description budgeted + openingBalance - paid (negativo = saldo a favor)
+             * @description budgeted + openingBalance - paid - creditMovements (negativo = saldo a favor), sin convertir: la cifra de la cartera. Lo que cuadra con plans[] es convertedBalance.
              * @example 1950000
              */
             balance: number;
+            /**
+             * @description DX-472: Σ plans[].paid en esta moneda (abonos convertidos a ella, como en /balance) más los abonos a saldos migrados de esta moneda. Difiere de paid a propósito: si todos los abonos son en la moneda del plan, coincide.
+             * @example 1200000
+             */
+            convertedPaid: number;
+            /**
+             * @description DX-472: budgeted + openingBalance - convertedPaid - creditMovements: el saldo que cuadra con plans[].
+             * @example 1950000
+             */
+            convertedBalance: number;
             /** @example 1 */
             overdueCount: number;
             /**
@@ -14394,8 +14404,14 @@ export interface components {
             openingBalance: number;
             /** @description DX-262 (QA D5): lo que queda pendiente del saldo migrado */
             openingPending: number;
+            /** @description Igual que `summary[].paid`: sin convertir */
             paid: number;
+            /** @description Igual que `summary[].balance`: sin convertir */
             balance: number;
+            /** @description DX-472: igual que `summary[].convertedPaid` */
+            convertedPaid: number;
+            /** @description DX-472: igual que `summary[].convertedBalance` */
+            convertedBalance: number;
             overdueAmount: number;
         };
         FamilyStatementMemberDto: {

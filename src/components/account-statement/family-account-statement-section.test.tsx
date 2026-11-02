@@ -26,6 +26,8 @@ const amounts = (currency: string, budgeted: number, paid: number) => ({
   openingPending: 0,
   paid,
   balance: Math.round((budgeted - paid) * 100) / 100,
+  convertedPaid: paid,
+  convertedBalance: Math.round((budgeted - paid) * 100) / 100,
   overdueAmount: 0,
 });
 

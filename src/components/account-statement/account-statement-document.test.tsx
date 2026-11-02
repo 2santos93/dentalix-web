@@ -141,6 +141,8 @@ it.each([
             budgeted,
             paid,
             balance,
+            convertedPaid: paid,
+            convertedBalance: balance,
           },
         ],
         plans: [plan],

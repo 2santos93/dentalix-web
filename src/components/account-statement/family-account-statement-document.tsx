@@ -4,7 +4,7 @@ import type {
   FamilyCurrencyAmounts,
   FamilyStatementMember,
 } from '@/lib/account-statement/account-statement-api';
-import { statementCopy } from '@/lib/account-statement/presentation';
+import { shownSummaryRows, statementCopy } from '@/lib/account-statement/presentation';
 import { RELATIONSHIP_LABELS } from '@/lib/patients/responsible-parties-api';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatDateTime } from '@/lib/format/date';
@@ -37,8 +37,8 @@ export const familyStatementCopy = {
 const copy = familyStatementCopy;
 
 function balanceText(row: FamilyCurrencyAmounts): string {
-  return `${formatCurrency(Math.abs(row.balance), row.currency)}${
-    row.balance < 0 ? ` ${statementCopy.inFavor}` : ''
+  return `${formatCurrency(Math.abs(row.convertedBalance), row.currency)}${
+    row.convertedBalance < 0 ? ` ${statementCopy.inFavor}` : ''
   }`;
 }
 
@@ -52,14 +52,15 @@ export function FamilyAccountStatementDocument({
 }: {
   statement: FamilyAccountStatement;
 }) {
-  const { clinic, payer, members, totals } = statement;
+  const { clinic, payer, members } = statement;
+  const totals = shownSummaryRows(statement.totals);
   const rows = members.flatMap<{
     member: FamilyStatementMember;
     row: FamilyCurrencyAmounts | null;
     first: boolean;
   }>((m) =>
-    m.summary.length > 0
-      ? m.summary.map((s, i) => ({ member: m, row: s, first: i === 0 }))
+    shownSummaryRows(m.summary).length > 0
+      ? shownSummaryRows(m.summary).map((s, i) => ({ member: m, row: s, first: i === 0 }))
       : [{ member: m, row: null, first: true }],
   );
 
@@ -107,7 +108,7 @@ export function FamilyAccountStatementDocument({
                 <tr key={t.currency} data-testid="family-total">
                   <Th scope="row">{t.currency}</Th>
                   <Td right>{formatCurrency(t.budgeted, t.currency)}</Td>
-                  <Td right>{formatCurrency(t.paid, t.currency)}</Td>
+                  <Td right>{formatCurrency(t.convertedPaid, t.currency)}</Td>
                   <Td right strong>
                     {balanceText(t)}
                   </Td>
@@ -152,7 +153,7 @@ export function FamilyAccountStatementDocument({
                   <>
                     <Td>{row.currency}</Td>
                     <Td right>{formatCurrency(row.budgeted, row.currency)}</Td>
-                    <Td right>{formatCurrency(row.paid, row.currency)}</Td>
+                    <Td right>{formatCurrency(row.convertedPaid, row.currency)}</Td>
                     <Td right strong>
                       {balanceText(row)}
                     </Td>

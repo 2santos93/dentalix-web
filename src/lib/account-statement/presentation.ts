@@ -149,6 +149,19 @@ export function installmentLabel(installment: AccountStatementInstallment): stri
 }
 
 /** Un paciente sin nada que mostrar: ni saldo, ni planes, ni abonos. */
+/**
+ * DX-472: el resumen que se enseña, con las cifras que cuadran con los planes.
+ * Una fila solo con lo entregado en otra moneda ya está convertida en su plan
+ * (y detallada en él): repetirla parecería un saldo a favor que no existe.
+ */
+export function shownSummaryRows<
+  T extends { budgeted: number; openingBalance: number; convertedPaid: number; convertedBalance: number },
+>(rows: T[]): T[] {
+  return rows.filter(
+    (r) => r.budgeted !== 0 || r.openingBalance !== 0 || r.convertedPaid !== 0 || r.convertedBalance !== 0,
+  );
+}
+
 export function isEmptyStatement(statement: {
   summary: unknown[];
   plans: unknown[];

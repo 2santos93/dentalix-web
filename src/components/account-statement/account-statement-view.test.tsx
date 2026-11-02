@@ -637,4 +637,32 @@ describe('AccountStatementView: proveedor de tasas (DX-472)', () => {
     render(<AccountStatementView token="t" patientId="p-1" />);
     expect((await screen.findAllByText(/Entregado:/)).length).toBeGreaterThan(0);
   });
+
+  it('el resumen cuadra con los planes: lo convertido, sin fila de lo entregado en otra moneda', async () => {
+    const [cop] = accountStatementFixture().summary;
+    mockedGet.mockResolvedValue(
+      accountStatementFixture({
+        summary: [
+          { ...cop, currency: 'USD', paid: 0, balance: 300, convertedPaid: 100, convertedBalance: 200 },
+          {
+            ...cop,
+            currency: 'VES',
+            budgeted: 0,
+            paid: 3600,
+            balance: -3600,
+            convertedPaid: 0,
+            convertedBalance: 0,
+            overdueCount: 0,
+            overdueAmount: 0,
+            nextInstallment: null,
+          },
+        ],
+      }),
+    );
+    render(<AccountStatementView token="t" patientId="p-1" />);
+
+    const usd = await screen.findByRole('region', { name: /resumen en USD/i });
+    expect(within(usd).getByTestId('balance')).toHaveTextContent('200');
+    expect(screen.queryByRole('region', { name: /resumen en VES/i })).not.toBeInTheDocument();
+  });
 });
