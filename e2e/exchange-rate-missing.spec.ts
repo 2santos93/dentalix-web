@@ -63,7 +63,7 @@ async function patch(request: APIRequestContext, session: ApiSession, path: stri
   expect(res.ok(), `PATCH ${path} falló: ${await res.text()}`).toBeTruthy();
 }
 
-/** Un paciente con un plan en USD y un abono de hoy en la moneda de la sede, que la API guarda «sin tasa». */
+/** Un paciente con un plan en GBP y un abono de hoy en la moneda de la sede, que la API guarda «sin tasa». */
 async function seedPlanWithoutRate(request: APIRequestContext, admin: ApiSession, suffix: string): Promise<string> {
   const patient = await apiPost<{ id: string }>(request, admin, '/patients', {
     firstName: 'Ana',
@@ -80,7 +80,7 @@ async function seedPlanWithoutRate(request: APIRequestContext, admin: ApiSession
     defaultPrice: 1000,
   });
   const plan = await apiPost<{ id: string }>(request, admin, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'USD',
+    currency: 'GBP',
   });
   const item = await apiPost<{ id: string }>(request, admin, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '11',
