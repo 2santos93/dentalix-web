@@ -262,7 +262,11 @@ export function RecordPaymentModal({
   const balance = usePlanBalance(token, plan?.id ?? null, open && (otherCurrency || isSplit), balanceRefresh);
   const previewBalance: PreviewPlanBalance =
     balance.status === 'ready'
-      ? { balance: balance.balance.balance, paymentsWithoutRate: balance.balance.paymentsWithoutRate.length }
+      ? {
+          balance: balance.balance.balance,
+          paymentsWithoutRate: balance.balance.paymentsWithoutRate.length,
+          rateProviderTimedOut: balance.balance.rateProviderTimedOut,
+        }
       : balance.status === 'error'
         ? 'error'
         : 'loading';
@@ -613,6 +617,7 @@ export function RecordPaymentModal({
                     paymentCurrency={currency}
                     planCurrency={plan.currency}
                     planBalance={previewBalance}
+                    onRetryBalance={() => setBalanceRefresh((n) => n + 1)}
                     date={form.date}
                     fmt={fmt}
                   />

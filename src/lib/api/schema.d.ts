@@ -13365,7 +13365,7 @@ export interface components {
             /** @description DX-375: abonos vivos «sin tasa» (en otra moneda y sin tasa de su día): no cuentan en paid, así que el saldo está incompleto hasta que se registre la tasa (Ajustes › Tasa de cambio) y el barrido la congele. Vacío si no hay ninguno. */
             paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
             /**
-             * @description DX-054: el proveedor de tasas no respondió a tiempo (el saldo espera como mucho 4 s a las conversiones en vivo). Los abonos que esperaban su tasa salen en paymentsWithoutRate y no suman en paid: el saldo está incompleto y volver a pedirlo lo completa cuando el proveedor responda. Nunca es un 500.
+             * @description DX-054: el proveedor de tasas no respondió a tiempo (el saldo espera como mucho 4 s a las conversiones en vivo) o se sabe que no contesta: no es que falte la tasa. Los abonos que esperaban su tasa salen en paymentsWithoutRate y no suman en paid: el saldo está incompleto y volver a pedirlo lo completa cuando el proveedor responda. Nunca es un 500.
              * @example false
              */
             rateProviderTimedOut: boolean;
@@ -14009,7 +14009,34 @@ export interface components {
              */
             startDate: string;
             /**
-             * @description Total pagado, convertido a currency del plan
+             * @description DX-472: el billable de GET /treatment-plans/:id/balance: lo cobrable del plan de tratamiento (ítems ACCEPTED|DONE; 0 si está cancelado o rechazado). No es totalToFinance, que es lo que se pactó financiar.
+             * @example 1200
+             */
+            billable: number;
+            /**
+             * @description DX-472: el paid de /balance: abonos vivos convertidos a la moneda del plan. Los «sin tasa» (paymentsWithoutRate) no suman.
+             * @example 300
+             */
+            paid: number;
+            /**
+             * @description DX-472: el creditMovements de /balance: traspasos y devoluciones de saldo a favor, con signo.
+             * @example 0
+             */
+            creditMovements: number;
+            /**
+             * @description DX-472: el balance de /balance: billable - paid - creditMovements. No es remaining, que se mide contra totalToFinance.
+             * @example 900
+             */
+            balance: number;
+            /** @description DX-472: los paymentsWithoutRate de /balance: abonos que no suman en paid por no tener tasa. */
+            paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
+            /**
+             * @description DX-472: el proveedor de tasas no respondió a tiempo. paid está incompleto y, mientras tanto, ninguna cuota sale OVERDUE: quedan PARTIAL o PENDING, y overdueCount y overdueAmount en 0. Volver a pedirlo lo completa. Nunca es un 500.
+             * @example false
+             */
+            rateProviderTimedOut: boolean;
+            /**
+             * @description paid + creditMovements: lo que cubre cuotas (un traspaso cubre como un abono; una devolución deja de cubrir). Difiere de paid a propósito.
              * @example 300
              */
             paidTotal: number;
@@ -14095,7 +14122,7 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
-             * @description Σ ítems ACCEPTED|DONE de los planes no cancelados en esta moneda
+             * @description Σ ítems ACCEPTED|DONE de los planes no cancelados en esta moneda (Σ billable de esos planes)
              * @example 3000000
              */
             budgeted: number;
@@ -14110,7 +14137,7 @@ export interface components {
              */
             openingPending: number;
             /**
-             * @description Σ abonos no anulados en esta moneda (sin convertir)
+             * @description DX-472: Σ paid de los planes en esta moneda (abonos vivos convertidos a ella, como en /balance) más los abonos a saldos migrados de esta moneda. Lo entregado en otra moneda se detalla en plans[].paidOtherCurrencies y en movements.
              * @example 1200000
              */
             paid: number;
@@ -14152,14 +14179,19 @@ export interface components {
              */
             createdAt: string;
             /**
-             * @description Ítems ACCEPTED|DONE
+             * @description Ítems ACCEPTED|DONE, aunque el plan esté cancelado o rechazado. Difiere de billable a propósito: es lo que se presupuestó, no lo que se cobra.
              * @example 3000000
              */
             budgeted: number;
+            /**
+             * @description DX-472: el billable de GET /treatment-plans/:id/balance: ítems ACCEPTED|DONE; 0 si el plan está cancelado o rechazado.
+             * @example 3000000
+             */
+            billable: number;
             /** @description `false` si el plan está CANCELLED o REJECTED: no suma al saldo. */
             countsTowardsBalance: boolean;
             /**
-             * @description Abonos vivos en la moneda del plan
+             * @description DX-472: el paid de /balance: abonos vivos convertidos a la moneda del plan con la tasa de cada uno. Los «sin tasa» (paymentsWithoutRate) no suman.
              * @example 1200000
              */
             paid: number;
@@ -14168,10 +14200,20 @@ export interface components {
              * @example -200000
              */
             creditMovements: number;
-            /** @description Abonos vivos del plan hechos en otra moneda (sin convertir) */
+            /** @description Abonos vivos del plan hechos en otra moneda, en esa moneda y sin convertir: lo que el paciente entregó. Solo informa: si tenían tasa, ya cuentan en paid. */
             paidOtherCurrencies: components["schemas"]["AccountStatementOtherCurrencyDto"][];
-            /** @example 1800000 */
+            /**
+             * @description DX-472: el balance de /balance: billable - paid - creditMovements.
+             * @example 1800000
+             */
             balance: number;
+            /** @description DX-472: abonos del plan que no suman en paid por no tener tasa, como en /balance. */
+            paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
+            /**
+             * @description DX-472: el proveedor de tasas no respondió a tiempo: paid está incompleto y las cuotas de este plan no salen OVERDUE mientras tanto.
+             * @example false
+             */
+            rateProviderTimedOut: boolean;
         };
         AccountStatementPaymentMethodRefDto: {
             /** Format: uuid */
@@ -14331,6 +14373,11 @@ export interface components {
             installments: components["schemas"]["AccountStatementInstallmentDto"][];
             /** @description DX-262: saldos migrados vivos, de la fecha de corte más antigua a la más reciente */
             openingBalances: components["schemas"]["AccountStatementOpeningBalanceDto"][];
+            /**
+             * @description DX-472: en algún plan, el proveedor de tasas no respondió a tiempo (el saldo espera como mucho 4 s): esas cifras están incompletas y volver a pedirlas las completa. Nunca es un 500.
+             * @example false
+             */
+            rateProviderTimedOut: boolean;
         };
         FamilyMemberPatientDto: {
             /** Format: uuid */
@@ -14368,6 +14415,11 @@ export interface components {
             members: components["schemas"]["FamilyStatementMemberDto"][];
             /** @description Suma de los subtotales por moneda, al céntimo. */
             totals: components["schemas"]["FamilyCurrencyAmountsDto"][];
+            /**
+             * @description DX-472: en algún plan de la familia, el proveedor de tasas no respondió a tiempo: las cifras están incompletas.
+             * @example false
+             */
+            rateProviderTimedOut: boolean;
         };
         BillablePlanDto: {
             /** Format: uuid */

@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Printer } from 'lucide-react';
+import { RateProviderNotice } from '@/components/payments/rate-provider-notice';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   familyAccountStatementPrintHref,
@@ -97,6 +98,9 @@ export function FamilyAccountStatementSection({
         />
       ) : (
         <div className="flex flex-col gap-3">
+          {data.rateProviderTimedOut ? (
+            <RateProviderNotice onRetry={() => setReloadKey((k) => k + 1)} />
+          ) : null}
           <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
             {data.members.map((m) => (
               <li

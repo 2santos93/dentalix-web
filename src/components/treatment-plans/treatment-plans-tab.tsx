@@ -1043,6 +1043,8 @@ export function TreatmentPlansTab({
                 currency={planDetail.currency}
                 balance={planBalance}
                 fmt={sedeFmt}
+                onRetryBalance={() => void refreshBalanceAndPayments()}
+                retryingBalance={paymentsRefreshing}
               />
               {/* La nota de alcance califica la región entera, por eso va
                   pegada debajo y no repetida en cada número. */}
@@ -1236,6 +1238,7 @@ export function TreatmentPlansTab({
                           }
                           plan={planDetail}
                           planBalance={planBalance}
+                          onRetryBalance={() => void refreshBalanceAndPayments()}
                           sedeZone={sedeZone}
                           sedeFmt={sedeFmt}
                           locationHint={locationHint}

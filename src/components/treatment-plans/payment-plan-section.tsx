@@ -17,6 +17,7 @@ import { CreatePaymentPlanModal } from '@/components/payment-plans/create-paymen
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
+import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
 import { formatCivilDate } from '@/lib/format/date';
 // DX-489: con el formato de la sede, como el resto de importes del plan
 // (`moneyWithCode` nunca lanza con un código que Intl no acepta).
@@ -171,6 +172,13 @@ export function PaymentPlanSection({
         />
       ) : (
         <>
+          {/* DX-472: el aviso con «Reintentar» va junto al saldo del plan, que
+              relee también esta sección; aquí, lo que cambia en las cuotas. */}
+          {plan.rateProviderTimedOut ? (
+            <p role="status" className="text-sm text-muted">
+              {rateProviderCopy.installments}
+            </p>
+          ) : null}
           <PaymentPlanSummary plan={plan} currency={planCurrency} fmt={fmt} />
           <InstallmentsTable plan={plan} currency={planCurrency} fmt={fmt} />
         </>

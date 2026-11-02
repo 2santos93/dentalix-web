@@ -8,6 +8,7 @@ import { statementCopy } from '@/lib/account-statement/presentation';
 import { RELATIONSHIP_LABELS } from '@/lib/patients/responsible-parties-api';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatDateTime } from '@/lib/format/date';
+import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
 import { DocSection, DocTable, Td, Th } from './account-statement-document';
 
 export const familyStatementCopy = {
@@ -82,6 +83,10 @@ export function FamilyAccountStatementDocument({
         <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">{copy.payer}</dt>
         <dd className="font-medium">{`${payer.firstName} ${payer.lastName}`}</dd>
       </dl>
+
+      {statement.rateProviderTimedOut ? (
+        <p className="mt-6 text-sm font-medium">{rateProviderCopy.printed}</p>
+      ) : null}
 
       {totals.length === 0 ? (
         <p className="mt-8 text-sm">{copy.empty}</p>

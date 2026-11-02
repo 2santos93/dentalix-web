@@ -53,6 +53,7 @@ export function accountStatementFixture(
         nextInstallment: null,
       },
     ],
+    rateProviderTimedOut: false,
     plans: [
       {
         id: 'plan-1',
@@ -60,11 +61,14 @@ export function accountStatementFixture(
         currency: 'COP',
         createdAt: '2026-08-01T15:00:00.000Z',
         budgeted: 3000000,
+        billable: 3000000,
         countsTowardsBalance: true,
         paid: 1200000,
         creditMovements: 0,
         paidOtherCurrencies: [],
         balance: 1800000,
+        paymentsWithoutRate: [],
+        rateProviderTimedOut: false,
       },
       {
         id: 'plan-2',
@@ -72,11 +76,14 @@ export function accountStatementFixture(
         currency: 'USD',
         createdAt: '2026-06-01T15:00:00.000Z',
         budgeted: 500,
+        billable: 0,
         countsTowardsBalance: false,
         paid: 50,
         creditMovements: 0,
         paidOtherCurrencies: [],
         balance: -50,
+        paymentsWithoutRate: [],
+        rateProviderTimedOut: false,
       },
     ],
     movements: [

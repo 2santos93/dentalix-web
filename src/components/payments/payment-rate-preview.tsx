@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { convertWithRate, paymentRateCopy, quoteFromRates, ratePairLabel, ratePerBase } from '@/lib/payments/payment-rate';
+import { rateProviderCopy } from './rate-provider-notice';
 import type { ExchangeRatesState } from './use-exchange-rates';
 
 // Copy como constantes (i18n-ready). Ningún texto nombra un país ni un banco.
@@ -46,13 +47,18 @@ interface PaymentRatePreviewProps {
    * si no se pudo: el equivalente y la tasa se enseñan igual.
    */
   planBalance: PreviewPlanBalance;
+  /** DX-472: vuelve a pedir el saldo si el proveedor de tasas no respondió. */
+  onRetryBalance: () => void;
   /** Día del abono (AAAA-MM-DD): el de la tasa que congelará (DX-375). */
   date: string;
   /** Formato de la sede (DX-378/DX-386); `null` mientras carga: importes y días «—». */
   fmt: RegionalFormat | null;
 }
 
-export type PreviewPlanBalance = { balance: number; paymentsWithoutRate: number } | 'loading' | 'error';
+export type PreviewPlanBalance =
+  | { balance: number; paymentsWithoutRate: number; rateProviderTimedOut: boolean }
+  | 'loading'
+  | 'error';
 
 /**
  * DX-376: al cobrar en otra moneda que la del plan, cuánto cubre el abono en
@@ -68,6 +74,7 @@ export function PaymentRatePreview({
   paymentCurrency,
   planCurrency,
   planBalance,
+  onRetryBalance,
   date,
   fmt,
 }: PaymentRatePreviewProps) {
@@ -85,6 +92,7 @@ export function PaymentRatePreview({
         paymentCurrency={paymentCurrency}
         planCurrency={planCurrency}
         planBalance={planBalance}
+        onRetryBalance={onRetryBalance}
         date={date}
         fmt={fmt}
       />
@@ -92,7 +100,16 @@ export function PaymentRatePreview({
   );
 }
 
-function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance, date, fmt }: PaymentRatePreviewProps) {
+function PreviewBody({
+  state,
+  amount,
+  paymentCurrency,
+  planCurrency,
+  planBalance,
+  onRetryBalance,
+  date,
+  fmt,
+}: PaymentRatePreviewProps) {
   const money = (value: number, currency: string) => sedeMoney(value, currency, fmt);
   if (state.status === 'idle') return null;
   if (state.status === 'loading') {
@@ -172,7 +189,15 @@ function PreviewBody({ state, amount, paymentCurrency, planCurrency, planBalance
         ) : null}
       </dl>
       {planBalance === 'error' ? <p className="text-muted">{copy.pendingUnavailable}</p> : null}
-      {typeof planBalance === 'object' && planBalance.paymentsWithoutRate > 0 ? (
+      {typeof planBalance === 'object' && planBalance.rateProviderTimedOut ? (
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <TriangleAlert aria-hidden className="size-4 shrink-0 text-warning-text" />
+          <span className="min-w-0 flex-1">{rateProviderCopy.title}</span>
+          <Button type="button" variant="secondary" size="sm" onClick={onRetryBalance}>
+            {rateProviderCopy.retry}
+          </Button>
+        </div>
+      ) : typeof planBalance === 'object' && planBalance.paymentsWithoutRate > 0 ? (
         <p className="mt-1 flex items-start gap-2">
           <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
           <span>{copy.pendingWithoutRate(planBalance.paymentsWithoutRate)}</span>

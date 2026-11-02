@@ -37,6 +37,8 @@ interface PlanPaymentFormModalProps {
   sedeFmt: RegionalFormat | null;
   /** A qué sede queda atribuido el abono (nada con una sola sede). */
   locationHint: string | null;
+  /** DX-472: vuelve a pedir el saldo si el proveedor de tasas no respondió. */
+  onRetryBalance: () => void;
   /** Tras registrar: refresca saldo y abonos (se espera antes de soltar el botón). */
   onRecorded: () => Promise<unknown>;
 }
@@ -53,6 +55,7 @@ export function PlanPaymentFormModal({
   onOpenChange,
   plan,
   planBalance,
+  onRetryBalance,
   sedeZone,
   sedeFmt,
   locationHint,
@@ -186,7 +189,9 @@ export function PlanPaymentFormModal({
           planBalance={{
             balance: planBalance.balance,
             paymentsWithoutRate: planBalance.paymentsWithoutRate.length,
+            rateProviderTimedOut: planBalance.rateProviderTimedOut,
           }}
+          onRetryBalance={onRetryBalance}
           date={paymentDate}
           fmt={sedeFmt}
         />

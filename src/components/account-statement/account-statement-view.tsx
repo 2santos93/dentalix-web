@@ -55,6 +55,7 @@ import { RecordPaymentModal } from '@/components/payments/record-payment-modal';
 import { StatementPaymentPlanModal } from './statement-payment-plan-modal';
 import { PlanItemsBalance } from './plan-items-balance';
 import { canRecordPayments } from '@/lib/payments/billable-plans-api';
+import { RateProviderNotice } from '@/components/payments/rate-provider-notice';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 import { CreditBalanceSection } from '@/components/patient-credit/credit-balance-section';
@@ -292,6 +293,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
               onVoid={voiding.request}
               onReceipt={setReceiptPaymentId}
               canCredit={canCredit}
+              onRetry={() => setReloadKey((k) => k + 1)}
               onTransferred={charged}
               onRefunded={(refund) => {
                 setIssuedRefund(refund);
@@ -373,6 +375,7 @@ function StatementBody({
   onVoid,
   onReceipt,
   canCredit,
+  onRetry,
   onTransferred,
   onRefunded,
 }: {
@@ -383,12 +386,21 @@ function StatementBody({
   onReceipt: (paymentId: string) => void;
   /** DX-253: ADMIN y recepción ven «Aplicar a otro plan» y «Devolver». */
   canCredit: boolean;
+  /** DX-472: vuelve a pedir el estado de cuenta. */
+  onRetry: () => void;
   onTransferred: (notice: string) => void;
   onRefunded: (refund: CreditRefund) => void;
 }) {
   const planName = planNamer(statement.plans);
   return (
     <div className="flex flex-col gap-8">
+      {statement.rateProviderTimedOut ? (
+        <RateProviderNotice
+          paymentsCount={statement.plans.reduce((n, p) => n + p.paymentsWithoutRate.length, 0)}
+          onRetry={onRetry}
+        />
+      ) : null}
+
       {statement.summary.length > 0 ? (
         <div className="flex flex-col gap-3">
           {statement.summary.map((row) => (
@@ -683,7 +695,7 @@ function PlanRows({
           {formatCurrency(plan.paid, plan.currency)}
           {plan.paidOtherCurrencies.map((o) => (
             <span key={o.currency} className="t-caption block text-muted">
-              + {formatCurrency(o.amount, o.currency)}
+              {statementCopy.handedOver(formatCurrency(o.amount, o.currency))}
             </span>
           ))}
         </TableCell>

@@ -25,6 +25,8 @@ export const statementCopy = {
   voidedBy: (name: string) => `Anulado por ${name}`,
   voidedByUnknownMember: 'un usuario ajeno a la clínica',
   notCounted: 'No suma al saldo',
+  // DX-472: lo entregado en otra moneda; «Abonado» ya lo lleva convertido.
+  handedOver: (amount: string) => `Entregado: ${amount}`,
   inFavor: 'a favor',
   noOverdue: 'Sin cuotas vencidas',
   overdueCount: (n: number) => (n === 1 ? '1 cuota vencida' : `${n} cuotas vencidas`),

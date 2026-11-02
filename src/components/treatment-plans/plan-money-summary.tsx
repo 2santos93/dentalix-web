@@ -3,6 +3,7 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMoney } from '@/lib/format/sede-number';
 import { allocationCopy } from '@/lib/payments/allocation-copy';
 import type { PlanBalance } from '@/lib/payments/payments-api';
+import { RateProviderNotice } from '@/components/payments/rate-provider-notice';
 import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
 import { cn } from '@/lib/utils';
 import { copy } from './treatment-plans-tab-copy';
@@ -28,6 +29,8 @@ export function PlanMoneySummary({
   currency,
   balance,
   fmt,
+  onRetryBalance,
+  retryingBalance,
 }: {
   token: string;
   total: number;
@@ -35,6 +38,9 @@ export function PlanMoneySummary({
   balance: PlanBalance | null;
   /** DX-489: el formato de la sede, el mismo de la lista de abonos (DX-386); sin él, «—». */
   fmt: RegionalFormat | null;
+  /** DX-472: vuelve a pedir el saldo si el proveedor de tasas no respondió. */
+  onRetryBalance: () => void;
+  retryingBalance: boolean;
 }) {
   const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const figures: { key: string; label: string; value: string; strong?: boolean; help?: string }[] = [
@@ -92,8 +98,15 @@ export function PlanMoneySummary({
       </dl>
       {/* DX-375: los abonos «sin tasa» no cuentan en Pagado ni en Saldo; el
           aviso lo dice junto a las cifras (y cómo resolverlo) en vez de la
-          nota de «sin convertir», que habla de los mismos abonos. */}
-      {balance && balance.paymentsWithoutRate.length > 0 ? (
+          nota de «sin convertir», que habla de los mismos abonos. DX-472: si
+          el proveedor no respondió no falta ninguna tasa: se reintenta. */}
+      {balance?.rateProviderTimedOut ? (
+        <RateProviderNotice
+          paymentsCount={balance.paymentsWithoutRate.length}
+          onRetry={onRetryBalance}
+          retrying={retryingBalance}
+        />
+      ) : balance && balance.paymentsWithoutRate.length > 0 ? (
         <WithoutRateNotice token={token} payments={balance.paymentsWithoutRate} />
       ) : balance && balance.unconvertedPaymentsCount > 0 ? (
         <p className="text-sm text-muted">{allocationCopy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>

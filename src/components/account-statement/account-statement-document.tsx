@@ -12,6 +12,7 @@ import {
   voidedDetail,
 } from '@/lib/account-statement/presentation';
 import { INSTALLMENT_STATUS_LABELS } from '@/lib/payment-plans/installment-status';
+import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { formatCurrency } from '@/lib/format/currency';
@@ -138,6 +139,11 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
         <p className="mt-8 text-sm">{statementCopy.emptyDescription}</p>
       ) : (
         <>
+          {statement.rateProviderTimedOut ? (
+            <p className="mt-6 text-sm font-medium" data-testid="statement-incomplete">
+              {rateProviderCopy.printed}
+            </p>
+          ) : null}
           {statement.summary.length > 0 ? (
             <DocSection title={copy.summaryHeading}>
               <DocTable label={copy.summaryTable}>
@@ -245,7 +251,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                         {formatCurrency(plan.paid, plan.currency)}
                         {plan.paidOtherCurrencies.map((o) => (
                           <span key={o.currency} className="block text-xs text-[#4b5563]">
-                            + {formatCurrency(o.amount, o.currency)}
+                            {statementCopy.handedOver(formatCurrency(o.amount, o.currency))}
                           </span>
                         ))}
                       </Td>

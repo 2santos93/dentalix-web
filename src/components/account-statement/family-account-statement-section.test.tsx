@@ -26,6 +26,7 @@ const amounts = (currency: string, budgeted: number, paid: number) => ({
 });
 
 const family: FamilyAccountStatement = {
+  rateProviderTimedOut: false,
   issuedAt: '2026-10-17T15:00:00.000Z',
   clinic: { name: 'Clínica Sonrisas', logoUrl: null, fiscal: EMPTY_CLINIC_FISCAL },
   payer: { id: 'mother', firstName: 'Marta', lastName: 'Gil' },

@@ -595,3 +595,46 @@ describe('cobrado por ítem de cada plan (DX-051)', () => {
     printSpy.mockRestore();
   });
 });
+
+describe('AccountStatementView: proveedor de tasas (DX-472)', () => {
+  beforeEach(() => {
+    mockedGet.mockReset();
+  });
+
+  it('avisa con «Reintentar» y vuelve a pedir el estado de cuenta', async () => {
+    const plans = accountStatementFixture().plans;
+    const timedOut = accountStatementFixture({
+      rateProviderTimedOut: true,
+      plans: [
+        {
+          ...plans[0],
+          rateProviderTimedOut: true,
+          paymentsWithoutRate: [{ paymentId: 'p', amount: 3600, currency: 'VES', paidOn: '2026-10-30' }],
+        },
+      ],
+    });
+    mockedGet.mockResolvedValueOnce(timedOut).mockResolvedValueOnce(accountStatementFixture());
+    render(<AccountStatementView token="t" patientId="p-1" />);
+
+    expect(await screen.findByText('El proveedor de tasas no respondió, vuelve a intentarlo')).toBeInTheDocument();
+    expect(screen.getByText(/todavía no cuenta 1 abono/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.queryByText('El proveedor de tasas no respondió, vuelve a intentarlo')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('lo entregado en otra moneda no se presenta como una suma', async () => {
+    const plans = accountStatementFixture().plans;
+    mockedGet.mockResolvedValue(
+      accountStatementFixture({
+        plans: [{ ...plans[0], paidOtherCurrencies: [{ currency: 'VES', amount: 3600 }] }],
+      }),
+    );
+    render(<AccountStatementView token="t" patientId="p-1" />);
+    expect((await screen.findAllByText(/Entregado:/)).length).toBeGreaterThan(0);
+  });
+});
