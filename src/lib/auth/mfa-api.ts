@@ -64,10 +64,11 @@ export function startLoginMfaEnrollment(
 export function confirmLoginMfaEnrollment(
   mfaToken: string,
   code: string,
+  emailCode?: string,
 ): Promise<MfaEnrolledSession> {
   return apiFetch('/auth/login/mfa/enrollment/confirm', {
     method: 'POST',
-    body: { mfaToken, code },
+    body: { mfaToken, code, ...(emailCode ? { emailCode } : {}) },
   });
 }
 

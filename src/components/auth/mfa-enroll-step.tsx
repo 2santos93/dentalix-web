@@ -35,7 +35,7 @@ const copy = {
   continue: 'Entrar a Dentalix',
   // DX-021-bis: alta de un superadmin.
   emailIntro:
-    'Te enviamos un código a tu correo. Compruébalo para ver la clave: la contraseña sola no basta para activar la verificación.',
+    'Te enviamos un código a tu correo: la contraseña sola no basta para activar la verificación. Si no llega en unos minutos, revisa el spam o vuelve a entrar pasados 10 minutos y saldrá otro.',
   emailLabel: 'Código del correo',
   emailInvalid: 'El código tiene 8 dígitos.',
   emailSubmit: 'Continuar',
@@ -60,6 +60,8 @@ export function MfaEnrollStep({
   onExpired: () => void;
 }) {
   const [enrollment, setEnrollment] = useState<MfaEnrollment | null>(null);
+  // La API lo pide también al confirmar: sin él, nadie gasta el contador del titular.
+  const [emailCode, setEmailCode] = useState<string | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [code, setCode] = useState('');
@@ -96,7 +98,7 @@ export function MfaEnrollStep({
     setSubmitting(true);
     setError(null);
     try {
-      const res = await confirmLoginMfaEnrollment(mfaToken, normalized);
+      const res = await confirmLoginMfaEnrollment(mfaToken, normalized, emailCode);
       setSession({ accessToken: res.accessToken, codes: res.recoveryCodes });
     } catch (err) {
       if (err instanceof ApiError && err.code === MFA_CHALLENGE_EXPIRED) {
@@ -148,7 +150,14 @@ export function MfaEnrollStep({
   }
   if (!enrollment && emailCodeRequired) {
     return (
-      <MfaEmailCodeStep mfaToken={mfaToken} onVerified={setEnrollment} onExpired={onExpired} />
+      <MfaEmailCodeStep
+        mfaToken={mfaToken}
+        onVerified={(res, code) => {
+          setEmailCode(code);
+          setEnrollment(res);
+        }}
+        onExpired={onExpired}
+      />
     );
   }
   if (!enrollment) return <Skeleton className="h-80 w-full" aria-label={copy.submitting} />;
@@ -201,7 +210,7 @@ function MfaEmailCodeStep({
   onExpired,
 }: {
   mfaToken: string;
-  onVerified: (enrollment: MfaEnrollment) => void;
+  onVerified: (enrollment: MfaEnrollment, emailCode: string) => void;
   onExpired: () => void;
 }) {
   const [code, setCode] = useState('');
@@ -220,7 +229,7 @@ function MfaEmailCodeStep({
     setSubmitting(true);
     setError(null);
     try {
-      onVerified(await startLoginMfaEnrollment(mfaToken, clean));
+      onVerified(await startLoginMfaEnrollment(mfaToken, clean), clean);
     } catch (err) {
       if (err instanceof ApiError && err.code === MFA_CHALLENGE_EXPIRED) {
         onExpired();

@@ -259,6 +259,7 @@ const STAFF_LOGIN_REASONS: Record<string, string> = {
   MFA_RECOVERY_CODE: 'Con un código de recuperación',
   MFA_ENROLLED: 'Activó la verificación en dos pasos al entrar',
   INVALID_MFA_CODE: 'Código de verificación incorrecto',
+  INVALID_EMAIL_CODE: 'Código del correo incorrecto',
 };
 
 /**
@@ -293,6 +294,7 @@ const STAFF_REASONS: Record<string, string> = {
   MFA_RESET_LOST_DEVICE: 'Restableció la verificación en dos pasos: perdió el móvil',
   MFA_RESET_DEVICE_REPLACED: 'Restableció la verificación en dos pasos: cambió de móvil',
   MFA_RESET_SECURITY_INCIDENT: 'Restableció la verificación en dos pasos: incidente de seguridad',
+  MFA_RESET_BY_SUPPORT: 'Soporte de Dentalix restableció la verificación en dos pasos',
   MFA_RESET_REFUSED: 'Restablecimiento de la verificación rechazado (sin cambios)',
   // PUT /staff/:userId/locations (anterior a DX-359): sin antes ni después.
   LOCATIONS_CHANGED: 'Sedes del miembro cambiadas',

@@ -144,9 +144,6 @@ load_env() {
   # DX-021-bis: las clínicas nuevas nacen exigiendo el MFA a sus ADMIN; la suite
   # registra clínicas y entra con contraseña (e2e/two-factor lo prueba aparte).
   export NEW_CLINIC_REQUIRE_ADMIN_MFA=false
-  # El superadmin de la suite se registró hace un momento: el código del correo
-  # de su alta no debe chocar con el tope de emails de plataforma (DX-144).
-  export MAIL_PLATFORM_RECIPIENT_COOLDOWN_SECONDS=0
   # DX-243: el spec de firma a distancia envía a la misma paciente de la demo
   # en cada corrida; con el tope diario de 5 una segunda corrida del día daría
   # 429 al enviar el enlace.
