@@ -53,7 +53,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
       docType: 'NATIONAL_ID',
       docNumber: `DOCCONF${suffix}`,
       sex: 'F',
-      phone: '+57 310 555 0101',
+      phone: '+58 414 555 0101',
     },
   });
   expect(patientRes.ok(), await patientRes.text()).toBeTruthy();
@@ -97,7 +97,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
 
   const whatsapp = sheet.getByRole('link', { name: /Abrir WhatsApp/ });
   const href = (await whatsapp.getAttribute('href')) ?? '';
-  expect(href.startsWith('https://wa.me/573105550101?text=')).toBe(true);
+  expect(href.startsWith('https://wa.me/584145550101?text=')).toBe(true);
   const message = decodeURIComponent(href.split('?text=')[1]);
   expect(message).toContain('Hola Camila');
   expect(message).toContain('a las 10:00');

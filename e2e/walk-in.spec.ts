@@ -88,7 +88,7 @@ test('1440: paciente nuevo desde la agenda, sobrecupo con motivo y sale en «En 
   await dialog.getByRole('radio', { name: 'Paciente nuevo' }).click();
   await dialog.getByLabel('Nombre', { exact: true }).fill('Lucía');
   await dialog.getByLabel('Apellido', { exact: true }).fill(lastName);
-  await dialog.getByLabel('Teléfono', { exact: true }).fill('+57 300 555 0101');
+  await dialog.getByLabel('Teléfono', { exact: true }).fill('+58 412 555 0101');
   await dialog.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
   await dialog.getByRole('checkbox', { name: 'Dolor' }).check();
   await dialog.getByRole('checkbox', { name: 'Inflamación' }).check();
@@ -162,7 +162,7 @@ test('1440: documento duplicado → aviso antes del sobrecupo y «Usar ese pacie
   await dialog.getByRole('radio', { name: 'Paciente nuevo' }).click();
   await dialog.getByLabel('Nombre', { exact: true }).fill('Sebastián');
   await dialog.getByLabel('Apellido', { exact: true }).fill('Tecleado');
-  await dialog.getByLabel('Teléfono', { exact: true }).fill('+57 300 555 0102');
+  await dialog.getByLabel('Teléfono', { exact: true }).fill('+58 412 555 0102');
   await dialog.getByLabel('Documento (opcional)', { exact: true }).fill(duplicateDoc);
   await dialog.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
   await dialog.getByRole('checkbox', { name: 'Dolor' }).check();

@@ -74,7 +74,7 @@ test.beforeAll(async ({ request }) => {
     docType: 'NATIONAL_ID',
     docNumber,
     sex: 'F',
-    phone: '+57 300 123 4567',
+    phone: '+58 412 123 4567',
   });
   patientId = patient.id;
   const start = atSede(sedeDayFromToday(1), '10:00');
@@ -112,7 +112,7 @@ test('recepción envía el enlace desde la ficha (1440)', async ({ page }) => {
   link = await input.inputValue();
   const whatsapp = dialog.getByRole('link', { name: /Abrir WhatsApp/ });
   const href = await whatsapp.getAttribute('href');
-  expect(href).toMatch(/^https:\/\/wa\.me\/573001234567\?text=/);
+  expect(href).toMatch(/^https:\/\/wa\.me\/584121234567\?text=/);
   expect(decodeURIComponent(href!)).not.toContain(lastName);
   await dialog.getByRole('button', { name: 'Cerrar' }).click();
   await expect(dialog).toBeHidden();

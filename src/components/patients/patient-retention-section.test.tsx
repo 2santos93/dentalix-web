@@ -47,7 +47,7 @@ function patient(overrides: Partial<Patient> = {}): Patient {
     docNumber: '1002',
     birthDate: null,
     sex: 'F',
-    phone: '3001112233',
+    phone: '4121112233',
     email: 'ana@example.com',
     address: null,
     notes: null,

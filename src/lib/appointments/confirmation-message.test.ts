@@ -47,12 +47,12 @@ describe('confirmationMessage', () => {
         end: '2026-10-20T14:30:00.000Z',
         providerName: 'Dra. Pérez',
         locationName: 'Sede Norte',
-        locationAddress: 'Calle 100 # 15-20',
+        locationAddress: 'Av. Libertador 100',
       },
       clock: CLOCK,
     });
     expect(text).toBe(
-      'Hola Ana, te recordamos tu cita del martes, 20 de octubre a las 10:00 a. m. con Dra. Pérez en Sede Norte (Calle 100 # 15-20). ' +
+      'Hola Ana, te recordamos tu cita del martes, 20 de octubre a las 10:00 a. m. con Dra. Pérez en Sede Norte (Av. Libertador 100). ' +
         'Confírmala, cancélala o pide que te llamemos aquí: https://demo.dentalix.app/confirmar/tok',
     );
   });
@@ -85,8 +85,8 @@ describe('longAppointmentDay', () => {
 
 describe('whatsAppUrl', () => {
   it('wa.me con el número E.164 sin + y el texto codificado', () => {
-    expect(whatsAppUrl('573105550101', 'Hola Ana & co: https://x/y?z=1')).toBe(
-      'https://wa.me/573105550101?text=Hola%20Ana%20%26%20co%3A%20https%3A%2F%2Fx%2Fy%3Fz%3D1',
+    expect(whatsAppUrl('584145550101', 'Hola Ana & co: https://x/y?z=1')).toBe(
+      'https://wa.me/584145550101?text=Hola%20Ana%20%26%20co%3A%20https%3A%2F%2Fx%2Fy%3Fz%3D1',
     );
   });
 });

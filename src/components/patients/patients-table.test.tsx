@@ -12,8 +12,8 @@ const patients: Patient[] = [
     docNumber: '123456',
     birthDate: '1990-05-10T00:00:00.000Z',
     sex: 'F',
-    phone: '3001234567',
-    phoneInternational: '+57 300 1234567',
+    phone: '4121234567',
+    phoneInternational: '+58 412 1234567',
     email: 'ana@example.com',
     address: null,
     notes: null,
@@ -81,8 +81,8 @@ describe('PatientsTable', () => {
   it('shows the international phone of the API, or the stored one when it has none (DX-387)', () => {
     const stored = { ...patients[1], id: '3', phone: 'casa: 2345', phoneInternational: null };
     render(<PatientsTable patients={[patients[0], stored]} loading={false} />);
-    expect(screen.getAllByText('+57 300 1234567')).toHaveLength(1);
-    expect(screen.queryByText('3001234567')).not.toBeInTheDocument();
+    expect(screen.getAllByText('+58 412 1234567')).toHaveLength(1);
+    expect(screen.queryByText('4121234567')).not.toBeInTheDocument();
     expect(screen.getAllByText('casa: 2345')).toHaveLength(1);
   });
 
@@ -129,7 +129,7 @@ describe('PatientsTable', () => {
       render(<PatientsTable patients={patients} loading={false} />);
       expect(screen.queryByRole('table')).not.toBeInTheDocument();
       const [ana, luis] = within(screen.getByRole('list', { name: 'Pacientes' })).getAllByRole('listitem');
-      expect(ana).toHaveTextContent(/^AGAna García\d+ años123456 · \+57 300 1234567$/);
+      expect(ana).toHaveTextContent(/^AGAna García\d+ años123456 · \+58 412 1234567$/);
       expect(within(ana).getByRole('link')).toHaveAttribute('href', '/patients/1');
       // Sin teléfono no hay « · » colgando ni «—».
       expect(luis).toHaveTextContent(/^LPLuis Pérez987654$/);

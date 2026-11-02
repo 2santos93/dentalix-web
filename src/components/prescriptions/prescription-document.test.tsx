@@ -27,7 +27,7 @@ const LEGACY_CO_MARKUP = [
   '<div>',
   '<p class="text-base font-semibold">Clínica Demo',
   '</p>',
-  '<p class="text-sm text-[#4b5563]">Sede Principal · Cra 15 #90-20',
+  '<p class="text-sm text-[#4b5563]">Sede Principal · Av. Francisco de Miranda 90',
   '</p>',
   '</div>',
   '</div>',
@@ -165,7 +165,7 @@ const LEGACY_ES_MARKUP = [
   '<div>',
   '<p class="text-base font-semibold">Clínica Demo',
   '</p>',
-  '<p class="text-sm text-[#4b5563]">Sede Principal · Cra 15 #90-20',
+  '<p class="text-sm text-[#4b5563]">Sede Principal · Av. Francisco de Miranda 90',
   '</p>',
   '</div>',
   '</div>',
@@ -324,7 +324,7 @@ describe('PrescriptionDocument (A4)', () => {
     // Textos, filas y orden de antes de DX-324; solo las fechas siguen la sede (R11).
     const co = renderDocument(makePrescriptionDocument(makeLegacyPrescription('CO', { safetyRulesVersion: null })));
     expect(co.container.textContent).toBe(
-      'Clínica DemoSede Principal · Cra 15 #90-20Fórmula médicaDecreto 780 de 2016, art. 2.5.3.10.16' +
+      'Clínica DemoSede Principal · Av. Francisco de Miranda 90Fórmula médicaDecreto 780 de 2016, art. 2.5.3.10.16' +
         'Fecha de emisión10/16/2026 11:00 a. m.Fecha de la receta10/16/2026' +
         'Válida hasta11/14/2026 (30 días naturales)' +
         'PacienteNombreAna PérezDocumentoDocumento nacional DOC-1020Nº de historia clínica1020' +
@@ -343,7 +343,7 @@ describe('PrescriptionDocument (A4)', () => {
 
     const es = renderDocument(makePrescriptionDocument(makeLegacyPrescription('ES', { safetyRulesVersion: null })));
     expect(es.container.textContent).toBe(
-      'Clínica DemoSede Principal · Cra 15 #90-20Receta médica privadaReal Decreto 1718/2010, art. 3' +
+      'Clínica DemoSede Principal · Av. Francisco de Miranda 90Receta médica privadaReal Decreto 1718/2010, art. 3' +
         'Fecha de emisión10/16/2026 11:00 a. m.Fecha prevista de dispensación10/16/2026' +
         'Válida hasta10/25/2026 (10 días naturales)' +
         'PacienteNombreAna PérezDNI/NIE12345678ZAño de nacimiento1980' +

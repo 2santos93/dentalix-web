@@ -29,8 +29,8 @@ const password = 'Password123!';
 const admin = { fullName: 'Ana Titular', email: `ana.cont.${suffix}@example.com` };
 const dentist = { fullName: 'Luis Contingencia', email: `luis.cont.${suffix}@example.com` };
 const reception = { fullName: 'Rita Recepción', email: `rita.cont.${suffix}@example.com` };
-const kept = { firstName: 'Sara', lastName: `Viene${suffix.slice(0, 8)}`, phone: '+57 300 1234567' };
-const cancelled = { firstName: 'Tomás', lastName: `Cancela${suffix.slice(0, 8)}`, phone: '+57 300 7654321' };
+const kept = { firstName: 'Sara', lastName: `Viene${suffix.slice(0, 8)}`, phone: '+58 412 1234567' };
+const cancelled = { firstName: 'Tomás', lastName: `Cancela${suffix.slice(0, 8)}`, phone: '+58 412 7654321' };
 const TOMORROW = sedeDayFromToday(1);
 /** Captura de QA a 390 px a DX339_QA_DIR, o a test-results. */
 const QA_DIR = process.env.DX339_QA_DIR ?? 'test-results';
@@ -135,7 +135,7 @@ test('RECEPTION a 390 px: descarga la agenda de contingencia; sale la cita agend
   expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
   const text = pdfText(pdf);
   expect(text).toContain(`${kept.firstName} ${kept.lastName}`);
-  expect(text).toContain('+57 300 1234567');
+  expect(text).toContain('+58 412 1234567');
   expect(text).toContain(dentist.fullName);
   expect(text).toContain('10:00 – 10:30');
   expect(text).not.toContain(cancelled.lastName);

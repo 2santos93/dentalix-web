@@ -48,7 +48,7 @@ describe('PatientRecordHeader', () => {
   it('saca edad, documento y teléfono a la cabecera, sin abrir ninguna pestaña', () => {
     render(
       <PatientRecordHeader
-        patient={patient({ phone: '+57 300 000 0000' })}
+        patient={patient({ phone: '+58 412 000 0000' })}
         loading={false}
         onEdit={() => {}}
       />,
@@ -56,7 +56,7 @@ describe('PatientRecordHeader', () => {
     const strip = screen.getByRole('list', { name: /datos de identificación/i });
     expect(strip).toHaveTextContent(/años/);
     expect(strip).toHaveTextContent('ID local DOC-1002');
-    expect(strip).toHaveTextContent('Tel. +57 300 000 0000');
+    expect(strip).toHaveTextContent('Tel. +58 412 000 0000');
   });
 
   it('shows the international phone of the API, or the stored one when it has none (DX-387)', () => {
@@ -96,13 +96,13 @@ describe('PatientRecordHeader', () => {
   it('omite entero el dato que falta en vez de dejar un marcador vacío', () => {
     render(
       <PatientRecordHeader
-        patient={patient({ birthDate: null, docNumber: null, phone: '+57 300 000 0000' })}
+        patient={patient({ birthDate: null, docNumber: null, phone: '+58 412 000 0000' })}
         loading={false}
         onEdit={() => {}}
       />,
     );
     const strip = screen.getByRole('list', { name: /datos de identificación/i });
-    expect(strip).toHaveTextContent('Tel. +57 300 000 0000');
+    expect(strip).toHaveTextContent('Tel. +58 412 000 0000');
     expect(strip).not.toHaveTextContent('—');
     expect(strip).not.toHaveTextContent(/años/);
     expect(strip).not.toHaveTextContent('ID local');
@@ -199,7 +199,7 @@ describe('PatientRecordHeader · saldo vencido (DX-150)', () => {
     render(
       <PatientRecordHeader
         patient={patient({
-          balance: { hasOverdue: true, overdueDays: 75, amounts: [{ currency: 'COP', amount: 300000 }] },
+          balance: { hasOverdue: true, overdueDays: 75, amounts: [{ currency: 'USD', amount: 300000 }] },
         })}
         loading={false}
         onEdit={() => {}}
