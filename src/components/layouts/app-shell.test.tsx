@@ -438,7 +438,8 @@ describe('AppShell', () => {
         </AppShell>
       </BrandingProvider>,
     );
-    expect(within(screen.getByRole('banner')).getByText('Clínica Sonrisa Norte')).toBeInTheDocument();
+    // Dos nodos: el CSS enseña uno u otro según haya selector de sede (DX-523).
+    expect(within(screen.getByRole('banner')).getAllByText('Clínica Sonrisa Norte').length).toBeGreaterThan(0);
     expect(screen.queryByText('Dentalix')).not.toBeInTheDocument();
   });
 
