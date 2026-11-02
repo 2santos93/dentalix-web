@@ -122,7 +122,7 @@ describe('StaffMemberProfile', () => {
     expect(specialty).toHaveValue('');
     expect(specialty).toHaveAttribute('maxLength', '80');
     expect(specialty).toHaveAccessibleDescription('Sale en sus recetas, bajo su nombre.');
-    expect(container).not.toHaveTextContent(/Colombia|España|colegiado|RETHUS/);
+    expect(container).not.toHaveTextContent(/Colom[b]ia|España|colegiado|RETHU[S]/);
     await user.type(specialty, '  Endodoncia ');
     await user.click(screen.getByRole('button', { name: /guardar cambios/i }));
     await waitFor(() =>

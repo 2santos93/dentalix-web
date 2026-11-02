@@ -203,7 +203,7 @@ describe('SEC-046: la API está leyendo otro archivo (503)', () => {
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
     await user.upload(
       screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'),
-      new File(['doc;importe;moneda\n1;2;COP'], 'saldos.csv', { type: 'text/csv' }),
+      new File(['doc;importe;moneda\n1;2;VES'], 'saldos.csv', { type: 'text/csv' }),
     );
     expect(await screen.findByRole('alert')).toHaveTextContent(busyText);
   });
@@ -470,7 +470,7 @@ it('QA O1: al avanzar, el foco va al título del paso nuevo (no se pierde en <bo
 
 describe('DX-262: hoja de saldos «Saldo migrado»', () => {
   const saldos = () =>
-    new File(['doc;importe;moneda\n1;2;COP'], 'saldos.csv', {
+    new File(['doc;importe;moneda\n1;2;VES'], 'saldos.csv', {
       type: 'text/csv',
     });
 
@@ -519,10 +519,10 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     });
     expect(within(totals).getByRole('columnheader', { name: 'Total de filas válidas' })).toBeInTheDocument();
     expect(within(totals).getByRole('columnheader', { name: 'Total en filas con error' })).toBeInTheDocument();
-    const cop = within(totals).getByRole('row', { name: /COP/ });
-    expect(cop).toHaveTextContent('201.000,50');
-    expect(cop).toHaveTextContent(/100,00/);
-    expect(cop).not.toHaveTextContent('201.100,50');
+    const ves = within(totals).getByRole('row', { name: /VES/ });
+    expect(ves).toHaveTextContent('201.000,50');
+    expect(ves).toHaveTextContent(/100,00/);
+    expect(ves).not.toHaveTextContent('201.100,50');
     expect(within(totals).getByRole('row', { name: /USD/ })).toHaveTextContent('40,00');
     expect(screen.getByText(/importe 0, negativo o ilegible no suman/)).toBeInTheDocument();
     const issues = screen.getByRole('table', {
@@ -546,7 +546,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
             column: 'numero_documento',
             kind: 'ERROR',
             message:
-              'Este paciente ya tiene un saldo migrado vivo de 80.000,00 COP (lote «p.csv» del 22/10/2026, corte 01/09/2026): no se crea otro. Si es otra deuda, marca «Añadir aunque ya tenga saldo migrado» y vuelve a subir la hoja.',
+              'Este paciente ya tiene un saldo migrado vivo de 80.000,00 VES (lote «p.csv» del 22/10/2026, corte 01/09/2026): no se crea otro. Si es otra deuda, marca «Añadir aunque ya tenga saldo migrado» y vuelve a subir la hoja.',
             value: '555555',
           },
         ],
@@ -561,7 +561,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
             row: 2,
             column: 'numero_documento',
             kind: 'EXISTING_BALANCE',
-            message: 'Este paciente ya tiene un saldo migrado vivo de 80.000,00 COP (…): se añadirá otro porque marcaste «Añadir aunque ya tenga saldo migrado».',
+            message: 'Este paciente ya tiene un saldo migrado vivo de 80.000,00 VES (…): se añadirá otro porque marcaste «Añadir aunque ya tenga saldo migrado».',
             value: '555555',
           },
         ],
@@ -715,7 +715,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
           balances: balancesFixture({
             progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0, existing: 0 },
             imported: [
-              { currency: 'COP', count: 2, amount: 201000.5 },
+              { currency: 'VES', count: 2, amount: 201000.5 },
               { currency: 'USD', count: 1, amount: 40 },
             ],
           }),

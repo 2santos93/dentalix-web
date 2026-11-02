@@ -116,7 +116,7 @@ test.beforeAll(async ({ request }) => {
 
   // Dos pendientes con permiso de WhatsApp para la oferta con enlace.
   for (const [name, n] of [['Ana', 3], ['Carla', 4]] as const) {
-    const { id } = await patient(name, n, { phone: '3101234567' });
+    const { id } = await patient(name, n, { phone: '4141234567' });
     const optIn = await request.patch(`${API_URL}/patients/${id}/communication`, {
       headers: session.headers,
       data: { whatsappOptIn: true, whatsappOptInSource: 'IN_PERSON' },

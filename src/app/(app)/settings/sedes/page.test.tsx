@@ -51,7 +51,7 @@ describe('Ajustes → Sedes (DX-279, DX-319)', () => {
     expect(screen.getByText(/Ábrela para sus datos legales y su política de cancelación\./)).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Nº de registro sanitario' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Política de cancelación' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/REPS|Resumen Digital/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/RE[P]S|Resumen Digital/)).not.toBeInTheDocument();
   });
 
   it.each(['RECEPTION', 'DENTIST', 'ASSISTANT'] as const)(

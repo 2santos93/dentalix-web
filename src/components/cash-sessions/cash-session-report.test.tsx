@@ -7,11 +7,11 @@ describe('CashSessionReport (DX-027)', () => {
     render(<CashSessionReport session={closedCashSessionFixture()} />);
     const doc = screen.getByTestId('cash-session-report');
     expect(within(doc).getByRole('heading', { name: 'Informe de cierre de caja' })).toBeInTheDocument();
-    expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 08:00');
-    expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 18:00');
+    expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 09:00');
+    expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 19:00');
     const table = within(doc).getByRole('table', { name: 'Arqueo por moneda y método' });
     const cash = within(table).getAllByRole('row')[1];
-    expect(cash).toHaveTextContent('Efectivo · COP');
+    expect(cash).toHaveTextContent('Efectivo · USD');
     expect(cash).toHaveTextContent(/79\.?000,00/);
     expect(cash).toHaveTextContent(/-1\.?000,00/);
     expect(doc).toHaveTextContent('Faltó cambio');
@@ -38,7 +38,7 @@ describe('CashSessionReport (DX-027)', () => {
             {
               id: 'adj-1',
               kind: 'VOID',
-              currency: 'COP',
+              currency: 'USD',
               method: 'CASH',
               amount: -30_000,
               reason: null,
@@ -79,9 +79,9 @@ describe('CashSessionReport (DX-027)', () => {
     );
     const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
     const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
-    expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/\+900,00 COP por ajustes del medio/);
+    expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/\+900,00 USD por ajustes del medio/);
     expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/80\.900,00/);
-    expect(cardRow.textContent?.replace(/\s/g, ' ')).toMatch(/−500,00 COP por ajustes del medio/);
+    expect(cardRow.textContent?.replace(/\s/g, ' ')).toMatch(/−500,00 USD por ajustes del medio/);
   });
 
   describe('DX-274: salidas de caja', () => {
@@ -112,7 +112,7 @@ describe('CashSessionReport (DX-027)', () => {
 
       const outflows = screen.getByRole('table', { name: 'Salidas de caja' });
       const row = within(outflows).getAllByRole('row')[1];
-      expect(row).toHaveTextContent('11:30');
+      expect(row).toHaveTextContent('12:30');
       expect(row).toHaveTextContent('Mensajería');
       expect(row).toHaveTextContent('Mensajeros Ya');
       expect(row).toHaveTextContent('Paola Martínez');
@@ -156,7 +156,7 @@ describe('CashSessionReport (DX-027)', () => {
               {
                 id: 'adj-2',
                 kind: 'OUTFLOW_VOID',
-                currency: 'COP',
+                currency: 'USD',
                 method: 'CASH',
                 amount: 8_000,
                 reason: 'Se devolvió el dinero',

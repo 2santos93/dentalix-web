@@ -69,7 +69,7 @@ describe('recordSplitPayment (DX-390)', () => {
       paidAt: '2026-10-30',
       lines: [
         { amount: 50, currency: 'USD', paymentMethodId: 'm1' },
-        { amount: 100000, currency: 'COP', paymentMethodId: 'm2', reference: 'TR-1' },
+        { amount: 100000, currency: 'VES', paymentMethodId: 'm2', reference: 'TR-1' },
       ],
     };
 

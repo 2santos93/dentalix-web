@@ -119,7 +119,7 @@ describe('OpeningsDialog (DX-122)', () => {
 
   it('busca con el profesional de la entrada y agrupa los huecos por día', async () => {
     mockedOpenings.mockResolvedValue({
-      timeZone: 'America/Bogota',
+      timeZone: 'America/Caracas',
       durationMinutes: 30,
       truncated: true,
       openings: [

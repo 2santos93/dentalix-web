@@ -56,8 +56,8 @@ function candidate(over: Partial<OpeningCandidate> & { patientId: string }): Ope
     kind: 'WAITLIST',
     patientFirstName: 'Ana',
     patientLastName: 'Ríos',
-    phone: '3101234567',
-    whatsappPhone: '573101234567',
+    phone: '4141234567',
+    whatsappPhone: '584141234567',
     whatsappBlocked: false,
     whatsappBlockedReason: null,
     waitlistEntryId: `wl-${over.patientId}`,
@@ -188,7 +188,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(hrefWhenRecorded).toBe('');
     expect(win.opener).toBeNull();
     const href = win.location.href;
-    expect(href.startsWith('https://wa.me/573101234567?text=')).toBe(true);
+    expect(href.startsWith('https://wa.me/584141234567?text=')).toBe(true);
     const text = decodeURIComponent(href.split('text=')[1]);
     expect(text).toContain('Hola Ana');
     expect(text).toContain('martes, 4 de marzo a las 10:00');
@@ -253,7 +253,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     await screen.findByText('Ana Ríos');
     expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
     expect(screen.getByText('Sin permiso de WhatsApp: llámalo')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Llamar a Ana Ríos al 3101234567' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Llamar a Ana Ríos al 4141234567' })).toBeInTheDocument();
   });
 
   it('con baja de WhatsApp (DX-128) no hay botón de WhatsApp: se ofrece «Llamar»', async () => {
@@ -261,9 +261,9 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     renderPanel();
     await screen.findByText('Berta Gil');
     expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Llamar a Berta Gil al 3101234567' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Llamar a Berta Gil al 4141234567' })).toHaveAttribute(
       'href',
-      'tel:3101234567',
+      'tel:4141234567',
     );
     expect(screen.getByText('No recibe WhatsApp: llámalo')).toBeInTheDocument();
   });
@@ -381,8 +381,8 @@ describe('«Ocupar este hueco» (DX-210)', () => {
       const carla = candidate({ patientId: 'p-carla', patientFirstName: 'Carla', patientLastName: 'Paz' });
       mockedList.mockResolvedValue(view([ana, carla]));
       mockedLinkOffer
-        .mockResolvedValueOnce(offerResult('p-ana', 'https://demo.dentalix.app/hueco/aaa', '573101234567'))
-        .mockResolvedValueOnce(offerResult('p-carla', 'https://demo.dentalix.app/hueco/ccc', '573101234567'));
+        .mockResolvedValueOnce(offerResult('p-ana', 'https://demo.dentalix.app/hueco/aaa', '584141234567'))
+        .mockResolvedValueOnce(offerResult('p-carla', 'https://demo.dentalix.app/hueco/ccc', '584141234567'));
       renderPanel();
       const send = await screen.findByRole('button', { name: 'Enviar oferta con enlace' });
       expect(send).toBeDisabled();

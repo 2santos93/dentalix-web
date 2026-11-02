@@ -31,7 +31,7 @@ jest.mock('../../lib/expenses/expense-categories-api', () => ({ listExpenseCateg
 // La moneda del fondo sale del catálogo; aquí basta una.
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
     { code: 'JPY', name: 'Yen japonés', symbol: '¥' },
   ]),
 }));
@@ -62,9 +62,9 @@ beforeEach(() => {
       id: 'loc-1',
       name: 'Sede principal',
       address: null,
-      country: 'CO',
+      country: 'VE',
       isActive: true,
-      timeZone: 'America/Bogota',
+      timeZone: 'America/Caracas',
       createdAt: '2026-01-01T00:00:00.000Z',
     }),
   ]);
@@ -94,7 +94,7 @@ describe('CashShiftsView (DX-027)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Abrir caja' }));
     await waitFor(() =>
       expect(mockedOpen).toHaveBeenCalledWith(token, {
-        floats: [{ currency: 'COP', amount: 50_000 }],
+        floats: [{ currency: 'USD', amount: 50_000 }],
         notes: undefined,
       }),
     );
@@ -114,7 +114,7 @@ describe('CashShiftsView (DX-027)', () => {
     expect(rows).toHaveLength(3);
     expect(within(rows[1]).getByText('Abierta')).toBeInTheDocument();
     expect(within(rows[2]).getByText('Cerrada')).toBeInTheDocument();
-    expect(within(rows[2]).getByText(/-COP\s1\.000,00/)).toBeInTheDocument();
+    expect(within(rows[2]).getByText(/USD-1\.000,00/)).toBeInTheDocument();
     // Toda la fila abre el turno; el informe de un cierre va en «⋯» (el turno abierto no lo tiene).
     expect(within(rows[2]).getByRole('link', { name: /^\d{2}\/\d{2}\/\d{4}/ })).toHaveAttribute('href', '/caja/turnos/cs-0');
     expect(within(rows[1]).queryByRole('button', { name: /^Acciones de turno/ })).not.toBeInTheDocument();
@@ -162,7 +162,7 @@ describe('CashShiftsView (DX-027)', () => {
 
     await waitFor(() => expect(mockedOutflow).toHaveBeenCalledTimes(1));
     expect(mockedOutflow.mock.calls[0][3]).toBe('loc-1');
-    expect(await screen.findByText(/Salida de caja de COP\s8\.000,00 registrada\./)).toBeInTheDocument();
+    expect(await screen.findByText(/Salida de caja de USD\s8\.000,00 registrada\./)).toBeInTheDocument();
     expect(await screen.findByText('Salidas del turno: 1')).toBeInTheDocument();
   });
 
@@ -191,7 +191,7 @@ describe('CashShiftsView (DX-027)', () => {
     });
     mockedList.mockResolvedValue(page([]));
     render(<CashShiftsView token={token} />);
-    expect(await screen.findByText(/-COP\s20\.000,00/)).toHaveClass('text-danger-text');
+    expect(await screen.findByText(/USD-20\.000,00/)).toHaveClass('text-danger-text');
   });
 
   it('si la lista falla, la caja actual sigue a mano y la lista se reintenta', async () => {
@@ -219,7 +219,7 @@ describe('CashShiftsView: moneda y zona de la sede (GLOBAL-G1)', () => {
   it('JPY location shows JPY without decimals', async () => {
     const user = userEvent.setup();
     mockedLocations.mockResolvedValue([
-      clinicLocation({ id: 'loc-1', country: 'CO', currency: 'JPY', timeZone: 'Asia/Tokyo' }),
+      clinicLocation({ id: 'loc-1', country: 'VE', currency: 'JPY', timeZone: 'Asia/Tokyo' }),
     ]);
     mockedCurrent.mockResolvedValue({ locationId: 'loc-1', settings, session: null });
     mockedList.mockResolvedValue(page([]));
@@ -235,9 +235,9 @@ describe('CashShiftsView: moneda y zona de la sede (GLOBAL-G1)', () => {
     );
   });
 
-  it('location without currency shows SedeConfigError and never COP', async () => {
+  it('location without currency shows SedeConfigError and never USD', async () => {
     const user = userEvent.setup();
-    mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'CO', currency: null })]);
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'VE', currency: null })]);
     mockedCurrent.mockResolvedValue({ locationId: 'loc-1', settings, session: null });
     mockedList.mockResolvedValue(page([]));
     render(<CashShiftsView token={token} />);
@@ -249,7 +249,7 @@ describe('CashShiftsView: moneda y zona de la sede (GLOBAL-G1)', () => {
     ).toBeInTheDocument();
     // Abrir caja empezaría el fondo en una moneda supuesta: no se ofrece.
     expect(screen.queryByRole('button', { name: 'Abrir caja' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/COP/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/USD/)).not.toBeInTheDocument();
 
     mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', currency: 'JPY' })]);
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));

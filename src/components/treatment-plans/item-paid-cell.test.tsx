@@ -3,8 +3,8 @@ import { ItemPaidCell, ItemPaidLine } from './item-paid-cell';
 import type { PlanItemBalance } from '@/lib/payments/payments-api';
 import { regionalFormat, type RegionalFormat } from '@/lib/format/regional-format';
 
-// DX-386: con el formato de la sede y el código ISO (fixture explícito es-CO).
-const ES_CO = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+// DX-386: con el formato de la sede y el código ISO (fixture explícito es-VE).
+const ES_CO = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 
 function balanceOf(overrides: Partial<PlanItemBalance> = {}): PlanItemBalance {
   return {
@@ -42,8 +42,8 @@ describe('ItemPaidCell', () => {
   });
 
   it('with another sede, its separators and the ISO code, never a symbol', () => {
-    const [paid] = renderCells(balanceOf({ paid: 5000 }), 'COP', regionalFormat({ locale: 'de-DE', hourCycle: 'h23' }));
-    expect(paid).toHaveTextContent(/^5\.000,00\sCOP$/);
+    const [paid] = renderCells(balanceOf({ paid: 5000 }), 'USD', regionalFormat({ locale: 'de-DE', hourCycle: 'h23' }));
+    expect(paid).toHaveTextContent(/^5\.000,00\sUSD$/);
     expect(paid).not.toHaveTextContent('$');
   });
 

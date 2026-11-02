@@ -34,14 +34,14 @@ function item(overrides: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem
     planId: 'plan-a',
     patientId: 'pat-1',
     patientName: 'Carolina Ruiz',
-    patientPhone: '300 111 2222',
-    patientWhatsApp: '573001112222',
+    patientPhone: '412 111 2222',
+    patientWhatsApp: '584121112222',
     optionGroupId: 'plan-a',
     optionLabel: 'Opción A: implante',
     presentedAt: '2026-10-07T15:00:00.000Z',
     presentedLocationId: 'loc-1',
     daysSincePresented: 9,
-    currency: 'COP',
+    currency: 'USD',
     total: 5300000,
     itemCount: 2,
     ...overrides,
@@ -52,7 +52,7 @@ function page(items: PendingFollowUpItem[], total = items.length) {
   return { items, total, page: 1, pageSize: 20 };
 }
 
-// Normaliza los espacios duros de Intl (es: "150.000,50 COP" lleva U+00A0).
+// Normaliza los espacios duros de Intl (es: "150.000,50 USD" lleva U+00A0).
 function money(text: string | null | undefined): string {
   return (text ?? '').replace(/\s/g, ' ');
 }
@@ -78,14 +78,14 @@ describe('PendingFollowUpView (DX-040)', () => {
       '/patients/pat-1',
     );
     expect(within(row).getByText('Opción A: implante')).toBeInTheDocument();
-    await waitFor(() => expect(money(row.textContent)).toContain(money('COP 5.300.000,00')));
+    await waitFor(() => expect(money(row.textContent)).toContain(money('USD 5.300.000,00')));
     expect(within(row).getByText('hace 9 días')).toBeInTheDocument();
-    expect(within(row).getByRole('link', { name: 'Llamar a Carolina Ruiz: 300 111 2222' })).toHaveAttribute(
+    expect(within(row).getByRole('link', { name: 'Llamar a Carolina Ruiz: 412 111 2222' })).toHaveAttribute(
       'href',
-      'tel:3001112222',
+      'tel:4121112222',
     );
     const whatsapp = within(row).getByRole('link', { name: 'WhatsApp a Carolina Ruiz' });
-    expect(whatsapp.getAttribute('href')).toMatch(/^https:\/\/wa\.me\/573001112222\?text=Hola%20Carolina/);
+    expect(whatsapp.getAttribute('href')).toMatch(/^https:\/\/wa\.me\/584121112222\?text=Hola%20Carolina/);
     await waitFor(() => expect(whatsapp.getAttribute('href')).toContain('Cl%C3%ADnica%20Demo'));
     expect(screen.getByText('1 presupuesto')).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledWith('tok', { olderThanDays: 7, page: 1 });
@@ -202,11 +202,11 @@ describe('PendingFollowUpView (DX-040)', () => {
       const nested = within(row).getByRole('list', { name: 'Opciones presentadas a Carolina Ruiz' });
       await waitFor(() =>
         expect(within(nested).getAllByRole('listitem').map((li) => money(li.textContent))).toEqual([
-          money('Opción A: implante · COP 5.300.000,00'),
-          money('Opción B: puente · COP 3.450.000,00'),
+          money('Opción A: implante · USD 5.300.000,00'),
+          money('Opción B: puente · USD 3.450.000,00'),
         ]),
       );
-      expect(money(row.textContent)).toContain(money('COP 3.450.000,00 – COP 5.300.000,00'));
+      expect(money(row.textContent)).toContain(money('USD 3.450.000,00 – USD 5.300.000,00'));
       // La antigüedad es la de la opción más antigua.
       expect(within(row).getByText('hace 9 días')).toBeInTheDocument();
       expect(within(row).getAllByRole('link', { name: /WhatsApp a Carolina Ruiz/ })).toHaveLength(1);

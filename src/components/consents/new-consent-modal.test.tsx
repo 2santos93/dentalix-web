@@ -116,7 +116,7 @@ const plan = {
   tenantId: 't1',
   patientId: 'p1',
   status: 'ACCEPTED' as const,
-  currency: 'COP',
+  currency: 'USD',
   notes: null,
   createdById: null,
   ...PLAN_WITHOUT_OPTIONS,

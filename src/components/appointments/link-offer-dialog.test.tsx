@@ -24,8 +24,8 @@ function candidate(over: Partial<OpeningCandidate> & { patientId: string }): Ope
     kind: 'WAITLIST',
     patientFirstName: 'Ana',
     patientLastName: 'Ríos',
-    phone: '3101234567',
-    whatsappPhone: '573101234567',
+    phone: '4141234567',
+    whatsappPhone: '584141234567',
     whatsappBlocked: false,
     whatsappBlockedReason: null,
     waitlistEntryId: `wl-${over.patientId}`,
@@ -143,7 +143,7 @@ describe('LinkOfferDialog: resultados anunciados y reintento (DX-486, FE-102)', 
   });
 
   it('«Abrir WhatsApp» mide al menos 44 px (min-h-11), no solo en los botones del modal', async () => {
-    mockedLinkOffer.mockResolvedValueOnce(offer('p-ana', 'https://demo.dentalix.app/hueco/aaa', '573101234567'));
+    mockedLinkOffer.mockResolvedValueOnce(offer('p-ana', 'https://demo.dentalix.app/hueco/aaa', '584141234567'));
     const { dialog } = renderDialog([ana]);
     await userEvent.click(within(dialog).getByRole('radio', { name: /WhatsApp/ }));
     await userEvent.click(within(dialog).getByRole('button', { name: copy.submit }));

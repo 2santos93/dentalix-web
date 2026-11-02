@@ -125,7 +125,7 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
     expect(link, 'el test anterior no dejó el enlace').not.toBe('');
     const context = await browser.newContext({
       locale: E2E_BROWSER_LOCALE,
-      timezoneId: 'America/Bogota',
+      timezoneId: 'America/Caracas',
       viewport: { width: 390, height: 844 },
       hasTouch: true,
     });
@@ -257,7 +257,7 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
     copyToken = await linkFromMail(PATIENT_EMAIL, /\/copia\/([A-Za-z0-9_-]{43})/, { since: copySince });
     const context = await browser.newContext({
       locale: E2E_BROWSER_LOCALE,
-      timezoneId: 'America/Bogota',
+      timezoneId: 'America/Caracas',
       viewport: { width: 390, height: 844 },
       hasTouch: true,
     });

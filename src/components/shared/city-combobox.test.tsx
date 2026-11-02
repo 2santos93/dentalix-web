@@ -14,8 +14,8 @@ const mocked = searchCities as jest.MockedFunction<typeof searchCities>;
 // during its own render — a plain `jest.fn()` onChange (as in the other
 // tests) would never trigger that warning, since it doesn't itself setState.
 function CountryChangingParent() {
-  const [countryCode, setCountryCode] = useState('CO');
-  const [value, setValue] = useState<CitySelection | null>({ id: 1, name: 'Bogotá' });
+  const [countryCode, setCountryCode] = useState('VE');
+  const [value, setValue] = useState<CitySelection | null>({ id: 1, name: 'Caracas' });
   return (
     <>
       <button type="button" onClick={() => setCountryCode('MX')}>
@@ -29,8 +29,8 @@ function CountryChangingParent() {
 describe('CityCombobox', () => {
   beforeEach(() => {
     mocked.mockReset().mockResolvedValue([
-      { id: 1, name: 'Bogotá', region: 'Bogota D.C.' },
-      { id: 2, name: 'Bogotá Chico', region: 'Bogota D.C.' },
+      { id: 1, name: 'Caracas', region: 'Caracas' },
+      { id: 2, name: 'Caracas Este', region: 'Caracas' },
     ]);
   });
 
@@ -42,22 +42,22 @@ describe('CityCombobox', () => {
   it('queries and lets the user pick a city', async () => {
     const onChange = jest.fn();
     const user = userEvent.setup();
-    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={onChange} />);
-    await user.type(screen.getByRole('combobox'), 'bog');
+    render(<CityCombobox id="city" token="tok" countryCode="VE" value={null} onChange={onChange} />);
+    await user.type(screen.getByRole('combobox'), 'car');
     await waitFor(() =>
-      expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'CO', q: 'bog', limit: 50 }),
+      expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'VE', q: 'car', limit: 50 }),
     );
-    const option = await screen.findByText('Bogotá');
+    const option = await screen.findByText('Caracas');
     await user.click(option);
-    expect(onChange).toHaveBeenCalledWith({ id: 1, name: 'Bogotá' });
+    expect(onChange).toHaveBeenCalledWith({ id: 1, name: 'Caracas' });
   });
 
   it('Escape closes the open list', async () => {
     const user = userEvent.setup();
-    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={() => {}} />);
+    render(<CityCombobox id="city" token="tok" countryCode="VE" value={null} onChange={() => {}} />);
     const input = screen.getByRole('combobox');
-    await user.type(input, 'bog');
-    await screen.findByText('Bogotá');
+    await user.type(input, 'car');
+    await screen.findByText('Caracas');
     expect(input).toHaveAttribute('aria-expanded', 'true');
     await user.keyboard('{Escape}');
     expect(input).toHaveAttribute('aria-expanded', 'false');
@@ -67,12 +67,12 @@ describe('CityCombobox', () => {
   it('does not reopen the dropdown after a city is picked', async () => {
     const onChange = jest.fn();
     const user = userEvent.setup();
-    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={onChange} />);
-    await user.type(screen.getByRole('combobox'), 'bog');
+    render(<CityCombobox id="city" token="tok" countryCode="VE" value={null} onChange={onChange} />);
+    await user.type(screen.getByRole('combobox'), 'car');
     await waitFor(() =>
-      expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'CO', q: 'bog', limit: 50 }),
+      expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'VE', q: 'car', limit: 50 }),
     );
-    const option = await screen.findByText('Bogotá');
+    const option = await screen.findByText('Caracas');
     await user.click(option);
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -90,7 +90,7 @@ describe('CityCombobox', () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const user = userEvent.setup();
     render(<CountryChangingParent />);
-    expect(screen.getByRole('combobox')).toHaveValue('Bogotá');
+    expect(screen.getByRole('combobox')).toHaveValue('Caracas');
 
     await user.click(screen.getByRole('button', { name: /change country/i }));
 
@@ -103,9 +103,9 @@ describe('CityCombobox', () => {
   it('si la búsqueda falla, muestra un FieldError con reintento y vuelve a buscar', async () => {
     mocked.mockReset()
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockResolvedValueOnce([{ id: 1, name: 'Bogotá', region: 'Bogota D.C.' }]);
+      .mockResolvedValueOnce([{ id: 1, name: 'Caracas', region: 'Caracas' }]);
     const user = userEvent.setup();
-    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={() => {}} />);
+    render(<CityCombobox id="city" token="tok" countryCode="VE" value={null} onChange={() => {}} />);
 
     const status = await screen.findByRole('status');
     expect(status).toHaveTextContent('Ciudades no disponibles');
@@ -116,7 +116,7 @@ describe('CityCombobox', () => {
     const input = await screen.findByRole('combobox');
     await waitFor(() => expect(mocked).toHaveBeenCalledTimes(2));
     await user.click(input);
-    expect(await screen.findByText('Bogotá')).toBeInTheDocument();
+    expect(await screen.findByText('Caracas')).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
@@ -127,9 +127,9 @@ describe('CityCombobox', () => {
     mocked.mockReset()
       .mockResolvedValueOnce([])
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockResolvedValue([{ id: 1, name: 'Bogotá', region: 'Bogota D.C.' }]);
+      .mockResolvedValue([{ id: 1, name: 'Caracas', region: 'Caracas' }]);
     const user = userEvent.setup();
-    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={() => {}} />);
+    render(<CityCombobox id="city" token="tok" countryCode="VE" value={null} onChange={() => {}} />);
     await waitFor(() => expect(mocked).toHaveBeenCalledTimes(1));
     await user.type(screen.getByRole('combobox'), 'b');
 

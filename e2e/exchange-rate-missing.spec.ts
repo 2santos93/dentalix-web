@@ -27,7 +27,9 @@ import { API_URL } from './support/urls';
  */
 const rawSuffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const password = 'Password123!';
-const LOCAL = E2E_REGION.currency;
+// La sede cobra en VES: USD es la moneda base del proveedor y no admite tasa manual.
+const REGION = { ...E2E_REGION, currency: 'VES' };
+const LOCAL = REGION.currency;
 const VIEWPORTS = [
   { name: 'escritorio', width: 1440, height: 900 },
   { name: 'móvil', width: 390, height: 844 },
@@ -40,8 +42,8 @@ let patientId: string;
 let autoOrigin: string;
 let autoAdminEmail: string;
 let autoPatientId: string;
-/** DX-386: el abono con el formato de la sede y el código ISO («COP 200.000,00»). */
-const PAYMENT_TEXT = moneyWithCode(200000, LOCAL, regionalFormat(E2E_REGION));
+/** DX-386: el abono con el formato de la sede y el código ISO («VES 200.000,00»). */
+const PAYMENT_TEXT = moneyWithCode(200000, LOCAL, regionalFormat(REGION));
 
 /** Hoy en la zona de la sede de e2e. */
 function sedeToday(): string {
@@ -110,6 +112,7 @@ test.beforeAll(async ({ playwright }) => {
       fullName: 'Dra Tasa',
       email: adminEmail,
       password,
+      location: REGION,
     });
     origin = admin.origin;
     await addStaffViaApi(request, admin, {
@@ -131,6 +134,7 @@ test.beforeAll(async ({ playwright }) => {
       fullName: 'Dra Auto',
       email: autoAdminEmail,
       password,
+      location: REGION,
     });
     autoOrigin = autoAdmin.origin;
     autoPatientId = await seedPlanWithoutRate(request, autoAdmin, `a${suffix}`);

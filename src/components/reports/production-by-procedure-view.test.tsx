@@ -24,7 +24,7 @@ jest.mock('../../lib/locations/use-sede-time-zone', () => ({
   ...jest.requireActual('../../lib/locations/use-sede-time-zone'),
   useSedeTimeZone: jest.fn(() => ({
     status: 'ready',
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
   })),
   sedeToday: () => '2026-10-24',
 }));
@@ -65,7 +65,7 @@ function report(overrides: Partial<ProductionByProcedure> = {}): ProductionByPro
         code: 'RES-1',
         label: 'Resina',
         category: 'Operatoria',
-        currency: 'COP',
+        currency: 'VES',
         count: 3,
         gross: 280,
         discounts: 20,
@@ -94,7 +94,7 @@ function report(overrides: Partial<ProductionByProcedure> = {}): ProductionByPro
     categoryTotals: [
       {
         category: 'Operatoria',
-        currency: 'COP',
+        currency: 'VES',
         count: 3,
         gross: 280,
         discounts: 20,
@@ -113,7 +113,7 @@ function report(overrides: Partial<ProductionByProcedure> = {}): ProductionByPro
     ],
     totals: [
       {
-        currency: 'COP',
+        currency: 'VES',
         count: 3,
         gross: 280,
         discounts: 20,
@@ -144,7 +144,7 @@ const table = () =>
 describe('ProductionByProcedureView (DX-423)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Bogota' });
+    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Caracas' });
     mockedFormat.mockReturnValue({
       status: 'ready',
       fmt: regionalFormat({ locale: 'es-ES', hourCycle: 'h23' }),
@@ -159,21 +159,21 @@ describe('ProductionByProcedureView (DX-423)', () => {
       from: '2026-10-01',
       to: '2026-10-24',
     });
-    const [cop] = screen.getAllByTestId('production-row');
-    for (const text of ['COP', '3', /280,00/, /20,00/, /260,00/, /86,67/, /100,00/, '-13,3 %']) {
-      expect(within(cop).getByText(text)).toBeInTheDocument();
+    const [ves] = screen.getAllByTestId('production-row');
+    for (const text of ['VES', '3', /280,00/, /20,00/, /260,00/, /86,67/, /100,00/, '-13,3 %']) {
+      expect(within(ves).getByText(text)).toBeInTheDocument();
     }
     expect(within(table()).getByRole('columnheader', { name: /Honorario medio/ })).toBeInTheDocument();
   });
 
-  it('subtotal y total por moneda: nunca una línea que mezcle COP y USD', async () => {
+  it('subtotal y total por moneda: nunca una línea que mezcle VES y USD', async () => {
     render(<ProductionByProcedureView token="t" />);
     await screen.findByRole('table');
     expect(
       screen.getAllByTestId('production-subtotal').map((r) => within(r).getAllByRole('cell')[0].textContent),
-    ).toEqual(['COP', 'USD']);
+    ).toEqual(['VES', 'USD']);
     expect(screen.getAllByTestId('production-total').map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(
-      ['COP', 'USD'],
+      ['VES', 'USD'],
     );
     expect(within(table()).getByRole('columnheader', { name: 'Operatoria' })).toBeInTheDocument();
   });
@@ -181,7 +181,7 @@ describe('ProductionByProcedureView (DX-423)', () => {
   it('«Sin atribuir»: su línea y el aviso que lo explica', async () => {
     mockedGet.mockResolvedValue(
       report({
-        unattributed: [{ currency: 'COP', count: 2, gross: 95, discounts: 0, net: 95 }],
+        unattributed: [{ currency: 'VES', count: 2, gross: 95, discounts: 0, net: 95 }],
       }),
     );
     render(<ProductionByProcedureView token="t" />);
@@ -233,7 +233,7 @@ describe('ProductionByProcedureView (DX-423)', () => {
           locationId: 'l1',
           locationName: 'Sede principal',
           toothNumber: '16',
-          currency: 'COP',
+          currency: 'VES',
           price: 80,
           discount: 20,
           net: 60,
@@ -247,7 +247,7 @@ describe('ProductionByProcedureView (DX-423)', () => {
     await screen.findByRole('table');
     await userEvent.click(
       screen.getByRole('button', {
-        name: 'Ver los procedimientos de RES-1 Resina en COP',
+        name: 'Ver los procedimientos de RES-1 Resina en VES',
       }),
     );
     const dialog = await screen.findByRole('dialog');
@@ -258,7 +258,7 @@ describe('ProductionByProcedureView (DX-423)', () => {
       't',
       expect.objectContaining({
         catalogItemId: 'c1',
-        currency: 'COP',
+        currency: 'VES',
         page: 1,
       }),
     );
@@ -279,7 +279,7 @@ describe('ProductionByProcedureView (DX-423)', () => {
           locationName: 'Sede Tokio',
           timeZone: 'Asia/Tokyo',
           toothNumber: '16',
-          currency: 'COP',
+          currency: 'VES',
           price: 80,
           discount: 0,
           net: 80,
@@ -291,7 +291,7 @@ describe('ProductionByProcedureView (DX-423)', () => {
     } as unknown as Awaited<ReturnType<typeof getProductionItems>>);
     render(<ProductionByProcedureView token="t" />);
     await screen.findByRole('table');
-    await userEvent.click(screen.getByRole('button', { name: 'Ver los procedimientos de RES-1 Resina en COP' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ver los procedimientos de RES-1 Resina en VES' }));
     const dialog = await screen.findByRole('dialog');
     expect(await within(dialog).findByText('Paciente eliminado')).toBeInTheDocument();
     expect(within(dialog).queryByRole('link')).not.toBeInTheDocument();
@@ -317,14 +317,14 @@ describe('ProductionByProcedureView (DX-423)', () => {
 
   it('sin fecha: aviso bajo la tabla con los importes, no una fila', async () => {
     mockedGet.mockResolvedValue(
-      report({ undated: [{ currency: 'COP', count: 2, gross: 95, discounts: 0, net: 95 }] }),
+      report({ undated: [{ currency: 'VES', count: 2, gross: 95, discounts: 0, net: 95 }] }),
     );
     render(<ProductionByProcedureView token="t" />);
     await screen.findByRole('table');
     const note = screen.getByTestId('production-undated');
     expect(note).toHaveAttribute('role', 'note');
     expect(note).toHaveTextContent('2 procedimientos realizados sin fecha');
-    expect(note).toHaveTextContent(/95,00\s*COP|COP\s*95,00/);
+    expect(note).toHaveTextContent(/95,00\s*VES|VES\s*95,00/);
     expect(screen.queryByTestId('production-unattributed')).not.toBeInTheDocument();
   });
 
@@ -335,7 +335,7 @@ describe('ProductionByProcedureView (DX-423)', () => {
         categoryTotals: [],
         totals: [],
         hasActivity: false,
-        undated: [{ currency: 'COP', count: 1, gross: 90000, discounts: 0, net: 90000 }],
+        undated: [{ currency: 'VES', count: 1, gross: 90000, discounts: 0, net: 90000 }],
       }),
     );
     render(<ProductionByProcedureView token="t" />);

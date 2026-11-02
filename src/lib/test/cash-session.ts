@@ -2,7 +2,7 @@ import type { CashSessionDetail } from '@/lib/cash-sessions/cash-sessions-api';
 
 type CashOutflow = CashSessionDetail['outflows'][number];
 
-/** Una salida de caja menor (DX-274): 8.000 COP de mensajería a las 11:30 de la sede. */
+/** Una salida de caja menor (DX-274): 8.000 USD de mensajería a las 12:30 de la sede. */
 export function outflowFixture(overrides: Partial<CashOutflow> = {}): CashOutflow {
   return {
     id: 'ep-1',
@@ -10,7 +10,7 @@ export function outflowFixture(overrides: Partial<CashOutflow> = {}): CashOutflo
     category: 'Mensajería',
     supplier: 'Mensajeros Ya',
     amount: 8_000,
-    currency: 'COP',
+    currency: 'USD',
     createdAt: '2026-10-17T16:30:00.000Z',
     createdBy: { id: 'u-recep', fullName: 'Paola Martínez' },
     ...overrides,
@@ -29,14 +29,14 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
     closedAt: null,
     closedBy: null,
     reopenCount: 0,
-    floats: [{ currency: 'COP', amount: 50_000 }],
+    floats: [{ currency: 'USD', amount: 50_000 }],
     differences: [],
     notes: null,
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     blindHidden: false,
     expected: [
       {
-        currency: 'COP',
+        currency: 'USD',
         method: 'CASH',
         opening: 50_000,
         payments: 30_000,
@@ -48,7 +48,7 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
         expected: 80_000,
       },
       {
-        currency: 'COP',
+        currency: 'USD',
         method: 'CARD',
         opening: 0,
         payments: 25_000,
@@ -66,7 +66,7 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
         paidAt: '2026-10-17T17:00:00.000Z',
         paidOn: '2026-10-17',
         amount: 30_000,
-        currency: 'COP',
+        currency: 'USD',
         method: 'CASH',
         receiptNumber: 'PRI-000012',
         patient: { id: 'pat-1', fullName: 'Ana Gómez' },
@@ -101,15 +101,15 @@ export function closedCashSessionFixture(overrides: Partial<CashSessionDetail> =
     notes: null,
     suggestedLockDate: '2026-10-17',
     lines: [
-      { currency: 'COP', method: 'CASH' as const, opening: 50_000, expected: 80_000, counted: 79_000, difference: -1_000 },
-      { currency: 'COP', method: 'CARD' as const, opening: 0, expected: 25_000, counted: 25_000, difference: 0 },
+      { currency: 'USD', method: 'CASH' as const, opening: 50_000, expected: 80_000, counted: 79_000, difference: -1_000 },
+      { currency: 'USD', method: 'CARD' as const, opening: 0, expected: 25_000, counted: 25_000, difference: 0 },
     ],
   };
   return cashSessionFixture({
     status: 'CLOSED',
     closedAt: closing.closedAt,
     closedBy: closing.closedBy,
-    differences: [{ currency: 'COP', amount: -1_000 }],
+    differences: [{ currency: 'USD', amount: -1_000 }],
     closing,
     closings: [closing],
     can: { close: false, reopen: true, adjust: true },

@@ -654,9 +654,9 @@ describe('exchangeRateBackupDetail (DX-402)', () => {
       exchangeRateBackupDetail({
         reason: 'EXCHANGE_RATE_BACKUP',
         origin: 'JOB',
-        exchangeRateBackup: { rateDate: '2026-10-28', manualSince: '2026-10-30', currencies: ['COP', 'USD'] },
+        exchangeRateBackup: { rateDate: '2026-10-28', manualSince: '2026-10-30', currencies: ['VES', 'USD'] },
       }),
-    ).toBe('Tasa de respaldo: la manual de un día anterior a «manual desde» (COP, USD) · proceso automático');
+    ).toBe('Tasa de respaldo: la manual de un día anterior a «manual desde» (VES, USD) · proceso automático');
   });
 
   it('null para otra reason', () => {

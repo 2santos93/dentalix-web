@@ -56,7 +56,7 @@ function renderModal() {
 describe('AcceptPlanModal (DX-012)', () => {
   beforeEach(() => {
     mockedGet.mockReset();
-    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-CO' })]);
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-VE' })]);
     mockedAccept.mockReset();
   });
 
@@ -70,8 +70,8 @@ describe('AcceptPlanModal (DX-012)', () => {
     expect(summary).toHaveTextContent('Diente 36');
     expect(summary).toHaveTextContent('Resina');
     // DX-522: importes con el código ISO y el formato de la sede.
-    await waitFor(() => expect((summary.textContent ?? '').replace(/\s/g, ' ')).toContain('COP 3.300.000,00'));
-    expect((summary.textContent ?? '').replace(/\s/g, ' ')).toContain('COP 3.150.000,00');
+    await waitFor(() => expect((summary.textContent ?? '').replace(/\s/g, ' ')).toContain('VES 3.300.000,00'));
+    expect((summary.textContent ?? '').replace(/\s/g, ' ')).toContain('VES 3.150.000,00');
     expect(summary).toHaveTextContent('Válido 30 días, hasta el 15/11/2026');
     expect(within(dialog).getByRole('link', { name: /Ver el presupuesto completo/ })).toHaveAttribute(
       'href',

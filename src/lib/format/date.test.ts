@@ -69,22 +69,22 @@ describe('formatDateTime (local)', () => {
 
 describe('formatTimeInZone', () => {
   it('renders HH:mm in the zone', () => {
-    expect(formatTimeInZone('2026-10-16T03:30:00.000Z', 'America/Bogota')).toBe('22:30');
-    expect(formatTimeInZone('2026-10-16T05:00:00.000Z', 'America/Bogota')).toBe('00:00');
-    expect(formatTimeInZone(null, 'America/Bogota')).toBe('—');
+    expect(formatTimeInZone('2026-10-16T03:30:00.000Z', 'America/Caracas')).toBe('23:30');
+    expect(formatTimeInZone('2026-10-16T04:00:00.000Z', 'America/Caracas')).toBe('00:00');
+    expect(formatTimeInZone(null, 'America/Caracas')).toBe('—');
   });
 });
 
 describe('formatDateTimeInZone (instant in a given IANA zone)', () => {
   it('renders dd/mm/yyyy HH:mm in the zone, not in the browser one', () => {
-    // 2026-10-16 03:30 UTC = 15/10 22:30 in a UTC-5 zone and 05:30 in Madrid (UTC+2).
+    // 2026-10-16 03:30 UTC = 15/10 23:30 in a UTC-4 zone and 05:30 in Madrid (UTC+2).
     const instant = '2026-10-16T03:30:00.000Z';
-    expect(formatDateTimeInZone(instant, 'America/Bogota')).toBe('15/10/2026 22:30');
+    expect(formatDateTimeInZone(instant, 'America/Caracas')).toBe('15/10/2026 23:30');
     expect(formatDateTimeInZone(instant, 'Europe/Madrid')).toBe('16/10/2026 05:30');
   });
 
   it('midnight is 00:00, never 24:00', () => {
-    expect(formatDateTimeInZone('2026-10-16T05:00:00.000Z', 'America/Bogota')).toBe(
+    expect(formatDateTimeInZone('2026-10-16T04:00:00.000Z', 'America/Caracas')).toBe(
       '16/10/2026 00:00',
     );
   });
@@ -95,21 +95,21 @@ describe('formatDateTimeInZone (instant in a given IANA zone)', () => {
   });
 
   it('falls back for invalid input', () => {
-    expect(formatDateTimeInZone(null, 'America/Bogota')).toBe('—');
-    expect(formatDateTimeInZone('nope', 'America/Bogota')).toBe('—');
+    expect(formatDateTimeInZone(null, 'America/Caracas')).toBe('—');
+    expect(formatDateTimeInZone('nope', 'America/Caracas')).toBe('—');
   });
 });
 
 describe('zonedDayStart (civil day in a zone → UTC instant)', () => {
   it('midnight of the day in the zone', () => {
-    expect(zonedDayStart('2026-10-16', 'America/Bogota')).toBe('2026-10-16T05:00:00.000Z');
+    expect(zonedDayStart('2026-10-16', 'America/Caracas')).toBe('2026-10-16T04:00:00.000Z');
     expect(zonedDayStart('2026-10-16', 'Europe/Madrid')).toBe('2026-10-15T22:00:00.000Z');
     expect(zonedDayStart('2026-01-16', 'Europe/Madrid')).toBe('2026-01-15T23:00:00.000Z');
   });
 
   it('null for a malformed day', () => {
-    expect(zonedDayStart('16/10/2026', 'America/Bogota')).toBeNull();
-    expect(zonedDayStart('2026-02-30', 'America/Bogota')).toBeNull();
+    expect(zonedDayStart('16/10/2026', 'America/Caracas')).toBeNull();
+    expect(zonedDayStart('2026-02-30', 'America/Caracas')).toBeNull();
   });
 });
 
@@ -153,7 +153,7 @@ describe('formatDateLabel (DX-063)', () => {
 
 describe('zoneCityLabel (DX-097)', () => {
   it('nombre legible de la zona', () => {
-    expect(zoneCityLabel('America/Bogota')).toBe('Bogotá');
+    expect(zoneCityLabel('America/Caracas')).toBe('Caracas');
     expect(zoneCityLabel('Europe/Madrid')).toBe('Madrid');
     expect(zoneCityLabel('America/Mexico_City')).toBe('Ciudad de México');
     expect(zoneCityLabel('America/Caracas')).toBe('Caracas');
@@ -162,8 +162,8 @@ describe('zoneCityLabel (DX-097)', () => {
 });
 
 describe('civilDateInZone (DX-097)', () => {
-  it('20:00 en Bogotá del 16 es el 16 en la sede aunque en UTC sea el 17', () => {
-    expect(civilDateInZone('2026-10-17T01:00:00.000Z', 'America/Bogota')).toBe('2026-10-16');
+  it('20:00 en Caracas del 16 es el 16 en la sede aunque en UTC sea el 17', () => {
+    expect(civilDateInZone('2026-10-17T00:00:00.000Z', 'America/Caracas')).toBe('2026-10-16');
     expect(civilDateInZone('2026-10-17T01:00:00.000Z', 'UTC')).toBe('2026-10-17');
   });
 
@@ -174,7 +174,7 @@ describe('civilDateInZone (DX-097)', () => {
   });
 
   it('null con un instante o una zona inválidos', () => {
-    expect(civilDateInZone('no-es-fecha', 'America/Bogota')).toBeNull();
+    expect(civilDateInZone('no-es-fecha', 'America/Caracas')).toBeNull();
     expect(civilDateInZone('2026-10-17T01:00:00.000Z', 'Mars/Olympus')).toBeNull();
   });
 });

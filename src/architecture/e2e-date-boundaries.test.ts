@@ -41,7 +41,7 @@ const DST_DAYS = [
   '2026-09-06', // Santiago adelanta
   '2026-10-04', // Sídney adelanta
   '2026-10-25', // Berlín y Londres atrasan
-  '2026-11-01', // Nueva York atrasa: desde aquí coincide con Bogotá (UTC−5)
+  '2026-11-01', // Nueva York atrasa: hasta aquí coincidía con Caracas (UTC−4)
   '2027-03-14', // Nueva York adelanta
   '2027-03-28', // Berlín y Londres adelantan
 ];
@@ -143,9 +143,9 @@ describe('premisas de zona de audit-log-zones.spec.ts (DX-362, DX-520)', () => {
   );
   const offsetsOn = (zone: string) => every6hFrom2026To2028.map((at) => utcOffsetLabel(at, zone));
 
-  it('Bogotá y Nueva York coinciden en invierno: con ellas el spec dependía de la fecha', () => {
-    const at = new Date('2026-11-01T17:00:00Z');
-    expect(utcOffsetLabel(at, 'America/Bogota')).toBe(utcOffsetLabel(at, 'America/New_York'));
+  it('Caracas y Nueva York coinciden en verano: con ellas el spec dependía de la fecha', () => {
+    const at = new Date('2026-07-01T17:00:00Z');
+    expect(utcOffsetLabel(at, 'America/Caracas')).toBe(utcOffsetLabel(at, 'America/New_York'));
   });
 
   it('São Paulo nunca marca la hora de Nueva York ni la de Berlín; Buenos Aires siempre la de São Paulo', () => {

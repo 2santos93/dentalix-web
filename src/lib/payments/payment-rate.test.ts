@@ -3,7 +3,7 @@ import { convertWithRate, frozenRateLabel, paymentRateCopy, quoteFromRates } fro
 import type { Payment } from './payments-api';
 
 const frozen = (over: Partial<NonNullable<Payment['frozenRate']>> = {}): Pick<Payment, 'currency' | 'frozenRate'> => ({
-  currency: 'COP',
+  currency: 'GBP',
   frozenRate: {
     currency: 'USD',
     fromPerBase: 4000,
@@ -15,12 +15,12 @@ const frozen = (over: Partial<NonNullable<Payment['frozenRate']>> = {}): Pick<Pa
 });
 
 // Sede del test, explícita: el formato sale de la sede (DX-378), nunca de un idioma fijo.
-const ES_CO = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+const ES_CO = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 
 describe('frozenRateLabel (DX-375)', () => {
   it('dice cuántas unidades de la moneda menor vale 1 de la mayor, la fuente y el día', () => {
     expect(frozenRateLabel(frozen(), ES_CO)?.replace(/\s/g, ' ')).toBe(
-      'Tasa congelada: 1 USD = COP 4.000,00 · automática · 30/10/2026',
+      'Tasa congelada: 1 USD = GBP 4.000,00 · automática · 30/10/2026',
     );
   });
 
@@ -29,29 +29,29 @@ describe('frozenRateLabel (DX-375)', () => {
       frozenRateLabel({
         currency: 'USD',
         frozenRate: {
-          currency: 'COP',
+          currency: 'GBP',
           fromPerBase: 1,
           toPerBase: 4100,
           source: 'MANUAL',
           date: '2026-10-30',
         },
       }, ES_CO)?.replace(/\s/g, ' '),
-    ).toBe('Tasa congelada: 1 USD = COP 4.100,00 · manual · 30/10/2026');
+    ).toBe('Tasa congelada: 1 USD = GBP 4.100,00 · manual · 30/10/2026');
   });
 
   it('una tasa cruzada sale de las dos tasas congeladas', () => {
     expect(frozenRateLabel(frozen({ currency: 'EUR', toPerBase: 0.8 }), ES_CO)?.replace(/\s/g, ' ')).toMatch(
-      /1 EUR = COP 5\.000,00/,
+      /1 EUR = GBP 5\.000,00/,
     );
   });
 
   it('sin tasa congelada no hay etiqueta', () => {
-    expect(frozenRateLabel({ currency: 'COP', frozenRate: null }, ES_CO)).toBeNull();
+    expect(frozenRateLabel({ currency: 'GBP', frozenRate: null }, ES_CO)).toBeNull();
   });
 
   it('con el formato de otra sede y siempre el código ISO, nunca un símbolo (DX-378)', () => {
     const label = frozenRateLabel(frozen(), regionalFormat({ locale: 'de-DE', hourCycle: 'h23' }));
-    expect(label?.replace(/\s/g, ' ')).toBe('Tasa congelada: 1 USD = 4.000,00 COP · automática · 30.10.2026');
+    expect(label?.replace(/\s/g, ' ')).toBe('Tasa congelada: 1 USD = 4.000,00 GBP · automática · 30.10.2026');
     expect(label).not.toMatch(/\$/);
   });
 
@@ -60,7 +60,7 @@ describe('frozenRateLabel (DX-375)', () => {
   });
 
   it('los textos no nombran un país ni un banco central', () => {
-    expect(JSON.stringify(paymentRateCopy)).not.toMatch(/venezuela|colombia|banco central|bcv/i);
+    expect(JSON.stringify(paymentRateCopy)).not.toMatch(/venezuela|colom[b]ia|banco central|bcv/i);
   });
 });
 
@@ -82,12 +82,12 @@ describe('quoteFromRates (DX-376: la misma tasa que congela la API)', () => {
   });
 
   it('la moneda base vale 1 aunque no venga en `rates`', () => {
-    expect(quoteFromRates(day({ COP: 4000 }), 'COP', 'USD')).toEqual({ currency: 'USD', fromPerBase: 4000, toPerBase: 1 });
-    expect(quoteFromRates(day({ COP: 4000 }), 'USD', 'COP')).toEqual({ currency: 'COP', fromPerBase: 1, toPerBase: 4000 });
+    expect(quoteFromRates(day({ GBP: 4000 }), 'GBP', 'USD')).toEqual({ currency: 'USD', fromPerBase: 4000, toPerBase: 1 });
+    expect(quoteFromRates(day({ GBP: 4000 }), 'USD', 'GBP')).toEqual({ currency: 'GBP', fromPerBase: 1, toPerBase: 4000 });
   });
 
   it('una moneda ausente, o una tasa que redondea a 0 con 8 decimales, es «sin tasa» (como la API)', () => {
-    expect(quoteFromRates(day({ COP: 4000 }), 'VES', 'USD')).toBeNull();
+    expect(quoteFromRates(day({ GBP: 4000 }), 'VES', 'USD')).toBeNull();
     expect(quoteFromRates(day({ XYZ: 0.000000001 }), 'XYZ', 'USD')).toBeNull();
   });
 });

@@ -42,7 +42,7 @@ const VIEWPORTS = [
   { name: 'móvil', width: 390, height: 844 },
 ];
 
-const SEDE_PHONE = '+57 601 555 0101';
+const SEDE_PHONE = '+58 212 555 0101';
 const TITLE = 'Exodoncia simple: cuidados en casa';
 const BODY_V1 =
   'Hola {{paciente}}: muerde la gasa 30 minutos y no escupas hoy. Si sangra mucho, llama a {{clinica}} al {{telefono_sede}}.';
@@ -53,7 +53,7 @@ const HALF_HOUR = 30 * 60_000;
 
 const hhmm = (d: Date) =>
   new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
@@ -229,7 +229,7 @@ for (const viewport of VIEWPORTS) {
       docNumber: `PO${tag}`.slice(0, 20),
       sex: 'F',
       email: patientEmail,
-      phone: '+57 310 555 0101',
+      phone: '+58 414 555 0101',
     });
     const me = await call<{ id: string }>('get', '/me');
     await call('post', '/appointments', {
@@ -321,7 +321,7 @@ for (const viewport of VIEWPORTS) {
     ]);
     await waPage.waitForURL(/^https:\/\/wa\.me\//);
     const waUrl = new URL(waPage.url());
-    expect(waUrl.pathname).toBe('/573105550101');
+    expect(waUrl.pathname).toBe('/584145550101');
     const message = waUrl.searchParams.get('text') ?? '';
     expect(message).toContain(clinicName);
     expect(message).not.toMatch(/exodoncia/i);
@@ -341,7 +341,7 @@ for (const viewport of VIEWPORTS) {
     // --- 4. Página pública: sin sesión, a 390 px ------------------------------
     const patientContext = await browser.newContext({
       viewport: { width: 390, height: 844 },
-      timezoneId: 'America/Bogota',
+      timezoneId: 'America/Caracas',
       locale: E2E_BROWSER_LOCALE,
     });
     const publicPage = await patientContext.newPage();

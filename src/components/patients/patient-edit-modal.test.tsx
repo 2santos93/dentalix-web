@@ -89,7 +89,7 @@ describe('PatientEditModal', () => {
     expect(input).not.toHaveProperty('legacyInsurerName');
   });
 
-  it('ya no ofrece «Aseguradora / EPS»: la cobertura se edita en su sección (DX-153)', () => {
+  it('ya no ofrece un campo de aseguradora: la cobertura se edita en su sección (DX-153)', () => {
     render(
       <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
     );
@@ -174,7 +174,7 @@ describe('PatientEditModal', () => {
   });
 
   it('no reenvía un campo que no cambió, aunque tuviera valor', async () => {
-    const withPhone = { ...patient, phone: '3000000001' };
+    const withPhone = { ...patient, phone: '4120000001' };
     mockedUpdate.mockResolvedValue(withPhone);
     const user = userEvent.setup();
     render(
@@ -252,10 +252,10 @@ describe('PatientEditModal', () => {
     await user.selectOptions(type, 'NATIONAL_ID');
     expect(label).toHaveValue('ID local');
 
-    await user.type(screen.getByLabelText(/^teléfono$/i), '3000000001');
+    await user.type(screen.getByLabelText(/^teléfono$/i), '4120000001');
     await user.click(screen.getByRole('button', { name: /guardar/i }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
-    expect(mockedUpdate.mock.calls[0][2]).toEqual({ phone: '3000000001' });
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ phone: '4120000001' });
   });
 
   it('places the type next to its number, with the free label right below', () => {

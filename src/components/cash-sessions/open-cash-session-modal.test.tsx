@@ -12,7 +12,7 @@ jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
 const mockedOpen = openCashSession as jest.MockedFunction<typeof openCashSession>;
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
   ]),
 }));
@@ -25,7 +25,7 @@ function renderModal() {
       onOpenChange={() => undefined}
       token="tok"
       sedeName="Sede principal"
-      defaultCurrency="COP"
+      defaultCurrency="VES"
       onOpened={onOpened}
     />,
   );
@@ -44,14 +44,14 @@ describe('OpenCashSessionModal (DX-027, DX-252)', () => {
     expect(screen.getByText(/Tu caja en Sede principal/)).toBeInTheDocument();
     await user.click(submit());
     await waitFor(() => expect(onOpened).toHaveBeenCalled());
-    expect(mockedOpen).toHaveBeenLastCalledWith('tok', { floats: [{ currency: 'COP', amount: 0 }], notes: undefined });
+    expect(mockedOpen).toHaveBeenLastCalledWith('tok', { floats: [{ currency: 'VES', amount: 0 }], notes: undefined });
 
     await user.type(screen.getByLabelText('Importe del fondo 1'), '100000');
     await user.type(screen.getByLabelText('Notas (opcional)'), '  Turno de mañana ');
     await user.click(submit());
     await waitFor(() =>
       expect(mockedOpen).toHaveBeenLastCalledWith('tok', {
-        floats: [{ currency: 'COP', amount: 100_000 }],
+        floats: [{ currency: 'VES', amount: 100_000 }],
         notes: 'Turno de mañana',
       }),
     );

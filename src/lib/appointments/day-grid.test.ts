@@ -12,7 +12,7 @@ import type { BusinessHours } from '@/lib/locations/schedule-api';
 
 // Lunes 9–13 y 15–19 (convención Date.getDay(): 1 = lunes).
 const hours: BusinessHours = {
-  timezone: 'America/Bogota',
+  timezone: 'America/Caracas',
   ranges: [
     { weekday: 1, startMinute: 9 * 60, endMinute: 13 * 60 },
     { weekday: 1, startMinute: 15 * 60, endMinute: 19 * 60 },

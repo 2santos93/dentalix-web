@@ -13,7 +13,7 @@ jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
     { code: 'JPY', name: 'Yen japonés', symbol: '¥' },
   ]),
 }));
@@ -94,9 +94,9 @@ describe('CashSessionDetailView: moneda de la sede (GLOBAL-G1)', () => {
     expect((within(adjust).getByLabelText('Moneda') as HTMLSelectElement).value).toBe('JPY');
   });
 
-  it('location without currency shows SedeConfigError and never COP', async () => {
+  it('location without currency shows SedeConfigError and never USD', async () => {
     const user = userEvent.setup();
-    mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'CO', currency: null })]);
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'VE', currency: null })]);
     mockedGet.mockResolvedValue(closedCashSessionFixture());
     await renderDetail();
     expect(

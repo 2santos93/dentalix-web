@@ -294,7 +294,7 @@ test('DX-509-bis (QA visual): «Pendiente de cerrar» pinta los sobrecupos mante
           status: 'COMPLETED',
           locationId: (body.locations as { id: string }[])[0].id,
           locationName: (body.locations as { name: string }[])[0].name,
-          timeZone: 'America/Bogota',
+          timeZone: 'America/Caracas',
           professionalId: dentistId,
           professionalName: dentist.fullName,
           keptAt: new Date(start.getTime() - 60 * 60_000).toISOString(),

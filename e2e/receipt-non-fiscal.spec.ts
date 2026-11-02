@@ -45,7 +45,7 @@ async function pay(request: APIRequestContext, amount: number): Promise<string> 
   return (
     await apiPost<{ id: string }>(request, receptionSession, `/treatment-plans/${planId}/payments`, {
       amount,
-      currency: 'COP',
+      currency: 'USD',
       paidAt: new Date().toISOString(),
       method: 'CASH',
     })
@@ -100,7 +100,7 @@ test.beforeAll(async ({ request }) => {
     sex: 'F',
   });
   planId = (
-    await apiPost<{ id: string }>(request, session, `/patients/${patient.id}/treatment-plans`, { currency: 'COP' })
+    await apiPost<{ id: string }>(request, session, `/patients/${patient.id}/treatment-plans`, { currency: 'USD' })
   ).id;
   const settings = (await (
     await request.get(`${API_URL}/payment-receipts/settings`, { headers: session.headers })

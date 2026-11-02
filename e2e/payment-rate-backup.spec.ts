@@ -13,10 +13,10 @@ import { API_URL } from './support/urls';
 /**
  * DX-402: el caso de la QA de DX-380 (punto 7, caso A) desde el aviso, a 1440
  * y 390 px. La clínica está en la fuente automática y el proveedor no da la
- * tasa (la API de la suite no tiene clave): un abono en USD a un plan en COP
+ * tasa (la API de la suite no tiene clave): un abono en USD a un plan en VES
  * de hace dos días queda «sin tasa» más de 24 h, con el reintento aplazado
  * 20 h. El ADMIN sigue el aviso del panel hasta Ajustes › Tasa de cambio,
- * pasa a manual (manual desde hoy) y registra la tasa COP de ese día: el
+ * pasa a manual (manual desde hoy) y registra la tasa VES de ese día: el
  * formulario le dice que servirá de respaldo a ese abono (y, con un día sin
  * abonos pendientes, que no se usará). El registro adelanta el reintento y el
  * barrido de cada minuto (worker de la API de la suite, APP_ROLE=all) congela
@@ -40,7 +40,7 @@ function sedeDay(offset: number): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: E2E_REGION.timeZone! }).format(day);
 }
 
-/** Paciente, plan en COP con un ítem aceptado y un abono en USD de `day` sin tasa. */
+/** Paciente, plan en VES con un ítem aceptado y un abono en USD de `day` sin tasa. */
 async function seedPaymentWithoutRate(
   request: APIRequestContext,
   session: ApiSession,
@@ -62,7 +62,7 @@ async function seedPaymentWithoutRate(
     defaultPrice: 1_000_000,
   });
   const plan = await apiPost<{ id: string }>(request, session, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'VES',
   });
   const item = await apiPost<{ id: string }>(request, session, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '11',
@@ -129,12 +129,12 @@ for (const viewport of VIEWPORTS) {
       await page.getByRole('button', { name: 'Registrar tasa' }).first().click();
       const dialog = page.getByRole('dialog', { name: 'Registrar tasa' });
       await fillDate(dialog, 'Fecha', sedeDay(-3));
-      await dialog.getByLabel('Moneda').selectOption('COP');
+      await dialog.getByLabel('Moneda').selectOption('VES');
       const backupNotice = dialog.getByTestId('manual-rate-backup-notice');
       await expect(backupNotice).toContainText('anterior a «manual desde»');
       await expect(backupNotice).toContainText('así que ahora no se usará');
       await fillDate(dialog, 'Fecha', day);
-      await expect(backupNotice).toContainText('Servirá de respaldo al abono sin tasa de ese día que necesita la tasa de COP');
+      await expect(backupNotice).toContainText('Servirá de respaldo al abono sin tasa de ese día que necesita la tasa de VES');
       await dialog.getByLabel(/^Tasa por 1/).fill('4000');
       expect(await axeViolations(page, dialog)).toEqual([]);
       if (QA_DIR) {
@@ -153,7 +153,7 @@ for (const viewport of VIEWPORTS) {
       }
       await dialog.getByRole('button', { name: 'Registrar tasa' }).click();
       await expect(dialog).toHaveCount(0);
-      await expect(page.getByText('Tasa de COP registrada.')).toBeVisible();
+      await expect(page.getByText('Tasa de VES registrada.')).toBeVisible();
 
       // 4. El registro adelanta el reintento y el barrido lo resuelve: el aviso desaparece.
       // Se espera a la primera lectura del aviso antes de sondear: cada vuelta

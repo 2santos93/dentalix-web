@@ -12,7 +12,7 @@ describe('exchange-api', () => {
   });
 
   it('getExchangeRates: GET /exchange/rates with an explicit date', async () => {
-    const body = { base: 'USD', rates: { COP: 4000, EUR: 0.92 } };
+    const body = { base: 'USD', rates: { VES: 4000, EUR: 0.92 } };
     const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => body });
     global.fetch = spy as unknown as typeof fetch;
 
@@ -26,7 +26,7 @@ describe('exchange-api', () => {
   });
 
   it('getExchangeRates: defaults the "date" query param to today (local) when omitted', async () => {
-    const body = { base: 'USD', rates: { COP: 4000 } };
+    const body = { base: 'USD', rates: { VES: 4000 } };
     const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => body });
     global.fetch = spy as unknown as typeof fetch;
 

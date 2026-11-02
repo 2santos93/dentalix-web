@@ -117,8 +117,8 @@ describe('postop-api', () => {
 
   it('ruta imprimible y enlace de WhatsApp reutilizado', () => {
     expect(postOpPrintHref('p/1', 'd1')).toBe('/print/patients/p%2F1/indicaciones/d1');
-    expect(whatsAppUrl('573001112233', 'Hola ñ')).toBe(
-      'https://wa.me/573001112233?text=Hola%20%C3%B1',
+    expect(whatsAppUrl('584121112233', 'Hola ñ')).toBe(
+      'https://wa.me/584121112233?text=Hola%20%C3%B1',
     );
   });
 

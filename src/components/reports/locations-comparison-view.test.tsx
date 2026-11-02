@@ -23,7 +23,7 @@ jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('../../lib/locations/use-sede-time-zone', () => ({
   ...jest.requireActual('../../lib/locations/use-sede-time-zone'),
-  useSedeTimeZone: jest.fn(() => ({ status: 'ready', timeZone: 'America/Bogota' })),
+  useSedeTimeZone: jest.fn(() => ({ status: 'ready', timeZone: 'America/Caracas' })),
   sedeToday: () => '2026-10-24',
 }));
 
@@ -70,7 +70,7 @@ function row(name: string, id: string | null, production: [string, Metric][], no
     locationId: id,
     name,
     isActive: true,
-    timeZone: id ? 'America/Bogota' : null,
+    timeZone: id ? 'America/Caracas' : null,
     hasActivity: true,
     previousPeriodUnattributed: false,
     metrics: {
@@ -96,14 +96,14 @@ function report(overrides: Partial<LocationsComparison> = {}): LocationsComparis
     currency: null,
     kpis: KPIS,
     locations: [
-      row('Sede principal', 'l1', [['COP', m(12, 10, 20, 'BETTER')]], m(10, 8, 2, 'WORSE')),
+      row('Sede principal', 'l1', [['VES', m(12, 10, 20, 'BETTER')]], m(10, 8, 2, 'WORSE')),
       row('Sede Norte', 'l2', [['USD', m(300, 300, 0, 'EQUAL')]], m(5, 5, 0, 'EQUAL')),
     ],
     total: row(
       'Total clínica',
       null,
       [
-        ['COP', m(12, 10, 20, 'BETTER')],
+        ['VES', m(12, 10, 20, 'BETTER')],
         ['USD', m(300, 300, 0, 'EQUAL')],
       ],
       m(7.5, 6.5, 1, 'WORSE'),
@@ -119,7 +119,7 @@ const table = () => screen.getByRole('table', { name: 'Indicadores por sede y to
 describe('LocationsComparisonView (DX-014)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Bogota' });
+    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Caracas' });
     mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'es-ES', hourCycle: 'h23' }) });
     mockedGet.mockResolvedValue(report());
   });
@@ -271,12 +271,12 @@ describe('LocationsComparisonView (DX-014)', () => {
 
   it('período comparado sin producción atribuida: nota plegada de una línea, «—» muted y el porqué en «Cómo se calcula» (BE-045)', async () => {
     const unattributed = { ...m(12, 10), previousUnattributed: true as const };
-    const flagged = row('Sede principal', 'l1', [['COP', unattributed]], m(10, 8, 2, 'WORSE'));
+    const flagged = row('Sede principal', 'l1', [['VES', unattributed]], m(10, 8, 2, 'WORSE'));
     mockedGet.mockResolvedValue(
       report({
         previousPeriodUnattributed: true,
         locations: [{ ...flagged, previousPeriodUnattributed: true }],
-        total: { ...row('Total clínica', null, [['COP', unattributed]], m(10, 8, 2, 'WORSE')), previousPeriodUnattributed: true },
+        total: { ...row('Total clínica', null, [['VES', unattributed]], m(10, 8, 2, 'WORSE')), previousPeriodUnattributed: true },
       }),
     );
     render(<LocationsComparisonView token="t" />);
@@ -302,7 +302,7 @@ describe('LocationsComparisonView (DX-014)', () => {
     const [production] = within(screen.getByTestId('comparison-total')).getAllByRole('cell');
     const notCompared = within(production).getByTestId('not-compared');
     expect(notCompared).toHaveTextContent(
-      'Sin comparar con 10,00 COP: el período comparado no tiene toda su producción atribuida a una sede.',
+      'Sin comparar con 10,00 VES: el período comparado no tiene toda su producción atribuida a una sede.',
     );
     expect(notCompared).toHaveClass('text-muted');
     // Sin flecha ni color de mejora en esa celda.
@@ -319,7 +319,7 @@ describe('LocationsComparisonView (DX-014)', () => {
           metrics: {
             ...base.locations[0].metrics,
             completedAppointments: m(25, 2, 1150, 'BETTER'),
-            collected: [{ currency: 'COP', ...m(50, 0, null, 'BETTER') }],
+            collected: [{ currency: 'VES', ...m(50, 0, null, 'BETTER') }],
           },
         },
         base.locations[1],

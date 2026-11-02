@@ -36,7 +36,7 @@ test('cambiar la contraseña en /settings/profile cierra las otras sesiones y el
   await loginAs(page, origin, clinic.email, OLD_PASSWORD);
 
   // "Otro dispositivo" con la misma cuenta.
-  const otherDevice = await browser.newContext({ locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Bogota' });
+  const otherDevice = await browser.newContext({ locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Caracas' });
   try {
     const other = await otherDevice.newPage();
     await loginAs(other, origin, clinic.email, OLD_PASSWORD);

@@ -60,9 +60,9 @@ const norte: ClinicLocation = clinicLocation({
   id: 'loc-1',
   name: 'Sede Norte',
   address: null,
-  country: 'CO',
+  country: 'VE',
   isActive: true,
-  timeZone: 'America/Bogota',
+  timeZone: 'America/Caracas',
   createdAt: '2026-01-01T00:00:00Z',
 });
 
@@ -89,7 +89,7 @@ const lista: Agreement = {
   kind: 'PRICE_LIST',
   percent: null,
   percentByCategory: null,
-  priceList: { id: 'pl-1', name: 'Lista Surco 2026', currency: 'COP' },
+  priceList: { id: 'pl-1', name: 'Lista Surco 2026', currency: 'USD' },
   locationId: 'loc-1',
   validFrom: null,
   validTo: null,
@@ -169,7 +169,7 @@ describe('AgreementsManager (DX-105)', () => {
     const rows = within(table).getAllByRole('row');
     expect(rows[1]).toHaveTextContent('Convenio Sanavida');
     expect(rows[1]).toHaveTextContent('Sanavida');
-    // DX-378 (FE-078): el % con el formato de la sede (es-CO: «15%»), no con «es» («15 %»).
+    // DX-378 (FE-078): el % con el formato de la sede (es-VE: «15%»), no con «es» («15 %»).
     expect(rows[1]).toHaveTextContent('15% de descuento · 2 categorías con porcentaje propio');
     expect(rows[1]).toHaveTextContent('Toda la clínica');
     expect(rows[1]).toHaveTextContent('01/01/2026 – 31/12/2026');

@@ -5,7 +5,7 @@ import { setActiveLocationId } from '@/lib/locations/location-store';
 import { useEffect } from 'react';
 import { notifyInClinicChanged } from '@/lib/appointments/patient-flow';
 
-const empty = { date:'2026-10-22', locationId:'loc-1', timeZone:'America/Bogota', now:'2026-10-22T14:00:00Z', scope:'MINE', waiting:[], inChair:[], readyForCheckout:[] };
+const empty = { date:'2026-10-22', locationId:'loc-1', timeZone:'America/Caracas', now:'2026-10-22T14:00:00Z', scope:'MINE', waiting:[], inChair:[], readyForCheckout:[] };
 const response = (data: unknown) => ({ ok:true, status:200, json:async () => data }) as Response;
 function Consumer({ token, id }: { token:string|null; id:string }) {
   const state = useInClinic(token);

@@ -7257,7 +7257,7 @@ export interface components {
             address?: string;
             /**
              * @description ISO 3166-1 alpha-2
-             * @example CO
+             * @example VE
              */
             countryCode?: string;
             /**
@@ -7812,7 +7812,7 @@ export interface components {
             address?: string | null;
             /**
              * @description ISO 3166-1 alpha-2
-             * @example CO
+             * @example VE
              */
             countryCode?: string | null;
             /**
@@ -12161,7 +12161,7 @@ export interface components {
              */
             minorUnits: number;
             /**
-             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, ALL: 0).
              * @example 0
              */
             roundingDigits: number;
@@ -12900,7 +12900,7 @@ export interface components {
              */
             minorUnits: number;
             /**
-             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, ALL: 0).
              * @example 0
              */
             roundingDigits: number;
@@ -14688,7 +14688,7 @@ export interface components {
         CreditRefundDto: {
             /** Format: uuid */
             id: string;
-            /** @example DEV-BOG-000001 */
+            /** @example DEV-CCS-000001 */
             number: string;
             /** Format: uuid */
             patientId: string;
@@ -15359,7 +15359,7 @@ export interface components {
         CashCreditRefundDto: {
             /** Format: uuid */
             id: string;
-            /** @example DEV-BOG-000001 */
+            /** @example DEV-CCS-000001 */
             number: string;
             amount: number;
             /** @description Código ISO 4217 de 3 letras. */

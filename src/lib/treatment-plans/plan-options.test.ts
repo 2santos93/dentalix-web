@@ -20,7 +20,7 @@ function plan(overrides: Partial<TreatmentPlan> & { id: string }): TreatmentPlan
     tenantId: 't1',
     patientId: 'p1',
     status: 'DRAFT',
-    currency: 'COP',
+    currency: 'USD',
     notes: null,
     createdById: null,
     optionGroupId: null,
@@ -144,10 +144,10 @@ describe('mensaje de WhatsApp', () => {
 
   it('wa.me con el número E.164 y el texto codificado; sin número, null', () => {
     const href = followUpWhatsAppHref(
-      { patientName: 'Ana', patientWhatsApp: '573001112222', presentedAt: '2026-10-07T15:00:00.000Z' },
+      { patientName: 'Ana', patientWhatsApp: '584121112222', presentedAt: '2026-10-07T15:00:00.000Z' },
       'Sonrisa',
     );
-    expect(href?.startsWith('https://wa.me/573001112222?text=Hola%20Ana')).toBe(true);
+    expect(href?.startsWith('https://wa.me/584121112222?text=Hola%20Ana')).toBe(true);
     expect(
       followUpWhatsAppHref(
         { patientName: 'Ana', patientWhatsApp: null, presentedAt: '2026-10-07T15:00:00.000Z' },

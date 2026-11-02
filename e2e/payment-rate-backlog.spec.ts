@@ -11,7 +11,7 @@ import { API_URL } from './support/urls';
 
 /**
  * DX-380: aviso al ADMIN de abonos sin tasa de más de 24 h, en el panel, a
- * 1440 y 390 px. Un abono en COP a un plan en USD se cobra sin tasa (la API de
+ * 1440 y 390 px. Un abono en GBP a un plan en USD se cobra sin tasa (la API de
  * la suite no tiene clave del proveedor), su reintento se envejece 25 h por
  * psql y el ADMIN ve «1 abono sin tasa desde el …» con el enlace a Ajustes ›
  * Tasa de cambio; recepción no lo ve ni lo pide. Al pasar a tasa manual y
@@ -36,7 +36,7 @@ function sedeToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: E2E_REGION.timeZone! }).format(new Date());
 }
 
-/** Paciente, plan en USD con un ítem aceptado y un abono en COP sin tasa. Devuelve el abono. */
+/** Paciente, plan en USD con un ítem aceptado y un abono en GBP sin tasa. Devuelve el abono. */
 async function seedPaymentWithoutRate(request: APIRequestContext, session: ApiSession, tag: string): Promise<string> {
   const patient = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Ana',
@@ -68,7 +68,7 @@ async function seedPaymentWithoutRate(request: APIRequestContext, session: ApiSe
     request,
     session,
     `/treatment-plans/${plan.id}/payments`,
-    { amount: 40000, currency: 'COP', paidAt: new Date(Date.now() - 60_000).toISOString(), method: 'CASH' },
+    { amount: 40000, currency: 'GBP', paidAt: new Date(Date.now() - 60_000).toISOString(), method: 'CASH' },
   );
   expect(payment.exchangeRateStatus, 'sin clave del proveedor el abono queda «sin tasa»').toBe('MISSING');
   return payment.id;
@@ -104,7 +104,7 @@ for (const viewport of VIEWPORTS) {
       // Solo el recuento y el día (con el formato de la sede): nada del paciente ni importes.
       await expect(notice).toContainText(/^1 abono sin tasa desde el \d{1,2}\/\d{1,2}\/\d{4}/);
       await expect(notice).not.toContainText(`SinTasa${tag}`);
-      await expect(notice).not.toContainText('COP');
+      await expect(notice).not.toContainText('GBP');
       const link = notice.getByRole('link', { name: 'Revisar la tasa de cambio' });
       await expect(link).toHaveAttribute('href', '/settings/tasa-de-cambio');
       expect(await axeViolations(page, notice)).toEqual([]);
@@ -150,7 +150,7 @@ for (const viewport of VIEWPORTS) {
         data: { source: 'MANUAL' },
       });
       expect(manual.ok(), `pasar a manual falló: ${await manual.text()}`).toBeTruthy();
-      await apiPost(request, session, '/exchange/manual-rates', { date: sedeToday(), currency: 'COP', rate: 4000 });
+      await apiPost(request, session, '/exchange/manual-rates', { date: sedeToday(), currency: 'GBP', rate: 4000 });
       await expect
         .poll(
           async () => {

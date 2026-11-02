@@ -39,8 +39,8 @@ it("muestra importe y moneda independientes, siguiente visita y enlace seguro Wh
         planId: "p1",
         patientId: "a",
         patientName: "Ana Pérez",
-        patientWhatsApp: "573001234567",
-        currency: "COP",
+        patientWhatsApp: "584121234567",
+        currency: "USD",
         total: 100000,
         daysSinceAccepted: 10,
         nextVisit: 2,
@@ -60,7 +60,7 @@ it("muestra importe y moneda independientes, siguiente visita y enlace seguro Wh
   });
   render(<UnscheduledPlansView token="token" />);
   expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
-  expect(screen.getByText("COP")).toBeInTheDocument();
+  expect(screen.getByText("USD")).toBeInTheDocument();
   // DX-378 (FE-078): fecha mínima e importe con el formato de la sede (en-US).
   expect(await screen.findByText("04/01/2027")).toBeInTheDocument();
   expect(screen.getByText(/100,000/)).toBeInTheDocument();
@@ -70,7 +70,7 @@ it("muestra importe y moneda independientes, siguiente visita y enlace seguro Wh
   const href = screen
     .getByRole("link", { name: "WhatsApp a Ana Pérez" })
     .getAttribute("href")!;
-  expect(href).toContain("https://wa.me/573001234567");
+  expect(href).toContain("https://wa.me/584121234567");
   expect(decodeURIComponent(href)).not.toContain("Corona");
   await waitFor(() => expect(listUnscheduledPlans).toHaveBeenCalled());
 });

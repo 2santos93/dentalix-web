@@ -15,12 +15,12 @@ import type { ComparisonRow, LocationsComparison, Metric } from './reports-api';
 const metric = (value: number | null): Metric => ({ value, previous: null, change: null, trend: null });
 
 function row(name: string, production: number | null, noShow: number | null): ComparisonRow {
-  const money = production === null ? [] : [{ currency: 'COP', ...metric(production) }];
+  const money = production === null ? [] : [{ currency: 'VES', ...metric(production) }];
   return {
     locationId: name,
     name,
     isActive: true,
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     hasActivity: true,
     previousPeriodUnattributed: false,
     metrics: {
@@ -73,12 +73,12 @@ describe('tabla de «Comparar sedes» (DX-014)', () => {
   });
 
   it('formatea valores y variaciones', () => {
-    const co = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+    const co = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
     expect(formatMetric('PERCENT', 33.33, co)).toBe('33,33%');
     expect(formatMetric('COUNT', 1234, co)).toBe('1.234');
     expect(formatMetric('PERCENT', null, co)).toBe('—');
     // DX-378: el código de la moneda, nunca «$» (producto bimonetario).
-    expect(formatMetric('MONEY', 120000, co, 'COP')).toBe('COP\u00a0120.000,00');
+    expect(formatMetric('MONEY', 120000, co, 'VES')).toBe('VES\u00a0120.000,00');
     expect(formatMetric('MONEY', 120000, co, 'USD')).toBe('USD\u00a0120.000,00');
     // Sin moneda: el importe sin símbolo, sin espacio delante.
     expect(formatMetric('MONEY', 120000, co)).toBe('120.000,00');

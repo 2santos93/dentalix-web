@@ -26,16 +26,16 @@ const CLINIC = { name: 'Clínica Sonrisa', primaryColor: '#7C3AED', logoUrl: nul
 const DETAILS = {
   patientFirstName: 'Ana',
   // 10:00 en la sede.
-  start: '2026-10-20T15:00:00.000Z',
-  end: '2026-10-20T15:30:00.000Z',
-  timeZone: 'America/Bogota',
-  locale: 'es-CO',
+  start: '2026-10-20T14:00:00.000Z',
+  end: '2026-10-20T14:30:00.000Z',
+  timeZone: 'America/Caracas',
+  locale: 'es-VE',
   hourCycle: 'h23',
   providerName: 'Dra. Pérez',
   locationName: 'Sede Norte',
-  locationAddress: 'Calle 100 # 15-20',
+  locationAddress: 'Av. Libertador 100',
   currentAppointmentStart: null,
-  expiresAt: '2026-10-20T15:00:00.000Z',
+  expiresAt: '2026-10-20T14:00:00.000Z',
 };
 
 function offer(overrides: Partial<PublicSlotOffer> = {}): PublicSlotOffer {

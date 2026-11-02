@@ -47,12 +47,12 @@ describe('price-lists-api', () => {
 
   it('crea, edita y retira', async () => {
     const spy = mockFetch({});
-    await createPriceList('tok', { name: 'Sede Norte', currency: 'COP', locationId: 'loc-1' });
+    await createPriceList('tok', { name: 'Sede Norte', currency: 'USD', locationId: 'loc-1' });
     await updatePriceList('tok', 'pl-1', { active: false, locationId: null });
     await deletePriceList('tok', 'pl-1');
     expect(call(spy, 0)).toMatchObject({
       method: 'POST',
-      body: { name: 'Sede Norte', currency: 'COP', locationId: 'loc-1' },
+      body: { name: 'Sede Norte', currency: 'USD', locationId: 'loc-1' },
     });
     expect(call(spy, 1)).toMatchObject({ method: 'PATCH', body: { active: false, locationId: null } });
     expect(call(spy, 1).path).toMatch(/\/price-lists\/pl-1$/);

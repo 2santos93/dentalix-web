@@ -7,10 +7,10 @@ import { E2E_BROWSER_LOCALE } from './support/regional';
 import { dataList, dataListRows } from './support/data-list';
 
 /**
- * e2e (DX-097): un abono cobrado a las 20:00 en la sede sale en la caja de
+ * e2e (DX-097): un abono cobrado a las 21:00 en la sede sale en la caja de
  * «Hoy» de la sede.
  *
- * Las 20:00 de la sede son la 01:00 UTC del día SIGUIENTE. Antes la API cortaba
+ * Las 21:00 de la sede son la 01:00 UTC del día SIGUIENTE. Antes la API cortaba
  * los días a medianoche UTC y la web pedía el día del navegador: con el
  * navegador en la sede, la caja de «hoy» no lo listaba. Ahora la API corta cada
  * día a medianoche de la zona de la sede (la de su horario) y la web toma
@@ -50,13 +50,13 @@ async function seedNightPayment(page: Page, tag: string): Promise<Seeded> {
     sex: 'F',
   });
   const plan = await apiPost<{ id: string }>(page.request, admin, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'USD',
   });
   const day = sedeDayFromToday(-1);
-  const paidAt = atSede(day, '20:00');
+  const paidAt = atSede(day, '21:00');
   const saved = await apiPost<{ paidAt: string }>(page.request, admin, `/treatment-plans/${plan.id}/payments`, {
     amount: 97_000,
-    currency: 'COP',
+    currency: 'USD',
     paidAt: paidAt.toISOString(),
     method: 'CASH',
   });
@@ -101,7 +101,7 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900 },
   { name: 'móvil', width: 390, height: 844 },
 ]) {
-  test(`un abono a las 20:00 de Bogotá sale en la caja de «Hoy» de la sede (${viewport.name})`, async ({ page }) => {
+  test(`un abono a las 21:00 de Caracas sale en la caja de «Hoy» de la sede (${viewport.name})`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const seeded = await seedNightPayment(page, String(viewport.width));
     await expectNightPaymentToday(page, seeded);

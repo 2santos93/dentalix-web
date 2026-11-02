@@ -24,8 +24,8 @@ const SEDES = [
 const mockedTransfer = transferCredit as jest.MockedFunction<typeof transferCredit>;
 const mockedRefund = refundCredit as jest.MockedFunction<typeof refundCredit>;
 
-/** Un plan COP cancelado con 300.000 abonados y uno vivo que debe 400.000. */
-function copCredit(): AccountStatement {
+/** Un plan VES cancelado con 300.000 abonados y uno vivo que debe 400.000. */
+function vesCredit(): AccountStatement {
   const base = accountStatementFixture();
   const [live] = base.plans;
   return {
@@ -79,7 +79,7 @@ beforeEach(() => {
 
 it('muestra una fila por plan con saldo a favor y sus dos acciones en el «⋯»', async () => {
   const user = userEvent.setup();
-  renderSection(copCredit());
+  renderSection(vesCredit());
   const row = screen.getByRole('row', { name: /Plan cancelled/ });
   expect(within(row).getByTestId('credit-row')).toHaveTextContent(/a favor/);
   await user.click(within(row).getByRole('button', { name: 'Acciones de Plan cancelled' }));
@@ -99,7 +99,7 @@ it('sin permiso (DENTIST/ASSISTANT) no pinta las acciones; sin saldo a favor, na
   const { unmount } = render(
     <CreditBalanceSection
       token="tok"
-      statement={copCredit()}
+      statement={vesCredit()}
       planName={planName}
       canAct={false}
       onTransferred={jest.fn()}
@@ -108,7 +108,7 @@ it('sin permiso (DENTIST/ASSISTANT) no pinta las acciones; sin saldo a favor, na
   );
   expect(screen.queryByRole('button', { name: /^Acciones de/ })).not.toBeInTheDocument();
   unmount();
-  const statement = copCredit();
+  const statement = vesCredit();
   renderSection({ ...statement, plans: [statement.plans[0]] });
   expect(screen.queryByTestId('credit-balance')).not.toBeInTheDocument();
 });
@@ -116,7 +116,7 @@ it('sin permiso (DENTIST/ASSISTANT) no pinta las acciones; sin saldo a favor, na
 it('aplicar a otro plan: vista previa del saldo resultante y envío con Idempotency-Key', async () => {
   const user = userEvent.setup();
   mockedTransfer.mockResolvedValue({} as never);
-  const { onTransferred } = renderSection(copCredit());
+  const { onTransferred } = renderSection(vesCredit());
   const dialog = await chooseAction(user, /Aplicar a otro plan/);
   await user.type(within(dialog).getByLabelText('Importe a aplicar'), '200000');
   const preview = within(dialog).getByRole('region', { name: 'Vista previa' });
@@ -127,14 +127,14 @@ it('aplicar a otro plan: vista previa del saldo resultante y envío con Idempote
   expect(mockedTransfer).toHaveBeenCalledWith(
     'tok',
     'cancelled',
-    { targetPlanId: 'live', amount: 200000, currency: 'COP' },
+    { targetPlanId: 'live', amount: 200000, currency: 'VES' },
     '00000000-0000-4000-8000-000000000001',
   );
 });
 
 it('aplicar más que el saldo a favor: error en el campo, sin llamar a la API', async () => {
   const user = userEvent.setup();
-  renderSection(copCredit());
+  renderSection(vesCredit());
   const dialog = await chooseAction(user, /Aplicar a otro plan/);
   await user.type(within(dialog).getByLabelText('Importe a aplicar'), '300001');
   await user.click(within(dialog).getByRole('button', { name: 'Aplicar al plan' }));
@@ -146,7 +146,7 @@ it('devolver: motivo obligatorio y abonos de referencia; el comprobante vuelve a
   const user = userEvent.setup();
   const refund = { id: 'r-1', number: 'DEV-NOR-000001' };
   mockedRefund.mockResolvedValue(refund as never);
-  const { onRefunded } = renderSection(copCredit());
+  const { onRefunded } = renderSection(vesCredit());
   const dialog = await chooseAction(user, /Devolver/);
   await user.type(within(dialog).getByLabelText('Importe a devolver'), '50000');
   await user.click(within(dialog).getByRole('button', { name: 'Devolver' }));
@@ -167,7 +167,7 @@ it('devolver: motivo obligatorio y abonos de referencia; el comprobante vuelve a
     'cancelled',
     {
       amount: 50000,
-      currency: 'COP',
+      currency: 'VES',
       method: 'TRANSFER',
       reason: 'El paciente se muda',
       paymentIds: ['pay-c'],
@@ -178,7 +178,7 @@ it('devolver: motivo obligatorio y abonos de referencia; el comprobante vuelve a
 
 it('devolver sin abonos marcados: aviso y sin llamar a la API', async () => {
   const user = userEvent.setup();
-  renderSection(copCredit());
+  renderSection(vesCredit());
   const dialog = await chooseAction(user, /Devolver/);
   await user.click(within(dialog).getByRole('checkbox'));
   await user.type(within(dialog).getByLabelText('Importe a devolver'), '1000');
@@ -190,7 +190,7 @@ it('devolver sin abonos marcados: aviso y sin llamar a la API', async () => {
 
 it('aplicar a otro plan: una nota de menos de 3 caracteres se avisa sin llamar a la API', async () => {
   const user = userEvent.setup();
-  renderSection(copCredit());
+  renderSection(vesCredit());
   const dialog = await chooseAction(user, /Aplicar a otro plan/);
   await user.type(within(dialog).getByLabelText('Importe a aplicar'), '1000');
   fireEvent.change(within(dialog).getByLabelText('Nota (opcional)'), { target: { value: 'ok' } });
@@ -201,7 +201,7 @@ it('aplicar a otro plan: una nota de menos de 3 caracteres se avisa sin llamar a
 
 it('devolver con más de 20 abonos vivos: ninguno marcado de entrada y tope de 20 al enviar', async () => {
   const user = userEvent.setup();
-  const statement = copCredit();
+  const statement = vesCredit();
   const many = Array.from({ length: 21 }, (_, i) => ({
     ...statement.movements[0],
     id: `pay-${String(i).padStart(2, '0')}`,
@@ -223,7 +223,7 @@ it('devolver con más de 20 abonos vivos: ninguno marcado de entrada y tope de 2
 it('D1: con varias sedes y «Todas las sedes», no deja devolver en efectivo y explica por qué', async () => {
   window.localStorage.clear();
   const user = userEvent.setup();
-  renderSection(copCredit());
+  renderSection(vesCredit());
   const dialog = await chooseAction(user, /Devolver/);
   expect(await within(dialog).findByTestId('refund-cash-location')).toHaveTextContent(
     /Elige la sede de la caja/,
@@ -240,7 +240,7 @@ it('D1: con varias sedes y «Todas las sedes», no deja devolver en efectivo y e
 it('D1: con una sede activa, el efectivo nombra la caja de esa sede', async () => {
   window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
   const user = userEvent.setup();
-  renderSection(copCredit());
+  renderSection(vesCredit());
   await chooseAction(user, /Devolver/);
   expect(await screen.findByTestId('refund-cash-location')).toHaveTextContent(
     'El efectivo sale de tu caja en Sede Norte.',

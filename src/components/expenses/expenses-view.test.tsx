@@ -41,7 +41,7 @@ jest.mock('../../lib/locations/session-locations', () => ({
 }));
 jest.mock('../../lib/locations/schedule-api', () => ({ getLocationSchedule: jest.fn().mockResolvedValue({ timezone: 'Pacific/Auckland', ranges: [] }) }));
 jest.mock('../../lib/reference/currencies-api', () => ({
-  listCurrencies: jest.fn().mockResolvedValue([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }]),
+  listCurrencies: jest.fn().mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]),
 }));
 
 const mockRequestLocations = jest.fn();
@@ -101,7 +101,7 @@ describe('ExpensesView (DX-274)', () => {
     const row = await findRow();
     expect(await within(row).findByText('10/20/2026')).toBeInTheDocument();
     // El código de la moneda, nunca «$» (producto bimonetario).
-    expect(within(row).getByText(/^COP\s150,000\.00$/)).toBeInTheDocument();
+    expect(within(row).getByText(/^USD\s150,000\.00$/)).toBeInTheDocument();
   });
 
   it('carga el mes en curso hasta hoy y pinta la fila con su estado y el recuento', async () => {
@@ -114,7 +114,7 @@ describe('ExpensesView (DX-274)', () => {
     expect(within(row).getByText('20/10/2026')).toBeInTheDocument();
     // Toda la fila abre el detalle: el botón de la celda principal se estira sobre ella.
     expect(within(row).getByRole('button', { name: /^Laboratorio/ })).toBeInTheDocument();
-    expect(within(row).getByText('Lab Dental SAS')).toBeInTheDocument();
+    expect(within(row).getByText('Lab Dental C.A.')).toBeInTheDocument();
     expect(await within(row).findByText('Sede principal')).toBeInTheDocument();
     // Un solo chip compuesto, en peligro: el vencimiento es lo urgente.
     expect(within(row).getByText('Parcial · vencido')).toHaveAttribute('data-overdue', 'true');

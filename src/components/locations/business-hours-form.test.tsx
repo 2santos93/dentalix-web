@@ -147,11 +147,11 @@ describe('BusinessHoursForm', () => {
     render(<BusinessHoursForm token={tokenFor('RECEPTIONIST')} />);
     const form = await screen.findByRole('form', { name: 'Guardar horario' });
     await waitFor(() => expect(form).toHaveTextContent('Zona horaria: (UTC+13) Auckland — Nueva Zelanda'));
-    expect(form).not.toHaveTextContent('America/Bogota');
+    expect(form).not.toHaveTextContent('America/Caracas');
     expect(screen.queryByRole('link', { name: 'Ajustes → Sedes' })).not.toBeInTheDocument();
   });
 
-  it('a location without zone shows the sede error with retry, never Bogotá', async () => {
+  it('a location without zone shows the sede error with retry, never Caracas', async () => {
     mockedGet.mockResolvedValue(null);
     jest.mocked(listLocations).mockResolvedValue([clinicLocation({ timeZone: null })]);
 
@@ -159,7 +159,7 @@ describe('BusinessHoursForm', () => {
     const form = await screen.findByRole('form', { name: 'Guardar horario' });
     expect(await within(form).findByText('Sin zona de sede')).toBeInTheDocument();
     expect(within(form).getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
-    expect(form).not.toHaveTextContent('Bogota');
+    expect(form).not.toHaveTextContent('Caracas');
   });
 
   it('while the location list loads the zone reads «…», not «por configurar»', async () => {

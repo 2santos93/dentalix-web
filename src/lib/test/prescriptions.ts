@@ -43,7 +43,7 @@ export function makePrescription(overrides: Partial<Prescription> = {}): Prescri
     clinicName: 'Clínica Demo',
     clinicFiscal: null,
     locationName: 'Sede Principal',
-    locationAddress: 'Cra 15 #90-20',
+    locationAddress: 'Av. Francisco de Miranda 90',
     notes: null,
     allergyOverride: false,
     allergyMatches: [],
@@ -123,7 +123,7 @@ export function makeIssuer(overrides: Partial<PrescriptionIssuer> = {}): Prescri
   return {
     locationId: 'loc1',
     locationName: 'Sede Principal',
-    locationAddress: 'Cra 15 #90-20',
+    locationAddress: 'Av. Francisco de Miranda 90',
     clinicName: 'Clínica Demo',
     professionalName: 'Dra. Laura Ruiz',
     professionalLicense: 'RM-12345',

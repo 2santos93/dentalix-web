@@ -40,7 +40,7 @@ export function formatCurrency(
   const text = currencyTextFor(texts, currency);
   if (text !== undefined) return moneyWithCurrencyText(amount, currency, locale, text);
   // Dos decimales fijos: los importes se guardan con céntimos, y las
-  // versiones recientes de ICU/CLDR dan 0 decimales a COP, con lo que
+  // versiones recientes de ICU/CLDR dan 0 decimales a monedas como RSD o ALL, con lo que
   // 150.000,50 se pintaría (redondeado) como 150.001. Las monedas que en ISO
   // 4217 no tienen decimales (JPY, VND…: GLOBAL-G1) van sin ellos cuando el
   // importe es entero; con céntimos conserva 2 decimales, nunca se redondea.

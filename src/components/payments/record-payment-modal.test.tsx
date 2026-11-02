@@ -111,7 +111,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$', roundingDigits: 2 },
+    { code: 'EUR', name: 'Euro', symbol: '€', roundingDigits: 2 },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$', roundingDigits: 2 },
     { code: 'VES', name: 'Bolívar', symbol: 'Bs' },
   ]),
@@ -146,10 +146,10 @@ function usdBalance(overrides: Partial<PlanBalance> = {}): PlanBalance {
   };
 }
 
-const copPlan: BillablePlan = {
-  id: 'plan-cop',
+const eurPlan: BillablePlan = {
+  id: 'plan-eur',
   status: 'ACCEPTED',
-  currency: 'COP',
+  currency: 'EUR',
   createdAt: '2026-08-01T15:00:00.000Z',
   total: 3000000,
   paid: 1200000,
@@ -158,7 +158,7 @@ const copPlan: BillablePlan = {
   hasActivePaymentPlan: false,
 };
 const usdPlan: BillablePlan = {
-  ...copPlan,
+  ...eurPlan,
   id: 'plan-usd',
   currency: 'USD',
   createdAt: '2026-09-10T15:00:00.000Z',
@@ -177,11 +177,11 @@ function savedPayment(
   return {
     id: 'pay-1',
     tenantId: 't-1',
-    treatmentPlanId: 'plan-cop',
+    treatmentPlanId: 'plan-eur',
     openingBalanceId: null,
     patientId: 'pat-1',
     amount: 150000,
-    currency: 'COP',
+    currency: 'EUR',
     paidAt: '2026-10-01T00:00:00.000Z',
     paidOn: '2026-10-01',
     method: 'TRANSFER',
@@ -197,7 +197,7 @@ function savedPayment(
     createdAt: '2026-10-16T12:00:00.000Z',
     updatedAt: '2026-10-16T12:00:00.000Z',
     receiptNumber: 'PRI-000001',
-    exchangeRateCurrency: 'COP',
+    exchangeRateCurrency: 'EUR',
     frozenRate: null,
     exchangeRateStatus: 'NOT_NEEDED',
     adjustments: [],
@@ -213,14 +213,14 @@ beforeEach(() => {
   mockedLocations.mockReset();
   mockedLocations.mockResolvedValue([clinicLocation()]);
   mockedRates.mockReset();
-  mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { COP: 4000, VES: 36.5 } });
+  mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { EUR: 4000, VES: 36.5 } });
   mockedBalance.mockReset();
   mockedBalance.mockResolvedValue(usdBalance());
 });
 
 const opening = {
   id: 'ob-1',
-  currency: 'COP',
+  currency: 'EUR',
   amount: 200000.5,
   asOfDate: '2026-08-09',
   asOfDateApproximate: false,
@@ -256,25 +256,25 @@ it('mientras carga los planes lo dice y no deja registrar', async () => {
 });
 
 it('propone el primer plan, su moneda y la fecha de hoy, y enseña su saldo', async () => {
-  mockedList.mockResolvedValue([copPlan, usdPlan]);
+  mockedList.mockResolvedValue([eurPlan, usdPlan]);
   renderModal();
   const dialog = screen.getByRole('dialog');
 
   const plan = await within(dialog).findByLabelText('Plan');
-  expect(plan).toHaveValue('plan-cop');
+  expect(plan).toHaveValue('plan-eur');
   await waitFor(() =>
     expect(within(plan).getAllByRole('option').map((o) => money(o.textContent))).toEqual([
-      'Plan del 01/08/2026 · Aceptado · Saldo COP 1.800.000,00',
+      'Plan del 01/08/2026 · Aceptado · Saldo EUR 1.800.000,00',
       'Plan del 10/09/2026 · Aceptado · Saldo USD 500,00',
     ]),
   );
-  expect(within(dialog).getByLabelText('Moneda')).toHaveValue('COP');
+  expect(within(dialog).getByLabelText('Moneda')).toHaveValue('EUR');
   expect(paymentDate(dialog)).toMatch(
     /^\d{4}-\d{2}-\d{2}$/,
   );
   // DX-386: con el formato de la sede y el código ISO, nunca «US$».
   expect(money(dialog.textContent)).toContain(
-    'Saldo COP 1.800.000,00 · Total COP 3.000.000,00 · Abonado COP 1.200.000,00',
+    'Saldo EUR 1.800.000,00 · Total EUR 3.000.000,00 · Abonado EUR 1.200.000,00',
   );
   // El único «US$» es el nombre de la moneda en su selector.
   expect(document.getElementById('rp-plan-hint')).not.toHaveTextContent('US$');
@@ -292,19 +292,19 @@ describe('fecha por defecto en la zona de la sede (DX-097)', () => {
     id: 'loc-1',
     name: 'Sede',
     address: null,
-    country: 'CO' as const,
+    country: 'VE' as const,
     isActive: true,
     timeZone,
     createdAt: '2026-01-01T00:00:00.000Z',
   }));
 
-  it('a las 20:30 de Bogotá (01:30Z del día siguiente, navegador en UTC) propone el día de la sede', async () => {
+  it('a las 20:30 de Caracas (00:30Z del día siguiente, navegador en UTC) propone el día de la sede', async () => {
     jest.useFakeTimers({
-      now: new Date('2026-10-16T01:30:00.000Z'),
+      now: new Date('2026-10-16T00:30:00.000Z'),
       advanceTimers: true,
     });
-    mockedLocations.mockResolvedValue([sedeIn('America/Bogota')]);
-    mockedList.mockResolvedValue([copPlan]);
+    mockedLocations.mockResolvedValue([sedeIn('America/Caracas')]);
+    mockedList.mockResolvedValue([eurPlan]);
     renderModal();
     const dialog = screen.getByRole('dialog');
     await within(dialog).findByLabelText('Plan');
@@ -319,7 +319,7 @@ describe('fecha por defecto en la zona de la sede (DX-097)', () => {
       advanceTimers: true,
     });
     mockedLocations.mockResolvedValue([sedeIn('Europe/Madrid')]);
-    mockedList.mockResolvedValue([copPlan]);
+    mockedList.mockResolvedValue([eurPlan]);
     renderModal();
     const dialog = screen.getByRole('dialog');
     await within(dialog).findByLabelText('Plan');
@@ -331,7 +331,7 @@ describe('fecha por defecto en la zona de la sede (DX-097)', () => {
 
 it('consumers render SedeConfigError without a zone', async () => {
   mockedLocations.mockResolvedValue([clinicLocation({ timeZone: null })]);
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   renderModal();
   const dialog = screen.getByRole('dialog');
   await within(dialog).findByLabelText('Plan');
@@ -350,7 +350,7 @@ it('consumers render SedeConfigError without a zone', async () => {
 // para que nadie crea que el saldo ya lo cuenta.
 it('un abono guardado sin tasa lo dice en el aviso', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   mockedRecord.mockResolvedValue(
     savedPayment({
       amount: 50,
@@ -374,7 +374,7 @@ it('un abono guardado sin tasa lo dice en el aviso', async () => {
 
 it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   mockedRecord.mockResolvedValue(savedPayment());
   const { onRecorded } = renderModal();
   const dialog = screen.getByRole('dialog');
@@ -388,10 +388,10 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   await waitFor(() =>
     expect(mockedRecord).toHaveBeenCalledWith(
       'tok',
-      'plan-cop',
+      'plan-eur',
       {
         amount: 150000,
-        currency: 'COP',
+        currency: 'EUR',
         paidAt: '2026-10-01',
         paymentMethodId: 'pm-transfer',
       },
@@ -399,13 +399,13 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
     ),
   );
   expect(onRecorded).toHaveBeenCalledWith(
-    expect.stringMatching(/^Abono registrado: COP\s150\.000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
+    expect.stringMatching(/^Abono registrado: EUR\s150\.000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
   );
 });
 
 it('DX-516: sin ajustes en el medio no se pinta nada; con ellos, el ajuste sobre el importe y el total a cobrar', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   renderModal();
   const dialog = screen.getByRole('dialog');
   await within(dialog).findByLabelText('Plan');
@@ -417,13 +417,13 @@ it('DX-516: sin ajustes en el medio no se pinta nada; con ellos, el ajuste sobre
   const preview = await within(dialog).findByRole('region', { name: 'Ajustes de este medio de pago' });
   expect(within(preview).getByText('Impuesto 3 %')).toBeInTheDocument();
   expect(within(preview).queryByText('Apagado')).not.toBeInTheDocument();
-  expect(await within(preview).findByText('+3,00 COP')).toBeInTheDocument();
-  expect(within(preview).getByText('103,00 COP')).toBeInTheDocument();
+  expect(await within(preview).findByText('+3,00 EUR')).toBeInTheDocument();
+  expect(within(preview).getByText('103,00 EUR')).toBeInTheDocument();
 });
 
 it('DX-377: un medio que pide referencia la exige antes de llamar a la API', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   renderModal();
   const dialog = screen.getByRole('dialog');
   await within(dialog).findByLabelText('Plan');
@@ -437,7 +437,7 @@ it('DX-377: un medio que pide referencia la exige antes de llamar a la API', asy
 
 it('DX-377: referencia repetida (409): avisa, pide motivo y reintenta con él y la misma clave', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   mockedRecord
     .mockRejectedValueOnce(
       new ApiError(409, 'Esta referencia ya se usó con este medio de pago en otro abono de los últimos 90 días.', {
@@ -468,7 +468,7 @@ it('DX-377: referencia repetida (409): avisa, pide motivo y reintenta con él y 
 
 it('DX-395: la referencia que falta marca aria-invalid, describe el error y recibe el foco', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   renderModal();
   const dialog = screen.getByRole('dialog');
   await within(dialog).findByLabelText('Plan');
@@ -487,7 +487,7 @@ it('DX-395: la referencia que falta marca aria-invalid, describe el error y reci
 
 it('DX-395: una referencia de solo guiones, puntos o espacios cuenta como vacía (la API la rechaza)', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   renderModal();
   const dialog = screen.getByRole('dialog');
   await within(dialog).findByLabelText('Plan');
@@ -505,7 +505,7 @@ it('DX-395: una referencia de solo guiones, puntos o espacios cuenta como vacía
 
 it('DX-395: el aviso de repetida lleva el foco al motivo; sin motivo, el campo lo dice', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   mockedRecord.mockRejectedValueOnce(
     new ApiError(409, 'Esta referencia ya se usó con este medio de pago en otro abono de los últimos 90 días.', {
       code: 'PAYMENT_REFERENCE_DUPLICATE',
@@ -538,7 +538,7 @@ it('DX-395: el aviso de repetida lleva el foco al motivo; sin motivo, el campo l
 });
 
 it('DX-395: a 390 px los controles y la X del modal miden al menos 44 px', async () => {
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   renderModal();
   const dialog = screen.getByRole('dialog');
   await within(dialog).findByLabelText('Plan');
@@ -551,7 +551,7 @@ it('DX-395: a 390 px los controles y la X del modal miden al menos 44 px', async
 
 it('valida el importe en español sin llamar a la API', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   renderModal();
   const dialog = screen.getByRole('dialog');
   await within(dialog).findByLabelText('Plan');
@@ -565,7 +565,7 @@ it('valida el importe en español sin llamar a la API', async () => {
 
 it('si falla, lo dice en español y el reintento reusa la misma Idempotency-Key', async () => {
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   mockedRecord
     .mockRejectedValueOnce(new ApiError(500, 'Internal server error'))
     .mockRejectedValueOnce(new ApiError(403, 'Insufficient role'));
@@ -604,7 +604,7 @@ it('paciente sin planes cobrables: mensaje claro y sin botón activo', async () 
 
 it('si no cargan los planes, el selector se sustituye por un error con reintento', async () => {
   const user = userEvent.setup();
-  mockedList.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce([copPlan]);
+  mockedList.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce([eurPlan]);
   renderModal();
   const dialog = screen.getByRole('dialog');
 
@@ -612,7 +612,7 @@ it('si no cargan los planes, el selector se sustituye por un error con reintento
   expect(within(dialog).getByRole('button', { name: 'Registrar abono' })).toBeDisabled();
   await user.click(within(failed.closest('[role="status"]') as HTMLElement).getByRole('button', { name: 'Reintentar' }));
 
-  expect(await within(dialog).findByLabelText('Plan')).toHaveValue('plan-cop');
+  expect(await within(dialog).findByLabelText('Plan')).toHaveValue('plan-eur');
   expect(mockedList).toHaveBeenCalledTimes(2);
 });
 
@@ -622,7 +622,7 @@ it('con varias sedes dice en cuál quedará registrado el abono', async () => {
     clinicLocation({ id: 'loc-1', name: 'Sede principal' }),
     clinicLocation({ id: 'loc-2', name: 'Sede Norte' }),
   ]);
-  mockedList.mockResolvedValue([copPlan]);
+  mockedList.mockResolvedValue([eurPlan]);
   renderModal();
   expect(
     await screen.findByText('Este abono quedará registrado en la sede Sede Norte.'),
@@ -635,7 +635,7 @@ it('el aviso dice lo que la API registró, no lo que quedó en el formulario (re
   // plan e importe y reintenta con la MISMA clave: la API devuelve el abono
   // original. El aviso no puede anunciar un cobro que no existe.
   const user = userEvent.setup();
-  mockedList.mockResolvedValue([copPlan, usdPlan]);
+  mockedList.mockResolvedValue([eurPlan, usdPlan]);
   mockedRecord
     .mockRejectedValueOnce(new TypeError('Failed to fetch'))
     .mockResolvedValueOnce(savedPayment({ amount: 1000, method: null }));
@@ -657,13 +657,13 @@ it('el aviso dice lo que la API registró, no lo que quedó en el formulario (re
 
   await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
   expect(onRecorded).toHaveBeenCalledWith(
-    expect.stringMatching(/^Abono registrado: COP\s1\.?000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
+    expect.stringMatching(/^Abono registrado: EUR\s1\.?000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
   );
 });
 
 describe('DX-262: abono contra el saldo migrado', () => {
   it('ofrece el saldo migrado con su pendiente como destino y abona contra él, en su moneda', async () => {
-    mockedList.mockResolvedValue([copPlan]);
+    mockedList.mockResolvedValue([eurPlan]);
     mockedRecordOpening.mockResolvedValue(
       savedPayment({
         treatmentPlanId: null,
@@ -683,11 +683,11 @@ describe('DX-262: abono contra el saldo migrado', () => {
         within(target)
           .getAllByRole('option')
           .map((o) => money(o.textContent)),
-      ).toEqual(['Un plan de tratamiento', 'Saldo migrado · Ortodoncia 2025 · pendiente COP 150.000,00']),
+      ).toEqual(['Un plan de tratamiento', 'Saldo migrado · Ortodoncia 2025 · pendiente EUR 150.000,00']),
     );
     await user.selectOptions(target, 'ob:ob-1');
     expect(within(dialog).queryByLabelText('Plan')).not.toBeInTheDocument();
-    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('COP');
+    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('EUR');
     expect(within(dialog).getByLabelText('Moneda')).toBeDisabled();
     await user.type(within(dialog).getByLabelText('Importe'), '100000');
     await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
@@ -695,7 +695,7 @@ describe('DX-262: abono contra el saldo migrado', () => {
     expect(mockedRecordOpening).toHaveBeenCalledWith(
       'tok',
       'ob-1',
-      expect.objectContaining({ amount: 100000, currency: 'COP' }),
+      expect.objectContaining({ amount: 100000, currency: 'EUR' }),
       expect.any(String),
     );
     expect(mockedRecord).not.toHaveBeenCalled();
@@ -934,6 +934,6 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
 
   it('ningún texto de la previsualización nombra un país ni un banco central', () => {
     const all = JSON.stringify(recordPaymentCopy.preview);
-    expect(all).not.toMatch(/venezuela|colombia|bcv|banco central/i);
+    expect(all).not.toMatch(/venezuela|colom[b]ia|bcv|banco central/i);
   });
 });

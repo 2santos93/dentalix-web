@@ -51,7 +51,7 @@ const patientFirstName = 'Camila';
  * Hora fija, no la del reloj real (DX-070, TST-008). Antes el spec agendaba a
  * «ahora + 61 min» formateado en la zona de Node, así que a partir de las 22:30
  * la cita caía al día siguiente y en un runner UTC la hora divergía 5 h de la
- * que pinta la UI (America/Bogota, la zona de la sede y del config).
+ * que pinta la UI (America/Caracas, la zona de la sede y del config).
  *
  * Ahora:
  * - la cita va a las 10:15–10:45 de un DÍA ANCLA, pasado mañana en la sede:

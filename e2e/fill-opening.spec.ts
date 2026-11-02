@@ -79,7 +79,7 @@ test.beforeAll(async ({ request }) => {
         docType: 'NATIONAL_ID',
         docNumber: `HUE${n}${suffix}`.slice(0, 20),
         sex: 'F',
-        phone: '3101234567',
+        phone: '4141234567',
       })
     ).id;
   const [gabi, ana, berta, elena] = [

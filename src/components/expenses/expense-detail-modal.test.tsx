@@ -35,7 +35,7 @@ jest.mock('../../lib/files/upload-single-file', () => ({
 jest.mock('../../lib/patient-documents/download', () => ({ startDownload: jest.fn() }));
 jest.mock('../../lib/hooks/use-media-query', () => ({ useMediaQuery: () => true }));
 jest.mock('../../lib/reference/currencies-api', () => ({
-  listCurrencies: jest.fn().mockResolvedValue([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }]),
+  listCurrencies: jest.fn().mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]),
 }));
 
 const mockedGet = getExpense as jest.MockedFunction<typeof getExpense>;
@@ -100,15 +100,15 @@ describe('ExpenseDetailModal (DX-274)', () => {
 
   it('DX-297 keeps the visible cancellation phrase and payment context in its audited name', async () => {
     renderDetail();
-    const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental SAS' });
+    const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental C.A.' });
     await screen.findByText(/Transferencia rechazada/);
     auditRenderedControls([{ html: dialog.outerHTML, selector: 'button[aria-label^="Anular"]' }]);
-    expect(within(dialog).getByRole('button', { name: /^Anular pago de 50\.000,00\sCOP del 21\/10\/2026$/ })).toHaveTextContent('Anular pago');
+    expect(within(dialog).getByRole('button', { name: /^Anular pago de 50\.000,00\sUSD del 21\/10\/2026$/ })).toHaveTextContent('Anular pago');
   });
 
   it('enseña los datos, el estado y los pagos con la caja de la salida', async () => {
     renderDetail();
-    const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental SAS' });
+    const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental C.A.' });
     expect(within(dialog).getByText('Parcial')).toBeInTheDocument();
     expect(within(dialog).getByText('Sede principal')).toBeInTheDocument();
     expect(within(dialog).getByText('Coronas de octubre')).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe('ExpenseDetailModal (DX-274)', () => {
 
   it('los datos son una lista de definiciones válida: cada par dt/dd en un div hijo directo del dl', async () => {
     renderDetail();
-    const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental SAS' });
+    const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental C.A.' });
     const list = dialog.querySelector('dl');
     expect(list).not.toBeNull();
     // axe (definition-list, dlitem): un <div> dentro de otro rompe la lista.
@@ -166,7 +166,7 @@ describe('ExpenseDetailModal (DX-274)', () => {
     await user.click(within(modal).getByRole('button', { name: 'Anular pago' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '¿Anular este pago?' })).not.toBeInTheDocument());
     await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Laboratorio · Lab Dental SAS' })),
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Laboratorio · Lab Dental C.A.' })),
     );
   });
 
@@ -201,7 +201,7 @@ describe('ExpenseDetailModal (DX-274)', () => {
     expect(await screen.findByText('Anulado por Admin Demo: Factura duplicada')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument();
     await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Laboratorio · Lab Dental SAS' })),
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Laboratorio · Lab Dental C.A.' })),
     );
   });
 
@@ -222,7 +222,7 @@ describe('ExpenseDetailModal (DX-274)', () => {
     const { onChanged } = renderDetail();
     await user.click(await screen.findByRole('button', { name: 'Registrar pago' }));
     const modal = await screen.findByRole('dialog', { name: 'Registrar pago' });
-    expect(within(modal).getByLabelText('Importe (COP)')).toHaveValue('100000');
+    expect(within(modal).getByLabelText('Importe (USD)')).toHaveValue('100000');
     await user.click(within(modal).getByRole('checkbox', { name: 'Desde mi caja abierta' }));
     await user.click(within(modal).getByRole('button', { name: 'Registrar pago' }));
     await waitFor(() => expect(mockedPay).toHaveBeenCalled());
@@ -248,8 +248,8 @@ describe('ExpenseDetailModal (DX-274)', () => {
     renderDetail();
     await user.click(await screen.findByRole('button', { name: 'Registrar pago' }));
     const modal = await screen.findByRole('dialog', { name: 'Registrar pago' });
-    await user.clear(within(modal).getByLabelText('Importe (COP)'));
-    await user.type(within(modal).getByLabelText('Importe (COP)'), '200000');
+    await user.clear(within(modal).getByLabelText('Importe (USD)'));
+    await user.type(within(modal).getByLabelText('Importe (USD)'), '200000');
     await user.click(within(modal).getByRole('button', { name: 'Registrar pago' }));
     expect(await within(modal).findByText(/El pago supera lo pendiente del gasto/)).toBeInTheDocument();
     expect(mockedPay).not.toHaveBeenCalled();
@@ -395,6 +395,6 @@ describe('ExpenseDetailModal (DX-274)', () => {
     renderDetail();
     expect(await screen.findByText('No pudimos cargar el gasto.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
-    expect(await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental SAS' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental C.A.' })).toBeInTheDocument();
   });
 });

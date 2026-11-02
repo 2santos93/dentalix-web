@@ -19,7 +19,7 @@ describe('cobranza: presentación (DX-150)', () => {
         overdueChipText({
           hasOverdue: true,
           overdueDays: 45,
-          amounts: [{ currency: 'COP', amount: 300000 }],
+          amounts: [{ currency: 'USD', amount: 300000 }],
         }),
       ),
     ).toMatch(/^Saldo vencido · 45 días · .*300\.000/);

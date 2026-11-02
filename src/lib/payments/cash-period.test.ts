@@ -3,14 +3,14 @@ import { isValidRange, presetRange } from './cash-period';
 // DX-097: los atajos salen del día civil de la SEDE (su zona IANA), no del
 // reloj del navegador. La suite corre con TZ=UTC: si se leyera la fecha local,
 // los casos de la sede de noche saldrían un día después.
-const BOGOTA = 'America/Bogota';
-// Jueves 15/10/2026 a las 22:30 en la sede = viernes 16 a las 03:30 UTC.
-const bogotaThu2230 = new Date('2026-10-16T03:30:00.000Z');
+const CARACAS = 'America/Caracas';
+// Jueves 15/10/2026 a las 22:30 en la sede = viernes 16 a las 02:30 UTC.
+const caracasThu2230 = new Date('2026-10-16T02:30:00.000Z');
 
 describe('presetRange (en la zona de la sede)', () => {
   it('hoy: el día de la sede aunque en UTC ya sea mañana', () => {
-    expect(presetRange('today', BOGOTA, bogotaThu2230)).toEqual({ from: '2026-10-15', to: '2026-10-15' });
-    expect(presetRange('today', 'UTC', bogotaThu2230)).toEqual({ from: '2026-10-16', to: '2026-10-16' });
+    expect(presetRange('today', CARACAS, caracasThu2230)).toEqual({ from: '2026-10-15', to: '2026-10-15' });
+    expect(presetRange('today', 'UTC', caracasThu2230)).toEqual({ from: '2026-10-16', to: '2026-10-16' });
   });
 
   it('hoy en Madrid: las 00:30 del 16 (22:30Z del 15) ya son el 16', () => {
@@ -21,31 +21,31 @@ describe('presetRange (en la zona de la sede)', () => {
   });
 
   it('esta semana: de lunes a domingo de la semana de la sede', () => {
-    expect(presetRange('week', BOGOTA, bogotaThu2230)).toEqual({ from: '2026-10-12', to: '2026-10-18' });
+    expect(presetRange('week', CARACAS, caracasThu2230)).toEqual({ from: '2026-10-12', to: '2026-10-18' });
   });
 
   it('esta semana un domingo: la semana que termina ese día, no la siguiente', () => {
-    // Domingo 18/10 a las 21:00 en la sede = lunes 19 02:00 UTC.
-    expect(presetRange('week', BOGOTA, new Date('2026-10-19T02:00:00.000Z'))).toEqual({
+    // Domingo 18/10 a las 21:00 en la sede = lunes 19 01:00 UTC.
+    expect(presetRange('week', CARACAS, new Date('2026-10-19T01:00:00.000Z'))).toEqual({
       from: '2026-10-12',
       to: '2026-10-18',
     });
   });
 
   it('esta semana cruzando de mes', () => {
-    expect(presetRange('week', BOGOTA, new Date('2026-09-30T14:00:00.000Z'))).toEqual({
+    expect(presetRange('week', CARACAS, new Date('2026-09-30T14:00:00.000Z'))).toEqual({
       from: '2026-09-28',
       to: '2026-10-04',
     });
   });
 
   it('este mes: el de la sede, del 1 al último día (bisiestos incluidos)', () => {
-    // 31/10 a las 22:00 en la sede = 01/11 03:00 UTC: sigue siendo octubre.
-    expect(presetRange('month', BOGOTA, new Date('2026-11-01T03:00:00.000Z'))).toEqual({
+    // 31/10 a las 22:00 en la sede = 01/11 02:00 UTC: sigue siendo octubre.
+    expect(presetRange('month', CARACAS, new Date('2026-11-01T02:00:00.000Z'))).toEqual({
       from: '2026-10-01',
       to: '2026-10-31',
     });
-    expect(presetRange('month', BOGOTA, new Date('2028-02-10T15:00:00.000Z'))).toEqual({
+    expect(presetRange('month', CARACAS, new Date('2028-02-10T15:00:00.000Z'))).toEqual({
       from: '2028-02-01',
       to: '2028-02-29',
     });
@@ -53,8 +53,8 @@ describe('presetRange (en la zona de la sede)', () => {
 
   it('presetRange throws on an invalid zone', () => {
     // Sin zona válida no hay «hoy»: nunca se cuenta en la sede ni en la del navegador.
-    expect(() => presetRange('today', 'Mars/Olympus', bogotaThu2230)).toThrow(RangeError);
-    expect(() => presetRange('month', '', bogotaThu2230)).toThrow(RangeError);
+    expect(() => presetRange('today', 'Mars/Olympus', caracasThu2230)).toThrow(RangeError);
+    expect(() => presetRange('month', '', caracasThu2230)).toThrow(RangeError);
   });
 });
 

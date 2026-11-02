@@ -26,7 +26,7 @@ function plan(overrides: Partial<TreatmentPlan> = {}): TreatmentPlan {
     tenantId: 't1',
     patientId: 'p1',
     status: 'DRAFT',
-    currency: 'COP',
+    currency: 'USD',
     notes: null,
     createdById: null,
     optionGroupId: null,

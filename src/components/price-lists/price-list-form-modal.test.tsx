@@ -21,9 +21,9 @@ const inactiveLocation: ClinicLocation = clinicLocation({
   id: 'loc-old',
   name: 'Sede cerrada',
   address: null,
-  country: 'CO',
+  country: 'VE',
   isActive: false,
-  timeZone: 'America/Bogota',
+  timeZone: 'America/Caracas',
   createdAt: '2026-01-01T00:00:00Z',
 });
 const activeLocation: ClinicLocation = { ...inactiveLocation, id: 'loc-1', name: 'Sede Norte', isActive: true };
@@ -31,7 +31,7 @@ const activeLocation: ClinicLocation = { ...inactiveLocation, id: 'loc-1', name:
 const saved: PriceList = {
   id: 'pl-1',
   name: 'Tarifas',
-  currency: 'COP',
+  currency: 'USD',
   locationId: null,
   active: true,
   itemCount: 0,
@@ -60,7 +60,7 @@ function setup(priceList: PriceList | null = null, locations: ClinicLocation[] =
 describe('PriceListFormModal (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedCurrencies.mockResolvedValue([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }] as never);
+    mockedCurrencies.mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }] as never);
     mockedCreate.mockResolvedValue(saved);
     mockedUpdate.mockResolvedValue(saved);
   });
@@ -75,7 +75,7 @@ describe('PriceListFormModal (DX-105)', () => {
     ]);
     await user.type(within(dialog).getByLabelText('Nombre'), 'Tarifas');
     await user.click(within(dialog).getByRole('button', { name: 'Crear lista' }));
-    await waitFor(() => expect(mockedCreate).toHaveBeenCalledWith('tok', { name: 'Tarifas', currency: 'COP' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledWith('tok', { name: 'Tarifas', currency: 'USD' }));
     expect(onSaved).toHaveBeenCalledWith(saved);
   });
 
@@ -98,8 +98,8 @@ describe('PriceListFormModal: moneda de la sede (GLOBAL-G1)', () => {
 
   it('JPY location shows JPY without decimals', async () => {
     const user = setupUser();
-    // País CO a propósito: la moneda sale de la sede, nunca del país.
-    const tokyo = clinicLocation({ id: 'loc-jp', name: 'Sede Tokio', country: 'CO', currency: 'JPY' });
+    // País VE a propósito: la moneda sale de la sede, nunca del país.
+    const tokyo = clinicLocation({ id: 'loc-jp', name: 'Sede Tokio', country: 'VE', currency: 'JPY' });
     const madrid = clinicLocation({ id: 'loc-es', name: 'Sede Madrid', country: 'ES', currency: 'EUR' });
     const { dialog } = setup(null, [tokyo, madrid]);
     await user.selectOptions(within(dialog).getByLabelText('Sede'), 'loc-jp');
@@ -111,13 +111,13 @@ describe('PriceListFormModal: moneda de la sede (GLOBAL-G1)', () => {
     );
   });
 
-  it('location without currency shows SedeConfigError and never COP', async () => {
+  it('location without currency shows SedeConfigError and never USD', async () => {
     const user = setupUser();
-    const unconfigured = clinicLocation({ id: 'loc-1', name: 'Sede Norte', country: 'CO', currency: null });
+    const unconfigured = clinicLocation({ id: 'loc-1', name: 'Sede Norte', country: 'VE', currency: null });
     const { dialog, onRetryLocations } = setup(null, [unconfigured]);
     await user.selectOptions(within(dialog).getByLabelText('Sede'), 'loc-1');
     expect(within(dialog).getByText('Sin moneda de sede')).toBeInTheDocument();
-    expect(within(dialog).queryByText(/COP/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/USD/)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: /reintentar/i }));
     expect(onRetryLocations).toHaveBeenCalled();
 

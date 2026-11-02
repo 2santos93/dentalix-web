@@ -28,7 +28,7 @@ Decimales de las monedas (DX-340, README de la API «Redondeo de importes»):
   (`GET /treatment-plans/:id` → `currencyDigits`; también `GET /currencies`).
   Helper: `line-rounding.ts`, espejo de `src/shared/money/line-rounding.ts`.
 - **Vectores** (`rounding-vectors.json`): los mismos casos que la API (RSD,
-  JPY, EUR y COP con 123,45 × 7,5 %, límites del descuento y total de
+  JPY, EUR y ALL con 123,45 × 7,5 %, límites del descuento y total de
   líneas); `line-rounding.test.ts` los comprueba aquí.
 
 Licencias de la lista de países (`iso3166-countries.json`): los códigos salen de

@@ -10,7 +10,7 @@ describe('CurrencySelect', () => {
   beforeEach(() => {
     mocked.mockReset().mockResolvedValue([
       { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
-      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+      { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     ]);
   });
 
@@ -23,7 +23,7 @@ describe('CurrencySelect', () => {
       const opts = Array.from(el.options).map((o) => `${o.value}:${o.textContent}`);
       expect(opts).toEqual(expect.arrayContaining([
         'USD:Dólar estadounidense ($)',
-        'COP:Peso colombiano ($)',
+        'VES:Bolívar venezolano (VES)',
       ]));
     });
   });
@@ -31,7 +31,7 @@ describe('CurrencySelect', () => {
   it('exclude leaves those codes out of the options (DX-374: the base of the rates)', async () => {
     render(<CurrencySelect id="cur" token="tok" value="" placeholder="Elige la moneda" exclude={['USD']} onChange={() => {}} />);
     const el = screen.getByRole('combobox') as HTMLSelectElement;
-    await waitFor(() => expect(Array.from(el.options).map((o) => o.value)).toContain('COP'));
+    await waitFor(() => expect(Array.from(el.options).map((o) => o.value)).toContain('VES'));
     expect(Array.from(el.options).map((o) => o.value)).not.toContain('USD');
   });
 
@@ -63,9 +63,9 @@ describe('CurrencySelect', () => {
   it('si la lista falla, sustituye el control por un FieldError con reintento', async () => {
     mocked.mockReset()
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockResolvedValueOnce([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }]);
+      .mockResolvedValueOnce([{ code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' }]);
     const user = userEvent.setup();
-    render(<CurrencySelect id="cur" token="tok" value="COP" onChange={() => {}} className="w-44" />);
+    render(<CurrencySelect id="cur" token="tok" value="VES" onChange={() => {}} className="w-44" />);
 
     const status = await screen.findByRole('status');
     expect(status).toHaveTextContent('Monedas no disponibles');
@@ -76,7 +76,7 @@ describe('CurrencySelect', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     const el = (await screen.findByRole('combobox')) as HTMLSelectElement;
-    await waitFor(() => expect(el.options[0]?.textContent).toBe('Peso colombiano ($)'));
+    await waitFor(() => expect(el.options[0]?.textContent).toBe('Bolívar venezolano (VES)'));
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(mocked).toHaveBeenCalledTimes(2);
   });

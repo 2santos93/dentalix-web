@@ -200,7 +200,7 @@ function watchConsole(page: Page): string[] {
 async function pageAs(browser: Browser, email: string, width: number) {
   const context = await browser.newContext({
     viewport: { width, height: 900 },
-    timezoneId: 'America/Bogota',
+    timezoneId: 'America/Caracas',
     locale: E2E_BROWSER_LOCALE,
   });
   const page = await context.newPage();

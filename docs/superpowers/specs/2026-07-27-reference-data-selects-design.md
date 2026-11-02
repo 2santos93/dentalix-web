@@ -31,7 +31,7 @@ datos viejos) vuelva a tumbar el render.
 
 - **Fuente de monedas:** nueva tabla `Currency` sembrada para coincidir con las
   monedas que soporta el proveedor de exchange (OpenExchangeRates, base USD) +
-  COP. La tabla también actúa como whitelist de validación.
+  VES. La tabla también actúa como whitelist de validación.
 - **País/Ciudad:** viven en el **Paciente**, junto a `address` (no la
   reemplazan). Se agregan `countryCode` + `cityId` (ambos opcionales).
 - **Dataset de ciudades:** amplio —
@@ -60,8 +60,8 @@ model Currency {
 }
 
 model Country {
-  code   String @id   // ISO 3166-1 alpha-2, p.ej. "CO"
-  name   String       // "Colombia"
+  code   String @id   // ISO 3166-1 alpha-2, p.ej. "VE"
+  name   String       // "Venezuela"
   cities City[]
   @@map("countries")
 }
@@ -104,7 +104,7 @@ solo lectura.
 |---|---|---|---|
 | GET | `/currencies` | `[{ code, name, symbol }]` | Lista completa (pequeña). |
 | GET | `/countries` | `[{ code, name }]` | Lista completa (~200). |
-| GET | `/cities?countryCode=CO&q=bog&limit=20` | `[{ id, name, region }]` | `countryCode` obligatorio; `q` filtra por nombre (ILIKE, mín. 1 char); `limit` default 20, máx 50. Orden por nombre. |
+| GET | `/cities?countryCode=VE&q=car&limit=20` | `[{ id, name, region }]` | `countryCode` obligatorio; `q` filtra por nombre (ILIKE, mín. 1 char); `limit` default 20, máx 50. Orden por nombre. |
 
 DTOs de respuesta anotados con `@ApiProperty` para que aparezcan en el
 `schema.d.ts` generado por `openapi-typescript`.
@@ -122,8 +122,8 @@ el front (select), pero esto cierra la puerta a datos inválidos desde la API.
 ## Seed (`dentalix-api`)
 
 - Añadir `prisma/seed.ts` y configurar `"prisma": { "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts" }` en `package.json`. Ejecutable con `npx prisma db seed`. **Idempotente** (`createMany({ skipDuplicates: true })` / `upsert`).
-- **Currencies:** arreglo curado inline (USD, COP, EUR, MXN, ARS, PEN, CLP,
-  BRL, … las soportadas por OpenExchangeRates + COP) con `name` y `symbol`.
+- **Currencies:** arreglo curado inline (USD, VES, EUR, MXN, ARS, PEN, CLP,
+  BRL, … las soportadas por OpenExchangeRates + VES) con `name` y `symbol`.
 - **Countries + Cities:** JSON del dataset bajo `prisma/data/` (recortado a los
   campos usados: country code/name; city id/name/countryCode/region). Inserción
   en lotes (~5k) con `skipDuplicates`.

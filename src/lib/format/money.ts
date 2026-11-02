@@ -9,11 +9,11 @@
  * - Lo que no encaja (grupos que no son de 3, separadores mezclados, un
  *   separador suelto) es ambiguo: se devuelve un error con el motivo y el
  *   formulario no envía nada. Mejor preguntar que guardar 100 veces más.
- * - Hasta 2 decimales en TODAS las monedas, también COP y CLP: la API y la
+ * - Hasta 2 decimales en TODAS las monedas, también RSD y CLP: la API y la
  *   base guardan cualquier importe con céntimos (`@IsMoney`, `Decimal(…, 2)`)
- *   y un campo no se redondea al escribirlo. Así un precio o un saldo en COP
+ *   y un campo no se redondea al escribirlo. Así un precio o un saldo en RSD
  *   con céntimos que se precarga en un campo se guarda sin tocarlo. (El
- *   redondeo a la unidad de COP es solo de las líneas que se calculan, como
+ *   redondeo a la unidad de RSD es solo de las líneas que se calculan, como
  *   el descuento en bloque, con los `roundingDigits` que manda la API:
  *   `lib/money/line-rounding.ts`, DX-340.)
  * - Un importe pegado tal como lo pinta la app («1.500.000,50 USD»,
@@ -139,7 +139,7 @@ function currencyAffixes(currency: string): string[] {
  */
 export function parseDecimalInput(raw: string, maxDecimals: number): DecimalParseResult {
   // Los espacios duros que trae un importe copiado de la propia app
-  // («150.000,00 COP» lleva U+00A0) cuentan como espacio.
+  // («150.000,00 VES» lleva U+00A0) cuentan como espacio.
   const text = normalizeSpaces(raw);
   if (text === '') return { ok: false, reason: 'empty', message: moneyInputCopy.empty };
   if (LEADING_SIGN.test(text) && parseDecimalInput(text.replace(LEADING_SIGN, ''), maxDecimals).ok) {
