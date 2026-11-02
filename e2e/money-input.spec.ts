@@ -163,7 +163,7 @@ for (const v of viewports) {
     await payment.getByRole('button', { name: 'Registrar abono' }).click();
     await expect(payment).toBeHidden({ timeout: 10_000 });
     // UX v2: el movimiento nuevo, con «Anular» en su «⋯».
-    const actions = panel.getByRole('button', { name: /^Acciones de abono de 150\.000,00\sCOP/ });
+    const actions = panel.getByRole('button', { name: /^Acciones de abono de COP\s150\.000,00/ });
     await expect(actions).toBeVisible({ timeout: 15_000 });
     await actions.click();
     await expect(page.getByRole('menuitem', { name: 'Anular' })).toBeVisible();

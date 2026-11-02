@@ -10,7 +10,8 @@ import {
 } from '@/lib/account-statement/account-statement-api';
 import { statementCopy } from '@/lib/account-statement/presentation';
 import { RELATIONSHIP_LABELS } from '@/lib/patients/responsible-parties-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Button } from '@/components/ui/button';
 import { SectionError } from '@/components/errors/section-error';
 import { familyStatementCopy } from './family-account-statement-document';
@@ -40,6 +41,8 @@ export function FamilyAccountStatementSection({
   /** Cambia cuando se registra o anula un abono en la ficha. */
   refreshKey?: number;
 }) {
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
   const [data, setData] = useState<FamilyAccountStatement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -119,7 +122,7 @@ export function FamilyAccountStatementSection({
                   ) : (
                     m.summary.map((s) => (
                       <span key={s.currency}>
-                        {copy.colBalance}: {formatCurrency(Math.abs(s.balance), s.currency)}
+                        {copy.colBalance}: {sedeMoney(Math.abs(s.balance), s.currency, fmt)}
                         {s.balance < 0 ? ` ${statementCopy.inFavor}` : ''}
                       </span>
                     ))
@@ -142,7 +145,7 @@ export function FamilyAccountStatementSection({
                 {copy.totalsHeading} ({t.currency})
               </span>
               <span>
-                {formatCurrency(Math.abs(t.balance), t.currency)}
+                {sedeMoney(Math.abs(t.balance), t.currency, fmt)}
                 {t.balance < 0 ? ` ${statementCopy.inFavor}` : ''}
               </span>
             </p>

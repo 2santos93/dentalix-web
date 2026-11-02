@@ -1,4 +1,3 @@
-import { formatCurrency } from '@/lib/format/currency';
 import { followUpAmount, groupFollowUp } from './follow-up-groups';
 import type { PendingFollowUpItem } from './plan-options-api';
 
@@ -38,14 +37,15 @@ describe('groupFollowUp (D2)', () => {
 });
 
 describe('followUpAmount (D2)', () => {
+  const money = (amount: number, currency: string) => `${currency} ${amount}`;
   it('una opción: su monto; varias: el rango; monedas distintas: cada una aparte', () => {
-    expect(followUpAmount([item()])).toBe(formatCurrency(100, 'COP'));
-    expect(followUpAmount([item({ total: 300 }), item({ total: 100 })])).toBe(
-      `${formatCurrency(100, 'COP')} – ${formatCurrency(300, 'COP')}`,
+    expect(followUpAmount([item()], money)).toBe(money(100, 'COP'));
+    expect(followUpAmount([item({ total: 300 }), item({ total: 100 })], money)).toBe(
+      `${money(100, 'COP')} – ${money(300, 'COP')}`,
     );
-    expect(followUpAmount([item({ total: 100 }), item({ total: 100 })])).toBe(formatCurrency(100, 'COP'));
-    expect(followUpAmount([item(), item({ currency: 'USD', total: 50 })])).toBe(
-      `${formatCurrency(100, 'COP')} · ${formatCurrency(50, 'USD')}`,
+    expect(followUpAmount([item({ total: 100 }), item({ total: 100 })], money)).toBe(money(100, 'COP'));
+    expect(followUpAmount([item(), item({ currency: 'USD', total: 50 })], money)).toBe(
+      `${money(100, 'COP')} · ${money(50, 'USD')}`,
     );
   });
 });

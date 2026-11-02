@@ -4,6 +4,9 @@ import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 import { openPatientTab } from './support/patient-tabs';
 import { dataList, dataListRows } from './support/data-list';
+import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
+import { moneyWithCode } from '../src/lib/format/sede-number';
 
 /**
  * e2e (DX-011): abrir la ficha → pestaña «Estado de cuenta» → «Imprimir».
@@ -35,11 +38,14 @@ const password = 'Password123!';
 const patientFirstName = 'Rosa';
 const patientLastName = `EstadoCuenta${suffix}`;
 
-// Mismo formateador que la app (`formatCurrency`, locale `es`).
+// Impreso: `formatCurrency` (pendiente de DX-354), locale `es`.
 const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
 function money(amount: number): string {
   return usd.format(amount);
 }
+/** DX-522: el estado de cuenta en pantalla, con el formato de la sede y el código ISO («USD 1.000,00»). */
+const sedeFmt = regionalFormat(E2E_REGION);
+const sedeUsd = (amount: number): string => moneyWithCode(amount, 'USD', sedeFmt);
 
 async function seed(
   request: APIRequestContext,
@@ -138,9 +144,9 @@ test('estado de cuenta: ficha → pestaña → imprimir muestra un documento lim
   const panel = page.locator('#tabpanel-account-statement');
   const summary = panel.getByRole('region', { name: 'Resumen en USD' });
   await expect(summary).toBeVisible({ timeout: 10_000 });
-  await expect(summary.getByTestId('budgeted')).toContainText(money(1000));
-  await expect(summary.getByTestId('paid')).toContainText(money(300));
-  await expect(summary.getByTestId('balance')).toContainText(money(700));
+  await expect(summary.getByTestId('budgeted')).toContainText(sedeUsd(1000));
+  await expect(summary.getByTestId('paid')).toContainText(sedeUsd(300));
+  await expect(summary.getByTestId('balance')).toContainText(sedeUsd(700));
 
   // UX v2: tabla desde 640 px, tarjetas en el teléfono (`DataList`). Dos abonos.
   const movements = dataList(panel, 'Movimientos (abonos)');
