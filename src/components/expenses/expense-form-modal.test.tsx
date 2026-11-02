@@ -25,7 +25,7 @@ jest.mock('../../lib/files/upload-single-file', () => ({
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
   ]),
 }));
@@ -66,8 +66,8 @@ function renderModal(props: Partial<React.ComponentProps<typeof ExpenseFormModal
 }
 
 async function fillRequired(user: ReturnType<typeof setupUser>) {
-  await screen.findByRole('option', { name: 'Peso colombiano ($)' });
-  await user.selectOptions(screen.getByLabelText('Moneda'), 'COP');
+  await screen.findByRole('option', { name: 'Bolívar venezolano (VES)' });
+  await user.selectOptions(screen.getByLabelText('Moneda'), 'VES');
   await user.selectOptions(screen.getByLabelText('Categoría'), 'Laboratorio');
   await user.type(screen.getByLabelText('Importe'), '150.000');
 }
@@ -85,7 +85,7 @@ describe('ExpenseFormModal (DX-274)', () => {
     mockExpenseToday.retry.mockReset();
     mockedCreate.mockReset().mockResolvedValue(expenseDetailFixture());
     mockedUpdate.mockReset().mockResolvedValue(expenseDetailFixture());
-    mockedSuppliers.mockReset().mockResolvedValue(['Lab Dental SAS', 'Mensajeros Ya']);
+    mockedSuppliers.mockReset().mockResolvedValue(['Lab Dental C.A.', 'Mensajeros Ya']);
     mockedUpload.mockReset().mockResolvedValue('up-1');
   });
 
@@ -119,16 +119,16 @@ describe('ExpenseFormModal (DX-274)', () => {
     expect(screen.getByRole('group', { name: 'Fecha de factura' })).toBeInTheDocument();
     expect(isoOf('invoiceDate')).toHaveValue('2026-10-24');
     await fillRequired(user);
-    await user.type(screen.getByLabelText('Proveedor'), '  Lab   Dental SAS ');
+    await user.type(screen.getByLabelText('Proveedor'), '  Lab   Dental C.A. ');
     await user.click(screen.getByRole('button', { name: 'Registrar gasto' }));
     await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
     const [, body, key] = mockedCreate.mock.calls[0];
     expect(body).toEqual({
       locationId: 'loc-1',
       category: 'Laboratorio',
-      supplier: 'Lab Dental SAS',
+      supplier: 'Lab Dental C.A.',
       amount: 150000,
-      currency: 'COP',
+      currency: 'VES',
       invoiceDate: '2026-10-24',
     });
     expect(key).toEqual(expect.any(String));

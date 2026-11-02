@@ -11,7 +11,7 @@ jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
 const mockedAdd = addCashAdjustment as jest.MockedFunction<typeof addCashAdjustment>;
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
   ]),
 }));
@@ -19,7 +19,7 @@ jest.mock('../../lib/reference/currencies-api', () => ({
 const adjustment: CashAdjustment = {
   id: 'adj-1',
   kind: 'CORRECTION',
-  currency: 'COP',
+  currency: 'VES',
   method: 'CASH',
   amount: 5_000,
   reason: 'Abono sin registrar',
@@ -39,7 +39,7 @@ function renderModal() {
       onOpenChange={() => undefined}
       token="tok"
       sessionId="cs-1"
-      defaultCurrency="COP"
+      defaultCurrency="VES"
       onCreated={onCreated}
     />,
   );
@@ -79,7 +79,7 @@ describe('CashAdjustmentModal (DX-027, DX-252)', () => {
     await user.click(submit());
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(adjustment));
     expect(mockedAdd).toHaveBeenCalledWith('tok', 'cs-1', {
-      currency: 'COP',
+      currency: 'VES',
       method: 'CASH',
       amount: 5_000,
       reason: 'Abono sin registrar',

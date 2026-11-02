@@ -40,16 +40,16 @@ const family: FamilyAccountStatement = {
       patient: { id: 'son', firstName: 'Iván', lastName: 'Gil' },
       relationship: 'MOTHER',
       self: false,
-      summary: [amounts('COP', 350000.35, 100000.25)],
+      summary: [amounts('USD', 350000.35, 100000.25)],
     },
     {
       patient: { id: 'daughter', firstName: 'Lucía', lastName: 'Gil' },
       relationship: 'MOTHER',
       self: false,
-      summary: [amounts('COP', 1200000.2, 450000.05)],
+      summary: [amounts('USD', 1200000.2, 450000.05)],
     },
   ],
-  totals: [amounts('COP', 1550000.55, 550000.3)],
+  totals: [amounts('USD', 1550000.55, 550000.3)],
 };
 
 describe('Estado de cuenta familiar (DX-203)', () => {
@@ -114,7 +114,7 @@ describe('Estado de cuenta familiar (DX-203)', () => {
   it('DX-262 (M1): con saldo migrado, la pantalla y el documento explican que el saldo lo incluye', async () => {
     const withOpening = {
       ...family,
-      totals: [{ ...amounts('COP', 1550000.55, 550000.3), openingBalance: 50000, openingPending: 50000 }],
+      totals: [{ ...amounts('USD', 1550000.55, 550000.3), openingBalance: 50000, openingPending: 50000 }],
     };
     mockedGet.mockResolvedValue(withOpening);
     render(<FamilyAccountStatementSection token="tok" patientId="mother" />);

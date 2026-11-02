@@ -253,7 +253,7 @@ describe('PublicSignatureView (DX-243)', () => {
   it('presupuesto (DX-415): tras el código ve ítems, totales en la moneda y el formato de la sede y condiciones; acepta y queda la copia', async () => {
     const user = setupUser();
     const budget = {
-      currency: 'COP',
+      currency: 'USD',
       clinicName: 'Clínica Sonrisas',
       location: { name: 'Sede Centro', address: 'Calle 1' },
       patient: { name: 'Laura Castro', document: 'CI 123' },
@@ -275,7 +275,7 @@ describe('PublicSignatureView (DX-243)', () => {
           agreementName: null,
         },
       ],
-      totals: [{ currency: 'COP', gross: 300000, discount: 30000, net: 270000, agreementSaving: 0 }],
+      totals: [{ currency: 'USD', gross: 300000, discount: 30000, net: 270000, agreementSaving: 0 }],
     };
     const doc = documentFixture({
       type: 'BUDGET',
@@ -308,7 +308,7 @@ describe('PublicSignatureView (DX-243)', () => {
     const items = within(article).getByRole('list', { name: 'Procedimientos del presupuesto' });
     expect(within(items).getAllByRole('listitem')).toHaveLength(1);
     // Formato de la sede (es-VE) y el código ISO de la moneda del plan (DX-378).
-    expect(article).toHaveTextContent(/Total \(COP\)\s*COP\s270\.000,00/);
+    expect(article).toHaveTextContent(/Total \(USD\)\s*USD\s270\.000,00/);
 
     await user.click(screen.getByRole('checkbox', { name: /he revisado el presupuesto/i }));
     draw(screen.getByRole('img', { name: 'Tu firma' }));

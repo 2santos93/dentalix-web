@@ -14,7 +14,7 @@ function item(over: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem {
     presentedAt: '2026-10-10T00:00:00.000Z',
     presentedLocationId: 'l1',
     daysSincePresented: 10,
-    currency: 'COP',
+    currency: 'VES',
     total: 100,
     itemCount: 1,
     ...over,
@@ -39,13 +39,13 @@ describe('groupFollowUp (D2)', () => {
 
 describe('followUpAmount (D2)', () => {
   it('una opción: su monto; varias: el rango; monedas distintas: cada una aparte', () => {
-    expect(followUpAmount([item()])).toBe(formatCurrency(100, 'COP'));
+    expect(followUpAmount([item()])).toBe(formatCurrency(100, 'VES'));
     expect(followUpAmount([item({ total: 300 }), item({ total: 100 })])).toBe(
-      `${formatCurrency(100, 'COP')} – ${formatCurrency(300, 'COP')}`,
+      `${formatCurrency(100, 'VES')} – ${formatCurrency(300, 'VES')}`,
     );
-    expect(followUpAmount([item({ total: 100 }), item({ total: 100 })])).toBe(formatCurrency(100, 'COP'));
+    expect(followUpAmount([item({ total: 100 }), item({ total: 100 })])).toBe(formatCurrency(100, 'VES'));
     expect(followUpAmount([item(), item({ currency: 'USD', total: 50 })])).toBe(
-      `${formatCurrency(100, 'COP')} · ${formatCurrency(50, 'USD')}`,
+      `${formatCurrency(100, 'VES')} · ${formatCurrency(50, 'USD')}`,
     );
   });
 });

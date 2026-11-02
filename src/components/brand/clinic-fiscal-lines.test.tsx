@@ -31,9 +31,9 @@ describe('documentos emitidos (DX-019)', () => {
   const FROZEN = { ...EMPTY_CLINIC_FISCAL, legalName: 'Sonrisas S.A.', taxId: 'J-1', taxIdLabel: 'ID fiscal' };
 
   it('el presupuesto imprime su foto; sin foto, ningún dato fiscal', () => {
-    const { rerender } = render(<PlanQuoteDocument catalogCurrency="COP" quote={planQuoteFixture({ clinicFiscal: FROZEN })} />);
+    const { rerender } = render(<PlanQuoteDocument catalogCurrency="USD" quote={planQuoteFixture({ clinicFiscal: FROZEN })} />);
     expect(screen.getByTestId('clinic-fiscal')).toHaveTextContent('Sonrisas S.A. · ID fiscal J-1');
-    rerender(<PlanQuoteDocument catalogCurrency="COP" quote={planQuoteFixture({ clinicFiscal: null })} />);
+    rerender(<PlanQuoteDocument catalogCurrency="USD" quote={planQuoteFixture({ clinicFiscal: null })} />);
     expect(screen.queryByTestId('clinic-fiscal')).not.toBeInTheDocument();
   });
 

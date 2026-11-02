@@ -24,7 +24,7 @@ const mockedReplace = replacePriceListItems as jest.MockedFunction<typeof replac
 const list: PriceList = {
   id: 'pl-1',
   name: 'Surco 2026',
-  currency: 'COP',
+  currency: 'USD',
   locationId: null,
   active: true,
   itemCount: 1,
@@ -75,7 +75,7 @@ describe('PriceListItemsView (DX-105)', () => {
     const user = setupUser();
     render_();
     expect(await screen.findByRole('heading', { name: 'Surco 2026' })).toBeInTheDocument();
-    expect(screen.getByText(/Precios en COP/)).toBeInTheDocument();
+    expect(screen.getByText(/Precios en USD/)).toBeInTheDocument();
     const table = await screen.findByRole('table', { name: 'Precios de la lista' });
     expect(
       within(table).getAllByRole('columnheader').map((h) => h.textContent),

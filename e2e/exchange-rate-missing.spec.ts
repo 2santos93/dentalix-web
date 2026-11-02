@@ -40,7 +40,7 @@ let patientId: string;
 let autoOrigin: string;
 let autoAdminEmail: string;
 let autoPatientId: string;
-/** DX-386: el abono con el formato de la sede y el código ISO («COP 200.000,00»). */
+/** DX-386: el abono con el formato de la sede y el código ISO («VES 200.000,00»). */
 const PAYMENT_TEXT = moneyWithCode(200000, LOCAL, regionalFormat(E2E_REGION));
 
 /** Hoy en la zona de la sede de e2e. */

@@ -18,7 +18,7 @@ const row: PriceListItemRow = {
   price: null,
 };
 
-function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'COP') {
+function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'USD') {
   const onSaved = jest.fn();
   const onOpenChange = jest.fn();
   render(

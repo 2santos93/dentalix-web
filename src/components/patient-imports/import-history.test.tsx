@@ -262,7 +262,7 @@ it('DX-262: con saldos migrados, el deshacer avisa de que también se retiran y 
     ...completed,
     balances: balancesFixture({
       progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0, existing: 0 },
-      imported: [{ currency: 'COP', count: 3, amount: 201000.5 }],
+      imported: [{ currency: 'USD', count: 3, amount: 201000.5 }],
     }),
   };
   mockedList.mockResolvedValue(page([withBalances]));
@@ -288,7 +288,7 @@ it('DX-262: «Retirar saldos migrados» retira solo los saldos (aunque los pacie
     ...completed,
     balances: balancesFixture({
       progress: { processed: 3, created: 2, skipped: 0, ambiguous: 1, existing: 0 },
-      imported: [{ currency: 'COP', count: 2, amount: 201000.5 }],
+      imported: [{ currency: 'USD', count: 2, amount: 201000.5 }],
       canUndo: true,
     }),
   };

@@ -15,7 +15,7 @@ function plan(overrides: Partial<TreatmentPlan> & { id: string }): TreatmentPlan
     tenantId: 't1',
     patientId: 'p1',
     status: 'PRESENTED',
-    currency: 'COP',
+    currency: 'VES',
     notes: null,
     createdById: null,
     optionGroupId: 'a',
@@ -44,7 +44,7 @@ function details() {
   );
 }
 
-// Normaliza los espacios duros de Intl (es: "150.000,50 COP" lleva U+00A0).
+// Normaliza los espacios duros de Intl (es: "150.000,50 VES" lleva U+00A0).
 function money(text: string | null | undefined): string {
   return (text ?? '').replace(/\s/g, ' ');
 }
@@ -58,7 +58,7 @@ describe('PlanOptionsComparison (DX-040)', () => {
       <PlanOptionsComparison token="tok" options={[optionA, optionB]} currentPlanId="a" onSelect={jest.fn()} />,
     );
     const a = await screen.findByRole('listitem', { name: 'Opción A: implante' });
-    expect(money(a.textContent)).toContain(money(formatCurrency(5300000, 'COP')));
+    expect(money(a.textContent)).toContain(money(formatCurrency(5300000, 'VES')));
     expect(within(a).getByText('2 procedimientos')).toBeInTheDocument();
     expect(within(a).getByText('Presentado')).toBeInTheDocument();
     const b = screen.getByRole('listitem', { name: 'Opción B: puente' });
@@ -96,12 +96,12 @@ describe('PlanOptionsComparison (DX-040)', () => {
 
   it('una sola moneda: sin aviso', async () => {
     mockedGetPlan.mockImplementation((_t, id) =>
-      Promise.resolve({ ...(id === 'a' ? optionA : { ...optionB, currency: 'COP' }), total: 1, items: [] }),
+      Promise.resolve({ ...(id === 'a' ? optionA : { ...optionB, currency: 'VES' }), total: 1, items: [] }),
     );
     render(
       <PlanOptionsComparison
         token="tok"
-        options={[optionA, { ...optionB, currency: 'COP' }]}
+        options={[optionA, { ...optionB, currency: 'VES' }]}
         currentPlanId="a"
         onSelect={jest.fn()}
       />,

@@ -26,7 +26,7 @@ const APPOINTMENT = {
   end: '2026-10-20T14:30:00.000Z',
   providerName: 'Dra. Pérez',
   locationName: 'Sede Norte',
-  locationAddress: 'Calle 100 # 15-20',
+  locationAddress: 'Av. Libertador 100',
 };
 const CLINIC = { name: 'Clínica Sonrisa', primaryColor: '#7C3AED', logoUrl: null };
 
@@ -62,7 +62,7 @@ describe('PublicConfirmationView', () => {
     expect(screen.getByText('14:00–14:30')).toBeInTheDocument();
     expect(screen.getByText('Dra. Pérez')).toBeInTheDocument();
     expect(screen.getByText('Sede Norte')).toBeInTheDocument();
-    expect(screen.getByText('Calle 100 # 15-20')).toBeInTheDocument();
+    expect(screen.getByText('Av. Libertador 100')).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('tok-1');
     // Abrir NO responde: solo el clic del paciente lo hace.
     expect(respond).not.toHaveBeenCalled();
@@ -177,7 +177,7 @@ describe('PublicConfirmationView', () => {
       noticeHours: 24,
       text: 'Las citas no avisadas se cobran.',
       suggestedFee: 50000,
-      currency: 'COP',
+      currency: 'USD',
     };
 
     it('muestra el texto, las horas y el importe; a tiempo no avisa ni pide aceptación', async () => {

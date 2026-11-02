@@ -24,7 +24,7 @@ export function accountStatementFixture(
     range: { from: null, to: null },
     summary: [
       {
-        currency: 'COP',
+        currency: 'VES',
         budgeted: 3000000,
         openingBalance: 0,
         openingPending: 0,
@@ -57,7 +57,7 @@ export function accountStatementFixture(
       {
         id: 'plan-1',
         status: 'ACCEPTED',
-        currency: 'COP',
+        currency: 'VES',
         createdAt: '2026-08-01T15:00:00.000Z',
         budgeted: 3000000,
         countsTowardsBalance: true,
@@ -85,7 +85,7 @@ export function accountStatementFixture(
         paidAt: '2026-09-20T17:00:00.000Z',
         paidOn: '2026-09-20',
         amount: 300000,
-        currency: 'COP',
+        currency: 'VES',
         method: 'CARD',
         paymentMethod: { id: 'pm-card', name: 'Tarjeta' },
         reference: null,
@@ -107,7 +107,7 @@ export function accountStatementFixture(
         paidAt: '2026-09-10T17:00:00.000Z',
         paidOn: '2026-09-10',
         amount: 1200000,
-        currency: 'COP',
+        currency: 'VES',
         method: 'TRANSFER',
         // DX-395: un medio propio de la clínica con su referencia.
         paymentMethod: { id: 'pm-mobile', name: 'Pago móvil' },
@@ -152,7 +152,7 @@ export function accountStatementFixture(
       {
         paymentPlanId: 'pp-1',
         treatmentPlanId: 'plan-1',
-        currency: 'COP',
+        currency: 'VES',
         kind: 'DOWN_PAYMENT',
         sequence: null,
         dueDate: '2026-08-10T00:00:00.000Z',
@@ -164,7 +164,7 @@ export function accountStatementFixture(
       {
         paymentPlanId: 'pp-1',
         treatmentPlanId: 'plan-1',
-        currency: 'COP',
+        currency: 'VES',
         kind: 'INSTALLMENT',
         sequence: 2,
         dueDate: '2026-10-10T00:00:00.000Z',
@@ -176,7 +176,7 @@ export function accountStatementFixture(
       {
         paymentPlanId: 'pp-1',
         treatmentPlanId: 'plan-1',
-        currency: 'COP',
+        currency: 'VES',
         kind: 'INSTALLMENT',
         sequence: 3,
         dueDate: '2026-11-10T00:00:00.000Z',
@@ -201,7 +201,7 @@ export function openingBalanceStatementFixture(): AccountStatement {
   return accountStatementFixture({
     summary: [
       {
-        currency: 'COP',
+        currency: 'VES',
         budgeted: 0,
         openingBalance: 200000.5,
         openingPending: 150000.5,
@@ -233,7 +233,7 @@ export function openingBalanceStatementFixture(): AccountStatement {
         paidAt: '2026-10-20T17:00:00.000Z',
         paidOn: '2026-10-20',
         amount: 50000,
-        currency: 'COP',
+        currency: 'VES',
         method: 'TRANSFER',
         paymentMethod: { id: 'pm-transfer', name: 'Transferencia' },
         reference: null,
@@ -255,7 +255,7 @@ export function openingBalanceStatementFixture(): AccountStatement {
     openingBalances: [
       {
         id: 'ob-1',
-        currency: 'COP',
+        currency: 'VES',
         amount: 200000.5,
         asOfDate: '2026-08-09',
         asOfDateApproximate: false,

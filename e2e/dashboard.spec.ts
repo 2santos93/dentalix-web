@@ -18,7 +18,7 @@ import { sedeTime } from './support/clock';
  *   - a treatment plan for the patient (`POST /patients/:id/treatment-
  *     plans`), one billable item (`POST /treatment-plans/:id/items`, priced,
  *     status flipped to DONE via `PATCH .../items/:itemId`), and an abono
- *     recorded against the plan in COP, `paidAt` today (`POST
+ *     recorded against the plan in VES, `paidAt` today (`POST
  *     /treatment-plans/:id/payments`) — this is what the dashboard's
  *     "Ingresos del período" card now sums (PAY-T4: sales/`/sales` removed,
  *     incomes are sourced from payments, see `get-payments-totals.use-
@@ -29,11 +29,11 @@ import { sedeTime } from './support/clock';
  *   - «Hoy»: the appointment's sede-formatted time, «Agendada», the patient
  *     link and «Por confirmar» = 1;
  *   - «Pendientes»: «Bajo stock» = 1 linking to /inventory, presupuestos «Al día»;
- *   - «Resultados del período» → «Cobrado, en COP»: the abono and «1 abono»;
+ *   - «Resultados del período» → «Cobrado, en VES»: the abono and «1 abono»;
  *   - «Cartera por antigüedad»: the plan is fully paid → «Nadie debe.».
  *
- * OFFLINE by design: the abono's currency (COP) equals the dashboard's
- * default query currency (COP), so `GetPaymentsTotalsUseCase` ->
+ * OFFLINE by design: the abono's currency (VES) equals the dashboard's
+ * default query currency (VES), so `GetPaymentsTotalsUseCase` ->
  * `ConvertAmountUseCase` takes the `from === to` passthrough
  * (`convert-amount.use-case.ts`) and returns `{ result: amount, rateUsed: 1 }`
  * WITHOUT calling `GetRatesForDateUseCase` (i.e. never hits Open Exchange
@@ -85,8 +85,8 @@ const paymentAmount = 250;
 // The income amount is asserted against a value formatted INSIDE the browser
 // (see `page.evaluate` below) with the same options as the app's
 // `formatCurrency` (`src/lib/format/currency.ts`): es locale and two FIXED
-// fraction digits (DX-098). Relying on ICU's default for COP breaks on recent
-// builds, which give COP 0 decimals ("250 COP" vs the app's "250,00 COP").
+// fraction digits (DX-098). Relying on ICU's default for VES breaks on recent
+// builds, which give VES 0 decimals ("250 VES" vs the app's "250,00 VES").
 
 // Same formatter as `dashboard-view.tsx`'s `formatTime`, in the browser's
 // (the sede's) timezone — not Node's (see support/clock.ts).
@@ -196,9 +196,9 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
       headers: seedHeaders,
       data: {
         amount: paymentAmount,
-        // COP so it equals the dashboard's default query currency — keeps the
+        // VES so it equals the dashboard's default query currency — keeps the
         // conversion a `from === to` passthrough (offline, no exchange call).
-        currency: 'COP',
+        currency: 'VES',
         // Ahora mismo: desde DX-097 la API corta los días en la zona de la
         // sede, así que un abono de cualquier hora de hoy cae en «hoy».
         paidAt: new Date().toISOString(),
@@ -237,7 +237,7 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   ).toBeTruthy();
 
   // --- Load Inicio (default period = current month..today inclusive,
-  // default currency COP -> covers today's abono; COP->COP passthrough) ---
+  // default currency VES -> covers today's abono; VES->VES passthrough) ---
   await page.goto(`${origin}/dashboard`);
   await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible();
   await expect(page.getByTestId('dashboard-scope')).toContainText(/Días en hora de \S/);
@@ -258,14 +258,14 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   await expect(pending.getByRole('link', { name: 'Bajo stock' })).toHaveAttribute('href', '/inventory');
   await expect(pending.getByTestId('pending-follow-up-value')).toHaveText('Al día');
 
-  // --- «Resultados del período» → «Cobrado, en COP»: total + count ---
+  // --- «Resultados del período» → «Cobrado, en VES»: total + count ---
   // Format the expected amount with the browser's own Intl and the app's
   // options (two fixed decimals, as `formatCurrency` since DX-098).
   const expectedIncome = await page.evaluate(
     (amount) =>
       new Intl.NumberFormat('es', {
         style: 'currency',
-        currency: 'COP',
+        currency: 'VES',
         currencyDisplay: 'code',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -273,7 +273,7 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
     paymentAmount,
   );
   const incomes = page.getByTestId('dashboard-incomes');
-  await expect(incomes.getByText('Cobrado, en COP', { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(incomes.getByText('Cobrado, en VES', { exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(incomes.getByText(expectedIncome, { exact: true }).first()).toBeVisible();
   await expect(incomes.getByText('1 abono', { exact: true })).toBeVisible();
   await expect(page.getByTestId('dashboard-kpi-production')).toContainText('Producción');

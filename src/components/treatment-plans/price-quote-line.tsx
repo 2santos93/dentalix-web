@@ -19,7 +19,7 @@ export type ListPriceText = (value: number) => string;
 
 /**
  * Origen del precio resuelto en el formulario: «Convenio · Seguros Sol ·
- * precio de lista COP 100.000,00». El precio de lista (catálogo) solo sale si
+ * precio de lista USD 100.000,00». El precio de lista (catálogo) solo sale si
  * difiere del resuelto.
  */
 export function priceSourceText(

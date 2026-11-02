@@ -29,7 +29,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
   ]),
 }));
@@ -200,8 +200,8 @@ const cases: [text: string, currency: string, expected: number][] = [
   ['150,50', 'USD', 150.5],
   ['1,500.25', 'USD', 1500.25],
   ['1.500.000,25', 'USD', 1_500_000.25],
-  ['150.000', 'COP', 150_000],
-  ['150,000', 'COP', 150_000],
+  ['150.000', 'VES', 150_000],
+  ['150,000', 'VES', 150_000],
 ];
 
 describe.each(formNames)('%s (DX-241)', (name) => {

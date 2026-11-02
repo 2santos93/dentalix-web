@@ -42,7 +42,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
   ]),
 }));
@@ -76,10 +76,10 @@ const METHODS = [
   },
 ];
 
-const copPlan: BillablePlan = {
-  id: 'plan-cop',
+const vesPlan: BillablePlan = {
+  id: 'plan-ves',
   status: 'ACCEPTED',
-  currency: 'COP',
+  currency: 'VES',
   createdAt: '2026-08-01T15:00:00.000Z',
   total: 3000000,
   paid: 2700000,
@@ -88,9 +88,9 @@ const copPlan: BillablePlan = {
   hasActivePaymentPlan: false,
 };
 
-function copBalance(balance: number): PlanBalance {
+function vesBalance(balance: number): PlanBalance {
   return {
-    planCurrency: 'COP',
+    planCurrency: 'VES',
     billable: 3000000,
     paid: 3000000 - balance,
     balance,
@@ -110,7 +110,7 @@ function savedSplit(): SplitPayment {
   const line = (id: string, n: number, amount: number, currency: string) => ({
     id,
     tenantId: 't-1',
-    treatmentPlanId: 'plan-cop',
+    treatmentPlanId: 'plan-ves',
     openingBalanceId: null,
     patientId: 'pat-1',
     amount,
@@ -130,7 +130,7 @@ function savedSplit(): SplitPayment {
     createdAt: '2026-10-30T17:00:00.000Z',
     updatedAt: '2026-10-30T17:00:00.000Z',
     receiptNumber: 'PRI-000007',
-    exchangeRateCurrency: 'COP',
+    exchangeRateCurrency: 'VES',
     frozenRate: null,
     exchangeRateStatus: 'NOT_NEEDED' as const,
     adjustments: [],
@@ -139,22 +139,22 @@ function savedSplit(): SplitPayment {
   return {
     id: 'pay-1',
     receiptNumber: 'PRI-000007',
-    planCurrency: 'COP',
+    planCurrency: 'VES',
     total: 300000,
-    payments: [line('pay-1', 1, 100000, 'COP'), line('pay-2', 2, 50, 'USD')],
+    payments: [line('pay-1', 1, 100000, 'VES'), line('pay-2', 2, 50, 'USD')],
   };
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   (listLocations as jest.Mock).mockResolvedValue([clinicLocation()]);
-  (listBillablePlans as jest.Mock).mockResolvedValue([copPlan]);
+  (listBillablePlans as jest.Mock).mockResolvedValue([vesPlan]);
   (getExchangeRates as jest.Mock).mockResolvedValue({
     base: 'USD',
     source: 'AUTOMATIC',
-    rates: { COP: 4000 },
+    rates: { VES: 4000 },
   });
-  (getPlanBalance as jest.Mock).mockResolvedValue(copBalance(1800000));
+  (getPlanBalance as jest.Mock).mockResolvedValue(vesBalance(1800000));
   mockedMethods.mockResolvedValue(METHODS);
   mockedSplit.mockResolvedValue(savedSplit());
 });
@@ -170,7 +170,7 @@ function renderModal() {
 
 const text = (value: string | null | undefined) => (value ?? '').replace(/\s/g, ' ');
 
-/** La primera forma de pago: 100 000 COP en efectivo, y la segunda: 50 USD en efectivo. */
+/** La primera forma de pago: 100 000 VES en efectivo, y la segunda: 50 USD en efectivo. */
 async function fillTwoLines(dialog: HTMLElement) {
   const user = userEvent.setup();
   await within(dialog).findByLabelText('Plan');
@@ -192,10 +192,10 @@ it('añade otra forma de pago y registra el cobro dividido: total y pendiente en
   await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
 
   const summary = within(dialog).getByTestId('split-summary');
-  // 100 000 + 50 USD × 4000 = 300 000 COP; pendiente 1 800 000.
-  await waitFor(() => expect(text(summary.textContent)).toContain('Total del cobroCOP 300.000,00'));
-  expect(text(summary.textContent)).toContain('Pendiente del planCOP 1.800.000,00');
-  expect(text(summary.textContent)).toContain('Pendiente tras el cobroCOP 1.500.000,00');
+  // 100 000 + 50 USD × 4000 = 300 000 VES; pendiente 1 800 000.
+  await waitFor(() => expect(text(summary.textContent)).toContain('Total del cobroVES 300.000,00'));
+  expect(text(summary.textContent)).toContain('Pendiente del planVES 1.800.000,00');
+  expect(text(summary.textContent)).toContain('Pendiente tras el cobroVES 1.500.000,00');
   // La previsualización de un abono suelto no se repite en el cobro dividido.
   expect(within(dialog).queryByTestId('rp-rate-preview')).toBeNull();
 
@@ -204,17 +204,17 @@ it('añade otra forma de pago y registra el cobro dividido: total y pendiente en
   await waitFor(() => expect(mockedSplit).toHaveBeenCalledTimes(1));
   expect(mockedRecord).not.toHaveBeenCalled();
   const [token, planId, body, key] = mockedSplit.mock.calls[0];
-  expect([token, planId]).toEqual(['tok', 'plan-cop']);
+  expect([token, planId]).toEqual(['tok', 'plan-ves']);
   expect(body).toEqual({
     paidAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     lines: [
-      { amount: 100000, currency: 'COP', paymentMethodId: 'pm-cash' },
+      { amount: 100000, currency: 'VES', paymentMethodId: 'pm-cash' },
       { amount: 50, currency: 'USD', paymentMethodId: 'pm-cash' },
     ],
   });
   expect(key).toMatch(/^[0-9a-f-]{36}$/);
   expect(text(onRecorded.mock.calls[0][0])).toBe(
-    'Cobro registrado: COP 300.000,00 en 2 formas de pago · 30/10/2026 · Plan del 01/08/2026 · recibo PRI-000007.',
+    'Cobro registrado: VES 300.000,00 en 2 formas de pago · 30/10/2026 · Plan del 01/08/2026 · recibo PRI-000007.',
   );
 });
 
@@ -266,14 +266,14 @@ it('hasta 5 formas de pago; quitar las añadidas vuelve al abono de siempre', as
 });
 
 it('si el total supera lo pendiente, pide confirmar el saldo a favor antes de enviarlo', async () => {
-  (getPlanBalance as jest.Mock).mockResolvedValue(copBalance(250000));
+  (getPlanBalance as jest.Mock).mockResolvedValue(vesBalance(250000));
   const { dialog } = renderModal();
   const { user, second } = await fillTwoLines(dialog);
   await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
 
   const summary = within(dialog).getByTestId('split-summary');
-  await waitFor(() => expect(text(summary.textContent)).toContain('Saldo a favor tras el cobroCOP 50.000,00'));
-  expect(text(summary.textContent)).toContain('supera lo pendiente en COP 50.000,00');
+  await waitFor(() => expect(text(summary.textContent)).toContain('Saldo a favor tras el cobroVES 50.000,00'));
+  expect(text(summary.textContent)).toContain('supera lo pendiente en VES 50.000,00');
 
   await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
   const confirm = within(summary).getByLabelText(splitPaymentCopy.confirmCredit);
@@ -409,17 +409,17 @@ it('el 409 de «lo pendiente cambió» (otro abono a la vez) sale en el resumen 
 // Correcciones de la QA en navegador (DX-390).
 describe('correcciones de QA (DX-390)', () => {
   it('B2: con saldo a favor previo, el excedente es solo lo que este cobro supera lo pendiente', async () => {
-    (getPlanBalance as jest.Mock).mockResolvedValue(copBalance(-15000));
+    (getPlanBalance as jest.Mock).mockResolvedValue(vesBalance(-15000));
     const { dialog } = renderModal();
     const { user, second } = await fillTwoLines(dialog);
     await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
 
     const summary = within(dialog).getByTestId('split-summary');
-    await waitFor(() => expect(text(summary.textContent)).toContain('Total del cobroCOP 300.000,00'));
-    expect(text(summary.textContent)).toContain('Pendiente del planCOP 0,00');
+    await waitFor(() => expect(text(summary.textContent)).toContain('Total del cobroVES 300.000,00'));
+    expect(text(summary.textContent)).toContain('Pendiente del planVES 0,00');
     // El saldo a favor tras el cobro sí suma el previo; el excedente, no.
-    expect(text(summary.textContent)).toContain('Saldo a favor tras el cobroCOP 315.000,00');
-    expect(text(summary.textContent)).toContain('supera lo pendiente en COP 300.000,00');
+    expect(text(summary.textContent)).toContain('Saldo a favor tras el cobroVES 315.000,00');
+    expect(text(summary.textContent)).toContain('supera lo pendiente en VES 300.000,00');
   });
 
   it('B4: mientras se envía, también la primera forma de pago queda bloqueada', async () => {
@@ -511,7 +511,7 @@ describe('correcciones de QA (DX-390)', () => {
   });
 
   it('B3: «Confirma el saldo a favor» lleva el foco a la casilla', async () => {
-    (getPlanBalance as jest.Mock).mockResolvedValue(copBalance(250000));
+    (getPlanBalance as jest.Mock).mockResolvedValue(vesBalance(250000));
     const { dialog } = renderModal();
     const { user, second } = await fillTwoLines(dialog);
     await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
@@ -545,7 +545,7 @@ describe('correcciones de QA (DX-390)', () => {
     const { user, second } = await fillTwoLines(dialog);
     await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
     const summary = within(dialog).getByTestId('split-summary');
-    await waitFor(() => expect(text(summary.textContent)).toContain('Total del cobroCOP 300.000,00'));
+    await waitFor(() => expect(text(summary.textContent)).toContain('Total del cobroVES 300.000,00'));
     expect(within(summary).queryByText(splitPaymentCopy.loading)).toBeNull();
     expect(within(summary).getByText(splitPaymentCopy.loadingPending)).toBeInTheDocument();
   });
@@ -571,7 +571,7 @@ describe('correcciones de QA (DX-390)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
     expect(text(onRecorded.mock.calls[0][0])).toBe(
-      'Cobro registrado: COP 100.000,00 + USD 50,00 en 2 formas de pago · 30/10/2026 · Plan del 01/08/2026 · recibo PRI-000007.',
+      'Cobro registrado: VES 100.000,00 + USD 50,00 en 2 formas de pago · 30/10/2026 · Plan del 01/08/2026 · recibo PRI-000007.',
     );
   });
 });

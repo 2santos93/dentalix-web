@@ -11,7 +11,7 @@ describe('OverdueChip (DX-150)', () => {
     const { rerender } = render(<OverdueChip balance={{ hasOverdue: true, overdueDays: 12 }} />);
     expect(screen.getByTestId('overdue-chip')).toHaveTextContent('Saldo vencido · 12 días');
     rerender(
-      <OverdueChip balance={{ hasOverdue: true, overdueDays: 12, amounts: [{ currency: 'COP', amount: 50000 }] }} />,
+      <OverdueChip balance={{ hasOverdue: true, overdueDays: 12, amounts: [{ currency: 'USD', amount: 50000 }] }} />,
     );
     expect(screen.getByTestId('overdue-chip').textContent?.replace(/\s/g, ' ')).toMatch(/12 días · .*50\.000/);
   });

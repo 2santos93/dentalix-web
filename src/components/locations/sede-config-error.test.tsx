@@ -15,14 +15,14 @@ function Amount({ location, onRetry }: { location: ClinicLocation; onRetry: () =
 }
 
 describe('SedeConfigError', () => {
-  it('location with null currency shows SedeConfigError, never COP', async () => {
+  it('location with null currency shows SedeConfigError, never USD', async () => {
     const onRetry = jest.fn();
-    render(<Amount location={clinicLocation({ country: 'CO', currency: null })} onRetry={onRetry} />);
+    render(<Amount location={clinicLocation({ country: 'VE', currency: null })} onRetry={onRetry} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'No se pudo saber la moneda de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
     );
-    expect(document.body).not.toHaveTextContent(/COP|\$/);
+    expect(document.body).not.toHaveTextContent(/USD|\$/);
     await setupUser().click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
