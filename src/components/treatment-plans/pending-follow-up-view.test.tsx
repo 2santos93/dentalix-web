@@ -10,7 +10,6 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import { ApiError } from '@/lib/api/client';
-import { formatCurrency } from '@/lib/format/currency';
 import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
@@ -18,7 +17,10 @@ jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
   rejectPlan: jest.fn(),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
-jest.mock('../../lib/locations/location-store', () => ({ getActiveLocationId: jest.fn() }));
+jest.mock('../../lib/locations/location-store', () => ({
+  getActiveLocationId: jest.fn(),
+  onLocationChange: jest.fn(() => () => undefined),
+}));
 jest.mock('../../lib/clinic-branding', () => ({ fetchClinicName: jest.fn() }));
 
 const mockedList = listPendingFollowUp as jest.MockedFunction<typeof listPendingFollowUp>;
@@ -76,7 +78,7 @@ describe('PendingFollowUpView (DX-040)', () => {
       '/patients/pat-1',
     );
     expect(within(row).getByText('Opción A: implante')).toBeInTheDocument();
-    expect(money(row.textContent)).toContain(money(formatCurrency(5300000, 'COP')));
+    await waitFor(() => expect(money(row.textContent)).toContain(money('COP 5.300.000,00')));
     expect(within(row).getByText('hace 9 días')).toBeInTheDocument();
     expect(within(row).getByRole('link', { name: 'Llamar a Carolina Ruiz: 300 111 2222' })).toHaveAttribute(
       'href',
@@ -198,13 +200,13 @@ describe('PendingFollowUpView (DX-040)', () => {
       const row = rows[0];
       expect(within(row).getByText('2 opciones')).toBeInTheDocument();
       const nested = within(row).getByRole('list', { name: 'Opciones presentadas a Carolina Ruiz' });
-      expect(within(nested).getAllByRole('listitem').map((li) => money(li.textContent))).toEqual([
-        money(`Opción A: implante · ${formatCurrency(5300000, 'COP')}`),
-        money(`Opción B: puente · ${formatCurrency(3450000, 'COP')}`),
-      ]);
-      expect(money(row.textContent)).toContain(
-        money(`${formatCurrency(3450000, 'COP')} – ${formatCurrency(5300000, 'COP')}`),
+      await waitFor(() =>
+        expect(within(nested).getAllByRole('listitem').map((li) => money(li.textContent))).toEqual([
+          money('Opción A: implante · COP 5.300.000,00'),
+          money('Opción B: puente · COP 3.450.000,00'),
+        ]),
       );
+      expect(money(row.textContent)).toContain(money('COP 3.450.000,00 – COP 5.300.000,00'));
       // La antigüedad es la de la opción más antigua.
       expect(within(row).getByText('hace 9 días')).toBeInTheDocument();
       expect(within(row).getAllByRole('link', { name: /WhatsApp a Carolina Ruiz/ })).toHaveLength(1);

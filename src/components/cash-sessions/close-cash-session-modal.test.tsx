@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { CloseCashSessionModal } from './close-cash-session-modal';
 import { closeCashSession } from '@/lib/cash-sessions/cash-sessions-api';
 import { ApiError } from '@/lib/api/client';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 import { cashSessionFixture, closedCashSessionFixture, outflowFixture } from '@/lib/test/cash-session';
 
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
@@ -10,6 +12,7 @@ jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
   closeCashSession: jest.fn(),
 }));
 const mockedClose = closeCashSession as jest.MockedFunction<typeof closeCashSession>;
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
     { code: 'COP', name: 'Peso colombiano', symbol: '$' },
@@ -32,15 +35,18 @@ function renderModal(session = cashSessionFixture(), onClosed = jest.fn()) {
 }
 
 describe('CloseCashSessionModal (DX-027)', () => {
-  beforeEach(() => mockedClose.mockReset());
+  beforeEach(() => {
+    mockedClose.mockReset();
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-CO' })]);
+  });
 
   it('enseña lo esperado y la diferencia en vivo; si no cuadra, exige motivo antes de enviar', async () => {
     const user = userEvent.setup();
     renderModal();
-    expect(screen.getByText(/Esperado 80\.?000,00/)).toBeInTheDocument();
+    expect(await screen.findByText(/Esperado COP\s80\.000,00/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Contado en efectivo (COP)'), '79000');
     await user.type(screen.getByLabelText('Contado en tarjeta (COP)'), '25000');
-    expect(screen.getAllByTestId('row-difference')[0]).toHaveTextContent(/-1\.?000,00/);
+    expect(screen.getAllByTestId('row-difference')[0]).toHaveTextContent(/-COP\s1\.000,00/);
     expect(screen.getAllByTestId('row-difference')[1]).toHaveTextContent('Cuadra');
 
     await user.click(screen.getByRole('button', { name: 'Cerrar caja' }));
@@ -175,9 +181,9 @@ describe('CloseCashSessionModal (DX-027)', () => {
     renderModal(
       cashSessionFixture({ expected: [{ ...cash, outflows: 100_000, outflowsCount: 1, expected: -20_000 }] }),
     );
-    expect(screen.getByText(/Esperado -20\.?000,00/)).toBeInTheDocument();
+    expect(await screen.findByText(/Esperado -COP\s20\.000,00/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Contado en efectivo (COP)'), '0');
-    expect(screen.getByTestId('row-difference')).toHaveTextContent(/20\.?000,00/);
+    expect(screen.getByTestId('row-difference')).toHaveTextContent(/COP\s20\.000,00/);
     expect(screen.getByTestId('row-difference')).not.toHaveTextContent('-');
   });
 

@@ -24,9 +24,10 @@ import {
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { onLocationChange } from '@/lib/locations/location-store';
 import { locationCurrency, locationRegionalFormat, locationTimeZone } from '@/lib/locations/location-settings';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
 import { formatDateTimeInZone } from '@/lib/format/date';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { PageHeader } from '@/components/shared/page-header';
@@ -249,6 +250,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
             sedeName={sedeName}
             openedAtIn={openedAtIn}
             currencyMissing={currencyMissing}
+            fmt={locationRegionalFormat(sede)}
             onRetryLocations={() => setCurrentKey((k) => k + 1)}
             onOpen={() => {
               setModalKey((k) => k + 1);
@@ -454,6 +456,7 @@ function CurrentSessionCard({
   sedeName,
   openedAtIn,
   currencyMissing,
+  fmt,
   onRetryLocations,
   onOpen,
   onClose,
@@ -464,6 +467,8 @@ function CurrentSessionCard({
   openedAtIn: (instant: string, locationId: string) => string | null;
   /** La sede de la caja no tiene moneda (o las sedes no cargaron). */
   currencyMissing: boolean;
+  /** DX-522: el formato de la sede de la caja (importes con código ISO); sin él, «—». */
+  fmt: RegionalFormat | null;
   onRetryLocations: () => void;
   onOpen: () => void;
   onClose: () => void;
@@ -545,7 +550,7 @@ function CurrentSessionCard({
                     <span className="text-xs text-muted">{line.currency}</span>
                   </span>
                   <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger-text' : 'text-ink')}>
-                    {formatCurrency(line.expected, line.currency)}
+                    {sedeMoney(line.expected, line.currency, fmt)}
                   </span>
                 </li>
               ))}
