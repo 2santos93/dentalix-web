@@ -41,6 +41,7 @@ export function makePrescription(overrides: Partial<Prescription> = {}): Prescri
     professionalSpecialty: null,
     professionalEmail: 'laura@example.com',
     clinicName: 'Clínica Demo',
+    clinicFiscal: null,
     locationName: 'Sede Principal',
     locationAddress: 'Cra 15 #90-20',
     notes: null,

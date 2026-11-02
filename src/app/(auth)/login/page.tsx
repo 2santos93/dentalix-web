@@ -27,6 +27,7 @@ export default async function LoginPage({
   return (
     <AuthLayout
       clinic={clinic}
+      fromHost
       task={clinic ? copy.clinicTask : copy.task}
       caption={copy.caption}
       footer={

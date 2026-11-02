@@ -36,7 +36,7 @@ const DARK = { surface: '#13171F', canvas: '#0B0F14', ink: '#0B0F14' };
 const TEXT_MIN = 4.6;
 const UI_MIN = 3;
 
-type Oklch = { l: number; c: number; h: number };
+export type Oklch = { l: number; c: number; h: number };
 type Lin = [number, number, number];
 
 const toLinear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
@@ -158,6 +158,12 @@ function deriveDark(o: Oklch): AccentTokens {
   );
   const primaryBorder = toHex({ l: 0.4, c: Math.min(o.c * 0.64, 0.06), h: o.h });
   return { primary, primaryFg: DARK.ink, primaryHover, primaryText, primarySubtle, primarySubtleText, primaryBorder };
+}
+
+/** OKLCH of a hex color (`null` if unparseable). DX-019: the settings screen's status-hue warning. */
+export function hexToOklch(hex: string): Oklch | null {
+  const rgb = parseHexColor(hex);
+  return rgb ? rgbToOklch(rgb) : null;
 }
 
 /** Light and dark accent families for a clinic brand color, or `null`. */

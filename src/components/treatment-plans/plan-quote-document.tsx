@@ -1,3 +1,4 @@
+import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import * as React from 'react';
 import type { PlanQuote, PlanQuoteItem } from '@/lib/treatment-plans/plan-quote-api';
 import { SURFACE_LABELS } from '@/lib/odontogram/surface-labels';
@@ -157,6 +158,8 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
           ) : null}
           <div className="min-w-0">
             <p className="text-base font-semibold">{quote.clinicName}</p>
+            {/* DX-019: datos fiscales de la clínica (los de hoy, como el logo). */}
+            <ClinicFiscalLines fiscal={quote.clinicFiscal} />
             <p className="text-sm text-[#4b5563]">
               {quote.location.name}
               {quote.location.address ? (

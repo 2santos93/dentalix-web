@@ -46,6 +46,7 @@ jest.mock('./inicio-api', () => ({
 // Los avisos de ADMIN tienen sus propias pruebas y sus propias llamadas.
 jest.mock('../locations/regional-review-notice', () => ({ RegionalReviewNotice: () => null }));
 jest.mock('../payments/rate-backlog-notice', () => ({ RateBacklogNotice: () => null }));
+jest.mock('../clinic-settings/clinic-fiscal-notice', () => ({ ClinicFiscalNotice: () => null }));
 
 const m = {
   getDashboard: jest.mocked(getDashboard),

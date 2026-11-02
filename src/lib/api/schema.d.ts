@@ -392,6 +392,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/logos/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FilesController_getLogo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients": {
         parameters: {
             query?: never;
@@ -2883,6 +2899,48 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinic/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Datos de la clínica (DX-019) */
+        get: operations["ClinicSettingsController_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cambia los datos de la clínica
+         * @description DX-019. Solo cambian los campos enviados; vacío o null borra un dato (salvo el nombre y el color). El identificador fiscal es texto libre, sin validar el formato de ningún país. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto.
+         */
+        patch: operations["ClinicSettingsController_update"];
+        trace?: never;
+    };
+    "/api/v1/clinic/settings/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sube el logo de la clínica
+         * @description DX-019. PNG, JPG o WebP de hasta 1 MB. El tipo se comprueba por los bytes y el fichero se re-escribe antes de guardarlo (sin metadatos). SVG no se admite. Es público por diseño (marca).
+         */
+        post: operations["ClinicSettingsController_uploadLogo"];
+        /** Quita el logo de la clínica (DX-019) */
+        delete: operations["ClinicSettingsController_deleteLogo"];
         options?: never;
         head?: never;
         patch?: never;
@@ -11786,6 +11844,16 @@ export interface components {
             label: string | null;
             minDaysAfterPrevious: number;
         };
+        ClinicFiscalDto: {
+            legalName: string | null;
+            /** @description Null = el nombre genérico («Id. fiscal»). */
+            taxIdLabel: string | null;
+            /** @description Texto libre, sin formato de ningún país. */
+            taxId: string | null;
+            address: string | null;
+            email: string | null;
+            phone: string | null;
+        };
         PlanQuoteLocationDto: {
             /** Format: uuid */
             id: string;
@@ -11874,7 +11942,7 @@ export interface components {
             /** @description Organización clínica actual; separada del contenido firmado. */
             visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
             /**
-             * @description 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
+             * @description 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
              * @enum {number}
              */
             version: 1 | 2;
@@ -11888,6 +11956,8 @@ export interface components {
             currency: string;
             clinicName: string;
             clinicLogoUrl: string | null;
+            /** @description DX-019: datos fiscales. Aceptado: los congelados al firmar; null si no los llevaba (nunca los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             location: components["schemas"]["PlanQuoteLocationDto"];
             patient: components["schemas"]["PlanQuotePatientDto"];
             /** @description Profesional que creó el plan */
@@ -12268,6 +12338,45 @@ export interface components {
             currencyTexts: {
                 [key: string]: string;
             };
+        };
+        ClinicSettingsDto: {
+            /** @example Clínica Sonrisas */
+            name: string;
+            legalName: string | null;
+            /** @description Texto libre, sin formato de ningún país. */
+            taxId: string | null;
+            /** @description Null = el nombre genérico («Id. fiscal»). */
+            taxIdLabel: string | null;
+            fiscalAddress: string | null;
+            contactEmail: string | null;
+            contactPhone: string | null;
+            /** @example #0E7490 */
+            primaryColor: string;
+            /** @description URL pública del logo. */
+            logoUrl: string | null;
+            /** @description Falta la razón social o el identificador fiscal: los recibos dicen «Datos fiscales pendientes». */
+            fiscalDataPending: boolean;
+        };
+        UpdateClinicSettingsDto: {
+            /** @description Nombre comercial (obligatorio si se envía). 1..120. */
+            name?: Record<string, never>;
+            /** @description Razón social. Vacío o null = sin dato. 1..160. */
+            legalName?: string | null;
+            /** @description Identificador fiscal, texto libre sin formato de ningún país. 1..64. */
+            taxId?: string | null;
+            /** @description Cómo llama la clínica a su identificador fiscal (p. ej. «ID fiscal»). Null = el genérico. 1..40. */
+            taxIdLabel?: string | null;
+            /** @description Dirección fiscal, una línea. 1..250. */
+            fiscalAddress?: string | null;
+            /** @description Email de contacto de la clínica. */
+            contactEmail?: string | null;
+            /** @description Teléfono de contacto, texto libre. 1..40. */
+            contactPhone?: string | null;
+            /**
+             * @description Color de la marca, #RRGGBB.
+             * @example #0E7490
+             */
+            primaryColor?: Record<string, never>;
         };
         CurrencyDto: {
             /**
@@ -12868,6 +12977,8 @@ export interface components {
             legalName: string | null;
             /** @description Identificador fiscal de la clínica (DX-019). */
             taxId: string | null;
+            /** @description Nombre que la clínica da a su identificador fiscal, congelado al emitir (DX-019). Ausente = el genérico. */
+            taxIdLabel?: string;
             address: string | null;
         };
         ReceiptLocationDto: {
@@ -13424,6 +13535,8 @@ export interface components {
             /** @example Clínica Sonrisas */
             name: string;
             logoUrl: string | null;
+            /** @description DX-019: datos fiscales y de contacto. */
+            fiscal: components["schemas"]["ClinicFiscalDto"];
         };
         AccountStatementPatientDto: {
             /** Format: uuid */
@@ -17451,6 +17564,8 @@ export interface components {
             professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
+            /** @description DX-019: datos fiscales congelados al emitir; null = la receta se imprime sin ellos (nunca con los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             locationName: string;
             locationAddress: string | null;
             notes: string | null;
@@ -17668,6 +17783,8 @@ export interface components {
             professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
+            /** @description DX-019: datos fiscales congelados al emitir; null = la receta se imprime sin ellos (nunca con los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             locationName: string;
             locationAddress: string | null;
             notes: string | null;
@@ -19175,6 +19292,26 @@ export interface operations {
         };
     };
     FilesController_getAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FilesController_getLogo: {
         parameters: {
             query?: never;
             header?: never;
@@ -26515,6 +26652,145 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BrandingDto"];
                 };
+            };
+        };
+    };
+    ClinicSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClinicSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Un texto vacío donde es obligatorio, con saltos de línea o más largo que su tope, un email sin forma nombre@dominio o un color que no es #RRGGBB */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_uploadLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description PNG, JPG o WebP de hasta 1 MB
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description El logo está vacío. / El logo supera el máximo de 1 MB. / El logo debe ser una imagen PNG, JPG o WebP. / El logo no es una imagen válida o está dañado. Expórtalo de nuevo y vuelve a subirlo. / El logo es demasiado grande: como mucho 8192 × 8192 píxeles. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. / El almacén de archivos no responde. Inténtalo de nuevo en unos minutos. (con Retry-After) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_deleteLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

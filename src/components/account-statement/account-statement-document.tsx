@@ -1,3 +1,4 @@
+import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import * as React from 'react';
 import type { AccountStatement } from '@/lib/account-statement/account-statement-api';
 import {
@@ -94,6 +95,8 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
           {clinic.logoUrl ? <ClinicLogo src={clinic.logoUrl} alt={clinic.name} variant="paper" /> : null}
           <div>
             <p className="text-base font-semibold">{clinic.name}</p>
+            {/* DX-019: datos fiscales y de contacto de la clínica. */}
+            <ClinicFiscalLines fiscal={clinic.fiscal} />
             <h1 className="text-xl font-semibold tracking-tight">{copy.title}</h1>
           </div>
         </div>
