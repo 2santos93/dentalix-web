@@ -1,7 +1,9 @@
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format/currency';
-import { NO_CURRENCY_TEXTS } from '@/lib/format/currency-text';
 import { formatCivilDate, formatDate, formatDateTime } from '@/lib/format/date';
+import { regionalFormat, type RegionalFormat } from '@/lib/format/regional-format';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { NO_CURRENCY_TEXTS, type CurrencyTexts } from '@/lib/format/currency-text';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import { paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
@@ -33,10 +35,9 @@ const copy = {
   paidOn: 'Fecha del abono',
   concept: 'Concepto',
   // DX-262: abono contra el saldo migrado (sin plan).
-  openingLabel: (opening: { concept: string; asOfDate: string } | null) =>
-    opening
-      ? `Saldo migrado · ${opening.concept} · corte ${formatCivilDate(opening.asOfDate)}`
-      : 'Saldo migrado',
+  // DX-521: la fecha de corte llega ya con el formato del recibo.
+  openingLabel: (opening: { concept: string; asOfDate: string } | null, asOfDate: string) =>
+    opening ? `Saldo migrado · ${opening.concept} · corte ${asOfDate}` : 'Saldo migrado',
   planLabel: (date: string, optionLabel: string | null) =>
     `Abono al plan de tratamiento del ${date}${optionLabel ? ` · ${optionLabel}` : ''}`,
   balanceAfter: 'Saldo del plan tras este abono',
@@ -57,6 +58,82 @@ const copy = {
   cashier: 'Recibió',
   signature: 'Firma y sello',
 };
+
+/** Lo que el documento del recibo necesita para pintar fechas e importes. */
+export interface ReceiptFormatting {
+  /** `true` si sale de la región de la sede; `false` si es el formato de antes (R5). */
+  regional: boolean;
+  /** Un instante (fecha y hora) o `—` si falta o no es una fecha. */
+  dateTime(value: string | null | undefined): string;
+  /** La fecha de un instante. */
+  date(value: string | null | undefined): string;
+  /** Un día civil `YYYY-MM-DD`, sin zona. */
+  civilDate(value: string | null | undefined): string;
+  money(amount: number, currency: string): string;
+}
+
+const NO_VALUE = '—';
+
+function instant(value: string | null | undefined): Date | null {
+  if (value === null || value === undefined || value === '') return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** La región de la sede si este navegador la entiende; si no, `null`. */
+function usableFormat(regional: PaymentReceipt['regional'] | undefined): { fmt: RegionalFormat; timeZone: string } | null {
+  if (!regional) return null;
+  try {
+    const fmt = regionalFormat({ locale: regional.locale, hourCycle: regional.hourCycle });
+    // Una zona que este navegador no conoce lanza RangeError al formatear.
+    fmt.dateTime(new Date(0), regional.timeZone);
+    return { fmt, timeZone: regional.timeZone };
+  } catch (error) {
+    if (error instanceof RangeError) return null;
+    throw error;
+  }
+}
+
+/**
+ * DX-521: el formato del recibo de caja. Con la región de su sede (`regional`
+ * de la API: la congelada al emitir, o la de hoy en un recibo anterior), las
+ * fechas salen en la zona de la sede y los importes con el código ISO (o el
+ * texto de la foto) en el orden de su locale. Sin región, o con un locale o una
+ * zona que este navegador no soporta, sale exactamente como antes (locale `es`,
+ * zona del navegador): nunca se inventa otro formato ni se rompe el documento.
+ *
+ * `texts`: los textos de moneda CONGELADOS en la foto del recibo, nunca los de
+ * hoy de la clínica (DX-517).
+ */
+export function receiptFormatting(
+  regional: PaymentReceipt['regional'] | undefined,
+  texts: CurrencyTexts,
+): ReceiptFormatting {
+  const usable = usableFormat(regional);
+  if (!usable) {
+    return {
+      regional: false,
+      dateTime: (value) => formatDateTime(value),
+      date: (value) => formatDate(value),
+      civilDate: (value) => formatCivilDate(value),
+      money: (amount, currency) => formatCurrency(amount, currency, undefined, texts),
+    };
+  }
+  const { fmt, timeZone } = usable;
+  return {
+    regional: true,
+    dateTime: (value) => {
+      const d = instant(value);
+      return d ? fmt.dateTime(d, timeZone) : NO_VALUE;
+    },
+    date: (value) => {
+      const d = instant(value);
+      return d ? fmt.date(d, timeZone) : NO_VALUE;
+    },
+    civilDate: (value) => (value ? fmt.civilDate(value.slice(0, 10)) : NO_VALUE),
+    money: (amount, currency) => moneyWithCode(amount, currency, fmt, texts),
+  };
+}
 
 interface PaymentReceiptDocumentProps {
   receipt: PaymentReceipt;
@@ -81,8 +158,10 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
   // recibo anterior o de una clínica sin textos), nunca con el de hoy: el
   // recibo se reimprime igual.
   const currencyTexts = snapshot.currencyTexts ?? NO_CURRENCY_TEXTS;
-  const money = (amount: number, currency: string): string =>
-    formatCurrency(amount, currency, undefined, currencyTexts);
+  // DX-521: fechas en la zona de la sede e importes con su locale y el código
+  // ISO de la moneda (o el texto de la foto). Sin región, o con una que este
+  // navegador no soporta, el documento sale exactamente como antes.
+  const { money, dateTime, date, civilDate } = receiptFormatting(receipt.regional, currencyTexts);
   const narrow = format === '80mm';
   // DX-376: la tasa congelada del abono (DX-375), no la del día: reimprimir da
   // la misma. Un abono anterior aún sin congelar (LEGACY) no imprime tasa.
@@ -147,7 +226,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           ) : null}
           <p className="mt-1 text-xs text-[#4b5563]">
             {receipt.legacy ? copy.registeredAt : copy.issuedAt}{' '}
-            <span className="tabular-nums">{formatDateTime(receipt.issuedAt)}</span>
+            <span className="tabular-nums">{dateTime(receipt.issuedAt)}</span>
           </p>
         </div>
       </header>
@@ -171,7 +250,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
         >
           <p className="text-2xl font-bold tracking-[0.3em]">{copy.voidedStamp}</p>
           <p className="text-sm font-medium">
-            {copy.voidedDetail(formatDateTime(receipt.voidedAt), receipt.voidReason ?? '')}
+            {copy.voidedDetail(dateTime(receipt.voidedAt), receipt.voidReason ?? '')}
           </p>
         </div>
       ) : null}
@@ -215,7 +294,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
                     ? copy.rateApplied(
                         ratePairLabel(payment.currency, frozen.rate, money),
                         paymentRateCopy.source[frozen.rate.source],
-                        formatCivilDate(frozen.rate.date),
+                        civilDate(frozen.rate.date),
                       )
                     : copy.rateMissing}
                 </dd>
@@ -232,12 +311,15 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           </>
         )}
         <Field label={copy.paidOn}>
-          <span className="tabular-nums">{formatCivilDate(payment.paidOn)}</span>
+          <span className="tabular-nums">{civilDate(payment.paidOn)}</span>
         </Field>
         <Field label={copy.concept}>
           {plan
-            ? copy.planLabel(formatDate(plan.createdAt), plan.optionLabel)
-            : copy.openingLabel(snapshot.openingBalance ?? null)}
+            ? copy.planLabel(date(plan.createdAt), plan.optionLabel)
+            : copy.openingLabel(
+                snapshot.openingBalance ?? null,
+                civilDate(snapshot.openingBalance?.asOfDate),
+              )}
         </Field>
         <Field label={plan ? copy.balanceAfter : copy.openingBalanceAfter}>
           <span className="tabular-nums">
