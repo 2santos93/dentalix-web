@@ -53,7 +53,7 @@ test.beforeAll(async ({ playwright }) => {
 async function openInicio(page: Page, email: string) {
   await loginAs(page, origin, email, PASSWORD);
   await page.goto(`${origin}/dashboard`);
-  const pending = page.getByRole('region', { name: 'Pendientes' });
+  const pending = page.getByRole('region', { name: 'Pendientes', exact: true });
   await expect(pending).toBeVisible({ timeout: 30_000 });
   return pending;
 }
@@ -100,7 +100,7 @@ test('DX-503-bis: al abrir Inicio sale UNA lectura de las listas (todas), no la 
     if (req.url().includes('/work-queues/summary')) reads.push(req.url());
   });
   await page.goto(`${origin}/dashboard`);
-  const pending = page.getByRole('region', { name: 'Pendientes' });
+  const pending = page.getByRole('region', { name: 'Pendientes', exact: true });
   await expect(pending.getByTestId('pending-low-stock-value')).toHaveText('1', { timeout: 30_000 });
   // Lo que tarde en llegar una segunda (el sondeo es de un minuto: no cuenta).
   await page.waitForLoadState('networkidle');
@@ -149,5 +149,5 @@ test('⌘K «Mi día» lleva al bloque de pendientes de Inicio', async ({ page }
   await palette.getByRole('combobox').fill('mi dia');
   await palette.getByRole('option', { name: /Mi día/ }).click();
   await expect(page).toHaveURL(/\/dashboard#pendientes$/);
-  await expect(page.getByRole('region', { name: 'Pendientes' })).toBeInViewport();
+  await expect(page.getByRole('region', { name: 'Pendientes', exact: true })).toBeInViewport();
 });
