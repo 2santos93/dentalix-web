@@ -35,7 +35,8 @@ const copy = {
   continue: 'Entrar a Dentalix',
   // DX-021-bis: alta de un superadmin.
   emailIntro:
-    'Te enviamos un código a tu correo: la contraseña sola no basta para activar la verificación. Si no llega en unos minutos, revisa el spam o vuelve a entrar pasados 10 minutos y saldrá otro.',
+    'Te enviamos un código a tu correo: la contraseña sola no basta para activar la verificación. Si no llega, revisa el spam o vuelve a entrar y saldrá otro.',
+  emailRef: (ref: string) => `Usa el correo con la referencia ${ref}: cada intento tiene su código.`,
   emailLabel: 'Código del correo',
   emailInvalid: 'El código tiene 8 dígitos.',
   emailSubmit: 'Continuar',
@@ -50,12 +51,15 @@ const copy = {
 export function MfaEnrollStep({
   mfaToken,
   emailCodeRequired = false,
+  emailCodeRef,
   onDone,
   onExpired,
 }: {
   mfaToken: string;
   /** La API le envió un código al correo que exige para enseñar la clave. */
   emailCodeRequired?: boolean;
+  /** Referencia del correo de este intento. */
+  emailCodeRef?: string;
   onDone: (accessToken: string) => void;
   onExpired: () => void;
 }) {
@@ -152,6 +156,7 @@ export function MfaEnrollStep({
     return (
       <MfaEmailCodeStep
         mfaToken={mfaToken}
+        emailCodeRef={emailCodeRef}
         onVerified={(res, code) => {
           setEmailCode(code);
           setEnrollment(res);
@@ -206,10 +211,12 @@ export function MfaEnrollStep({
 /** Primer paso del alta de un superadmin: el código de su correo abre la clave. */
 function MfaEmailCodeStep({
   mfaToken,
+  emailCodeRef,
   onVerified,
   onExpired,
 }: {
   mfaToken: string;
+  emailCodeRef?: string;
   onVerified: (enrollment: MfaEnrollment, emailCode: string) => void;
   onExpired: () => void;
 }) {
@@ -247,6 +254,7 @@ function MfaEmailCodeStep({
     <form onSubmit={handleSubmit} className={AUTH_FORM_CLASS} noValidate>
       <Callout tone="info" role="note">
         {copy.emailIntro}
+        {emailCodeRef ? ` ${copy.emailRef(emailCodeRef)}` : null}
       </Callout>
       <FormField htmlFor={id} label={copy.emailLabel} error={fieldError}>
         <Input

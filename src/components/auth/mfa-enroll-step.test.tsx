@@ -53,6 +53,19 @@ describe('MfaEnrollStep: alta del superadmin (DX-021-bis)', () => {
     expect(mockedStart).toHaveBeenCalledWith('tok', '12345678');
   });
 
+  it('dice qué correo usar: cada intento tiene su código', () => {
+    render(
+      <MfaEnrollStep
+        mfaToken="tok"
+        emailCodeRequired
+        emailCodeRef="A1F3"
+        onDone={jest.fn()}
+        onExpired={jest.fn()}
+      />,
+    );
+    expect(screen.getByText(/referencia A1F3/)).toBeInTheDocument();
+  });
+
   it('un código malo se queda en el paso, con el mensaje de la API', async () => {
     const user = userEvent.setup();
     mockedStart.mockRejectedValue(new ApiError(400, 'El código del correo no es correcto.'));

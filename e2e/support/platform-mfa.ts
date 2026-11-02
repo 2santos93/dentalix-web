@@ -30,6 +30,7 @@ export async function enrollPlatformAdmin(
   await apexPassword(page, email, password);
   const field = page.getByLabel('Código del correo');
   await expect(field).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/referencia [0-9A-F]{4}/)).toBeVisible();
   await onStep('email');
   await field.fill(await linkFromMail(email, /Tu código es: (\d{8})/, { since: mark }));
   await page.getByRole('button', { name: 'Continuar' }).click();

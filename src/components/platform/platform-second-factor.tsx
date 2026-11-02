@@ -62,6 +62,7 @@ export function PlatformSecondFactor({
       <MfaEnrollStep
         mfaToken={challenge.mfaToken}
         emailCodeRequired={challenge.emailCodeRequired === true}
+        emailCodeRef={challenge.emailCodeRef}
         onDone={onDone}
         onExpired={onExpired}
       />

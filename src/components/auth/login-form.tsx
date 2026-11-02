@@ -230,6 +230,7 @@ export function LoginForm({
       <MfaEnrollStep
         mfaToken={mfaChallenge.mfaToken}
         emailCodeRequired={mfaChallenge.emailCodeRequired === true}
+        emailCodeRef={mfaChallenge.emailCodeRef}
         onDone={enter}
         onExpired={mfaExpired}
       />

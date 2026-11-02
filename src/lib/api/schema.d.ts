@@ -6804,6 +6804,11 @@ export interface components {
              * @enum {boolean}
              */
             emailCodeRequired?: true;
+            /**
+             * @description DX-021-bis: referencia que lleva el correo de este intento, para distinguirlo de otros.
+             * @example A1F3
+             */
+            emailCodeRef?: string;
         };
         LoginDto: {
             /** @example ana@clinica.com */
@@ -6879,7 +6884,7 @@ export interface components {
             /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
             mfaToken: string;
             /**
-             * @description DX-021-bis: alta de un superadmin (`emailCodeRequired`): el código de 8 dígitos enviado a su correo.
+             * @description DX-021-bis: alta de un superadmin (`emailCodeRequired`): el código de 8 dígitos de ESTE token. 5 intentos en total; agotados, el token queda inservible y hay que volver a entrar.
              * @example 12345678
              */
             emailCode?: string;
@@ -6897,7 +6902,7 @@ export interface components {
             /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
             mfaToken: string;
             /**
-             * @description DX-021-bis: alta de un superadmin (`emailCodeRequired`): el código de 8 dígitos enviado a su correo.
+             * @description DX-021-bis: alta de un superadmin (`emailCodeRequired`): el código de 8 dígitos de ESTE token. 5 intentos en total; agotados, el token queda inservible y hay que volver a entrar.
              * @example 12345678
              */
             emailCode?: string;
