@@ -409,6 +409,59 @@ describe('LocationsComparisonView (DX-014)', () => {
     ]);
   });
 
+  describe('moneda elegida (DX-526)', () => {
+    const multi = () =>
+      report({
+        locations: [
+          row('Sede principal', 'l1', [['USD', m(100)]], m(1)),
+          row('Sede Norte', 'l2', [['USD', m(300)]], m(1)),
+          row('Sede São Paulo', 'l3', [['BRL', m(900)]], m(1)),
+        ],
+        total: row('Total clínica', null, [['USD', m(400)], ['BRL', m(900)]], m(1)),
+      });
+    const bars = () => screen.getAllByTestId('ranked-bar').map((b) => b.textContent);
+
+    it('por defecto, la primera moneda; las sedes sin ella no son una barra en cero sino una nota', async () => {
+      mockedGet.mockResolvedValue(multi());
+      render(<LocationsComparisonView token="t" />);
+      await screen.findByRole('table');
+      expect(screen.getByLabelText('Moneda para ordenar y graficar')).toHaveValue('USD');
+      expect(bars().some((b) => b?.includes('Sede São Paulo'))).toBe(false);
+      expect(screen.getAllByText('Sin cobros en USD: Sede São Paulo.')).toHaveLength(2);
+      expect(screen.queryByText(/BRL.*0,00/)).toBeNull();
+    });
+
+    it('al elegir BRL, el gráfico pasa a BRL y nombra las sedes sin cobros', async () => {
+      mockedGet.mockResolvedValue(multi());
+      render(<LocationsComparisonView token="t" />);
+      await screen.findByRole('table');
+      await userEvent.selectOptions(screen.getByLabelText('Moneda para ordenar y graficar'), 'BRL');
+      expect(bars()).toHaveLength(2);
+      expect(bars().every((b) => b?.includes('Sede São Paulo'))).toBe(true);
+      expect(screen.getAllByText('Sin cobros en BRL: Sede principal, Sede Norte.')).toHaveLength(2);
+    });
+
+    it('ordena las dos sedes USD entre sí en los dos sentidos', async () => {
+      mockedGet.mockResolvedValue(multi());
+      render(<LocationsComparisonView token="t" />);
+      await screen.findByRole('table');
+      const order = () => screen.getAllByTestId('comparison-row').map((r) => within(r).getByRole('rowheader').textContent);
+      await userEvent.click(within(table()).getByRole('button', { name: 'Cobrado' }));
+      expect(order()).toEqual(['Sede Norte', 'Sede principal', 'Sede São Paulo']);
+      await userEvent.click(within(table()).getByRole('button', { name: 'Cobrado' }));
+      expect(order()).toEqual(['Sede principal', 'Sede Norte', 'Sede São Paulo']);
+    });
+
+    it('con una sola moneda no hay selector', async () => {
+      mockedGet.mockResolvedValue(
+        report({ total: row('Total clínica', null, [['USD', m(400)]], m(1)) }),
+      );
+      render(<LocationsComparisonView token="t" />);
+      await screen.findByRole('table');
+      expect(screen.queryByLabelText('Moneda para ordenar y graficar')).toBeNull();
+    });
+  });
+
   it('consumers render SedeConfigError without a zone', async () => {
     const retry = jest.fn();
     mockedZone.mockReturnValue({ status: 'error', message: SEDE_TIME_ZONE_ERROR, retry });
