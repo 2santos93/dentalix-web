@@ -17,7 +17,7 @@ import { CreatePaymentPlanModal } from '@/components/payment-plans/create-paymen
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
-import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
+import { RateProviderNotice, rateProviderCopy } from '@/components/payments/rate-provider-notice';
 import { formatCivilDate } from '@/lib/format/date';
 // DX-489: con el formato de la sede, como el resto de importes del plan
 // (`moneyWithCode` nunca lanza con un código que Intl no acepta).
@@ -60,6 +60,8 @@ interface PaymentPlanSectionProps {
   refreshSignal: number;
   /** DX-489: el formato de la sede (el de la lista de abonos); sin él, «—». */
   fmt: RegionalFormat | null;
+  /** DX-472: relee el saldo y esta sección si el proveedor no respondió. */
+  onRetryBalance: () => void;
   /**
    * ¿Se puede crear un plan de cuotas? No en un plan rechazado o cancelado
    * (DX-109: la API responde 409). Por defecto, sí.
@@ -74,6 +76,7 @@ export function PaymentPlanSection({
   billable,
   refreshSignal,
   fmt,
+  onRetryBalance,
   canCreate = true,
 }: PaymentPlanSectionProps) {
   const [plan, setPlan] = useState<PaymentPlan | null>(null);
@@ -172,12 +175,9 @@ export function PaymentPlanSection({
         />
       ) : (
         <>
-          {/* DX-472: el aviso con «Reintentar» va junto al saldo del plan, que
-              relee también esta sección; aquí, lo que cambia en las cuotas. */}
+          {/* DX-472: las cuotas quedan lejos del aviso del saldo del plan. */}
           {plan.rateProviderTimedOut ? (
-            <p role="status" className="text-sm text-muted">
-              {rateProviderCopy.installments}
-            </p>
+            <RateProviderNotice detail={rateProviderCopy.installments} onRetry={onRetryBalance} />
           ) : null}
           <PaymentPlanSummary plan={plan} currency={planCurrency} fmt={fmt} />
           <InstallmentsTable plan={plan} currency={planCurrency} fmt={fmt} />

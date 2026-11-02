@@ -1286,6 +1286,7 @@ export function TreatmentPlansTab({
                           canCreate={billable}
                           refreshSignal={paymentPlanRefreshSignal}
                           fmt={sedeFmt}
+                          onRetryBalance={() => void refreshBalanceAndPayments()}
                         />
                       </div>
                     </>

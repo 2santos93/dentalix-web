@@ -13,7 +13,7 @@ export const rateProviderCopy = {
       ? 'El saldo todavía no cuenta 1 abono en otra moneda.'
       : `El saldo todavía no cuenta ${n} abonos en otra moneda.`,
   incomplete: 'Las cifras con abonos en otra moneda están incompletas.',
-  installments: 'Hasta completarlo, ninguna cuota se marca como vencida.',
+  installments: 'Hasta completar lo abonado, ninguna cuota se marca como vencida.',
   printed: 'Cifras incompletas: el proveedor de tasas no respondió y faltan abonos en otra moneda.',
 };
 
@@ -24,11 +24,14 @@ export const rateProviderCopy = {
  */
 export function RateProviderNotice({
   paymentsCount,
+  detail,
   onRetry,
   retrying = false,
 }: {
   /** Abonos sin contar; sin él, un texto que no los cuenta. */
   paymentsCount?: number;
+  /** En lugar de ese texto, lo que cambia en esta sección. */
+  detail?: string;
   onRetry: () => void;
   retrying?: boolean;
 }) {
@@ -44,7 +47,9 @@ export function RateProviderNotice({
         </Button>
       }
     >
-      <p>{paymentsCount ? rateProviderCopy.notCounted(paymentsCount) : rateProviderCopy.incomplete}</p>
+      <p>
+        {detail ?? (paymentsCount ? rateProviderCopy.notCounted(paymentsCount) : rateProviderCopy.incomplete)}
+      </p>
     </Callout>
   );
 }
