@@ -382,6 +382,8 @@ known, `moneyWithCode`/`sedeMoney` (`src/lib/format/sede-number.ts`). No screen 
 («450,00 USD», «VES 1.234,50»), never a CLDR symbol: in a multi-currency product «$» or
 «US$» do not mean the same in every country. Decimals follow DX-340 (2, or 0 for a
 currency without minor units when the amount is whole); separators follow the locale.
+A view never calls `formatCurrency` (no location): it uses `sedeMoney`/`moneyWithCode`, and renders
+«—» while the location format loads (DX-522; `money-with-sede-guard.test.ts`, whose pending list only shrinks).
 
 **The Currency Text Rule (DX-517).** A clinic may say how it writes a currency it uses
 (Ajustes › Monedas, ADMIN only, audited): a map ISO code → text of 1–8 characters on one
