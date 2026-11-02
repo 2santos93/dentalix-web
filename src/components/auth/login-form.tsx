@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Clock, Loader2 } from 'lucide-react';
@@ -15,7 +15,16 @@ import { InlineError } from '@/components/errors/inline-error';
 import { FORGOT_PASSWORD_PATH } from '@/lib/auth/password-reset-api';
 import { loginLockedMessage, waitClock } from '@/lib/auth/login-lockout';
 import { BREAK_GLASS_REQUIRED, MFA_COOLDOWN, MFA_NOT_ENROLLED } from '@/lib/auth/break-glass';
+import {
+  MFA_CHALLENGE_EXPIRED,
+  MFA_ENROLLMENT_REQUIRED,
+  verifyLoginMfa,
+  type MfaChallenge,
+  type SecondFactor,
+} from '@/lib/auth/mfa-api';
 import { BreakGlassStep } from './break-glass-step';
+import { MfaEnrollStep } from './mfa-enroll-step';
+import { MfaLoginStep } from './mfa-login-step';
 import { AUTH_FORM_CLASS, AUTH_LINK_CLASS, AUTH_SUBMIT_CLASS } from './auth-layout';
 import { PasswordInput } from './password-input';
 
@@ -44,6 +53,11 @@ const copy = {
     'Activaste la verificación en dos pasos hace poco: por seguridad, el acceso de soporte a las clínicas aún no está disponible (lo verás en el área de plataforma). Si no la activaste tú, avisa al equipo de seguridad de Dentalix.',
   badCode:
     'El código no es correcto o ya se usó. Espera al siguiente código de la app e intenta de nuevo.',
+  // DX-021: aceptar no abre sesión si la cuenta necesita segundo factor.
+  invitationAccepted:
+    'Invitación aceptada. Inicia sesión para entrar con tu verificación en dos pasos.',
+  // DX-021: el token del segundo paso caducó (5 min) o ya se usó.
+  mfaExpired: 'El paso de verificación caducó. Inicia sesión de nuevo.',
 };
 
 const ERROR_ID = 'login-error';
@@ -51,11 +65,10 @@ const LOCK_ID = 'login-lock';
 
 // El refresh llega en la cookie HttpOnly (DX-062): el body solo trae el access.
 // En un acceso de soporte (SEC-008) no hay refresh: `breakGlass` y `expiresAt`.
-interface LoginResponse {
-  accessToken: string;
-  breakGlass?: boolean;
-  expiresAt?: string;
-}
+// DX-021: con segundo factor, ningún token de sesión: solo `MfaChallenge`.
+type LoginResponse =
+  | { accessToken: string; breakGlass?: boolean; expiresAt?: string }
+  | MfaChallenge;
 
 interface BreakGlassInput {
   mfaCode: string;
@@ -66,7 +79,10 @@ interface BreakGlassInput {
  * `passwordReset`: se llega desde «Restablecer contraseña» (DX-010) y se
  * muestra el aviso de éxito.
  */
-export function LoginForm({ passwordReset = false }: { passwordReset?: boolean } = {}) {
+export function LoginForm({
+  passwordReset = false,
+  invitationAccepted = false,
+}: { passwordReset?: boolean; invitationAccepted?: boolean } = {}) {
   const router = useRouter();
   const setAccessToken = useAuthStore((s) => s.setAccessToken);
   const [email, setEmail] = useState('');
@@ -80,6 +96,8 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
   const [lockEnded, setLockEnded] = useState(false);
   // SEC-008: la API pidió código TOTP y motivo (superadmin sin membresía).
   const [breakGlassStep, setBreakGlassStep] = useState(false);
+  // DX-021: la contraseña valió y falta el segundo factor (o su alta forzada).
+  const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null);
 
   const remaining =
     lockedUntil === null ? 0 : Math.max(0, Math.ceil((lockedUntil - now) / 1000));
@@ -103,6 +121,47 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
     await login();
   }
 
+  const enter = (accessToken: string) => {
+    setAccessToken(accessToken);
+    router.push('/patients');
+  };
+
+  /** Vuelta a la contraseña con el aviso de que el paso caducó. */
+  const mfaExpired = useCallback(() => {
+    setMfaChallenge(null);
+    setError(copy.mfaExpired);
+  }, []);
+
+  /** Espera por demasiados intentos (429 con `Retry-After`). `true` si lo era. */
+  function startLock(err: unknown): boolean {
+    if (!(err instanceof ApiError && err.status === 429 && err.retryAfterSeconds)) return false;
+    const t = Date.now();
+    setNow(t);
+    setLockedUntil(t + err.retryAfterSeconds * 1000);
+    return true;
+  }
+
+  /** DX-021: `POST /auth/login/mfa` con el código o uno de recuperación. */
+  async function verifyMfa(factor: SecondFactor) {
+    if (locked || !mfaChallenge) return;
+    setError(null);
+    setLockEnded(false);
+    setSubmitting(true);
+    try {
+      const res = await verifyLoginMfa(mfaChallenge.mfaToken, factor);
+      enter(res.accessToken);
+    } catch (err) {
+      if (startLock(err)) return;
+      if (err instanceof ApiError && err.code === MFA_CHALLENGE_EXPIRED) {
+        mfaExpired();
+        return;
+      }
+      setError(apiErrorMessage(err, { fallback: copy.genericError, byStatus: { 401: copy.badCode } }));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   /**
    * `POST /auth/login`. Con `breakGlass` añade el código y el motivo del paso
    * de soporte (SEC-008); el email y la contraseña son los del primer paso.
@@ -124,17 +183,16 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
             }
           : { email, password },
       });
-      setAccessToken(res.accessToken);
-      router.push('/patients');
+      if ('mfa' in res) {
+        setPassword('');
+        setMfaChallenge(res);
+        return;
+      }
+      enter(res.accessToken);
     } catch (err) {
       // Demasiados intentos (DX-048): mismo aviso exista o no la cuenta, con la
       // espera de `Retry-After`. Sin la cabecera cae en el texto genérico.
-      if (err instanceof ApiError && err.status === 429 && err.retryAfterSeconds) {
-        const t = Date.now();
-        setNow(t);
-        setLockedUntil(t + err.retryAfterSeconds * 1000);
-        return;
-      }
+      if (startLock(err)) return;
       // SEC-008: solo llegan tras una contraseña correcta de superadmin.
       if (err instanceof ApiError && err.code === BREAK_GLASS_REQUIRED) {
         setBreakGlassStep(true);
@@ -166,6 +224,38 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
     }
   }
 
+  if (mfaChallenge?.mfa === MFA_ENROLLMENT_REQUIRED) {
+    return (
+      <MfaEnrollStep
+        mfaToken={mfaChallenge.mfaToken}
+        onDone={enter}
+        onExpired={mfaExpired}
+      />
+    );
+  }
+
+  if (mfaChallenge) {
+    return (
+      <div className={AUTH_FORM_CLASS}>
+        <MfaLoginStep
+          submitting={submitting}
+          locked={locked}
+          error={error}
+          onSubmit={(factor) => void verifyMfa(factor)}
+          onBack={() => {
+            setMfaChallenge(null);
+            setError(null);
+          }}
+        />
+        <div aria-live="polite" aria-atomic="true">
+          {locked ? (
+            <p className="text-sm font-medium text-warning-text">{loginLockedMessage(remaining)}</p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   if (breakGlassStep) {
     return (
       <div className={AUTH_FORM_CLASS}>
@@ -195,6 +285,11 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
       {passwordReset ? (
         <Callout tone="success" role="status">
           {copy.passwordResetDone}
+        </Callout>
+      ) : null}
+      {invitationAccepted ? (
+        <Callout tone="success" role="status">
+          {copy.invitationAccepted}
         </Callout>
       ) : null}
       <FormField htmlFor="login-email" label={copy.emailLabel}>

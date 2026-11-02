@@ -5,10 +5,11 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { SettingsPage, SettingsSection } from '@/components/settings/settings-page';
 import { ProfileView } from '@/components/profile/profile-view';
 import { ChangePasswordForm } from '@/components/profile/change-password-form';
+import { MfaSettings } from '@/components/profile/mfa-settings';
 
 const copy = {
   title: 'Mi perfil',
-  description: 'Tu nombre, tu foto y tu contraseña.',
+  description: 'Tu nombre, tu foto, tu contraseña y la verificación en dos pasos.',
   securityTitle: 'Seguridad',
   checkingSession: 'Verificando sesión…',
 };
@@ -38,6 +39,7 @@ export default function ProfilePage() {
       <ProfileView token={accessToken} />
       <SettingsSection title={copy.securityTitle}>
         <ChangePasswordForm token={accessToken} />
+        <MfaSettings token={accessToken} />
       </SettingsSection>
     </SettingsPage>
   );

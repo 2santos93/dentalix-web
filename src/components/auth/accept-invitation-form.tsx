@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { INVITATION_ACCEPTED_PARAM } from '@/lib/auth/password-reset-api';
 import { Loader2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -134,6 +135,11 @@ export function AcceptInvitationForm({
     setSubmitting(true);
     try {
       const res = await acceptInvitation(inviteToken, password);
+      // DX-021: la cuenta necesita segundo factor: entra por el login.
+      if ('loginRequired' in res) {
+        router.push(`/login?${INVITATION_ACCEPTED_PARAM}=1`);
+        return;
+      }
       // El refresh llega en la cookie HttpOnly (DX-062); el access, en memoria.
       setAccessToken(res.accessToken);
       router.push('/patients');

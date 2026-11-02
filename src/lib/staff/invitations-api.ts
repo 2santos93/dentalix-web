@@ -78,8 +78,9 @@ export async function getPublicInvitation(inviteToken: string): Promise<PublicIn
 export async function acceptInvitation(
   inviteToken: string,
   password: string,
-): Promise<{ accessToken: string }> {
-  return apiFetch<{ accessToken: string }>(`/public/invitations/${inviteToken}/accept`, {
+): Promise<{ accessToken: string } | { loginRequired: true }> {
+  // DX-021: con segundo factor, aceptada pero la sesión se abre en /login.
+  return apiFetch(`/public/invitations/${inviteToken}/accept`, {
     method: 'POST',
     body: { password },
   });
