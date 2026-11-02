@@ -36077,7 +36077,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Sede activa: queda en el contacto. */
+                /** @description No decide nada: se autoriza y se sella con la sede del paciente (la de la lista), no con la activa. */
                 "X-Location-Id"?: string;
             };
             path: {
@@ -36106,7 +36106,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. */
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. O 403 LOCATION_NOT_ALLOWED: el paciente es de una sede no permitida. */
             403: {
                 headers: {
                     [name: string]: unknown;
