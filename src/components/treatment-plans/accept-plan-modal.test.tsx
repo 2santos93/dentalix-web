@@ -3,8 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { AcceptPlanModal } from './accept-plan-modal';
 import { acceptPlan, getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { ApiError } from '@/lib/api/client';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 import { planQuoteFixture, SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
   getPlanQuote: jest.fn(),
@@ -53,6 +56,7 @@ function renderModal() {
 describe('AcceptPlanModal (DX-012)', () => {
   beforeEach(() => {
     mockedGet.mockReset();
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-CO' })]);
     mockedAccept.mockReset();
   });
 
@@ -65,7 +69,9 @@ describe('AcceptPlanModal (DX-012)', () => {
     expect(summary).toHaveTextContent('Implante');
     expect(summary).toHaveTextContent('Diente 36');
     expect(summary).toHaveTextContent('Resina');
-    expect((summary.textContent ?? '').replace(/\s/g, ' ')).toContain('3.300.000');
+    // DX-522: importes con el código ISO y el formato de la sede.
+    await waitFor(() => expect((summary.textContent ?? '').replace(/\s/g, ' ')).toContain('COP 3.300.000,00'));
+    expect((summary.textContent ?? '').replace(/\s/g, ' ')).toContain('COP 3.150.000,00');
     expect(summary).toHaveTextContent('Válido 30 días, hasta el 15/11/2026');
     expect(within(dialog).getByRole('link', { name: /Ver el presupuesto completo/ })).toHaveAttribute(
       'href',

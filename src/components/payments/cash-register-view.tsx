@@ -27,7 +27,8 @@ import {
 import {
   PAYMENT_METHOD_LABELS,
 } from '@/lib/payments/payment-method';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { PAYMENT_ADJUSTMENT_TYPE_LABELS, signedAdjustmentAmount } from '@/lib/payments/payment-adjustments';
 import { formatCivilDate, formatDate } from '@/lib/format/date';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
@@ -192,6 +193,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // atajos muestran `SedeConfigError` (el rango personalizado no la necesita).
   const zone = useSedeTimeZone(token);
   const timeZone = readyTimeZone(zone);
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const [period, setPeriod] = useState<PeriodChoice>('today');
   // El rango que se CONSULTA. Con un atajo sale del día de la sede (y se
   // recalcula si cambia la sede); en personalizado se copia de los campos solo
@@ -423,11 +427,11 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
       mobile: 'trailing',
       cell: (payment) => (
         <span className="flex flex-col items-end">
-          <span className="font-medium text-ink">{formatCurrency(payment.amount, payment.currency)}</span>
+          <span className="font-medium text-ink">{money(payment.amount, payment.currency)}</span>
           {/* DX-516: con ajustes por medio de pago, lo que entró de verdad. */}
           {payment.adjustments.length > 0 ? (
             <span className="t-caption text-muted tabular-nums">
-              {copy.collectedRow(formatCurrency(payment.collectedAmount, payment.currency))}
+              {copy.collectedRow(money(payment.collectedAmount, payment.currency))}
             </span>
           ) : null}
         </span>
@@ -584,7 +588,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
               emptyDescription={copy.emptyHint}
               skeleton={<TableSkeleton rows={4} />}
             >
-              {data ? <CashSummary summary={data.summary} /> : null}
+              {data ? <CashSummary summary={data.summary} money={money} /> : null}
 
               {/* Tabla desde \`sm\`; en el teléfono, tarjeta de dos líneas
                   (paciente + monto / fecha · método · destino · sede). Recibo
@@ -605,7 +609,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         paymentId: payment.id,
                         subject: copy.invoiceSubject(
                           payment.patient.fullName,
-                          formatCurrency(payment.amount, payment.currency),
+                          money(payment.amount, payment.currency),
                         ),
                         externalInvoiceNumber: payment.externalInvoiceNumber,
                       }),
@@ -741,7 +745,13 @@ function ScopeMarker({
  * patrón "número grande / etiqueta pequeña" como estructura. En móvil las dos
  * columnas se apilan.
  */
-function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) {
+function CashSummary({
+  summary,
+  money,
+}: {
+  summary: CashPaymentsResponse['summary'];
+  money: (amount: number, code: string) => string;
+}) {
   const headingId = React.useId();
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
@@ -757,7 +767,7 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
               key={row.currency}
               label={row.currency}
               meta={copy.paymentsCount(row.count)}
-              value={formatCurrency(row.total, row.currency)}
+              value={money(row.total, row.currency)}
             />
           ))}
         </SummaryList>
@@ -768,7 +778,7 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
               key={`${row.paymentMethodId ?? 'none'}-${row.currency}`}
               label={row.name ?? copy.methodNone}
               meta={`${row.currency} · ${copy.paymentsCount(row.count)}`}
-              value={formatCurrency(row.total, row.currency)}
+              value={money(row.total, row.currency)}
             />
           ))}
         </SummaryList>
@@ -782,7 +792,7 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
                 key={`${row.currency}-${row.type}`}
                 label={PAYMENT_ADJUSTMENT_TYPE_LABELS[row.type]}
                 meta={`${row.currency} · ${copy.adjustmentsCount(row.count)}`}
-                value={signedAdjustmentAmount({ type: row.type, amount: row.total, currency: row.currency })}
+                value={signedAdjustmentAmount({ type: row.type, amount: row.total, currency: row.currency }, money)}
               />
             ))}
           </SummaryList>
@@ -792,7 +802,7 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
                 key={row.currency}
                 label={row.currency}
                 meta={copy.collectedHint}
-                value={formatCurrency(row.total, row.currency)}
+                value={money(row.total, row.currency)}
               />
             ))}
           </SummaryList>

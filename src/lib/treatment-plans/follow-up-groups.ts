@@ -1,4 +1,3 @@
-import { formatCurrency } from '@/lib/format/currency';
 import type { PendingFollowUpItem } from './plan-options-api';
 
 /**
@@ -60,7 +59,11 @@ export function groupFollowUp(items: readonly PendingFollowUpItem[]): FollowUpGr
  * todas comparten moneda; si no, cada moneda con su rango, separadas por « · »
  * (nunca se suman monedas distintas).
  */
-export function followUpAmount(options: readonly PendingFollowUpItem[]): string {
+export function followUpAmount(
+  options: readonly PendingFollowUpItem[],
+  /** DX-522: el importe con el formato de la sede (`sedeMoney`). */
+  money: (amount: number, currency: string) => string,
+): string {
   const byCurrency = new Map<string, number[]>();
   for (const o of options) {
     const list = byCurrency.get(o.currency) ?? [];
@@ -72,8 +75,8 @@ export function followUpAmount(options: readonly PendingFollowUpItem[]): string 
       const min = Math.min(...totals);
       const max = Math.max(...totals);
       return min === max
-        ? formatCurrency(min, currency)
-        : `${formatCurrency(min, currency)} – ${formatCurrency(max, currency)}`;
+        ? money(min, currency)
+        : `${money(min, currency)} – ${money(max, currency)}`;
     })
     .join(' · ');
 }

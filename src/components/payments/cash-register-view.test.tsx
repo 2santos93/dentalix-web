@@ -279,12 +279,12 @@ it('DX-516: sin ajustes no hay bloque nuevo; con ellos, lo cobrado por fila y en
   render(<CashRegisterView token="tok" />);
   const table = await screen.findByRole('table', { name: /abonos/i });
   const row = within(table).getByRole('row', { name: new RegExp(betoCard.patient.fullName, 'i') });
-  expect(money(row.textContent)).toMatch(/Cobrado 103,00/);
+  expect(money(row.textContent)).toMatch(/Cobrado USD 103,00/);
   const summary = screen.getByRole('region', { name: /resumen del período/i });
   const adjustments = within(summary).getByRole('list', { name: 'Ajustes por medio de pago' });
-  expect(money(adjustments.textContent)).toMatch(/Impuesto.*\+3,00/);
+  expect(money(adjustments.textContent)).toMatch(/Impuesto.*\+USD 3,00/);
   const collected = within(summary).getByRole('list', { name: /Cobrado/ });
-  expect(money(collected.textContent)).toMatch(/103,00/);
+  expect(money(collected.textContent)).toMatch(/USD 103,00/);
 });
 
 it('DX-377: cada abono muestra su medio de pago y su referencia', async () => {

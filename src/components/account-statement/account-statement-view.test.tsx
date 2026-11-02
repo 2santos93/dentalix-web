@@ -82,9 +82,9 @@ it('pide el estado de cuenta del paciente y pinta el resumen por moneda', async 
 
   const cop = await screen.findByRole('region', { name: /resumen en COP/i });
   expect(mockedGet).toHaveBeenCalledWith('tok', 'pat-1');
-  expect(money(within(cop).getByTestId('budgeted').textContent)).toContain('3.000.000');
+  expect(money(within(cop).getByTestId('budgeted').textContent)).toContain('COP 3.000.000,00');
   expect(money(within(cop).getByTestId('paid').textContent)).toContain('1.200.000');
-  expect(money(within(cop).getByTestId('balance').textContent)).toContain('1.800.000');
+  expect(money(within(cop).getByTestId('balance').textContent)).toContain('COP 1.800.000,00');
 
   // Vencido destacado: importe y número de cuotas, en tono de peligro.
   const overdue = within(cop).getByTestId('overdue');

@@ -26,7 +26,8 @@ import {
   voidedDetail,
 } from '@/lib/account-statement/presentation';
 import { planQuotePrintHref } from '@/lib/treatment-plans/plan-quote-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { formatCivilDate } from '@/lib/format/date';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -369,6 +370,9 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   );
 }
 
+/** Un importe con el formato de la sede y el código ISO de su moneda (DX-522). */
+type Money = (amount: number, code: string) => string;
+
 function StatementBody({
   token,
   statement,
@@ -392,6 +396,9 @@ function StatementBody({
   onRefunded: (refund: CreditRefund) => void;
 }) {
   const planName = planNamer(statement.plans);
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
+  const money: Money = (amount, code) => sedeMoney(amount, code, fmt);
   return (
     <div className="flex flex-col gap-8">
       {statement.rateProviderTimedOut ? (
@@ -404,7 +411,7 @@ function StatementBody({
       {statement.summary.length > 0 ? (
         <div className="flex flex-col gap-3">
           {statement.summary.map((row) => (
-            <CurrencySummary key={row.currency} row={row} />
+            <CurrencySummary key={row.currency} row={row} money={money} />
           ))}
         </div>
       ) : null}
@@ -428,13 +435,13 @@ function StatementBody({
             columns={[
               { id: 'concept', header: statementCopy.colConcept, cell: (o) => <span className="break-words">{o.concept}</span> },
               { id: 'asOf', header: statementCopy.colAsOf, cell: (o) => <span className="tabular-nums">{openingAsOfLabel(o)}</span> },
-              { id: 'amount', header: copy.colAmount, numeric: true, cell: (o) => formatCurrency(o.amount, o.currency) },
-              { id: 'paid', header: statementCopy.colOpeningPaid, numeric: true, cell: (o) => formatCurrency(o.paid, o.currency) },
+              { id: 'amount', header: copy.colAmount, numeric: true, cell: (o) => money(o.amount, o.currency) },
+              { id: 'paid', header: statementCopy.colOpeningPaid, numeric: true, cell: (o) => money(o.paid, o.currency) },
               {
                 id: 'pending',
                 header: statementCopy.colOpeningPending,
                 numeric: true,
-                cell: (o) => <span className="font-medium">{formatCurrency(o.pending, o.currency)}</span>,
+                cell: (o) => <span className="font-medium">{money(o.pending, o.currency)}</span>,
               },
             ]}
           />
@@ -472,6 +479,7 @@ function StatementBody({
                   <PlanRows
                     key={plan.id}
                     token={token}
+                    money={money}
                     plan={plan}
                     planName={planName(plan.id)}
                     quoteHref={planQuotePrintHref(statement.patient.id, plan.id)}
@@ -506,12 +514,12 @@ function StatementBody({
                 cellClassName: 'whitespace-nowrap',
                 cell: (inst) => <span className="text-muted">{planName(inst.treatmentPlanId)}</span>,
               },
-              { id: 'amount', header: copy.colAmount, numeric: true, cell: (inst) => formatCurrency(inst.amount, inst.currency) },
+              { id: 'amount', header: copy.colAmount, numeric: true, cell: (inst) => money(inst.amount, inst.currency) },
               {
                 id: 'outstanding',
                 header: copy.colOutstanding,
                 numeric: true,
-                cell: (inst) => <span className="font-medium">{formatCurrency(inst.outstanding, inst.currency)}</span>,
+                cell: (inst) => <span className="font-medium">{money(inst.outstanding, inst.currency)}</span>,
               },
               {
                 id: 'status',
@@ -531,7 +539,7 @@ function StatementBody({
             label={copy.movementsTable}
             rows={statement.movements}
             getRowKey={(m) => m.id}
-            getRowLabel={(m) => copy.rowLabel(formatCurrency(m.amount, m.currency), formatCivilDate(m.paidOn))}
+            getRowLabel={(m) => copy.rowLabel(money(m.amount, m.currency), formatCivilDate(m.paidOn))}
             columns={[
               {
                 id: 'date',
@@ -596,7 +604,7 @@ function StatementBody({
                   <span className="inline-flex flex-wrap items-center justify-end gap-2">
                     {m.voided ? <Badge variant="neutral">{statementCopy.voided}</Badge> : null}
                     <span className={cn('font-medium', m.voided ? 'text-muted line-through' : 'text-ink')}>
-                      {formatCurrency(m.amount, m.currency)}
+                      {money(m.amount, m.currency)}
                     </span>
                   </span>
                 ),
@@ -604,7 +612,7 @@ function StatementBody({
                 // en la 1 recortaba la fecha.
                 mobileCell: (m) => (
                   <span className={cn('font-medium', m.voided ? 'text-muted line-through' : 'text-ink')}>
-                    {formatCurrency(m.amount, m.currency)}
+                    {money(m.amount, m.currency)}
                   </span>
                 ),
               },
@@ -656,11 +664,13 @@ const PLAN_COLUMNS = 7;
  */
 function PlanRows({
   token,
+  money,
   plan,
   planName,
   quoteHref,
 }: {
   token: string;
+  money: Money;
   plan: AccountStatementPlan;
   planName: string;
   quoteHref: string;
@@ -689,13 +699,13 @@ function PlanRows({
           </span>
         </TableCell>
         <TableCell className="text-right tabular-nums" data-label={copy.colBudgeted}>
-          {formatCurrency(plan.budgeted, plan.currency)}
+          {money(plan.budgeted, plan.currency)}
         </TableCell>
         <TableCell className="text-right tabular-nums" data-label={copy.colPaid}>
-          {formatCurrency(plan.paid, plan.currency)}
+          {money(plan.paid, plan.currency)}
           {plan.paidOtherCurrencies.map((o) => (
             <span key={o.currency} className="t-caption block text-muted">
-              {statementCopy.handedOver(formatCurrency(o.amount, o.currency))}
+              {statementCopy.handedOver(money(o.amount, o.currency))}
             </span>
           ))}
         </TableCell>
@@ -703,7 +713,7 @@ function PlanRows({
           className="text-right font-medium tabular-nums"
           data-label={copy.colBalance}
         >
-          {formatCurrency(plan.balance, plan.currency)}
+          {money(plan.balance, plan.currency)}
         </TableCell>
         {/* Sin `data-label`: en la tarjeta móvil, «Por ítem» encima de «Ver
             por ítem» repetiría lo mismo. */}
@@ -775,7 +785,7 @@ function SubSection({ title, children }: { title: string; children: React.ReactN
  * columnas hasta `lg`, cuatro desde ahí; una moneda por bloque, a todo el ancho. Lo vencido es lo único que se
  * tiñe, y solo cuando hay algo vencido.
  */
-function CurrencySummary({ row }: { row: AccountStatementSummary }) {
+function CurrencySummary({ row, money }: { row: AccountStatementSummary; money: Money }) {
   const hasOverdue = row.overdueCount > 0;
   const inFavor = row.balance < 0;
   return (
@@ -793,7 +803,7 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
             <span className="font-medium text-ink tabular-nums">
               {copy.nextInstallmentValue(
                 formatCivilDate(row.nextInstallment.dueDate),
-                formatCurrency(row.nextInstallment.amount, row.currency),
+                money(row.nextInstallment.amount, row.currency),
               )}
             </span>
           </p>
@@ -801,13 +811,13 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
       </div>
       <dl className="grid grid-cols-2 lg:grid-cols-4">
         <Figure label={copy.budgeted} testId="budgeted">
-          {formatCurrency(row.budgeted, row.currency)}
+          {money(row.budgeted, row.currency)}
         </Figure>
         <Figure label={copy.paid} testId="paid">
-          {formatCurrency(row.paid, row.currency)}
+          {money(row.paid, row.currency)}
         </Figure>
         <Figure label={copy.balance} testId="balance" emphasis>
-          {formatCurrency(Math.abs(row.balance), row.currency)}
+          {money(Math.abs(row.balance), row.currency)}
           {inFavor ? (
             <span className="t-caption ml-1 font-normal text-success-text">{statementCopy.inFavor}</span>
           ) : null}
@@ -819,7 +829,7 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
         >
           {hasOverdue ? (
             <>
-              {formatCurrency(row.overdueAmount, row.currency)}
+              {money(row.overdueAmount, row.currency)}
               <span className="t-caption block font-normal">
                 {statementCopy.overdueCount(row.overdueCount)}
               </span>
@@ -836,7 +846,7 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
         >
           {statementCopy.openingIncluded}{' '}
           <span className="font-medium tabular-nums text-ink">
-            {formatCurrency(row.openingPending, row.currency)}
+            {money(row.openingPending, row.currency)}
           </span>
         </p>
       ) : null}

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { replacePriceListItems, type PriceListItemRow } from '@/lib/price-lists/price-lists-api';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
@@ -46,6 +47,7 @@ export function PriceListItemPriceModal({
   row,
   onSaved,
 }: PriceListItemPriceModalProps) {
+  const fmt = readyFormat(useSedeFormat(token));
   const [price, setPrice] = useState(row.price === null ? '' : moneyInputText(row.price));
   const [priceError, setPriceError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -74,7 +76,7 @@ export function PriceListItemPriceModal({
   }
 
   const catalogPrice =
-    row.defaultPrice === null ? copy.noCatalogPrice : formatCurrency(row.defaultPrice, currency);
+    row.defaultPrice === null ? copy.noCatalogPrice : sedeMoney(row.defaultPrice, currency, fmt);
 
   return (
     <FormModal

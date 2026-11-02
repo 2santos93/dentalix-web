@@ -19,7 +19,8 @@ import {
   type CountRow,
 } from '@/lib/cash-sessions/arqueo';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { ApiError } from '@/lib/api/client';
 import { FormModal } from '@/components/shared/form-modal';
 import { CurrencySelect } from '@/components/shared/currency-select';
@@ -85,6 +86,8 @@ export function CloseCashSessionModal({
   onClosed,
 }: CloseCashSessionModalProps) {
   const baseId = useId();
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
   const blind = session.blindHidden;
   // Con arqueo ciego no se sabe qué monedas se cobraron: las del fondo, la de
   // la sede y las de los ajustes y salidas de caja de este turno (esos sí se
@@ -202,7 +205,7 @@ export function CloseCashSessionModal({
                   <p className="font-medium text-ink">{copy.rowLabel(method, row.currency)}</p>
                   {row.expected !== null ? (
                     <p className="text-xs text-muted tabular-nums">
-                      {copy.expected(formatCurrency(row.expected, row.currency))}
+                      {copy.expected(sedeMoney(row.expected, row.currency, fmt))}
                     </p>
                   ) : null}
                 </div>
@@ -228,7 +231,7 @@ export function CloseCashSessionModal({
                       )}
                     >
                       <span className="sr-only">{copy.difference}: </span>
-                      {diff === 0 ? copy.squared : formatCurrency(diff, row.currency)}
+                      {diff === 0 ? copy.squared : sedeMoney(diff, row.currency, fmt)}
                     </span>
                   ) : null}
                 </div>
