@@ -13457,6 +13457,25 @@ export interface components {
             lines: components["schemas"]["ReceiptSplitViewLineDto"][];
             total: components["schemas"]["ReceiptSplitTotalDto"];
         };
+        /**
+         * @description Reloj de la sede: 12 h o 24 h.
+         * @enum {string}
+         */
+        HourCycle: "h12" | "h23";
+        ReceiptRegionalDto: {
+            /**
+             * @description Zona IANA de la sede.
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /**
+             * @description Locale canónico: separadores y orden de las fechas.
+             * @example es-VE
+             */
+            locale: string;
+            /** @description Reloj de la sede: 12 h o 24 h. */
+            hourCycle: components["schemas"]["HourCycle"];
+        };
         ReceiptClinicDto: {
             /** @example Clínica Demo */
             name: string;
@@ -13573,25 +13592,6 @@ export interface components {
             lines: components["schemas"]["ReceiptSplitLineDto"][];
             total: components["schemas"]["ReceiptSplitTotalDto"];
         };
-        ReceiptRegionalDto: {
-            /**
-             * @description Zona IANA de la sede.
-             * @example America/Caracas
-             */
-            timeZone: string;
-            /**
-             * @description Locale canónico: separadores y orden de las fechas.
-             * @example es-VE
-             */
-            locale: string;
-            /** @description Reloj de la sede: 12 h o 24 h. */
-            hourCycle: components["schemas"]["HourCycle"];
-        };
-        /**
-         * @description Reloj de la sede: 12 h o 24 h.
-         * @enum {string}
-         */
-        HourCycle: "h12" | "h23";
         ReceiptSnapshotDto: {
             /** @enum {number} */
             version: 1;
