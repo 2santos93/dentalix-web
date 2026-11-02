@@ -83,8 +83,8 @@ model Currency {
 }
 
 model Country {
-  code   String @id   // ISO 3166-1 alpha-2, p.ej. "CO"
-  name   String       // "Colombia"
+  code   String @id   // ISO 3166-1 alpha-2, p.ej. "VE"
+  name   String       // "Venezuela"
   cities City[]
   @@map("countries")
 }
@@ -253,7 +253,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `prisma.currency/country/city` from Task 1.
-- Produces: `npx prisma db seed` populates `currencies` (curated whitelist incl. USD + COP), `countries` (all from dataset), `cities` (all from dataset). Idempotent: currencies/countries upserted; cities skipped when already populated (so `City.id` FKs stay stable).
+- Produces: `npx prisma db seed` populates `currencies` (curated whitelist incl. USD + VES), `countries` (all from dataset), `cities` (all from dataset). Idempotent: currencies/countries upserted; cities skipped when already populated (so `City.id` FKs stay stable).
 
 - [ ] **Step 1: Add the dataset dependency + seed config**
 
@@ -280,10 +280,10 @@ const prisma = new PrismaClient({
 });
 
 // Whitelist curada de monedas (ISO 4217). Cubre el contexto LATAM + majors;
-// alineada con lo que soporta el proveedor de exchange (base USD) e incluye COP.
+// alineada con lo que soporta el proveedor de exchange (base USD) e incluye VES.
 const CURRENCIES: { code: string; name: string; symbol: string }[] = [
   { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
-  { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+  { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
   { code: 'EUR', name: 'Euro', symbol: '€' },
   { code: 'MXN', name: 'Peso mexicano', symbol: '$' },
   { code: 'ARS', name: 'Peso argentino', symbol: '$' },
@@ -385,17 +385,17 @@ describe('reference seed', () => {
     await seedRaw.$disconnect();
   });
 
-  it('has USD and COP currencies with a symbol', async () => {
+  it('has USD and VES currencies with a symbol', async () => {
     const usd = await seedRaw.currency.findUnique({ where: { code: 'USD' } });
-    const cop = await seedRaw.currency.findUnique({ where: { code: 'COP' } });
+    const ves = await seedRaw.currency.findUnique({ where: { code: 'VES' } });
     expect(usd?.symbol).toBe('$');
-    expect(cop?.name).toMatch(/colombiano/i);
+    expect(ves?.name).toMatch(/venezolano/i);
   });
 
-  it('has Colombia and at least one Colombian city', async () => {
-    const co = await seedRaw.country.findUnique({ where: { code: 'CO' } });
-    expect(co?.name).toBe('Colombia');
-    const cities = await seedRaw.city.count({ where: { countryCode: 'CO' } });
+  it('has Venezuela and at least one Venezuelan city', async () => {
+    const co = await seedRaw.country.findUnique({ where: { code: 'VE' } });
+    expect(co?.name).toBe('Venezuela');
+    const cities = await seedRaw.city.count({ where: { countryCode: 'VE' } });
     expect(cities).toBeGreaterThan(0);
   });
 });
@@ -772,10 +772,10 @@ export class ListCountriesUseCase {
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CountryDto {
-  @ApiProperty({ example: 'CO' })
+  @ApiProperty({ example: 'VE' })
   code!: string;
 
-  @ApiProperty({ example: 'Colombia' })
+  @ApiProperty({ example: 'Venezuela' })
   name!: string;
 }
 ```
@@ -805,14 +805,14 @@ import { Country } from '../domain/entities/country.entity';
 - [ ] **Step 5: Add the e2e assertion** to `test/reference.e2e-spec.ts`:
 
 ```ts
-  it('GET /countries returns the seeded list incl. Colombia', async () => {
+  it('GET /countries returns the seeded list incl. Venezuela', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/countries')
       .set('X-Tenant-Host', hostFor(sub))
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
     const body = res.body as { code: string; name: string }[];
-    expect(body.some((c) => c.code === 'CO' && c.name === 'Colombia')).toBe(true);
+    expect(body.some((c) => c.code === 'VE' && c.name === 'Venezuela')).toBe(true);
   });
 ```
 
@@ -844,7 +844,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `ReferenceRepository.searchCities(countryCode, q, limit)` (Task 3).
-- Produces: `GET /api/v1/cities?countryCode=CO&q=bog&limit=20` → `CityDto[]` (`{ id, name, region }`). `countryCode` required (400 if missing); `limit` default 20, clamped to max 50.
+- Produces: `GET /api/v1/cities?countryCode=VE&q=car&limit=20` → `CityDto[]` (`{ id, name, region }`). `countryCode` required (400 if missing); `limit` default 20, clamped to max 50.
 
 - [ ] **Step 1: Write the query DTO** at `src/modules/reference/presentation/dto/search-cities-query.dto.ts`:
 
@@ -854,7 +854,7 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 
 export class SearchCitiesQueryDto {
-  @ApiProperty({ example: 'CO', description: 'ISO 3166-1 alpha-2 country code' })
+  @ApiProperty({ example: 'VE', description: 'ISO 3166-1 alpha-2 country code' })
   @IsString()
   @Length(2, 2)
   countryCode!: string;
@@ -883,10 +883,10 @@ export class CityDto {
   @ApiProperty({ example: 12345 })
   id!: number;
 
-  @ApiProperty({ example: 'Bogotá' })
+  @ApiProperty({ example: 'Caracas' })
   name!: string;
 
-  @ApiProperty({ type: String, nullable: true, example: 'Bogota D.C.' })
+  @ApiProperty({ type: String, nullable: true, example: 'Distrito Capital' })
   region!: string | null;
 }
 ```
@@ -964,7 +964,7 @@ import { City } from '../domain/entities/city.entity';
 
   it('GET /cities filters by countryCode + q and caps at 50', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/cities?countryCode=CO&q=bog&limit=100')
+      .get('/api/v1/cities?countryCode=VE&q=car&limit=100')
       .set('X-Tenant-Host', hostFor(sub))
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
@@ -1042,7 +1042,7 @@ export class PrismaReferenceLookup implements ReferenceLookup {
 - [ ] **Step 3: Extend the DTOs** — add to `create-patient.dto.ts` (after `address`):
 
 ```ts
-  @ApiPropertyOptional({ example: 'CO', description: 'ISO 3166-1 alpha-2' })
+  @ApiPropertyOptional({ example: 'VE', description: 'ISO 3166-1 alpha-2' })
   @IsOptional()
   @IsString()
   countryCode?: string;
@@ -1165,7 +1165,7 @@ describe('patient location (e2e)', () => {
       .expect(201);
     token = (login.body as { accessToken: string }).accessToken;
 
-    const co = await raw.city.findFirst({ where: { countryCode: 'CO' }, select: { id: true } });
+    const co = await raw.city.findFirst({ where: { countryCode: 'VE' }, select: { id: true } });
     coCityId = co!.id;
   });
 
@@ -1179,10 +1179,10 @@ describe('patient location (e2e)', () => {
       .post('/api/v1/patients')
       .set('X-Tenant-Host', hostFor(sub))
       .set('Authorization', `Bearer ${token}`)
-      .send({ firstName: 'Ana', lastName: 'G', docType: 'CC', sex: 'F', countryCode: 'CO', cityId: coCityId })
+      .send({ firstName: 'Ana', lastName: 'G', docType: 'CC', sex: 'F', countryCode: 'VE', cityId: coCityId })
       .expect(201);
     const body = res.body as { countryCode: string; cityId: number };
-    expect(body.countryCode).toBe('CO');
+    expect(body.countryCode).toBe('VE');
     expect(body.cityId).toBe(coCityId);
   });
 
@@ -1314,9 +1314,9 @@ Register the adapter provider in `payments.module.ts` and `treatment-plans.modul
       .post(`/api/v1/patients/${patientId}/treatment-plans`)
       .set('X-Tenant-Host', hostFor(sub))
       .set('Authorization', `Bearer ${token}`)
-      .send({ currency: 'COP' })
+      .send({ currency: 'VES' })
       .expect(201);
-    expect((ok.body as { currency: string }).currency).toBe('COP');
+    expect((ok.body as { currency: string }).currency).toBe('VES');
 
     await request(app.getHttpServer())
       .post(`/api/v1/patients/${patientId}/treatment-plans`)
@@ -1451,16 +1451,16 @@ describe('reference fetchers', () => {
   });
 
   it('searchCities builds the querystring (countryCode required, q + limit optional)', async () => {
-    await searchCities('tok', { countryCode: 'CO', q: 'bog', limit: 10 });
+    await searchCities('tok', { countryCode: 'VE', q: 'car', limit: 10 });
     expect(mockedApiFetch).toHaveBeenCalledWith(
-      '/cities?countryCode=CO&q=bog&limit=10',
+      '/cities?countryCode=VE&q=car&limit=10',
       { token: 'tok' },
     );
   });
 
   it('searchCities omits q and limit when absent', async () => {
-    await searchCities('tok', { countryCode: 'CO' });
-    expect(mockedApiFetch).toHaveBeenCalledWith('/cities?countryCode=CO', { token: 'tok' });
+    await searchCities('tok', { countryCode: 'VE' });
+    expect(mockedApiFetch).toHaveBeenCalledWith('/cities?countryCode=VE', { token: 'tok' });
   });
 });
 ```
@@ -1604,7 +1604,7 @@ describe('CurrencySelect', () => {
   beforeEach(() => {
     mocked.mockReset().mockResolvedValue([
       { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
-      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+      { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     ]);
   });
 
@@ -1618,7 +1618,7 @@ describe('CurrencySelect', () => {
       const opts = Array.from(el.options).map((o) => `${o.value}:${o.textContent}`);
       expect(opts).toEqual(expect.arrayContaining([
         'USD:Dólar estadounidense ($)',
-        'COP:Peso colombiano ($)',
+        'VES:Bolívar venezolano (VES)',
       ]));
     });
   });
@@ -1755,7 +1755,7 @@ And in `handleCreatePlan`: `const created = await createPlan(token, patientId, {
 ```ts
 jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
 ```
-In the test setup, `(listCurrencies as jest.Mock).mockResolvedValue([{ code:'USD', name:'Dólar', symbol:'$' }, { code:'COP', name:'Peso', symbol:'$' }])`. Fix any existing test that typed into the old free-text currency input to instead `selectOptions` the currency `<select>` (query `screen.getByLabelText(/moneda/i)`).
+In the test setup, `(listCurrencies as jest.Mock).mockResolvedValue([{ code:'USD', name:'Dólar', symbol:'$' }, { code:'VES', name:'Peso', symbol:'$' }])`. Fix any existing test that typed into the old free-text currency input to instead `selectOptions` the currency `<select>` (query `screen.getByLabelText(/moneda/i)`).
 
 - [ ] **Step 4: Replace the dashboard currency `<Input>`** in `dashboard-view.tsx` (the `dashboard-currency` FormField) with:
 
@@ -1809,8 +1809,8 @@ const mocked = searchCities as jest.MockedFunction<typeof searchCities>;
 describe('CityCombobox', () => {
   beforeEach(() => {
     mocked.mockReset().mockResolvedValue([
-      { id: 1, name: 'Bogotá', region: 'Bogota D.C.' },
-      { id: 2, name: 'Bogotá Chico', region: 'Bogota D.C.' },
+      { id: 1, name: 'Caracas', region: 'Distrito Capital' },
+      { id: 2, name: 'Caracas Centro', region: 'Distrito Capital' },
     ]);
   });
 
@@ -1822,12 +1822,12 @@ describe('CityCombobox', () => {
   it('queries and lets the user pick a city', async () => {
     const onChange = jest.fn();
     const user = userEvent.setup();
-    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={onChange} />);
-    await user.type(screen.getByRole('combobox'), 'bog');
-    await waitFor(() => expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'CO', q: 'bog' }));
-    const option = await screen.findByText('Bogotá');
+    render(<CityCombobox id="city" token="tok" countryCode="VE" value={null} onChange={onChange} />);
+    await user.type(screen.getByRole('combobox'), 'car');
+    await waitFor(() => expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'VE', q: 'car' }));
+    const option = await screen.findByText('Caracas');
     await user.click(option);
-    expect(onChange).toHaveBeenCalledWith({ id: 1, name: 'Bogotá' });
+    expect(onChange).toHaveBeenCalledWith({ id: 1, name: 'Caracas' });
   });
 });
 ```
@@ -2037,13 +2037,13 @@ Add labels to `copy`: `countryLabel: 'País'`, `cityLabel: 'Ciudad'`.
 jest.mock('../../lib/reference/countries-api', () => ({ listCountries: jest.fn() }));
 jest.mock('../../lib/reference/cities-api', () => ({ searchCities: jest.fn() }));
 ```
-In `beforeEach`, `(listCountries as jest.Mock).mockResolvedValue([{ code:'CO', name:'Colombia' }])` and `(searchCities as jest.Mock).mockResolvedValue([{ id: 1, name: 'Bogotá', region: null }])`. Add a test:
+In `beforeEach`, `(listCountries as jest.Mock).mockResolvedValue([{ code:'VE', name:'Venezuela' }])` and `(searchCities as jest.Mock).mockResolvedValue([{ id: 1, name: 'Caracas', region: null }])`. Add a test:
 ```ts
 it('renders País select and Ciudad combobox; city is disabled until a country is chosen', async () => {
   render(<PatientForm token="tok" />);
   const country = await screen.findByLabelText(/país/i);
   expect(screen.getByLabelText(/ciudad/i)).toBeDisabled();
-  await userEvent.selectOptions(country, 'CO');
+  await userEvent.selectOptions(country, 'VE');
   expect(screen.getByLabelText(/ciudad/i)).not.toBeDisabled();
 });
 ```
@@ -2078,7 +2078,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] Backend: `cd dentalix-api && npm run lint && npm run test && npm run test:int && npm run test:e2e` — all green (test DB migrated + seeded).
 - [ ] Frontend: `cd dentalix-web && npm run lint && npm test` — all green.
-- [ ] Manual smoke: start both, log in at `prueba.localhost:3001`, open a patient → create plan (pick COP) → register abono (currency is a select showing name+symbol) → confirm no crash when switching currencies; create a new patient → pick País → search Ciudad → save.
+- [ ] Manual smoke: start both, log in at `prueba.localhost:3001`, open a patient → create plan (pick VES) → register abono (currency is a select showing name+symbol) → confirm no crash when switching currencies; create a new patient → pick País → search Ciudad → save.
 ```
 ```
 
