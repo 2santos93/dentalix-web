@@ -2,7 +2,7 @@ import type { ClinicLocation } from '@/lib/locations/locations-api';
 
 /**
  * Sede de prueba (GLOBAL-G1). El fixture base es, a propósito y de forma
- * explícita, una sede de Bogotá ya revisada (COP · America/Bogota · es-CO · 12 h):
+ * explícita, una sede ya revisada (COP · America/Bogota · es-CO · 12 h):
  * es el dato de los tests, no un valor por defecto del producto. Cada test que
  * dependa de la moneda, la zona o el formato lo fija con `overrides`; una sede
  * sin configurar se construye con `currency`/`timeZone`/`locale`/`hourCycle` a `null`.

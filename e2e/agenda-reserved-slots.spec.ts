@@ -10,7 +10,7 @@ import { fillDate, fillTime, readDate } from './support/dates';
  * e2e DX-446: huecos reservados para urgencias.
  *
  * Una clínica nueva por corrida con un odontólogo («Luis Urgencias») y
- * recepción («Rita Reserva»), horario lun–vie 9–19 (Bogotá), dos tipos de
+ * recepción («Rita Reserva»), horario lun–vie 9–19 (zona de la sede), dos tipos de
  * cita («Consulta de urgencia», de urgencia, y «Limpieza») y dos pacientes.
  * En serie:
  * 1. recepción reserva 15:00–16:00 de Luis para urgencias (liberación 11:00)

@@ -235,7 +235,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
     const previousNow = Date.now();
     jest.setSystemTime(new Date(instant));
     try {
-      // El listado indica Bogotá; el horario guardado es Auckland.
+      // El listado indica la zona del fixture; el horario guardado es Auckland.
       render(<ExpensesSummaryView token="t" />);
       await act(async () => {});
       expect(getLocationSchedule).toHaveBeenCalledWith('t', 'loc-1');
@@ -247,7 +247,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-10-31T12:00:00Z'));
     try {
-      // Auckland ya está en noviembre; el listado fixture sigue indicando Bogotá.
+      // Auckland ya está en noviembre; el listado fixture sigue indicando la zona del fixture.
       render(<ExpensesSummaryView token="t" />);
       await act(async () => {});
       expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-06-01', to: '2026-11-30' });

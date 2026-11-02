@@ -167,7 +167,7 @@ test('registering a clinic in a country outside the old pair', async ({ page, re
 });
 
 // R1: el país se propone primero por la ZONA del navegador si es de un solo
-// país (la de la suite, America/Bogota, propondría Colombia) y, si no, por la
+// país (la de la suite, de un solo país, propondría ese país) y, si no, por la
 // región explícita del idioma (DX-312 P1). Estas dos pruebas miran la regla del
 // idioma, así que abren el navegador en una zona que no es de ningún país.
 const NO_COUNTRY_ZONE = 'Etc/UTC';
@@ -206,7 +206,7 @@ test.describe('the suite language in a zone of no country', () => {
 });
 
 test('the suite browser, in a zone of a single country, suggests that country', async ({ page }) => {
-  // America/Bogota (playwright.config.ts) es solo de Colombia: R1 lo propone, marcado y editable.
+  // La zona de la suite (playwright.config.ts) es de un solo país: R1 lo propone, marcado y editable.
   await page.goto(`${tenantOrigin(`pais-zona-${suffix}`)}/register`);
   await waitForHydratedForm(page);
   await expect(countryField(page)).toHaveValue('Colombia');

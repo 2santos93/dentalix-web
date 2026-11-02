@@ -6513,7 +6513,7 @@ export interface components {
         RecordDataConsentsDto: {
             /**
              * Format: uuid
-             * @description Versión de la política que se le mostró al titular. Debe ser la vigente (409 si cambió).
+             * @description Versión de la política que se le mostró al paciente. Debe ser la vigente (409 si cambió).
              */
             policyVersionId: string;
             decisions: components["schemas"]["ConsentDecisionDto"][];
@@ -15216,7 +15216,7 @@ export interface components {
         };
         ScopeConsentStatusDto: {
             scope: components["schemas"]["DataConsentScope"];
-            /** @description `null` = el titular aún no ha decidido sobre este scope. */
+            /** @description `null` = el paciente aún no ha decidido sobre este scope. */
             granted: boolean | null;
             latest: components["schemas"]["DataConsentRecordDto"] | null;
         };
