@@ -30,6 +30,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
 import { StaffLocationsCard } from '@/components/staff/staff-locations-card';
+import { StaffMfaReset } from '@/components/staff/staff-mfa-reset';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
   blocksOwnAgendaOnly,
@@ -492,6 +493,14 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                   </Callout>
                   {unlockRefused ? <InlineError>{unlockRefused}</InlineError> : null}
                 </div>
+              ) : null}
+              {member.status === 'ACTIVE' ? (
+                <StaffMfaReset
+                  token={token}
+                  userId={userId}
+                  memberName={member.fullName}
+                  self={getTokenUserId(token) === userId}
+                />
               ) : null}
               <div>
                 {member.status === 'ACTIVE' ? (

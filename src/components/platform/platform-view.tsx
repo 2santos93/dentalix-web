@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { logout } from '@/lib/auth/auth-api';
+import { loginLockedMessage } from '@/lib/auth/login-lockout';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
 import {
@@ -23,6 +24,8 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { ArrowUpRight, LogOut } from 'lucide-react';
 import { PlatformMfaCard } from './platform-mfa-card';
+import { PlatformSecondFactor } from './platform-second-factor';
+import type { MfaChallenge } from '@/lib/auth/mfa-api';
 
 const copy = {
   title: 'Plataforma',
@@ -42,6 +45,7 @@ const copy = {
   colSubdomain: 'Subdominio',
   loading: 'Cargando clínicas…',
   invalid: 'Credenciales inválidas.',
+  stepExpired: 'El paso de verificación caducó. Inicia sesión de nuevo.',
   loadError: 'No pudimos cargar las clínicas.',
   emptyTitle: 'Sin clínicas',
   emptyDescription: 'Todavía no hay ninguna clínica registrada.',
@@ -85,6 +89,8 @@ export function PlatformView() {
   const [password, setPassword] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
+  // DX-021-bis: la contraseña valió; falta el segundo factor (o su alta).
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
 
   const [tenants, setTenants] = useState<PlatformTenant[]>([]);
   const [loading, setLoading] = useState(false);
@@ -127,11 +133,14 @@ export function PlatformView() {
     setSignInError(null);
     setSigningIn(true);
     try {
-      const { accessToken } = await loginPlatform(email.trim(), password);
-      useAuthStore.getState().setAccessToken(accessToken);
+      setChallenge(await loginPlatform(email.trim(), password));
       setPassword('');
     } catch (err) {
-      setSignInError(apiErrorMessage(err, { fallback: copy.invalid, byStatus: { 401: copy.invalid, 403: copy.invalid } }));
+      setSignInError(
+        err instanceof ApiError && err.status === 429 && err.retryAfterSeconds
+          ? loginLockedMessage(err.retryAfterSeconds)
+          : apiErrorMessage(err, { fallback: copy.invalid, byStatus: { 401: copy.invalid, 403: copy.invalid } }),
+      );
     } finally {
       setSigningIn(false);
     }
@@ -152,6 +161,20 @@ export function PlatformView() {
         <p className="mt-1 text-sm text-muted">{copy.signInSubtitle}</p>
         <Card className="mt-6">
           <CardContent className="p-6">
+            {challenge ? (
+              <PlatformSecondFactor
+                challenge={challenge}
+                onDone={(accessToken) => {
+                  setChallenge(null);
+                  useAuthStore.getState().setAccessToken(accessToken);
+                }}
+                onExpired={() => {
+                  setChallenge(null);
+                  setSignInError(copy.stepExpired);
+                }}
+                onBack={() => setChallenge(null)}
+              />
+            ) : (
             <form onSubmit={handleSignIn} className="flex flex-col gap-4">
               {signInError && <InlineError variant="summary">{signInError}</InlineError>}
               <FormField htmlFor="platform-email" label={copy.email}>
@@ -178,6 +201,7 @@ export function PlatformView() {
                 {signingIn ? copy.signingIn : copy.signIn}
               </Button>
             </form>
+            )}
           </CardContent>
         </Card>
       </main>
@@ -199,7 +223,7 @@ export function PlatformView() {
       />
 
       <div className="flex flex-col gap-8">
-        {/* SEC-008: sin MFA no hay acceso de soporte a las clínicas. */}
+        {/* SEC-008: el acceso de soporte usa este mismo MFA, con su espera. */}
         <PlatformMfaCard token={token} />
 
         <section aria-labelledby="platform-clinics-title" className="flex flex-col gap-3">
