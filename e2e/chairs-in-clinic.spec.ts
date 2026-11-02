@@ -144,7 +144,7 @@ test('«Atender sin cita»: el sillón ocupado no se ofrece y, si alguien lo ocu
 });
 
 test('Semana y Mes llevan el sillón en el chip; 390 px sin scroll horizontal', async ({ page, request }) => {
-  await apiPost(request, session, '/appointments', {
+  const appointment = await apiPost<{ id: string }>(request, session, '/appointments', {
     patientId,
     providerId: dentistId,
     chairId: chairOne,
@@ -155,9 +155,11 @@ test('Semana y Mes llevan el sillón en el chip; 390 px sin scroll horizontal', 
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Semana', exact: true }).click();
   await fillDate(page, 'Fecha', day);
-  await expect(page.getByTestId('week-appointment-chair').filter({ hasText: 'Sillón 1' }).first()).toBeVisible({
-    timeout: 15_000,
-  });
+  // La de `day`, no la primera: las urgencias de hoy pueden caer en esta semana, a media
+  // columna, y ahí un nombre largo deja la etiqueta del sillón sin ancho (se recorta ella antes).
+  const chip = page.locator(`[data-testid="week-grid-appointment"][data-id="${appointment.id}"]`);
+  await expect(chip.getByTestId('week-appointment-chair')).toHaveText('Sillón 1', { timeout: 15_000 });
+  await expect(chip.getByTestId('week-appointment-chair')).toBeVisible();
   await page.getByRole('button', { name: 'Mes', exact: true }).click();
   await expect(page.getByTestId('month-appointment-chair').filter({ hasText: 'Sillón 1' }).first()).toBeVisible({
     timeout: 15_000,
