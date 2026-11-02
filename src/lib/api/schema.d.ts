@@ -752,7 +752,7 @@ export interface paths {
         };
         /**
          * Nombre local de cada tipo de documento de la clínica (DX-327)
-         * @description Null = sin nombre local: se usa el genérico. El nombre visible de un documento es la etiqueta del paciente, si no el nombre local de la clínica para su tipo, si no el genérico (R17). La importación de pacientes reconoce también estos nombres, antes que los genéricos (R19).
+         * @description Null = sin nombre local: se usa el genérico. El nombre visible de un documento es la etiqueta del paciente, si no el nombre local de la clínica para su tipo, si no el genérico (R17). La importación de pacientes reconoce también estos nombres, antes que los genéricos (R19). DX-524: `names` son los de la clínica; `effective`, los que rigen en la sede activa (los de la sede sobre los de la clínica, por tipo).
          */
         get: operations["PatientsController_documentTypeNames"];
         /**
@@ -7649,6 +7649,12 @@ export interface components {
             /** @description Otro documento */
             OTHER?: string | null;
         };
+        DocumentTypeNamesViewDto: {
+            /** @description Nombre local de cada tipo. En el PUT se sustituyen los cinco: una clave ausente queda sin nombre. */
+            names: components["schemas"]["DocumentTypeNamesValuesDto"];
+            /** @description Los nombres que rigen en la sede activa (X-Location-Id): los de la sede sobre los de la clínica, por tipo. Sin sede activa, los de la clínica. `names` sigue siendo solo los de la clínica. */
+            effective: components["schemas"]["DocumentTypeNamesValuesDto"];
+        };
         DocumentTypeNamesDto: {
             /** @description Nombre local de cada tipo. En el PUT se sustituyen los cinco: una clave ausente queda sin nombre. */
             names: components["schemas"]["DocumentTypeNamesValuesDto"];
@@ -8529,6 +8535,8 @@ export interface components {
             phoneInternational: string | null;
             /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. */
             defaultPhoneRegion: string | null;
+            /** @description DX-524: nombre propio de la sede para cada tipo de documento (texto libre de hasta 60 caracteres, distinto por tipo). Solo ADMIN; queda auditado. Una clave ausente no cambia; null o vacío vuelve a heredar el nombre de la clínica (DX-327) y, sin este, el genérico. Siempre trae los cinco; null = hereda. */
+            docTypeNames: components["schemas"]["DocumentTypeNamesValuesDto"];
             isActive: boolean;
             /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1). */
             currency: string | null;
@@ -8627,6 +8635,8 @@ export interface components {
              * @enum {boolean}
              */
             confirmRegionalChange?: true;
+            /** @description DX-524: nombre propio de la sede para cada tipo de documento (texto libre de hasta 60 caracteres, distinto por tipo). Solo ADMIN; queda auditado. Una clave ausente no cambia; null o vacío vuelve a heredar el nombre de la clínica (DX-327) y, sin este, el genérico. */
+            docTypeNames?: components["schemas"]["DocumentTypeNamesValuesDto"];
             /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
             isActive?: boolean;
         };
@@ -20789,7 +20799,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentTypeNamesDto"];
+                    "application/json": components["schemas"]["DocumentTypeNamesViewDto"];
                 };
             };
         };

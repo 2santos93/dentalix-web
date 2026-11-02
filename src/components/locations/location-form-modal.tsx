@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -11,6 +11,17 @@ import {
   type CreateLocationInput,
   type UpdateLocationSettingsInput,
 } from '@/lib/locations/locations-api';
+import {
+  DOC_TYPES,
+  DOC_TYPE_NAME_MAX,
+  docTypeNameError,
+  documentTypeName,
+  genericDocTypeName,
+  normalizeDocTypeName,
+  type ClinicDocumentTypeNames,
+} from '@/lib/patients/doc-type';
+import { getClinicDocumentTypeNames } from '@/lib/patients/document-type-names-api';
+import type { DocType } from '@/lib/patients/patients-api';
 import { isPhoneRegion, PHONE_REGIONS, phoneRegionLabel, searchPhoneRegions, type PhoneRegionOption } from '@/lib/locations/phone-regions';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import {
@@ -72,6 +83,14 @@ export const locationFormCopy = {
     `Zona horaria: las citas no se mueven, conservan su hora exacta. El horario de la sede y de los profesionales se leerá en ${after}, y la caja y los informes contarán los días con esa zona, también los de lo ya registrado.`,
   consequenceFormat: (after: string) =>
     `Formato y reloj: solo cambia cómo se escriben fechas, números y horas (${after}). Ningún dato cambia.`,
+  // DX-524: el nombre de cada documento en esta sede.
+  docNamesTitle: 'Nombre de los documentos',
+  docNamesDescription:
+    'Cómo se llama cada documento en esta sede: sale así en fichas, recetas, recibos y presupuestos de la sede. Lo ya emitido no cambia.',
+  docNameHint: (inherited: string) => `Vacío: se usa «${inherited}».`,
+  docNameTooLong: `Hasta ${DOC_TYPE_NAME_MAX} caracteres.`,
+  docNameControl: 'El nombre del documento no puede llevar caracteres de control.',
+  docNameNoLetter: 'El nombre necesita al menos una letra o un número.',
 };
 
 const copy = locationFormCopy;
@@ -81,7 +100,18 @@ const ID = 'location-form';
 const UNCONFIRMED = 'LOCATION_REGIONAL_CHANGE_UNCONFIRMED';
 const CASH_OPEN = 'LOCATION_REGIONAL_CASH_OPEN';
 
-type FieldErrors = RegionalSettingsErrors & { name?: string; phone?: string; defaultPhoneRegion?: string };
+type FieldErrors = RegionalSettingsErrors & {
+  name?: string;
+  phone?: string;
+  defaultPhoneRegion?: string;
+  docNames?: Partial<Record<DocType, string>>;
+};
+
+const DOC_NAME_ERROR_COPY = {
+  tooLong: copy.docNameTooLong,
+  control: copy.docNameControl,
+  noLetter: copy.docNameNoLetter,
+} as const;
 
 /** Campos a los que la API puede referir un 400 (`field`): el mensaje va junto a ellos. */
 const API_FIELDS = ['name', 'phone', 'defaultPhoneRegion', ...REGIONAL_SETTINGS_FIELDS] as const;
@@ -133,6 +163,31 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
   const [name, setName] = useState(location?.name ?? '');
   const [address, setAddress] = useState(location?.address ?? '');
   const [phone, setPhone] = useState(location?.phone ?? '');
+  // DX-524: el nombre propio de cada tipo (vacío = hereda). Solo en la edición.
+  const savedDocNames = location?.docTypeNames;
+  const [docNames, setDocNames] = useState<Record<DocType, string>>(
+    () => Object.fromEntries(DOC_TYPES.map((t) => [t, savedDocNames?.[t] ?? ''])) as Record<DocType, string>,
+  );
+  // Lo que hereda cada tipo: el nombre de la clínica y, sin este, el genérico.
+  // Si no carga, el genérico: nunca bloquea el formulario.
+  const [clinicNames, setClinicNames] = useState<ClinicDocumentTypeNames>({});
+  useEffect(() => {
+    if (!editing) return;
+    let alive = true;
+    Promise.resolve()
+      .then(() => getClinicDocumentTypeNames(token))
+      .then(
+        (loaded) => {
+          if (alive && loaded) setClinicNames(loaded);
+        },
+        () => {
+          // Sin los de la clínica: la pista cae al genérico.
+        },
+      );
+    return () => {
+      alive = false;
+    };
+  }, [editing, token]);
   // R1: país y zona del navegador, moneda, formato y reloj del país (solo en
   // el alta y en los campos vacíos de una sede por configurar).
   const draft = useRegionalDraft(location);
@@ -219,7 +274,23 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
   function validate(): FieldErrors {
     const found: FieldErrors = validateRegionalSettings(regional);
     if (name.trim() === '') found.name = copy.nameMissing;
+    if (editing) {
+      for (const type of DOC_TYPES) {
+        const error = docTypeNameError(docNames[type]);
+        if (error) found.docNames = { ...found.docNames, [type]: DOC_NAME_ERROR_COPY[error] };
+      }
+    }
     return found;
+  }
+
+  /** Solo los nombres que cambian: vacío = vuelve a heredar (null); sin cambios, nada. */
+  function changedDocNames(): Partial<Record<DocType, string | null>> | null {
+    const changed: Partial<Record<DocType, string | null>> = {};
+    for (const type of DOC_TYPES) {
+      const next = normalizeDocTypeName(docNames[type]);
+      if (next !== (savedDocNames?.[type] ?? null)) changed[type] = next;
+    }
+    return Object.keys(changed).length > 0 ? changed : null;
   }
 
   function body(): CreateLocationInput {
@@ -242,6 +313,7 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
 
   function patch(confirmRegionalChange: boolean): UpdateLocationSettingsInput {
     const { address: newAddress, phone: newPhone, defaultPhoneRegion, ...rest } = body();
+    const docTypeNames = changedDocNames();
     return {
       ...rest,
       // Solo si cambió: sin el campo, la API lo deja como estaba. Una sede que
@@ -252,6 +324,7 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
       ...(newAddress !== undefined || location?.address ? { address: newAddress ?? '' } : {}),
       ...(newPhone !== undefined || location?.phone ? { phone: newPhone ?? null } : {}),
       confirmRegionalSettings: true,
+      ...(docTypeNames ? { docTypeNames } : {}),
       ...(confirmRegionalChange ? { confirmRegionalChange: true as const } : {}),
     };
   }
@@ -313,6 +386,11 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
     const first = (['name', ...REGIONAL_SETTINGS_FIELDS] as const).find((f) => found[f]);
     if (first) {
       focusField(first);
+      return;
+    }
+    const firstDocName = DOC_TYPES.find((t) => found.docNames?.[t]);
+    if (firstDocName) {
+      document.getElementById(`${ID}-doc-${firstDocName}`)?.focus();
       return;
     }
     // Lo que se envía es lo que se ve: zona y formato quedan en su forma canónica.
@@ -411,6 +489,46 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
           proposals={draft.proposals}
           onAcceptProposal={draft.accept}
         />
+        {editing ? (
+          <fieldset className="flex flex-col gap-3">
+            <legend className="text-sm font-medium text-ink">{copy.docNamesTitle}</legend>
+            <p className="text-sm text-muted">{copy.docNamesDescription}</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {DOC_TYPES.map((type) => {
+                const id = `${ID}-doc-${type}`;
+                const error = errors.docNames?.[type];
+                return (
+                  <FormField
+                    key={type}
+                    htmlFor={id}
+                    label={genericDocTypeName(type)}
+                    hint={copy.docNameHint(documentTypeName(type, null, clinicNames))}
+                    hintId={`${id}-hint`}
+                    error={error}
+                  >
+                    <Input
+                      id={id}
+                      type="text"
+                      value={docNames[type]}
+                      aria-invalid={error ? true : undefined}
+                      aria-describedby={error ? fieldErrorId(id) : `${id}-hint`}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setDocNames((prev) => ({ ...prev, [type]: value }));
+                        setErrors((prev) => {
+                          if (!prev.docNames?.[type]) return prev;
+                          const next = { ...prev.docNames };
+                          delete next[type];
+                          return { ...prev, docNames: next };
+                        });
+                      }}
+                    />
+                  </FormField>
+                );
+              })}
+            </div>
+          </fieldset>
+        ) : null}
         {consequences.length > 0 ? (
           <Callout
             tone={movedFields().length > 0 ? 'warning' : 'info'}

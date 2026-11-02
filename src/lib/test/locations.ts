@@ -20,6 +20,8 @@ export function clinicLocation(overrides: Partial<ClinicLocation> = {}): ClinicL
     phoneInternational: null,
     // DX-329: sin prefijo telefónico por defecto; el test que lo use lo fija.
     defaultPhoneRegion: null,
+    // DX-524: sin nombres propios, hereda los de la clínica.
+    docTypeNames: { NATIONAL_ID: null, PASSPORT: null, RESIDENCE_PERMIT: null, TAX_ID: null, OTHER: null },
     isActive: true,
     currency: 'USD',
     timeZone: 'America/Caracas',

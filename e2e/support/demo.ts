@@ -66,6 +66,16 @@ export async function demoNationalIdLabel(request: APIRequestContext): Promise<s
   return names.NATIONAL_ID ?? DOC_TYPE_LABEL.NATIONAL_ID;
 }
 
+/** DX-524: el nombre del documento nacional en una sede: el suyo, si no el de la clínica. */
+export async function demoNationalIdLabelAt(request: APIRequestContext, sedeName: string): Promise<string> {
+  const session = await demoAdminSession(request);
+  const res = await request.get(`${API_URL}/locations`, { headers: session.headers });
+  expect(res.ok(), `GET /locations falló: ${await res.text()}`).toBeTruthy();
+  const locations = (await res.json()) as { name: string; docTypeNames?: Record<string, string | null> }[];
+  const sede = locations.find((l) => l.name === sedeName);
+  return sede?.docTypeNames?.NATIONAL_ID ?? (await demoNationalIdLabel(request));
+}
+
 /** Sedes que siembra `seed:demo` (prisma/demo/data.ts de la API). */
 export const DEMO_SEEDED_LOCATIONS: string[] = Object.keys(DEMO_LOCATION_REGIONS);
 
