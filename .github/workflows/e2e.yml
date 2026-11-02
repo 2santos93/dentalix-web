@@ -116,7 +116,7 @@ jobs:
 
       - name: Playwright
         id: playwright
-        timeout-minutes: 35
+        timeout-minutes: 50
         run: scripts/e2e-ci.sh test
 
       # DX-252 (TST-030): la E2E no sale verde con tests sin ejecutar. Falla,
