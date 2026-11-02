@@ -14,6 +14,7 @@ import {
 import { expectNoHorizontalScroll } from './support/layout';
 import { shot } from './support/qa-shot';
 import { activeSedeSelect } from './support/nav';
+import { dataList, dataListRows } from './support/data-list';
 import { cashCollected, choosePeriod, collectedOf, comparisonRow, nonZero } from './support/comparison';
 import { API_URL, tenantOrigin } from './support/urls';
 import { formatCivilDate } from '../src/lib/format/date';
@@ -43,7 +44,9 @@ import type { ApiSession } from './support/api';
  *  7. Ajustes › Sedes, «Comparar sedes» y el recibo de un abono de cada sede
  *     (su número de la serie de la sede y su moneda).
  *
- * Nada se crea ni se cambia (abrir un recibo solo deja su evento de auditoría): no hay limpieza que hacer. Cada pantalla, sin
+ *  8. Ajustes › Listas de precios con el formato de cada sede (DX-522): la lista de la prueba se crea y se borra.
+ *
+ * Salvo esa lista, nada se crea ni se cambia (abrir un recibo solo deja su evento de auditoría): no hay limpieza que hacer. Cada pantalla, sin
  * scroll horizontal y con axe sin violaciones serias ni críticas, en claro y
  * oscuro. Capturas a 1440 y 390 px en E2E_QA_DIR si está definido.
  */
@@ -317,6 +320,57 @@ for (const [sedeName, region] of REGIONS) {
       await expect(doc).toContainText(`N.º ${payment.receiptNumber}`, { timeout: 15_000 });
       await expect(doc).toContainText(payment.currency);
       await checkScreen(page, `receipt-${key.slug}`, viewport.width);
+    }
+  });
+}
+
+/** El precio de lista que lleva el ítem de prueba: con decimales y miles, para que el formato se note. */
+const PRICE_LIST_PRICE = 1234.5;
+
+for (const [sedeName, region] of REGIONS) {
+  // DX-522: Ajustes › Listas de precios pinta los importes con el formato de la sede activa y el
+  // código ISO de la lista (nunca el símbolo ni un idioma fijo). La lista es de la prueba y se borra.
+  test(`the price list shows its amounts in the format of the location: ${sedeName}`, async ({ page, request }) => {
+    test.setTimeout(120_000);
+    const location = locations.find((l) => l.name === sedeName);
+    expect(location, `la demo no trae la sede ${sedeName}`).toBeDefined();
+    const fmt = regionalFormat(region);
+    const money = (amount: number) => moneyWithCode(amount, region.currency, fmt).replace(/\s/g, ' ');
+    const catalog = await apiGet<{ id: string; code: string; kind: string; active: boolean; defaultPrice: number | null }[]>(
+      request,
+      session,
+      '/catalog/items',
+    );
+    const item = catalog.find((c) => c.kind === 'PROCEDURE' && c.active && c.defaultPrice !== null);
+    expect(item, 'la demo no trae un procedimiento con precio de catálogo').toBeDefined();
+
+    const created = await request.post(`${API_URL}/price-lists`, {
+      headers: session.headers,
+      data: { name: `DX522 ${sedeName}`.slice(0, 120), currency: region.currency, locationId: location!.id },
+    });
+    expect(created.ok(), `POST /price-lists falló: ${await created.text()}`).toBeTruthy();
+    const list = (await created.json()) as { id: string };
+    try {
+      const put = await request.put(`${API_URL}/price-lists/${list.id}/items`, {
+        headers: session.headers,
+        data: { items: [{ catalogItemId: item!.id, price: PRICE_LIST_PRICE }] },
+      });
+      expect(put.ok(), `PUT /price-lists/items falló: ${await put.text()}`).toBeTruthy();
+
+      for (const viewport of VIEWPORTS) {
+        await page.setViewportSize(viewport);
+        await page.goto(`${origin}/agenda`);
+        await chooseSede(page, sedeName);
+        await page.goto(`${origin}/settings/listas-de-precios/${list.id}`);
+        const row = dataListRows(dataList(page, 'Precios de la lista')).filter({ hasText: item!.code });
+        await expect(row.first()).toContainText(money(PRICE_LIST_PRICE), { timeout: 15_000 });
+        await expect(row.first()).toContainText(money(item!.defaultPrice!));
+        // Nunca el símbolo local: el código ISO de la lista es lo que distingue una moneda de otra.
+        await expect(row.first()).toContainText(region.currency);
+        await checkScreen(page, `price-list-${SEDE_SHOTS[sedeName].slug}`, viewport.width);
+      }
+    } finally {
+      await request.delete(`${API_URL}/price-lists/${list.id}`, { headers: session.headers });
     }
   });
 }
