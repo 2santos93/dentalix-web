@@ -395,6 +395,8 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       exchangeRateCurrency: 'COP',
       frozenRate: null,
       exchangeRateStatus: 'NOT_NEEDED',
+      adjustments: [],
+      collectedAmount: 50000,
     });
     const user = userEvent.setup();
     const onChanged = jest.fn();

@@ -65,6 +65,25 @@ describe('CashSessionReport (DX-027)', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
+  it('DX-516: los ajustes por medio de pago se ven bajo los cobros y suman al esperado; sin ellos, nada', () => {
+    const [cash, card] = cashSessionFixture().expected!;
+    const { unmount } = render(<CashSessionReport session={cashSessionFixture()} />);
+    expect(screen.queryByText(/por ajustes del medio/)).not.toBeInTheDocument();
+    unmount();
+    render(
+      <CashSessionReport
+        session={cashSessionFixture({
+          expected: [{ ...cash, paymentAdjustments: 900, expected: 80_900 }, { ...card, paymentAdjustments: -500, expected: card.expected - 500 }],
+        })}
+      />,
+    );
+    const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
+    const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
+    expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/\+900,00 COP por ajustes del medio/);
+    expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/80\.900,00/);
+    expect(cardRow.textContent?.replace(/\s/g, ' ')).toMatch(/−500,00 COP por ajustes del medio/);
+  });
+
   describe('DX-274: salidas de caja', () => {
     const [cash, card] = cashSessionFixture().expected!;
     const voided = {

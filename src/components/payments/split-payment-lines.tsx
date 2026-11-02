@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { CurrencySelect } from '@/components/shared/currency-select';
+import { PaymentAdjustmentsPreview } from './payment-adjustments-preview';
 import { InlineError } from '@/components/errors/inline-error';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMoney } from '@/lib/format/sede-number';
@@ -181,6 +182,14 @@ export function SplitLineFields({
       </div>
       <PaymentMethodSelect fields={fields} id={`${prefix}-method`} disabled={disabled} />
       <PaymentReferenceFields fields={fields} idPrefix={prefix} disabled={disabled} />
+      {/* DX-516: cada forma de pago, con los ajustes de su propio medio. */}
+      <PaymentAdjustmentsPreview
+        id={`${prefix}-adjustments`}
+        token={token}
+        method={fields.selected}
+        amount={lineAmount(line.amount, currency)}
+        currency={currency}
+      />
     </fieldset>
   );
 }

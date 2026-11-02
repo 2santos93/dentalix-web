@@ -23,6 +23,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
+import { PaymentAdjustmentsPreview } from './payment-adjustments-preview';
 import { parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { CurrencySelect } from '@/components/shared/currency-select';
@@ -636,6 +637,14 @@ export function RecordPaymentModal({
                   </FormField>
                 </div>
                 <PaymentReferenceFields fields={methodFields} idPrefix="rp" disabled={submitting} />
+                {/* DX-516: los ajustes del medio sobre este importe y lo que se cobra. */}
+                <PaymentAdjustmentsPreview
+                  id="rp-adjustments"
+                  token={token}
+                  method={methodFields.selected}
+                  amount={previewAmount}
+                  currency={currency}
+                />
               </div>
               {plan && !opening
                 ? split.lines.map((line, index) => (

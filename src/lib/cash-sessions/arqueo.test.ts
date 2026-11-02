@@ -15,6 +15,7 @@ const line = (method: CashExpectedLine['method'], expected: number): CashExpecte
   opening: method === 'CASH' ? 50_000 : 0,
   payments: expected,
   paymentsCount: 1,
+  paymentAdjustments: 0,
   adjustments: 0,
   outflows: 0,
   outflowsCount: 0,
