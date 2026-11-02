@@ -234,7 +234,7 @@ for (const viewport of [
       await page.emulateMedia({ colorScheme: 'light' });
       await dialog.getByRole('button', { name: 'Registrar salida' }).click();
       await expect(dialog).toBeHidden({ timeout: 15_000 });
-      await expect(page.getByText(/Salida de caja de 8\.?000,00\sUSD registrada\./)).toBeVisible();
+      await expect(page.getByText(/Salida de caja de USD\s8\.000,00 registrada\./)).toBeVisible();
       await expect(page.getByText('Salidas del turno: 1')).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText(figure(FLOAT - 8_000)).first()).toBeVisible();
 
