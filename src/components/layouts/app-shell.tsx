@@ -488,9 +488,12 @@ function BrandMark({ name, logoUrl }: { name: string | null; logoUrl: string | n
       .map((w) => w[0]!.toUpperCase())
       .join('');
     return (
-      <span className="flex size-8 items-center justify-center rounded-lg bg-primary-subtle text-xs font-semibold text-primary-subtle-text">
-        {initials || '·'}
-      </span>
+      // Decorativa, dentro de un botón con su propio nombre: en `content` y no
+      // como texto, para que el nombre incluya lo visible (WCAG 2.5.3).
+      <span
+        data-initials={initials || '·'}
+        className="flex size-8 items-center justify-center rounded-lg bg-primary-subtle text-xs font-semibold text-primary-subtle-text before:content-[attr(data-initials)]"
+      />
     );
   }
   return <Logo size={28} decorative />;
