@@ -117,7 +117,7 @@ export interface paths {
         put?: never;
         /**
          * Inicia sesión en la clínica del host (o en plataforma desde el apex)
-         * @description SEC-008: un superadmin SIN membresía en la clínica solo entra como acceso de soporte (break-glass): necesita el MFA enrolado (`/platform/mfa`), `mfaCode` y `breakGlassReason`. Recibe solo un access token ADMIN de vida corta (`breakGlass: true`, `expiresAt`), sin refresh, y el acceso queda en `GET /support-accesses` de la clínica.
+         * @description DX-021-bis: en el apex la contraseña no basta: responde siempre `MfaChallengeDto`; sin MFA, el alta exige además el código enviado al correo (`emailCodeRequired`). SEC-008: un superadmin SIN membresía en la clínica solo entra como acceso de soporte (break-glass): necesita el MFA enrolado (`/platform/mfa`), `mfaCode` y `breakGlassReason`. Recibe solo un access token ADMIN de vida corta (`breakGlass: true`, `expiresAt`), sin refresh, y el acceso queda en `GET /support-accesses` de la clínica.
          */
         post: operations["AuthController_loginHandler"];
         delete?: never;
@@ -294,10 +294,47 @@ export interface paths {
         get: operations["SecurityPolicyController_get"];
         /**
          * Cambia la política de seguridad de la clínica (solo ADMIN)
-         * @description Para exigir el MFA a los ADMIN, quien lo cambia debe tener ya el suyo activo (409 si no). Queda en la auditoría con el antes y el después.
+         * @description Para endurecerla, quien la cambia debe tener ya su MFA activo (409 si no). Cierra las sesiones de quienes quedan obligados sin tenerlo. Queda en la auditoría con el antes, el después y cuántas sesiones se cerraron.
          */
         put: operations["SecurityPolicyController_update"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ¿Tiene este miembro la verificación activa? */
+        get: operations["StaffMfaController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}/mfa/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restablece la verificación de otro miembro: contraseña y segundo factor de quien lo hace, con motivo
+         * @description Borra su secreto y sus códigos, cierra sus sesiones, deja sin valor sus dispositivos de confianza y le avisa por correo. Queda en la auditoría (`MFA_RESET_<motivo>`). Nunca la propia, la de un superadmin ni la de una cuenta con acceso a otra clínica (`MFA_RESET_REFUSED`).
+         */
+        post: operations["StaffMfaController_reset"];
         delete?: never;
         options?: never;
         head?: never;
@@ -466,6 +503,47 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/trusted-devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tus dispositivos de confianza: los que no piden el código durante 30 días */
+        get: operations["MyMfaController_trustedDevices"];
+        put?: never;
+        post?: never;
+        /**
+         * Revoca todos tus dispositivos de confianza
+         * @description Queda en la auditoría (`MFA_TRUSTED_DEVICES_REVOKED`).
+         */
+        delete: operations["MyMfaController_revokeAllTrustedDevices"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/trusted-devices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoca uno de tus dispositivos de confianza
+         * @description Queda en la auditoría (`MFA_TRUSTED_DEVICES_REVOKED`).
+         */
+        delete: operations["MyMfaController_revokeTrustedDevice"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4811,7 +4889,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/platform/mfa/enrollment": {
+    "/api/v1/platform/mfa/recovery-codes": {
         parameters: {
             query?: never;
             header?: never;
@@ -4821,30 +4899,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Inicia el alta del MFA: genera un secreto (pendiente hasta confirmarlo) y devuelve el otpauth URI
-         * @description Queda en platform_audit_events (MFA_ENROLLMENT_STARTED) sin el secreto ni el URI.
+         * Genera 10 códigos de recuperación nuevos (los anteriores dejan de valer): contraseña + código
+         * @description Queda en platform_audit_events (MFA_RECOVERY_CODES_REGENERATED) sin los códigos.
          */
-        post: operations["PlatformMfaController_start"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/platform/mfa/enrollment/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirma el alta con un código de la app y activa el MFA
-         * @description Queda en platform_audit_events (MFA_ENABLED) sin el código ni el secreto.
-         */
-        post: operations["PlatformMfaController_confirm"];
+        post: operations["PlatformMfaController_regenerate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6741,6 +6799,16 @@ export interface components {
             mfaToken: string;
             /** Format: date-time */
             expiresAt: string;
+            /**
+             * @description DX-021-bis: alta de un superadmin: se le envió un código al correo que exige POST /auth/login/mfa/enrollment.
+             * @enum {boolean}
+             */
+            emailCodeRequired?: true;
+            /**
+             * @description DX-021-bis: referencia que lleva el correo de este intento, para distinguirlo de otros.
+             * @example A1F3
+             */
+            emailCodeRef?: string;
         };
         LoginDto: {
             /** @example ana@clinica.com */
@@ -6809,10 +6877,17 @@ export interface components {
             recoveryCode?: string;
             /** @description El `mfaToken` que devolvió POST /auth/login. */
             mfaToken: string;
+            /** @description DX-021-bis: no volver a pedir el código en este navegador durante 30 días (solo en modo cookie; nunca para un superadmin). */
+            rememberDevice?: boolean;
         };
         StartLoginMfaEnrollmentDto: {
             /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
             mfaToken: string;
+            /**
+             * @description DX-021-bis: alta de un superadmin (`emailCodeRequired`): el código de 8 dígitos de ESTE token. 10 intentos fallidos en total; agotados, el token queda inservible y hay que volver a entrar.
+             * @example 12345678
+             */
+            emailCode?: string;
         };
         MfaEnrollmentDto: {
             /**
@@ -6826,6 +6901,11 @@ export interface components {
         ConfirmLoginMfaEnrollmentDto: {
             /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
             mfaToken: string;
+            /**
+             * @description DX-021-bis: alta de un superadmin (`emailCodeRequired`): el código de 8 dígitos de ESTE token. 10 intentos fallidos en total; agotados, el token queda inservible y hay que volver a entrar.
+             * @example 12345678
+             */
+            emailCode?: string;
             /** @example 123456 */
             code: string;
         };
@@ -6839,6 +6919,29 @@ export interface components {
         SecurityPolicyDto: {
             /** @description DX-021: exige la verificación en dos pasos a los ADMIN de la clínica. Quien no la tenga pasa por el alta forzada en su próximo inicio de sesión. */
             requireAdminMfa: boolean;
+            /** @description DX-021-bis: la exige a todos los miembros (implica `requireAdminMfa`). Sin indicarlo, se conserva. */
+            requireAllMfa?: boolean;
+        };
+        StaffMfaStatusDto: {
+            enabled: boolean;
+            /** Format: date-time */
+            enabledAt: string | null;
+        };
+        ResetMemberMfaDto: {
+            /**
+             * @description Código de 6 dígitos de la app.
+             * @example 123456
+             */
+            code?: string;
+            /**
+             * @description Uno de los códigos de recuperación (cada uno vale una sola vez).
+             * @example ABCD-EFGH-IJKL-MNOP
+             */
+            recoveryCode?: string;
+            /** @description Tu contraseña actual (re-autenticación). */
+            currentPassword: string;
+            /** @enum {string} */
+            reason: "LOST_DEVICE" | "DEVICE_REPLACED" | "SECURITY_INCIDENT";
         };
         CreateInvitationDto: {
             fullName: string;
@@ -6923,6 +7026,18 @@ export interface components {
             recoveryCodesRemaining: number;
             /** @description Obligatorio para ti en esta clínica (cuenta de soporte de Dentalix, o ADMIN de una clínica que lo exige): no se puede desactivar. */
             required: boolean;
+        };
+        TrustedDeviceDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Chrome en macOS */
+            label: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastUsedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
         };
         StartMyMfaDto: {
             /** @description Contraseña actual (re-autenticación). */
@@ -13342,6 +13457,25 @@ export interface components {
             lines: components["schemas"]["ReceiptSplitViewLineDto"][];
             total: components["schemas"]["ReceiptSplitTotalDto"];
         };
+        /**
+         * @description Reloj de la sede: 12 h o 24 h.
+         * @enum {string}
+         */
+        HourCycle: "h12" | "h23";
+        ReceiptRegionalDto: {
+            /**
+             * @description Zona IANA de la sede.
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /**
+             * @description Locale canónico: separadores y orden de las fechas.
+             * @example es-VE
+             */
+            locale: string;
+            /** @description Reloj de la sede: 12 h o 24 h. */
+            hourCycle: components["schemas"]["HourCycle"];
+        };
         ReceiptClinicDto: {
             /** @example Clínica Demo */
             name: string;
@@ -13458,25 +13592,6 @@ export interface components {
             lines: components["schemas"]["ReceiptSplitLineDto"][];
             total: components["schemas"]["ReceiptSplitTotalDto"];
         };
-        ReceiptRegionalDto: {
-            /**
-             * @description Zona IANA de la sede.
-             * @example America/Caracas
-             */
-            timeZone: string;
-            /**
-             * @description Locale canónico: separadores y orden de las fechas.
-             * @example es-VE
-             */
-            locale: string;
-            /** @description Reloj de la sede: 12 h o 24 h. */
-            hourCycle: components["schemas"]["HourCycle"];
-        };
-        /**
-         * @description Reloj de la sede: 12 h o 24 h.
-         * @enum {string}
-         */
-        HourCycle: "h12" | "h23";
         ReceiptSnapshotDto: {
             /** @enum {number} */
             version: 1;
@@ -16415,22 +16530,8 @@ export interface components {
              * @description SEC-008: desde cuándo sirve para el acceso de soporte (alta + espera de seguridad, BREAK_GLASS_MFA_COOLDOWN_MINUTES). null sin MFA.
              */
             breakGlassAvailableAt: string | null;
-        };
-        PlatformMfaEnrollmentDto: {
-            /**
-             * @description Secreto TOTP en base32 para teclearlo en la app de autenticación. Solo se muestra en esta respuesta.
-             * @example JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
-             */
-            secret: string;
-            /** @example otpauth://totp/Dentalix:soporte%40dentalix.app?secret=JBSWY3DPEHPK3PXP&issuer=Dentalix&algorithm=SHA1&digits=6&period=30 */
-            otpauthUri: string;
-        };
-        ConfirmPlatformMfaDto: {
-            /**
-             * @description Código de 6 dígitos de la app
-             * @example 123456
-             */
-            code: string;
+            /** @description DX-021-bis: códigos de recuperación sin usar. 0 si activó el MFA antes de existir: debe generarlos. */
+            recoveryCodesRemaining: number;
         };
         SupportAccessDto: {
             /** Format: uuid */
@@ -19595,6 +19696,13 @@ export interface operations {
                     "application/json": components["schemas"]["MfaEnrollmentDto"];
                 };
             };
+            /** @description Alta de un superadmin: falta el código enviado a su correo o no es correcto */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description `code: "MFA_CHALLENGE_EXPIRED"` */
             401: {
                 headers: {
@@ -19609,7 +19717,11 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            /**
+             * @description Demasiados códigos fallidos de esta cuenta (5 → espera creciente, el mismo contador que el MFA del superadmin) o avalancha de peticiones. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -19722,6 +19834,97 @@ export interface operations {
             };
             /** @description Quien la enciende no tiene MFA activo */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffMfaController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMfaStatusDto"];
+                };
+            };
+            /** @description No es miembro activo de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffMfaController_reset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetMemberMfaDto"];
+            };
+        };
+        responses: {
+            /** @description Restablecida */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Contraseña o código incorrectos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cuenta de soporte, o la sesión es un acceso de soporte */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es miembro activo de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Es la propia, no está activa, quien la pide no tiene MFA o la cuenta da acceso a otra clínica */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos de quien lo pide. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20058,6 +20261,70 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MyMfaStatusDto"];
                 };
+            };
+        };
+    };
+    MyMfaController_trustedDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrustedDeviceDto"][];
+                };
+            };
+        };
+    };
+    MyMfaController_revokeAllTrustedDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revocados */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_revokeTrustedDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revocado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es un dispositivo tuyo */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -32062,33 +32329,7 @@ export interface operations {
             };
         };
     };
-    PlatformMfaController_start: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlatformMfaEnrollmentDto"];
-                };
-            };
-            /** @description El MFA ya está activo */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PlatformMfaController_confirm: {
+    PlatformMfaController_regenerate: {
         parameters: {
             query?: never;
             header?: never;
@@ -32097,7 +32338,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConfirmPlatformMfaDto"];
+                "application/json": components["schemas"]["ReauthMfaDto"];
             };
         };
         responses: {
@@ -32106,24 +32347,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlatformMfaStatusDto"];
+                    "application/json": components["schemas"]["RecoveryCodesDto"];
                 };
             };
-            /** @description Código inválido o sin alta pendiente */
+            /** @description Contraseña o código incorrectos */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description El MFA ya está activo */
+            /** @description El MFA no está activo */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            /**
+             * @description Demasiados códigos fallidos. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
             429: {
                 headers: {
                     [name: string]: unknown;

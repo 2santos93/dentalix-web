@@ -9,13 +9,17 @@ import {
   confirmMyMfaEnrollment,
   disableMyMfa,
   getMyMfa,
+  listTrustedDevices,
   normalizeRecoveryCode,
   regenerateRecoveryCodes,
+  revokeTrustedDevices,
   startMyMfaEnrollment,
   type MfaEnrollment,
   type MyMfaStatus,
   type SecondFactor,
+  type TrustedDevice,
 } from '@/lib/auth/mfa-api';
+import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
@@ -69,10 +73,19 @@ const copy = {
   regenerateDescription: 'Los códigos anteriores dejarán de servir.',
   regenerateSubmit: 'Generar',
   regenerateError: 'No pudimos generar los códigos. Intenta de nuevo.',
+  devicesLabel: 'Dispositivos de confianza',
+  devicesHelp: 'No piden el código durante 30 días. Cambiar la contraseña los revoca.',
+  devicesNone: 'Ninguno',
+  devicesCount: (n: number) => (n === 1 ? '1 dispositivo' : `${n} dispositivos`),
+  revoke: 'Revocar',
+  revokeNamed: (label: string) => `Revocar ${label}`,
+  revokeAll: 'Revocar todos',
+  revokeError: 'No pudimos revocarlo. Intenta de nuevo.',
+  devicesError: 'No pudimos cargar tus dispositivos de confianza.',
 };
 
 /** 429 → la espera; lo demás, el mensaje de la API (ya claro) o `fallback`. */
-function mfaError(err: unknown, fallback: string): string {
+export function mfaError(err: unknown, fallback: string): string {
   if (err instanceof ApiError && err.status === 429 && err.retryAfterSeconds) {
     return loginLockedMessage(err.retryAfterSeconds);
   }
@@ -147,6 +160,7 @@ export function MfaSettings({ token }: { token: string }) {
             )
           }
         />
+        {status.enabled ? <TrustedDevicesRows token={token} /> : null}
         {status.enabled ? (
           <SettingRow
             label={copy.codesLabel}
@@ -349,8 +363,81 @@ function EnrollDialog({
   );
 }
 
+/** Dispositivos que no piden el código (DX-021-bis): cada uno se revoca aparte. */
+function TrustedDevicesRows({ token }: { token: string }) {
+  const [devices, setDevices] = useState<TrustedDevice[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listTrustedDevices(token)
+      .then((res) => {
+        if (!cancelled) setDevices(res);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Solo al montar: revocar actualiza la lista aquí y renovar el token no la cambia.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function revoke(id?: string) {
+    setBusy(true);
+    try {
+      await revokeTrustedDevices(token, id);
+      setDevices((list) => (id ? (list ?? []).filter((d) => d.id !== id) : []));
+    } catch (err) {
+      notifyError(apiErrorMessage(err, copy.revokeError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (failed) {
+    return <SettingRow label={copy.devicesLabel} description={copy.devicesError} />;
+  }
+  const count = devices?.length ?? 0;
+  return (
+    <>
+      <SettingRow
+        label={copy.devicesLabel}
+        description={copy.devicesHelp}
+        value={devices === null ? undefined : count > 0 ? copy.devicesCount(count) : copy.devicesNone}
+        action={
+          count > 1 ? (
+            <Button type="button" variant="secondary" disabled={busy} onClick={() => void revoke()}>
+              {copy.revokeAll}
+            </Button>
+          ) : undefined
+        }
+      />
+      {devices?.map((device) => (
+        <SettingRow
+          key={device.id}
+          label={device.label}
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              aria-label={copy.revokeNamed(device.label)}
+              disabled={busy}
+              onClick={() => void revoke(device.id)}
+            >
+              {copy.revoke}
+            </Button>
+          }
+        />
+      ))}
+    </>
+  );
+}
+
 /** Contraseña + segundo factor: lo que pide la API para desactivar o regenerar. */
-function ReauthDialog({
+export function ReauthDialog({
   title,
   description,
   submitLabel,
@@ -358,6 +445,7 @@ function ReauthDialog({
   errorFallback,
   onClose,
   onConfirm,
+  children,
 }: {
   title: string;
   description: string;
@@ -366,6 +454,8 @@ function ReauthDialog({
   errorFallback: string;
   onClose: () => void;
   onConfirm: (password: string, factor: SecondFactor) => Promise<void>;
+  /** Campos propios del caso, antes de la contraseña. */
+  children?: React.ReactNode;
 }) {
   const [password, setPassword] = useState('');
   const [useRecovery, setUseRecovery] = useState(false);
@@ -409,6 +499,7 @@ function ReauthDialog({
       submitting={submitting}
       error={error}
     >
+      {children}
       <PasswordField value={password} onChange={setPassword} disabled={submitting} />
       {useRecovery ? (
         <FormField htmlFor="mfa-recovery" label={copy.recoveryLabel} error={fieldError}>
@@ -447,7 +538,7 @@ function ReauthDialog({
 }
 
 /** Se muestran una sola vez. Quien cierre sin guardarlos puede generar otros desde la fila. */
-function RecoveryCodesDialog({ codes, onClose }: { codes: string[]; onClose: () => void }) {
+export function RecoveryCodesDialog({ codes, onClose }: { codes: string[]; onClose: () => void }) {
   const [saved, setSaved] = useState(false);
   return (
     <FormModal
