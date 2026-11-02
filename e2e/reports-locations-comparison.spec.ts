@@ -169,8 +169,8 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   await expect(collectedHeader).toHaveAttribute('aria-sort', 'none');
   // Se ordena por la primera moneda del total (`sortCurrency`), la que la
   // pantalla pinta primero en «Total clínica»; la API las trae por código.
-  // La inversión entre las dos sedes USD de PF3 no se puede comprobar con este
-  // comportamiento: ticket de producto (ordenar por la moneda elegida).
+  // DX-526: la moneda de orden la elige la persona; abajo se invierte el orden
+  // de las dos sedes en USD.
   const sortCode = [...collectedOf(report.total).keys()][0];
   expect(sortCode, 'la demo cobra algo en «Mes anterior»').toBeDefined();
   expect((await total.getByRole('cell').nth(1).innerText()).match(/\b[A-Z]{3}\b/)?.[0], 'moneda de orden').toBe(sortCode);
@@ -203,6 +203,30 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   await expect(collectedHeader).toHaveAttribute('aria-sort', 'ascending');
   await expect.poll(sedeOrder).toEqual(expectedOrder(1));
   await expect(page.getByTestId('comparison-total')).toBeVisible();
+
+  // DX-526 / PF3: con USD elegida, las dos sedes en USD se ordenan entre sí y se
+  // invierten; las demás (sin USD) quedan al final en los dos sentidos.
+  const SEDES_USD = ['Sede principal', 'Sede Norte'];
+  const currencySelect = page.getByLabel('Moneda para ordenar y graficar');
+  await currencySelect.selectOption('USD');
+  const usdAmount = (name: string) => collectedOf(comparisonRow(report, name)).get('USD');
+  for (const name of SEDES_USD) expect(usdAmount(name), `${name} cobra en USD`).toBeDefined();
+  expect(usdAmount('Sede principal'), 'las dos sedes USD difieren').not.toBe(usdAmount('Sede Norte'));
+  const usdDesc = [...SEDES_USD].sort((a, b) => usdAmount(b)! - usdAmount(a)!);
+  const others = SEDES.filter((n) => !SEDES_USD.includes(n));
+  const tail = async (n: number) => (await sedeOrder()).slice(-n).sort(byName);
+  // Sigue en ascendente (el orden se conserva al cambiar de moneda).
+  await expect(collectedHeader).toHaveAttribute('aria-sort', 'ascending');
+  await expect.poll(async () => (await sedeOrder()).slice(0, 2)).toEqual([...usdDesc].reverse());
+  expect(await tail(others.length)).toEqual([...others].sort(byName));
+  await table.getByRole('button', { name: 'Cobrado', exact: true }).click();
+  await expect(collectedHeader).toHaveAttribute('aria-sort', 'descending');
+  await expect.poll(async () => (await sedeOrder()).slice(0, 2)).toEqual(usdDesc);
+  expect(await tail(others.length)).toEqual([...others].sort(byName));
+  // Las sedes sin USD no son una barra en cero: se nombran en el gráfico.
+  const charts = page.getByRole('region', { name: 'Producción y cobrado por sede' });
+  await expect(charts).toContainText(/Sin cobros en USD:.*Sede São Paulo/);
+  await expect(charts).not.toContainText(/USD\s0,00/);
 
   // CSV con los filtros activos.
   await page.getByLabel('Período').selectOption('last_month');

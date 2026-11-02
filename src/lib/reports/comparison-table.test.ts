@@ -1,4 +1,14 @@
-import { formatChange, formatMetric, metricValues, nextSort, sortRows, type SortState } from './comparison-table';
+import {
+  comparisonCurrencies,
+  formatChange,
+  formatMetric,
+  locationAmounts,
+  metricValues,
+  nextSort,
+  sortCurrency,
+  sortRows,
+  type SortState,
+} from './comparison-table';
 import { regionalFormat } from '@/lib/format/regional-format';
 import type { ComparisonRow, LocationsComparison, Metric } from './reports-api';
 
@@ -97,5 +107,61 @@ describe('metricValues (BE-042)', () => {
     expect(metricValues({ ...r, metrics: { ...r.metrics, occupancy: metric(300) } }, 'occupancy')[0].value).toBe(100);
     expect(metricValues({ ...r, metrics: { ...r.metrics, occupancy: metric(66.67) } }, 'occupancy')[0].value).toBe(66.67);
     expect(metricValues({ ...r, metrics: { ...r.metrics, occupancy: metric(null) } }, 'occupancy')[0].value).toBeNull();
+  });
+});
+
+/** Una fila con importes en las monedas dadas (producción y cobrado iguales). */
+function multi(name: string, amounts: Record<string, number>): ComparisonRow {
+  const money = Object.entries(amounts).map(([currency, value]) => ({ currency, ...metric(value) }));
+  const base = row(name, null, null);
+  return { ...base, metrics: { ...base.metrics, production: money, collected: money } };
+}
+
+describe('moneda elegida para ordenar y graficar (DX-526)', () => {
+  const demo = {
+    locations: [
+      multi('Sede principal', { USD: 100, VES: 5000 }),
+      multi('Sede Norte', { USD: 300, VES: 100 }),
+      multi('Sede São Paulo', { BRL: 900 }),
+      multi('Sede Londres', { GBP: 50 }),
+    ],
+    total: multi('Total clínica', { USD: 400, BRL: 900, GBP: 50, VES: 5100 }),
+  } as unknown as LocationsComparison;
+  const order = (sort: SortState, currency?: string | null) => sortRows(demo, sort, currency).map((r) => r.name);
+
+  it('las monedas elegibles son las del total, sin repetir y en su orden', () => {
+    expect(comparisonCurrencies(demo)).toEqual(['USD', 'BRL', 'GBP', 'VES']);
+  });
+
+  it('sin moneda elegida, la primera del total; una elegida que el total no tiene, también', () => {
+    expect(sortCurrency(demo, 'collected')).toBe('USD');
+    expect(sortCurrency(demo, 'collected', 'BRL')).toBe('BRL');
+    expect(sortCurrency(demo, 'collected', 'EUR')).toBe('USD');
+    expect(sortCurrency(demo, 'noShowRate', 'BRL')).toBeNull();
+  });
+
+  it('en USD las dos sedes USD se invierten y las demás van al final en los dos sentidos', () => {
+    expect(order({ key: 'collected', direction: 'descending' })).toEqual([
+      'Sede Norte', 'Sede principal', 'Sede Londres', 'Sede São Paulo',
+    ]);
+    expect(order({ key: 'collected', direction: 'ascending' })).toEqual([
+      'Sede principal', 'Sede Norte', 'Sede Londres', 'Sede São Paulo',
+    ]);
+  });
+
+  it('en VES se ordena por bolívares; en BRL, la de Brasil primero', () => {
+    expect(order({ key: 'collected', direction: 'descending' }, 'VES')[0]).toBe('Sede principal');
+    expect(order({ key: 'collected', direction: 'descending' }, 'BRL')[0]).toBe('Sede São Paulo');
+  });
+
+  it('locationAmounts: una sede sin importe en la moneda es null, nunca 0', () => {
+    expect(locationAmounts(demo, 'production', 'BRL').map((a) => [a.row.name, a.value])).toEqual([
+      ['Sede principal', null],
+      ['Sede Norte', null],
+      ['Sede São Paulo', 900],
+      ['Sede Londres', null],
+    ]);
+    const zero = { ...demo, locations: [multi('A', { BRL: 0 })] } as unknown as LocationsComparison;
+    expect(locationAmounts(zero, 'production', 'BRL')[0].value).toBeNull();
   });
 });
