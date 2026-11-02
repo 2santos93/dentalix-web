@@ -5,17 +5,17 @@ import userEvent from '@testing-library/user-event';
 import { DocumentTypeNamesSettingsSection } from './document-type-names-settings';
 import { DOC_TYPES, DOC_TYPE_LABEL } from '@/lib/patients/doc-type';
 import {
-  getDocumentTypeNames,
+  getClinicDocumentTypeNames,
   updateDocumentTypeNames,
 } from '@/lib/patients/document-type-names-api';
 import { ApiError } from '@/lib/api/api-error';
 
 jest.mock('../../lib/patients/document-type-names-api', () => ({
   ...jest.requireActual('../../lib/patients/document-type-names-api'),
-  getDocumentTypeNames: jest.fn(),
+  getClinicDocumentTypeNames: jest.fn(),
   updateDocumentTypeNames: jest.fn(),
 }));
-const mockedGet = getDocumentTypeNames as jest.MockedFunction<typeof getDocumentTypeNames>;
+const mockedGet = getClinicDocumentTypeNames as jest.MockedFunction<typeof getClinicDocumentTypeNames>;
 const mockedSave = updateDocumentTypeNames as jest.MockedFunction<typeof updateDocumentTypeNames>;
 
 const NONE = {

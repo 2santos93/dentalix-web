@@ -1,6 +1,7 @@
 /** Cliente de los nombres locales de cada tipo de documento (DX-327, R16). */
 import {
   canManageDocumentTypeNames,
+  getClinicDocumentTypeNames,
   getDocumentTypeNames,
   updateDocumentTypeNames,
 } from './document-type-names-api';
@@ -41,6 +42,17 @@ describe('document-type-names-api', () => {
     expect(new URL(String(url), 'http://x').pathname).toMatch(/\/patients\/document-type-names$/);
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body)).toEqual({ names });
+  });
+
+  it('DX-524: the form names are the active location ones; the clinic ones stay available for Settings', async () => {
+    const effective = { ...names, NATIONAL_ID: 'Documento de la sede' };
+    mockFetch({ names, effective });
+    await expect(getDocumentTypeNames('tok')).resolves.toEqual(effective);
+    mockFetch({ names, effective });
+    await expect(getClinicDocumentTypeNames('tok')).resolves.toEqual(names);
+    // Una API anterior no trae `effective`: valen los de la clínica.
+    mockFetch({ names });
+    await expect(getDocumentTypeNames('tok')).resolves.toEqual(names);
   });
 
   it('a missing name reads as null', async () => {

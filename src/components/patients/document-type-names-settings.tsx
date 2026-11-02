@@ -10,7 +10,7 @@ import {
   normalizeDocTypeName,
 } from '@/lib/patients/doc-type';
 import {
-  getDocumentTypeNames,
+  getClinicDocumentTypeNames,
   updateDocumentTypeNames,
   type DocumentTypeNames,
 } from '@/lib/patients/document-type-names-api';
@@ -88,7 +88,7 @@ export function DocumentTypeNamesSettingsSection({
   useEffect(() => {
     if (!allowed) return;
     let cancelled = false;
-    getDocumentTypeNames(token)
+    getClinicDocumentTypeNames(token)
       .then((res) => {
         if (cancelled) return;
         setSavedNames(res);
