@@ -12,7 +12,7 @@ import { BrandingProvider, useClinicBranding } from '@/components/brand/branding
 import { ApiError } from '@/lib/api/api-error';
 
 const refresh = jest.fn();
-jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh }), usePathname: () => '/settings/clinica' }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn() } }));
 jest.mock('../../lib/clinic/clinic-settings-api', () => ({
   ...jest.requireActual('../../lib/clinic/clinic-settings-api'),
