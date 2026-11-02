@@ -4,7 +4,7 @@ import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { dataList, dataListRows, rowAction } from './support/data-list';
-import { DEMO_CURRENCY, DEMO_REGION, demoNationalIdLabel } from './support/demo';
+import { DEMO_CURRENCY, DEMO_REGION, demoNationalIdLabelAt } from './support/demo';
 import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
@@ -164,7 +164,7 @@ for (const viewport of [
     await expect(doc).toContainText('Clínica Demo');
     await expect(doc).toContainText('Datos fiscales pendientes');
     await expect(doc).toContainText(data.fullName);
-    await expect(doc).toContainText(`${await demoNationalIdLabel(page.request)} ******${data.docNumber.slice(-4)}`);
+    await expect(doc).toContainText(`${await demoNationalIdLabelAt(page.request, 'Sede principal')} ******${data.docNumber.slice(-4)}`);
     await expect(doc).not.toContainText(data.docNumber);
     await expect(doc).toContainText(figure(first.amount));
     await expect(doc).toContainText('Recibió');

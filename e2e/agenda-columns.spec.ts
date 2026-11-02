@@ -114,7 +114,7 @@ test('ADMIN crea el tipo «Endodoncia 90 min» y una cita con ese tipo: la hora 
 
   // --- Agenda, Día en columnas: una por profesional, vacías ---
   await openDay(page);
-  await expect(column(page, admin.fullName).getByText('Sin citas hoy')).toBeVisible();
+  await expect(column(page, admin.fullName).getByText('Sin citas este día')).toBeVisible();
 
   // «Nueva cita» de la columna de Ana: el profesional ya viene elegido.
   await column(page, admin.fullName).getByRole('button', { name: `Nueva cita con ${admin.fullName}` }).click();
@@ -162,7 +162,7 @@ test('«Mover a…» con teclado: a otro profesional; si choca, 409 en el modal 
   await page.keyboard.press('Enter');
   await expect(dialog).toBeHidden({ timeout: 10_000 });
   await expect(column(page, dentist.fullName).getByTestId('day-column-appointment')).toHaveCount(2);
-  await expect(column(page, admin.fullName).getByText('Sin citas hoy')).toBeVisible();
+  await expect(column(page, admin.fullName).getByText('Sin citas este día')).toBeVisible();
 });
 
 test('arrastrar con el ratón entre columnas reagenda; soltar sobre otra cita la devuelve a su sitio con el error', async ({
