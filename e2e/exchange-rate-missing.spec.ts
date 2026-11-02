@@ -27,7 +27,9 @@ import { API_URL } from './support/urls';
  */
 const rawSuffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const password = 'Password123!';
-const LOCAL = E2E_REGION.currency;
+// La sede cobra en VES: USD es la moneda base del proveedor y no admite tasa manual.
+const REGION = { ...E2E_REGION, currency: 'VES' };
+const LOCAL = REGION.currency;
 const VIEWPORTS = [
   { name: 'escritorio', width: 1440, height: 900 },
   { name: 'móvil', width: 390, height: 844 },
@@ -41,7 +43,7 @@ let autoOrigin: string;
 let autoAdminEmail: string;
 let autoPatientId: string;
 /** DX-386: el abono con el formato de la sede y el código ISO («VES 200.000,00»). */
-const PAYMENT_TEXT = moneyWithCode(200000, LOCAL, regionalFormat(E2E_REGION));
+const PAYMENT_TEXT = moneyWithCode(200000, LOCAL, regionalFormat(REGION));
 
 /** Hoy en la zona de la sede de e2e. */
 function sedeToday(): string {
@@ -63,7 +65,7 @@ async function patch(request: APIRequestContext, session: ApiSession, path: stri
   expect(res.ok(), `PATCH ${path} falló: ${await res.text()}`).toBeTruthy();
 }
 
-/** Un paciente con un plan en GBP y un abono de hoy en la moneda de la sede, que la API guarda «sin tasa». */
+/** Un paciente con un plan en USD y un abono de hoy en la moneda de la sede, que la API guarda «sin tasa». */
 async function seedPlanWithoutRate(request: APIRequestContext, admin: ApiSession, suffix: string): Promise<string> {
   const patient = await apiPost<{ id: string }>(request, admin, '/patients', {
     firstName: 'Ana',
@@ -80,7 +82,7 @@ async function seedPlanWithoutRate(request: APIRequestContext, admin: ApiSession
     defaultPrice: 1000,
   });
   const plan = await apiPost<{ id: string }>(request, admin, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'GBP',
+    currency: 'USD',
   });
   const item = await apiPost<{ id: string }>(request, admin, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '11',
@@ -110,6 +112,7 @@ test.beforeAll(async ({ playwright }) => {
       fullName: 'Dra Tasa',
       email: adminEmail,
       password,
+      location: REGION,
     });
     origin = admin.origin;
     await addStaffViaApi(request, admin, {
@@ -131,6 +134,7 @@ test.beforeAll(async ({ playwright }) => {
       fullName: 'Dra Auto',
       email: autoAdminEmail,
       password,
+      location: REGION,
     });
     autoOrigin = autoAdmin.origin;
     autoPatientId = await seedPlanWithoutRate(request, autoAdmin, `a${suffix}`);
