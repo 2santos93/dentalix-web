@@ -359,8 +359,10 @@ for (const [sedeName, region] of REGIONS) {
       await page.goto(`${origin}/agenda`);
       await chooseSede(page, sedeName);
       await page.goto(`${origin}/settings/listas-de-precios/${found.listId}`);
-      const row = dataListRows(dataList(page, 'Precios de la lista')).filter({ hasText: found.code });
-      await expect(row.first()).toContainText(money(found.price), { timeout: 15_000 });
+      // La lista va paginada: se busca por código, que a 390 px no se pinta en la fila.
+      await page.getByLabel('Buscar por código, nombre o categoría').fill(found.code);
+      const row = dataListRows(dataList(page, 'Precios de la lista')).filter({ hasText: money(found.price) });
+      await expect(row.first()).toBeVisible({ timeout: 15_000 });
       await expect(row.first()).toContainText(money(found.defaultPrice));
       await checkScreen(page, `price-list-${SEDE_SHOTS[sedeName].slug}`, viewport.width);
     }
