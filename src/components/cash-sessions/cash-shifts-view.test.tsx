@@ -114,7 +114,7 @@ describe('CashShiftsView (DX-027)', () => {
     expect(rows).toHaveLength(3);
     expect(within(rows[1]).getByText('Abierta')).toBeInTheDocument();
     expect(within(rows[2]).getByText('Cerrada')).toBeInTheDocument();
-    expect(within(rows[2]).getByText(/-1\.?000,00/)).toBeInTheDocument();
+    expect(within(rows[2]).getByText(/-COP\s1\.000,00/)).toBeInTheDocument();
     // Toda la fila abre el turno; el informe de un cierre va en «⋯» (el turno abierto no lo tiene).
     expect(within(rows[2]).getByRole('link', { name: /^\d{2}\/\d{2}\/\d{4}/ })).toHaveAttribute('href', '/caja/turnos/cs-0');
     expect(within(rows[1]).queryByRole('button', { name: /^Acciones de turno/ })).not.toBeInTheDocument();

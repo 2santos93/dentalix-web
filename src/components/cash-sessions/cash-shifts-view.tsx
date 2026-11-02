@@ -201,6 +201,11 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
     const zone = locationTimeZone(locations.find((l) => l.id === locationId));
     return zone ? formatDateTimeInZone(instant, zone) : null;
   };
+  // DX-522: cada turno con el formato de SU sede, también con «Todas las sedes».
+  const moneyIn = (locationId: string) => {
+    const fmt = locationRegionalFormat(locations.find((l) => l.id === locationId));
+    return (amount: number, currency: string) => sedeMoney(amount, currency, fmt);
+  };
 
   function afterChange(message: string) {
     setNotice(message);
@@ -307,7 +312,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
             <DataList
               label={copy.tableLabel}
               rows={list?.items ?? []}
-              columns={shiftColumns(openedAtIn)}
+              columns={shiftColumns(openedAtIn, moneyIn)}
               getRowKey={(item) => item.id}
               getRowHref={(item) => cashSessionHref(item.id)}
               getRowLabel={(item) => {
@@ -393,6 +398,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
  */
 function shiftColumns(
   openedAtIn: (instant: string, locationId: string) => string | null,
+  moneyIn: (locationId: string) => (amount: number, currency: string) => string,
 ): DataListColumn<CashSessionSummary>[] {
   return [
     {
@@ -412,7 +418,7 @@ function shiftColumns(
       header: copy.colStatus,
       cell: (item) => <StatusBadge kind="cashSession" status={sessionStatusKey(item)} />,
     },
-    { id: 'float', header: copy.colFloat, numeric: true, cell: (item) => moneyList(item.floats) },
+    { id: 'float', header: copy.colFloat, numeric: true, cell: (item) => moneyList(item.floats, undefined, moneyIn(item.location.id)) },
     {
       id: 'difference',
       header: copy.colDifference,
@@ -426,7 +432,7 @@ function shiftColumns(
               item.differences.some((d) => d.amount !== 0) ? 'text-danger-text' : 'text-ink',
             )}
           >
-            {differenceText(item.differences)}
+            {differenceText(item.differences, moneyIn(item.location.id))}
           </span>
         ) : (
           <span className="text-muted">—</span>
@@ -434,7 +440,7 @@ function shiftColumns(
       mobileCell: (item) =>
         item.status === 'CLOSED' ? (
           <span className={cn(item.differences.some((d) => d.amount !== 0) && 'text-danger-text')}>
-            {differenceText(item.differences)}
+            {differenceText(item.differences, moneyIn(item.location.id))}
           </span>
         ) : null,
     },
@@ -487,7 +493,7 @@ function CurrentSessionCard({
           {session ? (
             <p className="text-sm text-muted tabular-nums">
               {openedAt ? copy.openedAt(openedAt) : copy.openedAtNoZone} · {copy.float}{' '}
-              {moneyList(session.floats)}
+              {moneyList(session.floats, undefined, (amount, currency) => sedeMoney(amount, currency, fmt))}
             </p>
           ) : (
             <p className="text-sm text-muted">{copy.noSession}</p>
