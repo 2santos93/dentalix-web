@@ -181,9 +181,9 @@ test('el recibo (A4 y 80 mm) lleva el impuesto y lo cobrado; la caja también', 
     await page.goto(`${origin}/print/payments/${paymentId}/receipt${roll ? '?formato=80mm' : ''}`);
     const adjustments = page.getByTestId('receipt-adjustments');
     await expect(adjustments).toContainText('Impuesto 3 %', { timeout: 15_000 });
-    await expect(adjustments).toContainText('+3,00 USD');
+    await expect(adjustments).toContainText('+USD 3,00');
     await expect(adjustments).toContainText('Total cobrado');
-    await expect(adjustments).toContainText('103,00 USD');
+    await expect(adjustments).toContainText('USD 103,00');
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize(viewport);
       if (viewport.width === 390) await expectNoHorizontalScroll(page);

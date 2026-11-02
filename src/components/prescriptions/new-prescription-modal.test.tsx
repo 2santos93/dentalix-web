@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, configure, fireEvent, getConfig, render, screen, waitFor, within } from '@testing-library/react';
 import { NewPrescriptionModal } from './new-prescription-modal';
 import {
   checkPrescriptionSafety,
@@ -73,23 +73,39 @@ function renderModal(onIssued = jest.fn(), onOpenChange = jest.fn()) {
   return { onIssued, onOpenChange };
 }
 
-async function fillAmoxicilina(user: ReturnType<typeof setupUser>) {
+function fillAmoxicilina() {
   const dialog = screen.getByRole('dialog');
-  const set = async (label: RegExp, value: string) => {
-    const input = within(dialog).getByLabelText(label);
-    await user.clear(input);
-    await user.type(input, value);
+  // Un `change` por campo, no tecla a tecla: cada tecla re-renderiza todo el
+  // formulario, y 70 teclas por test eran la mayor parte de los 26 s de la suite
+  // (y lo que no cabía en el presupuesto de cada test al ir la CPU justa). Lo que
+  // aquí se prueba es la comprobación de avisos, no la escritura.
+  const set = (label: RegExp, value: string) => {
+    fireEvent.change(within(dialog).getByLabelText(label), { target: { value } });
   };
-  await set(/principio activo/i, 'Amoxicilina');
-  await set(/^concentración/i, '500 mg');
-  await set(/forma farmacéutica/i, 'Cápsula');
-  await set(/vía de administración/i, 'Oral');
-  await set(/^dosis/i, '1 cápsula');
-  await set(/^frecuencia/i, 'Cada 8 horas');
-  await set(/duración/i, '7');
-  await set(/cantidad total/i, '21');
-  await set(/^unidad/i, 'cápsulas');
+  set(/principio activo/i, 'Amoxicilina');
+  set(/^concentración/i, '500 mg');
+  set(/forma farmacéutica/i, 'Cápsula');
+  set(/vía de administración/i, 'Oral');
+  set(/^dosis/i, '1 cápsula');
+  set(/^frecuencia/i, 'Cada 8 horas');
+  set(/duración/i, '7');
+  set(/cantidad total/i, '21');
+  set(/^unidad/i, 'cápsulas');
 }
+
+// Casi todas las esperas de este archivo son por la comprobación de avisos, que
+// sale tras un debounce REAL de 400 ms (`SAFETY_CHECK_DEBOUNCE_MS`) y después
+// pinta el resultado; cada `findByRole` además recorre el árbol de accesibilidad
+// de jsdom (100–700 ms por consulta). Con el 1 s por defecto de Testing Library
+// eso no cabe en cuanto la máquina va justa (runner de 2 vCPU, suite en
+// paralelo): fallaba «Unable to find role="checkbox"» con la suite en 58 s, y
+// con 36 bucles ocupando la CPU fallaban 3 tests. Ninguna aserción mide cuánto
+// tarda el aviso en aparecer, así que el tope solo decide cuándo se da por
+// colgado algo que no llega; 10 s deja margen y queda bajo los 20 s por test de
+// jest, que sigue cortando un cuelgue de verdad.
+const defaultAsyncUtilTimeout = getConfig().asyncUtilTimeout;
+beforeAll(() => configure({ asyncUtilTimeout: 10_000 }));
+afterAll(() => configure({ asyncUtilTimeout: defaultAsyncUtilTimeout }));
 
 describe('NewPrescriptionModal', () => {
   beforeEach(() => {
@@ -105,7 +121,7 @@ describe('NewPrescriptionModal', () => {
     const { onIssued, onOpenChange } = renderModal();
     expect(await screen.findByText('Se emite desde Sede Principal · válida 30 días.')).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Válida desde' })).toBeInTheDocument();
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await submit(user);
     await waitFor(() =>
       expect(mockedIssue).toHaveBeenCalledWith('tok', 'p1', {
@@ -154,7 +170,7 @@ describe('NewPrescriptionModal', () => {
     renderModal();
     await screen.findByText(/Se emite desde/);
     expect(screen.getByText(/no sustituye tu juicio clínico/)).toBeInTheDocument();
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     const blocking = (await screen.findByText('Requieren confirmación (1)')).closest(
       'div',
     ) as HTMLElement;
@@ -204,7 +220,7 @@ describe('NewPrescriptionModal', () => {
     mockedCheck.mockResolvedValue(preview([allergyAlert]));
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     const checkbox = await screen.findByRole('checkbox', { name: /Confirmo/ });
     const reason = screen.getByLabelText('Motivo para emitir pese a los avisos');
     await user.click(checkbox);
@@ -237,7 +253,7 @@ describe('NewPrescriptionModal', () => {
     const props = { open: true, token: 'tok', patientId: 'p1', onOpenChange: jest.fn(), onIssued: jest.fn() };
     const { rerender } = render(<NewPrescriptionModal {...props} />);
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await user.click(await screen.findByRole('checkbox', { name: /Confirmo/ }));
     await user.type(screen.getByLabelText('Motivo para emitir pese a los avisos'), 'Motivo p1');
     let resolve!: (value: PrescriptionSafetyPreview) => void;
@@ -260,7 +276,7 @@ describe('NewPrescriptionModal', () => {
     const props = { open: true, token: 'tok', patientId: 'p1', onOpenChange: jest.fn(), onIssued: jest.fn() };
     const { rerender } = render(<NewPrescriptionModal {...props} />);
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await user.click(await screen.findByRole('checkbox', { name: /Confirmo/ }));
     const reason = screen.getByLabelText('Motivo para emitir pese a los avisos');
     await user.type(reason, 'Motivo conservado');
@@ -285,7 +301,7 @@ describe('NewPrescriptionModal', () => {
     mockedCheck.mockResolvedValueOnce(preview([allergyAlert]));
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await user.click(await screen.findByRole('checkbox', { name: /Confirmo/ }));
     await user.type(screen.getByLabelText('Motivo para emitir pese a los avisos'), 'Motivo');
     mockedCheck.mockResolvedValueOnce(preview([{ ...allergyAlert, message: 'Otro aviso bloqueante del servidor.' }]));
@@ -300,7 +316,7 @@ describe('NewPrescriptionModal', () => {
     mockedCheck.mockResolvedValue(preview([allergyAlert]));
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await user.click(await screen.findByRole('checkbox', { name: /Confirmo/ }));
     await user.type(screen.getByLabelText('Motivo para emitir pese a los avisos'), 'Motivo');
     const button = screen.getByRole('button', { name: 'Emitir receta' });
@@ -325,11 +341,10 @@ describe('NewPrescriptionModal', () => {
   });
 
   it('mientras se calculan los avisos no se emite: estado de carga', async () => {
-    const user = setupUser();
     mockedCheck.mockReturnValue(new Promise(() => {}));
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     expect(await screen.findByText('Comprobando avisos de seguridad')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeDisabled();
   });
@@ -338,11 +353,10 @@ describe('NewPrescriptionModal', () => {
     ['sin avisos', () => preview(), 'Sin avisos para estos medicamentos.'],
     ['con un aviso bloqueante', () => preview([allergyAlert]), allergyAlert.message],
   ])('recomprobación tras un resultado %s: en carga no afirma «Sin avisos» y en error no enseña lo anterior', async (_, first, shownText) => {
-    const user = setupUser();
     mockedCheck.mockResolvedValueOnce(first());
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     expect(await screen.findByText(shownText)).toBeInTheDocument();
     let reject!: (reason: unknown) => void;
     mockedCheck.mockReturnValueOnce(new Promise((_, fail) => { reject = fail; }));
@@ -392,7 +406,7 @@ describe('NewPrescriptionModal', () => {
     mockedIssue.mockResolvedValue(makePrescription());
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     expect(
       await screen.findByText('Sin anamnesis vigente: no se han podido comprobar alergias ni interacciones'),
     ).toBeInTheDocument();
@@ -410,7 +424,7 @@ describe('NewPrescriptionModal', () => {
     mockedIssue.mockRejectedValueOnce(new ApiError(409, msg));
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await submit(user);
     expect(await screen.findByText(msg)).toBeInTheDocument();
     await waitFor(() => expect(mockedCheck.mock.calls.length).toBeGreaterThanOrEqual(2));
@@ -418,10 +432,9 @@ describe('NewPrescriptionModal', () => {
   });
 
   it('there is no medicine registration field or external link', async () => {
-    const user = setupUser();
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await screen.findByText('Sin avisos para estos medicamentos.');
     expect(screen.queryByRole('textbox', { name: /Nº de registro del medicamento/ })).not.toBeInTheDocument();
     expect(screen.queryAllByRole('link').filter((a) => /aemps/i.test(a.getAttribute('href') ?? ''))).toEqual([]);
@@ -473,7 +486,7 @@ describe('NewPrescriptionModal', () => {
     mockedIssue.mockRejectedValue(new ApiError(400, msg));
     const { onOpenChange } = renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await submit(user);
     const alert = (await screen.findByText(msg)).closest('[role="alert"]') as HTMLElement;
     expect(alert).toBeInTheDocument();
@@ -490,7 +503,7 @@ describe('NewPrescriptionModal', () => {
     );
     const { onOpenChange } = renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await submit(user);
     const alert = (await screen.findByText(/Falta el número de historia clínica/)).closest(
       '[role="alert"]',
@@ -531,7 +544,7 @@ describe('NewPrescriptionModal', () => {
     mockedIssuer.mockResolvedValue(makeIssuer({ professionalLicense: null }));
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await submit(user);
     const license = screen.getByLabelText('Tu nº de registro profesional');
     expect(license).toHaveAttribute('aria-invalid', 'true');
@@ -550,7 +563,7 @@ describe('NewPrescriptionModal', () => {
     await submit(user);
     expect(screen.getByLabelText(/^concentración/i)).toHaveAttribute('aria-invalid', 'true');
 
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await submit(user);
     expect(await screen.findByText('Falta el número de historia clínica.')).toBeInTheDocument();
 
@@ -565,7 +578,7 @@ describe('NewPrescriptionModal', () => {
     mockedIssue.mockRejectedValueOnce(new ApiError(400, 'Falta el número de historia clínica.'));
     renderModal();
     await screen.findByText(/Se emite desde/);
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await submit(user);
     expect(await screen.findByText('Falta el número de historia clínica.')).toBeInTheDocument();
     await user.type(screen.getByLabelText(/indicaciones generales/i), 'x');
@@ -578,7 +591,7 @@ describe('NewPrescriptionModal', () => {
     mockedIssue.mockResolvedValue(makePrescription());
     renderModal();
     await user.type(await screen.findByLabelText('Tu nº de registro profesional'), 'TP-55');
-    await fillAmoxicilina(user);
+    fillAmoxicilina();
     await submit(user);
     await waitFor(() =>
       expect(mockedIssue).toHaveBeenCalledWith(

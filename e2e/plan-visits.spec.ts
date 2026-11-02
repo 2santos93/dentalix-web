@@ -618,9 +618,15 @@ for (const width of [390, 1440])
       await page.getByRole("button", { name: "Día", exact: true }).click();
       await page.getByRole("button", { name: "Lista", exact: true }).click();
       await fillDate(page, "Fecha", day);
-      const status = page.getByRole("combobox", {
-        name: /^Estado de la cita de 10:15–10:45/,
-      });
+      // La sede de pruebas y el profesional son los mismos en todas las
+      // variantes y el día sale de un sorteo: la cita CANCELADA de 10:15 de
+      // otra variante (o de una ejecución anterior) puede caer el mismo día.
+      // Se acota a la fila (escritorio) o tarjeta (móvil) del paciente de este
+      // test, cuyo apellido es el `tag` único.
+      const status = page
+        .locator("tr, li")
+        .filter({ hasText: tag })
+        .getByRole("combobox", { name: /^Estado de la cita de 10:15–10:45/ });
       await expect(status).toHaveText("Agendada");
       await chooseAppointmentStatus(status, "Cancelada");
       await confirmCancellation(page);
