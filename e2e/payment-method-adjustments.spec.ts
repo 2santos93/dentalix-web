@@ -194,9 +194,9 @@ test('el recibo (A4 y 80 mm) lleva el impuesto y lo cobrado; la caja también', 
 
   await page.goto(`${origin}/caja`);
   const table = dataList(page.locator('main'), /abonos del período/i);
-  await expect(dataListRows(table).filter({ hasText: 'Cobrado 103,00' })).toHaveCount(1, { timeout: 15_000 });
+  await expect(dataListRows(table).filter({ hasText: 'Cobrado USD 103,00' })).toHaveCount(1, { timeout: 15_000 });
   const summary = page.getByRole('region', { name: /resumen del período/i });
-  await expect(summary.getByRole('list', { name: 'Ajustes por medio de pago' })).toContainText('+3,00');
+  await expect(summary.getByRole('list', { name: 'Ajustes por medio de pago' })).toContainText('+USD 3,00');
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     if (viewport.width === 390) await expectNoHorizontalScroll(page);

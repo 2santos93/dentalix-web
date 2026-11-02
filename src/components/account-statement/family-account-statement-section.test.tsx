@@ -8,6 +8,10 @@ import {
 } from '@/lib/account-statement/account-statement-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { clinicLocation } from '@/lib/test/locations';
+import { listLocations } from '@/lib/locations/locations-api';
+
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 
 jest.mock('../../lib/account-statement/account-statement-api', () => ({
   ...jest.requireActual('../../lib/account-statement/account-statement-api'),
@@ -53,7 +57,10 @@ const family: FamilyAccountStatement = {
 };
 
 describe('Estado de cuenta familiar (DX-203)', () => {
-  beforeEach(() => jest.resetAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-CO' })]);
+  });
 
   it('lista a cada paciente con su saldo y el total', async () => {
     mockedGet.mockResolvedValue(family);
@@ -65,7 +72,8 @@ describe('Estado de cuenta familiar (DX-203)', () => {
       expect.stringContaining('Lucía Gil · Pagador: madre'),
     ]);
     expect(within(members[0]).getByText('Sin saldos')).toBeInTheDocument();
-    expect(screen.getByTestId('family-total').textContent).toMatch(/1\.000\.000,25/);
+    // DX-522: el importe lleva el código ISO y el formato de la sede.
+    await waitFor(() => expect(screen.getByTestId('family-total').textContent).toMatch(/COP\s1\.000\.000,25/));
     expect(screen.getByRole('link', { name: /Imprimir estado familiar/ })).toHaveAttribute(
       'href',
       '/print/patients/mother/family-account-statement',

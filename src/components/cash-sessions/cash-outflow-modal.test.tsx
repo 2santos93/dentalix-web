@@ -94,7 +94,7 @@ describe('CashOutflowModal (DX-274)', () => {
     });
     expect(key).toEqual(expect.any(String));
     expect(locationId).toBe('loc-2');
-    expect(onCreated).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Salida de caja de 8\.?000,00\sCOP registrada\.$/));
+    expect(onCreated).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Salida de caja de 8\s000,00\sCOP\sregistrada\.$/));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 

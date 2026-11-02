@@ -11,7 +11,8 @@ import {
   type PriceList,
   type PriceListItemRow,
 } from '@/lib/price-lists/price-lists-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -77,6 +78,8 @@ interface PriceListItemsViewProps {
  * con una sola fila y «Quitar precio» (en el «⋯») lo manda con `price: null`.
  */
 export function PriceListItemsView({ token, priceListId }: PriceListItemsViewProps) {
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
   const [list, setList] = useState<PriceList | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -247,12 +250,12 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
     return row.price === null ? (
       <span className="text-muted">{copy.noPrice}</span>
     ) : (
-      <span className="font-medium tabular-nums">{formatCurrency(row.price, currency)}</span>
+      <span className="font-medium tabular-nums">{sedeMoney(row.price, currency, fmt)}</span>
     );
   }
 
   function catalogPriceText(row: PriceListItemRow) {
-    return row.defaultPrice === null ? copy.noCatalogPrice : formatCurrency(row.defaultPrice, currency);
+    return row.defaultPrice === null ? copy.noCatalogPrice : sedeMoney(row.defaultPrice, currency, fmt);
   }
 
   function rowActions(row: PriceListItemRow): RowAction[] {

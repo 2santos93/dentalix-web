@@ -11,7 +11,8 @@ import {
   planQuotePrintHref,
   type PlanQuote,
 } from '@/lib/treatment-plans/plan-quote-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { formatCivilDate } from '@/lib/format/date';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
@@ -66,6 +67,8 @@ export function AcceptPlanModal({
   planId,
   onAccepted,
 }: AcceptPlanModalProps) {
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
   const [quote, setQuote] = useState<PlanQuote | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -182,7 +185,7 @@ export function AcceptPlanModal({
                     <span className="block t-caption text-muted tabular-nums">{copy.tooth(item.toothNumber)}</span>
                   </span>
                   <span className="shrink-0 font-medium text-ink tabular-nums">
-                    {formatCurrency(item.subtotal, quote.currency)}
+                    {sedeMoney(item.subtotal, quote.currency, fmt)}
                   </span>
                 </li>
               ))}
@@ -193,7 +196,7 @@ export function AcceptPlanModal({
                 className="flex items-baseline justify-between gap-3 border-t border-border pt-2 font-semibold text-ink"
               >
                 <span>{copy.total(total.currency)}</span>
-                <span className="tabular-nums">{formatCurrency(total.net, total.currency)}</span>
+                <span className="tabular-nums">{sedeMoney(total.net, total.currency, fmt)}</span>
               </p>
             ))}
             <p className="flex flex-wrap items-center justify-between gap-2 t-caption text-muted">
