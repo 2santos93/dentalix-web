@@ -14,9 +14,9 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * DX-449 (TST-053): zona de las sedes de los specs que necesitan citas de HOY
  * ya empezadas o por empezar. La API decide «hoy» con su reloj real y la zona
- * de la sede: a las 00:05 de Bogotá no cabe una cita «de hace 10 min» y a las
+ * de la sede: a las 00:05 de la sede no cabe una cita «de hace 10 min» y a las
  * 23:54 no queda franja de hoy por agendar, y la CI de los merges nocturnos
- * (04:40–06:00 UTC) salía en rojo. Bogotá mientras queden al menos
+ * (04:40–06:00 UTC) salía en rojo. La zona de la suite mientras queden al menos
  * `SEDE_TODAY_MARGIN_MINUTES` desde y hasta su medianoche; si no, una zona sin
  * horario de verano en la que ahora es cerca del mediodía.
  */
@@ -67,7 +67,7 @@ function minutesFromMidnight(at: Date, zone: string): number {
   return Math.min(minutes, 24 * 60 - minutes);
 }
 
-/** Bogotá si su medianoche queda a más del margen; si no, la candidata más cerca del mediodía. */
+/** La zona de la suite si su medianoche queda a más del margen; si no, la candidata más cerca del mediodía. */
 export function sedeTodayZone(now = new Date()): string {
   if (minutesFromMidnight(now, SEDE_TZ) >= SEDE_TODAY_MARGIN_MINUTES) return SEDE_TZ;
   let best = SEDE_TZ;

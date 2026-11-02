@@ -5,7 +5,7 @@ import ts from 'typescript';
 /**
  * DX-312 (P1, pre-flight m14): el navegador de la suite habla `es`, sin
  * región, para que la web no sugiera ningún país; un contexto en `es-CO`
- * rellenaría «Colombia» en silencio en el alta o en «Nueva sede». Todo
+ * rellenaría un país en silencio en el alta o en «Nueva sede». Todo
  * `locale` de las opciones del navegador (`use`/`test.use`, `newContext`,
  * `newPage`, `launchPersistentContext`) es `E2E_BROWSER_LOCALE`, salvo en
  * `location-country.spec.ts`, el único test con un idioma regional (es-VE).

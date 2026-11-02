@@ -868,7 +868,7 @@ describe('días de la sede (DX-097)', () => {
     expect(
       await screen.findByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.'),
     ).toBeInTheDocument();
-    // Nunca se consulta «hoy» con otra zona (ni Bogotá ni la del navegador).
+    // Nunca se consulta «hoy» con otra zona (ni la del fixture ni la del navegador).
     expect(mockedList).not.toHaveBeenCalled();
 
     // Reintentar relee las sedes; ya configurada, la caja carga.

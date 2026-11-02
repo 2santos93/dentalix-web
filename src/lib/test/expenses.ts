@@ -2,7 +2,7 @@ import type { Expense, ExpenseDetail, ExpensePayment } from '@/lib/expenses/expe
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 
-/** Sedes de prueba (DX-274): la principal en Bogotá y otra en Medellín. */
+/** Sedes de prueba (DX-274): la principal y otra en otra ciudad. */
 export const expenseLocations: ClinicLocation[] = [
   clinicLocation({
     id: 'loc-1',

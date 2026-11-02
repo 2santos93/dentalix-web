@@ -12,7 +12,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 /**
  * e2e DX-339: «Agenda de contingencia» desde la agenda.
  *
- * Una clínica nueva por corrida (sede en Bogotá, sin horario restringido) con
+ * Una clínica nueva por corrida (sede en la sede, sin horario restringido) con
  * un odontólogo, recepción y dos pacientes con cita MAÑANA en la sede: la de
  * Sara se queda agendada y la de Tomás se cancela por la API.
  *

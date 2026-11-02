@@ -75,8 +75,7 @@ describe('arquitectura: landing sin leyes ni regímenes (DX-369)', () => {
 /**
  * DX-323: ninguna pantalla cita una norma ni una autoridad de un país; el
  * producto es mundial y cada clínica escribe su base legal. Recorre la
- * producción de `src/` sin líneas de comentario (los comentarios son de
- * DX-371), y el contrato generado de la API con comentarios, porque sus
+ * producción de `src/`, comentarios incluidos (DX-371), y el contrato generado de la API con comentarios, porque sus
  * `@description` son textos que la API devuelve. La única excepción con nombre
  * congela las recetas emitidas antes de DX-324 (R12).
  */
@@ -110,7 +109,8 @@ function codeOf(line: string): string {
   return COMMENT_LINE.test(rest) ? '' : rest;
 }
 
-const citesLawInCode = (line: string): boolean => citesLaw(codeOf(line));
+/** Los comentarios cuentan (DX-371): una cita en un comentario justifica la regla con la ley de un país. */
+const citesLawInCode = (line: string): boolean => citesLaw(line);
 
 /** Cuántas veces aparece la línea fijada (sin sangría) en el texto del fichero. */
 const pinnedCount = (text: string, pinned: string): number =>
@@ -205,6 +205,10 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
       "/* nota */ const basis = '" + 'Le' + "y 1581';",
       "/* a */ /* b */ subtitle: '" + 'Le' + "y 1581',",
       "const url = 'https://example.org // " + 'Le' + "y 1581';",
+      '// ' + 'Le' + 'y 1581',
+      ' * ' + 'Le' + 'y 1581',
+      '/* nota */ // ' + 'Le' + 'y 1581',
+      '/* ' + 'Le' + 'y 1581 */',
     ]) {
       expect({ text, caught: citesLawInCode(text) }).toEqual({ text, caught: true });
     }
@@ -219,10 +223,6 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
       '(sic)',
       'basic',
       'artículos de limpieza',
-      '// ' + 'Le' + 'y 1581',
-      ' * ' + 'Le' + 'y 1581',
-      '/* nota */ // ' + 'Le' + 'y 1581',
-      '/* ' + 'Le' + 'y 1581 */',
     ]) {
       expect({ text, caught: citesLawInCode(text) }).toEqual({ text, caught: false });
     }

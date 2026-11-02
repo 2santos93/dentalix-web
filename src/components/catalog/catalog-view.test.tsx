@@ -27,8 +27,8 @@ jest.mock('../../lib/odontogram/catalog-api', () => ({
   updateCatalogItem: jest.fn(),
 }));
 
-// Las sedes deciden la moneda base de la clínica (DX-063): una clínica en
-// Colombia por defecto.
+// Las sedes deciden la moneda base de la clínica (DX-063): una clínica con
+// la moneda del fixture por defecto.
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
