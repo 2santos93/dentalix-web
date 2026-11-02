@@ -61,8 +61,8 @@ export function focusLocationSwitcher(): boolean {
  * - `variant="inline"`: en línea, con el nombre entero hasta 12rem.
  * - `variant="compact"`: selector con nombre, hasta 8.5rem.
  * - `variant="phone"`: barra superior del teléfono (K2): pastilla de 44px con
- *   el pin y el nombre ENTERO a dos líneas (DX-523); nombre accesible «Sede: …». Abre el mismo desplegable nativo. Deja el ancho a la
- *   marca de la clínica, que antes se cortaba junto al selector.
+ *   el pin y el nombre ENTERO a dos líneas (DX-523); nombre accesible «Sede: …».
+ *   Abre el mismo desplegable nativo.
  *
  * Con sedes acotadas (claim `loc` del token, DX-089) solo se ofrecen las
  * permitidas y nunca «Todas las sedes»: con varias, la opción vacía pasa a ser
