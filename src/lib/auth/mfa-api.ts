@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { useAuthStore } from './auth-store';
@@ -8,6 +8,9 @@ export type MfaEnrollment = components['schemas']['MfaEnrollmentDto'];
 export type MyMfaEnabled = components['schemas']['MyMfaEnabledDto'];
 export type MfaEnrolledSession = components['schemas']['MfaEnrolledSessionDto'];
 export type SecurityPolicy = components['schemas']['SecurityPolicyDto'];
+export type TrustedDevice = components['schemas']['TrustedDeviceDto'];
+export type StaffMfaStatus = components['schemas']['StaffMfaStatusDto'];
+export type MfaResetReason = components['schemas']['ResetMemberMfaDto']['reason'];
 
 /** DX-021: lo que devuelve el login cuando falta el segundo factor. */
 export type MfaChallenge = components['schemas']['MfaChallengeDto'];
@@ -39,12 +42,23 @@ export function canManageSecurityPolicy(role: ClinicRole | null): boolean {
 export function verifyLoginMfa(
   mfaToken: string,
   factor: SecondFactor,
+  rememberDevice = false,
 ): Promise<{ accessToken: string }> {
-  return apiFetch('/auth/login/mfa', { method: 'POST', body: { mfaToken, ...factor } });
+  return apiFetch('/auth/login/mfa', {
+    method: 'POST',
+    body: { mfaToken, ...factor, ...(rememberDevice ? { rememberDevice } : {}) },
+  });
 }
 
-export function startLoginMfaEnrollment(mfaToken: string): Promise<MfaEnrollment> {
-  return apiFetch('/auth/login/mfa/enrollment', { method: 'POST', body: { mfaToken } });
+/** `emailCode`: el alta de un superadmin exige el código enviado a su correo. */
+export function startLoginMfaEnrollment(
+  mfaToken: string,
+  emailCode?: string,
+): Promise<MfaEnrollment> {
+  return apiFetch('/auth/login/mfa/enrollment', {
+    method: 'POST',
+    body: { mfaToken, ...(emailCode ? { emailCode } : {}) },
+  });
 }
 
 export function confirmLoginMfaEnrollment(
@@ -112,6 +126,39 @@ export async function regenerateRecoveryCodes(
     body: { currentPassword, ...factor },
   });
   return res.recoveryCodes;
+}
+
+// --- Dispositivos de confianza (DX-021-bis) ---
+
+export function listTrustedDevices(token: string): Promise<TrustedDevice[]> {
+  return apiFetch('/me/mfa/trusted-devices', { token });
+}
+
+/** Sin `id`, todos. */
+export async function revokeTrustedDevices(token: string, id?: string): Promise<void> {
+  await apiFetchOrNull<null>(`/me/mfa/trusted-devices${id ? `/${id}` : ''}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+// --- La verificación de otro miembro (solo ADMIN, DX-021-bis) ---
+
+export function getStaffMfa(token: string, userId: string): Promise<StaffMfaStatus> {
+  return apiFetch(`/staff/${userId}/mfa`, { token });
+}
+
+export async function resetStaffMfa(
+  token: string,
+  userId: string,
+  input: { currentPassword: string; reason: MfaResetReason; factor: SecondFactor },
+): Promise<void> {
+  const { factor, ...rest } = input;
+  await apiFetchOrNull<null>(`/staff/${userId}/mfa/reset`, {
+    method: 'POST',
+    token,
+    body: { ...rest, ...factor },
+  });
 }
 
 // --- Política de la clínica ---

@@ -33,6 +33,13 @@ const copy = {
   submitting: 'Activando…',
   confirmError: 'No pudimos activar la verificación. Intenta de nuevo.',
   continue: 'Entrar a Dentalix',
+  // DX-021-bis: alta de un superadmin.
+  emailIntro:
+    'Te enviamos un código a tu correo. Compruébalo para ver la clave: la contraseña sola no basta para activar la verificación.',
+  emailLabel: 'Código del correo',
+  emailInvalid: 'El código tiene 8 dígitos.',
+  emailSubmit: 'Continuar',
+  emailSubmitting: 'Comprobando…',
 };
 
 /**
@@ -42,10 +49,13 @@ const copy = {
  */
 export function MfaEnrollStep({
   mfaToken,
+  emailCodeRequired = false,
   onDone,
   onExpired,
 }: {
   mfaToken: string;
+  /** La API le envió un código al correo que exige para enseñar la clave. */
+  emailCodeRequired?: boolean;
   onDone: (accessToken: string) => void;
   onExpired: () => void;
 }) {
@@ -60,6 +70,7 @@ export function MfaEnrollStep({
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
+    if (emailCodeRequired) return;
     let cancelled = false;
     startLoginMfaEnrollment(mfaToken)
       .then((res) => {
@@ -73,7 +84,7 @@ export function MfaEnrollStep({
     return () => {
       cancelled = true;
     };
-  }, [mfaToken, attempt, onExpired]);
+  }, [mfaToken, emailCodeRequired, attempt, onExpired]);
 
   const normalized = normalizeTotpCode(code);
   const codeError = touched && !normalized ? copy.codeInvalid : null;
@@ -135,6 +146,11 @@ export function MfaEnrollStep({
       </div>
     );
   }
+  if (!enrollment && emailCodeRequired) {
+    return (
+      <MfaEmailCodeStep mfaToken={mfaToken} onVerified={setEnrollment} onExpired={onExpired} />
+    );
+  }
   if (!enrollment) return <Skeleton className="h-80 w-full" aria-label={copy.submitting} />;
 
   const id = 'login-mfa-enroll-code';
@@ -172,6 +188,85 @@ export function MfaEnrollStep({
           </>
         ) : (
           copy.submit
+        )}
+      </Button>
+    </form>
+  );
+}
+
+/** Primer paso del alta de un superadmin: el código de su correo abre la clave. */
+function MfaEmailCodeStep({
+  mfaToken,
+  onVerified,
+  onExpired,
+}: {
+  mfaToken: string;
+  onVerified: (enrollment: MfaEnrollment) => void;
+  onExpired: () => void;
+}) {
+  const [code, setCode] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const clean = code.replace(/\s/g, '');
+  const valid = /^\d{8}$/.test(clean);
+  const fieldError = touched && !valid ? copy.emailInvalid : null;
+  const id = 'login-mfa-email-code';
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setTouched(true);
+    if (!valid || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      onVerified(await startLoginMfaEnrollment(mfaToken, clean));
+    } catch (err) {
+      if (err instanceof ApiError && err.code === MFA_CHALLENGE_EXPIRED) {
+        onExpired();
+      } else if (err instanceof ApiError && err.status === 429 && err.retryAfterSeconds) {
+        setError(loginLockedMessage(err.retryAfterSeconds));
+      } else {
+        setError(apiErrorMessage(err, copy.loadError));
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className={AUTH_FORM_CLASS} noValidate>
+      <Callout tone="info" role="note">
+        {copy.emailIntro}
+      </Callout>
+      <FormField htmlFor={id} label={copy.emailLabel} error={fieldError}>
+        <Input
+          id={id}
+          name="emailCode"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={9}
+          required
+          disabled={submitting}
+          value={code}
+          aria-invalid={fieldError ? true : undefined}
+          aria-describedby={fieldError ? fieldErrorId(id) : undefined}
+          onChange={(e) => setCode(e.target.value)}
+          className="tabular-nums tracking-widest"
+        />
+      </FormField>
+      {error ? (
+        <InlineError id="login-mfa-email-error" variant="summary">
+          {error}
+        </InlineError>
+      ) : null}
+      <Button type="submit" size="lg" disabled={submitting} className={AUTH_SUBMIT_CLASS}>
+        {submitting ? (
+          <>
+            <Loader2 className="animate-spin" /> {copy.emailSubmitting}
+          </>
+        ) : (
+          copy.emailSubmit
         )}
       </Button>
     </form>

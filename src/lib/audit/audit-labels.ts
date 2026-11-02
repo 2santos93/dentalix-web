@@ -287,6 +287,13 @@ const STAFF_REASONS: Record<string, string> = {
   MFA_ENABLED: 'Activó la verificación en dos pasos y cerró sus demás sesiones',
   MFA_DISABLED: 'Desactivó la verificación en dos pasos y cerró sus demás sesiones',
   MFA_RECOVERY_CODES_REGENERATED: 'Generó códigos de recuperación nuevos',
+  MFA_TRUSTED_DEVICE_ADDED: 'Marcó un dispositivo de confianza',
+  MFA_TRUSTED_DEVICE_USED: 'Entró desde un dispositivo de confianza, sin código',
+  MFA_TRUSTED_DEVICES_REVOKED: 'Revocó dispositivos de confianza',
+  MFA_RESET_LOST_DEVICE: 'Restableció la verificación en dos pasos: perdió el móvil',
+  MFA_RESET_DEVICE_REPLACED: 'Restableció la verificación en dos pasos: cambió de móvil',
+  MFA_RESET_SECURITY_INCIDENT: 'Restableció la verificación en dos pasos: incidente de seguridad',
+  MFA_RESET_REFUSED: 'Restablecimiento de la verificación rechazado (sin cambios)',
   // PUT /staff/:userId/locations (anterior a DX-359): sin antes ni después.
   LOCATIONS_CHANGED: 'Sedes del miembro cambiadas',
 };
@@ -765,6 +772,7 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   if (metadata.reason === 'EXCHANGE_RATE_SOURCE') return exchangeRateSourceDetail(from, to);
   // DX-021: solo el sentido del cambio.
   if (metadata.reason === 'MFA_POLICY') {
+    if (to === 'ALL_MFA_REQUIRED') return 'Verificación en dos pasos: obligatoria para todo el equipo';
     return to === 'ADMIN_MFA_REQUIRED'
       ? 'Verificación en dos pasos: obligatoria para administradores'
       : 'Verificación en dos pasos: opcional para administradores';

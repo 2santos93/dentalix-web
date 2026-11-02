@@ -4,8 +4,9 @@ import { test, expect } from './support/test';
 import { loginAs, waitForHydratedForm } from './support/auth';
 import { registerClinicViaApi } from './support/api';
 import { expectNoHorizontalScroll } from './support/layout';
+import { enrollPlatformAdmin } from './support/platform-mfa';
 import { totpNow } from './support/totp';
-import { WEB_PORT, tenantOrigin } from './support/urls';
+import { tenantOrigin } from './support/urls';
 
 /**
  * SEC-008 — acceso de soporte (break-glass) del superadmin a una clínica.
@@ -58,26 +59,11 @@ test('el superadmin enrola el MFA, entra a una clínica con código y motivo, y 
     `UPDATE users SET "isPlatformAdmin" = true WHERE email = '${home.email}'`,
   ]);
 
-  // --- 1. Alta del MFA en el área de plataforma (apex) ---------------------
-  await page.goto(`http://localhost:${WEB_PORT}/admin`);
-  await waitForHydratedForm(page);
-  await page.getByLabel('Email').fill(home.email);
-  await page.getByLabel('Contraseña').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page.getByRole('heading', { name: 'Verificación en dos pasos' })).toBeVisible({
-    timeout: 15_000,
-  });
-  await page.getByRole('button', { name: 'Activar' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Activar la verificación en dos pasos' });
-  const secret = ((await dialog.getByTestId('mfa-secret').textContent()) ?? '').replace(/\s/g, '');
-  expect(secret).toMatch(/^[A-Z2-7]{32}$/);
-  await dialog.getByLabel('Código de la app').fill(totpNow(secret));
-  await dialog.getByRole('button', { name: 'Activar' }).click();
-  await expect(page.getByText('Verificación en dos pasos activada.')).toBeVisible();
-  // Espera de seguridad tras el alta (riesgo de transición). La tarjeta la
-  // pinta con el mismo estado que el aviso de «activada», así que basta mirar
-  // ahora. Con `BREAK_GLASS_MFA_COOLDOWN_MINUTES=0` en la API (local) no hay
+  // --- 1. Alta del MFA en el login del apex (DX-021-bis) --------------------
+  const { secret } = await enrollPlatformAdmin(page, home.email, PASSWORD);
+  // Espera de seguridad tras el alta (riesgo de transición). Con `BREAK_GLASS_MFA_COOLDOWN_MINUTES=0` en la API (local) no hay
   // espera y el login va directo al paso del código.
+  await expect(page.getByText(/Quedan 10/)).toBeVisible();
   const inCooldown = await page
     .getByText(/podrás usarla para entrar como soporte desde el/i)
     .isVisible();

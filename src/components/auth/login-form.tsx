@@ -98,6 +98,7 @@ export function LoginForm({
   const [breakGlassStep, setBreakGlassStep] = useState(false);
   // DX-021: la contraseña valió y falta el segundo factor (o su alta forzada).
   const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null);
+  const [rememberDevice, setRememberDevice] = useState(false);
 
   const remaining =
     lockedUntil === null ? 0 : Math.max(0, Math.ceil((lockedUntil - now) / 1000));
@@ -148,7 +149,7 @@ export function LoginForm({
     setLockEnded(false);
     setSubmitting(true);
     try {
-      const res = await verifyLoginMfa(mfaChallenge.mfaToken, factor);
+      const res = await verifyLoginMfa(mfaChallenge.mfaToken, factor, rememberDevice);
       enter(res.accessToken);
     } catch (err) {
       if (startLock(err)) return;
@@ -228,6 +229,7 @@ export function LoginForm({
     return (
       <MfaEnrollStep
         mfaToken={mfaChallenge.mfaToken}
+        emailCodeRequired={mfaChallenge.emailCodeRequired === true}
         onDone={enter}
         onExpired={mfaExpired}
       />
@@ -242,6 +244,7 @@ export function LoginForm({
           locked={locked}
           error={error}
           onSubmit={(factor) => void verifyMfa(factor)}
+          remember={{ checked: rememberDevice, onChange: setRememberDevice }}
           onBack={() => {
             setMfaChallenge(null);
             setError(null);
