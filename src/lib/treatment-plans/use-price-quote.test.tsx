@@ -12,7 +12,7 @@ const quote = (price: number): PriceQuote => ({
   agreementId: null,
   agreementName: null,
   allowDiscount: true,
-  currency: 'COP',
+  currency: 'USD',
 });
 
 function deferred() {
@@ -26,7 +26,7 @@ describe('usePriceQuote (DX-105)', () => {
 
   it('sin prestación o sin moneda no pide nada', () => {
     const { result } = renderHook(() =>
-      usePriceQuote({ token: 't', patientId: 'p', catalogItemId: '', currency: 'COP' }),
+      usePriceQuote({ token: 't', patientId: 'p', catalogItemId: '', currency: 'USD' }),
     );
     expect(result.current.status).toBe('idle');
     expect(mocked).not.toHaveBeenCalled();
@@ -36,7 +36,7 @@ describe('usePriceQuote (DX-105)', () => {
     mocked.mockResolvedValue(quote(80));
     const onSettled = jest.fn();
     const { result } = renderHook(() =>
-      usePriceQuote({ token: 't', patientId: 'p', catalogItemId: 'c1', currency: 'COP', onSettled }),
+      usePriceQuote({ token: 't', patientId: 'p', catalogItemId: 'c1', currency: 'USD', onSettled }),
     );
     expect(result.current.status).toBe('loading');
     await waitFor(() => expect(result.current.status).toBe('ready'));
@@ -50,7 +50,7 @@ describe('usePriceQuote (DX-105)', () => {
     mocked.mockReturnValueOnce(first.promise).mockResolvedValueOnce(quote(30));
     const onSettled = jest.fn();
     const { result, rerender } = renderHook(
-      ({ id }) => usePriceQuote({ token: 't', patientId: 'p', catalogItemId: id, currency: 'COP', onSettled }),
+      ({ id }) => usePriceQuote({ token: 't', patientId: 'p', catalogItemId: id, currency: 'USD', onSettled }),
       { initialProps: { id: 'c1' } },
     );
     rerender({ id: 'c2' });
@@ -64,7 +64,7 @@ describe('usePriceQuote (DX-105)', () => {
     mocked.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(quote(70));
     const onSettled = jest.fn();
     const { result } = renderHook(() =>
-      usePriceQuote({ token: 't', patientId: 'p', catalogItemId: 'c1', currency: 'COP', onSettled }),
+      usePriceQuote({ token: 't', patientId: 'p', catalogItemId: 'c1', currency: 'USD', onSettled }),
     );
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(onSettled).toHaveBeenCalledWith(null);
@@ -79,7 +79,7 @@ describe('usePriceQuote (DX-105)', () => {
       const pending = deferred();
       mocked.mockResolvedValueOnce(quote(80)).mockReturnValue(pending.promise);
       const { result, rerender } = renderHook(
-        ({ id }) => usePriceQuote({ token: 't', patientId: 'p', catalogItemId: id, currency: 'COP' }),
+        ({ id }) => usePriceQuote({ token: 't', patientId: 'p', catalogItemId: id, currency: 'USD' }),
         { initialProps: { id: 'c1' } },
       );
       await waitFor(() => expect(result.current.status).toBe('ready'));
@@ -99,7 +99,7 @@ describe('usePriceQuote (DX-105)', () => {
     const pending = deferred();
     mocked.mockResolvedValueOnce(quote(80)).mockReturnValueOnce(pending.promise);
     const { result, rerender } = renderHook(
-      ({ token }) => usePriceQuote({ token, patientId: 'p', catalogItemId: 'c1', currency: 'COP' }),
+      ({ token }) => usePriceQuote({ token, patientId: 'p', catalogItemId: 'c1', currency: 'USD' }),
       { initialProps: { token: 'old' } },
     );
     await waitFor(() => expect(result.current.status).toBe('ready'));

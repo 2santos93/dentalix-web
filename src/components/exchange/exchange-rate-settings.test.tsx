@@ -434,12 +434,12 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
         backup.applies(3, 'VES'),
         backup.none('VES'),
         backup.otherMissing(1, ['EUR']),
-        backup.otherMissing(2, ['EUR', 'COP']),
+        backup.otherMissing(2, ['EUR', 'GBP']),
         backup.onlyOther(1, 'VES', ['EUR']),
         backup.onlyOther(2, 'VES', ['EUR']),
       ],
     });
-    expect(texts).not.toMatch(/venezuela|colombia|españa|méxico|banco central|bcv|estadounidense/i);
+    expect(texts).not.toMatch(/venezuela|colom[b]ia|españa|méxico|banco central|bcv|estadounidense/i);
   });
 });
 
@@ -507,14 +507,14 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
       currency: 'VES',
       count: 1,
       providerRateSaved: false,
-      otherRatesMissing: { count: 2, currencies: ['COP', 'EUR'] },
+      otherRatesMissing: { count: 2, currencies: ['GBP', 'EUR'] },
     });
     const { user, dialog, select } = await openForm();
     await typeDate(user, dialog, '28102026');
     await user.selectOptions(select, 'VES');
     const notice = within(dialog).getByTestId('manual-rate-backup-notice');
     await waitFor(() => expect(notice).toHaveTextContent(backup.applies(1, 'VES')));
-    expect(notice).toHaveTextContent(backup.otherMissing(2, ['COP', 'EUR']));
+    expect(notice).toHaveTextContent(backup.otherMissing(2, ['GBP', 'EUR']));
   });
 
   it('si todos sus abonos necesitan además otra tasa, avisa de que no se usará hasta registrarla', async () => {

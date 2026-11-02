@@ -12,7 +12,7 @@ jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
 
 const mockedCreate = createPaymentPlan as jest.MockedFunction<typeof createPaymentPlan>;
 
-const PLAN = { id: 'plan-1', currency: 'COP', billable: 1200000 };
+const PLAN = { id: 'plan-1', currency: 'VES', billable: 1200000 };
 
 beforeEach(() => {
   mockedCreate.mockReset();
@@ -45,16 +45,16 @@ it('propone 12 cuotas mensuales desde hoy, sin pie y el total facturable del pla
   expect(dialog.querySelector<HTMLInputElement>('input[name="pp-start"]')?.value).toMatch(
     /^\d{4}-\d{2}-\d{2}$/,
   );
-  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Cuota: 100.000,00 COP');
+  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Cuota: 100.000,00 VES');
 });
 
 it('DX-489: desde el plan de tratamiento, la vista previa sale con el formato de la sede (código delante)', () => {
-  const fmt = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+  const fmt = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
   renderModal({ money: (amount, code) => sedeMoney(amount, code, fmt) });
   const dialog = screen.getByRole('dialog', { name: 'Crear plan de pagos' });
   const text = dialog.textContent?.replace(/\s/g, ' ') ?? '';
-  expect(text).toContain('Cuota: COP 100.000,00');
-  expect(text).not.toContain('100.000,00 COP');
+  expect(text).toContain('Cuota: VES 100.000,00');
+  expect(text).not.toContain('100.000,00 VES');
 });
 
 it('crea el plan de cuotas con los datos del formulario y avisa', async () => {
@@ -107,7 +107,7 @@ it('DX-241: pie y total con miles se leen como en el resto de la app', async () 
   await user.type(within(dialog).getByLabelText('Pie (opcional)'), '200.000');
   await user.clear(within(dialog).getByLabelText('Total a financiar'));
   await user.type(within(dialog).getByLabelText('Total a financiar'), '1.400.000');
-  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Financiado: 1.200.000,00 COP · Cuota: 100.000,00 COP');
+  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Financiado: 1.200.000,00 VES · Cuota: 100.000,00 VES');
   await user.click(within(dialog).getByRole('button', { name: 'Crear' }));
   await waitFor(() =>
     expect(mockedCreate).toHaveBeenCalledWith(
@@ -131,10 +131,10 @@ it('DX-241: un total ambiguo no se envía y el motivo sale junto al campo', asyn
   expect(mockedCreate).not.toHaveBeenCalled();
 });
 
-it('DX-241: un facturable en COP con céntimos se propone y se envía sin tocarlo', async () => {
+it('DX-241: un facturable en VES con céntimos se propone y se envía sin tocarlo', async () => {
   const user = userEvent.setup();
   mockedCreate.mockResolvedValue({} as Awaited<ReturnType<typeof createPaymentPlan>>);
-  renderModal({ plan: { id: 'plan-1', currency: 'COP', billable: 175000.5 } });
+  renderModal({ plan: { id: 'plan-1', currency: 'VES', billable: 175000.5 } });
   const dialog = screen.getByRole('dialog');
   expect(within(dialog).getByLabelText('Total a financiar')).toHaveValue('175000,5');
   await user.click(within(dialog).getByRole('button', { name: 'Crear' }));

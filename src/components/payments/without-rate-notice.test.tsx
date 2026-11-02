@@ -5,7 +5,7 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { getExchangeRateSettings } from '@/lib/exchange/exchange-settings-api';
 import { WithoutRateNotice, withoutRateCopy } from './without-rate-notice';
 
-// DX-378: importe y día con el formato de la sede (fixture explícito es-CO).
+// DX-378: importe y día con el formato de la sede (fixture explícito es-VE).
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
   listLocations: jest.fn(),
@@ -156,7 +156,7 @@ describe('WithoutRateNotice (DX-375)', () => {
           {
             paymentId: 'p2',
             amount: 150000,
-            currency: 'COP',
+            currency: 'VES',
             paidOn: '2026-10-29',
           },
         ]}
@@ -165,7 +165,7 @@ describe('WithoutRateNotice (DX-375)', () => {
     await screen.findByRole('link', { name: withoutRateCopy.adminLink });
     const text = screen.getByRole('status').textContent ?? '';
     expect(text).toContain(withoutRateCopy.title(2));
-    expect(JSON.stringify(withoutRateCopy)).not.toMatch(/venezuela|colombia|españa|méxico|banco central|bcv|banrep/i);
-    expect(text).not.toMatch(/venezuela|colombia|españa|méxico|banco central|bcv|banrep/i);
+    expect(JSON.stringify(withoutRateCopy)).not.toMatch(/venezuela|colom[b]ia|españa|méxico|banco central|bcv|banrep/i);
+    expect(text).not.toMatch(/venezuela|colom[b]ia|españa|méxico|banco central|bcv|banrep/i);
   });
 });

@@ -21,7 +21,7 @@ function setup() {
       onOpenChange={onOpenChange}
       token="tok"
       patient={patient}
-      currencies={['COP', 'USD']}
+      currencies={['VES', 'USD']}
       onSaved={onSaved}
     />,
   );
@@ -81,14 +81,14 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
-  it('DX-241: COP admite céntimos como la API («150.000,50» → 150000,5)', async () => {
+  it('DX-241: VES admite céntimos como la API («150.000,50» → 150000,5)', async () => {
     mockedCreate.mockResolvedValue({ id: 'pp1' } as never);
     setup();
     await userEvent.type(screen.getByLabelText('Importe'), '150.000,50');
     await typeDate(inDays(1));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
-      expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', expect.objectContaining({ amount: 150000.5, currency: 'COP' })),
+      expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', expect.objectContaining({ amount: 150000.5, currency: 'VES' })),
     );
   });
 
@@ -105,13 +105,13 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     const { onSaved, onOpenChange } = setup();
     const due = inDays(7);
     await userEvent.type(screen.getByLabelText('Importe'), '200.000');
-    await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'COP');
+    await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'VES');
     await typeDate(due);
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', {
         amount: 200000,
-        currency: 'COP',
+        currency: 'VES',
         dueDate: due,
       }),
     );

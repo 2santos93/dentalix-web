@@ -11,7 +11,7 @@ import { E2E_BROWSER_LOCALE } from './support/regional';
  * e2e DX-415: aceptación del presupuesto a distancia.
  *
  *   1. La administradora de una clínica nueva (sembrada por la API: paciente
- *      con email y un plan COP «Presentado» con un procedimiento) abre la
+ *      con email y un plan USD «Presentado» con un procedimiento) abre la
  *      ficha → «Plan de tratamiento» a 1440 px → «Enviar a aceptar»: el modal
  *      muestra el destinatario enmascarado; al enviar, el estado «Enviado».
  *   2. La paciente abre el enlace del email a 390 px y sin sesión: pide el
@@ -75,7 +75,7 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
     });
     patientId = patient.id;
     const plan = await apiPost<{ id: string }>(request, admin, `/patients/${patient.id}/treatment-plans`, {
-      currency: 'COP',
+      currency: 'USD',
     });
     await apiPost(request, admin, `/treatment-plans/${plan.id}/items`, {
       toothNumber: '36',
@@ -104,7 +104,7 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
     expect(link, 'el test anterior no dejó el enlace').not.toBe('');
     const context = await browser.newContext({
       locale: E2E_BROWSER_LOCALE,
-      timezoneId: 'America/Bogota',
+      timezoneId: 'America/Caracas',
       viewport: { width: 390, height: 844 },
       hasTouch: true,
     });
@@ -125,7 +125,7 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
 
       const budget = page.getByRole('article', { name: 'Presupuesto y condiciones' });
       await expect(budget.getByRole('list', { name: 'Procedimientos del presupuesto' })).toContainText(PROCEDURE);
-      await expect(budget).toContainText('Total (COP)');
+      await expect(budget).toContainText('Total (USD)');
       await expect(budget).toContainText('Al firmar aceptas este presupuesto');
       await expectNoHorizontalScroll(page);
 

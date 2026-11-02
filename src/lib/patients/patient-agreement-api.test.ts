@@ -63,8 +63,8 @@ describe('patient-agreement-api', () => {
 
   it('pide el precio con prestación y moneda', async () => {
     const spy = mockFetch({ price: 100 });
-    await getPriceQuote('tok', 'p-1', { catalogItemId: 'c-1', currency: 'COP' });
+    await getPriceQuote('tok', 'p-1', { catalogItemId: 'c-1', currency: 'USD' });
     expect(call(spy).path).toMatch(/\/patients\/p-1\/price-quote$/);
-    expect(call(spy).search).toBe('?catalogItemId=c-1&currency=COP');
+    expect(call(spy).search).toBe('?catalogItemId=c-1&currency=USD');
   });
 });

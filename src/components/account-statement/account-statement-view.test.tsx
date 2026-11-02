@@ -53,7 +53,7 @@ const mockedBillable = listBillablePlans as jest.MockedFunction<typeof listBilla
 const mockedCreatePlan = createPaymentPlan as jest.MockedFunction<typeof createPaymentPlan>;
 const mockedPlanBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
 
-// Normaliza los espacios duros de Intl (es: "1.800.000,00 COP" lleva U+00A0).
+// Normaliza los espacios duros de Intl (es: "1.800.000,00 VES" lleva U+00A0).
 function money(text: string | null | undefined): string {
   return (text ?? '').replace(/\s/g, ' ');
 }
@@ -80,18 +80,18 @@ it('pide el estado de cuenta del paciente y pinta el resumen por moneda', async 
 
   expect(screen.getByRole('status', { name: /cargando/i })).toBeInTheDocument();
 
-  const cop = await screen.findByRole('region', { name: /resumen en COP/i });
+  const ves = await screen.findByRole('region', { name: /resumen en VES/i });
   expect(mockedGet).toHaveBeenCalledWith('tok', 'pat-1');
-  expect(money(within(cop).getByTestId('budgeted').textContent)).toContain('COP 3.000.000,00');
-  expect(money(within(cop).getByTestId('paid').textContent)).toContain('1.200.000');
-  expect(money(within(cop).getByTestId('balance').textContent)).toContain('COP 1.800.000,00');
+  expect(money(within(ves).getByTestId('budgeted').textContent)).toContain('VES 3.000.000,00');
+  expect(money(within(ves).getByTestId('paid').textContent)).toContain('1.200.000');
+  expect(money(within(ves).getByTestId('balance').textContent)).toContain('VES 1.800.000,00');
 
   // Vencido destacado: importe y número de cuotas, en tono de peligro.
-  const overdue = within(cop).getByTestId('overdue');
+  const overdue = within(ves).getByTestId('overdue');
   expect(money(overdue.textContent)).toContain('250.000');
   expect(overdue).toHaveTextContent(/1 cuota vencida/i);
   expect(overdue.className).toMatch(/danger/);
-  expect(within(cop).getByText(/próxima cuota/i).parentElement).toHaveTextContent('10/11/2026');
+  expect(within(ves).getByText(/próxima cuota/i).parentElement).toHaveTextContent('10/11/2026');
 
   // Saldo negativo = a favor del paciente; sin vencidas, sin tono de alerta.
   const usd = screen.getByRole('region', { name: /resumen en USD/i });
@@ -198,7 +198,7 @@ it('error de red: estado de error con reintento que vuelve a pedir', async () =>
   expect(alert).toHaveTextContent(/no pudimos cargar el estado de cuenta/i);
 
   await userEvent.click(within(alert).getByRole('button', { name: /reintentar/i }));
-  expect(await screen.findByRole('region', { name: /resumen en COP/i })).toBeInTheDocument();
+  expect(await screen.findByRole('region', { name: /resumen en VES/i })).toBeInTheDocument();
   expect(mockedGet).toHaveBeenCalledTimes(2);
 });
 
@@ -312,7 +312,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
   const billablePlan: BillablePlan = {
     id: 'plan-1',
     status: 'ACCEPTED',
-    currency: 'COP',
+    currency: 'VES',
     createdAt: '2026-08-01T15:00:00.000Z',
     total: 3000000,
     paid: 1200000,
@@ -324,7 +324,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
   it.each(['RECEPTION', 'ADMIN'])('%s ve «Registrar abono» y «Plan de cuotas»', async (role) => {
     mockedGet.mockResolvedValue(accountStatementFixture());
     render(<AccountStatementView token={tokenForRole(role)} patientId="pat-1" />);
-    await screen.findByRole('region', { name: /resumen en COP/i });
+    await screen.findByRole('region', { name: /resumen en VES/i });
     expect(screen.getByRole('button', { name: 'Registrar abono' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Plan de cuotas' })).toBeInTheDocument();
   });
@@ -332,7 +332,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
   it.each(['DENTIST', 'ASSISTANT'])('%s (sin permiso de pagos) no ve los botones de cobro', async (role) => {
     mockedGet.mockResolvedValue(accountStatementFixture());
     render(<AccountStatementView token={tokenForRole(role)} patientId="pat-1" />);
-    await screen.findByRole('region', { name: /resumen en COP/i });
+    await screen.findByRole('region', { name: /resumen en VES/i });
     expect(screen.queryByRole('button', { name: 'Registrar abono' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Plan de cuotas' })).not.toBeInTheDocument();
   });
@@ -340,7 +340,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
   it('sin rol legible tampoco, ni con un 403 del estado de cuenta', async () => {
     mockedGet.mockResolvedValue(accountStatementFixture());
     const { unmount } = render(<AccountStatementView token="tok" patientId="pat-1" />);
-    await screen.findByRole('region', { name: /resumen en COP/i });
+    await screen.findByRole('region', { name: /resumen en VES/i });
     expect(screen.queryByRole('button', { name: 'Registrar abono' })).not.toBeInTheDocument();
     unmount();
 
@@ -378,7 +378,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       openingBalanceId: null,
       patientId: 'pat-1',
       amount: 50000,
-      currency: 'COP',
+      currency: 'VES',
       paidAt: '2026-10-16T00:00:00.000Z',
       paidOn: '2026-10-16',
       method: null,
@@ -392,7 +392,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       createdAt: '2026-10-16T12:00:00.000Z',
       updatedAt: '2026-10-16T12:00:00.000Z',
       receiptNumber: 'PRI-000007',
-      exchangeRateCurrency: 'COP',
+      exchangeRateCurrency: 'VES',
       frozenRate: null,
       exchangeRateStatus: 'NOT_NEEDED',
       adjustments: [],
@@ -401,7 +401,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     const user = userEvent.setup();
     const onChanged = jest.fn();
     render(<AccountStatementView token={RECEPTION} patientId="pat-1" onChanged={onChanged} />);
-    await screen.findByRole('region', { name: /resumen en COP/i });
+    await screen.findByRole('region', { name: /resumen en VES/i });
 
     await user.click(screen.getByRole('button', { name: 'Registrar abono' }));
     const dialog = await screen.findByRole('dialog', {
@@ -416,11 +416,11 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     expect(mockedRecord).toHaveBeenCalledWith(
       RECEPTION,
       'plan-1',
-      expect.objectContaining({ amount: 50000, currency: 'COP' }),
+      expect.objectContaining({ amount: 50000, currency: 'VES' }),
       expect.any(String),
     );
     expect(money((await screen.findByText(/abono registrado/i)).textContent)).toMatch(
-      /COP 50\.000,00/,
+      /VES 50\.000,00/,
     );
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
     // DX-150: avisa a la ficha para releer la marca de saldo y la cobranza.
@@ -436,7 +436,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     mockedCreatePlan.mockResolvedValue({} as Awaited<ReturnType<typeof createPaymentPlan>>);
     const user = userEvent.setup();
     render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
-    await screen.findByRole('region', { name: /resumen en COP/i });
+    await screen.findByRole('region', { name: /resumen en VES/i });
 
     await user.click(screen.getByRole('button', { name: 'Plan de cuotas' }));
     const dialog = await screen.findByRole('dialog', {
@@ -489,12 +489,12 @@ it('DX-262: «Saldo migrado» con su fecha de corte («aprox.» si es la de impo
   expect(within(movements).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
   expect(rows[1]).toHaveTextContent('23/10/2026 (aprox.)');
 
-  const cop = screen.getByRole('region', { name: /resumen en COP/i });
+  const ves = screen.getByRole('region', { name: /resumen en VES/i });
   // QA D5: lo que queda del migrado tras el abono, no el importe original.
-  expect(within(cop).getByTestId('opening')).toHaveTextContent(/^Incluye saldo migrado pendiente:/);
-  expect(money(within(cop).getByTestId('opening').textContent)).toContain('150.000,50');
-  expect(money(within(cop).getByTestId('opening').textContent)).not.toContain('200.000,50');
-  expect(money(within(cop).getByTestId('balance').textContent)).toContain('150.000,50');
+  expect(within(ves).getByTestId('opening')).toHaveTextContent(/^Incluye saldo migrado pendiente:/);
+  expect(money(within(ves).getByTestId('opening').textContent)).toContain('150.000,50');
+  expect(money(within(ves).getByTestId('opening').textContent)).not.toContain('200.000,50');
+  expect(money(within(ves).getByTestId('balance').textContent)).toContain('150.000,50');
   // QA D3: hay una fila «aprox.», así que la nota lo explica.
   expect(screen.getByText(/«aprox\.»: el archivo no traía la fecha/)).toBeInTheDocument();
 });
@@ -510,13 +510,13 @@ it('QA D3: sin ninguna fila aproximada, la nota no habla de «aprox.»; QA D5: s
   await screen.findByRole('table', { name: 'Saldos migrados' });
   expect(screen.getByText(/^Deuda traída del programa anterior al importar los pacientes\.$/)).toBeInTheDocument();
   expect(screen.queryByText(/aprox\./)).not.toBeInTheDocument();
-  const cop = screen.getByRole('region', { name: /resumen en COP/i });
-  expect(within(cop).queryByTestId('opening')).not.toBeInTheDocument();
+  const ves = screen.getByRole('region', { name: /resumen en VES/i });
+  expect(within(ves).queryByTestId('opening')).not.toBeInTheDocument();
 });
 
 describe('cobrado por ítem de cada plan (DX-051)', () => {
   const planBalance = {
-    planCurrency: 'COP',
+    planCurrency: 'VES',
     billable: 3000000,
     paid: 1200000,
     balance: 1800000,

@@ -27,7 +27,7 @@ const mockedReplace = replacePriceListItems as jest.MockedFunction<typeof replac
 const list: PriceList = {
   id: 'pl-1',
   name: 'Surco 2026',
-  currency: 'COP',
+  currency: 'USD',
   locationId: null,
   active: true,
   itemCount: 1,
@@ -70,7 +70,7 @@ describe('PriceListItemsView (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedLists.mockResolvedValue([list]);
-    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-CO' })]);
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-VE' })]);
     mockedItems.mockResolvedValue(page([profilaxis, resina]));
     mockedReplace.mockResolvedValue({ upserted: 1, removed: 0 });
   });
@@ -79,7 +79,7 @@ describe('PriceListItemsView (DX-105)', () => {
     const user = setupUser();
     render_();
     expect(await screen.findByRole('heading', { name: 'Surco 2026' })).toBeInTheDocument();
-    expect(screen.getByText(/Precios en COP/)).toBeInTheDocument();
+    expect(screen.getByText(/Precios en USD/)).toBeInTheDocument();
     const table = await screen.findByRole('table', { name: 'Precios de la lista' });
     expect(
       within(table).getAllByRole('columnheader').map((h) => h.textContent),
@@ -94,8 +94,8 @@ describe('PriceListItemsView (DX-105)', () => {
     const rows = within(table).getAllByRole('row');
     expect(rows[1]).toHaveTextContent('PROF');
     expect(rows[1]).toHaveTextContent('Preventiva');
-    expect(rows[1]).toHaveTextContent(/COP\s80\.000,00/);
-    expect(rows[1]).toHaveTextContent(/COP\s60\.000,00/);
+    expect(rows[1]).toHaveTextContent(/USD\s80\.000,00/);
+    expect(rows[1]).toHaveTextContent(/USD\s60\.000,00/);
     expect(rows[2]).toHaveTextContent('Sin precio');
     expect(mockedItems).toHaveBeenCalledWith('tok', 'pl-1', { page: 1, pageSize: 20 });
     expect(screen.getByRole('link', { name: 'Listas de precios' })).toHaveAttribute(
@@ -224,7 +224,7 @@ describe('PriceListItemsView (DX-105)', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Quitar precio' }));
     expect(await within(dialog).findByText('No pudimos quitar el precio.')).toBeInTheDocument();
-    expect(within(table).getAllByRole('row', { hidden: true })[1]).toHaveTextContent(/COP\s60\.000,00/);
+    expect(within(table).getAllByRole('row', { hidden: true })[1]).toHaveTextContent(/USD\s60\.000,00/);
   });
 
   it('busca con debounce desde la página 1 y pagina', async () => {

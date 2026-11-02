@@ -8,32 +8,32 @@ export const expenseLocations: ClinicLocation[] = [
     id: 'loc-1',
     name: 'Sede principal',
     address: null,
-    country: 'CO',
+    country: 'VE',
     isActive: true,
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     createdAt: '2026-01-01T00:00:00.000Z',
   }),
   clinicLocation({
     id: 'loc-2',
     name: 'Sede norte',
     address: null,
-    country: 'CO',
+    country: 'VE',
     isActive: true,
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     createdAt: '2026-02-01T00:00:00.000Z',
   }),
 ];
 
-/** Un gasto pendiente de 150.000 COP en la sede principal. */
+/** Un gasto pendiente de 150.000 USD en la sede principal. */
 export function expenseFixture(overrides: Partial<Expense> = {}): Expense {
   return {
     id: 'exp-1',
     locationId: 'loc-1',
     category: 'Laboratorio',
-    supplier: 'Lab Dental SAS',
+    supplier: 'Lab Dental C.A.',
     description: 'Coronas de octubre',
     amount: 150_000,
-    currency: 'COP',
+    currency: 'USD',
     invoiceDate: '2026-10-20',
     dueDate: null,
     paidAmount: 0,
@@ -57,7 +57,7 @@ export function expensePaymentFixture(overrides: Partial<ExpensePayment> = {}): 
   return {
     id: 'pay-1',
     amount: 50_000,
-    currency: 'COP',
+    currency: 'USD',
     method: 'CASH',
     paidOn: '2026-10-21',
     cashSessionId: null,

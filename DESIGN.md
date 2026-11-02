@@ -355,10 +355,10 @@ an English keyboard:
 - Anything else (`1.50.0`, `1.500,000`, a trailing separator) is **ambiguous**: the form
   does not submit and the field says why, in Spanish, next to it (rung 4, `InlineError`
   via `FormField`, with `aria-invalid` + `aria-describedby`). Asking beats storing 100×.
-- Up to 2 decimals in **every** currency, COP and CLP included: the API and the database
-  store every amount with cents (`Decimal(…, 2)`), so a COP price or balance with cents
+- Up to 2 decimals in **every** currency, RSD and CLP included: the API and the database
+  store every amount with cents (`Decimal(…, 2)`), so an RSD price or balance with cents
   that pre-fills a field saves untouched. The server stays the authority on amounts.
-- An amount pasted as the app paints it (`1.500.000,50 US$`, `150.000,00 COP`, `150,50 €`,
+- An amount pasted as the app paints it (`1.500.000,50 US$`, `150.000,00 USD`, `150,50 €`,
   Intl's hard spaces included) reads the same; another currency's code does not.
 - Above the API's cap (9.999.999.999,99) the field says so instead of sending it.
 - Text input with `inputMode="decimal"`, never `type="number"` (it silently drops a

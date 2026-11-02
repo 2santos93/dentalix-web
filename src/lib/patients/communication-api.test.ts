@@ -45,12 +45,12 @@ describe('communication-api (DX-128)', () => {
       patientId: 'p1',
       contactChannel: 'WHATSAPP',
       clinicDefaultChannel: 'EMAIL',
-      phone: '+573101234567',
-      phoneE164: '+573101234567',
+      phone: '+584141234567',
+      phoneE164: '+584141234567',
       phoneStatus: 'VALID',
       phoneAmbiguous: false,
-      phoneInternational: '+57 310 1234567',
-      phoneCountry: 'CO',
+      phoneInternational: '+58 414 1234567',
+      phoneCountry: 'VE',
       email: 'a@x.co',
       whatsappOptIn: {
         at: '2026-10-17T10:00:00.000Z',
@@ -68,9 +68,9 @@ describe('communication-api (DX-128)', () => {
     };
     expect(withCommunication(patient, saved)).toEqual({
       ...patient,
-      phone: '+573101234567',
+      phone: '+584141234567',
       // DX-387: la cabecera y «Datos» pintan el formato internacional nuevo.
-      phoneInternational: '+57 310 1234567',
+      phoneInternational: '+58 414 1234567',
       contactChannel: 'WHATSAPP',
       whatsappOptInAt: '2026-10-17T10:00:00.000Z',
       whatsappOptInSource: 'IN_PERSON',

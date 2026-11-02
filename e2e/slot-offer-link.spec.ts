@@ -74,7 +74,7 @@ test.beforeAll(async ({ request }) => {
         docType: 'NATIONAL_ID',
         docNumber: `OFE${n}${suffix}`.slice(0, 20),
         sex: 'F',
-        phone: '3101234567',
+        phone: '4141234567',
       })
     ).id;
   const [gabi, ana, carla] = [await patient('Gabi', 1), await patient('Ana', 2), await patient('Carla', 3)];

@@ -34,10 +34,10 @@ export interface RegionalSettings {
 }
 
 export const E2E_REGION: RegionalSettings = {
-  country: 'CO',
-  currency: 'COP',
+  country: 'VE',
+  currency: 'USD',
   timeZone: SEDE_TZ,
-  locale: 'es-CO',
+  locale: 'es-VE',
   hourCycle: 'h23',
 };
 

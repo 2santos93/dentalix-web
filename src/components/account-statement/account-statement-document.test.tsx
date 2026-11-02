@@ -64,10 +64,10 @@ it('incluye resumen por moneda, planes, movimientos y cuotas — y ningún botó
   render(<AccountStatementDocument statement={accountStatementFixture()} />);
 
   const summary = screen.getByRole('table', { name: /resumen/i });
-  const copRow = within(summary).getByRole('row', { name: /COP/ });
-  expect(money(copRow.textContent)).toContain('1.800.000');
-  expect(money(copRow.textContent)).toContain('250.000');
-  expect(copRow).toHaveTextContent('10/11/2026');
+  const vesRow = within(summary).getByRole('row', { name: /VES/ });
+  expect(money(vesRow.textContent)).toContain('1.800.000');
+  expect(money(vesRow.textContent)).toContain('250.000');
+  expect(vesRow).toHaveTextContent('10/11/2026');
 
   expect(within(screen.getByRole('table', { name: /movimientos/i })).getAllByRole('row')).toHaveLength(4);
   expect(screen.getByRole('table', { name: /movimientos/i })).toHaveTextContent(/anulado/i);
@@ -103,9 +103,9 @@ it('DX-262: el documento lista el saldo migrado con su fecha de corte', () => {
   expect(table).toHaveTextContent('Ortodoncia 2025');
   expect(table).toHaveTextContent('23/10/2026 (aprox.)');
   expect(money(table.textContent)).toContain('150.000,50');
-  const copRow = within(screen.getByRole('table', { name: /resumen/i })).getByRole('row', { name: /COP/ });
+  const vesRow = within(screen.getByRole('table', { name: /resumen/i })).getByRole('row', { name: /VES/ });
   // El resumen dice que el saldo incluye el migrado (revisión M1).
-  expect(money(copRow.textContent)).toContain('200.000,50');
+  expect(money(vesRow.textContent)).toContain('200.000,50');
   expect(screen.getByText(/El saldo incluye el saldo migrado/)).toBeInTheDocument();
   const movements = screen.getByRole('table', { name: /movimientos/i });
   expect(movements).toHaveTextContent('Saldo migrado · Ortodoncia 2025');

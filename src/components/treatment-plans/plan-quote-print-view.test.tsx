@@ -18,7 +18,7 @@ jest.mock('../../lib/exchange/exchange-api', () => ({
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso', symbol: '$' },
+    { code: 'VES', name: 'Bolívar', symbol: 'Bs.' },
     { code: 'USD', name: 'Dólar', symbol: 'US$' },
   ]),
 }));
@@ -47,14 +47,14 @@ describe('PlanQuotePrintView (DX-012)', () => {
     mockedGet.mockReset();
     print.mockReset();
     window.print = print;
-    jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+    jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
     mockedRates.mockReset();
   });
 
   describe('DX-376: segunda moneda opcional', () => {
     it('sin elegir no pide tasas; al elegir una pinta su total con la tasa de hoy en la sede', async () => {
       mockedGet.mockResolvedValue(planQuoteFixture());
-      mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { COP: 4000 } });
+      mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 4000 } });
       renderView();
       await screen.findByTestId('quote-header');
       expect(mockedRates).not.toHaveBeenCalled();
@@ -74,7 +74,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
       await screen.findByTestId('quote-header');
       await screen.findByRole('option', { name: /Dólar/ });
       await userEvent.selectOptions(screen.getByLabelText('Segunda moneda (opcional)'), 'USD');
-      expect(await screen.findByText(/no hay tasa de COP para hoy/i)).toBeInTheDocument();
+      expect(await screen.findByText(/no hay tasa de VES para hoy/i)).toBeInTheDocument();
       expect(screen.queryByTestId('quote-second-total')).not.toBeInTheDocument();
     });
 
@@ -82,7 +82,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
       mockedGet.mockResolvedValue(planQuoteFixture());
       mockedRates
         .mockRejectedValueOnce(new Error('red'))
-        .mockResolvedValueOnce({ base: 'USD', source: 'AUTOMATIC', rates: { COP: 4000 } });
+        .mockResolvedValueOnce({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 4000 } });
       renderView();
       await screen.findByTestId('quote-header');
       await screen.findByRole('option', { name: /Dólar/ });
@@ -164,11 +164,11 @@ describe('PlanQuotePrintView (DX-012)', () => {
       });
     const flat = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
 
-    it('plan en EUR, sedes en COP: lo que se imprime lleva el precio de lista en COP y sin ahorro', async () => {
+    it('plan en EUR, sedes en VES: lo que se imprime lleva el precio de lista en VES y sin ahorro', async () => {
       mockedGet.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
-      expect(flat(table)).toContain('Precio de lista 80.000,00 COP');
+      expect(flat(table)).toContain('Precio de lista 80.000,00 VES');
       expect(flat(table)).not.toContain('80.000,00 EUR');
       expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
       expect(print).toHaveBeenCalledTimes(1);
@@ -182,7 +182,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
       await waitFor(() => expect(mockedGet).toHaveBeenCalled());
       expect(screen.queryByTestId('quote-header')).not.toBeInTheDocument();
       expect(print).not.toHaveBeenCalled();
-      resolveLocations([clinicLocation()]);
+      resolveLocations([clinicLocation({ currency: 'VES' })]);
       expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
       expect(print).toHaveBeenCalledTimes(1);
     });
@@ -192,16 +192,16 @@ describe('PlanQuotePrintView (DX-012)', () => {
       mockedGet.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
-      expect(flat(table)).toMatch(/Precio de lista 80\.000,00(?! (EUR|COP))/);
+      expect(flat(table)).toMatch(/Precio de lista 80\.000,00(?! (EUR|VES))/);
       expect(screen.getByTestId('quote-list-price-note')).toHaveTextContent(/puede estar en otra moneda/);
       expect(screen.getByTestId('quote-locations-error')).toHaveTextContent(/moneda de la sede/);
       expect(print).not.toHaveBeenCalled();
-      // Reintentar: con las sedes ya leídas, el precio de lista sale en COP y se imprime.
-      jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+      // Reintentar: con las sedes ya leídas, el precio de lista sale en VES y se imprime.
+      jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
       fireEvent.click(within(screen.getByTestId('quote-locations-error')).getByRole('button', { name: 'Reintentar' }));
       await waitFor(() =>
         expect(flat(screen.getByRole('table', { name: 'Procedimientos del presupuesto' }))).toContain(
-          'Precio de lista 80.000,00 COP',
+          'Precio de lista 80.000,00 VES',
         ),
       );
       expect(screen.queryByTestId('quote-locations-error')).not.toBeInTheDocument();

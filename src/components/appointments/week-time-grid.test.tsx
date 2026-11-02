@@ -43,6 +43,23 @@ it('renders 7 day headers Mon..Sun', () => {
   expect(headers[6]).toHaveAttribute('data-date', '2026-03-15');
 });
 
+it('DX-492: la tarjeta lleva el sillón cuando lo tiene, también en las de 15 min', () => {
+  const chair = { id: 'c1', name: 'Sillón 1', active: true };
+  render(
+    <WeekTimeGrid clock={CLOCK}
+      appointments={[
+        appointment({ id: 'a', chair }),
+        appointment({ id: 'b', chair, start: '2026-03-10T09:00:00.000Z', end: '2026-03-10T09:15:00.000Z' }),
+        appointment({ id: 'c', start: '2026-03-11T09:00:00.000Z', end: '2026-03-11T09:30:00.000Z' }),
+      ]}
+      weekStart={WEEK_START}
+      onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
+    />,
+  );
+  expect(screen.getAllByTestId('week-appointment-chair')).toHaveLength(2);
+  expect(screen.getAllByTestId('week-grid-appointment')[0]).toHaveAttribute('title', expect.stringContaining('Sillón 1'));
+});
+
 it('clicking a day header calls onSelectDay with its date', async () => {
   const onSelectDay = jest.fn();
   render(

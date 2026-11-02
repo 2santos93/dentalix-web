@@ -85,11 +85,11 @@ describe('MoneyInput (DX-241)', () => {
     expect(preview()).toBeEmptyDOMElement();
   });
 
-  it('en COP, miles y céntimos se leen como en el resto de monedas', async () => {
-    render(<Harness currency="COP" />);
+  it('en VES, miles y céntimos se leen como en el resto de monedas', async () => {
+    render(<Harness currency="VES" />);
     await type().type(screen.getByLabelText('Importe'), '150.000,50');
     act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
-    expect(preview()).toHaveTextContent(/^Se guardará: 150\.000,50\sCOP$/);
+    expect(preview()).toHaveTextContent(/^Se guardará: 150\.000,50\sVES$/);
   });
 
   it('sin moneda, el importe sin símbolo', () => {

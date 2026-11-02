@@ -34,12 +34,12 @@ function comms(over: Partial<PatientCommunication> = {}): PatientCommunication {
     patientId: 'p1',
     contactChannel: 'EMAIL',
     clinicDefaultChannel: 'EMAIL',
-    phone: '+573101234567',
-    phoneE164: '+573101234567',
+    phone: '+584141234567',
+    phoneE164: '+584141234567',
     phoneStatus: 'VALID',
     phoneAmbiguous: false,
-    phoneInternational: '+57 310 1234567',
-    phoneCountry: 'CO',
+    phoneInternational: '+58 414 1234567',
+    phoneCountry: 'VE',
     email: 'ana@example.com',
     whatsappOptIn: null,
     reminderOptOut: null,
@@ -86,7 +86,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(screen.getByRole('status', { name: 'Cargando comunicaciones' })).toBeInTheDocument();
 
     const section = screen.getByRole('region', { name: 'Comunicaciones' });
-    expect(await within(section).findByText('+57 310 1234567')).toBeInTheDocument();
+    expect(await within(section).findByText('+58 414 1234567')).toBeInTheDocument();
     expect(within(section).getByText('Canal de los recordatorios').nextSibling).toHaveTextContent(
       'WhatsApp',
     );
@@ -212,7 +212,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
     await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
     const dialog = await screen.findByRole('dialog', { name: 'Comunicaciones del paciente' });
     await user.selectOptions(within(dialog).getByLabelText('Canal de los recordatorios'), 'WHATSAPP');
-    await user.type(within(dialog).getByLabelText('Móvil'), '310 123 4567');
+    await user.type(within(dialog).getByLabelText('Móvil'), '414 123 4567');
     await user.click(
       within(dialog).getByLabelText('Acepta que la clínica le escriba por WhatsApp'),
     );
@@ -221,7 +221,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
 
     expect(mockedUpdate).toHaveBeenCalledWith('tok', 'p1', {
       contactChannel: 'WHATSAPP',
-      phone: '310 123 4567',
+      phone: '414 123 4567',
       whatsappOptIn: true,
       whatsappOptInSource: 'IN_PERSON',
     });
@@ -326,14 +326,14 @@ describe('PatientCommunicationSection (DX-128)', () => {
 
   it('avisa a la ficha del cambio guardado (el teléfono de «Datos» no se queda viejo)', async () => {
     mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneInternational: null, phoneStatus: 'MISSING' }));
-    const saved = comms({ phone: '+573101234567' });
+    const saved = comms({ phone: '+584141234567' });
     mockedUpdate.mockResolvedValue(saved);
     const onChanged = jest.fn();
     const user = setupUser();
     renderSection(true, onChanged);
     await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
     const dialog = await screen.findByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Móvil'), '310 123 4567');
+    await user.type(within(dialog).getByLabelText('Móvil'), '414 123 4567');
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(onChanged).toHaveBeenCalledWith(saved));
     expect(onChanged).toHaveBeenCalledTimes(1);
@@ -342,7 +342,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
   it('un adulto no muestra destinatario; un menor, que los avisos van a su responsable (DX-203)', async () => {
     mockedGet.mockResolvedValueOnce(comms());
     const { unmount } = renderSection();
-    expect(await screen.findByText('+57 310 1234567')).toBeInTheDocument();
+    expect(await screen.findByText('+58 414 1234567')).toBeInTheDocument();
     expect(screen.queryByText('Destinatario de los avisos')).not.toBeInTheDocument();
     unmount();
 

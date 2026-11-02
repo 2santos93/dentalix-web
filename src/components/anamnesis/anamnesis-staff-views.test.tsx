@@ -218,7 +218,7 @@ describe('Bloque de la ficha (DX-099)', () => {
       appointmentId: null,
       url: 'http://demo.localhost:3001/anamnesis/abc',
       expiresAt: '2026-10-30T15:00:00.000Z',
-      whatsapp: { phone: '573001234567', text: 'Hola' },
+      whatsapp: { phone: '584121234567', text: 'Hola' },
       whatsappUnavailableReason: null,
       consentRequired: false,
     });
@@ -230,7 +230,7 @@ describe('Bloque de la ficha (DX-099)', () => {
     expect(await screen.findByDisplayValue('http://demo.localhost:3001/anamnesis/abc')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Abrir WhatsApp/ })).toHaveAttribute(
       'href',
-      'https://wa.me/573001234567?text=Hola',
+      'https://wa.me/584121234567?text=Hola',
     );
     expect(onCreated).toHaveBeenCalled();
   });

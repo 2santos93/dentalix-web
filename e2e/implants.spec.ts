@@ -150,7 +150,7 @@ test('registrar desde el odontograma, imprimir la tarjeta y buscar por lote (144
   await expect(card).toContainText('021.5310');
   await expect(card).toContainText('RC-ABUT-4');
   // DX-325: la tarjeta no cita la norma de ningún país.
-  await expect(card).not.toContainText(/Res\.|Reglamento|RD \d|\(CO\)|\(ES\)/);
+  await expect(card).not.toContainText(/Res\.|Reglamento|RD \d|\(VE\)|\(ES\)/);
   await shoot(cardPage, 'implant-card');
   await cardPage.getByRole('button', { name: 'Imprimir y registrar la entrega' }).click();
   await expect(card).toContainText('Tarjeta entregada al paciente el');

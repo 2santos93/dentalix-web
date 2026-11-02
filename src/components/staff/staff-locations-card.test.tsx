@@ -26,9 +26,9 @@ function sede(id: string, name: string, isActive = true): ClinicLocation {
     id,
     name,
     address: null,
-    country: 'CO',
+    country: 'VE',
     isActive,
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     createdAt: '2026-01-01T00:00:00.000Z',
   });
 }

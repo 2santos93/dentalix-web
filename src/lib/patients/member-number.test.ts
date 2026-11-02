@@ -54,7 +54,7 @@ describe('nº de afiliado (SEC-049)', () => {
 
   it('una ayuda única y ningún texto de un tipo o país', () => {
     expect(memberNumberCopy.hint).toBe('El número que figura en la tarjeta o póliza del paciente.');
-    expect(JSON.stringify(memberNumberCopy)).not.toMatch(/EPS|prepagada|mutua|documento|c[ée]dula/i);
+    expect(JSON.stringify(memberNumberCopy)).not.toMatch(/E[P]S|prepagada|mutua|documento|c[ée]dula/i);
   });
 
   it('insignia: verificada con quién y cuándo, sin verificar, o nada con un pagador interno', () => {

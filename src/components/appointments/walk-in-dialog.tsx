@@ -28,6 +28,9 @@ import {
   type WalkInResult,
 } from '@/lib/appointments/walk-in';
 import { notifyInClinicChanged } from '@/lib/appointments/patient-flow';
+import { listAppointments } from '@/lib/appointments/appointments-api';
+import { listChairs, type Chair } from '@/lib/chairs/chairs-api';
+import { freeChairs } from '@/lib/chairs/chair-columns';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
@@ -78,6 +81,11 @@ export const walkInCopy = {
   providersError: 'No pudimos cargar los profesionales.',
   providerNeedsLocation: 'Elige primero la sede',
   noProviders: 'Nadie atiende en esta sede.',
+  // DX-492: solo se ofrecen los sillones libres ahora.
+  chair: 'Sillón (opcional)',
+  chairNone: 'Sin sillón',
+  chairHint: 'Solo salen los sillones libres ahora.',
+  allChairsBusy: 'Todos los sillones de la sede están ocupados ahora.',
   triage: 'Señales de triaje',
   triageHint: 'Marca lo que refiere el paciente.',
   note: 'Nota de triaje (opcional)',
@@ -180,6 +188,10 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
   const [locationsKey, setLocationsKey] = useState(0);
   const [pickedLocationId, setPickedLocationId] = useState('');
   const [providerId, setProviderId] = useState(defaultProviderId ?? '');
+  // La respuesta lleva su sede: con otra sede elegida no se ofrece ni envía nada de la anterior.
+  const [chairs, setChairs] = useState<{ locationId: string; any: boolean; free: Chair[] } | null>(null);
+  const [chairsKey, setChairsKey] = useState(0);
+  const [chairId, setChairId] = useState('');
   const [flags, setFlags] = useState<TriageFlag[]>([]);
   const [note, setNote] = useState('');
   const [overbook, setOverbook] = useState(false);
@@ -270,9 +282,41 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
   // Un profesional que no atiende en la sede (el de la columna, o tras
   // cambiar de sede) no cuenta como elegido.
   const selectedProviderId = providers.some((p) => p.userId === providerId) ? providerId : '';
+  const chairsHere = chairs?.locationId === effectiveLocationId ? chairs : null;
+  const selectedChairId = chairsHere?.free.some((c) => c.id === chairId) ? chairId : '';
   const typedQuery = query.trim();
   const searchShown = typedQuery.length >= 2;
   const searchAnswer = search?.query === typedQuery ? search : null;
+
+  useEffect(() => {
+    if (!open || !effectiveLocationId) return;
+    let cancelled = false;
+    const now = new Date();
+    // `GET /appointments` filtra por inicio: un día atrás cubre lo que sigue en curso.
+    const from = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const to = new Date(now.getTime() + 60 * 1000).toISOString();
+    Promise.all([
+      listChairs(token, effectiveLocationId),
+      // Sin la agenda se ofrecen todos: si choca, la API lo dice con el nombre.
+      listAppointments(token, { from, to, locationId: effectiveLocationId }).catch(() => []),
+    ]).then(
+      ([active, appointments]) => {
+        if (cancelled) return;
+        setChairs({
+          locationId: effectiveLocationId,
+          any: active.length > 0,
+          free: freeChairs(active, appointments, now),
+        });
+      },
+      // El sillón es opcional: sin la lista, la urgencia se atiende igual.
+      () => {
+        if (!cancelled) setChairs(null);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [open, token, effectiveLocationId, chairsKey]);
 
   const focusFirstInvalid = useCallback(() => {
     if (!focusFirstError.current) return;
@@ -321,6 +365,7 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
     }
     const input: CreateWalkInInput = {
       providerId: selectedProviderId,
+      ...(selectedChairId ? { chairId: selectedChairId } : {}),
       triageFlags: TRIAGE_FLAGS.filter((f) => flags.includes(f)),
       ...(note.trim() ? { triageNote: note.trim() } : {}),
       ...(overbook ? { overbookReason: reason.trim() } : {}),
@@ -365,6 +410,8 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
       } else {
         setError(apiErrorMessage(err, walkInCopy.error));
         setRetryable(err instanceof NetworkError || (err instanceof ApiError && err.status >= 500));
+        // El 409 del sillón dice cuál: la lista vuelve sin él.
+        if (err instanceof ApiError && err.status === 409) setChairsKey((k) => k + 1);
       }
     } finally {
       inFlight.current = false;
@@ -605,6 +652,27 @@ export function WalkInDialog({ open, onOpenChange, token, locationId, defaultPro
             </NativeSelect>
           )}
         </FormField>
+
+        {chairsHere?.any ? (
+          <FormField
+            htmlFor={id('chair')}
+            label={walkInCopy.chair}
+            hint={chairsHere.free.length > 0 ? walkInCopy.chairHint : walkInCopy.allChairsBusy}
+            hintId={id('chair-hint')}
+          >
+            <NativeSelect
+              id={id('chair')}
+              value={selectedChairId}
+              onChange={(e) => setChairId(e.target.value)}
+              aria-describedby={id('chair-hint')}
+            >
+              <option value="">{walkInCopy.chairNone}</option>
+              {chairsHere.free.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        ) : null}
 
         <fieldset className="flex min-w-0 flex-col gap-2">
           <legend className="text-sm font-medium text-ink">{walkInCopy.triage}</legend>

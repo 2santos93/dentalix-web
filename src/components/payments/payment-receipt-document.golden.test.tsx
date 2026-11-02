@@ -29,7 +29,7 @@ function fullReceipt(): PaymentReceipt {
           paymentId: 'pay-1',
           line: 1,
           amount: 100000,
-          currency: 'COP',
+          currency: 'VES',
           method: 'CASH',
           paymentMethodName: 'Efectivo',
           reference: null,
@@ -48,7 +48,7 @@ function fullReceipt(): PaymentReceipt {
           exchangeRate: null,
         },
       ],
-      total: { currency: 'COP', amount: 180000 },
+      total: { currency: 'VES', amount: 180000 },
     },
     snapshot: {
       ...base.snapshot,

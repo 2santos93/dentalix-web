@@ -39,9 +39,10 @@ const SEDE: ClinicLocation = clinicLocation({
   id: 'loc-1',
   name: 'Sede principal',
   address: null,
-  country: 'CO',
+  country: 'VE',
   isActive: true,
-  timeZone: 'America/Bogota',
+  currency: 'VES',
+  timeZone: 'America/Caracas',
   createdAt: '2026-01-01T00:00:00.000Z',
 });
 
@@ -67,7 +68,7 @@ describe('CancellationPolicySettings (DX-279)', () => {
     jest.clearAllMocks();
     mockedLocations.mockResolvedValue([SEDE]);
     mockedCurrencies.mockResolvedValue([
-      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+      { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
       { code: 'USD', name: 'Dólar', symbol: 'US$' },
     ]);
   });
@@ -86,8 +87,8 @@ describe('CancellationPolicySettings (DX-279)', () => {
     const user = userEvent.setup();
     mockedGet.mockResolvedValue({
       locationId: 'loc-1',
-      current: version(2, { noticeHours: 48, suggestedFee: 50000, currency: 'COP' }),
-      versions: [version(2, { noticeHours: 48, suggestedFee: 50000, currency: 'COP' }), version(1)],
+      current: version(2, { noticeHours: 48, suggestedFee: 50000, currency: 'VES' }),
+      versions: [version(2, { noticeHours: 48, suggestedFee: 50000, currency: 'VES' }), version(1)],
     });
     render(<CancellationPolicySettings token="tok" />);
     expect(await screen.findByTestId('policy-summary-loc-1')).toHaveTextContent('48 h de aviso · versión 2');
@@ -101,7 +102,7 @@ describe('CancellationPolicySettings (DX-279)', () => {
   it('guardar valida en el formulario y crea la versión siguiente', async () => {
     const user = userEvent.setup();
     mockedGet.mockResolvedValue({ locationId: 'loc-1', current: version(1), versions: [version(1)] });
-    mockedCreate.mockResolvedValue(version(2, { noticeHours: 12, suggestedFee: 30000, currency: 'COP' }));
+    mockedCreate.mockResolvedValue(version(2, { noticeHours: 12, suggestedFee: 30000, currency: 'VES' }));
     render(<CancellationPolicySettings token="tok" />);
     await user.click(await screen.findByRole('button', { name: 'Cambiar la política de Sede principal' }));
     const dialog = screen.getByRole('dialog', { name: 'Política de cancelación · Sede principal' });
@@ -127,7 +128,7 @@ describe('CancellationPolicySettings (DX-279)', () => {
     expect(mockedCreate).toHaveBeenCalledWith('tok', 'loc-1', {
       noticeHours: 12,
       suggestedFee: 30000,
-      currency: 'COP',
+      currency: 'VES',
       patientText: 'Avísanos',
       receptionCanCharge: true,
     });
@@ -201,7 +202,7 @@ describe('CancellationPolicySettings: moneda de la sede (GLOBAL-G1)', () => {
 
   it('JPY location shows JPY without decimals', async () => {
     const user = userEvent.setup();
-    // País CO a propósito: la moneda del importe sale de la sede.
+    // País VE a propósito: la moneda del importe sale de la sede.
     mockedLocations.mockResolvedValue([{ ...SEDE, currency: 'JPY', timeZone: 'Asia/Tokyo' }]);
     mockedCreate.mockResolvedValue(version(1, { suggestedFee: 3000, currency: 'JPY' }));
     render(<CancellationPolicySettings token="tok" />);
@@ -215,14 +216,14 @@ describe('CancellationPolicySettings: moneda de la sede (GLOBAL-G1)', () => {
     expect(await screen.findByText(/Importe sugerido: 3000\sJPY$/)).toBeInTheDocument();
   });
 
-  it('location without currency shows SedeConfigError and never COP', async () => {
+  it('location without currency shows SedeConfigError and never a currency of its country', async () => {
     const user = userEvent.setup();
-    mockedLocations.mockResolvedValue([{ ...SEDE, country: 'CO', currency: null }]);
+    mockedLocations.mockResolvedValue([{ ...SEDE, country: 'VE', currency: null }]);
     render(<CancellationPolicySettings token="tok" />);
     await user.click(await screen.findByRole('button', { name: 'Configurar la política de Sede principal' }));
     const dialog = screen.getByRole('dialog', { name: 'Política de cancelación · Sede principal' });
     expect(within(dialog).getByText('Sin moneda de sede')).toBeInTheDocument();
-    expect(within(dialog).queryByText(/COP/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/USD|VES/)).not.toBeInTheDocument();
 
     // Un importe sin moneda no se envía…
     await user.type(within(dialog).getByLabelText('Importe sugerido (opcional)'), '3000');

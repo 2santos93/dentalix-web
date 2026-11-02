@@ -57,8 +57,8 @@ const roster: Roster = {
   to: '2026-10-25',
   locationId: null,
   locations: [
-    { id: A, name: 'Sede A', timeZone: 'America/Bogota' },
-    { id: B, name: 'Sede B', timeZone: 'America/Bogota' },
+    { id: A, name: 'Sede A', timeZone: 'America/Caracas' },
+    { id: B, name: 'Sede B', timeZone: 'America/Caracas' },
   ],
   providers: [
     { providerId: 'dra-x', fullName: 'Dra. Ximena', role: 'DENTIST', configured: false, days: [] },
@@ -74,7 +74,7 @@ const configured: ProviderSchedule = {
     {
       locationId: A,
       locationName: 'Sede A',
-      timeZone: 'America/Bogota',
+      timeZone: 'America/Caracas',
       ranges: [{ weekday: 1, startMinute: 480, endMinute: 780 }],
     },
   ],
@@ -167,7 +167,7 @@ describe('ProviderSchedulesPanel', () => {
         {
           locationId: B,
           locationName: 'Sede B',
-          timeZone: 'America/Bogota',
+          timeZone: 'America/Caracas',
           ranges: [{ weekday: 1, startMinute: 600, endMinute: 900 }],
         },
       ],

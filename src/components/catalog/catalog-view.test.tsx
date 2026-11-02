@@ -40,9 +40,9 @@ function clinicIn(country: ClinicLocation['country']): ClinicLocation[] {
       address: null,
       country,
       isActive: true,
-      currency: country === 'ES' ? 'EUR' : 'COP',
-      timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Bogota',
-      locale: country === 'ES' ? 'es-ES' : 'es-CO',
+      currency: country === 'ES' ? 'EUR' : 'VES',
+      timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Caracas',
+      locale: country === 'ES' ? 'es-ES' : 'es-VE',
       createdAt: '2026-01-01T00:00:00Z',
     }),
   ];
@@ -98,7 +98,7 @@ describe('CatalogView', () => {
     mockedList.mockReset();
     mockedCreate.mockReset();
     mockedUpdate.mockReset();
-    mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
     // La sede activa vive en localStorage y persiste entre tests del mismo
     // fichero: sin limpiarla, el aviso de alcance se filtra a los demás casos.
     window.localStorage.clear();
@@ -303,9 +303,9 @@ describe('CatalogView', () => {
     expect(await screen.findByText('Profilaxis dental')).toBeInTheDocument();
   });
 
-  // Revisión DX-241: un precio de catálogo en COP con céntimos (la API lo
+  // Revisión DX-241: un precio de catálogo en VES con céntimos (la API lo
   // guarda en Decimal(12,2)) se edita sin tocar el precio y se guarda tal cual.
-  it('DX-241: editar un ítem con precio en COP con céntimos guarda sin tocar el precio', async () => {
+  it('DX-241: editar un ítem con precio en VES con céntimos guarda sin tocar el precio', async () => {
     const withCents = { ...item1, defaultPrice: 150000.5 };
     mockedList.mockResolvedValueOnce(page([withCents]));
     mockedUpdate.mockResolvedValue({ ...withCents, labelEs: 'Profilaxis dental' });
@@ -314,7 +314,7 @@ describe('CatalogView', () => {
     const user = setupUser();
     render(<CatalogView token="tok" />);
     await screen.findByRole('table', { name: /catálogo/i });
-    await waitFor(() => expect(screen.getByText('150.000,50 COP')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('150.000,50 VES')).toBeInTheDocument());
 
     const menu = await openRowMenu(user, /acciones de profilaxis/i);
     await user.click(within(menu).getByRole('menuitem', { name: /editar/i }));
@@ -578,12 +578,12 @@ describe('CatalogView', () => {
   });
 
   // DX-063 / FE-014: los precios iban siempre en USD («US$») aunque la clínica
-  // cobre en pesos.
-  it('formatea los precios en la moneda base de la clínica (COP en Colombia), no en USD', async () => {
+  // cobre en otra moneda.
+  it('formatea los precios en la moneda base de la clínica (USD en Venezuela), no en USD', async () => {
     mockedList.mockResolvedValue(page([item1]));
     render(<CatalogView token="tok" />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
-    await waitFor(() => expect(within(table).getByText('80.000,00 COP')).toBeInTheDocument());
+    await waitFor(() => expect(within(table).getByText('80.000,00 VES')).toBeInTheDocument());
     expect(within(table).queryByText(/US\$|USD/)).not.toBeInTheDocument();
   });
 
@@ -595,9 +595,9 @@ describe('CatalogView', () => {
     await waitFor(() => expect(within(table).getByText('80.000,00 EUR')).toBeInTheDocument());
   });
 
-  it('una clínica con sedes en Colombia y España pinta el importe sin moneda, elija la sede que elija', async () => {
+  it('una clínica con sedes en Venezuela y España pinta el importe sin moneda, elija la sede que elija', async () => {
     mockedLocations.mockResolvedValue([
-      ...clinicIn('CO'),
+      ...clinicIn('VE'),
       clinicLocation({
         id: 'l2',
         name: 'Madrid',
@@ -616,7 +616,7 @@ describe('CatalogView', () => {
     const table = await screen.findByRole('table', { name: /catálogo/i });
     await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
     await waitFor(() => expect(within(table).getByText('80.000,00')).toBeInTheDocument());
-    expect(within(table).queryByText(/€|EUR|COP|US\$|USD/)).not.toBeInTheDocument();
+    expect(within(table).queryByText(/€|EUR|VES|US\$|USD/)).not.toBeInTheDocument();
   });
 
   it('sin sedes cargadas pinta el importe sin moneda, nunca en USD', async () => {
@@ -629,18 +629,18 @@ describe('CatalogView', () => {
   });
 
   it('JPY location shows JPY without decimals', async () => {
-    // País CO a propósito: la moneda sale de la sede, nunca del país.
-    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'CO', currency: 'JPY' })]);
+    // País VE a propósito: la moneda sale de la sede, nunca del país.
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'VE', currency: 'JPY' })]);
     mockedList.mockResolvedValue(page([{ ...item1, defaultPrice: 8000 }]));
     render(<CatalogView token="tok" />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     await waitFor(() => expect(within(table).getByText(/^8000\sJPY$/)).toBeInTheDocument());
-    expect(within(table).queryByText(/COP|,00/)).not.toBeInTheDocument();
+    expect(within(table).queryByText(/VES|,00/)).not.toBeInTheDocument();
   });
 
-  it('location without currency shows SedeConfigError and never COP', async () => {
+  it('location without currency shows SedeConfigError and never VES', async () => {
     const user = setupUser();
-    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'CO', currency: null })]);
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'VE', currency: null })]);
     mockedList.mockResolvedValue(page([item1]));
     render(<CatalogView token="tok" />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
@@ -650,7 +650,7 @@ describe('CatalogView', () => {
       ),
     ).toBeInTheDocument();
     expect(within(table).getByText('80.000,00')).toBeInTheDocument();
-    expect(within(table).queryByText(/COP|US\$|USD/)).not.toBeInTheDocument();
+    expect(within(table).queryByText(/VES|US\$|USD/)).not.toBeInTheDocument();
 
     mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', currency: 'EUR' })]);
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
@@ -673,44 +673,44 @@ describe('CatalogView', () => {
 });
 
 // DX-320 (decisión D4): el catálogo se identifica por su código interno; no
-// hay código CUPS ni ningún «código externo» del procedimiento.
-describe('CatalogView · sin código CUPS (DX-320)', () => {
+// hay código de procedimiento ni ningún «código externo» del procedimiento.
+describe('CatalogView · sin código externo (DX-320)', () => {
   const admin = tokenFor('ADMIN', 'u-admin');
 
   beforeEach(() => {
     mockedList.mockReset().mockResolvedValue(page([item1]));
     mockedUpdate.mockReset().mockResolvedValue(item1);
     mockedCreate.mockReset().mockResolvedValue(item1);
-    mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
     (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([item1]);
     window.localStorage.clear();
   });
 
-  it('la tabla no tiene columna CUPS', async () => {
+  it('la tabla no tiene columna de código externo', async () => {
     render(<CatalogView token={admin} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
-    expect(within(table).queryByRole('columnheader', { name: /CUPS/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/CUPS/i)).not.toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: /CU[P]S/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/CU[P]S/i)).not.toBeInTheDocument();
   });
 
-  it('el formulario de edición no pide CUPS ni otro código externo, y no lo envía', async () => {
+  it('el formulario de edición no pide ningún código externo, y no lo envía', async () => {
     const user = setupUser();
     render(<CatalogView token={admin} initialItemId="c1" />);
     const dialog = await screen.findByRole('dialog', { name: 'Editar ítem' });
-    expect(within(dialog).queryByLabelText(/CUPS/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/CU[P]S/i)).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText(/código externo/i)).not.toBeInTheDocument();
-    expect(within(dialog).queryByText(/CUPS/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/CU[P]S/i)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('cupsCode');
   });
 
-  it('el alta no pide CUPS', async () => {
+  it('el alta no pide código externo', async () => {
     const user = setupUser();
     render(<CatalogView token={admin} />);
     await screen.findByRole('table', { name: /catálogo/i });
     await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
-    expect(screen.queryByLabelText(/CUPS/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/CU[P]S/i)).not.toBeInTheDocument();
   });
 });
 
@@ -721,7 +721,7 @@ describe('CatalogView · admite descuentos (DX-105)', () => {
     mockedList.mockReset().mockResolvedValue(page([item1]));
     mockedUpdate.mockReset().mockResolvedValue(item1);
     mockedCreate.mockReset().mockResolvedValue(item1);
-    mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
     (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([item1]);
     window.localStorage.clear();
   });

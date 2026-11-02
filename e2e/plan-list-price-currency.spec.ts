@@ -10,18 +10,18 @@ import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
 
 /**
- * e2e (DX-489): plan en EUR con el catálogo en COP.
+ * e2e (DX-489): plan en EUR con el catálogo en USD.
  *
- * Una clínica nueva con su única sede en COP (`E2E_REGION`): el catálogo (que
- * no lleva moneda) está en COP, la de sus sedes. La sede tiene una lista de
+ * Una clínica nueva con su única sede en USD (`E2E_REGION`): el catálogo (que
+ * no lleva moneda) está en USD, la de sus sedes. La sede tiene una lista de
  * precios activa en EUR, así que un ítem de un plan en EUR toma el precio de
  * esa lista (100,55 EUR) y guarda el de catálogo (80.000) como precio de lista.
  *
- *   - Pestaña del plan: el ítem dice «precio de lista COP 80.000,00», nunca
+ *   - Pestaña del plan: el ítem dice «precio de lista USD 80.000,00», nunca
  *     «EUR 80.000,00»; el total, «Pagado» y la lista de abonos pintan el
  *     mismo importe con UN formato (el de la sede, código ISO).
  *   - Presupuesto imprimible (pantalla, `media: print` y PDF): «Precio de
- *     lista 80.000,00 COP», la nota de que es el del catálogo y no se
+ *     lista 80.000,00 USD», la nota de que es el del catálogo y no se
  *     convierte, y sin «Ahorro por convenio».
  * En escritorio (1440 px) y en móvil (390 px, sin scroll horizontal).
  */
@@ -59,11 +59,11 @@ test.beforeAll(async ({ request }) => {
     email: admin.email,
     password,
   });
-  expect(E2E_REGION.currency).toBe('COP');
+  expect(E2E_REGION.currency).toBe('USD');
   const locations = await request.get(`${API_URL}/locations`, { headers: session.headers });
   expect(locations.ok()).toBeTruthy();
   const [location] = (await locations.json()) as { id: string; currency: string }[];
-  expect(location.currency).toBe('COP');
+  expect(location.currency).toBe('USD');
   const inSede = { ...session, headers: { ...session.headers, 'X-Location-Id': location.id } };
 
   const catalogItem = await apiPost<{ id: string }>(request, inSede, '/catalog/items', {
@@ -118,7 +118,7 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900 },
   { name: 'móvil', width: 390, height: 844 },
 ]) {
-  test(`plan en EUR con catálogo en COP: precio de lista en COP en la pestaña y en el presupuesto (${viewport.name})`, async ({
+  test(`plan en EUR con catálogo en USD: precio de lista en USD en la pestaña y en el presupuesto (${viewport.name})`, async ({
     page,
     context,
   }) => {
@@ -132,7 +132,7 @@ for (const viewport of [
     // --- Pestaña del plan.
     const origin489 = panel.getByText(/Lista de precios de la sede · precio de lista/).filter({ visible: true }).first();
     await expect(origin489).toBeVisible({ timeout: 10_000 });
-    await expect(origin489).toHaveText(`Lista de precios de la sede · precio de lista ${sede(CATALOG_PRICE, 'COP')}`);
+    await expect(origin489).toHaveText(`Lista de precios de la sede · precio de lista ${sede(CATALOG_PRICE, 'USD')}`);
     await expect(panel).not.toContainText(sede(CATALOG_PRICE, 'EUR'));
     await expect(panel).not.toContainText(printed(CATALOG_PRICE, 'EUR'));
 
@@ -158,8 +158,8 @@ for (const viewport of [
     ]);
     await printPage.setViewportSize({ width: viewport.width, height: viewport.height });
     await expect(printPage.getByTestId('quote-header')).toBeVisible({ timeout: 15_000 });
-    const listLine = `Precio de lista ${printed(CATALOG_PRICE, 'COP')}`;
-    const note = 'El precio de lista es el del catálogo de la clínica, en COP: es de referencia y no se convierte a EUR.';
+    const listLine = `Precio de lista ${printed(CATALOG_PRICE, 'USD')}`;
+    const note = 'El precio de lista es el del catálogo de la clínica, en USD: es de referencia y no se convierte a EUR.';
     // En pantalla estrecha, la ficha; en ancha, la tabla.
     const items = printPage.getByRole(viewport.width === 390 ? 'list' : 'table', {
       name: 'Procedimientos del presupuesto',

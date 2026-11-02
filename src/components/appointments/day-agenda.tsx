@@ -17,6 +17,7 @@ import { sedeTimeRange, type AgendaClock } from '@/lib/locations/sede-clock';
 import { AppointmentStatusSelect } from './appointment-status-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
+import { chairDisplayName } from '@/lib/chairs/chair-columns';
 import { statusOptionsFor } from '@/lib/appointments/patient-flow';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -287,6 +288,11 @@ export function DayAgenda({
                   {providerName && (
                     <td className="px-4 py-3 text-ink">
                       {providerName(appointment.providerId) ?? copy.reasonFallback}
+                      {appointment.chair ? (
+                        <span className="block text-xs text-muted" data-testid="day-agenda-chair">
+                          {chairDisplayName(appointment.chair)}
+                        </span>
+                      ) : null}
                     </td>
                   )}
                   <td className="px-4 py-3 text-muted">
@@ -348,7 +354,11 @@ export function DayAgenda({
                 />
               </p>
               <p className="mt-0.5 text-muted">
-                {[providerName?.(appointment.providerId), appointment.reason ?? copy.reasonFallback]
+                {[
+                  providerName?.(appointment.providerId),
+                  appointment.chair ? chairDisplayName(appointment.chair) : null,
+                  appointment.reason ?? copy.reasonFallback,
+                ]
                   .filter(Boolean)
                   .join(' · ')}
               </p>

@@ -47,11 +47,11 @@ describe("configChangeItems (DX-360)", () => {
       configChangeItems({
         reason: "PAYER_CREATED",
         configChange: {
-          after: { name: "Sanitas", type: "INSURER", active: true },
+          after: { name: "Sanavida", type: "INSURER", active: true },
         },
       }),
     ).toEqual([
-      { field: "name", label: "Nombre", kind: "added", value: "Sanitas" },
+      { field: "name", label: "Nombre", kind: "added", value: "Sanavida" },
       { field: "type", label: "Tipo", kind: "added", value: "Aseguradora" },
       { field: "active", label: "Activo", kind: "added", value: "Sí" },
     ]);

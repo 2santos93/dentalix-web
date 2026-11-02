@@ -58,6 +58,15 @@ describe('next-opening (DX-509-bis)', () => {
     });
   });
 
+  it('DX-509-ter: con sillón indicado, la búsqueda lo pide; sin él, no', async () => {
+    mocked.mockResolvedValue(openings([]));
+    const target = { start: '2026-11-11T15:10:00.000Z', end: '2026-11-11T15:40:00.000Z', providerId: 'p' };
+    await findNextOpening('tok', appointment, target, 'UTC', 'ch-1');
+    expect(mocked.mock.calls[0][1]).toMatchObject({ chairIds: ['ch-1'], excludeAppointmentId: 'apt-1' });
+    await findNextOpening('tok', appointment, target, 'UTC', null);
+    expect(mocked.mock.calls[1][1]).not.toHaveProperty('chairIds');
+  });
+
   it('un hueco que empieza antes pero sigue libre a la hora pedida vale desde esa hora; sin nada, null', async () => {
     mocked.mockResolvedValueOnce(openings([['2026-11-11T14:00:00.000Z', '2026-11-11T17:00:00.000Z']]));
     const target = { start: '2026-11-11T15:10:00.000Z', end: '2026-11-11T15:40:00.000Z', providerId: 'p' };

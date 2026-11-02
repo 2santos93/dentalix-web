@@ -31,8 +31,8 @@ const roster: Roster = {
   to: '2026-10-25',
   locationId: null,
   locations: [
-    { id: A, name: 'Sede A', timeZone: 'America/Bogota' },
-    { id: B, name: 'Sede B', timeZone: 'America/Bogota' },
+    { id: A, name: 'Sede A', timeZone: 'America/Caracas' },
+    { id: B, name: 'Sede B', timeZone: 'America/Caracas' },
   ],
   providers: [
     {

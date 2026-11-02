@@ -13,7 +13,7 @@ jest.mock('../../lib/payments/payments-api', () => ({
   getPlanBalance: jest.fn(),
 }));
 // DX-378: el aviso «sin tasa» pinta importe y día con el formato de la sede
-// (fixture explícito es-CO).
+// (fixture explícito es-VE).
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
   listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
@@ -28,8 +28,8 @@ jest.mock('../../lib/exchange/exchange-settings-api', () => ({
 const mockedBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
 const mockedSettings = jest.mocked(getExchangeRateSettings);
 
-/** DX-386: el formato de la sede del fixture (es-CO) y el código ISO, con el espacio normalizado. */
-const ES_CO = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+/** DX-386: el formato de la sede del fixture (es-VE) y el código ISO, con el espacio normalizado. */
+const ES_CO = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 function money(amount: number, currency: string): string {
   return moneyWithCode(amount, currency, ES_CO).replace(/\u00A0/g, ' ');
 }

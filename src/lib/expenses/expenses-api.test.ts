@@ -67,7 +67,7 @@ describe('expenses-api', () => {
   it('alta y pago con Idempotency-Key; edición y anulaciones con su cuerpo', async () => {
     const spy = mockFetch({});
     await getExpense('tok', 'exp 1');
-    await createExpense('tok', { category: 'Arriendo', amount: 10, currency: 'COP', invoiceDate: '2026-10-01' }, 'key-1');
+    await createExpense('tok', { category: 'Arriendo', amount: 10, currency: 'USD', invoiceDate: '2026-10-01' }, 'key-1');
     await updateExpense('tok', 'exp-1', { supplier: null });
     await voidExpense('tok', 'exp-1', 'Factura duplicada');
     await addExpensePayment('tok', 'exp-1', { amount: 5, method: 'CASH', fromCashSession: true }, 'key-2');
@@ -114,7 +114,7 @@ describe('expenses-api', () => {
 
   it('la salida de caja manda la sede de la caja en X-Location-Id', async () => {
     const spy = mockFetch({});
-    await createCashOutflow('tok', { category: 'Mensajería', amount: 8000, currency: 'COP' }, 'key-3', 'loc-2');
+    await createCashOutflow('tok', { category: 'Mensajería', amount: 8000, currency: 'USD' }, 'key-3', 'loc-2');
     expect(call(spy, 0)).toMatchObject({ method: 'POST', body: { category: 'Mensajería', amount: 8000 } });
     expect(call(spy, 0).path).toMatch(/\/cash-sessions\/current\/outflows$/);
     expect(call(spy, 0).headers).toMatchObject({ 'Idempotency-Key': 'key-3', 'X-Location-Id': 'loc-2' });

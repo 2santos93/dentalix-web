@@ -47,16 +47,16 @@ describe('reglas de descuento (DX-204)', () => {
     expect(needsReason(RULES, 1000, 0)).toBe(false);
   });
 
-  it('redondeo por moneda: COP sin decimales, EUR a céntimos, tope ítem a ítem', () => {
-    expect(digitsOf('COP')).toBe(0);
+  it('redondeo por moneda: RSD sin decimales, EUR a céntimos, tope ítem a ítem', () => {
+    expect(digitsOf('RSD')).toBe(0);
     expect(digitsOf('EUR')).toBe(2);
-    expect([85000, 123457, 99999].map((p) => discountForPercent(p, 7.5, digitsOf('COP'), 10))).toEqual([
+    expect([85000, 123457, 99999].map((p) => discountForPercent(p, 7.5, digitsOf('RSD'), 10))).toEqual([
       6375, 9259, 7500,
     ]);
     expect([85.55, 123.45, 0.99].map((p) => discountForPercent(p, 7.5, digitsOf('EUR'), 10))).toEqual([
       6.42, 9.26, 0.07,
     ]);
-    expect(discountForPercent(1005, 10, digitsOf('COP'), 10)).toBe(100);
+    expect(discountForPercent(1005, 10, digitsOf('RSD'), 10)).toBe(100);
     expect(discountForPercent(10.05, 10, digitsOf('EUR'), 10)).toBe(1);
   });
 
@@ -135,12 +135,12 @@ describe('decimales por moneda sin lista en la web (GLOBAL-G1 R7, DX-340)', () =
     expect('currencyDecimals' in discountRules).toBe(false);
   });
 
-  it('el redondeo vigente se conserva en las monedas de la paridad: RSD, COP y JPY a 0; EUR a 2', () => {
-    // La lista fija anterior (CLDR 47 ∪ COP, CLP, JPY, KRW, PYG) es ahora
+  it('el redondeo vigente se conserva en las monedas de la paridad: RSD, ALL y JPY a 0; EUR a 2', () => {
+    // La lista fija anterior (CLDR 47 ∪ CLP, JPY, KRW, PYG y otras con redondeo a la unidad) es ahora
     // `currencies.rounding_digits = 0` en la API; los vectores lo fijan para
     // las monedas de la paridad.
     expect(digitsOf('RSD')).toBe(0);
-    expect(digitsOf('COP')).toBe(0);
+    expect(digitsOf('ALL')).toBe(0);
     expect(digitsOf('JPY')).toBe(0);
     expect(digitsOf('EUR')).toBe(2);
     expect(discountForPercent(123.45, 7.5, digitsOf('RSD'), 100)).toBe(9);

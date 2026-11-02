@@ -13,7 +13,7 @@ function item(over: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem {
     presentedAt: '2026-10-10T00:00:00.000Z',
     presentedLocationId: 'l1',
     daysSincePresented: 10,
-    currency: 'COP',
+    currency: 'VES',
     total: 100,
     itemCount: 1,
     ...over,
@@ -39,13 +39,13 @@ describe('groupFollowUp (D2)', () => {
 describe('followUpAmount (D2)', () => {
   const money = (amount: number, currency: string) => `${currency} ${amount}`;
   it('una opción: su monto; varias: el rango; monedas distintas: cada una aparte', () => {
-    expect(followUpAmount([item()], money)).toBe(money(100, 'COP'));
+    expect(followUpAmount([item()], money)).toBe(money(100, 'VES'));
     expect(followUpAmount([item({ total: 300 }), item({ total: 100 })], money)).toBe(
-      `${money(100, 'COP')} – ${money(300, 'COP')}`,
+      `${money(100, 'VES')} – ${money(300, 'VES')}`,
     );
-    expect(followUpAmount([item({ total: 100 }), item({ total: 100 })], money)).toBe(money(100, 'COP'));
+    expect(followUpAmount([item({ total: 100 }), item({ total: 100 })], money)).toBe(money(100, 'VES'));
     expect(followUpAmount([item(), item({ currency: 'USD', total: 50 })], money)).toBe(
-      `${money(100, 'COP')} · ${money(50, 'USD')}`,
+      `${money(100, 'VES')} · ${money(50, 'USD')}`,
     );
   });
 });

@@ -69,6 +69,8 @@ export async function findOpenings(
     patientId?: string;
     /** DX-509-bis: la cita que se mueve no tapa su propia hora. */
     excludeAppointmentId?: string;
+    /** DX-492: solo huecos con alguno de estos sillones libre (cada uno dice cuál). */
+    chairIds?: readonly string[];
   },
 ): Promise<Openings> {
   const search = new URLSearchParams({
@@ -80,5 +82,6 @@ export async function findOpenings(
   });
   if (params.patientId) search.set('patientId', params.patientId);
   if (params.excludeAppointmentId) search.set('excludeAppointmentId', params.excludeAppointmentId);
+  for (const id of params.chairIds ?? []) search.append('chairIds', id);
   return apiFetch<Openings>(`/appointments/openings?${search.toString()}`, { token });
 }

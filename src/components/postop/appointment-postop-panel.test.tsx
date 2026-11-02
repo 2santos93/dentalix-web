@@ -37,8 +37,8 @@ function suggestions(overrides: Partial<PostOpSuggestions> = {}): PostOpSuggesti
     suggested: [EXTRACTION, WHITENING],
     others: [ENDO],
     email: { allowed: true, reason: null, toMasked: 'a***@correo.com', toResponsible: false },
-    whatsapp: { phone: '573105550101', reason: null },
-    locationPhone: '+57 601 555 0000',
+    whatsapp: { phone: '584145550101', reason: null },
+    locationPhone: '+58 212 555 0000',
     deliveries: [],
     ...overrides,
   };
@@ -214,7 +214,7 @@ describe('AppointmentPostOpPanel', () => {
           delivery: deliverySummary({ channel: 'WHATSAPP_LINK' }),
           publicUrl: 'http://demo.localhost:3001/indicaciones/tok_abc',
           whatsapp: {
-            phone: '573105550101',
+            phone: '584145550101',
             text: 'Hola Ana, aquí tienes tus indicaciones: http://demo.localhost:3001/indicaciones/tok_abc',
           },
         }),
@@ -231,7 +231,7 @@ describe('AppointmentPostOpPanel', () => {
       channel: 'WHATSAPP_LINK',
     });
     const href = win.location.href;
-    expect(href.startsWith('https://wa.me/573105550101?text=')).toBe(true);
+    expect(href.startsWith('https://wa.me/584145550101?text=')).toBe(true);
     const text = decodeURIComponent(href.split('?text=')[1]);
     expect(text).toContain('http://demo.localhost:3001/indicaciones/tok_abc');
     expect(text).not.toContain(EXTRACTION.title);
@@ -282,7 +282,7 @@ describe('AppointmentPostOpPanel', () => {
 
     // El reintento repite la misma entrega.
     mockedDeliver.mockResolvedValueOnce(
-      created({ whatsapp: { phone: '573105550101', text: 'Hola' } }),
+      created({ whatsapp: { phone: '584145550101', text: 'Hola' } }),
     );
     const [, opts] = (toast.error as jest.Mock).mock.calls[0];
     await act(async () => opts.action.onClick());

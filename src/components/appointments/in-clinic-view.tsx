@@ -50,7 +50,7 @@ export function InClinicView({ token }: { token: string }) {
       {walkInOpen ? (
         <WalkInDialog open onOpenChange={setWalkInOpen} token={token} locationId={locationId} />
       ) : null}
-      <InClinicPanel state={state} role={role} runner={runner} showTitle={false} className="max-w-3xl" />
+      <InClinicPanel state={state} role={role} runner={runner} showTitle={false} className="max-w-3xl" token={token} />
       {runner.overbookDialog}
     </div>
   );

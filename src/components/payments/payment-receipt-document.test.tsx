@@ -15,14 +15,14 @@ it('lleva el número, la clínica y la sede, el paciente enmascarado, el abono, 
   const doc = screen.getByTestId('receipt-document');
   expect(doc).toHaveTextContent('N.º NOR-000123');
   expect(doc).toHaveTextContent('Clínica Sonrisas');
-  expect(doc).toHaveTextContent('Sede Norte · Calle 100 # 15-20');
+  expect(doc).toHaveTextContent('Sede Norte · Av. Libertador 100');
   expect(doc).toHaveTextContent('Carolina Duque');
   expect(doc).toHaveTextContent('ID local ******5678');
-  expect(text(doc)).toContain('150.000,00 COP');
+  expect(text(doc)).toContain('150.000,00 USD');
   expect(doc).toHaveTextContent('Efectivo');
   expect(doc).toHaveTextContent('17/10/2026');
   expect(doc).toHaveTextContent('Opción A: implante');
-  expect(text(doc)).toContain('450.000,00 COP');
+  expect(text(doc)).toContain('450.000,00 USD');
   expect(doc).toHaveTextContent('Rita Recepción');
   expect(doc).toHaveTextContent('Este documento no es factura');
   expect(screen.queryByText(/anulado/i)).not.toBeInTheDocument();
@@ -45,18 +45,18 @@ it('con datos fiscales muestra razón social, identificación fiscal y direcció
           fiscalDataPending: false,
           clinic: {
             name: 'Clínica Sonrisas',
-            legalName: 'Sonrisas S.A.S.',
-            taxId: '900123456-7',
-            address: 'Cra 7 # 72-10, Bogotá',
+            legalName: 'Sonrisas C.A.',
+            taxId: 'J-12345678-9',
+            address: 'Av. Urdaneta 72, Caracas',
           },
         },
       }}
     />,
   );
   const doc = screen.getByTestId('receipt-document');
-  expect(doc).toHaveTextContent('Sonrisas S.A.S.');
-  expect(doc).toHaveTextContent('Id. fiscal 900123456-7');
-  expect(doc).toHaveTextContent('Cra 7 # 72-10, Bogotá');
+  expect(doc).toHaveTextContent('Sonrisas C.A.');
+  expect(doc).toHaveTextContent('Id. fiscal J-12345678-9');
+  expect(doc).toHaveTextContent('Av. Urdaneta 72, Caracas');
   expect(screen.queryByText('Datos fiscales pendientes')).not.toBeInTheDocument();
 });
 
@@ -291,19 +291,19 @@ describe('DX-390: cobro dividido', () => {
       <PaymentReceiptDocument
         receipt={paymentReceiptFixture({
           split: {
-            lines: [line(1, 50, 'USD', 200000), line(2, 100000, 'COP', 100000)],
-            total: { currency: 'COP', amount: 300000 },
+            lines: [line(1, 50, 'USD', 200000), line(2, 100000, 'VES', 100000)],
+            total: { currency: 'VES', amount: 300000 },
           },
         })}
       />,
     );
     const doc = screen.getByTestId('receipt-document');
-    expect(text(doc)).toContain('Total en COP');
-    expect(text(doc)).toContain('300.000,00 COP');
+    expect(text(doc)).toContain('Total en VES');
+    expect(text(doc)).toContain('300.000,00 VES');
     const lines = screen.getByTestId('receipt-split-lines');
     expect(lines.querySelectorAll('li')).toHaveLength(2);
     expect(text(lines)).toContain('Efectivo');
-    expect(text(lines)).toContain('equivale a 200.000,00 COP');
+    expect(text(lines)).toContain('equivale a 200.000,00 VES');
     expect(text(lines)).toContain('Pago móvil · Referencia PM-77');
     // El «Valor» de un abono suelto no sale.
     expect(screen.queryByText('Valor')).not.toBeInTheDocument();
@@ -314,8 +314,8 @@ describe('DX-390: cobro dividido', () => {
       <PaymentReceiptDocument
         receipt={paymentReceiptFixture({
           split: {
-            lines: [line(1, 50, 'USD', null), line(2, 100000, 'COP', 100000)],
-            total: { currency: 'COP', amount: null },
+            lines: [line(1, 50, 'USD', null), line(2, 100000, 'VES', 100000)],
+            total: { currency: 'VES', amount: null },
           },
         })}
       />,
@@ -471,20 +471,20 @@ describe('texto propio de cada moneda (DX-517)', () => {
     const receipt = paymentReceiptFixture();
     render(
       <PaymentReceiptDocument
-        receipt={{ ...receipt, snapshot: { ...receipt.snapshot, currencyTexts: { COP: 'Col$' } } }}
+        receipt={{ ...receipt, snapshot: { ...receipt.snapshot, currencyTexts: { USD: 'Dól.' } } }}
       />,
     );
     const doc = screen.getByTestId('receipt-document');
-    expect(text(doc)).toContain('150.000,00 Col$');
-    expect(text(doc)).toContain('450.000,00 Col$');
-    expect(text(doc)).not.toContain('COP');
+    expect(text(doc)).toContain('150.000,00 Dól.');
+    expect(text(doc)).toContain('450.000,00 Dól.');
+    expect(text(doc)).not.toContain('USD');
   });
 
   it('un recibo emitido sin textos se reimprime igual aunque la clínica los configure después', () => {
-    setClinicCurrencyTexts({ COP: 'Col$' });
+    setClinicCurrencyTexts({ USD: 'Dól.' });
     render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
     const doc = screen.getByTestId('receipt-document');
-    expect(text(doc)).toContain('150.000,00 COP');
-    expect(text(doc)).not.toContain('Col$');
+    expect(text(doc)).toContain('150.000,00 USD');
+    expect(text(doc)).not.toContain('Dól.');
   });
 });

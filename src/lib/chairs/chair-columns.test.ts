@@ -3,6 +3,7 @@ import {
   chairColumnOf,
   chairColumns,
   chairDisplayName,
+  freeChairs,
   moveChairInOrder,
   proposeProvider,
   readColumnsBy,
@@ -23,6 +24,31 @@ function chair(partial: Partial<Chair> & { id: string }): Chair {
     ...partial,
   };
 }
+
+describe('freeChairs (DX-492)', () => {
+  const NOW = new Date('2026-11-10T14:00:00.000Z');
+  const chair = (id: string, active = true) => ({ id, active }) as Chair;
+  const appt = (chairId: string | null, start: string, end: string, status = 'ARRIVED') => ({
+    chairId,
+    status,
+    start: `2026-11-10T${start}:00.000Z`,
+    end: `2026-11-10T${end}:00.000Z`,
+  });
+
+  it('quita los inactivos y los ocupados ahora; lo cancelado o ya terminado no ocupa', () => {
+    const free = freeChairs(
+      [chair('a'), chair('b'), chair('c'), chair('d'), chair('e', false)],
+      [
+        appt('a', '13:30', '14:30'),
+        appt('b', '13:30', '14:30', 'CANCELLED'),
+        appt('c', '13:00', '14:00'),
+        appt(null, '13:30', '14:30'),
+      ],
+      NOW,
+    );
+    expect(free.map((c) => c.id)).toEqual(['b', 'c', 'd']);
+  });
+});
 
 describe('columnas por sillón (DX-211)', () => {
   const chairs = [

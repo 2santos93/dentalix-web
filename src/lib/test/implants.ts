@@ -41,7 +41,7 @@ export function makeImplantCard(overrides: Partial<ImplantCard> = {}): ImplantCa
     patientDocument: 'Documento nacional DOC-0002',
     patientBirthDate: '1980-05-02',
     clinicName: 'Clínica Demo',
-    locations: [{ id: 'loc-1', name: 'Sede principal', address: 'Cra 7 # 72-10' }],
+    locations: [{ id: 'loc-1', name: 'Sede principal', address: 'Av. Urdaneta 72' }],
     placedOn: '2026-10-10',
     professionals: ['Dra. Laura Ruiz'],
     items: [
@@ -91,7 +91,7 @@ export function makeLotMatch(overrides: Partial<ImplantLotMatch> = {}): ImplantL
     patientId: 'p1',
     patientName: 'Lucía Gómez',
     patientDocument: 'Documento nacional DOC-0002',
-    phone: '+57 300 000 0001',
+    phone: '+58 412 000 0001',
     placedOn: '2026-10-10',
     toothNumber: '36',
     kind: 'IMPLANT',

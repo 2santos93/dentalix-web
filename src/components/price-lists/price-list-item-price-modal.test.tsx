@@ -21,7 +21,7 @@ const row: PriceListItemRow = {
   price: null,
 };
 
-function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'COP') {
+function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'USD') {
   const onSaved = jest.fn();
   const onOpenChange = jest.fn();
   render(
@@ -41,13 +41,13 @@ function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'COP') {
 describe('PriceListItemPriceModal (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-CO' })]);
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-VE' })]);
     mockedReplace.mockResolvedValue({ upserted: 1, removed: 0 });
   });
 
   it('nombra el procedimiento y su precio de catálogo, con el código y el formato de la sede (DX-522)', async () => {
     const { dialog } = setup();
-    expect(await within(dialog).findByText(/Profilaxis\. Precio de catálogo: COP\s80\.000,00/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/Profilaxis\. Precio de catálogo: USD\s80\.000,00/)).toBeInTheDocument();
   });
 
   it.each([

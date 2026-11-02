@@ -12,7 +12,7 @@ export function inspectFixture(overrides: Partial<ImportInspect> = {}): ImportIn
     delimiter: ';',
     headers: ['Documento', 'Nombre', 'Apellidos', 'Celular', 'Extra'],
     suggestedMapping: { docNumber: 'Documento', firstName: 'Nombre', lastName: 'Apellidos', phone: 'Celular' },
-    sampleRows: [['DEMO-0001', 'Ana', 'Pérez', '3101234567', 'x']],
+    sampleRows: [['DEMO-0001', 'Ana', 'Pérez', '4141234567', 'x']],
     totalRows: 3,
     fields: [
       { key: 'docType', label: 'Tipo de documento', required: false, header: 'tipo_documento' },
@@ -99,11 +99,11 @@ export function balancesFixture(
     preparedCount: 3,
     addToExisting: false,
     fileTotals: [
-      { currency: 'COP', rows: 4, amount: 201100.5 },
+      { currency: 'VES', rows: 4, amount: 201100.5 },
       { currency: 'USD', rows: 1, amount: 40 },
     ],
     validTotals: [
-      { currency: 'COP', rows: 3, amount: 201000.5 },
+      { currency: 'VES', rows: 3, amount: 201000.5 },
       { currency: 'USD', rows: 1, amount: 40 },
     ],
     imported: [],

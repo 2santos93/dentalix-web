@@ -21,14 +21,16 @@ export function canOfferNextOpening(appointment: { overbooked?: boolean | null }
 /**
  * DX-509-bis: el primer hueco libre del profesional destino, en la sede de la
  * cita, que empieza a la hora pedida o después y en el que cabe su duración
- * (con las otras citas del paciente; la propia no ocupa). `null` si no hay
- * ninguno en `NEXT_OPENING_DAYS` días.
+ * (con las otras citas del paciente; la propia no ocupa). Con `chairId`
+ * (DX-509-ter), además libre ese sillón. `null` si no hay ninguno en
+ * `NEXT_OPENING_DAYS` días.
  */
 export async function findNextOpening(
   token: string,
   appointment: { id: string; start: string; end: string; patientId: string; locationId: string },
   target: MoveTarget,
   timeZone: string,
+  chairId?: string | null,
 ): Promise<MoveTarget | null> {
   const duration = new Date(appointment.end).getTime() - new Date(appointment.start).getTime();
   const from = wallDay(target.start, timeZone);
@@ -40,6 +42,7 @@ export async function findNextOpening(
     durationMinutes: Math.round(duration / 60_000),
     patientId: appointment.patientId,
     excludeAppointmentId: appointment.id,
+    ...(chairId ? { chairIds: [chairId] } : {}),
   });
   const wanted = new Date(target.start).getTime();
   for (const opening of openings) {

@@ -14,9 +14,9 @@ jest.mock('./locations-api', () => ({ listLocations: jest.fn() }));
 const listLocationsMock = listLocations as jest.MockedFunction<typeof listLocations>;
 
 const sede = (id: string, timeZone: string | null): ClinicLocation =>
-  clinicLocation({ id, name: id, timeZone, country: timeZone === 'Europe/Madrid' ? 'ES' : 'CO' });
+  clinicLocation({ id, name: id, timeZone, country: timeZone === 'Europe/Madrid' ? 'ES' : 'VE' });
 
-const principal = sede('principal', 'America/Bogota');
+const principal = sede('principal', 'America/Caracas');
 const madrid = sede('madrid', 'Europe/Madrid');
 const tokyo = sede('tokyo', 'Asia/Tokyo');
 
@@ -35,7 +35,7 @@ describe('pickSedeTimeZone', () => {
     expect(pickSedeTimeZone([retirada, tokyo], null)).toBe('Asia/Tokyo');
   });
 
-  it('no zone gives error state, never America/Bogota', () => {
+  it('no zone gives error state, never America/Caracas', () => {
     expect(pickSedeTimeZone([], null)).toBeNull();
     expect(pickSedeTimeZone([sede('x', 'Mars/Olympus')], 'x')).toBeNull();
     expect(pickSedeTimeZone([sede('x', null), principal], 'x')).toBeNull();
@@ -46,7 +46,7 @@ describe('sedeToday', () => {
   const lateEvening = new Date('2026-10-15T22:30:00.000Z');
 
   it('hoy en la zona de la sede', () => {
-    expect(sedeToday('America/Bogota', lateEvening)).toBe('2026-10-15');
+    expect(sedeToday('America/Caracas', lateEvening)).toBe('2026-10-15');
     expect(sedeToday('Asia/Tokyo', lateEvening)).toBe('2026-10-16');
   });
 
@@ -71,12 +71,12 @@ describe('useSedeTimeZone', () => {
     expect(result.current).toEqual({ status: 'ready', timeZone: 'Europe/Madrid' });
   });
 
-  it('location with null timeZone gives error state, never Bogotá', async () => {
+  it('location with null timeZone gives error state, never Caracas', async () => {
     listLocationsMock.mockResolvedValue([sede('sin-zona', null)]);
     const { result } = renderHook(() => useSedeTimeZone('tok'));
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current).toMatchObject({ status: 'error', message: SEDE_TIME_ZONE_ERROR });
-    expect(JSON.stringify(result.current)).not.toContain('America/Bogota');
+    expect(JSON.stringify(result.current)).not.toContain('America/Caracas');
   });
 
   it('sin ninguna sede activa: el mensaje de la API («Crea una en Ajustes → Sedes»)', async () => {

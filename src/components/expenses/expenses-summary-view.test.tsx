@@ -32,11 +32,11 @@ function summary(rows: ExpenseSummary['rows']): ExpenseSummary {
   return { from: '2026-05-01', to: '2026-10-31', rows };
 }
 
-const copRow: ExpenseSummary['rows'][number] = {
+const vesRow: ExpenseSummary['rows'][number] = {
   month: '2026-10',
   locationId: 'loc-1',
   locationName: 'Sede principal',
-  currency: 'COP',
+  currency: 'VES',
   income: 5_000_000,
   categories: [
     { category: 'Arriendo', amount: 2_500_000 },
@@ -58,7 +58,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
   });
 
   beforeEach(() => {
-    mockedSummary.mockReset().mockResolvedValue(summary([copRow]));
+    mockedSummary.mockReset().mockResolvedValue(summary([vesRow]));
     mockedCsv.mockReset().mockResolvedValue('csv');
     (getActiveLocationId as jest.Mock).mockReturnValue(null);
     mockRequestLocations.mockReset().mockResolvedValue(expenseLocations);
@@ -77,7 +77,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
     });
     expect(within(row).getByText('Octubre de 2026')).toBeInTheDocument();
     expect(within(row).getByText('Sede principal')).toBeInTheDocument();
-    expect(within(row).getByText('COP')).toBeInTheDocument();
+    expect(within(row).getByText('VES')).toBeInTheDocument();
     expect(within(row).getByText(/5\.000\.000,00/)).toBeInTheDocument();
     expect(within(row).getByText(/1\.500\.000,00/)).toBeInTheDocument();
   });
@@ -139,9 +139,9 @@ describe('ExpensesSummaryView (DX-274)', () => {
   it('cada moneda va en su fila: nunca se suman, y un neto negativo se ve como tal', async () => {
     mockedSummary.mockResolvedValue(
       summary([
-        copRow,
+        vesRow,
         {
-          ...copRow,
+          ...vesRow,
           currency: 'USD',
           income: 100,
           categories: [],
@@ -154,7 +154,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
 
     const rows = await screen.findAllByTestId('summary-row');
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]).getByText('COP')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('VES')).toBeInTheDocument();
     expect(within(rows[1]).getByText('USD')).toBeInTheDocument();
     expect(within(rows[1]).getByText(/150,00/)).toHaveClass('text-danger-text');
     // Ningún importe es la suma de las dos monedas (5.000.100 / 1.349.850 / …).

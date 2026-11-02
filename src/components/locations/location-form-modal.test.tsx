@@ -10,6 +10,7 @@ import { clinicLocation } from '@/lib/test/locations';
 import { setupUser } from '@/lib/test/user';
 import { chooseCountry, chooseRegionalOption } from '@/lib/test/country';
 import { localeLabel, timeZoneLabel } from '@/lib/locations/regional-options';
+import { getClinicDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -17,6 +18,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
   createLocation: jest.fn(),
   updateLocationSettings: jest.fn(),
 }));
+jest.mock('../../lib/patients/document-type-names-api', () => ({ getClinicDocumentTypeNames: jest.fn() }));
 jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
 jest.mock('../../lib/locations/regional-settings', () => ({
   ...jest.requireActual('../../lib/locations/regional-settings'),
@@ -32,11 +34,18 @@ const mockedUpdate = jest.mocked(updateLocationSettings);
 const CURRENCIES = [
   { code: 'EUR', name: 'Euro', symbol: '€' },
   { code: 'JPY', name: 'Yen japonés', symbol: '¥' },
-  { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+  { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
 ];
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(getClinicDocumentTypeNames).mockResolvedValue({
+    NATIONAL_ID: null,
+    PASSPORT: null,
+    RESIDENCE_PERMIT: null,
+    TAX_ID: null,
+    OTHER: null,
+  });
   jest.mocked(listCurrencies).mockResolvedValue(CURRENCIES);
   // Un navegador en UTC y sin región explícita: ningún país sugerido (ni por
   // la zona, R1, ni por el idioma, DX-312 P1).
@@ -182,7 +191,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     jest.mocked(browserTimeZone).mockReturnValue('America/Caracas');
     jest.mocked(browserLocale).mockReturnValue('en-US');
     jest.mocked(browserHourCycle).mockReturnValue('h12');
-    jest.mocked(listCurrencies).mockResolvedValue([...CURRENCIES, { code: 'VES', name: 'Bolívar venezolano', symbol: 'Bs.' }, { code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]);
+    jest.mocked(listCurrencies).mockResolvedValue([...CURRENCIES, { code: 'VES', name: 'Bolívar venezolano', symbol: 'Bs.' }]);
     mockedCreate.mockResolvedValue(clinicLocation({ id: 'caracas' }));
     const { dialog, user } = setup();
     await currenciesLoaded(dialog);
@@ -213,7 +222,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     jest.mocked(browserTimeZone).mockReturnValue('America/Caracas');
     jest.mocked(browserLocale).mockReturnValue('es-VE');
     jest.mocked(browserHourCycle).mockReturnValue('h12');
-    jest.mocked(listCurrencies).mockResolvedValue([...CURRENCIES, { code: 'VES', name: 'Bolívar venezolano', symbol: 'Bs.' }, { code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]);
+    jest.mocked(listCurrencies).mockResolvedValue([...CURRENCIES, { code: 'VES', name: 'Bolívar venezolano', symbol: 'Bs.' }]);
     mockedCreate.mockResolvedValue(clinicLocation({ id: 'caracas' }));
     const { dialog, user } = setup();
     await currenciesLoaded(dialog);
@@ -320,12 +329,12 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       hourCycle: 'h12',
       regionalSettingsReviewedAt: null,
     });
-    mockedUpdate.mockResolvedValue(clinicLocation({ ...sede, locale: 'es-CO' }));
+    mockedUpdate.mockResolvedValue(clinicLocation({ ...sede, locale: 'es-VE' }));
     const { dialog, user } = setup(sede);
-    // Solo el campo vacío toma una sugerencia: la del país de la sede (CO), no
+    // Solo el campo vacío toma una sugerencia: la del país de la sede (VE), no
     // la del navegador (ja-JP); lo guardado se queda, sin marca.
     const locale = within(dialog).getByLabelText('Formato regional');
-    expect(locale).toHaveValue(localeLabel('es-CO'));
+    expect(locale).toHaveValue(localeLabel('es-VE'));
     expect(locale).toHaveAccessibleDescription(expect.stringContaining('Sugerido por el país.'));
     expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue(timeZoneLabel('Europe/Berlin'));
     expect(within(dialog).getByLabelText('Zona horaria')).not.toHaveAccessibleDescription(
@@ -337,7 +346,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     expect(mockedUpdate.mock.calls[0][2]).toMatchObject({
-      locale: 'es-CO',
+      locale: 'es-VE',
       hourCycle: 'h12',
       confirmRegionalSettings: true,
     });
@@ -433,11 +442,11 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
   it('choosing a country re-suggests the untouched currency and format, never what was chosen by hand', async () => {
     const { dialog, user } = setup();
     await currenciesLoaded(dialog);
-    await chooseCountry(user, within(dialog).getByLabelText('País'), 'CO');
-    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('COP');
-    expect(within(dialog).getByLabelText('Formato regional')).toHaveValue(localeLabel('es-CO'));
-    // CO tiene una sola zona y la del navegador (UTC) no es suya: se propone la del país.
-    expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue(timeZoneLabel('America/Bogota'));
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'VE');
+    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('USD');
+    expect(within(dialog).getByLabelText('Formato regional')).toHaveValue(localeLabel('es-VE'));
+    // VE tiene una sola zona y la del navegador (UTC) no es suya: se propone la del país.
+    expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue(timeZoneLabel('America/Caracas'));
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
     await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
     // La moneda elegida a mano se queda; el país ofrece la suya con «Usar EUR».
@@ -482,10 +491,10 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       name: 'Sede principal',
       address: 'Calle 1',
       phone: '+34 600 000 000',
-      country: 'CO',
-      currency: 'COP',
-      timeZone: 'America/Bogota',
-      locale: 'es-CO',
+      country: 'VE',
+      currency: 'USD',
+      timeZone: 'America/Caracas',
+      locale: 'es-VE',
       hourCycle: 'h12',
       confirmRegionalSettings: true,
     });
@@ -496,7 +505,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
   it('409 UNCONFIRMED opens ConfirmDialog and resends with confirmRegionalChange', async () => {
     const sede = clinicLocation();
     const message =
-      'La sede ya tiene movimientos en COP. Cambiar la moneda no convierte esos importes ni los de las listas de precios: confirma el cambio para continuar.';
+      'La sede ya tiene movimientos en USD. Cambiar la moneda no convierte esos importes ni los de las listas de precios: confirma el cambio para continuar.';
     mockedUpdate
       .mockRejectedValueOnce(
         new ApiError(409, message, { code: 'LOCATION_REGIONAL_CHANGE_UNCONFIRMED' }),
@@ -594,15 +603,15 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     const callout = within(dialog).getByTestId('regional-consequences');
     expect(callout).toHaveTextContent('Qué cambia al guardar');
     expect(callout).toHaveTextContent(
-      'Moneda: lo ya registrado en COP (cobros con su tasa de cambio, gastos, presupuestos y listas de precios) se queda en COP; no se convierte. Lo nuevo se registrará en EUR. La numeración de los recibos no cambia.',
+      'Moneda: lo ya registrado en USD (cobros con su tasa de cambio, gastos, presupuestos y listas de precios) se queda en USD; no se convierte. Lo nuevo se registrará en EUR. La numeración de los recibos no cambia.',
     );
-    await chooseRegionalOption(user, within(dialog).getByLabelText('Zona horaria'), 'America/Caracas');
+    await chooseRegionalOption(user, within(dialog).getByLabelText('Zona horaria'), 'Europe/Madrid');
     expect(callout).toHaveTextContent(/Zona horaria: las citas no se mueven, conservan su hora exacta\./);
-    expect(callout).toHaveTextContent(timeZoneLabel('America/Caracas'));
-    await chooseRegionalOption(user, within(dialog).getByLabelText('Formato regional'), 'es-VE');
-    expect(callout).toHaveTextContent(/Formato y reloj: solo cambia cómo se escriben fechas, números y horas \(Español \(Venezuela\), 12 h\)\. Ningún dato cambia\./);
+    expect(callout).toHaveTextContent(timeZoneLabel('Europe/Madrid'));
+    await chooseRegionalOption(user, within(dialog).getByLabelText('Formato regional'), 'es-ES');
+    expect(callout).toHaveTextContent(/Formato y reloj: solo cambia cómo se escriben fechas, números y horas \(Español \(España\), 12 h\)\. Ningún dato cambia\./);
     // Volver a lo guardado lo quita.
-    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'COP');
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'USD');
     expect(callout).not.toHaveTextContent('Moneda:');
   });
 
@@ -708,7 +717,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       const prefix = within(dialog).getByLabelText(PREFIX);
       expect(prefix).toHaveValue(phoneRegionLabel('ES'));
       expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
-      await chooseCountry(user, within(dialog).getByLabelText('País'), 'CO');
+      await chooseCountry(user, within(dialog).getByLabelText('País'), 'VE');
       expect(prefix).toHaveValue(phoneRegionLabel('ES'));
       expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
       await currenciesLoaded(dialog);
@@ -744,36 +753,36 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
 
     it("editing shows the stored prefix and changing the country proposes the new one only if it was the old country's", async () => {
       // La región era la del país: cambiar el país propone la del nuevo, marcada.
-      let view = setup(clinicLocation({ country: 'CO', defaultPhoneRegion: 'CO' }));
+      let view = setup(clinicLocation({ country: 'VE', defaultPhoneRegion: 'VE' }));
       let prefix = within(view.dialog).getByLabelText(PREFIX);
-      expect(prefix).toHaveValue(phoneRegionLabel('CO'));
+      expect(prefix).toHaveValue(phoneRegionLabel('VE'));
       expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
       await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
       expect(prefix).toHaveValue(phoneRegionLabel('ES'));
       expect(prefix).toHaveAccessibleDescription(`${PREFIX_SUGGESTED} ${PREFIX_HINT}`);
       // Volver al país guardado vuelve a lo guardado, sin marca.
-      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'CO');
-      expect(prefix).toHaveValue(phoneRegionLabel('CO'));
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'VE');
+      expect(prefix).toHaveValue(phoneRegionLabel('VE'));
       expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
       await currenciesLoaded(view.dialog);
 
       // La región no era la del país: no se toca.
       cleanup();
-      view = setup(clinicLocation({ country: 'CO', defaultPhoneRegion: 'VE' }));
+      view = setup(clinicLocation({ country: 'VE', defaultPhoneRegion: 'PT' }));
       prefix = within(view.dialog).getByLabelText(PREFIX);
       await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
-      expect(prefix).toHaveValue(phoneRegionLabel('VE'));
+      expect(prefix).toHaveValue(phoneRegionLabel('PT'));
       expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
       await currenciesLoaded(view.dialog);
 
       // Ni aunque el país cambie dos veces.
-      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'CO');
-      expect(prefix).toHaveValue(phoneRegionLabel('VE'));
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'VE');
+      expect(prefix).toHaveValue(phoneRegionLabel('PT'));
       expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
 
       // Sin prefijo guardado: tampoco.
       cleanup();
-      view = setup(clinicLocation({ country: 'CO', defaultPhoneRegion: null }));
+      view = setup(clinicLocation({ country: 'VE', defaultPhoneRegion: null }));
       prefix = within(view.dialog).getByLabelText(PREFIX);
       expect(prefix).toHaveValue(NO_PREFIX);
       await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
@@ -783,10 +792,10 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     });
 
     it('editing keeps the stored prefix when the country is cleared', async () => {
-      const sede = clinicLocation({ country: 'CO', defaultPhoneRegion: 'CO' });
+      const sede = clinicLocation({ country: 'VE', defaultPhoneRegion: 'VE' });
       // Sin país no se propone nada: queda lo guardado, no «Sin prefijo».
       expect(phoneRegionFollowsCountry(sede, '')).toBe(false);
-      expect(phoneRegionFollowsCountry(sede, 'CO')).toBe(false);
+      expect(phoneRegionFollowsCountry(sede, 'VE')).toBe(false);
       expect(phoneRegionFollowsCountry(sede, 'ES')).toBe(true);
       expect(phoneRegionFollowsCountry(null, '')).toBe(true);
       // El combobox no deja el país vacío: borrarlo y salir vuelve al último elegido, y el prefijo con él.
@@ -801,7 +810,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     });
 
     it('editing sends defaultPhoneRegion only when it changed', async () => {
-      const sede = clinicLocation({ country: 'CO', defaultPhoneRegion: 'CO' });
+      const sede = clinicLocation({ country: 'VE', defaultPhoneRegion: 'VE' });
       mockedUpdate.mockResolvedValue(sede);
       let view = setup(sede);
       await currenciesLoaded(view.dialog);
@@ -821,14 +830,14 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       cleanup();
       view = setup(sede);
       await currenciesLoaded(view.dialog);
-      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'VE');
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
       await view.user.click(within(view.dialog).getByRole('button', { name: 'Guardar sede' }));
       await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(3));
-      expect(mockedUpdate.mock.calls[2][2]).toMatchObject({ country: 'VE', defaultPhoneRegion: 'VE' });
+      expect(mockedUpdate.mock.calls[2][2]).toMatchObject({ country: 'ES', defaultPhoneRegion: 'ES' });
     });
 
     it('a location from an older API, without the prefix key, does not send null when the prefix is untouched (DX-329)', async () => {
-      const old: Partial<ClinicLocation> = { ...clinicLocation({ country: 'CO' }) };
+      const old: Partial<ClinicLocation> = { ...clinicLocation({ country: 'VE' }) };
       delete old.defaultPhoneRegion;
       const sede = old as ClinicLocation;
       mockedUpdate.mockResolvedValue(sede);
@@ -861,10 +870,97 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     });
 
     it('the prefix hint says how saved numbers are read and that they are not rewritten', async () => {
-      const { dialog } = setup(clinicLocation({ defaultPhoneRegion: 'CO' }));
+      const { dialog } = setup(clinicLocation({ defaultPhoneRegion: 'VE' }));
       expect(within(dialog).getByLabelText(PREFIX)).toHaveAccessibleDescription(PREFIX_HINT);
       expect(within(dialog).getByText(PREFIX_HINT)).toBeInTheDocument();
       await currenciesLoaded(dialog);
     });
+  });
+});
+
+describe('nombre de los documentos de la sede (DX-524)', () => {
+  const GROUP = 'Nombre de los documentos';
+  const field = (dialog: HTMLElement, label: string) => within(dialog).getByLabelText(label);
+  const names = (over: Partial<NonNullable<ClinicLocation['docTypeNames']>> = {}) => ({
+    NATIONAL_ID: null,
+    PASSPORT: null,
+    RESIDENCE_PERMIT: null,
+    TAX_ID: null,
+    OTHER: null,
+    ...over,
+  });
+
+  it('is only in the edit form, one field per type with what it inherits', async () => {
+    jest.mocked(getClinicDocumentTypeNames).mockResolvedValue(names({ NATIONAL_ID: 'Documento de la clínica' }));
+    const sede = clinicLocation({ docTypeNames: names({ PASSPORT: 'Pasaporte de la sede' }) });
+    const { dialog } = setup(sede);
+    await currenciesLoaded(dialog);
+    expect(within(dialog).getByRole('group', { name: GROUP })).toBeInTheDocument();
+    expect(field(dialog, 'Documento nacional')).toHaveValue('');
+    expect(field(dialog, 'Pasaporte')).toHaveValue('Pasaporte de la sede');
+    // Vacío = hereda: el de la clínica y, sin este, el genérico.
+    await waitFor(() =>
+      expect(field(dialog, 'Documento nacional')).toHaveAccessibleDescription('Vacío: se usa «Documento de la clínica».'),
+    );
+    expect(field(dialog, 'Identificación fiscal')).toHaveAccessibleDescription('Vacío: se usa «Identificación fiscal».');
+    for (const label of ['Documento nacional', 'Pasaporte', 'Permiso de residencia', 'Identificación fiscal', 'Otro documento']) {
+      expect(field(dialog, label)).toBeInTheDocument();
+    }
+  });
+
+  it('the create form does not have it', async () => {
+    const { dialog } = setup();
+    await currenciesLoaded(dialog);
+    expect(within(dialog).queryByRole('group', { name: GROUP })).not.toBeInTheDocument();
+    expect(getClinicDocumentTypeNames).not.toHaveBeenCalled();
+  });
+
+  it('sends only the names that changed; clearing a saved one sends null', async () => {
+    const sede = clinicLocation({ docTypeNames: names({ PASSPORT: 'Pasaporte de la sede', TAX_ID: 'RIF' }) });
+    mockedUpdate.mockResolvedValue(sede);
+    const { dialog, user } = setup(sede);
+    await currenciesLoaded(dialog);
+    await user.type(field(dialog, 'Documento nacional'), '  Cédula   de identidad ');
+    await user.clear(field(dialog, 'Pasaporte'));
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toMatchObject({
+      docTypeNames: { NATIONAL_ID: 'Cédula de identidad', PASSPORT: null },
+    });
+    expect(mockedUpdate.mock.calls[0][2].docTypeNames).not.toHaveProperty('TAX_ID');
+  });
+
+  it('without changes it sends no docTypeNames at all', async () => {
+    const sede = clinicLocation({ docTypeNames: names({ PASSPORT: 'Pasaporte de la sede' }) });
+    mockedUpdate.mockResolvedValue(sede);
+    const { dialog, user } = setup(sede);
+    await currenciesLoaded(dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('docTypeNames');
+  });
+
+  it('a name over 60 characters is refused next to its field, with focus, without saving', async () => {
+    const sede = clinicLocation();
+    const { dialog, user } = setup(sede);
+    await currenciesLoaded(dialog);
+    await user.type(field(dialog, 'Otro documento'), 'a'.repeat(61));
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    expect(field(dialog, 'Otro documento')).toHaveAccessibleDescription('Hasta 60 caracteres.');
+    expect(field(dialog, 'Otro documento')).toHaveFocus();
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('an older API without the field shows empty names and sends nothing', async () => {
+    const old: Partial<ClinicLocation> = { ...clinicLocation() };
+    delete old.docTypeNames;
+    const sede = old as ClinicLocation;
+    mockedUpdate.mockResolvedValue(sede);
+    const { dialog, user } = setup(sede);
+    await currenciesLoaded(dialog);
+    expect(field(dialog, 'Documento nacional')).toHaveValue('');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('docTypeNames');
   });
 });

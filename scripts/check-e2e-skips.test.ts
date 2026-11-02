@@ -164,10 +164,10 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
 
   describe('flaky (DX-292, TST-033): pasaron solo al reintentar', () => {
     it('uno o dos se nombran (fichero:línea y título) y no ponen rojo', () => {
-      const res = run(report([ok('crea una cita'), flaky('guarda el REPS'), flaky('valida el código')]));
+      const res = run(report([ok('crea una cita'), flaky('guarda el código'), flaky('valida el código')]));
       expect(res.code).toBe(0);
       expect(res.out).toContain('2 flaky');
-      expect(res.out).toContain('e2e/clinical-codes.spec.ts:7 «guarda el REPS»');
+      expect(res.out).toContain('e2e/clinical-codes.spec.ts:7 «guarda el código»');
       expect(res.out).toContain('e2e/clinical-codes.spec.ts:7 «valida el código»');
     });
 
@@ -180,7 +180,7 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
     });
 
     it('en GitHub Actions cada flaky es un aviso anotado en el fichero', () => {
-      const res = run(report([flaky('guarda el REPS')]), { GITHUB_ACTIONS: 'true' });
+      const res = run(report([flaky('guarda el código')]), { GITHUB_ACTIONS: 'true' });
       expect(res.code).toBe(0);
       expect(res.out).toContain('::warning file=e2e/clinical-codes.spec.ts,line=7,title=Test flaky::');
     });
@@ -191,7 +191,7 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
       const res = runWithSummary(
         report([
           ok('crea una cita'),
-          flaky('guarda el REPS'),
+          flaky('guarda el código'),
           { file: 'settings-index.spec.ts', title: 'Mi perfil mide 44 px', status: 'unexpected' },
           { file: 'patient-flow.spec.ts', title: 'llegó', status: 'skipped', annotations: [{ type: 'skip', description: 'Motivo' }] },
         ]),
@@ -199,7 +199,7 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
       expect(res.code).toBe(1);
       expect(res.summary).toContain('4 tests');
       expect(res.summary).toMatch(/1 passed · 1 failed · 1 flaky · 1 skipped/);
-      expect(res.summary).toContain('`e2e/clinical-codes.spec.ts:7` «guarda el REPS»');
+      expect(res.summary).toContain('`e2e/clinical-codes.spec.ts:7` «guarda el código»');
       expect(res.summary).toContain('`e2e/settings-index.spec.ts:7` «Mi perfil mide 44 px»');
       expect(res.summary).toContain('`e2e/patient-flow.spec.ts:7` «llegó» — Motivo');
     });

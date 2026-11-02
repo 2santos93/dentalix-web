@@ -209,7 +209,7 @@ test('the suite browser, in a zone of a single country, suggests that country', 
   // La zona de la suite (playwright.config.ts) es de un solo país: R1 lo propone, marcado y editable.
   await page.goto(`${tenantOrigin(`pais-zona-${suffix}`)}/register`);
   await waitForHydratedForm(page);
-  await expect(countryField(page)).toHaveValue('Colombia');
+  await expect(countryField(page)).toHaveValue('Venezuela');
   await expect(countryField(page)).toHaveAccessibleDescription(new RegExp(`^${SUGGESTED}`));
 });
 

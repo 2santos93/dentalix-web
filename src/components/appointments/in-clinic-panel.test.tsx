@@ -42,10 +42,12 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
     patientLastName: 'Ríos',
     providerId: 'dent-1',
     providerName: 'Dra. Lina',
-    start: '2026-10-19T14:00:00.000Z',
-    end: '2026-10-19T14:30:00.000Z',
+    chairId: null,
+    chair: null,
+    start: '2026-10-19T13:00:00.000Z',
+    end: '2026-10-19T13:30:00.000Z',
     status: 'ARRIVED',
-    arrivedAt: '2026-10-19T13:50:00.000Z',
+    arrivedAt: '2026-10-19T12:50:00.000Z',
     seatedAt: null,
     readyForCheckoutAt: null,
     minutesInStatus: 12,
@@ -72,10 +74,10 @@ function view(overrides: Partial<InClinicView> = {}): InClinicView {
   return {
     date: '2026-10-19',
     locationId: 'loc-1',
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     locale: 'de-DE',
     hourCycle: 'h23',
-    now: '2026-10-19T14:02:00.000Z',
+    now: '2026-10-19T13:02:00.000Z',
     scope: 'LOCATION',
     waiting: [],
     inChair: [],
@@ -101,6 +103,46 @@ function staticState(overrides: Partial<InClinicState>): InClinicState {
 }
 const noRunner = { pendingId: null, run: jest.fn() };
 
+describe('InClinicPanel: sillón y «Mover a…» (DX-492)', () => {
+  const chair = { id: 'ch-1', name: 'Sillón 1', active: true };
+  const seated = item({ appointmentId: 'a1', chairId: 'ch-1', chair });
+
+  it('muestra el sillón de quien lo tiene y nada de quien no', () => {
+    render(
+      <InClinicPanel
+        state={staticState({ view: view({ waiting: [seated, item({ appointmentId: 'a2' })] }) })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const chairs = screen.getAllByTestId('in-clinic-chair');
+    expect(chairs).toHaveLength(1);
+    expect(chairs[0]).toHaveTextContent('Sillón 1');
+  });
+
+  it('un sillón desactivado se dice', () => {
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({ waiting: [{ ...seated, chair: { ...chair, active: false } }] }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    expect(screen.getByTestId('in-clinic-chair')).toHaveTextContent('Sillón 1 (inactivo)');
+  });
+
+  it('«Mover a…» solo con sesión', () => {
+    const state = staticState({ view: view({ waiting: [seated] }) });
+    const name = /Mover a… la cita de Ana Ríos/;
+    const { rerender } = render(<InClinicPanel state={state} role="RECEPTION" runner={noRunner} />);
+    expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    rerender(<InClinicPanel state={state} role="RECEPTION" runner={noRunner} token="T" />);
+    expect(screen.getByRole('button', { name })).toBeInTheDocument();
+  });
+});
+
 describe('InClinicPanel (DX-200)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -117,7 +159,7 @@ describe('InClinicPanel (DX-200)', () => {
             patientFirstName: 'Berta',
             punctuality: 'LATE',
             minutesInStatus: 4,
-            arrivedAt: '2026-10-19T14:03:00.000Z',
+            arrivedAt: '2026-10-19T13:03:00.000Z',
           }),
         ],
         inChair: [item({ appointmentId: 'a3', status: 'IN_CHAIR', punctuality: 'VERY_LATE', minutesInStatus: 2 })],
@@ -156,9 +198,9 @@ describe('InClinicPanel (DX-200)', () => {
                 walkIn: true,
                 punctuality: 'LATE',
                 minutesInStatus: 3,
-                arrivedAt: '2026-10-19T14:03:00.000Z',
+                arrivedAt: '2026-10-19T13:03:00.000Z',
               }),
-              item({ appointmentId: 'n1', patientFirstName: 'Berta', punctuality: 'LATE', arrivedAt: '2026-10-19T14:03:00.000Z' }),
+              item({ appointmentId: 'n1', patientFirstName: 'Berta', punctuality: 'LATE', arrivedAt: '2026-10-19T13:03:00.000Z' }),
             ],
           }),
         })}

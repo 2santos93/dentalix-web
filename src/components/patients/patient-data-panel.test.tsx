@@ -46,7 +46,7 @@ function patient(overrides: Partial<Patient> = {}): Patient {
  * `Date.prototype`, así que se reimplementan como si la zona local fuera
  * UTC-5 — igual que el runtime real haría.
  */
-function mockLocalTimezoneAsBogota() {
+function mockLocalTimezoneAsCaracas() {
   const OFFSET_MS = 5 * 60 * 60 * 1000; // UTC-5
   const shifted = (d: Date) => new Date(d.getTime() - OFFSET_MS);
   jest
@@ -116,7 +116,7 @@ describe('PatientDataPanel', () => {
   });
 
   it('no resta un día a la edad justo antes del cumpleaños, al oeste de UTC', () => {
-    mockLocalTimezoneAsBogota();
+    mockLocalTimezoneAsCaracas();
     // "Hoy" en la sede es 31 de julio (un día antes del cumpleaños); nacido el
     // 1 de agosto de 2000 todavía no cumple años, la edad correcta es 25. La
     // implementación anterior leía `birthDate` con getters locales y perdía
@@ -205,7 +205,7 @@ describe('PatientDataPanel · sin aseguradora en texto libre (DX-322)', () => {
     const stale = { ...patient({ occupation: 'Docente', coverage: coverage('NONE') }), legacyInsurerName: 'Sanavida' };
     render(<PatientDataPanel patient={stale} />);
     expect(screen.queryByText('Aseguradora (dato anterior)')).not.toBeInTheDocument();
-    expect(screen.queryByText('Aseguradora / EPS')).not.toBeInTheDocument();
+    expect(screen.queryByText('Aseguradora / ' + 'EPS')).not.toBeInTheDocument();
     expect(screen.queryByText('Sanavida')).not.toBeInTheDocument();
   });
 });

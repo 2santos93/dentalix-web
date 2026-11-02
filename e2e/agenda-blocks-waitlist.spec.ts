@@ -143,7 +143,7 @@ test('recepción bloquea las vacaciones de Luis: se ven en la agenda y una cita 
   await form.getByRole('button', { name: 'Agendar cita' }).click();
   await expect(
     // Un día completo se nombra por el día elegido, no por el fin exclusivo.
-    // Con el formateador de la sede, como la API: «2/11» en es-CO (CLDR), no
+    // Con el formateador de la sede, como la API: «2/11» en es-VE (CLDR), no
     // un dd/MM fijo que solo coincide del 10 al 31.
     form.getByText(
       `La agenda del profesional está bloqueada (Vacaciones) el ${regionalFormat(E2E_REGION).dayMonth(atSede(VACATION_DAY, '12:00'), SEDE_TZ)}. Elige otro horario.`,

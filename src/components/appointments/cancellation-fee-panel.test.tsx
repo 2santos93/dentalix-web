@@ -40,7 +40,7 @@ function view(over: Partial<CancellationFeeView> = {}): CancellationFeeView {
     chargeBlock: null,
     chargeBlockMessage: null,
     canManage: true,
-    communicated: { policyVersionId: 'v1', version: 1, noticeHours: 24, suggestedFee: 50000, currency: 'COP' },
+    communicated: { policyVersionId: 'v1', version: 1, noticeHours: 24, suggestedFee: 50000, currency: 'VES' },
     fee: null,
     ...over,
   };
@@ -54,7 +54,7 @@ const charged = view({
     id: 'f-1',
     status: 'CHARGED',
     amount: 40000,
-    currency: 'COP',
+    currency: 'VES',
     planId: 'plan-1',
     planItemId: 'i-1',
     planItemRemoved: false,

@@ -141,7 +141,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
     render(<LocationsList token={ADMIN} canEdit />);
     const row = (await screen.findByText('Sede Antigua')).closest('li')!;
     expect(within(row).getAllByText('Por configurar').length).toBeGreaterThan(0);
-    expect(row).not.toHaveTextContent(/COP|America\/Bogota|es-CO|Bogotá/);
+    expect(row).not.toHaveTextContent(/USD|America\/Caracas|es-VE|Caracas/);
 
     await user.click(within(row).getByRole('button', { name: 'Revisar Sede Antigua' }));
     const dialog = await screen.findByRole('dialog', { name: 'Editar sede' });

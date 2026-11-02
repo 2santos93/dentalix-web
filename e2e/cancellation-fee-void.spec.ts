@@ -62,7 +62,7 @@ test.beforeAll(async ({ request }) => {
     await apiPost<{ id: string }>(request, session, `/locations/${principal}/cancellation-policy`, {
       noticeHours: 24,
       suggestedFee: 50000,
-      currency: 'COP',
+      currency: 'USD',
       patientText: 'Avísanos con un día de antelación.',
     })
   ).id;

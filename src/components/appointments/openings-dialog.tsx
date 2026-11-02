@@ -35,6 +35,7 @@ import { sedeTime, sedeTimeRange, type SedeClock } from '@/lib/locations/sede-cl
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { addCivilDays, wallDay } from '@/lib/time/wall-clock';
 import { endSentence } from '@/lib/format/text';
+import { listChairs, type Chair } from '@/lib/chairs/chairs-api';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -42,6 +43,10 @@ const copy = {
   description: (minutes: number) =>
     `Huecos de ${minutes} min dentro del horario de la sede y del profesional en ella, sin chocar con otras citas y fuera de cualquier bloqueo (también los que dejan agendar, como el almuerzo).`,
   provider: 'Profesional',
+  // DX-492: filtra los huecos por sillón y agenda en el libre.
+  chair: 'Sillón',
+  chairNone: 'Sin sillón',
+  chairAny: 'Cualquier sillón libre',
   from: 'Desde',
   to: 'Hasta',
   search: 'Buscar',
@@ -60,6 +65,10 @@ const copy = {
     `${name} ya no está en pendientes: alguien lo agendó o lo descartó.`,
   pickProvider: 'Elige un profesional.',
 };
+
+const ANY_CHAIR = 'any';
+/** Sillones que acepta «Buscar hueco» de una vez. */
+const MAX_OPENING_CHAIRS = 12;
 
 /** Días que se buscan por defecto: dos semanas. */
 const DEFAULT_SPAN_DAYS = 13;
@@ -118,7 +127,14 @@ export function OpeningsDialog({
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(() => addCivilDays(today, DEFAULT_SPAN_DAYS));
   // Lo que se busca: cambia al pulsar «Buscar» (no en cada tecla).
-  const [query, setQuery] = useState({ providerId, from, to });
+  const [query, setQuery] = useState<{ providerId: string; from: string; to: string; chairIds?: string[] }>({
+    providerId,
+    from,
+    to,
+  });
+  // Opcional: sin sillones (o sin poder leerlos) se busca como siempre.
+  const [chairs, setChairs] = useState<Chair[]>([]);
+  const [chairChoice, setChairChoice] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [openings, setOpenings] = useState<Opening[]>([]);
   const [truncated, setTruncated] = useState(false);
@@ -127,6 +143,19 @@ export function OpeningsDialog({
   const [bookingStart, setBookingStart] = useState<string | null>(null);
   const [bookError, setBookError] = useState<string | null>(null);
   const name = waitlistPatientName(entry);
+
+  useEffect(() => {
+    let cancelled = false;
+    listChairs(token, entry.locationId).then(
+      (data) => {
+        if (!cancelled) setChairs(data);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [token, entry.locationId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +174,7 @@ export function OpeningsDialog({
           to: query.to,
           durationMinutes: entry.durationMinutes,
           patientId: entry.patientId,
+          chairIds: query.chairIds,
         });
         if (cancelled) return;
         setOpenings(result.openings);
@@ -167,7 +197,13 @@ export function OpeningsDialog({
     setBookError(null);
     // Una fecha escrita a medias no se busca: se queda la búsqueda anterior.
     if (!isCivilDay(from) || !isCivilDay(to)) return;
-    setQuery({ providerId, from, to });
+    const chairIds =
+      chairChoice === ANY_CHAIR
+        ? chairs.slice(0, MAX_OPENING_CHAIRS).map((c) => c.id)
+        : chairChoice
+          ? [chairChoice]
+          : undefined;
+    setQuery({ providerId, from, to, chairIds });
   }
 
   async function book(opening: Opening) {
@@ -177,6 +213,7 @@ export function OpeningsDialog({
       const created = await scheduleFromWaitlist(token, entry.id, {
         providerId: query.providerId,
         start: opening.start,
+        ...(opening.chair ? { chairId: opening.chair.id } : {}),
       });
       const when = `${civilDateLabel(wallDay(created.start, clock.timeZone), { weekday: 'short', day: 'numeric', month: 'short' })} ${sedeTimeRange(created.start, created.end, clock)}`;
       toast.success(copy.scheduled(name, when));
@@ -209,6 +246,19 @@ export function OpeningsDialog({
         </DialogHeader>
 
         <form onSubmit={search} noValidate className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+          {chairs.length > 0 ? (
+            <FormField htmlFor="openings-chair" label={copy.chair} className="sm:col-span-full">
+              <NativeSelect id="openings-chair" value={chairChoice} onChange={(e) => setChairChoice(e.target.value)}>
+                <option value="">{copy.chairNone}</option>
+                <option value={ANY_CHAIR}>{copy.chairAny}</option>
+                {chairs.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          ) : null}
           <FormField htmlFor="openings-provider" label={copy.provider}>
             <NativeSelect
               id="openings-provider"
@@ -273,12 +323,17 @@ export function OpeningsDialog({
                   <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border bg-surface">
                     {group.openings.map((opening) => (
                       <li
-                        key={opening.start}
+                        key={`${opening.start}-${opening.chair?.id ?? ''}`}
                         data-testid="opening"
                         className="flex min-h-11 items-center justify-between gap-3 px-3 py-1.5"
                       >
-                        <span className="text-sm font-medium tabular-nums text-ink">
+                        <span className="flex min-w-0 flex-col text-sm font-medium tabular-nums text-ink sm:flex-row sm:items-baseline sm:gap-2">
                           {sedeTimeRange(opening.start, opening.end, clock)}
+                          {opening.chair ? (
+                            <span data-testid="opening-chair" className="truncate text-xs font-normal text-muted">
+                              {opening.chair.name}
+                            </span>
+                          ) : null}
                         </span>
                         <Button
                           type="button"

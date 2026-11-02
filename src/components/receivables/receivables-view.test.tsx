@@ -42,13 +42,13 @@ const BUCKETS = { current: 0, days0to30: 0, days31to60: 0, days61to90: 0, over90
 
 function row(overrides: Partial<AgingRow> = {}): AgingRow {
   return {
-    patient: { id: 'pat-1', fullName: 'Ana Pérez', phone: '300 111 2222', whatsApp: '573001112222' },
+    patient: { id: 'pat-1', fullName: 'Ana Pérez', phone: '412 111 2222', whatsApp: '584121112222' },
     locationId: 'loc-1',
     oldestAgeDays: 120,
     ageApproximate: true,
     currencies: [
       {
-        currency: 'COP',
+        currency: 'VES',
         balance: 480000,
         debt: 500000,
         credit: 20000,
@@ -58,7 +58,7 @@ function row(overrides: Partial<AgingRow> = {}): AgingRow {
         nextInstallment: null,
       },
     ],
-    lastPayment: { paidOn: '2026-09-30', amount: 50000, currency: 'COP' },
+    lastPayment: { paidOn: '2026-09-30', amount: 50000, currency: 'VES' },
     nextInstallment: null,
     lastNote: null,
     promise: null,
@@ -77,7 +77,7 @@ function page(items: AgingRow[], overrides: Partial<ReceivablesAgingPage> = {}):
     totals: items.length
       ? [
           {
-            currency: 'COP',
+            currency: 'VES',
             patients: items.length,
             balance: 480000,
             debt: 500000,
@@ -131,9 +131,9 @@ describe('ReceivablesView (DX-145)', () => {
     expect(money(tableRow.textContent)).toContain('500.000,00');
     expect(money(tableRow.textContent)).toContain('A favor: 20.000,00');
     expect(within(tableRow).getByText('30/09/2026')).toBeInTheDocument();
-    expect(within(tableRow).getByRole('link', { name: 'Llamar a Ana Pérez: 300 111 2222' })).toHaveAttribute(
+    expect(within(tableRow).getByRole('link', { name: 'Llamar a Ana Pérez: 412 111 2222' })).toHaveAttribute(
       'href',
-      'tel:3001112222',
+      'tel:4121112222',
     );
     // Toda la fila abre el estado de cuenta (un enlace por fila, el del nombre).
     expect(within(tableRow).getByRole('link', { name: /^Ana Pérez/ })).toHaveAttribute(
@@ -143,7 +143,7 @@ describe('ReceivablesView (DX-145)', () => {
     const whatsapp = within(tableRow).getByRole('link', { name: 'WhatsApp a Ana Pérez' });
     await waitFor(() => expect(whatsapp.getAttribute('href')).toContain('Cl%C3%ADnica%20Demo'));
     // Sin importes en el mensaje.
-    expect(decodeURIComponent(whatsapp.getAttribute('href') ?? '')).not.toMatch(/\d{3}\.|COP|\$/);
+    expect(decodeURIComponent(whatsapp.getAttribute('href') ?? '')).not.toMatch(/\d{3}\.|VES|\$/);
 
     expect(screen.getByTestId('scope-marker')).toHaveTextContent('Sede principal');
     expect(screen.getByText('1 deudor')).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe('ReceivablesView (DX-145)', () => {
   it('resume los totales por tramo y moneda', async () => {
     mockedAging.mockResolvedValue(page([row()]));
     render(<ReceivablesView token="tok" />);
-    const summary = await screen.findByTestId('aging-total-COP');
+    const summary = await screen.findByTestId('aging-total-VES');
     expect(money(summary.textContent)).toContain('1 deudor');
     expect(within(summary).getByText('Más de 90 días')).toBeInTheDocument();
     expect(money(summary.textContent)).toContain('Saldo a favor 20.000,00');
@@ -178,9 +178,9 @@ describe('ReceivablesView (DX-145)', () => {
     await waitFor(() => expect(mockedAging).toHaveBeenLastCalledWith('tok', { minBalance: 100000, page: 1 }));
     expect(screen.getByRole('button', { name: 'Más filtros (1)' })).toBeInTheDocument();
     await user.keyboard('{Escape}');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Moneda' }), 'COP');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Moneda' }), 'VES');
     await waitFor(() =>
-      expect(mockedAging).toHaveBeenLastCalledWith('tok', { currency: 'COP', minBalance: 100000, page: 1 }),
+      expect(mockedAging).toHaveBeenLastCalledWith('tok', { currency: 'VES', minBalance: 100000, page: 1 }),
     );
   });
 
@@ -292,7 +292,7 @@ describe('ReceivablesView (DX-145)', () => {
         page([
           row({
             lastNote: { channel: 'CALL', outcome: 'PROMISED_PAYMENT', createdAt: '2026-10-16T15:00:00.000Z' },
-            promise: { id: 'pp1', amount: 200000, currency: 'COP', dueDate: '2026-11-15', status: 'KEPT', reopenedAt: null },
+            promise: { id: 'pp1', amount: 200000, currency: 'VES', dueDate: '2026-11-15', status: 'KEPT', reopenedAt: null },
           }),
         ]),
       );
@@ -312,7 +312,7 @@ describe('ReceivablesView (DX-145)', () => {
             promise: {
               id: 'pp1',
               amount: 200000,
-              currency: 'COP',
+              currency: 'VES',
               dueDate: '2026-11-15',
               status: 'OPEN',
               reopenedAt: '2026-10-17T15:00:00.000Z',
@@ -334,7 +334,7 @@ describe('ReceivablesView (DX-145)', () => {
             promise: {
               id: 'pp1',
               amount: 200000,
-              currency: 'COP',
+              currency: 'VES',
               dueDate: '2026-11-15',
               status: 'KEPT',
               reopenedAt: '2026-10-17T15:00:00.000Z',
@@ -366,7 +366,7 @@ describe('ReceivablesView (DX-145)', () => {
 
     it('con un compromiso abierto no ofrece otro', async () => {
       mockedAging.mockResolvedValue(
-        page([row({ promise: { id: 'pp1', amount: 1, currency: 'COP', dueDate: '2026-11-15', status: 'OPEN', reopenedAt: null } })]),
+        page([row({ promise: { id: 'pp1', amount: 1, currency: 'VES', dueDate: '2026-11-15', status: 'OPEN', reopenedAt: null } })]),
       );
       render(<ReceivablesView token="tok" />);
       const table = await screen.findByRole('table');
@@ -439,11 +439,11 @@ describe('ReceivablesView (DX-145)', () => {
       expect(card).toHaveTextContent('Más de 90 días');
       await waitFor(() => expect(mockedClinic).toHaveBeenCalled());
       await openRowMenu(user);
-      expect(await screen.findByRole('menuitem', { name: 'Llamar al 300 111 2222' })).toBeInTheDocument();
+      expect(await screen.findByRole('menuitem', { name: 'Llamar al 412 111 2222' })).toBeInTheDocument();
       await user.click(screen.getByRole('menuitem', { name: 'WhatsApp' }));
-      expect(open).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/wa\.me\/573001112222\?text=/), '_blank', 'noopener,noreferrer');
+      expect(open).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/wa\.me\/584121112222\?text=/), '_blank', 'noopener,noreferrer');
       const text = decodeURIComponent(String(open.mock.calls[0][0]).split('?text=')[1]);
-      expect(text).not.toMatch(/\d|COP|\$/);
+      expect(text).not.toMatch(/\d|VES|\$/);
       open.mockRestore();
     });
   });

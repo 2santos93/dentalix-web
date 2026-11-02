@@ -183,6 +183,11 @@ describe('MoveAppointmentDialog con sillones (DX-211)', () => {
     );
   }
 
+  it('DX-492: con sillones, la descripción lo menciona; sin ellos, no', () => {
+    renderWithChairs(appointment);
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(/profesional y el sillón para la cita/);
+  });
+
   it('ofrece los sillones activos y el de la cita aunque esté inactivo', () => {
     renderWithChairs(withChair);
     const select = screen.getByLabelText('Sillón');
@@ -309,6 +314,27 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
         providerId: 'prov-1',
       }),
     );
+  });
+
+  it('DX-509-ter: la sugerencia busca libre el sillón de la cita', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockRejectedValueOnce(overlap());
+    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, openings: [] });
+    render(
+      <MoveAppointmentDialog
+        clock={CLOCK}
+        open
+        onOpenChange={jest.fn()}
+        token="tok"
+        appointment={{ ...overbooked, chairId: 'ch-1', chair: { id: 'ch-1', name: 'Sillón 1', active: true } }}
+        providers={providers}
+        hours={null}
+        onMoved={jest.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+    await waitFor(() => expect(mockedOpenings).toHaveBeenCalled());
+    expect(mockedOpenings.mock.calls[0][1]).toMatchObject({ chairIds: ['ch-1'] });
   });
 
   it('sin hueco en 14 días lo dice; una cita normal o otro 409 no busca', async () => {

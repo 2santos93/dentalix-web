@@ -3,12 +3,12 @@ import { wallInstant } from '../../src/lib/time/wall-clock';
 /**
  * Fechas y horas de la SEDE en los specs (DX-070, TST-008).
  *
- * El navegador corre en `America/Bogota` (playwright.config.ts), pero Node —
+ * El navegador corre en `America/Caracas` (playwright.config.ts), pero Node —
  * donde el spec calcula lo que espera ver — corre en la zona de la máquina
  * (UTC en GitHub). Todo lo que el spec compara con la UI se calcula aquí, en la
  * zona de la sede, nunca con `getHours()`/`setHours()` del proceso.
  */
-export const SEDE_TZ = 'America/Bogota';
+export const SEDE_TZ = 'America/Caracas';
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -16,7 +16,7 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
  * ya empezadas o por empezar. La API decide «hoy» con su reloj real y la zona
  * de la sede: a las 00:05 de la sede no cabe una cita «de hace 10 min» y a las
  * 23:54 no queda franja de hoy por agendar, y la CI de los merges nocturnos
- * (04:40–06:00 UTC) salía en rojo. La zona de la suite mientras queden al menos
+ * (03:40–05:00 UTC) salía en rojo. La zona de la suite mientras queden al menos
  * `SEDE_TODAY_MARGIN_MINUTES` desde y hasta su medianoche; si no, una zona sin
  * horario de verano en la que ahora es cerca del mediodía.
  */
@@ -30,8 +30,8 @@ export const NOON_ZONE_CANDIDATES: readonly string[] = [
   'Pacific/Pitcairn',
   'America/Phoenix',
   'America/Regina',
+  'America/Lima',
   SEDE_TZ,
-  'America/La_Paz',
   'America/Sao_Paulo',
   'America/Noronha',
   'Atlantic/Cape_Verde',

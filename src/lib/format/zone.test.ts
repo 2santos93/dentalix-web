@@ -3,7 +3,7 @@ import { utcOffsetLabel } from './zone';
 // Jest corre con TZ=UTC: ninguna de estas zonas es la del entorno.
 describe('utcOffsetLabel (DX-362)', () => {
   it('says the offset of the zone at that instant, with a real minus sign', () => {
-    expect(utcOffsetLabel(new Date('2026-10-16T03:30:00Z'), 'America/Bogota')).toBe('UTC−5');
+    expect(utcOffsetLabel(new Date('2026-10-16T03:30:00Z'), 'America/Caracas')).toBe('UTC−4');
     expect(utcOffsetLabel(new Date('2026-10-16T03:30:00Z'), 'America/New_York')).toBe('UTC−4');
     expect(utcOffsetLabel(new Date('2026-10-16T03:30:00Z'), 'Europe/Berlin')).toBe('UTC+2');
   });

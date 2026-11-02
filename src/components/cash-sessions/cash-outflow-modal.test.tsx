@@ -22,7 +22,7 @@ jest.mock('../../lib/files/upload-single-file', () => ({
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
   ]),
 }));
@@ -47,7 +47,7 @@ function renderModal(
       token="tok"
       locationId="loc-2"
       sedeName="Sede norte"
-      defaultCurrency="COP"
+      defaultCurrency="VES"
       fmt={fmt}
       onRetryFormat={onRetryFormat}
       onCreated={onCreated}
@@ -90,11 +90,11 @@ describe('CashOutflowModal (DX-274)', () => {
       supplier: 'Mensajeros Ya',
       description: 'Envío de muestras',
       amount: 8_000,
-      currency: 'COP',
+      currency: 'VES',
     });
     expect(key).toEqual(expect.any(String));
     expect(locationId).toBe('loc-2');
-    expect(onCreated).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Salida de caja de 8\s000,00\sCOP\sregistrada\.$/));
+    expect(onCreated).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Salida de caja de 8\s000,00\sVES\sregistrada\.$/));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
