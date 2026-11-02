@@ -49,8 +49,9 @@ test('a 390 px el nombre largo se lee entero y «Editar» sigue activo', async (
   expect((await pill.boundingBox())?.height).toBe(44);
   await expectNoHorizontalScroll(page);
 
-  const brand = page.locator('header').getByText(`Clínica Selector ${suffix}`).first();
-  if (await brand.isVisible()) expect((await brand.boundingBox())?.width ?? 0).toBeGreaterThan(80);
+  // La marca queda en sus iniciales; el nombre sigue para los lectores de pantalla.
+  await expect(page.locator('header [data-initials]').first()).toBeVisible();
+  await expect(page.locator('header .sr-only').first()).toHaveText(`Clínica Selector ${suffix}`);
 
   const violations = await axeInBothThemes(page, page.locator('body'), async (scheme) => {
     await page.screenshot({ path: testInfo.outputPath(`pill-390-${scheme}.png`) });

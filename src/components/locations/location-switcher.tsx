@@ -206,12 +206,12 @@ export function LocationSwitcher({
     return (
       <span
         title={`${copy.label}: ${fullName}`}
-        className="relative inline-flex h-11 max-w-[12rem] shrink-0 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
+        className="relative inline-flex h-11 min-w-0 flex-1 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
       >
         <MapPin aria-hidden className="size-4 shrink-0" />
         {/* Nombre ENTERO a dos líneas (el táctil no tiene hover para un
             tooltip); la barra mantiene sus 44px de alto. */}
-        <span aria-hidden className="line-clamp-2 min-w-0 break-words text-xs font-medium leading-tight text-ink">
+        <span aria-hidden className="line-clamp-2 min-w-0 flex-1 break-words text-xs font-medium leading-tight text-ink">
           {fullName}
         </span>
         <ChevronDown aria-hidden className="size-3.5 shrink-0" />
