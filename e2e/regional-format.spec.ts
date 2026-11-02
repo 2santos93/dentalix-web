@@ -442,8 +442,8 @@ test('modal de sede: reloj bajo la vista previa; A pasa a 24 h y el panel lo pin
   expect(a.hourCycle).toBe('h23');
 });
 
-// R1: con una zona de un solo país (la de la suite, America/Bogota → Colombia)
-// el registro propone el país y su formato (es-CO) y el reloj sale de ese
+// R1: con una zona de un solo país (la de la suite, de un solo país)
+// el registro propone el país y su formato y el reloj sale de ese
 // formato, no del navegador. Esta prueba mira el reloj del NAVEGADOR, así que
 // abre el registro en una zona que no es de ningún país.
 test.describe('registro con el reloj del navegador', () => {

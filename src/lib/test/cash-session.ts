@@ -2,7 +2,7 @@ import type { CashSessionDetail } from '@/lib/cash-sessions/cash-sessions-api';
 
 type CashOutflow = CashSessionDetail['outflows'][number];
 
-/** Una salida de caja menor (DX-274): 8.000 COP de mensajería a las 11:30 de Bogotá. */
+/** Una salida de caja menor (DX-274): 8.000 COP de mensajería a las 11:30 de la sede. */
 export function outflowFixture(overrides: Partial<CashOutflow> = {}): CashOutflow {
   return {
     id: 'ep-1',
