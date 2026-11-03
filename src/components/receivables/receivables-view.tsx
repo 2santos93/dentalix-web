@@ -35,6 +35,8 @@ import { Pagination } from '@/components/shared/pagination';
 import { ResultCount } from '@/components/shared/list-toolbar';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { AgingSummary } from './aging-summary';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { ScopeMarker } from './scope-marker';
 import {
   AgeCell,
@@ -127,6 +129,8 @@ export function ReceivablesView({ token }: { token: string }) {
   const router = useRouter();
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
   const isAdmin = getTokenRole(token) === 'ADMIN';
+  // Importes y fechas con el formato de la sede de la pantalla (DX-354b): el deudor agrega sedes.
+  const stamp = useSedeStamp(token);
   const [ageFilter, setAgeFilter] = useState<string>('all');
   const [minBalanceText, setMinBalanceText] = useState('');
   const [minBalance, setMinBalance] = useState<number | undefined>(undefined);
@@ -306,15 +310,15 @@ export function ReceivablesView({ token }: { token: string }) {
       headerClassName: 'whitespace-nowrap',
       cell: (r) => (
         <>
-          <DebtCell currencies={r.currencies} />
+          <DebtCell currencies={r.currencies} stamp={stamp} />
           {r.paymentsWithoutRateCount > 0 ? <IncompleteMark /> : null}
           {/* Con un solo tramo ya lo dice la antigüedad; con varios, el desglose. */}
-          {bucketLineCount(r) > 1 ? <BucketList currencies={r.currencies} className="mt-1" /> : null}
+          {bucketLineCount(r) > 1 ? <BucketList currencies={r.currencies} stamp={stamp} className="mt-1" /> : null}
         </>
       ),
       mobileCell: (r) => (
         <>
-          <DebtCell currencies={r.currencies} compact />
+          <DebtCell currencies={r.currencies} stamp={stamp} compact />
           {r.paymentsWithoutRateCount > 0 ? <IncompleteMark /> : null}
         </>
       ),
@@ -325,7 +329,7 @@ export function ReceivablesView({ token }: { token: string }) {
       mobile: 'hidden',
       showFrom: 'xl',
       headerClassName: 'whitespace-nowrap',
-      cell: (r) => <LastPayment row={r} />,
+      cell: (r) => <LastPayment row={r} stamp={stamp} />,
     },
     {
       id: 'next',
@@ -333,15 +337,15 @@ export function ReceivablesView({ token }: { token: string }) {
       mobile: 'hidden',
       showFrom: 'xl',
       headerClassName: 'whitespace-nowrap',
-      cell: (r) => <NextInstallment row={r} />,
+      cell: (r) => <NextInstallment row={r} stamp={stamp} />,
     },
     {
       id: 'collection',
       header: receivablesCopy.colCollection,
       showFrom: 'lg',
       cellClassName: 'max-w-[14rem]',
-      cell: (r) => <CollectionCell row={r} />,
-      mobileCell: (r) => (r.lastNote || r.promise ? <CollectionCell row={r} compact /> : null),
+      cell: (r) => <CollectionCell row={r} stamp={stamp} />,
+      mobileCell: (r) => (r.lastNote || r.promise ? <CollectionCell row={r} stamp={stamp} compact /> : null),
     },
     {
       id: 'contact',
@@ -505,6 +509,7 @@ export function ReceivablesView({ token }: { token: string }) {
           />
         ) : (
           <>
+            <SedeStampNote stamp={stamp} />
             {data && !loading ? <RateNotices page={data} onRetry={() => setReloadKey((k) => k + 1)} /> : null}
 
             <AsyncSection
@@ -516,7 +521,7 @@ export function ReceivablesView({ token }: { token: string }) {
               emptyDescription={receivablesCopy.emptyHint}
               skeleton={<TableSkeleton rows={5} />}
             >
-              {data ? <AgingSummary totals={data.totals} /> : null}
+              {data ? <AgingSummary totals={data.totals} stamp={stamp} /> : null}
 
               <ResultCount
                 total={data?.total ?? 0}

@@ -12,7 +12,7 @@ import {
   waiveCancellationFee,
   type CancellationFeeView,
 } from '@/lib/cancellations/cancellation-fee-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
@@ -27,6 +27,7 @@ import {
   voidFeeCopy,
 } from './fee-reason-modal';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 export const cancellationFeeCopy = {
   heading: 'Cargo por inasistencia o cancelación tardía',
@@ -71,10 +72,6 @@ export const cancellationFeeCopy = {
 
 const copy = cancellationFeeCopy;
 
-function money(amount: number | null | undefined, currency: string | null | undefined): string | null {
-  return amount !== null && amount !== undefined && currency ? formatCurrency(amount, currency) : null;
-}
-
 /**
  * DX-291: en el detalle de una cita NO_SHOW o cancelada tarde, el estado del
  * cargo y las acciones «Generar cargo» y «Condonar» (y, ya generado, «Anular
@@ -85,6 +82,10 @@ function money(amount: number | null | undefined, currency: string | null | unde
  */
 export function CancellationFeePanel({ token, appointmentId }: { token: string; appointmentId: string }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // El cargo es de la sede de la cita; la pantalla no trae su id, así que se pinta con la sede de la pantalla (DX-354b).
+  const stamp = useSedeStamp(token);
+  const money = (amount: number | null | undefined, currency: string | null | undefined): string | null =>
+    amount !== null && amount !== undefined && currency ? stamp.money(amount, currency) : null;
   // DX-343: tras generar, condonar, anular o un 409, el botón que abrió el
   // diálogo ya no existe (o ya no vale): el foco va al encabezado del panel.
   // Cerrar sin actuar lo deja volver a quien abrió.
@@ -222,6 +223,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       className="flex flex-col gap-2 border-t border-border-subtle pt-4 text-sm"
     >
       {heading}
+      <SedeStampNote stamp={stamp} />
       {view.status === 'VOIDED' && fee ? (
         <div className="flex flex-col gap-1">
           <p className="tabular-nums text-ink">{copy.voided(money(fee.amount, fee.currency) ?? '')}</p>
@@ -333,7 +335,7 @@ function ChargeFeeModal({
   const stamp = useSedeStamp(token);
   const id = useId();
   const amountId = `${id}-amount`;
-  const max = formatCurrency(suggested, currency);
+  const max = stamp.money(suggested, currency);
   const [amountText, setAmountText] = useState(moneyInputText(suggested));
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -364,7 +366,7 @@ function ChargeFeeModal({
         appointmentId,
         parsed.value === suggested ? undefined : parsed.value,
       );
-      toast.success(copy.chargeDone(formatCurrency(parsed.value, currency)));
+      toast.success(copy.chargeDone(stamp.money(parsed.value, currency)));
       onDone(next);
     } catch (err) {
       setError(apiErrorMessage(err, copy.chargeError));
@@ -388,11 +390,14 @@ function ChargeFeeModal({
       onSubmit={handleSubmit}
       submitLabel={copy.chargeSubmit}
       submitting={submitting}
+      // Sin el formato de la sede el tope no se puede decir: no se genera el cargo a ciegas.
+      submitDisabled={max === NO_SEDE_FORMAT}
       error={error}
       hideSubmit={stale}
       onCloseAutoFocus={onCloseAutoFocus}
     >
       {stale ? <FeeConflictNotice /> : null}
+      <SedeStampNote stamp={stamp} />
       <FormField
         htmlFor={amountId}
         label={copy.amount}

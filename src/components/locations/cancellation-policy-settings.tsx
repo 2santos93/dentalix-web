@@ -19,8 +19,6 @@ import {
   type CancellationPolicyVersion,
   type ReminderEmailPreview,
 } from '@/lib/cancellations/cancellation-policy-api';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatDateTime } from '@/lib/format/date';
 import { parseMoneyInput } from '@/lib/format/money';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Disclosure } from '@/components/shared/disclosure';
@@ -45,7 +43,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 export const cancellationPolicyCopy = {
   heading: 'Política de cancelación',
@@ -146,6 +145,8 @@ export function CancellationPolicySettings({
       cancelled = true;
     };
   }, [requestLocations, reloadKey]);
+  // Cada versión de la política con el formato de SU sede (DX-354b, E1); un solo aviso para toda la lista.
+  const stamp = useSedeStamp(token, locations.map((l) => l.id));
 
   return (
     <section aria-labelledby="cancellation-policy-heading" className="flex flex-col gap-3">
@@ -155,6 +156,7 @@ export function CancellationPolicySettings({
         </h2>
         <p className="max-w-[68ch] text-sm text-muted">{locationId ? copy.supportOne : copy.support}</p>
       </div>
+      <SedeStampNote stamp={stamp} />
       <AsyncSection loading={loading} error={error} onRetry={() => {
           setLoading(true);
           setReloadKey((k) => k + 1);
@@ -166,6 +168,7 @@ export function CancellationPolicySettings({
               <LocationPolicyRow
                 token={token}
                 location={location}
+                stamp={stamp}
                 showName={!locationId}
                 onRetryLocations={() => {
                   // Relee sin vaciar la lista (el modal abierto sigue abierto).
@@ -181,20 +184,22 @@ export function CancellationPolicySettings({
   );
 }
 
-function feeText(version: CancellationPolicyVersion): string | null {
+function feeText(version: CancellationPolicyVersion, stamp: SedePainters): string | null {
   return version.suggestedFee !== null && version.currency
-    ? formatCurrency(version.suggestedFee, version.currency)
+    ? stamp.money(version.suggestedFee, version.currency, version.locationId)
     : null;
 }
 
 function LocationPolicyRow({
   token,
   location,
+  stamp,
   showName,
   onRetryLocations,
 }: {
   token: string;
   location: ClinicLocation;
+  stamp: SedePainters;
   showName: boolean;
   onRetryLocations: () => void;
 }) {
@@ -222,7 +227,7 @@ function LocationPolicyRow({
   }, [token, location.id, reloadKey]);
 
   const current = policy?.current ?? null;
-  const fee = current ? feeText(current) : null;
+  const fee = current ? feeText(current, stamp) : null;
 
   return (
     <div className="flex flex-col gap-2 text-sm">
@@ -288,11 +293,11 @@ function LocationPolicyRow({
               <li key={v.id} className="flex flex-col gap-0.5 px-2 py-2">
                 <span className="flex items-center gap-1.5 text-xs text-muted tabular-nums">
                   <History aria-hidden className="size-3.5 shrink-0" />
-                  {copy.versionLine(v.version, formatDateTime(v.createdAt), v.createdByName)}
+                  {copy.versionLine(v.version, stamp.dateTime(v.createdAt, v.locationId), v.createdByName)}
                 </span>
                 <span className="tabular-nums text-ink">
                   {copy.summary(v.noticeHours, v.version)}
-                  {feeText(v) ? ` · ${copy.fee(feeText(v)!)}` : ''}
+                  {feeText(v, stamp) ? ` · ${copy.fee(feeText(v, stamp)!)}` : ''}
                 </span>
                 <span className="whitespace-pre-line break-words text-muted">
                   {v.patientText || copy.noText}
@@ -517,7 +522,7 @@ export function CancellationPolicyModal({
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
         <FormField htmlFor={feeId} label={copy.feeLabel} error={errors.fee} hint={copy.feeHint} hintId={`${feeId}-hint`}>
           <MoneyInput
-            money={stamp.money}
+            money={(amount, code) => stamp.money(amount, code, location.id)}
             id={feeId}
             value={feeTextValue}
             onValueChange={(v) => {
