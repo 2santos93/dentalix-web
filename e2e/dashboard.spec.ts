@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
 import { API_URL } from './support/urls';
-import { sedeTime } from './support/clock';
+import { SEDE_TODAY_TZ, sedeTime } from './support/clock';
+import { E2E_TODAY_REGION } from './support/regional';
 
 /**
  * e2e: register clinic + login (the registering user is ADMIN — the only role
@@ -88,14 +89,30 @@ const paymentAmount = 250;
 // fraction digits (DX-098). Relying on ICU's default for USD breaks on recent
 // builds, which give USD 0 decimals ("250 USD" vs the app's "250,00 USD").
 
+/**
+ * La sede y el navegador van en `SEDE_TODAY_TZ` (support/clock.ts): la cita de
+ * «Hoy» se agenda con el reloj real a 3 minutos vista, y en la zona de la
+ * suite, desde las 23:57 de la sede caía en mañana y no salía en «Hoy». Esa
+ * zona deja siempre al menos 3 h hasta la medianoche.
+ */
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
+
 // Same formatter as `dashboard-view.tsx`'s `formatTime`, in the browser's
 // (the sede's) timezone — not Node's (see support/clock.ts).
-const formatTime = sedeTime;
+const formatTime = (at: Date) => sedeTime(at, ZONE);
 
 test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los datos sembrados', async ({
   page,
 }) => {
-  const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
+  const origin = await registerAndLogin(page, {
+    subdomain,
+    clinicName,
+    fullName,
+    email,
+    password,
+    location: E2E_TODAY_REGION,
+  });
   await disableBusinessHours(page, origin);
 
   const accessToken = await accessTokenOf(page);
@@ -217,8 +234,8 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   expect(owner, 'Expected the registered owner to appear in GET /staff').toBeTruthy();
 
   // --- Seed an appointment for TODAY, a few minutes ahead (I1: «Hoy» lists
-  // the sede's civil day). Runs right before midnight in the sede would push
-  // it to tomorrow: the spec is not meant to run at 23:55. ---
+  // the sede's civil day). The sede's zone (`ZONE`) is never within 3 h of
+  // its midnight, so «a few minutes ahead» is still today at any hour. ---
   const appointmentStart = new Date(Date.now() + 3 * 60 * 1000);
   const appointmentEnd = new Date(appointmentStart.getTime() + 30 * 60 * 1000);
   const appointmentResponse = await page.request.post(`${API_URL}/appointments`, {
