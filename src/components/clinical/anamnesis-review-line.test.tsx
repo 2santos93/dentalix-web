@@ -168,12 +168,14 @@ describe('AnamnesisReviewLine con cada sede (DX-354b)', () => {
     expect(expectedTime('berlin')).toBe('23:30');
   });
 
-  it('sin formato: «—» en la hora, la frase sigue completa y el aviso sale una vez', async () => {
+  it('sin formato: «—» en la hora y la frase sigue completa; el aviso lo da la ficha, no la línea', async () => {
     listLocationsMock.mockRejectedValue(new Error('red'));
     render(
       <AnamnesisReviewLine token="tok" patientId="p1" alerts={confirmed} failed={false} onReload={jest.fn()} canConfirm />,
     );
-    await waitFor(() => expect(screen.getAllByText(/No se pudo saber el formato regional/)).toHaveLength(1));
-    expect(screen.getByTestId('anamnesis-review')).toHaveTextContent('Sin cambios hoy · confirmado a las — por Dr. Gómez');
+    await waitFor(() =>
+      expect(screen.getByTestId('anamnesis-review')).toHaveTextContent('Sin cambios hoy · confirmado a las — por Dr. Gómez'),
+    );
+    expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
   });
 });
