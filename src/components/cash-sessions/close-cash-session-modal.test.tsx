@@ -79,20 +79,28 @@ describe('CloseCashSessionModal (DX-027)', () => {
     await waitFor(() => expect(onClosed).toHaveBeenCalled());
   });
 
-  it('arqueo ciego: filas en blanco sin esperado; el 400 de la API pide el motivo', async () => {
+  it('arqueo ciego: filas en blanco sin esperado; cierra sin motivo aunque no cuadre, sin que la pantalla lo sepa antes (SEC-043)', async () => {
     const user = userEvent.setup();
-    mockedClose.mockRejectedValue(
-      new ApiError(400, 'El arqueo no cuadra: explica el motivo de la diferencia antes de cerrar.'),
+    const { onClosed } = renderModal(
+      cashSessionFixture({ blindHidden: true, expected: null, payments: null, voidedPayments: null, adjustments: null }),
     );
-    renderModal(cashSessionFixture({ blindHidden: true, expected: null, payments: null }));
+    mockedClose.mockResolvedValue(closedCashSessionFixture());
     expect(screen.queryByText(/Esperado/)).not.toBeInTheDocument();
     expect(screen.queryByTestId('row-difference')).not.toBeInTheDocument();
+    expect(screen.getByText(/«diferencia sin justificar»/)).toBeInTheDocument();
     // Cuatro métodos de la moneda del fondo.
     expect(screen.getByLabelText('Contado en transferencia (USD)')).toBeInTheDocument();
+    // El motivo es opcional: quien cuenta no sabe si cuadra.
+    expect(screen.getByLabelText('Motivo si crees que no cuadra (opcional)')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Contado en efectivo (USD)'), '70000');
     await user.click(screen.getByRole('button', { name: 'Cerrar caja' }));
-    expect(await screen.findByText(/El arqueo no cuadra/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Motivo, si el arqueo no cuadra')).toBeInTheDocument();
+    await waitFor(() => expect(onClosed).toHaveBeenCalled());
+    expect(mockedClose).toHaveBeenCalledTimes(1);
+    expect(mockedClose).toHaveBeenCalledWith(
+      'tok',
+      'cs-1',
+      expect.objectContaining({ differenceReason: undefined }),
+    );
   });
 
   it('si la API dice que no cuadra (entró un abono después de abrir el modal), deja escribir el motivo y reenviar', async () => {
@@ -119,7 +127,7 @@ describe('CloseCashSessionModal (DX-027)', () => {
     );
   });
 
-  it('arqueo ciego: también cuenta las monedas de los ajustes y deja añadir otra moneda cobrada', async () => {
+  it('arqueo ciego: sin ajustes a la vista (SEC-043), deja añadir otra moneda cobrada', async () => {
     const user = userEvent.setup();
     mockedClose.mockResolvedValue(closedCashSessionFixture());
     renderModal(
@@ -127,25 +135,10 @@ describe('CloseCashSessionModal (DX-027)', () => {
         blindHidden: true,
         expected: null,
         payments: null,
-        adjustments: [
-          {
-            id: 'adj-1',
-            kind: 'CORRECTION',
-            currency: 'EUR',
-            method: 'CASH',
-            amount: -5,
-            reason: 'Billete falso',
-            createdAt: '2026-10-17T15:00:00.000Z',
-            createdBy: { id: 'u-admin', fullName: 'Admin' },
-            sessionId: 'cs-1',
-            payment: null,
-            expensePayment: null,
-            originalSession: null,
-          },
-        ],
+        voidedPayments: null,
+        adjustments: null,
       }),
     );
-    expect(screen.getByLabelText('Contado en efectivo (EUR)')).toBeInTheDocument();
     expect(screen.queryByLabelText('Contado en efectivo (VES)')).not.toBeInTheDocument();
 
     await screen.findByRole('option', { name: /Bolívar/ });

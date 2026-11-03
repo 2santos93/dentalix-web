@@ -20,6 +20,7 @@ const line = (method: CashExpectedLine['method'], expected: number): CashExpecte
   outflows: 0,
   outflowsCount: 0,
   expected,
+  amountHidden: false,
 });
 
 describe('arqueo en pantalla (DX-027)', () => {

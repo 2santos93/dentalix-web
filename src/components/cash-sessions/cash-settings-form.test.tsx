@@ -32,6 +32,17 @@ describe('CashSettingsForm (DX-027)', () => {
     );
   });
 
+  it('el arqueo ciego explica qué oculta a recepción y qué pasa si no cuadra (SEC-043)', async () => {
+    mockedGet.mockResolvedValue({ requireOpenSession: false, blindClose: true });
+    render(<CashSettingsForm token="tok" allowed />);
+    await screen.findByRole('switch', { name: 'Arqueo ciego' });
+    const hint = screen.getByText(/Recepción cuenta por moneda y método/);
+    expect(hint).toHaveTextContent(/los cobros, las anulaciones ni los ajustes del turno/);
+    expect(hint).toHaveTextContent(/en la lista de abonos y su CSV los de cajas abiertas salen sin importe y no suman/);
+    expect(hint).toHaveTextContent(/«diferencia sin justificar»/);
+    expect(hint).toHaveTextContent(/el recibo de cada abono sí lleva su importe/);
+  });
+
   it('si no se guarda, el interruptor vuelve a su sitio y lo dice', async () => {
     const user = userEvent.setup();
     mockedGet.mockResolvedValue({ requireOpenSession: false, blindClose: false });
