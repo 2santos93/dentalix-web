@@ -26,6 +26,8 @@ const adjustment: CashAdjustment = {
   createdAt: '2026-10-17T15:00:00.000Z',
   createdBy: { id: 'u-admin', fullName: 'Admin' },
   sessionId: 'cs-2',
+  sessionStatus: 'OPEN',
+  amountHidden: false,
   payment: null,
   expensePayment: null,
   originalSession: null,

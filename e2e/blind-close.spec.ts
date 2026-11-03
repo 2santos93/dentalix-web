@@ -77,6 +77,18 @@ async function startClean(request: APIRequestContext, host: string) {
   return { admin, reception };
 }
 
+/** Cierra, si la hay, la caja abierta de quien trae `headers` (ADMIN: ve lo esperado). */
+async function closeOwnSession(request: APIRequestContext, headers: Record<string, string>): Promise<void> {
+  const current = await request.get(`${API_URL}/cash-sessions/current`, { headers });
+  expect(current.ok(), await current.text()).toBeTruthy();
+  const { session } = (await current.json()) as { session: { id: string; expected: Expected[] } | null };
+  if (!session) return;
+  await post(request, headers, `/cash-sessions/${session.id}/close`, {
+    counts: session.expected.map((l) => ({ currency: l.currency, method: l.method, counted: Math.max(0, l.expected) })),
+    differenceReason: 'Cierre de limpieza de la prueba e2e',
+  });
+}
+
 async function webLogin(page: Page, origin: string, email: string): Promise<void> {
   await page.goto(`${origin}/login`);
   await waitForHydratedForm(page);
@@ -109,7 +121,9 @@ for (const viewport of [
 
     try {
       await setBlind(page.request, admin, true);
-      await post(page.request, reception, '/cash-sessions/open', { floats: [{ currency: 'USD', amount: 100 }] });
+      const ownSession = await post<{ id: string }>(page.request, reception, '/cash-sessions/open', {
+        floats: [{ currency: 'USD', amount: 100 }],
+      });
       const patient = await post<{ id: string }>(page.request, admin, '/patients', {
         firstName: 'Arqueo',
         lastName,
@@ -120,7 +134,7 @@ for (const viewport of [
       const plan = await post<{ id: string }>(page.request, admin, `/patients/${patient.id}/treatment-plans`, {
         currency: 'USD',
       });
-      await post(page.request, reception, `/treatment-plans/${plan.id}/payments`, {
+      const charged = await post<{ id: string }>(page.request, reception, `/treatment-plans/${plan.id}/payments`, {
         amount: 45,
         currency: 'USD',
         paidAt: new Date().toISOString(),
@@ -237,6 +251,31 @@ for (const viewport of [
       } finally {
         await adminContext.close();
       }
+
+      // Revisión M1: la administradora, con su caja abierta, anula el cobro de
+      // 45 de esa caja ya cerrada. La anulación cuenta en SU caja abierta: en el
+      // informe del turno de recepción va sin cifra.
+      await closeOwnSession(page.request, admin);
+      await post(page.request, admin, '/cash-sessions/open', { floats: [] });
+      const voided = await page.request.delete(`${API_URL}/payments/${charged.id}`, {
+        headers: admin,
+        data: { reason: 'Prueba de anulación posterior' },
+      });
+      expect(voided.ok(), await voided.text()).toBeTruthy();
+      await page.goto(`${origin}/caja/turnos/${ownSession.id}`);
+      const report = page.getByTestId('cash-session-report');
+      const voidedList = report.getByRole('list', { name: 'Abonos anulados' });
+      await expect(voidedList).toContainText('Oculto durante el arqueo', { timeout: 15_000 });
+      await expect(voidedList).not.toContainText('45,00');
+      const later = report.getByRole('list', { name: 'Ajustes posteriores a este cierre' });
+      await expect(later).toContainText('Oculto durante el arqueo');
+      if (narrow) await expectNoHorizontalScroll(page);
+      await later.scrollIntoViewIfNeeded();
+      await shot(page, 'sec043-informe-oculto', viewport.width);
+      // Cerrada la caja de la administradora, la cifra vuelve.
+      await closeOwnSession(page.request, admin);
+      await page.reload();
+      await expect(later).toContainText('45,00', { timeout: 15_000 });
     } finally {
       await setBlind(page.request, admin, false);
     }

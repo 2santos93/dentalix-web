@@ -40,6 +40,7 @@ describe('CashSettingsForm (DX-027)', () => {
     expect(hint).toHaveTextContent(/los cobros, las anulaciones ni los ajustes del turno/);
     expect(hint).toHaveTextContent(/en la lista de abonos y su CSV los de cajas abiertas salen sin importe y no suman/);
     expect(hint).toHaveTextContent(/«diferencia sin justificar»/);
+    expect(hint).toHaveTextContent(/el recibo de cada abono sí lleva su importe/);
   });
 
   it('si no se guarda, el interruptor vuelve a su sitio y lo dice', async () => {

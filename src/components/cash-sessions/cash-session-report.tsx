@@ -51,6 +51,10 @@ const copy = {
   squared: 'El arqueo cuadra.',
   // SEC-043: cerrada a ciegas sin motivo y sin cuadrar; la revisa administración.
   unjustified: 'Diferencia sin justificar',
+  // SEC-043 (B4): a ciegas, el motivo que escribió quien contó aunque cuadrara.
+  countedNote: (note: string) => `Nota de quien contó: ${note}`,
+  // SEC-043 (M1): cuenta en otra caja aún abierta o pendiente, con arqueo ciego.
+  amountHidden: 'Oculto durante el arqueo',
   unjustifiedHint: 'Se cerró a ciegas sin motivo: administración la revisa con quien contó.',
   closingNotes: 'Notas del cierre',
   lockDate: 'Fecha de bloqueo sugerida',
@@ -331,7 +335,12 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
               ) : closing.hasDifference ? (
                 closing.differenceReason
               ) : (
-                copy.squared
+                <>
+                  {copy.squared}
+                  {closing.differenceReason ? (
+                    <span className="mt-1 block text-xs text-muted">{copy.countedNote(closing.differenceReason)}</span>
+                  ) : null}
+                </>
               )}
             </Fact>
             <Fact label={copy.lockDate}>
@@ -399,9 +408,13 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                       {p.patient.fullName}
                       {p.receiptNumber ? <span className="ml-2 text-xs text-muted tabular-nums">{p.receiptNumber}</span> : null}
                     </span>
-                    <span className="font-medium tabular-nums line-through decoration-1">
-                      {formatCurrency(p.amount, p.currency)}
-                    </span>
+                    {p.amount === null ? (
+                      <HiddenAmount />
+                    ) : (
+                      <span className="font-medium tabular-nums line-through decoration-1">
+                        {formatCurrency(p.amount, p.currency)}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-muted">
                     {copy.colReason}: {p.voidReason ?? '—'} · {copy.colVoidedBy}: {p.voidedBy?.fullName ?? '—'}
@@ -585,9 +598,13 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
                   <span className="font-medium">
                     {formatTimeInZone(o.createdAt, zone)} · {outflowSubject(o)}
                   </span>
-                  <span className="font-medium tabular-nums line-through decoration-1">
-                    {formatCurrency(o.amount, o.currency)}
-                  </span>
+                  {o.amount === null ? (
+                    <HiddenAmount />
+                  ) : (
+                    <span className="font-medium tabular-nums line-through decoration-1">
+                      {formatCurrency(o.amount, o.currency)}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted">
                   {copy.colReason}: {o.voidReason ?? '—'} · {copy.colBy}: {o.createdBy.fullName ?? '—'} ·{' '}
@@ -601,6 +618,15 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
         </>
       ) : null}
     </div>
+  );
+}
+
+/** SEC-043: el importe que no se enseña mientras rige el arqueo ciego. */
+function HiddenAmount() {
+  return (
+    <span className="text-sm text-muted" data-testid="amount-hidden">
+      {copy.amountHidden}
+    </span>
   );
 }
 
@@ -633,9 +659,13 @@ function AdjustmentList({
                   {PAYMENT_METHOD_LABELS[a.method]} · {a.currency}
                 </span>
               </span>
-              <span className={cn('font-semibold tabular-nums', a.amount < 0 && 'text-danger-text')}>
-                {formatCurrency(a.amount, a.currency)}
-              </span>
+              {a.amount === null ? (
+                <HiddenAmount />
+              ) : (
+                <span className={cn('font-semibold tabular-nums', a.amount < 0 && 'text-danger-text')}>
+                  {formatCurrency(a.amount, a.currency)}
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted">
               {a.payment ? `${a.payment.patient.fullName}${a.payment.receiptNumber ? ` · ${a.payment.receiptNumber}` : ''} · ` : ''}

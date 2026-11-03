@@ -142,7 +142,7 @@ const copy = {
   // SEC-043: con arqueo ciego, recepción no ve los abonos de cajas abiertas.
   blindTitle: 'Arqueo ciego: los abonos de las cajas abiertas van sin importe',
   blindHint:
-    'Salen en la lista para que puedas ver su recibo o anularlos desde «⋯», pero sin importe, y el resumen y el CSV no los suman: así nadie sabe lo esperado antes de contar. El recibo sí lleva su importe. Las cifras vuelven al cerrar la caja.',
+    'Salen en la lista para que puedas ver su recibo o anularlos desde «⋯», pero sin importe, y el resumen y el CSV no los suman: así nadie sabe lo esperado antes de contar. Las cifras vuelven al cerrar la caja.',
   // SEC-043: el importe de una fila de una caja abierta con arqueo ciego.
   amountHidden: 'Oculto durante el arqueo',
   empty: 'No hay abonos en este período.',

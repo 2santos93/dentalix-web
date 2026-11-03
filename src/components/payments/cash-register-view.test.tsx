@@ -239,6 +239,8 @@ it('arqueo ciego (SEC-043): la fila de una caja abierta sale sin importe, con su
   expect(callout).toHaveTextContent('los abonos de las cajas abiertas van sin importe');
   expect(callout).toHaveTextContent(/ver su recibo o anularlos desde «⋯»/);
   expect(callout).not.toHaveTextContent(/ficha|plan del paciente/);
+  // SEC-043 (B1): lo del recibo se explica solo en Ajustes → Caja (ADMIN).
+  expect(callout).not.toHaveTextContent(/recibo sí lleva su importe/);
   const table = screen.getByRole('table', { name: /abonos/i });
   const row = within(table).getByRole('row', { name: /ana gómez/i });
   const cell = within(row).getByTestId('amount-hidden');

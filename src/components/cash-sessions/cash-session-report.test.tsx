@@ -32,6 +32,7 @@ describe('CashSessionReport (DX-027)', () => {
               voidedBy: { id: 'u-admin', fullName: 'Admin' },
               voidReason: 'Duplicado',
               bookedAsAdjustment: false,
+              amountHidden: false,
             },
           ],
           adjustments: [
@@ -45,6 +46,8 @@ describe('CashSessionReport (DX-027)', () => {
               createdAt: '2026-10-17T19:00:00.000Z',
               createdBy: { id: 'u-admin', fullName: 'Admin' },
               sessionId: 'cs-1',
+              sessionStatus: 'OPEN',
+              amountHidden: false,
               payment: { id: 'pay-9', patient: { id: 'p', fullName: 'Beto Ruiz' }, paidOn: '2026-10-16', receiptNumber: null },
               expensePayment: null,
               originalSession: { id: 'cs-0', openedAt: '2026-10-16T13:00:00.000Z', openedBy: { id: 'u-recep', fullName: 'Paola' } },
@@ -84,6 +87,67 @@ describe('CashSessionReport (DX-027)', () => {
     expect(screen.getByRole('heading', { name: 'Salidas de caja' })).toBeInTheDocument();
   });
 
+  it('SEC-043 (M1): lo que cuenta en otra caja abierta o pendiente sale «Oculto durante el arqueo», sin cifra', () => {
+    const base = closedCashSessionFixture();
+    render(
+      <CashSessionReport
+        session={{
+          ...base,
+          voidedPayments: [
+            {
+              ...cashSessionFixture().payments![0],
+              id: 'pay-2',
+              amount: null,
+              collectedAmount: null,
+              amountHidden: true,
+              voidedAt: '2026-10-18T14:00:00.000Z',
+              voidedBy: { id: 'u-admin', fullName: 'Admin' },
+              voidReason: 'Duplicado',
+              bookedAsAdjustment: true,
+            },
+          ],
+          laterAdjustments: [
+            {
+              id: 'adj-9',
+              kind: 'VOID',
+              currency: 'USD',
+              method: 'CASH',
+              amount: null,
+              amountHidden: true,
+              reason: null,
+              createdAt: '2026-10-18T14:00:00.000Z',
+              createdBy: { id: 'u-admin', fullName: 'Admin' },
+              sessionId: null,
+              sessionStatus: null,
+              payment: { id: 'pay-2', patient: { id: 'p', fullName: 'Beto Ruiz' }, paidOn: '2026-10-17', receiptNumber: null },
+              expensePayment: null,
+              originalSession: null,
+            },
+          ],
+        }}
+      />,
+    );
+    const voidedList = screen.getByRole('list', { name: 'Abonos anulados' });
+    expect(within(voidedList).getByTestId('amount-hidden')).toHaveTextContent('Oculto durante el arqueo');
+    const later = screen.getByRole('list', { name: 'Ajustes posteriores a este cierre' });
+    expect(within(later).getByTestId('amount-hidden')).toHaveTextContent('Oculto durante el arqueo');
+    expect(later).not.toHaveTextContent(/USD\s?-|−/);
+  });
+
+  it('SEC-043 (B4): cuadrado a ciegas con la nota que escribió quien contó', () => {
+    const base = closedCashSessionFixture();
+    const closing = {
+      ...base.closing!,
+      blind: true,
+      hasDifference: false,
+      differenceReason: 'Conté dos veces el cajón',
+      lines: base.closing!.lines.map((l) => ({ ...l, counted: l.expected, difference: 0 })),
+    };
+    render(<CashSessionReport session={{ ...base, differences: [], closing, closings: [closing] }} />);
+    expect(screen.getByText('El arqueo cuadra.')).toBeInTheDocument();
+    expect(screen.getByText('Nota de quien contó: Conté dos veces el cajón')).toBeInTheDocument();
+  });
+
   it('cierre a ciegas sin motivo que no cuadró (SEC-043): «Diferencia sin justificar» para revisar', () => {
     const base = closedCashSessionFixture();
     const closing = { ...base.closing!, blind: true, differenceReason: null, unjustifiedDifference: true };
@@ -120,6 +184,7 @@ describe('CashSessionReport (DX-027)', () => {
       voidedBy: { id: 'u-admin', fullName: 'Admin' },
       voidReason: 'Se devolvió el dinero',
       bookedAsAdjustment: true,
+      amountHidden: false,
     };
 
     it('columna «Salidas» con signo y sección con hora, categoría, proveedor, quién e importe; las anuladas tachadas con motivo', () => {
@@ -191,6 +256,8 @@ describe('CashSessionReport (DX-027)', () => {
                 createdAt: '2026-10-18T15:00:00.000Z',
                 createdBy: { id: 'u-admin', fullName: 'Admin' },
                 sessionId: 'cs-1',
+                sessionStatus: 'OPEN',
+                amountHidden: false,
                 payment: null,
                 expensePayment: { id: 'ep-1', expenseId: 'exp-9', category: 'Mensajería', supplier: 'Mensajeros Ya' },
                 originalSession: { id: 'cs-0', openedAt: '2026-10-17T13:00:00.000Z', openedBy: { id: 'u-recep', fullName: 'Paola' } },

@@ -13027,7 +13027,7 @@ export interface components {
             amount: number | null;
             /** @description Código ISO 4217 de 3 letras. SEC-043: `null` con `amountHidden`. */
             currency: string | null;
-            /** @description SEC-043: rige el arqueo ciego, quien consulta no es ADMIN y el abono cuenta en una caja aún abierta. Va sin `amount`, `currency`, `collectedAmount` ni `notes` (null) y sin `adjustments` (vacío), y no suma en el resumen. Recibo y anulación funcionan igual. Las cifras vuelven al cerrar la caja. */
+            /** @description SEC-043: rige el arqueo ciego, quien consulta no es ADMIN y el abono cuenta en una caja aún abierta. Va sin `amount`, `currency`, `collectedAmount`, `notes` ni `reference` (null) y sin `adjustments` (vacío), y no suma en el resumen. Recibo y anulación funcionan igual. Las cifras vuelven al cerrar la caja. */
             amountHidden: boolean;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
@@ -15398,7 +15398,6 @@ export interface components {
              * @example 2026-10-17
              */
             paidOn: string;
-            amount: number;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
@@ -15409,8 +15408,12 @@ export interface components {
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
-            /** @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). */
-            collectedAmount: number;
+            /** @description SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: null con `amountHidden`. */
+            collectedAmount: number | null;
+            /** @description SEC-043: con arqueo ciego y quien consulta sin ser ADMIN, cuenta en una caja aún abierta o pendiente: `amount` va a null. */
+            amountHidden: boolean;
             /** Format: date-time */
             voidedAt: string | null;
             voidedBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -15447,12 +15450,15 @@ export interface components {
             /** @example Mensajería */
             category: string;
             supplier: string | null;
-            amount: number;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** Format: date-time */
             createdAt: string;
             createdBy: components["schemas"]["CashStaffRefDto"];
+            /** @description SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: con arqueo ciego y quien consulta sin ser ADMIN, cuenta en una caja aún abierta o pendiente: `amount` va a null. */
+            amountHidden: boolean;
             /** Format: date-time */
             voidedAt: string | null;
             voidedBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -15511,8 +15517,10 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
-            /** @description Con signo */
-            amount: number;
+            /** @description Con signo. SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: con arqueo ciego y quien consulta sin ser ADMIN, cuenta en una caja aún abierta o pendiente: `amount` va a null. */
+            amountHidden: boolean;
             reason: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -15522,6 +15530,8 @@ export interface components {
              * @description Caja donde cuenta; null = pendiente de la siguiente que se abra en la sede
              */
             sessionId: string | null;
+            /** @description SEC-043: estado de esa caja; null si está pendiente. */
+            sessionStatus: components["schemas"]["CashSessionStatus"] | null;
             payment: components["schemas"]["CashAdjustmentPaymentDto"] | null;
             /** @description OUTFLOW_VOID: la salida de caja anulada y su gasto */
             expensePayment: components["schemas"]["CashAdjustmentExpensePaymentDto"] | null;
