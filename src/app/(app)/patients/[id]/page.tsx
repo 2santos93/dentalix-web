@@ -45,6 +45,7 @@ import { PatientCollectionsSection } from '@/components/collections/patient-coll
 import { FamilyAccountStatementSection } from '@/components/account-statement/family-account-statement-section';
 import { canManageCollections } from '@/lib/collections/presentation';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-access';
 import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
 import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
@@ -164,6 +165,8 @@ function PatientDetailView() {
   }, [accessToken, patientId]);
   // DX-247: banderas médicas de la cabecera (también la del plan y del
   // odontograma) y de la línea de revisión de la anamnesis.
+  // DX-354: el importe del chip «Saldo vencido» con el formato de la sede de la pantalla (sin token no pide nada).
+  const sedeFormat = readyFormat(useSedeFormat(accessToken ?? ''));
   const medicalAlerts = usePatientMedicalAlerts(accessToken, patientId);
   // DX-279: insignia de inasistencias y cancelaciones tardías (12 meses).
   const attendance = usePatientAttendance(accessToken, patientId);
@@ -382,6 +385,7 @@ function PatientDetailView() {
         attendance={attendance.data}
         attendanceFailed={attendance.failed}
         onRetryAttendance={attendance.reload}
+        fmt={sedeFormat}
       />
 
       {loading ? (

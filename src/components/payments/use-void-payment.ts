@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { voidPayment } from '@/lib/payments/payments-api';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -50,12 +50,18 @@ export interface VoidPaymentTarget {
   splitLines?: number | null;
 }
 
-export function voidPaymentSubject(target: VoidPaymentTarget): string {
+/**
+ * `fmt`: el formato de la sede de la pantalla desde la que se anula (DX-354,
+ * D10: se inyecta, un gancho de caja y estado de cuenta se abre desde pantallas
+ * con otra sede activa). Importe con el código ISO y día con el orden de la
+ * sede; sin él (cargando o sin formato), «—».
+ */
+export function voidPaymentSubject(target: VoidPaymentTarget, fmt: RegionalFormat | null): string {
   return [
     target.amount !== null && target.currency !== null
-      ? formatCurrency(target.amount, target.currency)
+      ? sedeMoney(target.amount, target.currency, fmt)
       : null,
-    formatCivilDate(target.paidOn),
+    sedeCivilDate(target.paidOn, fmt),
     target.patientName,
   ]
     .filter(Boolean)
@@ -67,12 +73,12 @@ export function voidPaymentSubject(target: VoidPaymentTarget): string {
  * recibo, que es lo que la API anula. Del cobro no se repite el importe de la
  * línea pulsada: no es lo que se anuló.
  */
-function voidedNotice(target: VoidPaymentTarget): string {
+function voidedNotice(target: VoidPaymentTarget, fmt: RegionalFormat | null): string {
   if (target.splitLines && target.splitLines > 1) {
-    const rest = [formatCivilDate(target.paidOn), target.patientName].filter(Boolean).join(' · ');
+    const rest = [sedeCivilDate(target.paidOn, fmt), target.patientName].filter(Boolean).join(' · ');
     return copy.voidedSplit(target.splitLines, rest);
   }
-  return copy.voided(voidPaymentSubject(target));
+  return copy.voided(voidPaymentSubject(target, fmt));
 }
 
 /**
@@ -81,7 +87,7 @@ function voidedNotice(target: VoidPaymentTarget): string {
  * anulando, envío, error en español y el aviso de éxito. Tras anular, cierra
  * el modal y llama a `onVoided` para que la pantalla recargue sus datos.
  */
-export function useVoidPayment(token: string, onVoided: () => void) {
+export function useVoidPayment(token: string, onVoided: () => void, fmt: RegionalFormat | null) {
   const [target, setTarget] = useState<VoidPaymentTarget | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +111,7 @@ export function useVoidPayment(token: string, onVoided: () => void) {
     setError(null);
     try {
       await voidPayment(token, target.id, reason);
-      setNotice(voidedNotice(target));
+      setNotice(voidedNotice(target, fmt));
       setTarget(null);
       onVoided();
     } catch (err) {

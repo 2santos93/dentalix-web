@@ -1,14 +1,16 @@
 import { render, screen, within } from '@testing-library/react';
 import { CashSessionReport } from './cash-session-report';
 import { cashSessionFixture, closedCashSessionFixture, outflowFixture } from '@/lib/test/cash-session';
+import type { CashSessionDetail } from '@/lib/cash-sessions/cash-sessions-api';
+import { REGIONAL_DE, REGIONAL_US } from '@/lib/test/document-regional';
 
 describe('CashSessionReport (DX-027)', () => {
   it('cerrada: quién abrió y cerró, fondo, arqueo con contado y diferencia, motivo y fecha de bloqueo', () => {
     render(<CashSessionReport session={closedCashSessionFixture()} />);
     const doc = screen.getByTestId('cash-session-report');
     expect(within(doc).getByRole('heading', { name: 'Informe de cierre de caja' })).toBeInTheDocument();
-    expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 09:00');
-    expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 19:00');
+    expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 9:00 a. m.');
+    expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 7:00 p. m.');
     const table = within(doc).getByRole('table', { name: 'Arqueo por moneda y método' });
     const cash = within(table).getAllByRole('row')[1];
     expect(cash).toHaveTextContent('Efectivo · USD');
@@ -212,9 +214,9 @@ describe('CashSessionReport (DX-027)', () => {
     );
     const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
     const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
-    expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/\+900,00 USD por ajustes del medio/);
+    expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/\+USD 900,00 por ajustes del medio/);
     expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/80\.900,00/);
-    expect(cardRow.textContent?.replace(/\s/g, ' ')).toMatch(/−500,00 USD por ajustes del medio/);
+    expect(cardRow.textContent?.replace(/\s/g, ' ')).toMatch(/−USD 500,00 por ajustes del medio/);
   });
 
   describe('DX-274: salidas de caja', () => {
@@ -242,7 +244,7 @@ describe('CashSessionReport (DX-027)', () => {
       expect(within(arqueo).getByRole('columnheader', { name: 'Salidas' })).toBeInTheDocument();
       const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
       expect(within(cashRow).getAllByRole('cell')[4]).toHaveTextContent(/-8\.?000,00/);
-      expect(within(cardRow).getAllByRole('cell')[4]).toHaveTextContent(/^\$?\s?0,00/);
+      expect(within(cardRow).getAllByRole('cell')[4]).toHaveTextContent(/^USD\s0,00/);
 
       const outflows = screen.getByRole('table', { name: 'Salidas de caja' });
       const row = within(outflows).getAllByRole('row')[1];
@@ -327,5 +329,33 @@ describe('CashSessionReport (DX-027)', () => {
       render(<CashSessionReport session={cashSessionFixture()} />);
       expect(screen.getByText('Sin salidas de caja en este turno.')).toBeInTheDocument();
     });
+  });
+});
+
+describe('DX-354: el formato de la sede del turno', () => {
+  const closed = (regional: CashSessionDetail['regional']) => closedCashSessionFixture({ regional });
+
+  it('A: sede en-US h12, la hora en 12 h en la zona de la sede y los importes con código', () => {
+    render(<CashSessionReport session={closed({ ...REGIONAL_US, timeZone: 'America/New_York' })} />);
+    const doc = screen.getByTestId('cash-session-report');
+    // 13:00 UTC es 9:00 a. m. en Nueva York (EDT).
+    expect(doc).toHaveTextContent('Paola Martínez · 10/17/2026 9:00 a. m.');
+    expect(doc.textContent?.replace(/\s/g, ' ')).toContain('USD 50,000.00');
+  });
+
+  it('B: sede de-DE h23, 24 h y los importes con código', () => {
+    render(<CashSessionReport session={closed({ ...REGIONAL_DE, timeZone: 'America/Caracas' })} />);
+    const doc = screen.getByTestId('cash-session-report');
+    expect(doc).toHaveTextContent('Paola Martínez · 17.10.2026 09:00');
+    expect(doc.textContent?.replace(/\s/g, ' ')).toContain('50.000,00 USD');
+  });
+
+  it('C: sin región, «—» en las fechas y los importes, sin símbolo ni dd/mm/yyyy', () => {
+    render(<CashSessionReport session={closed(null)} />);
+    const text = screen.getByTestId('cash-session-report').textContent ?? '';
+    expect(text).toContain('Paola Martínez · —');
+    expect(text).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+    expect(text).not.toMatch(/\d[.,]\d{2}/);
+    expect(text).not.toContain('US$');
   });
 });

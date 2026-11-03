@@ -238,7 +238,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // Anular (DX-057): «Anular» solo sale en las filas con `canVoid` (lo calcula
   // la API para quien consulta); tras anular se recarga la caja, que solo
   // lista abonos activos, y con ella el resumen.
-  const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1));
+  const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1), fmt);
   // Recibo de caja (DX-136): ver, reimprimir o enviar el de cualquier fila.
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
@@ -700,7 +700,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         error={voiding.error}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
-        subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+        subject={voiding.target ? voidPaymentSubject(voiding.target, fmt) : undefined}
         splitLines={voiding.target?.splitLines ?? undefined}
       />
     </>

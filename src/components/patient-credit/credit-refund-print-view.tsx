@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Lock, Printer, ReceiptText } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -13,6 +13,8 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { CreditRefundDocument } from './credit-refund-document';
 
 const copy = {
@@ -53,6 +55,8 @@ export function CreditRefundPrintView({
   const [notFound, setNotFound] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
+  // DX-354: sin formato de sede no se abre el diálogo de impresión solo: saldría lleno de «—» antes de leer el aviso.
+  const docFormat = useMemo(() => (refund ? documentFormat(refund.regional) : null), [refund]);
   const forbidden = !allowed || deniedByApi;
 
   useEffect(() => {
@@ -76,11 +80,11 @@ export function CreditRefundPrintView({
   }, [token, refundId, reloadKey, allowed]);
 
   useEffect(() => {
-    if (refund && !printed.current) {
+    if (refund && docFormat !== null && !printed.current) {
       printed.current = true;
       window.print();
     }
-  }, [refund]);
+  }, [refund, docFormat]);
 
   const backHref = refund
     ? `/patients/${encodeURIComponent(refund.patientId)}?tab=account-statement`
@@ -118,7 +122,7 @@ export function CreditRefundPrintView({
               </Link>
             ))}
           </nav>
-          <Button type="button" onClick={() => window.print()} disabled={!refund}>
+          <Button type="button" onClick={() => window.print()} disabled={!refund || docFormat === null}>
             <Printer aria-hidden />
             {copy.print}
           </Button>
@@ -126,9 +130,18 @@ export function CreditRefundPrintView({
       </div>
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {refund ? (
-          <div className={cn('mx-auto shadow-sm print:shadow-none', format === '80mm' ? 'max-w-[80mm]' : 'max-w-[210mm]')}>
-            <CreditRefundDocument refund={refund} format={format} />
-          </div>
+          <>
+            {docFormat === null ? (
+              <DocumentFormatNote
+                locationId={refund.locationId}
+                onRetry={() => setReloadKey((k) => k + 1)}
+                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              />
+            ) : null}
+            <div className={cn('mx-auto shadow-sm print:shadow-none', format === '80mm' ? 'max-w-[80mm]' : 'max-w-[210mm]')}>
+              <CreditRefundDocument refund={refund} format={format} />
+            </div>
+          </>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
             <EmptyState role="status" icon={<Lock aria-hidden />} title={copy.forbiddenTitle} description={copy.forbiddenHint} />

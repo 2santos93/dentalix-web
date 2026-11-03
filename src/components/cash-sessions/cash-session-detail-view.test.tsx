@@ -1,5 +1,7 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
+import { REGIONAL_US } from '@/lib/test/document-regional';
 import { CashSessionDetailView } from './cash-session-detail-view';
 import { getCashSession } from '@/lib/cash-sessions/cash-sessions-api';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -109,5 +111,20 @@ describe('CashSessionDetailView: moneda de la sede (GLOBAL-G1)', () => {
     mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', currency: 'JPY' })]);
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByRole('button', { name: 'Corregir con un ajuste' })).toBeInTheDocument();
+  });
+});
+
+describe('CashSessionDetailView: formato de la sede del turno (DX-354)', () => {
+  it('sin región: el informe con «—», el aviso y Reintentar, que vuelve a leer el turno', async () => {
+    mockedGet.mockResolvedValueOnce(closedCashSessionFixture({ regional: null }));
+    mockedGet.mockResolvedValueOnce(closedCashSessionFixture({ regional: REGIONAL_US }));
+    render(<CashSessionDetailView token="tok" sessionId="cs-1" />);
+    await screen.findByTestId('cash-session-report');
+    expect(screen.getByTestId('cash-session-report')).toHaveTextContent('Paola Martínez · —');
+    expect(screen.getByText(SEDE_LOCALE_ERROR)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(screen.getByTestId('cash-session-report')).toHaveTextContent('10/17/2026 9:00 a. m.'));
+    expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument();
+    expect(mockedGet).toHaveBeenCalledTimes(2);
   });
 });

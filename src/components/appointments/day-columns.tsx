@@ -655,7 +655,7 @@ export function DayColumns({
                             patient,
                             a.appointmentType?.name,
                             STATUS_LABELS[a.status],
-                            overdueChipText(a.balance),
+                            overdueChipText(a.balance, fmt),
                             attendanceBadgeText(a.attendance),
                             copy.detailFor(byChair ? providerName(a.providerId) : p.label),
                             coverageChipText(a.coverage),
@@ -701,7 +701,7 @@ export function DayColumns({
                               {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
                             </span>
                           </span>{' '}
-                          <OverdueChip balance={a.balance} compact />{' '}
+                          <OverdueChip balance={a.balance} compact fmt={fmt} />{' '}
                           {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
                           <AttendanceBadge counts={a.attendance} compact />
                         </button>

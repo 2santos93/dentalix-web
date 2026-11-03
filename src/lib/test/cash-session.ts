@@ -1,4 +1,5 @@
 import type { CashSessionDetail } from '@/lib/cash-sessions/cash-sessions-api';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 type CashOutflow = CashSessionDetail['outflows'][number];
 
@@ -34,6 +35,7 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
     unjustifiedDifference: false,
     notes: null,
     timeZone: 'America/Caracas',
+    regional: REGIONAL_VE,
     blindHidden: false,
     expected: [
       {

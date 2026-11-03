@@ -11889,6 +11889,21 @@ export interface components {
             providerName: string | null;
             locationName: string;
             locationAddress: string | null;
+            /**
+             * @description DX-354: zona IANA de la sede de la cita, en crudo. null si la sede no la tiene.
+             * @example America/Caracas
+             */
+            timeZone: string | null;
+            /**
+             * @description DX-354: formato regional (BCP 47) de la sede de la cita, en crudo. null si la sede no lo tiene.
+             * @example es-VE
+             */
+            locale: string | null;
+            /**
+             * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
+             * @example h12
+             */
+            hourCycle: components["schemas"]["HourCycle"] | null;
         };
         ConfirmationLinkDto: {
             /** @description URL pública en el host de la clínica. Contiene el token en claro: se entrega solo aquí. */
@@ -12383,6 +12398,20 @@ export interface components {
             name: string;
             address: string | null;
         };
+        DocumentRegionalDto: {
+            /**
+             * @description Zona IANA de la sede.
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /**
+             * @description Locale canónico: separadores y orden de las fechas.
+             * @example es-VE
+             */
+            locale: string;
+            /** @description Reloj de la sede: 12 h o 24 h. */
+            hourCycle: components["schemas"]["HourCycle"];
+        };
         PlanQuotePatientDto: {
             name: string;
             /** @example Documento nacional DOC-0001 */
@@ -12482,6 +12511,8 @@ export interface components {
             /** @description DX-019: datos fiscales. Aceptado: los congelados al firmar; null si no los llevaba (nunca los de hoy). */
             clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             location: components["schemas"]["PlanQuoteLocationDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del presupuesto (la de la firma si ya se aceptó). null si le falta algo: el presupuesto se lee igual y la web pinta «—». No forma parte del contenido firmado. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patient: components["schemas"]["PlanQuotePatientDto"];
             /** @description Profesional que creó el plan */
             professionalName: string | null;
@@ -13501,7 +13532,7 @@ export interface components {
             total: components["schemas"]["ReceiptSplitTotalDto"];
         };
         /**
-         * @description Reloj de la sede: 12 h o 24 h.
+         * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
          * @enum {string}
          */
         HourCycle: "h12" | "h23";
@@ -14417,6 +14448,8 @@ export interface components {
             /** Format: date-time */
             issuedAt: string;
             clinic: components["schemas"]["AccountStatementClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede en contexto (o la principal) para formatear el impreso. null si a la sede le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patient: components["schemas"]["AccountStatementPatientDto"];
             addressee: components["schemas"]["AccountStatementAddresseeDto"];
             range: components["schemas"]["AccountStatementRangeDto"];
@@ -14470,6 +14503,8 @@ export interface components {
             /** Format: date-time */
             issuedAt: string;
             clinic: components["schemas"]["AccountStatementClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede en contexto (o la principal) para formatear el impreso. null si a la sede le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             payer: components["schemas"]["FamilyMemberPatientDto"];
             members: components["schemas"]["FamilyStatementMemberDto"][];
             /** @description Suma de los subtotales por moneda, al céntimo. */
@@ -14816,6 +14851,8 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             snapshot: components["schemas"]["RefundReceiptSnapshotDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del comprobante. null si le falta algo: el comprobante se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
         };
         CreditTransferDto: {
             /** Format: uuid */
@@ -15626,6 +15663,8 @@ export interface components {
             notes: string | null;
             /** @example UTC */
             timeZone: string;
+            /** @description DX-354: zona, locale y reloj de la sede de la caja para formatear el cierre impreso. null si le falta algo: la caja se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             /** @description Arqueo ciego para quien consulta: `expected`, `payments`, `voidedPayments` y `adjustments` vienen a null hasta cerrar, y los cierres anteriores (si se reabrió) sin líneas (SEC-043). */
             blindHidden: boolean;
             expected: components["schemas"]["CashExpectedLineDto"][] | null;
@@ -17012,6 +17051,8 @@ export interface components {
             /** @description data:image/png;base64,…; null en uno firmado a distancia hasta que firma el profesional */
             professionalSignature: string | null;
             clinic: components["schemas"]["ConsentClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del documento (la de la firma a distancia, o la sede en contexto). null si le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patient: components["schemas"]["ConsentPatientDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
             integrityOk: boolean;
@@ -17263,6 +17304,8 @@ export interface components {
             clinic: components["schemas"]["PostOpClinicBrandingDto"];
             locationName: string;
             locationPhone: string | null;
+            /** @description DX-354: zona, locale y reloj de la sede de la entrega. null si le falta algo: la entrega se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patientName: string;
         };
         PublicPostOpDto: {
@@ -17571,6 +17614,8 @@ export interface components {
             patientFirstName: string | null;
             /** Format: date-time */
             expiresAt: string;
+            /** @description DX-354: zona, locale y reloj de la sede principal de la clínica (la activa más antigua), para pintar `expiresAt`. null si le falta algo: la página pinta «—» y pide llamar a la clínica. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             questionnaire: components["schemas"]["AnamnesisQuestionnaireDto"];
             consent: components["schemas"]["PublicConsentDto"];
         };
@@ -18635,6 +18680,8 @@ export interface components {
             /** Format: date */
             patientBirthDate: string | null;
             clinicName: string;
+            /** @description DX-354: zona, locale y reloj de la sede de la tarjeta (la de los implantes si es una; si junta varias, la activa). null si le falta algo: la tarjeta se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             locations: components["schemas"]["ImplantCardLocationDto"][];
             /** Format: date */
             placedOn: string;
@@ -19177,6 +19224,8 @@ export interface components {
             /** Format: date-time */
             optedOutAt: string | null;
             clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
+            /** @description DX-354: zona, locale y reloj de la sede principal de la clínica (la activa más antigua), para pintar `optedOutAt`. null si le falta algo: la página pinta «—» y pide llamar a la clínica. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
         };
         /** @enum {string} */
         RecallKind: "HYGIENE" | "CHECKUP";

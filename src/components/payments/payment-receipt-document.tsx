@@ -1,8 +1,6 @@
 import { taxIdLine } from '@/lib/clinic/clinic-settings-api';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDate, formatDateTime } from '@/lib/format/date';
-import { regionalFormat, type RegionalFormat } from '@/lib/format/regional-format';
+import { documentFormat, NO_DOCUMENT_FORMAT } from '@/lib/format/document-format';
 import { moneyWithCode } from '@/lib/format/sede-number';
 import { NO_CURRENCY_TEXTS, type CurrencyTexts } from '@/lib/format/currency-text';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -72,8 +70,8 @@ const copy = {
 
 /** Lo que el documento del recibo necesita para pintar fechas e importes. */
 export interface ReceiptFormatting {
-  /** `true` si sale de la región de la sede; `false` si es el formato de antes (R5). */
-  regional: boolean;
+  /** `false` si la sede del recibo no tiene formato: todo sale «—» (DX-354). */
+  available: boolean;
   /** Un instante (fecha y hora) o `—` si falta o no es una fecha. */
   dateTime(value: string | null | undefined): string;
   /** La fecha de un instante. */
@@ -83,7 +81,7 @@ export interface ReceiptFormatting {
   money(amount: number, currency: string): string;
 }
 
-const NO_VALUE = '—';
+const NO_VALUE = NO_DOCUMENT_FORMAT;
 
 function instant(value: string | null | undefined): Date | null {
   if (value === null || value === undefined || value === '') return null;
@@ -91,27 +89,13 @@ function instant(value: string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** La región de la sede si este navegador la entiende; si no, `null`. */
-function usableFormat(regional: PaymentReceipt['regional'] | undefined): { fmt: RegionalFormat; timeZone: string } | null {
-  if (!regional) return null;
-  try {
-    const fmt = regionalFormat({ locale: regional.locale, hourCycle: regional.hourCycle });
-    // Una zona que este navegador no conoce lanza RangeError al formatear.
-    fmt.dateTime(new Date(0), regional.timeZone);
-    return { fmt, timeZone: regional.timeZone };
-  } catch (error) {
-    if (error instanceof RangeError) return null;
-    throw error;
-  }
-}
-
 /**
  * DX-521: el formato del recibo de caja. Con la región de su sede (`regional`
  * de la API: la congelada al emitir, o la de hoy en un recibo anterior), las
  * fechas salen en la zona de la sede y los importes con el código ISO (o el
- * texto de la foto) en el orden de su locale. Sin región, o con un locale o una
- * zona que este navegador no soporta, sale exactamente como antes (locale `es`,
- * zona del navegador): nunca se inventa otro formato ni se rompe el documento.
+ * texto de la foto) en el orden de su locale. DX-354: sin región, o con un
+ * locale o una zona que este navegador no soporta, fechas e importes salen «—»
+ * (y quien imprime muestra el aviso de la sede): nunca otro formato.
  *
  * `texts`: los textos de moneda CONGELADOS en la foto del recibo, nunca los de
  * hoy de la clínica (DX-517).
@@ -120,19 +104,19 @@ export function receiptFormatting(
   regional: PaymentReceipt['regional'] | undefined,
   texts: CurrencyTexts,
 ): ReceiptFormatting {
-  const usable = usableFormat(regional);
-  if (!usable) {
+  const format = documentFormat(regional);
+  if (!format) {
     return {
-      regional: false,
-      dateTime: (value) => formatDateTime(value),
-      date: (value) => formatDate(value),
-      civilDate: (value) => formatCivilDate(value),
-      money: (amount, currency) => formatCurrency(amount, currency, undefined, texts),
+      available: false,
+      dateTime: () => NO_VALUE,
+      date: () => NO_VALUE,
+      civilDate: () => NO_VALUE,
+      money: () => NO_VALUE,
     };
   }
-  const { fmt, timeZone } = usable;
+  const { fmt, timeZone } = format;
   return {
-    regional: true,
+    available: true,
     dateTime: (value) => {
       const d = instant(value);
       return d ? fmt.dateTime(d, timeZone) : NO_VALUE;
@@ -143,7 +127,7 @@ export function receiptFormatting(
     },
     civilDate: (value) => {
       if (!value) return NO_VALUE;
-      // Un día mal formado no rompe el documento: «—», como el helper de antes.
+      // Un día mal formado no rompe el documento: «—».
       try {
         return fmt.civilDate(value.slice(0, 10));
       } catch (error) {
@@ -179,8 +163,8 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
   // recibo se reimprime igual.
   const currencyTexts = snapshot.currencyTexts ?? NO_CURRENCY_TEXTS;
   // DX-521: fechas en la zona de la sede e importes con su locale y el código
-  // ISO de la moneda (o el texto de la foto). Sin región, o con una que este
-  // navegador no soporta, el documento sale exactamente como antes.
+  // ISO de la moneda (o el texto de la foto). DX-354: sin región, o con una que
+  // este navegador no soporta, «—» (nunca el formato de antes).
   const { money, dateTime, date, civilDate } = receiptFormatting(receipt.regional, currencyTexts);
   const narrow = format === '80mm';
   // DX-376: la tasa congelada del abono (DX-375), no la del día: reimprimir da

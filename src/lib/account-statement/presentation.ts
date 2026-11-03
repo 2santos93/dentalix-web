@@ -1,4 +1,4 @@
-import { formatCivilDate, formatDate } from '@/lib/format/date';
+import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import type { PaymentMethod } from '@/lib/payments/payments-api';
 import type {
@@ -14,7 +14,9 @@ import type {
  * exactamente lo mismo.
  */
 export const statementCopy = {
-  planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
+  // La fecha del plan, con la zona y el formato de la sede del documento o de la pantalla (DX-354); sin ellos, «—».
+  planLabel: (createdAt: string, format: DocumentFormat | null) =>
+    `Plan del ${documentTexts(format).date(createdAt)}`,
   unknownPlan: 'Plan',
   downPayment: 'Inicial',
   installment: (sequence: number | null) => `Cuota ${sequence ?? ''}`.trim(),
@@ -65,17 +67,21 @@ export function openingNoteFor(openings: Pick<AccountStatementOpeningBalance, 'a
     : statementCopy.openingNote;
 }
 
-/** «15/03/2026» o «23/10/2026 (aprox.)» si la fecha es la de la importación. */
+/** «15/03/2026» o «23/10/2026 (aprox.)» (con el orden de la sede) si la fecha es la de la importación. */
 export function openingAsOfLabel(
   opening: Pick<AccountStatementOpeningBalance, 'asOfDate' | 'asOfDateApproximate'>,
+  format: DocumentFormat | null,
 ): string {
-  const day = formatCivilDate(opening.asOfDate);
+  const day = documentTexts(format).civilDate(opening.asOfDate);
   return opening.asOfDateApproximate ? `${day} (${statementCopy.approx})` : day;
 }
 
 /** Nombre de un plan por su id (el plan no tiene título: se nombra por su fecha). */
-export function planNamer(plans: AccountStatementPlan[]): (id: string | null) => string {
-  const byId = new Map(plans.map((p) => [p.id, statementCopy.planLabel(p.createdAt)]));
+export function planNamer(
+  plans: AccountStatementPlan[],
+  format: DocumentFormat | null,
+): (id: string | null) => string {
+  const byId = new Map(plans.map((p) => [p.id, statementCopy.planLabel(p.createdAt, format)]));
   return (id) => (id ? byId.get(id) : undefined) ?? statementCopy.unknownPlan;
 }
 

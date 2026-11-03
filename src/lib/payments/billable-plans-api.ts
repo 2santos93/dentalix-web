@@ -2,6 +2,7 @@ import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { formatCurrency } from '@/lib/format/currency';
+import type { DocumentFormat } from '@/lib/format/document-format';
 import { statementCopy } from '@/lib/account-statement/presentation';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 
@@ -45,13 +46,19 @@ export type MoneyFormatter = (amount: number, currency: string) => string;
  * Cómo se nombra un plan en el selector de cobro: el mismo «Plan del …» que el
  * estado de cuenta y la caja (el plan no tiene título), su estado y lo que
  * falta por pagar — lo que decide contra cuál se cobra. `money` pinta el
- * importe (DX-386: con el formato de la sede donde la pantalla lo tiene).
+ * importe (DX-386: con el formato de la sede donde la pantalla lo tiene);
+ * `dates` es la zona y el formato de la sede con que se escribe la fecha del
+ * plan (DX-354), o `null` para «—».
  */
-export function billablePlanLabel(plan: BillablePlan, money: MoneyFormatter = formatCurrency): string {
+export function billablePlanLabel(
+  plan: BillablePlan,
+  dates: DocumentFormat | null,
+  money: MoneyFormatter = formatCurrency,
+): string {
   const balance =
     plan.balance < 0 ? `${money(-plan.balance, plan.currency)} ${statementCopy.inFavor}` : money(plan.balance, plan.currency);
   return [
-    statementCopy.planLabel(plan.createdAt),
+    statementCopy.planLabel(plan.createdAt, dates),
     PLAN_STATUS_LABELS[plan.status],
     `Saldo ${balance}`,
   ].join(' · ');

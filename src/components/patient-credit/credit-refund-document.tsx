@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/lib/format/currency';
-import { civilDateInZone, formatCivilDate } from '@/lib/format/date';
+import { civilDateInZone } from '@/lib/format/date';
+import { documentFormat, documentTexts } from '@/lib/format/document-format';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import type { CreditRefund, RefundPrintFormat } from '@/lib/patient-credit/patient-credit-api';
@@ -42,9 +42,12 @@ export function CreditRefundDocument({
 }) {
   const s = refund.snapshot;
   const narrow = format === '80mm';
-  // DX-378: fechas y horas en la zona de la sede del comprobante.
+  // DX-378: fechas y horas en la zona de la sede del comprobante. DX-354: el
+  // orden de la fecha y los importes con el código, con el formato de la sede
+  // (`regional`); sin él, «—» (y quien muestra el documento, el aviso).
   const zone = s.location.timeZone;
-  const day = (iso: string) => formatCivilDate(civilDateInZone(iso, zone));
+  const txt = documentTexts(documentFormat(refund.regional));
+  const day = (iso: string) => txt.civilDate(civilDateInZone(iso, zone));
   const docName = dtoDocTypeName({ docType: s.patient.documentType, docTypeLabel: s.patient.docTypeLabel });
   const doc = documentText(docName, s.patient.docNumber);
   return (
@@ -81,10 +84,10 @@ export function CreditRefundDocument({
       <dl className={cn('mt-4 grid gap-x-6 gap-y-3', !narrow && 'sm:grid-cols-2')}>
         <Row label={copy.refundedTo} value={s.patient.fullName} />
         {doc ? <Row label={copy.document} value={doc} /> : null}
-        <Row label={copy.amount} value={formatCurrency(s.amount, s.currency)} strong />
+        <Row label={copy.amount} value={txt.amount(s.amount, s.currency)} strong />
         <Row label={copy.method} value={PAYMENT_METHOD_LABELS[s.method]} />
         <Row label={copy.plan} value={copy.planLabel(day(s.plan.createdAt), s.plan.label)} />
-        <Row label={copy.creditAfter} value={formatCurrency(s.creditAfter, s.currency)} />
+        <Row label={copy.creditAfter} value={txt.amount(s.creditAfter, s.currency)} />
         <div className={cn(!narrow && 'sm:col-span-2')}>
           <Row label={copy.reason} value={s.reason} />
         </div>
@@ -97,7 +100,7 @@ export function CreditRefundDocument({
             <li key={p.id} className="flex flex-wrap justify-between gap-x-3 tabular-nums">
               <span>{p.receiptNumber}</span>
               <span>
-                {day(p.paidAt)} · {formatCurrency(p.amount, p.currency)}
+                {day(p.paidAt)} · {txt.amount(p.amount, p.currency)}
               </span>
             </li>
           ))}

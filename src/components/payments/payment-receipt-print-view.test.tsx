@@ -4,6 +4,7 @@ import { PaymentReceiptPrintView } from './payment-receipt-print-view';
 import { printPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { ApiError } from '@/lib/api/client';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
@@ -92,4 +93,23 @@ it('un 403 de la API se muestra como aviso de acceso y un 404 como abono inexist
   render(<PaymentReceiptPrintView token="tok" paymentId="pay-1" format="a4" />);
   expect(await screen.findByText(/no encontramos este abono/i)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+});
+
+it('DX-354: un recibo sin región de sede pinta «—» y el aviso de la sede, fuera del papel; Reintentar lo vuelve a leer', async () => {
+  mockedPrint.mockResolvedValueOnce(paymentReceiptFixture({ regional: null }));
+  mockedPrint.mockResolvedValueOnce(paymentReceiptFixture());
+  render(<PaymentReceiptPrintView token="tok" paymentId="pay-1" format="a4" />);
+
+  await screen.findByRole('heading', { level: 1, name: /recibo de caja/i });
+  expect(screen.getByTestId('receipt-document')).toHaveTextContent(/Emitido\s*—/);
+  const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
+  expect(note?.closest('.print\\:hidden')).not.toBeNull();
+  expect(printSpy).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: /imprimir/i })).toBeDisabled();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+  await waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument());
+  expect(screen.getByTestId('receipt-document')).not.toHaveTextContent(/Emitido\s*—/);
+  expect(mockedPrint).toHaveBeenCalledTimes(2);
 });

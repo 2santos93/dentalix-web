@@ -3,7 +3,6 @@ import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import type { PaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { setClinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
 import { PaymentReceiptDocument, receiptFormatting } from './payment-receipt-document';
-import { formatCurrency } from '@/lib/format/currency';
 import { NO_CURRENCY_TEXTS } from '@/lib/format/currency-text';
 
 const CARACAS = { timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h23' } as const;
@@ -11,7 +10,7 @@ const CARACAS = { timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h23'
 describe('receiptFormatting (DX-521)', () => {
   it('con la región de la sede pinta fechas en su zona y importes con código o texto', () => {
     const f = receiptFormatting(CARACAS, { VES: 'Bs.' });
-    expect(f.regional).toBe(true);
+    expect(f.available).toBe(true);
     expect(f.dateTime('2026-11-02T01:30:00.000Z')).toBe('01/11/2026 21:30');
     expect(f.date('2026-11-02T01:30:00.000Z')).toBe('01/11/2026');
     expect(f.civilDate('2026-11-02')).toBe('02/11/2026');
@@ -39,14 +38,14 @@ describe('receiptFormatting (DX-521)', () => {
     ['locale mal formado', { ...CARACAS, locale: 'no es un locale' }],
     ['zona que el navegador no conoce', { ...CARACAS, timeZone: 'Mars/Olympus' }],
     ['zona vacía', { ...CARACAS, timeZone: '' }],
-  ])('R5 (%s): se pinta como hoy, sin lanzar', (_name, regional) => {
+  ])('DX-354 (%s): fechas e importes «—», sin lanzar y sin otro formato', (_name, regional) => {
     const f = receiptFormatting(regional, { VES: 'Bs.' });
-    expect(f.regional).toBe(false);
-    // El formato de antes: locale `es`, zona del navegador y los textos de la foto.
-    expect(f.civilDate('2026-11-02')).toBe('02/11/2026');
-    expect(f.money(12345.5, 'VES')).toBe(formatCurrency(12345.5, 'VES', undefined, { VES: 'Bs.' }));
-    expect(f.money(12345.5, 'VES')).toBe('12.345,50\u00a0Bs.');
-    expect(f.money(12345.5, 'USD')).toBe('12.345,50\u00a0USD');
+    expect(f.available).toBe(false);
+    expect(f.dateTime('2026-11-02T01:30:00.000Z')).toBe('—');
+    expect(f.date('2026-11-02T01:30:00.000Z')).toBe('—');
+    expect(f.civilDate('2026-11-02')).toBe('—');
+    expect(f.money(12345.5, 'VES')).toBe('—');
+    expect(f.money(12345.5, 'USD')).toBe('—');
   });
 });
 
@@ -167,15 +166,34 @@ describe('recibo con el formato y la zona de su sede (DX-521)', () => {
     ['sin región (null)', null],
     ['locale que este runtime no soporta', { timeZone: 'America/Caracas', locale: 'xx-ZZ', hourCycle: 'h23' }],
     ['zona que el navegador no conoce', { timeZone: 'Mars/Olympus', locale: 'es-VE', hourCycle: 'h23' }],
-  ] as [string, PaymentReceipt['regional']][])('R5, %s', (_n, regional) => {
-    it('pinta como antes: zona del navegador (UTC) y locale es, sin romper', () => {
+  ] as [string, PaymentReceipt['regional']][])('DX-354, %s', (_n, regional) => {
+    it('fechas e importes «—», sin otro formato ni símbolo', () => {
       render(<PaymentReceiptDocument receipt={receiptAt(regional)} />);
       const text = docText();
-      expect(text).toContain('Emitido 02/11/2026 01:30');
-      expect(text).toContain('Anulado el 02/11/2026 01:30');
-      expect(text).toContain('150.000,00 VES');
-      expect(text).toContain('Fecha del abono02/11/2026');
+      expect(text).toContain('Emitido —');
+      expect(text).toContain('Anulado el —');
+      expect(text).toContain('Fecha del abono—');
+      expect(text).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+      expect(text).not.toMatch(/\d[.,]\d{2}/);
+      expect(text).not.toContain('US$');
     });
+  });
+
+  it('regional h12 en-US: 3:05 p. m. y USD 1,234.50', () => {
+    const regional: Regional = { timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' };
+    const base = receiptAt(regional);
+    render(
+      <PaymentReceiptDocument
+        receipt={{
+          ...base,
+          issuedAt: '2027-05-03T19:05:00.000Z',
+          snapshot: { ...base.snapshot, payment: { ...base.snapshot.payment, amount: 1234.5, currency: 'USD' } },
+        }}
+      />,
+    );
+    const text = docText();
+    expect(text).toContain('Emitido 05/03/2027 3:05 p. m.');
+    expect(text).toContain('USD 1,234.50');
   });
 
   it('R8: la hoja sigue blanca y sin tokens de tema, con y sin región', () => {

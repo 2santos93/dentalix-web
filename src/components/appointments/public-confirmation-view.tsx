@@ -21,8 +21,7 @@ import {
   type PublicCancellationPolicy,
   type PublicConfirmation,
 } from '@/lib/appointments/confirmations-api';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatDateLabel, formatTime } from '@/lib/format/date';
+import { documentFormat, documentTexts, NO_DOCUMENT_FORMAT, type DocumentFormat } from '@/lib/format/document-format';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -68,6 +67,13 @@ const copy = {
   lateMessage:
     'Si cancelas ahora, cuenta como cancelación tardía según la política de la clínica. Si prefieres, pide que te llamemos para buscar otra hora.',
   acknowledge: 'He leído y acepto la política de cancelación de la clínica',
+  // DX-354: la sede de la cita no tiene zona, formato o reloj: no hay quien lo configure, así que se manda a la clínica.
+  missing: 'Sin dato',
+  noFormat: 'Llama a la clínica para confirmar la hora de tu cita.',
+  // DX-354: con la sede sin formato no se puede escribir el cargo: nunca «—» en su lugar; se cancela por teléfono.
+  feeNeedsClinicTitle: 'Para cancelar ahora, llama a la clínica',
+  feeNeedsClinicMessage:
+    'Cancelar con tan poco aviso tiene un cargo según la política de la clínica y aquí no podemos mostrártelo. Llama a la clínica para cancelar o para que te llamemos a ti.',
   acknowledgeRequired: (hours: number) =>
     `Para cancelar con menos de ${hours} h de aviso, marca que aceptas la política de cancelación.`,
 };
@@ -79,23 +85,67 @@ type LoadState =
   | { kind: 'ready'; data: PublicConfirmation };
 
 /**
- * La página pública no recibe la zona ni el reloj de la sede (la API no los
- * manda en la confirmación): el día y la hora salen en los del navegador del
- * paciente. Excepción listada en `src/architecture/sede-clock-guard.test.ts`.
+ * DX-354: el formato de la sede de la cita (zona, locale y reloj que manda la
+ * API, en crudo), no el del navegador del paciente. Si la sede no lo tiene,
+ * `null`: el día y la hora salen «—» y se manda a llamar a la clínica.
  */
-function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointment }) {
+function appointmentFormat(appointment: ConfirmationAppointment): DocumentFormat | null {
+  return documentFormat({
+    timeZone: appointment.timeZone ?? null,
+    locale: appointment.locale ?? null,
+    hourCycle: appointment.hourCycle ?? null,
+  });
+}
+
+/**
+ * DX-354: cancelar tarde con cargo cuando la sede no tiene formato. El importe
+ * no se puede escribir (ni se pinta «—» en su lugar), así que el paciente no
+ * puede aceptar el cargo en línea: cancela llamando a la clínica.
+ */
+function cancelNeedsClinic(data: PublicConfirmation): boolean {
+  const policy = data.cancellationPolicy;
+  const appointment = data.appointment;
+  if (!policy || !appointment || !data.isLate) return false;
+  const hasFee = policy.suggestedFee !== null && policy.suggestedFee > 0 && Boolean(policy.currency);
+  return hasFee && appointmentFormat(appointment) === null;
+}
+
+/** El «—» de un dato que la sede no permite escribir, con texto para lectores de pantalla. */
+function MissingValue() {
+  return (
+    <>
+      <span aria-hidden>{NO_DOCUMENT_FORMAT}</span>
+      <span className="sr-only">{copy.missing}</span>
+    </>
+  );
+}
+
+function AppointmentSummary({
+  appointment,
+  format,
+}: {
+  appointment: ConfirmationAppointment;
+  format: DocumentFormat | null;
+}) {
+  const doc = documentTexts(format);
+  // En 12 h el rango lleva espacios alrededor del guion («9:00 a. m. – 9:30 a. m.»).
+  const separator = format?.fmt.hourCycle === 'h12' ? ' – ' : '–';
   const rows = [
     {
       icon: CalendarCheck,
       label: copy.dayLabel,
-      value: formatDateLabel(appointment.start, { weekday: 'long', day: 'numeric', month: 'long' }),
+      value: format
+        ? format.fmt.longDate(new Date(appointment.start), format.timeZone)
+        : <MissingValue />,
       sub: null,
     },
     {
       icon: Clock,
       label: copy.timeLabel,
-      value: `${formatTime(appointment.start)}–${formatTime(appointment.end)}`,
-      sub: null,
+      value: format
+        ? `${doc.time(appointment.start)}${separator}${doc.time(appointment.end)}`
+        : <MissingValue />,
+      sub: format ? null : copy.noFormat,
     },
     ...(appointment.providerName
       ? [{ icon: UserRound, label: copy.providerLabel, value: appointment.providerName, sub: null }]
@@ -134,13 +184,18 @@ function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointm
 function CancellationPolicyNotice({
   policy,
   isLate,
+  format,
+  feeBlocked,
 }: {
   policy: PublicCancellationPolicy;
   isLate: boolean;
+  format: DocumentFormat | null;
+  /** Tarde, con cargo y sin formato de sede: el paciente no puede cancelar en línea. */
+  feeBlocked: boolean;
 }) {
   const fee =
-    policy.suggestedFee !== null && policy.suggestedFee > 0 && policy.currency
-      ? formatCurrency(policy.suggestedFee, policy.currency)
+    format && policy.suggestedFee !== null && policy.suggestedFee > 0 && policy.currency
+      ? documentTexts(format).amount(policy.suggestedFee, policy.currency)
       : null;
   return (
     <section
@@ -157,7 +212,16 @@ function CancellationPolicyNotice({
         {policy.text ? <p className="whitespace-pre-line break-words">{policy.text}</p> : null}
         {fee ? <p className="tabular-nums">{copy.policyFee(fee)}</p> : null}
       </div>
-      {isLate ? (
+      {feeBlocked ? (
+        <Callout
+          tone="warning"
+          role="note"
+          data-testid="public-fee-needs-clinic"
+          title={copy.feeNeedsClinicTitle}
+        >
+          {copy.feeNeedsClinicMessage}
+        </Callout>
+      ) : isLate ? (
         <Callout
           tone="warning"
           role="note"
@@ -205,6 +269,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
 
   async function handleRespond(action: ConfirmationAction) {
     if (state.kind !== 'ready') return;
+    if (action === 'cancel' && cancelNeedsClinic(state.data)) return;
     const policy = state.data.cancellationPolicy;
     const mustAcknowledge = action === 'cancel' && state.data.isLate && policy !== null;
     if (mustAcknowledge && !acknowledged) {
@@ -289,7 +354,12 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     <p className="mt-1 text-sm text-ink">{copy.responded[state.data.response]}</p>
                   )}
                 </div>
-                {state.data.appointment && <AppointmentSummary appointment={state.data.appointment} />}
+                {state.data.appointment && (
+                  <AppointmentSummary
+                    appointment={state.data.appointment}
+                    format={appointmentFormat(state.data.appointment)}
+                  />
+                )}
               </section>
             )}
 
@@ -301,11 +371,16 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   </span>{' '}
                   {copy.pendingLead}
                 </p>
-                <AppointmentSummary appointment={state.data.appointment} />
+                <AppointmentSummary
+                  appointment={state.data.appointment}
+                  format={appointmentFormat(state.data.appointment)}
+                />
                 {state.data.cancellationPolicy ? (
                   <CancellationPolicyNotice
                     policy={state.data.cancellationPolicy}
                     isLate={state.data.isLate}
+                    format={appointmentFormat(state.data.appointment)}
+                    feeBlocked={cancelNeedsClinic(state.data)}
                   />
                 ) : null}
                 <div className="flex flex-col gap-3">
@@ -330,7 +405,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   >
                     <Phone aria-hidden /> {copy.callMe}
                   </Button>
-                  {state.data.isLate && state.data.cancellationPolicy ? (
+                  {state.data.isLate && state.data.cancellationPolicy && !cancelNeedsClinic(state.data) ? (
                     <div className="rounded-lg border border-border bg-surface px-3 py-2">
                       <Checkbox
                         ref={ackRef}
@@ -346,17 +421,19 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                       />
                     </div>
                   ) : null}
-                  <Button
-                    type="button"
-                    size="lg"
-                    variant="outline"
-                    className="h-12 w-full"
-                    loading={pending === 'cancel'}
-                    disabled={pending !== null}
-                    onClick={() => void handleRespond('cancel')}
-                  >
-                    <CalendarX aria-hidden /> {copy.cancel}
-                  </Button>
+                  {cancelNeedsClinic(state.data) ? null : (
+                    <Button
+                      type="button"
+                      size="lg"
+                      variant="outline"
+                      className="h-12 w-full"
+                      loading={pending === 'cancel'}
+                      disabled={pending !== null}
+                      onClick={() => void handleRespond('cancel')}
+                    >
+                      <CalendarX aria-hidden /> {copy.cancel}
+                    </Button>
+                  )}
                   {respondError && <InlineError>{respondError}</InlineError>}
                 </div>
               </section>

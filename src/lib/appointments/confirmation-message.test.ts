@@ -7,6 +7,7 @@ import {
 import type { Appointment } from './appointments-api';
 import { locationClock } from '@/lib/locations/sede-clock';
 import { clinicLocation } from '@/lib/test/locations';
+import { PUBLIC_REGIONAL_VE } from '@/lib/test/document-regional';
 
 // Sede en Caracas (UTC−4) y 12 h; Jest corre con TZ=UTC.
 const CLOCK = locationClock(clinicLocation({ timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' }))!;
@@ -48,6 +49,7 @@ describe('confirmationMessage', () => {
         providerName: 'Dra. Pérez',
         locationName: 'Sede Norte',
         locationAddress: 'Av. Libertador 100',
+        ...PUBLIC_REGIONAL_VE,
       },
       clock: CLOCK,
     });
@@ -67,6 +69,7 @@ describe('confirmationMessage', () => {
         providerName: null,
         locationName: 'Sede principal',
         locationAddress: null,
+        ...PUBLIC_REGIONAL_VE,
       },
       clock: CLOCK,
     });

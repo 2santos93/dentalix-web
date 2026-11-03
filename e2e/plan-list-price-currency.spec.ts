@@ -5,7 +5,6 @@ import { loginAs } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
-import { formatCurrency } from '../src/lib/format/currency';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
 
@@ -37,8 +36,6 @@ const LIST_PRICE_EUR = 100.55;
 const sedeFmt = regionalFormat(E2E_REGION);
 /** Importes de la pestaña del plan: formato de la sede y código ISO (DX-386, DX-489). */
 const sede = (amount: number, currency: string) => moneyWithCode(amount, currency, sedeFmt).replace(/ /g, ' ');
-/** Importes del documento impreso: `formatCurrency` (pendiente de DX-354). */
-const printed = (amount: number, currency: string) => formatCurrency(amount, currency).replace(/ /g, ' ');
 
 let session: ApiSession;
 let patientId = '';
@@ -134,7 +131,6 @@ for (const viewport of [
     await expect(origin489).toBeVisible({ timeout: 10_000 });
     await expect(origin489).toHaveText(`Lista de precios de la sede · precio de lista ${sede(CATALOG_PRICE, 'USD')}`);
     await expect(panel).not.toContainText(sede(CATALOG_PRICE, 'EUR'));
-    await expect(panel).not.toContainText(printed(CATALOG_PRICE, 'EUR'));
 
     // Un solo formato para el mismo importe: resumen, «Pagado» y abonos.
     const figure = (term: string) =>
@@ -148,7 +144,6 @@ for (const viewport of [
     await expect(panel.getByRole(paymentsRole, { name: /abonos del plan de tratamiento/i })).toContainText(
       sede(LIST_PRICE_EUR, 'EUR'),
     );
-    await expect(panel).not.toContainText(printed(LIST_PRICE_EUR, 'EUR'));
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
 
     // --- Presupuesto imprimible: lo mismo que la pantalla.
@@ -158,17 +153,17 @@ for (const viewport of [
     ]);
     await printPage.setViewportSize({ width: viewport.width, height: viewport.height });
     await expect(printPage.getByTestId('quote-header')).toBeVisible({ timeout: 15_000 });
-    const listLine = `Precio de lista ${printed(CATALOG_PRICE, 'USD')}`;
+    const listLine = `Precio de lista ${sede(CATALOG_PRICE, 'USD')}`;
     const note = 'El precio de lista es el del catálogo de la clínica, en USD: es de referencia y no se convierte a EUR.';
     // En pantalla estrecha, la ficha; en ancha, la tabla.
     const items = printPage.getByRole(viewport.width === 390 ? 'list' : 'table', {
       name: 'Procedimientos del presupuesto',
     });
     await expect(items).toContainText(listLine);
-    await expect(items).not.toContainText(printed(CATALOG_PRICE, 'EUR'));
+    await expect(items).not.toContainText(sede(CATALOG_PRICE, 'EUR'));
     await expect(printPage.getByTestId('quote-list-price-note')).toHaveText(note);
     await expect(printPage.getByText('Ahorro por convenio')).toHaveCount(0);
-    await expect(printPage.getByTestId('quote-total-EUR')).toContainText(printed(LIST_PRICE_EUR, 'EUR'));
+    await expect(printPage.getByTestId('quote-total-EUR')).toContainText(sede(LIST_PRICE_EUR, 'EUR'));
     if (viewport.width === 390) await expectNoHorizontalScroll(printPage);
 
     // En papel (y en el PDF) siempre es tabla, con el mismo precio de lista.

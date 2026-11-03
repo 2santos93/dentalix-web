@@ -1,3 +1,5 @@
+import { regionalFormat } from '@/lib/format/regional-format';
+import type { AuditEvent } from './audit-api';
 import {
   exchangeRateBackupDetail,
   receiptDetail,
@@ -27,6 +29,8 @@ import {
   signatureRequestDetail,
   confirmationLinkDetail,
 } from './audit-labels';
+
+type AuditMetadata = AuditEvent['metadata'];
 
 describe('etiquetas de auditoría', () => {
   it('cada acción y cada recurso tienen etiqueta en español', () => {
@@ -166,19 +170,31 @@ describe('cashSessionDetail (DX-027)', () => {
   });
 });
 
+const H23 = regionalFormat({ locale: 'es', hourCycle: 'h23' });
+const H12 = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+const WEEKLY: AuditMetadata = {
+  scheduleChange: {
+    before: [],
+    after: [
+      { locationId: 'a', weekday: 1, startMinute: 480, endMinute: 780 },
+      { locationId: 'b', weekday: 4, startMinute: 840, endMinute: 1140 },
+    ],
+  },
+};
+
 describe('scheduleChangeDetail (DX-233)', () => {
   it('semanal: antes y después por día', () => {
     expect(
-      scheduleChangeDetail({
-        scheduleChange: {
-          before: [],
-          after: [
-            { locationId: 'a', weekday: 1, startMinute: 480, endMinute: 780 },
-            { locationId: 'b', weekday: 4, startMinute: 840, endMinute: 1140 },
-          ],
-        },
-      }),
+      scheduleChangeDetail(WEEKLY, H23),
     ).toBe('Antes: sin horario · Después: lun 08:00–13:00, jue 14:00–19:00');
+  });
+  it('DX-354: cambio de horario en 12 h con una sede h12', () => {
+    expect(scheduleChangeDetail(WEEKLY, H12)).toBe(
+      'Antes: sin horario · Después: lun 8:00 a. m.–1:00 p. m., jue 2:00 p. m.–7:00 p. m.',
+    );
+  });
+  it('DX-354: con fmt null «—», no otro reloj', () => {
+    expect(scheduleChangeDetail(WEEKLY, null)).toBe('Antes: sin horario · Después: —');
   });
   it('excepción: fecha y «no trabaja»', () => {
     expect(
@@ -187,11 +203,11 @@ describe('scheduleChangeDetail (DX-233)', () => {
           before: [{ locationId: 'b', date: '2026-10-22', startMinute: 840, endMinute: 1140 }],
           after: [{ locationId: 'b', date: '2026-10-22', off: true }],
         },
-      }),
-    ).toBe('Antes: 22/10 14:00–19:00 · Después: 22/10 no trabaja');
+      }, H23),
+    ).toBe('Antes: 22 de octubre 14:00–19:00 · Después: 22 de octubre no trabaja');
   });
   it('sin cambio de horario, null', () => {
-    expect(scheduleChangeDetail({})).toBeNull();
+    expect(scheduleChangeDetail({}, H23)).toBeNull();
   });
 });
 
@@ -216,6 +232,9 @@ describe('importBatchDetail (DX-107)', () => {
   });
 });
 
+/** El reloj de la pantalla de auditoría de una sede en UTC con locale `es`. */
+const CLOCK = { timeZone: 'UTC', fmt: H23 };
+
 describe('planItemAttributionDetail (DX-050)', () => {
   const before = {
     performedById: '11111111-1111-4111-8111-111111111111',
@@ -228,13 +247,13 @@ describe('planItemAttributionDetail (DX-050)', () => {
       planItemAttributionDetail({
         reason: 'PLAN_ITEM_ATTRIBUTION_CORRECTED',
         attribution: { before, after: { ...before, performedById: '22222222-2222-4222-8222-222222222222' } },
-      }),
+      }, CLOCK),
     ).toBe('Corrección de quién lo realizó · Otro profesional');
     expect(
       planItemAttributionDetail({
         reason: 'PLAN_ITEM_ATTRIBUTION_CORRECTED',
         attribution: { before, after: { ...before, completedAt: '2026-10-19T15:00:00.000Z' } },
-      }),
+      }, CLOCK),
     ).toBe('Corrección de quién lo realizó · Fecha 20/10/2026 → 19/10/2026');
   });
 
@@ -246,7 +265,7 @@ describe('planItemAttributionDetail (DX-050)', () => {
           before: { performedById: null, locationId: null, completedAt: null },
           after: { performedById: before.performedById, locationId: null, completedAt: null },
         },
-      }),
+      }, CLOCK),
     ).toBe('Corrección de quién lo realizó · Antes sin atribuir');
   });
 
@@ -255,14 +274,26 @@ describe('planItemAttributionDetail (DX-050)', () => {
       planItemAttributionDetail({
         reason: 'PLAN_ITEM_DONE_REVERTED',
         attribution: { before, after: { performedById: null, locationId: null, completedAt: null } },
-      }),
+      }, CLOCK),
     ).toBe('Se quitó «Realizado» · realizado el 20/10/2026');
-    expect(planItemAttributionDetail({ reason: 'PLAN_ITEM_DONE_REVERTED' })).toBe('Se quitó «Realizado»');
+    expect(planItemAttributionDetail({ reason: 'PLAN_ITEM_DONE_REVERTED' }, CLOCK)).toBe('Se quitó «Realizado»');
+  });
+
+  it('DX-354: las fechas con la zona y el formato de la sede de la pantalla; sin él, «—»', () => {
+    const reverted: AuditMetadata = {
+      reason: 'PLAN_ITEM_DONE_REVERTED',
+      attribution: { before, after: { performedById: null, locationId: null, completedAt: null } },
+    };
+    // 15:00 UTC del 20/10 es el 20/10 en Nueva York, en el orden de en-US.
+    expect(planItemAttributionDetail(reverted, { timeZone: 'America/New_York', fmt: H12 })).toBe(
+      'Se quitó «Realizado» · realizado el 10/20/2026',
+    );
+    expect(planItemAttributionDetail(reverted, null)).toBe('Se quitó «Realizado» · realizado el —');
   });
 
   it('null fuera de la atribución', () => {
-    expect(planItemAttributionDetail({ reason: 'PATIENT_FLOW' })).toBeNull();
-    expect(planItemAttributionDetail({ changedFields: ['performedById'] })).toBeNull();
+    expect(planItemAttributionDetail({ reason: 'PATIENT_FLOW' }, CLOCK)).toBeNull();
+    expect(planItemAttributionDetail({ changedFields: ['performedById'] }, CLOCK)).toBeNull();
   });
 });
 

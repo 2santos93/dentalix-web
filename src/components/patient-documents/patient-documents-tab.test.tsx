@@ -122,6 +122,35 @@ describe('PatientDocumentsTab (DX-151)', () => {
     expect(screen.queryByText(/MB$/)).not.toBeInTheDocument();
   });
 
+  it('DX-354: la fecha de subida sigue el reloj de la sede activa (h12 en una, h23 en otra)', async () => {
+    mockedList.mockResolvedValue([makeDocument({ uploadedAt: '2027-05-03T19:05:00.000Z', uploadedByName: 'Dra. Laura Ruiz' })]);
+    // Sede B: en-US, 12 h, Nueva York.
+    mockedLocations.mockResolvedValue([
+      clinicLocation({ locale: 'en-US', hourCycle: 'h12', timeZone: 'America/New_York' }),
+    ]);
+    const first = render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    expect(await screen.findByText('Dra. Laura Ruiz · 05/03/2027 3:05 p. m.')).toBeInTheDocument();
+    first.unmount();
+
+    // Sede A: de-DE, 24 h, Berlín: la misma subida, con otro reloj y otro orden.
+    mockedLocations.mockResolvedValue([
+      clinicLocation({ locale: 'de-DE', hourCycle: 'h23', timeZone: 'Europe/Berlin' }),
+    ]);
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    expect(await screen.findByText('Dra. Laura Ruiz · 03.05.2027 21:05')).toBeInTheDocument();
+  });
+
+  it('DX-354: la anulación y la fecha clínica con el formato de la sede; sin él, «—»', async () => {
+    mockedList.mockResolvedValue([
+      makeDocument({ voidedAt: '2027-05-03T19:05:00.000Z', voidedByName: 'Rita', voidReason: 'Duplicado', clinicalDate: '2027-05-03' }),
+    ]);
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    const { container } = render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
+    expect(container.textContent).not.toMatch(/\d{2}[/.]\d{2}[/.]\d{4}/);
+    expect(container.textContent).toContain('Dra. Laura Ruiz · —');
+  });
+
   it('carga con esqueleto anunciado', () => {
     mockedList.mockReturnValue(new Promise(() => {}));
     render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
@@ -170,7 +199,8 @@ describe('PatientDocumentsTab (DX-151)', () => {
     const [, active, voided] = within(table).getAllByRole('row');
     expect(active).toHaveTextContent('Radiografía');
     expect(active).toHaveTextContent('panoramica.pdf');
-    expect(active).toHaveTextContent('10/10/2026');
+    // La sede de la pantalla es alemana: orden dd.mm.yyyy y la subida en su zona (Caracas).
+    expect(active).toHaveTextContent('10.10.2026');
     expect(active).toHaveTextContent('11, 21');
     expect(active).toHaveTextContent('Dra. Laura Ruiz');
     expect(within(voided).getByText('sonrisa.jpg', VISIBLE).closest('[data-document-status]')).toHaveAttribute('data-document-status', 'VOIDED');

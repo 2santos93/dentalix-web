@@ -1,8 +1,7 @@
 import { statusLabel } from '@/lib/status/tones';
-import { formatCurrency } from '@/lib/format/currency';
 import type { CashSessionSummary } from './cash-sessions-api';
 
-/** DX-522: las vistas pasan el de la sede; el valor por defecto es el del impreso (DX-354). */
+/** DX-522: quien pinta pasa el formateador de importes de la sede (con el código ISO); sin sede, «—». */
 type Money = (amount: number, currency: string) => string;
 
 /** Estado de un turno para el chip: abierta, cerrada o reabierta (abierta otra vez). */
@@ -21,7 +20,7 @@ export function sessionStatusLabel(session: Pick<CashSessionSummary, 'status' | 
 export function moneyList(
   items: readonly { currency: string; amount: number }[],
   empty = 'Sin fondo',
-  money: Money = formatCurrency,
+  money: Money,
 ): string {
   if (items.length === 0) return empty;
   return items.map((i) => money(i.amount, i.currency)).join(' · ');
@@ -37,7 +36,7 @@ export const AMOUNT_HIDDEN_TEXT = 'Oculto durante el arqueo';
  */
 export function differenceText(
   items: readonly { currency: string; amount: number | null }[],
-  money: Money = formatCurrency,
+  money: Money,
 ): string {
   const hidden = items.filter((i) => i.amount === null);
   const nonZero = items.flatMap((i) =>

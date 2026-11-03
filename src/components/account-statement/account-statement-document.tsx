@@ -16,8 +16,7 @@ import { INSTALLMENT_STATUS_LABELS } from '@/lib/payment-plans/installment-statu
 import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { ClinicLogo } from '@/components/brand/clinic-brand';
 
 const copy = {
@@ -35,10 +34,11 @@ const copy = {
   plansTable: 'Planes del paciente',
   movementsHeading: 'Movimientos',
   movementsTable: 'Movimientos (abonos)',
+  // Los días llegan ya escritos con el formato de la sede del documento.
   movementsRange: (from: string | null, to: string | null) => {
-    if (from && to) return `Movimientos del ${formatCivilDate(from)} al ${formatCivilDate(to)}.`;
-    if (from) return `Movimientos desde el ${formatCivilDate(from)}.`;
-    return `Movimientos hasta el ${formatCivilDate(to)}.`;
+    if (from && to) return `Movimientos del ${from} al ${to}.`;
+    if (from) return `Movimientos desde el ${from}.`;
+    return `Movimientos hasta el ${to}.`;
   },
   movementsEmpty: 'Sin abonos registrados.',
   installmentsHeading: 'Cuotas',
@@ -66,6 +66,8 @@ const copy = {
 
 interface AccountStatementDocumentProps {
   statement: AccountStatement;
+  /** El formato de la sede del estado de cuenta (`documentFormat`); `null` → «—» en fechas e importes. */
+  format: DocumentFormat | null;
 }
 
 /**
@@ -80,8 +82,10 @@ interface AccountStatementDocumentProps {
  * en la app: en A4 caben y un documento se lee como tabla; en un teléfono, el
  * marco se desplaza de lado sin que la página crezca.
  */
-export function AccountStatementDocument({ statement }: AccountStatementDocumentProps) {
-  const planName = planNamer(statement.plans);
+export function AccountStatementDocument({ statement, format }: AccountStatementDocumentProps) {
+  // DX-354: fechas, horas e importes con la zona, el reloj y el formato de la sede del documento.
+  const doc = documentTexts(format);
+  const planName = planNamer(statement.plans, format);
   const { clinic, patient, range } = statement;
   // M1: con saldo migrado, el «Saldo» no es solo presupuestado − abonado.
   const summary = shownSummaryRows(statement.summary);
@@ -108,7 +112,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
           {copy.issuedAt}
           <br />
           <span className="font-medium text-[#111827] tabular-nums">
-            {formatDateTime(statement.issuedAt)}
+            {doc.dateTime(statement.issuedAt)}
           </span>
         </p>
       </header>
@@ -152,7 +156,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
               <ul className="tabular-nums">
                 {withoutRate.map((p) => (
                   <li key={p.paymentId}>
-                    {statementCopy.withoutRateItem(formatCurrency(p.amount, p.currency), formatCivilDate(p.paidOn))}
+                    {statementCopy.withoutRateItem(doc.amount(p.amount, p.currency), doc.civilDate(p.paidOn))}
                   </li>
                 ))}
               </ul>
@@ -176,26 +180,26 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                   {summary.map((row) => (
                     <tr key={row.currency}>
                       <Th scope="row">{row.currency}</Th>
-                      <Td right>{formatCurrency(row.budgeted, row.currency)}</Td>
+                      <Td right>{doc.amount(row.budgeted, row.currency)}</Td>
                       {withOpening ? (
-                        <Td right>{formatCurrency(row.openingBalance, row.currency)}</Td>
+                        <Td right>{doc.amount(row.openingBalance, row.currency)}</Td>
                       ) : null}
-                      <Td right>{formatCurrency(row.convertedPaid, row.currency)}</Td>
+                      <Td right>{doc.amount(row.convertedPaid, row.currency)}</Td>
                       <Td right strong>
-                        {formatCurrency(Math.abs(row.convertedBalance), row.currency)}
+                        {doc.amount(Math.abs(row.convertedBalance), row.currency)}
                         {row.convertedBalance < 0 ? ` ${statementCopy.inFavor}` : ''}
                       </Td>
                       <Td right strong={row.overdueCount > 0}>
                         {row.overdueCount > 0
                           ? copy.overdueValue(
-                              formatCurrency(row.overdueAmount, row.currency),
+                              doc.amount(row.overdueAmount, row.currency),
                               row.overdueCount,
                             )
                           : copy.none}
                       </Td>
                       <Td>
                         {row.nextInstallment
-                          ? `${formatCivilDate(row.nextInstallment.dueDate)} · ${formatCurrency(
+                          ? `${doc.civilDate(row.nextInstallment.dueDate)} · ${doc.amount(
                               row.nextInstallment.amount,
                               row.currency,
                             )}`
@@ -227,11 +231,11 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                   {statement.openingBalances.map((o) => (
                     <tr key={o.id}>
                       <Td>{o.concept}</Td>
-                      <Td>{openingAsOfLabel(o)}</Td>
-                      <Td right>{formatCurrency(o.amount, o.currency)}</Td>
-                      <Td right>{formatCurrency(o.paid, o.currency)}</Td>
+                      <Td>{openingAsOfLabel(o, format)}</Td>
+                      <Td right>{doc.amount(o.amount, o.currency)}</Td>
+                      <Td right>{doc.amount(o.paid, o.currency)}</Td>
                       <Td right strong>
-                        {formatCurrency(o.pending, o.currency)}
+                        {doc.amount(o.pending, o.currency)}
                       </Td>
                     </tr>
                   ))}
@@ -260,17 +264,17 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                         {PLAN_STATUS_LABELS[plan.status]}
                         {!plan.countsTowardsBalance ? ` · ${statementCopy.notCounted}` : ''}
                       </Td>
-                      <Td right>{formatCurrency(plan.budgeted, plan.currency)}</Td>
+                      <Td right>{doc.amount(plan.budgeted, plan.currency)}</Td>
                       <Td right>
-                        {formatCurrency(plan.paid, plan.currency)}
+                        {doc.amount(plan.paid, plan.currency)}
                         {plan.paidOtherCurrencies.map((o) => (
                           <span key={o.currency} className="block text-xs text-[#4b5563]">
-                            {statementCopy.handedOver(formatCurrency(o.amount, o.currency))}
+                            {statementCopy.handedOver(doc.amount(o.amount, o.currency))}
                           </span>
                         ))}
                       </Td>
                       <Td right strong>
-                        {formatCurrency(plan.balance, plan.currency)}
+                        {doc.amount(plan.balance, plan.currency)}
                       </Td>
                     </tr>
                   ))}
@@ -295,11 +299,11 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                 <tbody>
                   {statement.installments.map((inst) => (
                     <tr key={`${inst.paymentPlanId}-${inst.kind}-${inst.sequence ?? 0}`}>
-                      <Td>{formatCivilDate(inst.dueDate)}</Td>
+                      <Td>{doc.civilDate(inst.dueDate)}</Td>
                       <Td>{installmentLabel(inst)}</Td>
                       <Td>{planName(inst.treatmentPlanId)}</Td>
-                      <Td right>{formatCurrency(inst.amount, inst.currency)}</Td>
-                      <Td right>{formatCurrency(inst.outstanding, inst.currency)}</Td>
+                      <Td right>{doc.amount(inst.amount, inst.currency)}</Td>
+                      <Td right>{doc.amount(inst.outstanding, inst.currency)}</Td>
                       <Td strong={inst.status === 'OVERDUE'}>
                         {INSTALLMENT_STATUS_LABELS[inst.status]}
                       </Td>
@@ -313,7 +317,10 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
           <DocSection title={copy.movementsHeading}>
             {filtered ? (
               <p className="mb-2 text-xs text-[#4b5563]">
-                {copy.movementsRange(range.from, range.to)}
+                {copy.movementsRange(
+                  range.from ? doc.civilDate(range.from) : null,
+                  range.to ? doc.civilDate(range.to) : null,
+                )}
               </p>
             ) : null}
             {statement.movements.length > 0 ? (
@@ -330,7 +337,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                 <tbody>
                   {statement.movements.map((m) => (
                     <tr key={m.id} className={m.voided ? 'text-[#6b7280]' : undefined}>
-                      <Td>{formatCivilDate(m.paidOn)}</Td>
+                      <Td>{doc.civilDate(m.paidOn)}</Td>
                       <Td>
                         {movementDestination(m, planName, statement.openingBalances)}
                         {voidedDetail(m) ? (
@@ -344,11 +351,11 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                           <>
                             <span className="mr-2 text-xs uppercase">{statementCopy.voided}</span>
                             <span className="line-through">
-                              {formatCurrency(m.amount, m.currency)}
+                              {doc.amount(m.amount, m.currency)}
                             </span>
                           </>
                         ) : (
-                          formatCurrency(m.amount, m.currency)
+                          doc.amount(m.amount, m.currency)
                         )}
                       </Td>
                     </tr>

@@ -22,6 +22,7 @@ import { getRoster } from '@/lib/locations/provider-schedule-api';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import { listChairs } from '@/lib/chairs/chairs-api';
 import { notifyError } from '@/components/errors/notify';
+import { PUBLIC_REGIONAL_VE } from '@/lib/test/document-regional';
 
 // Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
 // pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
@@ -997,6 +998,7 @@ describe('AgendaView', () => {
         providerName: 'Dra. Ana Ríos',
         locationName: 'Sede principal',
         locationAddress: null,
+        ...PUBLIC_REGIONAL_VE,
       },
     });
     const user = userEvent.setup();

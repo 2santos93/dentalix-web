@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { BillablePlanField } from './billable-plan-field';
+import { FORMAT_ES } from '@/lib/test/document-regional';
 import type { BillablePlan } from '@/lib/payments/billable-plans-api';
 
 const money = (amount: number, currency: string) => `${currency} ${amount}`;
@@ -29,6 +30,7 @@ function renderField(p: BillablePlan) {
       value={p.id}
       onChange={jest.fn()}
       money={money}
+      planDates={FORMAT_ES}
     />,
   );
 }

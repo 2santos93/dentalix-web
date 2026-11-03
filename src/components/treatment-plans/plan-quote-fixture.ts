@@ -1,4 +1,5 @@
 import type { PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 /** Presupuesto de ejemplo para los tests de los componentes (DX-012). */
 export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote {
@@ -9,6 +10,7 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
     patientId: 'p1',
     planStatus: 'DRAFT',
     currency: 'VES',
+    regional: REGIONAL_VE,
     clinicName: 'Clínica Sonrisas',
     clinicLogoUrl: 'https://cdn.example.com/logo.png',
     clinicFiscal: null,
