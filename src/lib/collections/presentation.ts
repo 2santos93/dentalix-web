@@ -56,7 +56,22 @@ export function overdueChipText(balance: OverdueBalance | null | undefined): str
       ? `Saldo vencido · ${days(balance.overdueDays)}`
       : 'Saldo vencido';
   const amounts = (balance.amounts ?? []).map((a) => formatCurrency(a.amount, a.currency));
-  return amounts.length > 0 ? `${base} · ${amounts.join(' + ')}` : base;
+  const text = amounts.length > 0 ? `${base} · ${amounts.join(' + ')}` : base;
+  // DX-472-bis: algún abono en otra moneda no cuenta todavía.
+  return balance.incomplete ? `${text} · ${INCOMPLETE_BALANCE_TEXT}` : text;
+}
+
+/** DX-472-bis: el saldo no cuenta algún abono en otra moneda (sin tasa todavía). */
+export const INCOMPLETE_BALANCE_TEXT = 'cifras incompletas';
+
+/**
+ * Sin saldo vencido pero con cifras incompletas (DX-472-bis): solo en la
+ * ficha, para que nadie lea «al día» lo que aún no se pudo contar. `null` si
+ * no aplica.
+ */
+export function incompleteBalanceChipText(balance: OverdueBalance | null | undefined): string | null {
+  if (!balance?.incomplete || balance.hasOverdue) return null;
+  return 'Saldo con cifras incompletas';
 }
 
 /** Hoy (YYYY-MM-DD) en la hora local del navegador: mínimo del selector de fecha. */

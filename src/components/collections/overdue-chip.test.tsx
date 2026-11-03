@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { OverdueChip } from './overdue-chip';
+import { IncompleteBalanceChip, OverdueChip } from './overdue-chip';
 
 describe('OverdueChip (DX-150)', () => {
   it('no pinta nada sin saldo vencido', () => {
@@ -14,5 +14,26 @@ describe('OverdueChip (DX-150)', () => {
       <OverdueChip balance={{ hasOverdue: true, overdueDays: 12, amounts: [{ currency: 'USD', amount: 50000 }] }} />,
     );
     expect(screen.getByTestId('overdue-chip').textContent?.replace(/\s/g, ' ')).toMatch(/12 días · .*50\.000/);
+  });
+});
+
+describe('cifras incompletas (DX-472-bis)', () => {
+  it('con saldo vencido, el chip lo añade', () => {
+    render(<OverdueChip balance={{ hasOverdue: true, overdueDays: 12, incomplete: true }} />);
+    expect(screen.getByTestId('overdue-chip')).toHaveTextContent('Saldo vencido · 12 días · cifras incompletas');
+  });
+
+  it('sin saldo vencido, la ficha lo dice aparte', () => {
+    render(<IncompleteBalanceChip balance={{ hasOverdue: false, overdueDays: null, incomplete: true }} />);
+    expect(screen.getByTestId('incomplete-balance-chip')).toHaveTextContent('Saldo con cifras incompletas');
+  });
+
+  it('sin la marca, nada', () => {
+    const { container } = render(<IncompleteBalanceChip balance={{ hasOverdue: false, overdueDays: null }} />);
+    expect(container).toBeEmptyDOMElement();
+    const { container: withOverdue } = render(
+      <IncompleteBalanceChip balance={{ hasOverdue: true, overdueDays: 3, incomplete: true }} />,
+    );
+    expect(withOverdue).toBeEmptyDOMElement();
   });
 });

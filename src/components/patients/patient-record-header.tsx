@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { RowAction } from '@/components/shared/row-actions';
 import { cn } from '@/lib/utils';
-import { OverdueChip } from '@/components/collections/overdue-chip';
+import { IncompleteBalanceChip, OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
 import { AgreementChip } from '@/components/patients/agreement-chip';
 import { agreementChipText } from '@/lib/patients/agreement-presentation';
@@ -197,6 +197,7 @@ export function PatientRecordHeader({
   const hasChips =
     !!patient &&
     (!!patient.balance?.hasOverdue ||
+      !!patient.balance?.incomplete ||
       !!coverageChipText(patient.coverage) ||
       !!agreementChipText(patient.agreement) ||
       !!alertSeverity ||
@@ -322,6 +323,8 @@ export function PatientRecordHeader({
           <AttendanceBadge counts={attendance?.totals} />
           {/* DX-150: «Saldo vencido · N días» (importe solo ADMIN y RECEPTION). */}
           {patient.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
+          {/* DX-472-bis: «Saldo con cifras incompletas» si no hay vencido que avise. */}
+          <IncompleteBalanceChip balance={patient.balance} />
           {/* DX-153: «Cobertura vencida». DX-105: «Convenio: X». */}
           <CoverageChip coverage={patient.coverage} />
           <AgreementChip agreement={patient.agreement} />
