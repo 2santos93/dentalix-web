@@ -207,8 +207,12 @@ test('RECEPCIÓN: «Ver por ítem» avisa «sin tasa» sin enlace y dice a quié
   const toggle = statement.getByRole('button', { name: /^Ver por ítem/ });
   await expect(toggle).toBeVisible({ timeout: 15_000 });
   await toggle.click();
-  const notice = statement.getByRole('status').filter({ hasText: '1 abono sin tasa' });
+  // DX-472: el mismo aviso va también arriba del estado de cuenta; aquí, el
+  // del detalle por ítem que abre el botón.
+  const detail = statement.locator(`#${await toggle.getAttribute('aria-controls')}`);
+  const notice = detail.getByRole('status').filter({ hasText: '1 abono sin tasa' });
   await expect(notice).toBeVisible({ timeout: 15_000 });
+  await expect(statement.getByRole('status').filter({ hasText: '1 abono sin tasa' })).toHaveCount(2);
   await expect(notice).toContainText('pide a un administrador que revise la tasa de cambio de ese día');
   await expect(notice.getByRole('link')).toHaveCount(0);
   await expectNoHorizontalScroll(page);
