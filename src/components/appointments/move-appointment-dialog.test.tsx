@@ -396,6 +396,25 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
       expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ start: at('11:00'), chairId: 'ch-2' });
     });
 
+    it('con el sillón de la cita desactivado busca sin él (pedirlo daría 400) y no lo nombra', async () => {
+      const user = userEvent.setup();
+      const off = { ...withChair, chairId: 'ch-old', chair: { id: 'ch-old', name: 'Viejo', active: false } };
+      mockedUpdate.mockRejectedValueOnce(chairOverlap('Viejo'));
+      mockedOpenings.mockResolvedValue({
+        timeZone: 'UTC',
+        durationMinutes: 90,
+        truncated: false,
+        openings: [{ start: at('13:00'), end: at('16:00') }],
+      });
+      renderOverbooked({ appointment: off, chairs: [...chairs, { ...base, id: 'ch-old', name: 'Viejo', active: false }] });
+      await typeTime(user, 'Hora de inicio', '11:00');
+      await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+      const offer = await screen.findByTestId('move-next-opening');
+      await waitFor(() => expect(offer).toHaveTextContent('13:00 con Dra. Ana Ríos.'));
+      expect(offer).not.toHaveTextContent('Viejo');
+      expect(mockedOpenings.mock.calls[0][1]).not.toHaveProperty('chairIds');
+    });
+
     it('cambiar solo el sillón (misma hora) no busca hueco: la hora no es lo que se pidió cambiar', async () => {
       const user = userEvent.setup();
       mockedUpdate.mockRejectedValueOnce(chairOverlap('Sillón Ávila'));

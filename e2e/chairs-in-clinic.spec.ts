@@ -172,6 +172,23 @@ test('Semana y Mes llevan el sillón en el chip; 390 px sin scroll horizontal', 
     start: atSede(day, '09:00'),
     end: atSede(day, '09:30'),
   });
+  // Y dos de 15 min, también a media columna: la fila compacta (paciente, sillón y estado en una línea).
+  const short = [
+    await apiPost<{ id: string }>(request, session, '/appointments', {
+      patientId,
+      providerId: dentistId,
+      chairId: chairOne,
+      start: atSede(day, '10:00'),
+      end: atSede(day, '10:15'),
+    }),
+    await apiPost<{ id: string }>(request, session, '/appointments', {
+      patientId: longName.id,
+      providerId: adminId,
+      chairId: chairTwo,
+      start: atSede(day, '10:00'),
+      end: atSede(day, '10:15'),
+    }),
+  ];
   await loginInSede(page);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Semana', exact: true }).click();
@@ -180,12 +197,28 @@ test('Semana y Mes llevan el sillón en el chip; 390 px sin scroll horizontal', 
   for (const [id, name] of [
     [appointment.id, 'Sillón 1'],
     [shared.id, 'Sillón 2'],
+    [short[0].id, 'Sillón 1'],
+    [short[1].id, 'Sillón 2'],
   ] as const) {
     const label = page.locator(`[data-testid="week-grid-appointment"][data-id="${id}"]`).getByTestId('week-appointment-chair');
     await expect(label).toHaveText(name, { timeout: 15_000 });
     await expect(label).toBeVisible();
-    // Entero, sin recortar: el que cede es el paciente.
-    expect(await label.evaluate((el) => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth)).toBe(true);
+    const fit = await label.evaluate((el) => {
+      // El ancho del texto tal cual (la elipsis solo se pinta): si la caja es menor, aunque sea
+      // por una fracción de píxel, sale «Silló…».
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const patient = el.previousElementSibling as HTMLElement;
+      return {
+        chairWhole: range.getBoundingClientRect().width <= el.getBoundingClientRect().width + 0.01,
+        patientWidth: patient.clientWidth,
+        rowOverflow: el.parentElement!.scrollWidth - el.parentElement!.clientWidth,
+      };
+    });
+    // El sillón entero; el paciente cede, pero se sigue viendo; la fila no desborda.
+    expect(fit.chairWhole).toBe(true);
+    expect(fit.patientWidth).toBeGreaterThan(0);
+    expect(fit.rowOverflow).toBeLessThanOrEqual(0);
   }
   await page.getByRole('button', { name: 'Mes', exact: true }).click();
   await expect(page.getByTestId('month-appointment-chair').filter({ hasText: 'Sillón 1' }).first()).toBeVisible({

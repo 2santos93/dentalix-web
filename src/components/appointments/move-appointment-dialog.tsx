@@ -129,6 +129,12 @@ export function MoveAppointmentDialog({
   const [error, setError] = useState<string | null>(collision?.message ?? null);
   const [submitting, setSubmitting] = useState(false);
 
+  /** Activo según la lista de la sede; sin ella, según la cita. */
+  function isActiveChair(id: string): boolean {
+    const known = chairs.find((c) => c.id === id) ?? (appointment.chair?.id === id ? appointment.chair : null);
+    return known?.active !== false;
+  }
+
   /** Nombre del sillón con el que se busca el hueco (DX-492-bis); sin sillón, null. */
   function chairName(id: string): string | null {
     if (!id) return null;
@@ -138,8 +144,11 @@ export function MoveAppointmentDialog({
   /** Busca el siguiente hueco; solo cuenta la última búsqueda. */
   function searchNextOpening(target: MoveTarget) {
     const id = ++search.current;
-    const chair = chairName(chairId);
-    findNextOpening(token, appointment, target, timeZone, chairId).then(
+    // Un sillón desactivado (el de la cita) no se puede pedir a «Buscar hueco»
+    // (400): se busca sin él y la sugerencia no lo nombra.
+    const searchChairId = chairId && isActiveChair(chairId) ? chairId : null;
+    const chair = chairName(searchChairId ?? '');
+    findNextOpening(token, appointment, target, timeZone, searchChairId).then(
       (found) => {
         if (search.current === id) {
           setNextOpening(found ? { status: 'found', target: found, chair } : { status: 'none', chair });
