@@ -103,6 +103,8 @@ function PlanFigures({ id, plan, money }: { id: string; plan: BillablePlan; mone
   const others = plan.paidOtherCurrencies
     .map((o) => money(o.amount, o.currency))
     .join(', ');
+  // Una API anterior a DX-472-bis no manda el campo: nada que avisar.
+  const notCounted = (plan.paymentsWithoutRate as BillablePlan['paymentsWithoutRate'] | undefined)?.length ?? 0;
   return (
     <p id={id} className="t-caption text-muted tabular-nums">
       {billablePlanFieldCopy.figures(
@@ -115,11 +117,11 @@ function PlanFigures({ id, plan, money }: { id: string; plan: BillablePlan; mone
       {others ? (
         <span className="block">{billablePlanFieldCopy.otherCurrencies(others)}</span>
       ) : null}
-      {plan.paymentsWithoutRate.length > 0 ? (
+      {notCounted > 0 ? (
         <span className="block text-warning-text">
           {plan.rateProviderTimedOut
-            ? billablePlanFieldCopy.providerTimedOut(plan.paymentsWithoutRate.length)
-            : billablePlanFieldCopy.withoutRate(plan.paymentsWithoutRate.length)}
+            ? billablePlanFieldCopy.providerTimedOut(notCounted)
+            : billablePlanFieldCopy.withoutRate(notCounted)}
         </span>
       ) : null}
     </p>

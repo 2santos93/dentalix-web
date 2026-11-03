@@ -611,7 +611,8 @@ function RateNotices({ page, onRetry }: { page: ReceivablesAgingPage; onRetry: (
       <RateProviderNotice detail={receivablesCopy.providerDetail(page.paymentsWithoutRateCount)} onRetry={onRetry} />
     );
   }
-  if (page.paymentsWithoutRateCount === 0) return null;
+  // Sin el campo (API anterior a DX-472-bis), nada que avisar.
+  if (!page.paymentsWithoutRateCount) return null;
   return (
     <Callout tone="warning" icon={TriangleAlert} title={withoutRateCopy.title(page.paymentsWithoutRateCount)}>
       <p>{receivablesCopy.withoutRateBody}</p>
