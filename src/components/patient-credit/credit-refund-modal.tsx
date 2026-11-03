@@ -25,6 +25,7 @@ import { getActiveLocationId } from '@/lib/locations/location-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { creditPreviewCopy, type CreditSource } from './credit-balance';
 import { CreditPreview } from './credit-preview';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 export const REFUND_REASON_MIN = 3;
 export const REFUND_REASON_MAX = 500;
@@ -81,6 +82,7 @@ export function CreditRefundModal({
   planName,
   onDone,
 }: CreditRefundModalProps) {
+  const stamp = useSedeStamp(token);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<RefundMethod>('CASH');
   const [reason, setReason] = useState('');
@@ -190,6 +192,7 @@ export function CreditRefundModal({
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="cr-amount" label={copy.amount} error={amountError}>
           <MoneyInput
+            money={stamp.money}
             id="cr-amount"
             currency={source.currency}
             requirePositive

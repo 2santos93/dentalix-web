@@ -8,6 +8,9 @@ import { ApiError } from '@/lib/api/client';
 jest.mock('../../lib/collections/collections-api', () => ({
   createPaymentPromise: jest.fn(),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
+}));
 const mockedCreate = createPaymentPromise as jest.MockedFunction<typeof createPaymentPromise>;
 
 const patient = { id: 'pat-1', fullName: 'Ana Pérez' };
@@ -61,7 +64,7 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     await userEvent.type(screen.getByLabelText('Importe'), '150.50');
     await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'USD');
     await typeDate(due);
-    expect(await screen.findByText(/^Se guardará: 150,50\sUSD$/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Se guardará: USD\s150,50$/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', { amount: 150.5, currency: 'USD', dueDate: due }),

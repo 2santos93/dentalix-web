@@ -419,6 +419,20 @@ it('DX-516: sin ajustes en el medio no se pinta nada; con ellos, el ajuste sobre
   const preview = await within(dialog).findByRole('region', { name: 'Ajustes de este medio de pago' });
   expect(within(preview).getByText('Impuesto 3 %')).toBeInTheDocument();
   expect(within(preview).queryByText('Apagado')).not.toBeInTheDocument();
+  expect(await within(preview).findByText('+EUR 3,00')).toBeInTheDocument();
+  expect(within(preview).getByText('EUR 103,00')).toBeInTheDocument();
+});
+
+it('DX-354b: los ajustes del medio salen con el formato de la sede (de-DE: «+3,00 EUR»)', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([eurPlan]);
+  mockedLocations.mockResolvedValue([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '100');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Efectivo divisas');
+  const preview = await within(dialog).findByRole('region', { name: 'Ajustes de este medio de pago' });
   expect(await within(preview).findByText('+3,00 EUR')).toBeInTheDocument();
   expect(within(preview).getByText('103,00 EUR')).toBeInTheDocument();
 });

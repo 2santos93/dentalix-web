@@ -4,7 +4,7 @@ import { statementCopy } from '@/lib/account-statement/presentation';
 import type { BillablePlan } from '@/lib/payments/billable-plans-api';
 import { CreatePaymentPlanModal } from '@/components/payment-plans/create-payment-plan-modal';
 import { BillablePlanField, BillablePlansEmpty } from '@/components/payments/billable-plan-field';
-import { readyClock, useSedeClock } from '@/lib/locations/sede-clock';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { useBillablePlans } from '@/components/payments/use-billable-plans';
 
 // Copy como constantes (i18n-ready).
@@ -44,7 +44,8 @@ export function StatementPaymentPlanModal({
 }: StatementPaymentPlanModalProps) {
   const billable = useBillablePlans(token, patientId, open);
   // La fecha de «Plan del …» con la zona y el formato de la sede de la pantalla (DX-354).
-  const clock = readyClock(useSedeClock(token));
+  const stamp = useSedeStamp(token);
+  const clock = stamp.clock;
   const [planId, setPlanId] = useState('');
 
   // Ajuste durante el render: cada apertura vuelve al primer plan disponible.
@@ -65,6 +66,7 @@ export function StatementPaymentPlanModal({
       onOpenChange={onOpenChange}
       token={token}
       plan={plan ? { id: plan.id, currency: plan.currency, billable: plan.total } : null}
+      money={stamp.money}
       onCreated={() => {
         if (plan) onCreated(copy.created(statementCopy.planLabel(plan.createdAt, clock)));
       }}
@@ -80,6 +82,7 @@ export function StatementPaymentPlanModal({
             onChange={setPlanId}
             unavailableReason={unavailableReason}
             planDates={clock}
+            money={stamp.money}
           />
           {plans.length > 0 && available.length === 0 ? (
             <p role="status" className="text-sm text-muted">

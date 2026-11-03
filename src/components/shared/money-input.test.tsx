@@ -2,13 +2,22 @@ import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MoneyInput, MONEY_PREVIEW_DELAY_MS } from './money-input';
+import { moneyWithCode, NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { stampPainters } from '@/lib/locations/sede-stamp';
+import { testAgendaClock } from '@/lib/test/sede-clock';
+
+const caracasMoney = stampPainters(testAgendaClock([STAMP_SEDES.caracas, STAMP_SEDES.berlin])).money;
+const berlinMoney = stampPainters(testAgendaClock([STAMP_SEDES.berlin, STAMP_SEDES.caracas])).money;
 
 function Harness({
   currency = 'USD',
   initial = '',
   invalid = false,
   requirePositive = false,
+  money = caracasMoney,
 }: {
+  money?: (amount: number, currency: string) => string;
   currency?: string;
   initial?: string;
   invalid?: boolean;
@@ -24,6 +33,7 @@ function Harness({
         value={text}
         onValueChange={setText}
         requirePositive={requirePositive}
+        money={money}
         aria-invalid={invalid ? true : undefined}
         aria-describedby={invalid ? 'amount-error' : undefined}
       />
@@ -60,7 +70,7 @@ describe('MoneyInput (DX-241)', () => {
     // Mientras se teclea no cambia: el lector lo anuncia una vez, no por tecla.
     expect(preview()).toBeEmptyDOMElement();
     act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
-    expect(preview()).toHaveTextContent(/^Se guardará: 150,50\sUSD$/);
+    expect(preview()).toHaveTextContent(/^Se guardará: USD\s150,50$/);
   });
 
   it('el campo apunta a la vista previa con aria-describedby, junto al error que pase el formulario', () => {
@@ -89,13 +99,38 @@ describe('MoneyInput (DX-241)', () => {
     render(<Harness currency="VES" />);
     await type().type(screen.getByLabelText('Importe'), '150.000,50');
     act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
-    expect(preview()).toHaveTextContent(/^Se guardará: 150\.000,50\sVES$/);
+    expect(preview()).toHaveTextContent(/^Se guardará: VES\s150\.000,50$/);
   });
 
-  it('sin moneda, el importe sin símbolo', () => {
+  it('sin moneda elegida no promete ningún formato', () => {
     render(<Harness currency="" initial="15.000,5" />);
     act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
-    expect(preview()).toHaveTextContent(/^Se guardará: 15\.000,50$/);
+    expect(preview()).toBeEmptyDOMElement();
+  });
+
+  // DX-354b: la vista previa usa el formato de la sede de la pantalla, no uno fijo.
+  it('la vista previa sale con el formato de la sede: Caracas «VES 1.234,50», Berlín «1.234,50 VES», Miami «USD 1,234.50»', async () => {
+    const miami = stampPainters(testAgendaClock([STAMP_SEDES.miami, STAMP_SEDES.caracas])).money;
+    const { unmount } = render(<Harness currency="VES" money={caracasMoney} />);
+    await type().type(screen.getByLabelText('Importe'), '1234,5');
+    act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
+    expect(preview().textContent).toBe(`Se guardará: ${moneyWithCode(1234.5, 'VES', STAMP_FORMATS.caracas)}`);
+    unmount();
+    const berlinRender = render(<Harness currency="VES" money={berlinMoney} />);
+    await type().type(screen.getByLabelText('Importe'), '1234,5');
+    act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
+    expect(preview().textContent).toBe(`Se guardará: ${moneyWithCode(1234.5, 'VES', STAMP_FORMATS.berlin)}`);
+    berlinRender.unmount();
+    render(<Harness currency="USD" money={miami} />);
+    await type().type(screen.getByLabelText('Importe'), '1234,5');
+    act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
+    expect(preview().textContent).toBe(`Se guardará: ${moneyWithCode(1234.5, 'USD', STAMP_FORMATS.miami)}`);
+  });
+
+  it('sin formato de sede («—») la vista previa calla en vez de prometer «—»', () => {
+    render(<Harness initial="150,50" money={() => NO_SEDE_FORMAT} />);
+    act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
+    expect(preview()).toBeEmptyDOMElement();
   });
 
   // QA DX-241: «Se guardará: 0,00» prometía algo que el envío rechaza.
@@ -106,6 +141,6 @@ describe('MoneyInput (DX-241)', () => {
 
   it('sin requirePositive, «0» se guarda como 0 (fondo de caja, arqueo)', () => {
     render(<Harness initial="0" />);
-    expect(preview()).toHaveTextContent(/^Se guardará: 0,00\sUSD$/);
+    expect(preview()).toHaveTextContent(/^Se guardará: USD\s0,00$/);
   });
 });

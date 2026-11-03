@@ -16,6 +16,7 @@ import {
   paymentBody,
   type ExpensePaymentValue,
 } from './expense-payment-fields';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 export const expensePaymentCopy = {
   title: 'Registrar pago',
@@ -55,6 +56,7 @@ export function ExpensePaymentModal({
   onSaved,
   onCloseAutoFocus,
 }: ExpensePaymentModalProps) {
+  const stamp = useSedeStamp(token);
   const configured = useExpenseToday(token, expense.locationId, open && !suppliedToday);
   const today = suppliedToday ?? configured.today;
   const [amount, setAmount] = useState(() => moneyInputText(expense.pendingAmount));
@@ -120,6 +122,7 @@ export function ExpensePaymentModal({
       {configured.error ? <SectionError description={configured.error} onRetry={configured.retry} /> : null}
       <FormField htmlFor="expense-pay-amount" label={expensePaymentCopy.amount(expense.currency)} error={amountError}>
         <MoneyInput
+          money={stamp.money}
           id="expense-pay-amount"
           currency={expense.currency}
           requirePositive

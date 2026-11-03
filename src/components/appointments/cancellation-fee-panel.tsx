@@ -26,6 +26,7 @@ import {
   feeReasonCopy,
   voidFeeCopy,
 } from './fee-reason-modal';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 export const cancellationFeeCopy = {
   heading: 'Cargo por inasistencia o cancelación tardía',
@@ -329,6 +330,7 @@ function ChargeFeeModal({
   onStale: () => void;
   onCloseAutoFocus?: (event: Event) => void;
 }) {
+  const stamp = useSedeStamp(token);
   const id = useId();
   const amountId = `${id}-amount`;
   const max = formatCurrency(suggested, currency);
@@ -399,6 +401,7 @@ function ChargeFeeModal({
         hintId={`${amountId}-hint`}
       >
         <MoneyInput
+          money={stamp.money}
           id={amountId}
           value={amountText}
           onValueChange={(v) => {

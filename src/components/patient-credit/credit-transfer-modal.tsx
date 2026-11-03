@@ -13,6 +13,7 @@ import { transferCredit } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatementPlan } from '@/lib/account-statement/account-statement-api';
 import { creditPreviewCopy, type CreditSource } from './credit-balance';
 import { CreditPreview } from './credit-preview';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 const copy = {
   title: 'Aplicar saldo a favor a otro plan',
@@ -56,6 +57,7 @@ export function CreditTransferModal({
   planName,
   onDone,
 }: CreditTransferModalProps) {
+  const stamp = useSedeStamp(token);
   const [targetId, setTargetId] = useState(targets[0]?.id ?? '');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
@@ -161,6 +163,7 @@ export function CreditTransferModal({
           </FormField>
           <FormField htmlFor="ct-amount" label={copy.amount} error={amountError}>
             <MoneyInput
+              money={stamp.money}
               id="ct-amount"
               currency={source.currency}
               requirePositive

@@ -45,6 +45,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 export const cancellationPolicyCopy = {
   heading: 'Política de cancelación',
@@ -427,6 +428,7 @@ export function CancellationPolicyModal({
   onOpenChange: (open: boolean) => void;
   onSaved: (saved: CancellationPolicyVersion) => void;
 }) {
+  const stamp = useSedeStamp(token);
   const id = useId();
   const hoursId = `${id}-hours`;
   const feeId = `${id}-fee`;
@@ -515,6 +517,7 @@ export function CancellationPolicyModal({
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
         <FormField htmlFor={feeId} label={copy.feeLabel} error={errors.fee} hint={copy.feeHint} hintId={`${feeId}-hint`}>
           <MoneyInput
+            money={stamp.money}
             id={feeId}
             value={feeTextValue}
             onValueChange={(v) => {

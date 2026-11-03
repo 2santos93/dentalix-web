@@ -76,6 +76,7 @@ export function CashOutflowModal({
   onCreated,
 }: CashOutflowModalProps) {
   const categories = useExpenseCategories(token, open);
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const [category, setCategory] = useState('');
   const [supplier, setSupplier] = useState('');
   const [description, setDescription] = useState('');
@@ -184,6 +185,7 @@ export function CashOutflowModal({
       <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
         <FormField htmlFor="outflow-amount" label={expenseFieldsCopy.amount} error={errors.amount}>
           <MoneyInput
+            money={money}
             id="outflow-amount"
             currency={currency}
             requirePositive

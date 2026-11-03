@@ -32,6 +32,7 @@ import { formatAmount, formatCurrency } from '@/lib/format/currency';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { clinicBaseCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
 
@@ -199,6 +200,7 @@ interface CatalogViewProps {
  * history in `ToothRecord` / plan items that reference it is preserved.
  */
 export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
+  const stamp = useSedeStamp(token);
   // Moneda base de la clínica (la común de sus sedes activas, GLOBAL-G1). Con
   // sedes en monedas distintas, el importe va sin símbolo. Si las sedes no
   // cargaron o alguna no tiene moneda tampoco lleva símbolo, y además se dice
@@ -678,6 +680,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
               error={priceError}
             >
               <MoneyInput
+                money={stamp.money}
                 id="catalog-price"
                 currency={currency ?? ''}
                 value={price}

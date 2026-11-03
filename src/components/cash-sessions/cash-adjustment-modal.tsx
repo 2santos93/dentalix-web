@@ -17,6 +17,7 @@ import { parseMoneyInput } from '@/lib/format/money';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 const copy = {
   title: 'Corregir el cierre',
@@ -54,6 +55,7 @@ export function CashAdjustmentModal({
   defaultCurrency,
   onCreated,
 }: CashAdjustmentModalProps) {
+  const stamp = useSedeStamp(token);
   const id = useId();
   const [sign, setSign] = useState<1 | -1>(-1);
   const [amount, setAmount] = useState('');
@@ -122,6 +124,7 @@ export function CashAdjustmentModal({
       <div className="grid gap-3 sm:grid-cols-3">
         <FormField htmlFor={`${id}-amount`} label={copy.amount} error={amountError}>
           <MoneyInput
+            money={stamp.money}
             id={`${id}-amount`}
             currency={currency}
             requirePositive

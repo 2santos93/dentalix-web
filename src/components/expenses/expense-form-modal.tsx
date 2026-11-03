@@ -46,6 +46,7 @@ import {
 import type { ExpenseCategoriesState } from './use-expense-categories';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 export const expenseFormCopy = {
   ...expenseFieldsCopy,
@@ -162,6 +163,7 @@ export function ExpenseFormModal({
   onSaved,
   onCloseAutoFocus,
 }: ExpenseFormModalProps) {
+  const stamp = useSedeStamp(token);
   // Se elige entre las activas; editando, sigue elegible la sede del gasto.
   const locations = allLocations.filter((l) => l.isActive || l.id === expense?.locationId);
   const editing = expense !== undefined;
@@ -385,6 +387,7 @@ export function ExpenseFormModal({
       <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
         <FormField htmlFor="expense-amount" label={expenseFormCopy.amount} error={errors.amount}>
           <MoneyInput
+            money={stamp.money}
             id="expense-amount"
             currency={form.currency}
             requirePositive

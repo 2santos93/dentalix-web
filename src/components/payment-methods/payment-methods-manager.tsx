@@ -22,6 +22,8 @@ import type { RowAction } from '@/components/shared/row-actions';
 import { PaymentMethodFormModal } from './payment-method-form-modal';
 import { PaymentAdjustmentFormModal } from './payment-adjustment-form-modal';
 import { PAYMENT_ADJUSTMENT_TYPE_LABELS, adjustmentCalculationText } from '@/lib/payments/payment-adjustments';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 export const paymentMethodsCopy = {
   title: 'Medios de pago',
@@ -80,6 +82,7 @@ interface PaymentMethodsManagerProps {
  * activar o desactivar. No se borran: los abonos anteriores los conservan.
  */
 export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerProps) {
+  const stamp = useSedeStamp(token);
   const [methods, setMethods] = useState<ClinicPaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -244,7 +247,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
     { id: 'label', header: copy.colAdjustment, mobile: 'primary', cell: (r) => <span className="font-medium text-ink">{r.adjustment.label}</span> },
     { id: 'method', header: copy.colAdjustmentMethod, cell: (r) => r.method.name },
     { id: 'type', header: copy.colAdjustmentType, cell: (r) => PAYMENT_ADJUSTMENT_TYPE_LABELS[r.adjustment.type] },
-    { id: 'calculation', header: copy.colAdjustmentCalculation, cell: (r) => <span className="tabular-nums">{adjustmentCalculationText(r.adjustment)}</span> },
+    { id: 'calculation', header: copy.colAdjustmentCalculation, cell: (r) => adjustmentCalculationText(r.adjustment, stamp.money), cellClassName: 'tabular-nums' },
     {
       id: 'status',
       header: copy.colStatus,
@@ -345,6 +348,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           {copy.newAdjustment}
         </Button>
       </div>
+      <SedeStampNote stamp={stamp} />
       <AsyncSection
         loading={loading}
         error={null}
