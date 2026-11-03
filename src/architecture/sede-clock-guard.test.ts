@@ -46,7 +46,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/account-statement/family-account-statement-document.tsx': PRINTED,
   'components/consents/consent-document.tsx': PRINTED,
   'components/implants/implant-card-document.tsx': PRINTED,
-  'components/payments/payment-receipt-document.tsx': PRINTED,
   'components/postop/postop-document.tsx': PRINTED,
   'components/treatment-plans/plan-quote-document.tsx': PRINTED,
   'lib/account-statement/presentation.ts': PRINTED,
@@ -121,6 +120,7 @@ const MIGRATED = [
   'components/expenses/expenses-summary-view.tsx',
   // DX-362: el registro de auditoría, con la zona de la pantalla y su desfase en cada hora.
   'components/audit/audit-log-view.tsx',
+  'components/payments/payment-receipt-document.tsx',
 ];
 
 /**

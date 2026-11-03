@@ -9,6 +9,8 @@ import {
   type PaymentReceipt,
   type ReceiptPrintFormat,
 } from '@/lib/payments/payment-receipts-api';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { PaymentReceiptDocument } from './payment-receipt-document';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -137,14 +139,23 @@ export function PaymentReceiptPrintView({
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {receipt ? (
-          <div
-            className={cn(
-              'mx-auto sm:border sm:border-border print:border-0',
-              format === '80mm' ? 'max-w-[80mm]' : 'max-w-[210mm]',
-            )}
-          >
-            <PaymentReceiptDocument receipt={receipt} format={format} />
-          </div>
+          <>
+            {documentFormat(receipt.regional) === null ? (
+              <DocumentFormatNote
+                locationId={receipt.snapshot.location.id}
+                onRetry={() => setReloadKey((k) => k + 1)}
+                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              />
+            ) : null}
+            <div
+              className={cn(
+                'mx-auto sm:border sm:border-border print:border-0',
+                format === '80mm' ? 'max-w-[80mm]' : 'max-w-[210mm]',
+              )}
+            >
+              <PaymentReceiptDocument receipt={receipt} format={format} />
+            </div>
+          </>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
             <EmptyState

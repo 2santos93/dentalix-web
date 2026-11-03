@@ -11,6 +11,8 @@ import {
   sendPaymentReceipt,
   type PaymentReceipt,
 } from '@/lib/payments/payment-receipts-api';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { PaymentReceiptDocument } from './payment-receipt-document';
 import {
   Dialog,
@@ -173,6 +175,12 @@ function ReceiptBody({
 
   return (
     <>
+      {documentFormat(receipt.regional) === null ? (
+        <DocumentFormatNote
+          locationId={receipt.snapshot.location.id}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
+      ) : null}
       <div className="overflow-hidden rounded-lg border border-border">
         <PaymentReceiptDocument receipt={receipt} />
       </div>
