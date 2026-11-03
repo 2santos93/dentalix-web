@@ -60,6 +60,27 @@ it('DX-492: la tarjeta lleva el sillón cuando lo tiene, también en las de 15 m
   expect(screen.getAllByTestId('week-grid-appointment')[0]).toHaveAttribute('title', expect.stringContaining('Sillón 1'));
 });
 
+it('DX-492-bis: con nombre largo, cede antes el paciente (hasta 4 caracteres); el sillón se recorta pasado el 45 %', () => {
+  // jsdom no mide: el reparto lo comprueba el Playwright de sillones; aquí, las clases que lo deciden.
+  const chair = { id: 'c1', name: 'Sillón 1', active: true };
+  render(
+    <WeekTimeGrid clock={CLOCK}
+      appointments={[
+        appointment({ id: 'a', chair, patientFirstName: 'María Fernanda', patientLastName: 'Rodríguez Villalobos' }),
+        appointment({ id: 'b', chair: { id: 'c2', name: 'Sillón 2', active: true }, patientId: 'pat-2' }),
+        appointment({ id: 'c', chair, start: '2026-03-10T09:00:00.000Z', end: '2026-03-10T09:15:00.000Z' }),
+      ]}
+      weekStart={WEEK_START}
+      onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
+    />,
+  );
+  for (const label of screen.getAllByTestId('week-appointment-chair')) {
+    expect(label).toHaveClass('min-w-0', 'max-w-[45%]', 'truncate');
+    expect(label).not.toHaveClass('shrink-0');
+    expect(label.previousElementSibling).toHaveClass('min-w-[4ch]', 'max-w-max', 'flex-1', 'truncate');
+  }
+});
+
 it('clicking a day header calls onSelectDay with its date', async () => {
   const onSelectDay = jest.fn();
   render(
