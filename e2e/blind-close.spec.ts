@@ -4,14 +4,16 @@ import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { shot } from './support/qa-shot';
+import { dataList, dataListRows } from './support/data-list';
 
 /**
  * e2e (SEC-043): el arqueo ciego no se puede eludir desde la pantalla.
  *
  * Contra la clínica DEMO sembrada. Con «arqueo ciego» activo, recepción abre
  * su caja y cobra en efectivo (por la API):
- *   - en Caja → Abonos no ve ese cobro (ni en la lista ni en el resumen) y un
- *     aviso le dice por qué y dónde verlo;
+ *   - en Caja → Abonos ve sus cobros sin importe (el resumen no los suma) y un
+ *     aviso le dice por qué; desde esa fila abre el recibo (con su importe) y
+ *     anula un cobro equivocado;
  *   - en Caja → Turnos cuenta sin ver lo esperado, cierra sin motivo aunque no
  *     cuadre (la pantalla no lo sabe antes) y el turno sale «Sin justificar»;
  *   - la administradora abre ese turno y ve «Diferencia sin justificar».
@@ -124,18 +126,69 @@ for (const viewport of [
         paidAt: new Date().toISOString(),
         method: 'CASH',
       });
+      // Un cobro equivocado a otra paciente, que recepción anula desde Abonos.
+      const wrongName = `Error${tag}`;
+      const wrong = await post<{ id: string }>(page.request, admin, '/patients', {
+        firstName: 'Arqueo',
+        lastName: wrongName,
+        docType: 'NATIONAL_ID',
+        docNumber: `29${Date.now().toString().slice(-8)}`,
+        sex: 'F',
+      });
+      const wrongPlan = await post<{ id: string }>(page.request, admin, `/patients/${wrong.id}/treatment-plans`, {
+        currency: 'USD',
+      });
+      await post(page.request, reception, `/treatment-plans/${wrongPlan.id}/payments`, {
+        amount: 9,
+        currency: 'USD',
+        paidAt: new Date().toISOString(),
+        method: 'CASH',
+      });
 
       await webLogin(page, origin, RECEPTION_EMAIL);
 
-      // Vía «Abonos»: el cobro de la caja abierta no sale, y el aviso lo explica.
+      // Vía «Abonos»: los cobros de la caja abierta salen, pero sin importe,
+      // y el aviso lo explica.
       await page.goto(`${origin}/caja`);
       await expect(page.getByRole('tab', { name: 'Abonos' })).toHaveAttribute('aria-selected', 'true');
       const notice = page.getByTestId('cash-blind-hidden');
       await expect(notice).toBeVisible({ timeout: 15_000 });
-      await expect(notice).toContainText('faltan los abonos de las cajas abiertas');
-      await expect(page.getByText(lastName)).toHaveCount(0);
+      await expect(notice).toContainText('los abonos de las cajas abiertas van sin importe');
+      const table = dataList(page, 'Abonos del período');
+      const ownRow = dataListRows(table).filter({ hasText: lastName });
+      const wrongRow = dataListRows(table).filter({ hasText: wrongName });
+      await expect(ownRow).toHaveCount(1);
+      await expect(wrongRow).toHaveCount(1);
+      for (const row of [ownRow, wrongRow]) {
+        await expect(row).toContainText('Oculto durante el arqueo');
+        await expect(row).not.toContainText(/USD|45,00|9,00/);
+      }
       if (narrow) await expectNoHorizontalScroll(page);
       await shot(page, 'sec043-abonos', viewport.width);
+      await wrongRow.scrollIntoViewIfNeeded();
+      await shot(page, 'sec043-abonos-filas', viewport.width);
+
+      // Desde la fila sin importe: el recibo (con su importe, es del paciente)
+      // y la anulación del cobro equivocado.
+      await wrongRow.getByRole('button', { name: `Acciones de abono de Arqueo ${wrongName}` }).click();
+      await page.getByRole('menuitem', { name: 'Recibo' }).click();
+      const receipt = page.getByRole('dialog', { name: /recibo de caja/i });
+      await expect(receipt.getByTestId('receipt-document')).toContainText('9,00', { timeout: 15_000 });
+      await page.keyboard.press('Escape');
+      await expect(receipt).toBeHidden();
+      await wrongRow.getByRole('button', { name: `Acciones de abono de Arqueo ${wrongName}` }).click();
+      await page.getByRole('menuitem', { name: 'Anular' }).click();
+      const voidDialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
+      await expect(voidDialog).toContainText(`Arqueo ${wrongName}`);
+      await expect(voidDialog).not.toContainText('9,00');
+      if (narrow) await expectDialogInsideViewport(page, voidDialog);
+      await shot(page, 'sec043-anular', viewport.width);
+      await voidDialog.getByLabel('Motivo de la anulación').fill('Cobrado a otra paciente');
+      await voidDialog.getByRole('button', { name: 'Anular abono' }).click();
+      await expect(voidDialog).toBeHidden({ timeout: 10_000 });
+      await expect(page.getByRole('status').filter({ hasText: 'Abono anulado' })).toBeVisible();
+      await expect(wrongRow).toHaveCount(0, { timeout: 10_000 });
+      await expect(ownRow).toHaveCount(1);
 
       // Vía «Turnos»: sin esperado; cierra sin motivo aunque no cuadre.
       await page.goto(`${origin}/caja?tab=turnos`);
@@ -159,9 +212,11 @@ for (const viewport of [
       await row.scrollIntoViewIfNeeded();
       await shot(page, 'sec043-turnos', viewport.width);
 
-      // Cerrada su caja, el cobro vuelve a «Abonos».
+      // Cerrada su caja, el cobro vuelve a «Abonos» con su importe.
       await page.goto(`${origin}/caja`);
-      await expect(page.getByText(`Arqueo ${lastName}`).first()).toBeVisible({ timeout: 15_000 });
+      const closedRow = dataListRows(dataList(page, 'Abonos del período')).filter({ hasText: lastName });
+      await expect(closedRow).toContainText('45,00', { timeout: 15_000 });
+      await expect(closedRow).not.toContainText('Oculto durante el arqueo');
 
       // La administradora ve la marca en la ficha del turno.
       const adminContext = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });

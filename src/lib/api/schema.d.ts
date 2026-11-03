@@ -3290,7 +3290,7 @@ export interface paths {
         };
         /**
          * Caja: abonos del período con resumen por moneda y método
-         * @description SEC-043: con «arqueo ciego», quien no es ADMIN no recibe los abonos que cuentan en una caja aún abierta (ni en filas ni en el resumen): `blindHidden` lo indica. Aparecen al cerrarla.
+         * @description SEC-043: con «arqueo ciego», quien no es ADMIN recibe los abonos que cuentan en una caja aún abierta sin importe ni moneda (`amountHidden`), y el resumen no los suma: `blindHidden` lo indica. Recibo y anulación funcionan igual; las cifras vuelven al cerrarla.
          */
         get: operations["PaymentsController_listCash"];
         put?: never;
@@ -3310,7 +3310,7 @@ export interface paths {
         };
         /**
          * Caja en CSV: abonos del período con medio y referencia
-         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe. SEC-043: con «arqueo ciego», quien no es ADMIN no recibe los abonos de cajas aún abiertas, como en `GET /payments`.
+         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe. SEC-043: con «arqueo ciego», quien no es ADMIN recibe los abonos de cajas aún abiertas sin moneda ni ajustes, con «Oculto durante el arqueo» en Importe y Total cobrado (no suman en una hoja de cálculo).
          */
         get: operations["PaymentsController_listCashCsv"];
         put?: never;
@@ -13020,10 +13020,15 @@ export interface components {
             registeredOn: string;
             /** @description Si `registeredOn` es hoy en la zona de la sede del abono. */
             registeredToday: boolean;
-            /** @example 150000 */
-            amount: number;
-            /** @description Código ISO 4217 de 3 letras. */
-            currency: string;
+            /**
+             * @description SEC-043: `null` con `amountHidden`.
+             * @example 150000
+             */
+            amount: number | null;
+            /** @description Código ISO 4217 de 3 letras. SEC-043: `null` con `amountHidden`. */
+            currency: string | null;
+            /** @description SEC-043: rige el arqueo ciego, quien consulta no es ADMIN y el abono cuenta en una caja aún abierta. Va sin `amount`, `currency`, `collectedAmount` ni `notes` (null) y sin `adjustments` (vacío), y no suma en el resumen. Recibo y anulación funcionan igual. Las cifras vuelven al cerrar la caja. */
+            amountHidden: boolean;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
             /** @description DX-377: medio de pago (el inicial de su método si el abono es de una réplica anterior). */
@@ -13051,10 +13056,10 @@ export interface components {
             /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
             adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
             /**
-             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`.
+             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`. SEC-043: `null` con `amountHidden`.
              * @example 103
              */
-            collectedAmount: number;
+            collectedAmount: number | null;
         };
         CashScopeDto: {
             /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
@@ -13147,7 +13152,7 @@ export interface components {
             scope: components["schemas"]["CashScopeDto"];
             /** @description Resumen del período entero con los mismos filtros. */
             summary: components["schemas"]["CashPaymentsSummaryDto"];
-            /** @description SEC-043: rige el arqueo ciego y quien consulta no es ADMIN: filas, total y resumen no incluyen los abonos que cuentan en una caja aún abierta (aparecen al cerrarla). */
+            /** @description SEC-043: rige el arqueo ciego y quien consulta no es ADMIN: el resumen no suma los abonos que cuentan en una caja aún abierta y esas filas van sin importe (`amountHidden`). Las cifras vuelven al cerrarla. */
             blindHidden: boolean;
         };
         RecordPaymentDto: {

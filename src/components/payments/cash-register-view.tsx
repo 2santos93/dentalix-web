@@ -140,9 +140,11 @@ const copy = {
   periodDays: (from: string, to: string) => (from === to ? from : `del ${from} al ${to}`),
   registeredOn: (date: string) => `Registrado el ${date}`,
   // SEC-043: con arqueo ciego, recepción no ve los abonos de cajas abiertas.
-  blindTitle: 'Arqueo ciego: faltan los abonos de las cajas abiertas',
+  blindTitle: 'Arqueo ciego: los abonos de las cajas abiertas van sin importe',
   blindHint:
-    'No salen en la lista, el resumen ni el CSV hasta que se cierre su caja, para que nadie pueda saber lo esperado antes de contar. Para ver o anular un abono, imprimir su recibo o cobrar, entra en el plan del paciente.',
+    'Salen en la lista para que puedas ver su recibo o anularlos desde «⋯», pero sin importe, y el resumen y el CSV no los suman: así nadie sabe lo esperado antes de contar. El recibo sí lleva su importe. Las cifras vuelven al cerrar la caja.',
+  // SEC-043: el importe de una fila de una caja abierta con arqueo ciego.
+  amountHidden: 'Oculto durante el arqueo',
   empty: 'No hay abonos en este período.',
   emptyHint: 'Prueba con otro rango de fechas o con otro medio de pago.',
   invoiceSubject: (patient: string, amount: string) => `${patient} · ${amount}`,
@@ -430,17 +432,22 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
       header: copy.colAmount,
       numeric: true,
       mobile: 'trailing',
-      cell: (payment) => (
+      cell: (payment) =>
+        payment.amountHidden || payment.amount === null || payment.currency === null ? (
+          <span className="text-sm text-muted" data-testid="amount-hidden">
+            {copy.amountHidden}
+          </span>
+        ) : (
         <span className="flex flex-col items-end">
           <span className="font-medium text-ink">{money(payment.amount, payment.currency)}</span>
           {/* DX-516: con ajustes por medio de pago, lo que entró de verdad. */}
           {payment.adjustments.length > 0 ? (
             <span className="t-caption text-muted tabular-nums">
-              {copy.collectedRow(money(payment.collectedAmount, payment.currency))}
+              {copy.collectedRow(money(payment.collectedAmount ?? payment.amount, payment.currency))}
             </span>
           ) : null}
         </span>
-      ),
+        ),
     },
   ];
 
@@ -620,7 +627,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         paymentId: payment.id,
                         subject: copy.invoiceSubject(
                           payment.patient.fullName,
-                          money(payment.amount, payment.currency),
+                          payment.amount !== null && payment.currency !== null
+                            ? money(payment.amount, payment.currency)
+                            : formatCivilDate(payment.paidOn),
                         ),
                         externalInvoiceNumber: payment.externalInvoiceNumber,
                       }),

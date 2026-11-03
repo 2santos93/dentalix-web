@@ -94,6 +94,7 @@ const CLINIC_METHODS: ClinicPaymentMethod[] = [
 const anaCash: CashPayment = {
   id: 'pay-1',
   createdById: 'u-recep',
+  amountHidden: false,
   canVoid: true,
   paidAt: '2026-10-15T17:00:00.000Z',
   paidOn: '2026-10-15',
@@ -222,14 +223,31 @@ it('pide el día de hoy al entrar y pinta cada abono con paciente, plan, método
   expect(amount.closest('td')).toHaveClass('text-right', 'tabular-nums');
 });
 
-it('arqueo ciego (SEC-043): dice que faltan los abonos de cajas abiertas y dónde verlos; sin él, nada', async () => {
-  mockedList.mockResolvedValue(response({ blindHidden: true, items: [], total: 0 }));
+it('arqueo ciego (SEC-043): la fila de una caja abierta sale sin importe, con su «⋯» para ver el recibo o anular; el aviso lo explica', async () => {
+  const hidden: CashPayment = {
+    ...anaCash,
+    amount: null,
+    currency: null,
+    collectedAmount: null,
+    notes: null,
+    adjustments: [],
+    amountHidden: true,
+  };
+  mockedList.mockResolvedValue(response({ blindHidden: true, items: [hidden, betoCard] }));
   const { unmount } = render(<CashRegisterView token="tok" />);
   const callout = await screen.findByTestId('cash-blind-hidden');
-  expect(callout).toHaveTextContent('Arqueo ciego: faltan los abonos de las cajas abiertas');
-  expect(callout).toHaveTextContent(/entra en el plan del paciente/);
-  // El vacío sigue diciendo lo suyo debajo.
-  expect(screen.getByText('No hay abonos en este período.')).toBeInTheDocument();
+  expect(callout).toHaveTextContent('los abonos de las cajas abiertas van sin importe');
+  expect(callout).toHaveTextContent(/ver su recibo o anularlos desde «⋯»/);
+  expect(callout).not.toHaveTextContent(/ficha|plan del paciente/);
+  const table = screen.getByRole('table', { name: /abonos/i });
+  const row = within(table).getByRole('row', { name: /ana gómez/i });
+  const cell = within(row).getByTestId('amount-hidden');
+  expect(cell).toHaveTextContent('Oculto durante el arqueo');
+  // En la columna numérica: alineado a la derecha como los importes.
+  expect(cell.closest('td')).toHaveClass('text-right');
+  expect(within(row).queryByText(/150\.000/)).not.toBeInTheDocument();
+  // La otra fila conserva su importe.
+  expect(within(within(table).getByRole('row', { name: /beto ruiz/i })).getByText(/50,25/)).toBeInTheDocument();
   unmount();
 
   mockedList.mockResolvedValue(response());
@@ -722,6 +740,52 @@ describe('anular desde la caja (DX-057)', () => {
     await waitFor(() =>
       expect(within(table).queryByRole('row', { name: /ana gómez/i })).not.toBeInTheDocument(),
     );
+  });
+
+  it('SEC-043: una fila sin importe (caja abierta, arqueo ciego) se anula igual; el modal y el aviso la nombran sin cifra', async () => {
+    const user = userEvent.setup();
+    const hidden: CashPayment = {
+      ...anaCash,
+      amount: null,
+      currency: null,
+      collectedAmount: null,
+      notes: null,
+      adjustments: [],
+      amountHidden: true,
+    };
+    mockedList
+      .mockResolvedValueOnce(response({ blindHidden: true, items: [hidden, betoCard] }))
+      .mockResolvedValueOnce(response({ blindHidden: true, items: [betoCard], total: 1 }));
+    mockedVoid.mockResolvedValue(undefined);
+    render(<CashRegisterView token="tok" />);
+
+    await pickRowAction(user, /ana gómez/, 'Anular');
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(dialog).toHaveTextContent('15/10/2026 · Ana Gómez');
+    expect(money(dialog.textContent)).not.toMatch(/VES|150\.000/);
+
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste(REASON);
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+    await waitFor(() => expect(mockedVoid).toHaveBeenCalledWith('tok', 'pay-1', REASON));
+    expect(await screen.findByText('Abono anulado: 15/10/2026 · Ana Gómez.')).toBeInTheDocument();
+  });
+
+  it('SEC-043: «Recibo» de una fila sin importe abre el recibo del abono', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue(
+      response({
+        blindHidden: true,
+        items: [{ ...anaCash, amount: null, currency: null, collectedAmount: null, amountHidden: true }],
+        total: 1,
+      }),
+    );
+    const mockedReceipt = getPaymentReceipt as jest.MockedFunction<typeof getPaymentReceipt>;
+    mockedReceipt.mockResolvedValue(paymentReceiptFixture({ paymentId: 'pay-1', reference: 'PRI-000009' }));
+    render(<CashRegisterView token="tok" />);
+    await pickRowAction(user, /ana gómez/, 'Recibo');
+    await screen.findByRole('dialog', { name: /recibo de caja/i });
+    expect(mockedReceipt).toHaveBeenCalledWith('tok', 'pay-1');
   });
 
   it('un 403 o un 404 se explican en español dentro del modal, nunca en inglés', async () => {

@@ -38,7 +38,7 @@ describe('CashSettingsForm (DX-027)', () => {
     await screen.findByRole('switch', { name: 'Arqueo ciego' });
     const hint = screen.getByText(/Recepción cuenta por moneda y método/);
     expect(hint).toHaveTextContent(/los cobros, las anulaciones ni los ajustes del turno/);
-    expect(hint).toHaveTextContent(/la lista de abonos y su CSV no incluyen los de cajas abiertas/);
+    expect(hint).toHaveTextContent(/en la lista de abonos y su CSV los de cajas abiertas salen sin importe y no suman/);
     expect(hint).toHaveTextContent(/«diferencia sin justificar»/);
   });
 
