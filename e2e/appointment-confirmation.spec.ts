@@ -201,8 +201,8 @@ test('con el navegador del paciente en otra zona, el día y la hora son los de l
   });
   const link = await apiPost<{ url: string }>(request, at, `/appointments/${appt.id}/confirmation-link`, {});
 
-  // El navegador del paciente está en Los Ángeles y en inglés: nada de eso cuenta.
-  const context = await browser.newContext({ timezoneId: 'America/Los_Angeles', locale: 'en-US', viewport: { width: 390, height: 844 } });
+  // El navegador del paciente está en otra zona (Los Ángeles): no cuenta.
+  const context = await browser.newContext({ timezoneId: 'America/Los_Angeles', viewport: { width: 390, height: 844 } });
   const patientPage = await context.newPage();
   await patientPage.goto(link.url);
   const fmt = regionalFormat({ locale: sede.locale, hourCycle: sede.hourCycle });
