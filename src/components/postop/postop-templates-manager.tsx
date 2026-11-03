@@ -10,7 +10,8 @@ import {
   updatePostOpTemplate,
   type PostOpTemplate,
 } from '@/lib/postop/postop-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { notifyError } from '@/components/errors/notify';
@@ -96,6 +97,7 @@ export function PostOpTemplatesManager({ token, allowed }: PostOpTemplatesManage
   const [modalKey, setModalKey] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [loadingSamples, setLoadingSamples] = useState(false);
+  const stamp = useSedeStamp(token);
 
   useEffect(() => {
     if (!allowed) return;
@@ -213,8 +215,9 @@ export function PostOpTemplatesManager({ token, allowed }: PostOpTemplatesManage
       id: 'updated',
       header: copy.colUpdated,
       showFrom: 'lg',
-      cell: (t) => <span className="t-data whitespace-nowrap text-muted">{formatDateTime(t.updatedAt)}</span>,
-      mobileCell: (t) => formatDateTime(t.updatedAt),
+      cellClassName: 't-data whitespace-nowrap text-muted',
+      cell: (t) => stamp.dateTime(t.updatedAt),
+      mobileCell: (t) => stamp.maybe.dateTime(t.updatedAt),
     },
   ];
 
@@ -229,6 +232,8 @@ export function PostOpTemplatesManager({ token, allowed }: PostOpTemplatesManage
           {copy.newTemplate}
         </Button>
       </div>
+
+      <SedeStampNote stamp={stamp} />
 
       <AsyncSection
         loading={loading}

@@ -12,6 +12,8 @@ import { listPatientSedation } from '@/lib/sedation/sedation-api';
 import { checkedSheet } from '@/lib/test/sedation-sheet';
 import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
 import { sedeTime } from '@/lib/locations/sede-clock';
+import { listLocations } from '@/lib/locations/locations-api';
+import { dateTimeIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — use a relative path (same convention as the other tests).
@@ -187,7 +189,8 @@ describe('ClinicalEntriesList', () => {
       mockedList.mockResolvedValue(entries);
       render(<ClinicalEntriesList token="tok" patientId="p1" />);
       expect(await screen.findAllByText('Todo en orden')).toHaveLength(2);
-      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      // La región de aviso de la sede (DX-354b) está montada y vacía: ningún estado dice nada.
+      expect(screen.queryAllByRole('status').filter((el) => el.textContent)).toEqual([]);
       expect(screen.queryByRole('button', { name: /faltan|listo/i })).not.toBeInTheDocument();
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
@@ -666,5 +669,90 @@ describe('ClinicalEntriesList', () => {
     (listPatientSedation as jest.Mock).mockRejectedValueOnce(new Error('red'));
     render(<ClinicalEntriesList token="token" patientId="p1" />);
     expect(await screen.findByText(/no pudimos cargar las hojas de sedación/i)).toBeInTheDocument();
+  });
+});
+
+describe('ClinicalEntriesList con cada sede (DX-354b)', () => {
+  // 03:30Z del 2 de febrero: 1 de febrero 23:30 en Caracas, 2 de febrero 04:30 en Berlín.
+  const late = { ...entries[0], entryDate: '2026-02-01T00:00:00.000Z', createdAt: '2026-02-02T03:30:00.000Z' };
+  const mockedLocations = listLocations as jest.Mock;
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedListStaff.mockReset();
+    mockedListStaff.mockResolvedValue(staff);
+    window.localStorage.clear();
+  });
+  afterEach(() =>
+    mockedLocations.mockImplementation(() => Promise.resolve([caracasSede()])),
+  );
+
+  it.each([['caracas'], ['berlin']] as const)(
+    'con la pantalla en %s: la fecha civil y la marca de registro con el formato de la sede',
+    async (key) => {
+      mockedLocations.mockResolvedValue([STAMP_SEDES[key]]);
+      mockedList.mockResolvedValue([late]);
+      render(<ClinicalEntriesList token="tok" patientId="p1" />);
+      const table = await screen.findByRole('table');
+      const row = within(table).getAllByRole('row')[1];
+      await waitFor(() => expect(row).toHaveTextContent(`Dra. Ana Ríos · ${dateTimeIn(key, late.createdAt)}`));
+      expect(row).toHaveTextContent(STAMP_FORMATS[key].civilDate('2026-02-01'));
+      // El nombre accesible de los botones lleva la misma fecha y hora.
+      expect(
+        within(row).getAllByRole('button', { name: new RegExp(`registrada ${dateTimeIn(key, late.createdAt)}`) }).length,
+      ).toBeGreaterThan(0);
+    },
+  );
+
+  it('sin formato: «—», nombre accesible sin «—» y el aviso sale una vez', async () => {
+    mockedLocations.mockRejectedValue(new Error('red'));
+    mockedList.mockResolvedValue([late]);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(screen.getAllByText(/No se pudo saber el formato regional/)).toHaveLength(1));
+    const row = within(table).getAllByRole('row')[1];
+    expect(row).toHaveTextContent('Dra. Ana Ríos · —');
+    expect(within(row).getAllByRole('button').every((b) => !/—/.test(b.getAttribute('aria-label') ?? ''))).toBe(true);
+  });
+
+  it('I2: la hora de una anestesia sale con el reloj de SU sede (Berlín en una pantalla de Caracas)', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+    mockedList.mockResolvedValue(entries);
+    const AT = '2026-02-01T03:30:00.000Z';
+    (listPatientAnesthesia as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'an-b',
+        patientId: 'p1',
+        clinicalEntryId: 'ce-2',
+        locationId: STAMP_SEDES.berlin.id,
+        anestheticId: 'a1',
+        anestheticName: 'Articaína 4 %',
+        activeIngredient: 'Articaína',
+        concentrationPct: 4,
+        vasoconstrictor: null,
+        mlPerCarpule: 1.7,
+        maxMgPerKg: 7,
+        maxAbsoluteMg: 500,
+        carpules: 3,
+        doseMg: 204,
+        technique: 'NERVE_BLOCK',
+        site: '85',
+        lot: 'L-1',
+        administeredAt: AT,
+        weightKg: 20,
+        weightSource: 'ANAMNESIS',
+        cumulativeMg: 204,
+        cumulativePercent: 146,
+        safetyRulesVersion: 'ANESTHESIA_DOSE_V1',
+        safetyAlerts: [],
+        overrideReason: null,
+        authorId: 'u1',
+        createdAt: AT,
+      },
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    const lists = await screen.findAllByRole('list', { name: /anestesia local de la evolución/i });
+    await waitFor(() => expect(lists[0]).toHaveTextContent(STAMP_FORMATS.berlin.time(new Date(AT), 'Europe/Berlin')));
+    expect(lists[0]).not.toHaveTextContent(STAMP_FORMATS.caracas.time(new Date(AT), 'America/Caracas'));
   });
 });

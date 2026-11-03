@@ -5,10 +5,15 @@ import { ConsentScopeFields } from './consent-scope-fields';
 import { EMPTY_SELECTION, type ConsentSelection } from '@/lib/data-consents/data-consents-api';
 import { policyFixture } from '@/lib/test/data-consents';
 
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
+
 function Harness({ onChange }: { onChange: (v: ConsentSelection) => void }) {
   const [value, setValue] = useState(EMPTY_SELECTION);
   return (
     <ConsentScopeFields
+      token="tok"
       idPrefix="t"
       policy={policyFixture()}
       value={value}
@@ -20,7 +25,7 @@ function Harness({ onChange }: { onChange: (v: ConsentSelection) => void }) {
   );
 }
 
-it('muestra el texto de la política y una casilla por scope, ninguna premarcada', () => {
+it('muestra el texto de la política y una casilla por scope, ninguna premarcada', async () => {
   render(<Harness onChange={jest.fn()} />);
   expect(
     screen.getByRole('region', { name: /texto completo de la política/i }),
@@ -30,7 +35,7 @@ it('muestra el texto de la política y una casilla por scope, ninguna premarcada
   for (const box of boxes) expect(box).not.toBeChecked();
   expect(screen.getByRole('checkbox', { name: /datos sensibles de salud/i })).toBeInTheDocument();
   expect(screen.getByText(/no está obligado a autorizarlos/i)).toBeInTheDocument();
-  expect(screen.getByText(/versión 1 · publicada el 01\/10\/2026/i)).toBeInTheDocument();
+  expect(await screen.findByText(/versión 1 · publicada el 01\/10\/2026/i)).toBeInTheDocument();
 });
 
 it('cada casilla cambia solo su scope', async () => {

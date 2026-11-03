@@ -1,10 +1,16 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { dateIn, dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { listLocations } from '@/lib/locations/locations-api';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PatientPostOpDeliveries } from './patient-postop-deliveries';
 import { ApiError } from '@/lib/api/api-error';
 import {
   listPatientPostOpDeliveries,
   type PostOpDeliverySummary,
 } from '@/lib/postop/postop-api';
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 
 jest.mock('../../lib/postop/postop-api', () => ({
   ...jest.requireActual('../../lib/postop/postop-api'),
@@ -128,5 +134,32 @@ describe('PatientPostOpDeliveries', () => {
     } finally {
       window.matchMedia = original;
     }
+  });
+});
+
+describe('PatientPostOpDeliveries con cada sede (DX-354b)', () => {
+  const mockedSedes = listLocations as jest.Mock;
+  afterEach(() => mockedSedes.mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]));
+  const DELIVERED = '2026-10-17T03:30:00.000Z';
+
+  beforeEach(() => mockedList.mockReset());
+
+  it.each([['caracas'], ['berlin']] as const)('con la pantalla en %s: la fecha de entrega y el «Abierto» con su formato', async (key) => {
+    mockedSedes.mockResolvedValue([STAMP_SEDES[key]]);
+    mockedList.mockResolvedValue([delivery({ deliveredAt: DELIVERED, firstOpenedAt: DELIVERED })]);
+    render(<PatientPostOpDeliveries token="tok" patientId="pat-1" />);
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(within(table).getAllByRole('row')[1]).toHaveTextContent(dateIn(key, DELIVERED)));
+    expect(screen.getByText('Abierto')).toHaveAttribute('title', expect.stringContaining(dateTimeIn(key, DELIVERED)));
+  });
+
+  it('sin formato: «—» en la fecha, sin título en «Abierto» y un solo aviso', async () => {
+    mockedSedes.mockRejectedValue(new Error('red'));
+    mockedList.mockResolvedValue([delivery()]);
+    render(<PatientPostOpDeliveries token="tok" patientId="pat-1" />);
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(screen.getAllByText(/No se pudo saber el formato regional/)).toHaveLength(1));
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('Sin dato');
+    expect(screen.getByText('Abierto')).not.toHaveAttribute('title');
   });
 });

@@ -54,6 +54,12 @@ interface SedeConfigErrorProps {
   description?: string;
   /** La sede a la que le falta el dato, si se sabe: «Configurar sede» abre su modal. */
   locationId?: string | null;
+  /**
+   * Para `note`: `false` quita su `role="status"` cuando la nota ya vive dentro
+   * de una región persistente (`SedeStampNote`, `DocumentFormatNote`), para no
+   * repetir el rol. Por defecto `true`.
+   */
+  live?: boolean;
   /** Para `note`: `id` del texto, para que un control que la nota deshabilita la cite en `aria-describedby`. */
   descriptionId?: string;
   className?: string;
@@ -74,6 +80,7 @@ export function SedeConfigError({
   description,
   locationId,
   descriptionId,
+  live = true,
   className,
 }: SedeConfigErrorProps) {
   const token = useAuthStore((s) => s.accessToken);
@@ -97,7 +104,7 @@ export function SedeConfigError({
   if (variant === 'note') {
     return (
       <div
-        role="status"
+        role={live ? 'status' : undefined}
         className={cn(
           'flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm sm:flex-row sm:items-center',
           className,

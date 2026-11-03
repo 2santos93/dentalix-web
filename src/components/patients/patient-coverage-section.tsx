@@ -5,6 +5,8 @@ import { Plus, ShieldCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import {
   deleteCoverage,
   listCoverages,
@@ -86,6 +88,7 @@ export function PatientCoverageSection({
   onChanged,
 }: PatientCoverageSectionProps) {
   const ids = useId();
+  const stamp = useSedeStamp(token);
   const [coverages, setCoverages] = useState<PatientCoverage[] | null>(null);
   const [payers, setPayers] = useState<Payer[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -222,7 +225,7 @@ export function PatientCoverageSection({
       <ul className="flex flex-col divide-y divide-border-subtle">
         {coverages.map((c) => {
           const statusBadge = coverageStatusBadge(c);
-          const verification = coverageVerificationBadge(c);
+          const verification = coverageVerificationBadge(c, stamp);
           const canVerify =
             mayVerify && requiresMemberNumber(c.payer.type) && !c.verifiedAt && !!c.memberNumber;
           return (
@@ -347,6 +350,7 @@ export function PatientCoverageSection({
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
+      <SedeStampNote stamp={stamp} />
       {content()}
 
       {dialog ? (

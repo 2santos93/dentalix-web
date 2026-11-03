@@ -16,6 +16,9 @@ jest.mock('../../lib/consents/consents-api', () => ({
   createConsentTemplate: jest.fn(),
   updateConsentTemplate: jest.fn(),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
 const mockedList = listConsentTemplates as jest.MockedFunction<typeof listConsentTemplates>;

@@ -16818,6 +16818,11 @@ export interface components {
             end: string;
             /** @enum {string} */
             status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
+            /**
+             * Format: uuid
+             * @description Sede de la cita (DX-354b): la web formatea su hora con el reloj de esa sede.
+             */
+            locationId: string;
         };
         DashboardDto: {
             period: components["schemas"]["DashboardPeriodDto"];

@@ -11,6 +11,12 @@ interface DocumentFormatNoteProps {
   locationId?: string | null;
   /** Vuelve a leer el documento, que trae el formato de su sede con sus valores de hoy. */
   onRetry: () => void;
+  /**
+   * `false` deja solo la región vacía: quien la monta siempre y la activa
+   * cuando el documento llega sin formato consigue que se anuncie. Por defecto
+   * `true` (quien la monta ya sabe que falta el formato).
+   */
+  active?: boolean;
   className?: string;
 }
 
@@ -19,10 +25,19 @@ interface DocumentFormatNoteProps {
  * fechas e importes del papel salen «—» y esta nota, solo en pantalla
  * (`print:hidden`), dice qué falta. Nunca se pinta otro formato en su lugar.
  */
-export function DocumentFormatNote({ locationId, onRetry, className }: DocumentFormatNoteProps) {
+export function DocumentFormatNote({ locationId, onRetry, active = true, className }: DocumentFormatNoteProps) {
   return (
-    <div className={cn('print:hidden', className)}>
-      <SedeConfigError kind="locale" variant="note" locationId={locationId ?? getActiveLocationId()} onRetry={onRetry} />
+    // La región `role="status"` es el contenedor y la nota va dentro sin rol propio.
+    <div role="status" className={cn('print:hidden', className)}>
+      {active ? (
+        <SedeConfigError
+          kind="locale"
+          variant="note"
+          live={false}
+          locationId={locationId ?? getActiveLocationId()}
+          onRetry={onRetry}
+        />
+      ) : null}
     </div>
   );
 }

@@ -3,7 +3,8 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { DescriptionList, DescriptionItem } from '@/components/ui/description-list';
@@ -211,6 +212,7 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
   const [editing, setEditing] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const stamp = useSedeStamp(token);
   // Bumped by the retry action to re-run the load effect below.
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -237,7 +239,7 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
 
   /** «Registrada el 8 ago 2026 14:32 por Dra. Ríos». */
   function versionProvenance(history: MedicalHistory): string {
-    const when = formatDateTime(history.createdAt);
+    const when = stamp.dateTime(history.createdAt);
     const author = history.createdById ? staffById.get(history.createdById) : null;
     return author ? copy.versionRecordedBy(author, when) : copy.versionRecordedAt(when);
   }
@@ -348,6 +350,8 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
           </Button>
         ) : null}
       </div>
+
+      <SedeStampNote stamp={stamp} />
 
       <AsyncSection
         loading={loading}

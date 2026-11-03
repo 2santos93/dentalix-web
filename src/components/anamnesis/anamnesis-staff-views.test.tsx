@@ -4,6 +4,8 @@ import { AnamnesisReviewView } from './anamnesis-review-view';
 import { PatientAnamnesisSection } from './patient-anamnesis-section';
 import { AnamnesisSendDialog } from './anamnesis-send-dialog';
 import { NetworkError } from '@/lib/api/api-error';
+import { listLocations } from '@/lib/locations/locations-api';
+import { caracasSede } from '@/lib/test/sede-clock';
 import {
   acceptAnamnesis,
   createAnamnesisRequest,
@@ -25,6 +27,9 @@ jest.mock('../../lib/anamnesis/anamnesis-api', () => ({
   createAnamnesisRequest: jest.fn(),
   revokeAnamnesisRequest: jest.fn(),
 }));
+
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
 const inbox = listAnamnesisInbox as jest.MockedFunction<typeof listAnamnesisInbox>;
 const review = getAnamnesisReview as jest.MockedFunction<typeof getAnamnesisReview>;
@@ -84,7 +89,11 @@ function reviewFixture(): AnamnesisReview {
   };
 }
 
-beforeEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  jest.resetAllMocks();
+  // Las solicitudes de estas pruebas son de la sede `l1` (Caracas, 12 h).
+  mockedLocations.mockResolvedValue([caracasSede({ id: 'l1' })]);
+});
 
 describe('Bandeja «Anamnesis por revisar» (DX-099)', () => {
   it('vacía: «No hay anamnesis por revisar»', async () => {

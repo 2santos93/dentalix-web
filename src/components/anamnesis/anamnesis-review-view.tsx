@@ -14,9 +14,10 @@ import {
 } from '@/lib/anamnesis/anamnesis-api';
 import { SAFETY_FLAG_LABELS } from '@/lib/clinical/medical-alerts';
 import type { ClinicalHistoryValue, SafetyFlags } from '@/lib/clinical/clinical-types';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
@@ -160,6 +161,8 @@ export function AnamnesisReviewView({
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [rejectError, setRejectError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
+  // La solicitud y su cita se pintan con el reloj de SU sede; la versión de la historia no trae sede (la de la pantalla).
+  const stamp = useSedeStamp(token, [data?.submission.location.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -276,12 +279,13 @@ export function AnamnesisReviewView({
         meta={
           <div className="mt-1.5 flex flex-col gap-0.5 text-sm text-muted tabular-nums">
             {submission.submittedAt && (
-              <p>{copy.submitted(formatDateTime(submission.submittedAt), submission.location.name)}</p>
+              <p>{copy.submitted(stamp.dateTime(submission.submittedAt, submission.location.id), submission.location.name)}</p>
             )}
-            {submission.appointment && <p>{copy.appointment(formatDateTime(submission.appointment.start))}</p>}
+            {submission.appointment && <p>{copy.appointment(stamp.dateTime(submission.appointment.start, submission.location.id))}</p>}
           </div>
         }
       />
+      <SedeStampNote stamp={stamp} className="mb-4" />
 
       {result ? (
         <Callout
@@ -303,7 +307,7 @@ export function AnamnesisReviewView({
             {copy.reviewed(
               SUBMISSION_STATUS_LABELS[submission.status],
               submission.reviewedByName,
-              submission.reviewedAt ? formatDateTime(submission.reviewedAt) : null,
+              submission.reviewedAt ? stamp.dateTime(submission.reviewedAt, submission.location.id) : null,
             )}
           </p>
           {submission.rejectReason && <p className="text-sm text-ink">{submission.rejectReason}</p>}
@@ -338,7 +342,7 @@ export function AnamnesisReviewView({
               description={
                 <span className="tabular-nums">
                   {data.currentVersion
-                    ? copy.diffAgainst(data.currentVersion.version, formatDateTime(data.currentVersion.createdAt))
+                    ? copy.diffAgainst(data.currentVersion.version, stamp.dateTime(data.currentVersion.createdAt))
                     : copy.diffNoPrevious}
                 </span>
               }
