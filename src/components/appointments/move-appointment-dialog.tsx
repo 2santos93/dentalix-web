@@ -53,16 +53,22 @@ const copy = {
   // DX-509-bis: un sobrecupo que no cabe donde se pidió.
   nextOpeningSearching: 'Buscando el siguiente hueco libre…',
   nextOpeningTitle: 'Siguiente hueco libre',
-  nextOpening: (when: string, provider: string) => endSentence(`${when} con ${provider}`),
+  // DX-492-bis: con sillón, la sugerencia lo deja libre y lo dice.
+  nextOpening: (when: string, provider: string, chair: string | null) =>
+    endSentence(chair ? `${when} con ${provider}, en «${chair}»` : `${when} con ${provider}`),
   useNextOpening: 'Usar este hueco',
-  noNextOpening: `No hay huecos libres de ese profesional en los próximos ${NEXT_OPENING_DAYS} días. Prueba con otro profesional o mantenla donde está.`,
+  noNextOpening: (chair: string | null) =>
+    chair
+      ? `No hay huecos libres de ese profesional con «${chair}» en los próximos ${NEXT_OPENING_DAYS} días. Prueba con otro profesional u otro sillón, o mantenla donde está.`
+      : `No hay huecos libres de ese profesional en los próximos ${NEXT_OPENING_DAYS} días. Prueba con otro profesional o mantenla donde está.`,
   nextOpeningError: 'No pudimos buscar el siguiente hueco libre. Elige otra hora a mano.',
 };
 
+/** `chair`: el nombre del sillón con el que se buscó (DX-492-bis); sin él, null. */
 type NextOpening =
   | { status: 'searching' }
-  | { status: 'found'; target: MoveTarget }
-  | { status: 'none' }
+  | { status: 'found'; target: MoveTarget; chair: string | null }
+  | { status: 'none'; chair: string | null }
   | { status: 'error' };
 
 interface MoveAppointmentDialogProps {
@@ -123,12 +129,30 @@ export function MoveAppointmentDialog({
   const [error, setError] = useState<string | null>(collision?.message ?? null);
   const [submitting, setSubmitting] = useState(false);
 
+  /** Activo según la lista de la sede; sin ella, según la cita. */
+  function isActiveChair(id: string): boolean {
+    const known = chairs.find((c) => c.id === id) ?? (appointment.chair?.id === id ? appointment.chair : null);
+    return known?.active !== false;
+  }
+
+  /** Nombre del sillón con el que se busca el hueco (DX-492-bis); sin sillón, null. */
+  function chairName(id: string): string | null {
+    if (!id) return null;
+    return chairOptions.find((c) => c.id === id)?.name ?? (appointment.chair?.id === id ? appointment.chair.name : null);
+  }
+
   /** Busca el siguiente hueco; solo cuenta la última búsqueda. */
   function searchNextOpening(target: MoveTarget) {
     const id = ++search.current;
-    findNextOpening(token, appointment, target, timeZone, chairId).then(
+    // Un sillón desactivado (el de la cita) no se puede pedir a «Buscar hueco»
+    // (400): se busca sin él y la sugerencia no lo nombra.
+    const searchChairId = chairId && isActiveChair(chairId) ? chairId : null;
+    const chair = chairName(searchChairId ?? '');
+    findNextOpening(token, appointment, target, timeZone, searchChairId).then(
       (found) => {
-        if (search.current === id) setNextOpening(found ? { status: 'found', target: found } : { status: 'none' });
+        if (search.current === id) {
+          setNextOpening(found ? { status: 'found', target: found, chair } : { status: 'none', chair });
+        }
       },
       () => {
         if (search.current === id) setNextOpening({ status: 'error' });
@@ -246,9 +270,10 @@ export function MoveAppointmentDialog({
               ? copy.nextOpening(
                   fmt.dateTime(new Date(nextOpening.target.start), timeZone),
                   providerName(nextOpening.target.providerId),
+                  nextOpening.chair,
                 )
               : nextOpening.status === 'none'
-                ? copy.noNextOpening
+                ? copy.noNextOpening(nextOpening.chair)
                 : copy.nextOpeningError}
         </Callout>
       ) : null}

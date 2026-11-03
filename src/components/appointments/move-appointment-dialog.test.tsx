@@ -337,6 +337,96 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
     expect(mockedOpenings.mock.calls[0][1]).toMatchObject({ chairIds: ['ch-1'] });
   });
 
+  describe('DX-492-bis · choca el sillón', () => {
+    const withChair: Appointment = {
+      ...overbooked,
+      chairId: 'ch-1',
+      chair: { id: 'ch-1', name: 'Sillón 1', active: true },
+    };
+    const base = {
+      tenantId: 't1',
+      locationId: 'loc-1',
+      sortOrder: 0,
+      defaultProviderId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const chairs = [
+      { ...base, id: 'ch-1', name: 'Sillón 1', active: true },
+      { ...base, id: 'ch-2', name: 'Sillón Ávila', active: true },
+    ];
+    const chairOverlap = (name: string) =>
+      new ApiError(409, `El sillón «${name}» ya está ocupado de 11:00 a 11:30`, {
+        code: 'APPOINTMENT_OVERLAP',
+      });
+
+    it('ofrece el siguiente hueco con ese sillón libre y lo dice', async () => {
+      const user = userEvent.setup();
+      mockedUpdate.mockRejectedValueOnce(chairOverlap('Sillón 1'));
+      mockedOpenings.mockResolvedValue({
+        timeZone: 'UTC',
+        durationMinutes: 90,
+        truncated: false,
+        openings: [{ start: at('13:00'), end: at('16:00') }],
+      });
+      renderOverbooked({ appointment: withChair, chairs });
+      await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+
+      expect(await screen.findByText('El sillón «Sillón 1» ya está ocupado de 11:00 a 11:30')).toBeInTheDocument();
+      const offer = await screen.findByTestId('move-next-opening');
+      await waitFor(() => expect(offer).toHaveTextContent('13:00 con Dra. Ana Ríos, en «Sillón 1».'));
+      expect(mockedOpenings.mock.calls[0][1]).toMatchObject({ chairIds: ['ch-1'], excludeAppointmentId: 'apt-1' });
+    });
+
+    it('con otra hora y otro sillón busca ese sillón; sin hueco, lo nombra', async () => {
+      const user = userEvent.setup();
+      mockedUpdate.mockRejectedValueOnce(chairOverlap('Sillón Ávila'));
+      mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, openings: [] });
+      renderOverbooked({ appointment: withChair, chairs });
+      await typeTime(user, 'Hora de inicio', '11:00');
+      await user.selectOptions(screen.getByLabelText('Sillón'), 'ch-2');
+      await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+
+      expect(
+        await screen.findByText(
+          'No hay huecos libres de ese profesional con «Sillón Ávila» en los próximos 14 días. Prueba con otro profesional u otro sillón, o mantenla donde está.',
+        ),
+      ).toBeInTheDocument();
+      expect(mockedOpenings.mock.calls[0][1]).toMatchObject({ chairIds: ['ch-2'] });
+      expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ start: at('11:00'), chairId: 'ch-2' });
+    });
+
+    it('con el sillón de la cita desactivado busca sin él (pedirlo daría 400) y no lo nombra', async () => {
+      const user = userEvent.setup();
+      const off = { ...withChair, chairId: 'ch-old', chair: { id: 'ch-old', name: 'Viejo', active: false } };
+      mockedUpdate.mockRejectedValueOnce(chairOverlap('Viejo'));
+      mockedOpenings.mockResolvedValue({
+        timeZone: 'UTC',
+        durationMinutes: 90,
+        truncated: false,
+        openings: [{ start: at('13:00'), end: at('16:00') }],
+      });
+      renderOverbooked({ appointment: off, chairs: [...chairs, { ...base, id: 'ch-old', name: 'Viejo', active: false }] });
+      await typeTime(user, 'Hora de inicio', '11:00');
+      await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+      const offer = await screen.findByTestId('move-next-opening');
+      await waitFor(() => expect(offer).toHaveTextContent('13:00 con Dra. Ana Ríos.'));
+      expect(offer).not.toHaveTextContent('Viejo');
+      expect(mockedOpenings.mock.calls[0][1]).not.toHaveProperty('chairIds');
+    });
+
+    it('cambiar solo el sillón (misma hora) no busca hueco: la hora no es lo que se pidió cambiar', async () => {
+      const user = userEvent.setup();
+      mockedUpdate.mockRejectedValueOnce(chairOverlap('Sillón Ávila'));
+      renderOverbooked({ appointment: withChair, chairs });
+      await user.selectOptions(screen.getByLabelText('Sillón'), 'ch-2');
+      await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+      expect(await screen.findByText('El sillón «Sillón Ávila» ya está ocupado de 11:00 a 11:30')).toBeInTheDocument();
+      expect(mockedUpdate.mock.calls[0][2]).toEqual({ chairId: 'ch-2' });
+      expect(mockedOpenings).not.toHaveBeenCalled();
+    });
+  });
+
   it('sin hueco en 14 días lo dice; una cita normal o otro 409 no busca', async () => {
     const user = userEvent.setup();
     mockedUpdate.mockRejectedValueOnce(overlap());

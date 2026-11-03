@@ -32,6 +32,14 @@ describe('next-opening (DX-509-bis)', () => {
     expect(canOfferNextOpening({ overbooked: true }, new Error('x'))).toBe(false);
   });
 
+  it('DX-492-bis: el 409 de sillón ocupado al mover también (lleva el mismo código; la API añade `scope: chair`)', () => {
+    const chair = new ApiError(409, 'El sillón «Sillón 1» ya está ocupado de 15:30 a 16:00', {
+      code: APPOINTMENT_OVERLAP,
+    });
+    expect(canOfferNextOpening({ overbooked: true }, chair)).toBe(true);
+    expect(canOfferNextOpening({ overbooked: false }, chair)).toBe(false);
+  });
+
   it('pide 14 días desde el día del destino (en la zona de la sede), sin la propia cita, y toma el primero que cabe desde la hora pedida', async () => {
     mocked.mockResolvedValue(
       openings([

@@ -78,15 +78,30 @@ interface WeekTimeGridProps {
   selectedProviderId?: string | null;
 }
 
-/** DX-492: el sillón junto al paciente; si no cabe, se recorta él primero. */
+/**
+ * DX-492: el sillón junto al paciente. DX-492-bis (medido en Semana a media
+ * columna, chip de 160 px): los nombres cortos (≈12 caracteres, «Sillón
+ * Ávila») caben enteros; los largos se recortan y ocupan como mucho el 45 % del
+ * chip. El paciente (`PATIENT_CLASS`) cede antes, hasta 4 caracteres; solo
+ * entonces encoge el sillón, así que la fila compacta nunca desborda. El
+ * paciente sigue entero en el `title` y en el detalle.
+ */
 function WeekChairLabel({ chair }: { chair: string | null }) {
   if (!chair) return null;
   return (
-    <span data-testid="week-appointment-chair" className="min-w-0 shrink-[20] truncate font-normal">
+    <span data-testid="week-appointment-chair" className="min-w-0 max-w-[45%] truncate font-normal">
       {chair}
     </span>
   );
 }
+
+/**
+ * El paciente parte de 0 y crece hasta su nombre con el hueco que dejan los
+ * demás (`flex-1 max-w-max`), con un mínimo de 4 caracteres. Así el sillón no
+ * encoge mientras quepa; un peso de encogimiento no basta: le quitaría una
+ * fracción de píxel y saldría «Silló…».
+ */
+const PATIENT_CLASS = 'min-w-[4ch] max-w-max flex-1 truncate font-semibold';
 
 const WHOLE_DAY = { start: 0, end: DAY_MINUTES };
 
@@ -264,7 +279,7 @@ export function WeekTimeGrid({
                     {/* En 20 px paciente y estado comparten una fila; en las demás el paciente mantiene prioridad. */}
                     {heightPx < 40 ? (
                       <span className="flex min-w-0 items-center gap-1 font-medium leading-none">
-                        <span className="min-w-0 truncate font-semibold">{patient}</span>{' '}
+                        <span className={PATIENT_CLASS}>{patient}</span>{' '}
                         <WeekChairLabel chair={chair} />{' '}
                         <AppointmentStatusLabel status={a.status} compact />{' '}
                         <ConfirmationBadge appointment={a} compact />{' '}
@@ -274,7 +289,7 @@ export function WeekTimeGrid({
                     ) : (
                       <>
                         <span className="flex min-w-0 items-center gap-1">
-                          <span className="min-w-0 truncate font-semibold">{patient}</span>{' '}
+                          <span className={PATIENT_CLASS}>{patient}</span>{' '}
                           <WeekChairLabel chair={chair} />
                         </span>{' '}
                         <span className="flex min-w-0 items-center gap-1">
