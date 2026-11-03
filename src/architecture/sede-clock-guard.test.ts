@@ -59,7 +59,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/inventory/inventory-view.tsx': STAMP,
   'components/locations/cancellation-policy-settings.tsx': STAMP,
   'components/odontogram/tooth-timeline.tsx': STAMP,
-  'components/patient-documents/patient-documents-tab.tsx': STAMP,
   'components/patient-imports/import-history.tsx': STAMP,
   'components/patients/clinical-entries-list.tsx': STAMP,
   'components/patients/medical-history-panel.tsx': STAMP,
