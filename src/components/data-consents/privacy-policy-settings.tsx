@@ -14,7 +14,8 @@ import {
 } from '@/lib/data-consents/data-consents-api';
 import { POLICY_TEMPLATE, unfilledPlaceholderFields } from '@/lib/data-consents/policy-template';
 import { getTokenRole } from '@/lib/auth/token-role';
-import { formatDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Disclosure } from '@/components/shared/disclosure';
 import { FormField } from '@/components/shared/form-field';
@@ -94,6 +95,7 @@ function draftFrom(policy: PrivacyPolicyVersion | null): Draft {
 export function PrivacyPolicySettings({ token }: { token: string }) {
   const { data, loading, failed, reload } = usePrivacyPolicies(token);
   const isAdmin = canPublishPrivacyPolicy(getTokenRole(token));
+  const stamp = useSedeStamp(token);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(POLICY_TEMPLATE);
   const [submitting, setSubmitting] = useState(false);
@@ -149,6 +151,7 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
 
   return (
     <div className="flex flex-col gap-6">
+      <SedeStampNote stamp={stamp} />
       <AsyncSection
         loading={loading}
         error={failed ? copy.loadError : null}
@@ -170,7 +173,7 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
                   <span className="tnum">
                     {copy.currentMeta(
                       current.version,
-                      formatDate(current.publishedAt),
+                      stamp.date(current.publishedAt),
                       current.publishedBy.fullName,
                     )}
                   </span>
@@ -189,7 +192,7 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
                     <div key={p.id} className="px-4 py-2">
                       <Disclosure
                         summary={`Versión ${p.version}`}
-                        meta={copy.historyMeta(formatDate(p.publishedAt), p.publishedBy.fullName)}
+                        meta={copy.historyMeta(stamp.date(p.publishedAt), p.publishedBy.fullName)}
                       >
                         <PolicyBody policy={p} />
                       </Disclosure>

@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react';
 import { ChevronRight, ClipboardCheck } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listAnamnesisInbox, type AnamnesisSubmission } from '@/lib/anamnesis/anamnesis-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 const copy = {
   title: 'Anamnesis por revisar',
@@ -27,48 +28,56 @@ const copy = {
   count: (n: number) => `${n} ${n === 1 ? 'cuestionario' : 'cuestionarios'} · los más antiguos primero`,
 };
 
-const columns: DataListColumn<AnamnesisSubmission>[] = [
-  {
-    id: 'patient',
-    header: copy.colPatient,
-    mobile: 'primary',
-    cell: (row) => (
-      <>
-        <span className="sr-only">{copy.reviewPrefix}</span>
-        {row.patient.fullName}
-      </>
-    ),
-  },
-  {
-    id: 'submitted',
-    header: copy.colSubmitted,
-    mobile: 'trailing',
-    cellClassName: 'tabular-nums',
-    cell: (row) => formatDateTime(row.submittedAt),
-  },
-  {
-    id: 'appointment',
-    header: copy.colAppointment,
-    cellClassName: 'tabular-nums',
-    cell: (row) =>
-      row.appointment ? formatDateTime(row.appointment.start) : <span className="text-muted">{copy.noAppointment}</span>,
-    mobileCell: (row) => (row.appointment ? formatDateTime(row.appointment.start) : null),
-  },
-  { id: 'location', header: copy.colLocation, cell: (row) => row.location.name },
-  {
-    id: 'review',
-    header: <span className="sr-only">{copy.review}</span>,
-    mobile: 'hidden',
-    align: 'end',
-    // Pista visual de que la fila abre la revisión (el enlace es la fila).
-    cell: () => (
-      <span aria-hidden className="inline-flex items-center gap-0.5 text-sm font-medium text-primary-text">
-        {copy.review}
-        <ChevronRight className="size-4" />
-      </span>
-    ),
-  },
-];
+/** Cada fila se pinta con el reloj de SU sede (`row.location.id`), no con el de la pantalla (DX-354b). */
+function inboxColumns(stamp: SedeStamp): DataListColumn<AnamnesisSubmission>[] {
+  return [
+    {
+      id: 'patient',
+      header: copy.colPatient,
+      mobile: 'primary',
+      cell: (row) => (
+        <>
+          <span className="sr-only">{copy.reviewPrefix}</span>
+          {row.patient.fullName}
+        </>
+      ),
+    },
+    {
+      id: 'submitted',
+      header: copy.colSubmitted,
+      mobile: 'trailing',
+      cellClassName: 'tabular-nums',
+      cell: (row) => stamp.dateTime(row.submittedAt, row.location.id),
+      mobileCell: (row) => stamp.maybe.dateTime(row.submittedAt, row.location.id),
+    },
+    {
+      id: 'appointment',
+      header: copy.colAppointment,
+      cellClassName: 'tabular-nums',
+      cell: (row) =>
+        row.appointment ? (
+          stamp.dateTime(row.appointment.start, row.location.id)
+        ) : (
+          <span className="text-muted">{copy.noAppointment}</span>
+        ),
+      mobileCell: (row) => (row.appointment ? stamp.maybe.dateTime(row.appointment.start, row.location.id) : null),
+    },
+    { id: 'location', header: copy.colLocation, cell: (row) => row.location.name },
+    {
+      id: 'review',
+      header: <span className="sr-only">{copy.review}</span>,
+      mobile: 'hidden',
+      align: 'end',
+      // Pista visual de que la fila abre la revisión (el enlace es la fila).
+      cell: () => (
+        <span aria-hidden className="inline-flex items-center gap-0.5 text-sm font-medium text-primary-text">
+          {copy.review}
+          <ChevronRight className="size-4" />
+        </span>
+      ),
+    },
+  ];
+}
 
 /**
  * Bandeja «Anamnesis por revisar» (DX-099): lo que los pacientes enviaron por
@@ -80,6 +89,11 @@ export function AnamnesisInboxView({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const stamp = useSedeStamp(
+    token,
+    rows.map((row) => row.location.id),
+  );
+  const columns = inboxColumns(stamp);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,6 +133,7 @@ export function AnamnesisInboxView({ token }: { token: string }) {
         skeleton={<TableSkeleton rows={3} />}
       >
         <div className="flex flex-col gap-3">
+          <SedeStampNote stamp={stamp} />
           <p className="t-caption text-muted tnum">{copy.count(rows.length)}</p>
           <DataList
             label={copy.tableLabel}

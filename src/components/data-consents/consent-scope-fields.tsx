@@ -8,7 +8,8 @@ import {
   type DataConsentScope,
   type PrivacyPolicyVersion,
 } from '@/lib/data-consents/data-consents-api';
-import { formatDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { Checkbox } from '@/components/ui/checkbox';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
@@ -23,6 +24,8 @@ const copy = {
 };
 
 interface ConsentScopeFieldsProps {
+  /** Para leer el formato de la sede con el que se pinta la fecha de la política. */
+  token: string;
   policy: PrivacyPolicyVersion;
   value: ConsentSelection;
   onChange: (next: ConsentSelection) => void;
@@ -39,20 +42,23 @@ interface ConsentScopeFieldsProps {
  * del paciente y «Registrar autorización» de la ficha.
  */
 export function ConsentScopeFields({
+  token,
   policy,
   value,
   onChange,
   idPrefix,
   hiddenScopes = [],
 }: ConsentScopeFieldsProps) {
+  const stamp = useSedeStamp(token);
   const scopes = CONSENT_SCOPES.filter((s) => !hiddenScopes.includes(s));
   const hintId = `${idPrefix}-hint`;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <p className="text-xs text-muted">
-          {copy.policyMeta(policy.version, formatDate(policy.publishedAt))}
+          {copy.policyMeta(policy.version, stamp.date(policy.publishedAt))}
         </p>
+        <SedeStampNote stamp={stamp} />
         {/* Región con scroll propio: la política puede ocupar páginas y no debe
             empujar las casillas fuera de la vista. Enfocable para leerla con
             teclado. */}

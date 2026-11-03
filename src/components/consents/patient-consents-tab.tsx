@@ -12,7 +12,8 @@ import {
   type PatientConsent,
   type PatientConsentSummary,
 } from '@/lib/consents/consents-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +39,7 @@ const copy = {
   colDocument: 'Documento',
   colSigner: 'Firmante',
   colProfessional: 'Profesional',
-  rowLabel: (title: string, when: string) => `«${title}» del ${when}`,
+  rowLabel: (title: string, when: string | null) => (when ? `«${title}» del ${when}` : `«${title}»`),
   signer: (name: string, type: string) => `${name} (${type.toLowerCase()})`,
   version: (v: number) => `Versión ${v} de la plantilla`,
   print: 'Ver e imprimir',
@@ -130,6 +131,7 @@ function ClinicalConsents({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const stamp = useSedeStamp(token);
   const [modalOpen, setModalOpen] = useState(false);
   // Cada apertura monta un modal nuevo: nada (ni una firma) pasa de una a otra.
   const [modalKey, setModalKey] = useState(0);
@@ -222,8 +224,9 @@ function ClinicalConsents({
     {
       id: 'signedAt',
       header: copy.colSignedAt,
-      cell: (consent) => <span className="tnum">{formatDateTime(consent.signedAt)}</span>,
-      mobileCell: (consent) => formatDateTime(consent.signedAt),
+      cellClassName: 'tnum',
+      cell: (consent) => stamp.dateTime(consent.signedAt),
+      mobileCell: (consent) => stamp.maybe.dateTime(consent.signedAt),
     },
     {
       id: 'signer',
@@ -276,6 +279,8 @@ function ClinicalConsents({
         </Callout>
       ) : null}
 
+      <SedeStampNote stamp={stamp} />
+
       <AsyncSection
         loading={loading}
         error={error}
@@ -291,7 +296,7 @@ function ClinicalConsents({
           rows={consents}
           columns={columns}
           getRowKey={(consent) => consent.id}
-          getRowLabel={(consent) => copy.rowLabel(consent.title, formatDateTime(consent.signedAt))}
+          getRowLabel={(consent) => copy.rowLabel(consent.title, stamp.maybe.dateTime(consent.signedAt))}
           rowActions={(consent) => [
             ...(awaitsMe(consent)
               ? [{ label: copy.countersign, icon: <PenLine aria-hidden />, onSelect: () => countersign(consent) }]

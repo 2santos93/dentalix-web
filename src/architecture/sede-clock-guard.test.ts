@@ -48,15 +48,7 @@ const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del nav
 const PENDING: Readonly<Record<string, string>> = {
   'components/cash-sessions/cash-shifts-view.tsx': ZONE_24H,
   'lib/clinical/medical-alerts.ts': ZONE_24H,
-  'components/anamnesis/anamnesis-inbox-view.tsx': STAMP,
-  'components/anamnesis/anamnesis-review-view.tsx': STAMP,
-  'components/anamnesis/patient-anamnesis-section.tsx': STAMP,
   'components/collections/patient-collections-section.tsx': STAMP,
-  'components/consents/consent-templates-manager.tsx': STAMP,
-  'components/consents/patient-consents-tab.tsx': STAMP,
-  'components/data-consents/consent-scope-fields.tsx': STAMP,
-  'components/data-consents/data-consents-tab.tsx': STAMP,
-  'components/data-consents/privacy-policy-settings.tsx': STAMP,
   'components/discounts/discount-policy-manager.tsx': STAMP,
   'components/domains/domains-manager.tsx': STAMP,
   'components/expenses/expense-detail-modal.tsx': STAMP,
@@ -93,7 +85,7 @@ const PENDING: Readonly<Record<string, string>> = {
  * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
  * cierre, `PENDING` desaparece.
  */
-const MAX_PENDING = 40;
+const MAX_PENDING = 32;
 
 const CIVIL_W4 = 'Día civil en `dd/mm/yyyy` fijo: se migra a `fmt.civilDate`/`stamp.civilDate` en DX-354b W4.';
 
@@ -160,6 +152,15 @@ const MIGRATED = [
   'components/cash-sessions/cash-session-report.tsx',
   'components/patient-documents/patient-documents-tab.tsx',
   'lib/audit/audit-labels.ts',
+  // DX-354b W1: cada fila con la sede de su dato (`useSedeStamp`), zona paciente y clínica.
+  'components/anamnesis/anamnesis-inbox-view.tsx',
+  'components/anamnesis/anamnesis-review-view.tsx',
+  'components/anamnesis/patient-anamnesis-section.tsx',
+  'components/consents/consent-templates-manager.tsx',
+  'components/consents/patient-consents-tab.tsx',
+  'components/data-consents/consent-scope-fields.tsx',
+  'components/data-consents/data-consents-tab.tsx',
+  'components/data-consents/privacy-policy-settings.tsx',
 ];
 
 /**

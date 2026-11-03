@@ -8,12 +8,13 @@ import {
   revokeAnamnesisRequest,
   type AnamnesisSubmission,
 } from '@/lib/anamnesis/anamnesis-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
 import { Callout } from '@/components/ui/callout';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import type { AnamnesisStatus } from '@/lib/clinical/medical-alerts';
 
 const copy = {
@@ -36,14 +37,15 @@ const copy = {
   revokeError: 'No pudimos anular el enlace.',
 };
 
-function detail(s: AnamnesisSubmission): string | null {
+/** Cada solicitud con el reloj de SU sede (`location.id`), no el de la pantalla (DX-354b). */
+function detail(s: AnamnesisSubmission, stamp: SedePainters): string | null {
   switch (s.status) {
     case 'SUBMITTED':
-      return s.submittedAt ? copy.pending(formatDateTime(s.submittedAt)) : null;
+      return s.submittedAt ? copy.pending(stamp.dateTime(s.submittedAt, s.location.id)) : null;
     case 'PENDING_PATIENT':
-      return copy.waiting(formatDateTime(s.expiresAt));
+      return copy.waiting(stamp.dateTime(s.expiresAt, s.location.id));
     case 'ACCEPTED':
-      return s.reviewedAt ? copy.accepted(s.reviewedByName, formatDateTime(s.reviewedAt)) : null;
+      return s.reviewedAt ? copy.accepted(s.reviewedByName, stamp.dateTime(s.reviewedAt, s.location.id)) : null;
     case 'REJECTED':
       return copy.rejected(s.rejectReason);
     default:
@@ -95,6 +97,10 @@ export function PatientAnamnesisSection({
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [revoking, setRevoking] = useState(false);
+  const stamp = useSedeStamp(
+    token,
+    rows.map((r) => r.location.id),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -165,6 +171,7 @@ export function PatientAnamnesisSection({
         </Callout>
       ) : null}
       {reviewLine}
+      <SedeStampNote stamp={stamp} />
       {error ? (
         <SectionError
           description={error}
@@ -184,7 +191,7 @@ export function PatientAnamnesisSection({
             >
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <StatusBadge kind="anamnesisSubmission" status={item.status} />
-                {detail(item) && <p className="text-sm text-muted tabular-nums">{detail(item)}</p>}
+                {detail(item, stamp) && <p className="text-sm text-muted tabular-nums">{detail(item, stamp)}</p>}
               </div>
               {item.status === 'SUBMITTED' && canReview && (
                 <Button asChild variant="secondary" size="sm" className="self-start sm:self-auto">

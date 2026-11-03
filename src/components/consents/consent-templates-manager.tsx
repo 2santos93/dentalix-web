@@ -8,7 +8,8 @@ import {
   updateConsentTemplate,
   type ConsentTemplate,
 } from '@/lib/consents/consents-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { notifyError } from '@/components/errors/notify';
@@ -60,6 +61,7 @@ export function ConsentTemplatesManager({ token, allowed }: ConsentTemplatesMana
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const stamp = useSedeStamp(token);
 
   useEffect(() => {
     if (!allowed) return;
@@ -150,8 +152,9 @@ export function ConsentTemplatesManager({ token, allowed }: ConsentTemplatesMana
     {
       id: 'updated',
       header: copy.colUpdated,
-      cell: (t) => <span className="tnum text-muted">{formatDateTime(t.updatedAt)}</span>,
-      mobileCell: (t) => formatDateTime(t.updatedAt),
+      cellClassName: 'tnum text-muted',
+      cell: (t) => stamp.dateTime(t.updatedAt),
+      mobileCell: (t) => stamp.maybe.dateTime(t.updatedAt),
     },
   ];
 
@@ -166,6 +169,8 @@ export function ConsentTemplatesManager({ token, allowed }: ConsentTemplatesMana
           {copy.newTemplate}
         </Button>
       </div>
+
+      <SedeStampNote stamp={stamp} />
 
       <AsyncSection
         loading={loading}
