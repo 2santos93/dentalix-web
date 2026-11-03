@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Lock, Printer, ReceiptText } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -60,6 +60,8 @@ export function PaymentReceiptPrintView({
   const [notFound, setNotFound] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
+  // DX-354: sin formato de sede no se abre el diálogo de impresión solo: saldría lleno de «—» antes de leer el aviso.
+  const docFormat = useMemo(() => (receipt ? documentFormat(receipt.regional) : null), [receipt]);
   const forbidden = !allowed || deniedByApi;
 
   useEffect(() => {
@@ -86,11 +88,11 @@ export function PaymentReceiptPrintView({
   }, [token, paymentId, reloadKey, allowed]);
 
   useEffect(() => {
-    if (receipt && !printed.current) {
+    if (receipt && docFormat !== null && !printed.current) {
       printed.current = true;
       window.print();
     }
-  }, [receipt]);
+  }, [receipt, docFormat]);
 
   const backHref = receipt
     ? `/patients/${encodeURIComponent(receipt.snapshot.patient.id)}?tab=treatment-plans`
@@ -130,7 +132,7 @@ export function PaymentReceiptPrintView({
               </Link>
             ))}
           </nav>
-          <Button type="button" onClick={() => window.print()} disabled={!receipt}>
+          <Button type="button" onClick={() => window.print()} disabled={!receipt || docFormat === null}>
             <Printer aria-hidden />
             {copy.print}
           </Button>
@@ -140,7 +142,7 @@ export function PaymentReceiptPrintView({
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {receipt ? (
           <>
-            {documentFormat(receipt.regional) === null ? (
+            {docFormat === null ? (
               <DocumentFormatNote
                 locationId={receipt.snapshot.location.id}
                 onRetry={() => setReloadKey((k) => k + 1)}

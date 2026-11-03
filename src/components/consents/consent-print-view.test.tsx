@@ -245,9 +245,12 @@ describe('DX-354: el formato de la sede del consentimiento', () => {
     expect(await screen.findByTestId('consent-header')).toHaveTextContent(/Firmado el\s*—/);
     const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
     expect(note?.closest('.print\\:hidden')).not.toBeNull();
+    expect(print).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /imprimir/i })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     // 15:00 UTC es 11:00 a. m. en Nueva York.
     await waitFor(() => expect(screen.getByTestId('consent-header')).toHaveTextContent('10/16/2026 11:00 a. m.'));
+    expect(print).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument();
     print.mockRestore();
   });

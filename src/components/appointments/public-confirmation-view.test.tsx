@@ -121,6 +121,54 @@ describe('PublicConfirmationView', () => {
     expect(screen.getAllByText('—')).toHaveLength(2);
   });
 
+  describe('DX-354: sede sin formato y cancelación tardía con cargo', () => {
+    const lateWithFee = (
+      appointment: Partial<PublicConfirmation['appointment'] & object> = { timeZone: null, locale: null, hourCycle: null },
+    ) =>
+      view({
+        appointment: { ...APPOINTMENT, ...appointment },
+        isLate: true,
+        cancellationPolicy: { policyVersionId: 'pv-1', noticeHours: 24, text: '', suggestedFee: 1234.5, currency: 'USD' },
+      });
+
+    it('no se puede aceptar el cargo en línea: sin «Cancelar cita» ni casilla, el aviso de llamar a la clínica y nunca el cargo como «—»', async () => {
+      get.mockResolvedValueOnce(lateWithFee());
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+      expect(screen.getByTestId('public-fee-needs-clinic')).toHaveTextContent(/llama a la clínica para cancelar/i);
+      expect(screen.queryByRole('button', { name: 'Cancelar cita' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Cargo por inasistencia/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('public-late-cancellation')).not.toBeInTheDocument();
+      // Confirmar y pedir que lo llamen siguen disponibles.
+      expect(screen.getByRole('button', { name: 'Confirmar asistencia' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Quiero que me llamen' })).toBeEnabled();
+    });
+
+    it('a tiempo (sin cargo) sigue pudiendo cancelar', async () => {
+      get.mockResolvedValueOnce(
+        view({
+          appointment: { ...APPOINTMENT, timeZone: null, locale: null, hourCycle: null } as never,
+          isLate: false,
+          cancellationPolicy: { policyVersionId: 'pv-1', noticeHours: 24, text: '', suggestedFee: 1234.5, currency: 'USD' },
+        }),
+      );
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+      expect(screen.getByRole('button', { name: 'Cancelar cita' })).toBeEnabled();
+      expect(screen.queryByTestId('public-fee-needs-clinic')).not.toBeInTheDocument();
+    });
+
+    it('con formato de sede el cargo se ve con su código y se cancela como siempre', async () => {
+      get.mockResolvedValueOnce(lateWithFee({ timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+      expect(screen.getByTestId('public-cancellation-policy').textContent?.replace(/\s/g, ' ')).toContain('USD 1,234.50');
+      expect(screen.getByRole('button', { name: 'Cancelar cita' })).toBeEnabled();
+      expect(screen.queryByTestId('public-fee-needs-clinic')).not.toBeInTheDocument();
+    });
+  });
+
   it('aplica el color de la clínica al bloque (white-label)', async () => {
     get.mockResolvedValueOnce(view());
     const { container } = render(<PublicConfirmationView confirmationToken="tok-1" />);

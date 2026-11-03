@@ -163,9 +163,12 @@ describe('DX-354: el formato de la sede de la entrega', () => {
 
   it('la vista imprimible sin región muestra el aviso de la sede fuera del papel', async () => {
     mockedGet.mockResolvedValue(documentFixture({ regional: null }));
-    jest.spyOn(window, 'print').mockImplementation(() => undefined);
+    const printSpy = jest.spyOn(window, 'print').mockImplementation(() => undefined);
     render(<PostOpPrintView token="tok" patientId="pat-1" deliveryId="del-1" />);
     expect(await screen.findByText(/entregada el —/)).toBeInTheDocument();
+    // Sin formato no se abre el diálogo de impresión solo, y el botón espera.
+    expect(printSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /imprimir/i })).toBeDisabled();
     const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
     expect(note?.closest('.print\\:hidden')).not.toBeNull();
   });

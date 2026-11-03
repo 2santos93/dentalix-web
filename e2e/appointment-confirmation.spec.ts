@@ -213,5 +213,30 @@ test('con el navegador del paciente en otra zona, el día y la hora son los de l
   await expect
     .poll(async () => norm((await summary.textContent()) ?? ''))
     .toContain(`${fmt.time(start, sede.timeZone)}–${fmt.time(end, sede.timeZone)}`);
+
+  // Sin formato de la sede (respuesta interceptada) y cancelación tardía con cargo: el paciente no
+  // puede aceptar el cargo en línea; ni «—» como importe ni «Cancelar cita».
+  await patientPage.route('**/public/appointment-confirmations/*', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const res = await route.fetch();
+    const body = (await res.json()) as Record<string, unknown> & { appointment: Record<string, unknown> };
+    await route.fulfill({
+      response: res,
+      json: {
+        ...body,
+        isLate: true,
+        cancellationPolicy: { policyVersionId: 'pv-e2e', noticeHours: 24, text: '', suggestedFee: 25, currency: 'USD' },
+        appointment: { ...body.appointment, timeZone: null, locale: null, hourCycle: null },
+      },
+    });
+  });
+  await patientPage.reload();
+  await expect(patientPage.getByTestId('public-fee-needs-clinic')).toContainText('llama a la clínica para cancelar', {
+    ignoreCase: true,
+    timeout: 15_000,
+  });
+  await expect(patientPage.getByRole('button', { name: 'Cancelar cita' })).toHaveCount(0);
+  await expect(patientPage.getByText('Llama a la clínica para confirmar la hora de tu cita.')).toBeVisible();
+  await expect(patientPage.getByText(/Cargo por inasistencia/)).toHaveCount(0);
   await context.close();
 });

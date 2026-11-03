@@ -28,9 +28,9 @@ describe('DX-354: el importe del chip sigue el formato de la sede', () => {
     expect(screen.getByTestId('overdue-chip').textContent?.replace(/\s/g, ' ')).toBe('Saldo vencido · 12 días · USD 50,000.00');
   });
 
-  it('sin formato de la sede, «—», nunca otro formato', () => {
+  it('sin formato de la sede, sin importe, nunca otro formato', () => {
     render(<OverdueChip balance={balance} fmt={null} />);
-    expect(screen.getByTestId('overdue-chip')).toHaveTextContent('Saldo vencido · 12 días · —');
+    expect(screen.getByTestId('overdue-chip')).toHaveTextContent(/^Saldo vencido · 12 días$/);
   });
 });
 

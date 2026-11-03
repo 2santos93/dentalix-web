@@ -5,6 +5,7 @@ import { PaymentReceiptDialog } from './payment-receipt-dialog';
 import { getPaymentReceipt, sendPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { ApiError } from '@/lib/api/client';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
@@ -120,4 +121,17 @@ it('con título propio congelado, el encabezado del diálogo lo dice; sin él, �
   const dialog = await screen.findByRole('dialog', { name: 'Recibo de caja' });
   await within(dialog).findByTestId('receipt-document');
   expect(screen.getByRole('dialog', { name: 'Recibo de caja' })).toBeInTheDocument();
+});
+
+it('DX-354: sin región de la sede el recibo sale con «—» y el aviso; Reintentar lo vuelve a leer', async () => {
+  mockedGet.mockResolvedValueOnce(paymentReceiptFixture({ regional: null }));
+  mockedGet.mockResolvedValueOnce(paymentReceiptFixture());
+  render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
+  const dialog = await screen.findByRole('dialog', { name: /recibo de caja/i });
+  expect(await within(dialog).findByTestId('receipt-document')).toHaveTextContent(/Emitido\s*—/);
+  expect(within(dialog).getByText(SEDE_LOCALE_ERROR)).toBeInTheDocument();
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Reintentar' }));
+  await waitFor(() => expect(within(dialog).queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument());
+  expect(within(dialog).getByTestId('receipt-document')).not.toHaveTextContent(/Emitido\s*—/);
+  expect(mockedGet).toHaveBeenCalledTimes(2);
 });

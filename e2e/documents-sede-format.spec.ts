@@ -1,5 +1,4 @@
 import { test, expect, type APIRequestContext, type Locator, type Page } from './support/test';
-import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { apiPost, createLocationViaApi, registerClinicViaApi, type ApiSession } from './support/api';
@@ -29,15 +28,15 @@ import { moneyWithCode } from '../src/lib/format/sede-number';
  * Capturas a 390 y 1440 px, claro y oscuro, en E2E_QA_DIR si está definido
  * (`.planning/clickup-handoff-audit/qa/DX-354/`).
  *
- * Un caso usa la BD (quita el reloj de una sede): sin E2E_DATABASE_URL se salta
- * (permitido en e2e/allowed-skips.json); en la CI siempre está.
+ * El caso de una sede sin formato se prueba interceptando la respuesta del
+ * documento con `regional: null` (la API no deja crear una sede sin reloj): sin
+ * BD y sin saltos.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
 const subdomain = `g1c-${suffix}`;
 const password = 'Password123!';
 const adminEmail = `admin.g1c.${suffix}@example.com`;
 const QA_DIR = process.env.E2E_QA_DIR;
-const DB_SKIP = 'E2E_DATABASE_URL no definido: no se puede quitar el reloj de una sede';
 
 type Sede = { name: string } & RegionalSettings;
 type Key = 'us' | 'de';
@@ -45,14 +44,6 @@ type Key = 'us' | 'de';
 const SEDES: Record<Key, Sede> = {
   us: { name: 'Sede US', country: 'US', currency: 'USD', timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' },
   de: { name: 'Sede DE', country: 'DE', currency: 'EUR', timeZone: 'Europe/Berlin', locale: 'de-DE', hourCycle: 'h23' },
-};
-const SEDE_SIN_RELOJ: Sede = {
-  name: 'Sede sin reloj',
-  country: 'FR',
-  currency: 'EUR',
-  timeZone: 'Europe/Paris',
-  locale: 'fr-FR',
-  hourCycle: 'h12',
 };
 const KEYS: readonly Key[] = ['us', 'de'];
 const VIEWPORTS = [
@@ -97,10 +88,6 @@ async function apiGet<T>(request: APIRequestContext, s: ApiSession, path: string
 async function apiPatch(request: APIRequestContext, s: ApiSession, path: string, body: object): Promise<void> {
   const res = await request.patch(`${API_URL}${path}`, { headers: s.headers, data: body });
   expect(res.ok(), `PATCH ${path} falló: ${await res.text()}`).toBeTruthy();
-}
-
-function psql(sql: string): void {
-  execFileSync('psql', [process.env.E2E_DATABASE_URL as string, '-v', 'ON_ERROR_STOP=1', '-c', sql]);
 }
 
 const fmtOf = (s: Sede) => regionalFormat({ locale: s.locale, hourCycle: s.hourCycle });
@@ -409,29 +396,15 @@ test('cierre de caja: la apertura y los cobros con el reloj, el formato y el có
   }
 });
 
-test('una sede sin reloj: «—» en el impreso y el aviso de la sede, nunca otro formato', async ({ page, request }) => {
-  test.skip(!process.env.E2E_DATABASE_URL, DB_SKIP);
-  const sinReloj = await createLocationViaApi(request, session, SEDE_SIN_RELOJ);
-  const s: ApiSession = { ...session, headers: { ...session.headers, 'X-Location-Id': sinReloj } };
-  const patient = await apiPost<{ id: string }>(request, s, '/patients', {
-    firstName: 'PacienteSinReloj',
-    lastName: `Impreso${suffix}`.slice(0, 40),
-    docType: 'PASSPORT',
-    docNumber: `G1CS${suffix}`.slice(0, 20),
-    sex: 'F',
-  });
-  const plan = await apiPost<{ id: string }>(request, s, `/patients/${patient.id}/treatment-plans`, { currency: 'EUR' });
-  await apiPost(request, s, `/treatment-plans/${plan.id}/payments`, {
-    amount: 80,
-    currency: 'EUR',
-    paidAt: new Date().toISOString(),
-    method: 'CASH',
-  });
-  psql(`UPDATE locations SET "hourCycle" = NULL WHERE id = '${sinReloj}'`);
-
+test('un documento cuya sede no tiene formato (región nula): «—» y el aviso de la sede, nunca otro formato', async ({ page }) => {
   await loginAdmin(page);
-  await page.evaluate((id) => window.localStorage.setItem('dentalix.activeLocationId', id), sinReloj);
-  await page.goto(`${origin}/print/patients/${patient.id}/account-statement`);
+  await activate(page, 'us');
+  // La API responde `regional: null` cuando a la sede le falta algo; aquí se simula en la respuesta.
+  await page.route('**/patients/*/account-statement*', async (route) => {
+    const res = await route.fetch();
+    await route.fulfill({ response: res, json: { ...(await res.json()), regional: null } });
+  });
+  await page.goto(`${origin}/print/patients/${data.us.patientId}/account-statement`);
   const header = page.getByTestId('statement-header');
   await expect(header).toBeVisible({ timeout: 15_000 });
   await expectContains(header, 'Fecha de emisión —');

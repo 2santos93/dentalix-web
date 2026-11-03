@@ -222,6 +222,8 @@ describe('PlanQuotePrintView (DX-012)', () => {
       expect(header.textContent).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
       const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
       expect(note?.closest('.print\\:hidden')).not.toBeNull();
+      expect(print).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /imprimir/i })).toBeDisabled();
       fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
       await waitFor(() => expect(screen.getByTestId('quote-header')).toHaveTextContent('10/16/2026'));
       expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument();

@@ -29,7 +29,7 @@ describe('cobranza: presentación (DX-150)', () => {
   it('DX-354: el importe sigue el formato de la sede y, sin él, es «—»', () => {
     const balance = { hasOverdue: true, overdueDays: 45, amounts: [{ currency: 'USD', amount: 300000 }] };
     expect(money(overdueChipText(balance, FORMAT_US.fmt))).toBe('Saldo vencido · 45 días · USD 300,000.00');
-    expect(overdueChipText(balance, null)).toBe('Saldo vencido · 45 días · —');
+    expect(overdueChipText(balance, null)).toBe('Saldo vencido · 45 días');
   });
 
   it('solo ADMIN y RECEPTION gestionan la cobranza', () => {

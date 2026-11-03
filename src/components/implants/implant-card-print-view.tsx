@@ -123,7 +123,7 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
           <div className="mx-auto flex w-full max-w-[180mm] flex-col gap-3 print:max-w-none">
             {format === null ? (
               <DocumentFormatNote
-                locationId={card.locations[0]?.id}
+                locationId={card.locations.length === 1 ? card.locations[0].id : undefined}
                 onRetry={() => setReloadKey((k) => k + 1)}
                 className="mx-4 sm:mx-0"
               />

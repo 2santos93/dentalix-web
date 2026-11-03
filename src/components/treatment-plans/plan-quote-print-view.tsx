@@ -103,7 +103,7 @@ export function PlanQuotePrintView({
   const locations = useLocationsState(token);
   const catalogCurrency = locations.status === 'ready' ? clinicBaseCurrency(locations.locations) : null;
   const ready = data !== null && locations.status !== 'loading';
-  const autoPrint = data !== null && locations.status === 'ready';
+  const autoPrint = data !== null && format !== null && locations.status === 'ready';
 
   useEffect(() => {
     if (!allowed) return;
@@ -173,7 +173,7 @@ export function PlanQuotePrintView({
               />
             </div>
           ) : null}
-          <Button type="button" onClick={() => window.print()} disabled={!ready}>
+          <Button type="button" onClick={() => window.print()} disabled={!ready || format === null}>
             <Printer aria-hidden />
             {copy.print}
           </Button>

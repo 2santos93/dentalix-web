@@ -106,6 +106,19 @@ const MIGRATED = [
   // DX-362: el registro de auditoría, con la zona de la pantalla y su desfase en cada hora.
   'components/audit/audit-log-view.tsx',
   'components/payments/payment-receipt-document.tsx',
+  'components/account-statement/account-statement-document.tsx',
+  'components/account-statement/family-account-statement-document.tsx',
+  'components/consents/consent-document.tsx',
+  'components/implants/implant-card-document.tsx',
+  'components/postop/postop-document.tsx',
+  'components/treatment-plans/plan-quote-document.tsx',
+  'lib/account-statement/presentation.ts',
+  'components/anamnesis/public-anamnesis-view.tsx',
+  'components/appointments/public-confirmation-view.tsx',
+  'components/reminders/public-reminder-opt-out-view.tsx',
+  'components/cash-sessions/cash-session-report.tsx',
+  'components/patient-documents/patient-documents-tab.tsx',
+  'lib/audit/audit-labels.ts',
 ];
 
 /**

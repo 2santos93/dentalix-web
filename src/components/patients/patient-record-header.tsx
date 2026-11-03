@@ -141,7 +141,7 @@ interface PatientRecordHeaderProps {
    * secundaria: una primaria por vista.
    */
   editPrimary?: boolean;
-  /** El formato de la sede de la pantalla para el importe del saldo vencido (DX-354); `null` → «—». */
+  /** El formato de la sede de la pantalla para el importe del saldo vencido (DX-354); `null` → el chip sin importe. */
   fmt: RegionalFormat | null;
 }
 

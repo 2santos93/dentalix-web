@@ -104,8 +104,11 @@ it('DX-354: un recibo sin región de sede pinta «—» y el aviso de la sede, f
   expect(screen.getByTestId('receipt-document')).toHaveTextContent(/Emitido\s*—/);
   const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
   expect(note?.closest('.print\\:hidden')).not.toBeNull();
+  expect(printSpy).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: /imprimir/i })).toBeDisabled();
 
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+  await waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument());
   expect(screen.getByTestId('receipt-document')).not.toHaveTextContent(/Emitido\s*—/);
   expect(mockedPrint).toHaveBeenCalledTimes(2);

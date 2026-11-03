@@ -14,8 +14,10 @@ import ts from 'typescript';
  * `formatCurrency` salvo los de `PENDING`, cada uno con su motivo (DX-354 amplía
  * la guarda a `lib/`, salvo `lib/format/**`, donde vive el formateador,
  * `lib/test/**` y `schema.d.ts`). La lista solo encoge: una entrada que ya no
- * lo importa hace fallar la prueba hasta que se quita, y un fichero nuevo no
- * entra en ella.
+ * lo importa hace fallar la prueba hasta que se quita. Un fichero nuevo no
+ * debería entrar: DX-354 solo añadió dos ayudantes de `lib/` que reciben el
+ * `money` por parámetro y se migran con sus pantallas (DX-354b); las ya
+ * migradas están en `MIGRATED`.
  */
 const SRC = join(__dirname, '..');
 const CURRENCY_MODULE = '@/lib/format/currency';
@@ -51,6 +53,29 @@ const PENDING: Readonly<Record<string, string>> = {
   'lib/payments/billable-plans-api.ts': LIB_FLOW,
   'lib/payments/payment-adjustments.ts': LIB_FLOW,
 };
+
+/**
+ * DX-354: documentos y ayudantes que ya pintan sus importes con `moneyWithCode`
+ * (`sedeMoney`/`documentTexts`): no pueden volver a `formatCurrency` ni a
+ * `PENDING`.
+ */
+const MIGRATED = [
+  'components/account-statement/account-statement-document.tsx',
+  'components/account-statement/family-account-statement-document.tsx',
+  'components/consents/consent-document.tsx',
+  'components/implants/implant-card-document.tsx',
+  'components/postop/postop-document.tsx',
+  'components/treatment-plans/plan-quote-document.tsx',
+  'lib/account-statement/presentation.ts',
+  'components/appointments/public-confirmation-view.tsx',
+  'components/cash-sessions/cash-session-report.tsx',
+  'components/patient-credit/credit-refund-document.tsx',
+  'components/payments/use-void-payment.ts',
+  'lib/collections/presentation.ts',
+  'lib/cash-sessions/presentation.ts',
+  'lib/treatment-plans/list-price.ts',
+  'components/payments/payment-receipt-document.tsx',
+];
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -96,6 +121,15 @@ describe('arquitectura: importes con la sede (DX-522)', () => {
   it('every pending entry still imports formatCurrency (the list only shrinks)', () => {
     const stale = Object.keys(PENDING).filter((rel) => !views.find((v) => v.rel === rel)?.uses);
     expect(stale).toEqual([]);
+  });
+
+  it('the migrated documents and helpers cannot return to formatCurrency or the pending list', () => {
+    for (const rel of MIGRATED) {
+      const file = views.find((v) => v.rel === rel);
+      expect([rel, file !== undefined]).toEqual([rel, true]);
+      expect([rel, file?.uses]).toEqual([rel, false]);
+      expect([rel, rel in PENDING]).toEqual([rel, false]);
+    }
   });
 
   it('scans lib/ too, and skips lib/format, lib/test, schema.d.ts and tests', () => {

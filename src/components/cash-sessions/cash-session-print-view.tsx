@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -8,11 +8,10 @@ import {
   getCashSession,
   type CashSessionDetail,
 } from '@/lib/cash-sessions/cash-sessions-api';
-import { formatCivilDate } from '@/lib/format/date';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
-import { documentFormat } from '@/lib/format/document-format';
+import { documentFormat, documentTexts } from '@/lib/format/document-format';
 import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { CashSessionReport } from './cash-session-report';
 
@@ -27,6 +26,8 @@ const copy = {
   forbiddenTitle: 'Tu rol no tiene acceso a la caja.',
   forbiddenHint: 'Es un dato financiero: lo ven administración y recepción.',
   documentTitle: (sede: string, day: string) => `Cierre de caja ${sede} ${day}`,
+  // Sin formato de sede no hay fecha que escribir (DX-354): nunca otra.
+  documentTitleNoDate: (sede: string) => `Cierre de caja ${sede}`,
 };
 
 interface CashSessionPrintViewProps {
@@ -68,12 +69,14 @@ export function CashSessionPrintView({ token, sessionId, allowed = true }: CashS
     };
   }, [token, sessionId, reloadKey, allowed]);
 
+  // DX-354: el formato de la sede del turno; sin él no se abre el diálogo de impresión solo (saldría lleno de «—»).
+  const docFormat = useMemo(() => (session ? documentFormat(session.regional) : null), [session]);
   useEffect(() => {
-    if (session && !printed.current) {
+    if (session && docFormat !== null && !printed.current) {
       printed.current = true;
       window.print();
     }
-  }, [session]);
+  }, [session, docFormat]);
 
   const forbidden = !allowed || status === 403;
 
@@ -81,10 +84,12 @@ export function CashSessionPrintView({ token, sessionId, allowed = true }: CashS
     <div className="cash-report-print-page flex min-h-full flex-1 flex-col bg-canvas print:bg-white">
       {session ? (
         <title>
-          {copy.documentTitle(
-            session.location.name,
-            formatCivilDate(session.closing?.suggestedLockDate ?? session.openedOn),
-          )}
+          {docFormat
+            ? copy.documentTitle(
+                session.location.name,
+                documentTexts(docFormat).civilDate(session.closing?.suggestedLockDate ?? session.openedOn),
+              )
+            : copy.documentTitleNoDate(session.location.name)}
         </title>
       ) : null}
       <div
@@ -98,7 +103,7 @@ export function CashSessionPrintView({ token, sessionId, allowed = true }: CashS
             {copy.back}
           </Link>
         </Button>
-        <Button type="button" onClick={() => window.print()} disabled={!session}>
+        <Button type="button" onClick={() => window.print()} disabled={!session || docFormat === null}>
           <Printer aria-hidden />
           {copy.print}
         </Button>
@@ -107,7 +112,7 @@ export function CashSessionPrintView({ token, sessionId, allowed = true }: CashS
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {session ? (
           <>
-            {documentFormat(session.regional) === null ? (
+            {docFormat === null ? (
               <DocumentFormatNote
                 locationId={session.location.id}
                 onRetry={() => setReloadKey((k) => k + 1)}

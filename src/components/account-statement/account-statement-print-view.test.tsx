@@ -91,8 +91,12 @@ it('DX-354: usa el formato de la sede del estado de cuenta; sin él, «—» y e
   expect(await screen.findByTestId('statement-header')).toHaveTextContent(/emisión\s*—/i);
   const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
   expect(note?.closest('.print\\:hidden')).not.toBeNull();
+  // Sin formato no se abre el diálogo de impresión solo, y el botón espera.
+  expect(printSpy).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: /imprimir/i })).toBeDisabled();
 
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+  await waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
   // 15:30 UTC es 11:30 en Nueva York.
   await waitFor(() => expect(screen.getByTestId('statement-header')).toHaveTextContent('10/15/2026 11:30 a. m.'));
   expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument();

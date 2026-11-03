@@ -85,11 +85,11 @@ export function PostOpPrintView({
   }, [token, patientId, deliveryId, reloadKey, allowed]);
 
   useEffect(() => {
-    if (data && !printed.current) {
+    if (data && format !== null && !printed.current) {
       printed.current = true;
       window.print();
     }
-  }, [data]);
+  }, [data, format]);
 
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=clinical-history`;
 
@@ -107,7 +107,7 @@ export function PostOpPrintView({
             {copy.back}
           </Link>
         </Button>
-        <Button type="button" onClick={() => window.print()} disabled={!data}>
+        <Button type="button" onClick={() => window.print()} disabled={!data || format === null}>
           <Printer aria-hidden />
           {copy.print}
         </Button>

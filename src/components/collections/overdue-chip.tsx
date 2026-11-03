@@ -18,7 +18,7 @@ export function OverdueChip({
   fmt,
 }: {
   balance: OverdueBalance | null | undefined;
-  /** El formato de la sede de la pantalla para el importe (DX-354); `null` → «—». */
+  /** El formato de la sede de la pantalla para el importe (DX-354); `null` → sin importe. */
   fmt: RegionalFormat | null;
   className?: string;
   /** En la tarjeta de la agenda: una línea, sin icono. */
