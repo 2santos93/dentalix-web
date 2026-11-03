@@ -10,7 +10,8 @@ import ts from 'typescript';
  * Mientras la sede carga o no tiene formato se pinta `NO_SEDE_FORMAT`.
  *
  * Plan, presupuesto, listas de precios, caja, estado de cuenta e impresos ya
- * cumplen. Ningún fichero de `components/`, `app/` ni `lib/` importa
+ * cumplen; el resto de pantallas de importes se migra en DX-354b (W2, W3), y
+ * `MAX_PENDING` baja con cada PR hasta que `PENDING` desaparece. Ningún fichero de `components/`, `app/` ni `lib/` importa
  * `formatCurrency` salvo los de `PENDING`, cada uno con su motivo (DX-354 amplía
  * la guarda a `lib/`, salvo `lib/format/**`, donde vive el formateador,
  * `lib/test/**` y `schema.d.ts`). La lista solo encoge: una entrada que ya no
@@ -25,6 +26,13 @@ const CURRENCY_MODULE = '@/lib/format/currency';
 const FLOW = 'Diálogo o ayudante compartido con pantallas aún sin migrar: pasa con ellas, con el `money` inyectado.';
 const OTHER = 'Pantalla fuera de las cinco superficies de DX-522: pendiente de migrar a sedeMoney.';
 const LIB_FLOW = 'Ayudante de lib/ con el `money` inyectado y `formatCurrency` por defecto: se migra con sus pantallas (DX-354b).';
+
+/**
+ * Aserción del máximo (DX-354b, M2): nadie añade entradas a `PENDING` aunque el
+ * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
+ * cierre, `PENDING` desaparece.
+ */
+const MAX_PENDING = 24;
 
 /** Ficheros que aún importan `formatCurrency`. Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
@@ -121,6 +129,12 @@ describe('arquitectura: importes con la sede (DX-522)', () => {
   it('every pending entry still imports formatCurrency (the list only shrinks)', () => {
     const stale = Object.keys(PENDING).filter((rel) => !views.find((v) => v.rel === rel)?.uses);
     expect(stale).toEqual([]);
+  });
+
+  it('the pending list never grows beyond its maximum (DX-354b)', () => {
+    expect(Object.keys(PENDING).length).toBeLessThanOrEqual(MAX_PENDING);
+    // Una entrada de más hace fallar el máximo.
+    expect(Object.keys({ ...PENDING, 'components/nueva/pantalla.tsx': OTHER }).length <= MAX_PENDING).toBe(false);
   });
 
   it('the migrated documents and helpers cannot return to formatCurrency or the pending list', () => {
