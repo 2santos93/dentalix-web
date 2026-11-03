@@ -14,7 +14,7 @@ import { useLoad } from './use-load';
 export const agingCopy = {
   heading: 'Cartera por antigüedad',
   asOf: (day: string) =>
-    `Al ${day}. Por moneda de cada plan, sin sumar monedas entre sí; lo abonado en otra moneda ya cuenta con su tasa. El saldo a favor no se resta.`,
+    `Al ${day}. Por moneda de cada plan, sin sumar monedas entre sí; lo abonado en otra moneda se convierte con la tasa de su día. El saldo a favor no se resta.`,
   link: 'Ver cartera',
   loading: 'Cargando la cartera…',
   error: 'No pudimos cargar la cartera.',

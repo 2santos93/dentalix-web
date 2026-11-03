@@ -54,7 +54,7 @@ import {
 export const receivablesCopy = {
   title: 'Cartera',
   description:
-    'Lo que deben los pacientes, por antigüedad: a quién llamar primero. Cada saldo es el de su estado de cuenta, en la moneda de cada plan: lo abonado en otra moneda ya cuenta con su tasa.',
+    'Lo que deben los pacientes, por antigüedad: a quién llamar primero. Cada saldo es el de su estado de cuenta, en la moneda de cada plan: lo abonado en otra moneda se convierte con la tasa de su día.',
   ageLabel: 'Antigüedad',
   minBalanceLabel: 'Saldo mínimo',
   minBalancePlaceholder: 'Saldo mínimo',
