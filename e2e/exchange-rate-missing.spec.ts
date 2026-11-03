@@ -8,6 +8,7 @@ import { E2E_REGION } from './support/regional';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
 import { API_URL } from './support/urls';
+import { fillDate } from './support/dates';
 
 /**
  * e2e (DX-375): el aviso «sin tasa». Una clínica nueva por corrida, en tasa
@@ -54,6 +55,13 @@ function sedeToday(): string {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
+}
+
+/** El día anterior a `sedeToday()`: sin abonos en la clínica de este spec. */
+function sedeYesterday(): string {
+  const day = new Date(`${sedeToday()}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - 1);
+  return day.toISOString().slice(0, 10);
 }
 
 async function put(request: APIRequestContext, session: ApiSession, path: string, data: object): Promise<void> {
@@ -183,6 +191,10 @@ test('ADMIN: la tasa registrada desde el aviso se puede corregir mientras ningú
   await page.goto(`${origin}/settings/tasa-de-cambio`);
   await page.getByRole('button', { name: 'Registrar tasa' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Registrar tasa' });
+  // DX-531: la tasa de ayer, no la de hoy. Registrar la de hoy adelanta el
+  // barrido (DX-402), que la congela en el abono «sin tasa» de hoy; si llega
+  // antes de «Corregir», la tasa ya está en uso y no se puede cambiar.
+  await fillDate(dialog, 'Fecha', sedeYesterday());
   const currency = dialog.getByLabel('Moneda');
   await expect(currency.locator(`option[value="${LOCAL}"]`)).toHaveCount(1, { timeout: 15_000 });
   await currency.selectOption(LOCAL);
