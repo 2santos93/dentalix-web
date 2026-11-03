@@ -1,7 +1,9 @@
 import type { AuditAction, AuditEvent, AuditResourceType } from './audit-api';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { BadgeProps } from '@/components/ui/badge';
-import { formatDate } from '@/lib/format/date';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMinute, type SedeClock } from '@/lib/locations/sede-clock';
 import { DOC_TYPE_LABEL, genericDocTypeName } from '@/lib/patients/doc-type';
 import type { DocType } from '@/lib/patients/patients-api';
 
@@ -479,31 +481,34 @@ export function implantSearchDetail(metadata: AuditMetadata): string | null {
 
 const WEEKDAY_SHORT = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
-function minuteLabel(m: number): string {
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-}
-
 type ScheduleEntry = NonNullable<AuditMetadata['scheduleChange']>['after'][number];
 
-function scheduleEntryLabel(e: ScheduleEntry): string {
+/** Un día o una excepción con el reloj de la sede (DX-354): «lun 8:00 a. m.–1:00 p. m.» o «22 de octubre no trabaja». */
+function scheduleEntryLabel(e: ScheduleEntry, fmt: RegionalFormat): string {
   const when =
     e.date !== undefined
-      ? `${e.date.slice(8, 10)}/${e.date.slice(5, 7)}`
+      ? fmt.civilLongDate(e.date, { weekday: false, year: false })
       : WEEKDAY_SHORT[e.weekday ?? 0];
   if (e.off) return `${when} no trabaja`;
-  return `${when} ${minuteLabel(e.startMinute ?? 0)}–${minuteLabel(e.endMinute ?? 0)}`;
+  return `${when} ${sedeMinute(e.startMinute ?? 0, fmt)}–${sedeMinute(e.endMinute ?? 0, fmt)}`;
 }
 
 /**
  * DX-233: horario de un profesional antes y después (semanal o una
  * excepción por fecha): «Antes: lun 08:00–13:00 · Después: …». null si el
- * evento no es un cambio de horario.
+ * evento no es un cambio de horario. DX-354: las horas y las fechas con el
+ * formato y el reloj de la sede de la pantalla (`fmt`), nunca 24 h a mano; sin
+ * él, «—».
  */
-export function scheduleChangeDetail(metadata: AuditMetadata): string | null {
+export function scheduleChangeDetail(metadata: AuditMetadata, fmt: RegionalFormat | null): string | null {
   const change = metadata.scheduleChange;
   if (!change) return null;
   const side = (entries: ScheduleEntry[]) =>
-    entries.length === 0 ? 'sin horario' : entries.map(scheduleEntryLabel).join(', ');
+    entries.length === 0
+      ? 'sin horario'
+      : fmt
+        ? entries.map((e) => scheduleEntryLabel(e, fmt)).join(', ')
+        : NO_SEDE_FORMAT;
   return `Antes: ${side(change.before)} · Después: ${side(change.after)}`;
 }
 
@@ -547,9 +552,11 @@ const PLAN_ITEM_ATTRIBUTION_REASONS: Record<string, string> = {
  * DX-050: un ADMIN corrigió quién o cuándo realizó un ítem del plan, o el ítem
  * salió de «Realizado» («Corrección de quién lo realizó · Fecha 20/10/2026 →
  * 19/10/2026»). La metadata solo trae ids e instantes: se dice qué cambió, no
- * nombres. null si el evento no es de la atribución.
+ * nombres. null si el evento no es de la atribución. DX-354: las fechas con la
+ * zona y el formato de la sede de la pantalla (`clock`); sin él, «—».
  */
-export function planItemAttributionDetail(metadata: AuditMetadata): string | null {
+export function planItemAttributionDetail(metadata: AuditMetadata, clock: SedeClock | null): string | null {
+  const formatDate = (iso: string) => (clock ? clock.fmt.date(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT);
   const what = metadata.reason ? PLAN_ITEM_ATTRIBUTION_REASONS[metadata.reason] : undefined;
   if (!what) return null;
   const change = metadata.attribution;

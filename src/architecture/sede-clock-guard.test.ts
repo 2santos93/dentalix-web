@@ -78,7 +78,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/treatment-plans/plan-options-panel.tsx': STAMP,
   'components/treatment-plans/plan-quote-actions.tsx': STAMP,
   'components/treatment-plans/treatment-plans-tab-copy.ts': STAMP,
-  'lib/audit/audit-labels.ts': STAMP,
   'lib/patients/member-number.ts': STAMP,
   'lib/treatment-plans/item-attribution.ts': STAMP,
   'lib/treatment-plans/plan-options.ts': STAMP,
