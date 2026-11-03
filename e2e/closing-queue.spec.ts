@@ -60,9 +60,13 @@ test('RECEPTION a 390 px: cierra una cita de ayer con «No asistió» y sale de 
   expect(patient).not.toBe('');
 
   // Por teclado: foco en el «⋯» de la primera fila, Enter abre el menú y
-  // «No asistió» se elige con las flechas y Enter. El menú pasa el foco a
-  // «Atendida» después de montarse; una flecha pulsada antes se pierde
-  // (DX-530), así que se espera a ese foco y se baja una sola vez.
+  // «No asistió» se elige con las flechas y Enter. Radix mueve el foco de una
+  // flecha en un `setTimeout` posterior al keydown (RovingFocusGroupItem), no
+  // en el keydown: el bucle viejo («¿ya está en No asistió? si no, otra
+  // flecha») leía el foco antes de ese tick y pulsaba una segunda flecha, que
+  // lo llevaba a «Cancelada» (traza del run 41570243954, ClickUp
+  // 1244errrt3f). Por eso: el foco en «Atendida», UNA flecha y una espera con
+  // reintento a que llegue a «No asistió» (DX-530).
   await outcome.getByRole('button', { name: `Acciones de ${patient}` }).first().focus();
   await page.keyboard.press('Enter');
   const menu = page.getByRole('menu');
