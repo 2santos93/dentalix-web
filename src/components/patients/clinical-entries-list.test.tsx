@@ -714,4 +714,45 @@ describe('ClinicalEntriesList con cada sede (DX-354b)', () => {
     expect(row).toHaveTextContent('Dra. Ana Ríos · —');
     expect(within(row).getAllByRole('button').every((b) => !/—/.test(b.getAttribute('aria-label') ?? ''))).toBe(true);
   });
+
+  it('I2: la hora de una anestesia sale con el reloj de SU sede (Berlín en una pantalla de Caracas)', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+    mockedList.mockResolvedValue(entries);
+    const AT = '2026-02-01T03:30:00.000Z';
+    (listPatientAnesthesia as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'an-b',
+        patientId: 'p1',
+        clinicalEntryId: 'ce-2',
+        locationId: STAMP_SEDES.berlin.id,
+        anestheticId: 'a1',
+        anestheticName: 'Articaína 4 %',
+        activeIngredient: 'Articaína',
+        concentrationPct: 4,
+        vasoconstrictor: null,
+        mlPerCarpule: 1.7,
+        maxMgPerKg: 7,
+        maxAbsoluteMg: 500,
+        carpules: 3,
+        doseMg: 204,
+        technique: 'NERVE_BLOCK',
+        site: '85',
+        lot: 'L-1',
+        administeredAt: AT,
+        weightKg: 20,
+        weightSource: 'ANAMNESIS',
+        cumulativeMg: 204,
+        cumulativePercent: 146,
+        safetyRulesVersion: 'ANESTHESIA_DOSE_V1',
+        safetyAlerts: [],
+        overrideReason: null,
+        authorId: 'u1',
+        createdAt: AT,
+      },
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    const lists = await screen.findAllByRole('list', { name: /anestesia local de la evolución/i });
+    await waitFor(() => expect(lists[0]).toHaveTextContent(STAMP_FORMATS.berlin.time(new Date(AT), 'Europe/Berlin')));
+    expect(lists[0]).not.toHaveTextContent(STAMP_FORMATS.caracas.time(new Date(AT), 'America/Caracas'));
+  });
 });

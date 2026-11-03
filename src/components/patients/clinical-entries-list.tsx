@@ -126,9 +126,6 @@ interface ClinicalEntriesListProps {
  */
 export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' }: ClinicalEntriesListProps) {
   // DX-378: el día de la cita, en la zona y con el formato de la sede.
-  // Las evoluciones no traen sede aún (PRODUCT.md): todo se pinta con la de la pantalla.
-  const stamp = useSedeStamp(token);
-  const clock = stamp.clock;
   const [entries, setEntries] = useState<ClinicalEntry[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +148,13 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
   const [sedationFor, setSedationFor] = useState<ClinicalEntry | null>(null);
   const [sedationFailed, setSedationFailed] = useState(false);
   const [sedationReload, setSedationReload] = useState(0);
+  // La evolución no trae sede aún (PRODUCT.md): se pinta con la de la pantalla. Cada anestesia
+  // trae la suya (`locationId`) y su hora sale con ella.
+  const stamp = useSedeStamp(
+    token,
+    anesthesia.map((r) => r.locationId),
+  );
+  const clock = stamp.clock;
   const role = getTokenRole(token);
   const canRecordAnesthesia = role === 'DENTIST' || role === 'ADMIN';
 
@@ -320,7 +324,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
           {records.map((r) => (
             <li key={r.id} className="text-sm text-ink">
               <span className="text-xs font-medium text-muted">{copy.anesthesia} </span>
-              <span className="tabular-nums">{stamp.time(r.administeredAt)}</span>{' '}
+              <span className="tabular-nums">{stamp.time(r.administeredAt, r.locationId)}</span>{' '}
               <span className="tabular-nums">{copy.anesthesiaLine(r)}</span>
               {r.overrideReason ? (
                 <span className="block text-xs text-muted">
