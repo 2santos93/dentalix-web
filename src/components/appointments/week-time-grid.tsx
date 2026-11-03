@@ -286,7 +286,7 @@ export function WeekTimeGrid({
                       </>
                     )}{' '}
                     {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
-                    <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />{' '}
+                    <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" fmt={clock.fmt} />{' '}
                     {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
                     <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />{' '}
                     {/* DX-509: solo mientras es sobrecupo. */}

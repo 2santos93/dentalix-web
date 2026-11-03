@@ -1,6 +1,7 @@
 import { statusLabels } from '@/lib/status/tones';
 import type { ClinicRole } from '@/lib/me/me-api';
-import { formatCurrency } from '@/lib/format/currency';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 import type {
   CollectionChannel,
   CollectionOutcome,
@@ -48,14 +49,19 @@ const days = (n: number) => (n === 1 ? '1 día' : `${n} días`);
 /**
  * Texto del chip «Saldo vencido». Con importe (ADMIN/RECEPTION) lo añade; sin
  * él (DENTIST/ASSISTANT), solo la marca y los días. `null` si no hay saldo vencido.
+ * DX-354: el importe con el formato de la sede de la pantalla y el código ISO
+ * (`fmt`); sin formato, «—».
  */
-export function overdueChipText(balance: OverdueBalance | null | undefined): string | null {
+export function overdueChipText(
+  balance: OverdueBalance | null | undefined,
+  fmt: RegionalFormat | null,
+): string | null {
   if (!balance?.hasOverdue) return null;
   const base =
     balance.overdueDays !== null && balance.overdueDays !== undefined
       ? `Saldo vencido · ${days(balance.overdueDays)}`
       : 'Saldo vencido';
-  const amounts = (balance.amounts ?? []).map((a) => formatCurrency(a.amount, a.currency));
+  const amounts = (balance.amounts ?? []).map((a) => sedeMoney(a.amount, a.currency, fmt));
   const text = amounts.length > 0 ? `${base} · ${amounts.join(' + ')}` : base;
   // DX-472-bis: algún abono en otra moneda no cuenta todavía.
   return balance.incomplete ? `${text} · ${INCOMPLETE_BALANCE_TEXT}` : text;

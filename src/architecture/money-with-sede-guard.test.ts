@@ -9,19 +9,22 @@ import ts from 'typescript';
  * `formatCurrency`, que no conoce la sede (idioma fijo y símbolo «US$»).
  * Mientras la sede carga o no tiene formato se pinta `NO_SEDE_FORMAT`.
  *
- * Plan, presupuesto, listas de precios, caja y estado de cuenta ya cumplen.
- * Ninguna vista de `components/` ni de `app/` importa `formatCurrency` salvo
- * las de `PENDING`, cada una con su motivo. La lista solo encoge: una entrada
- * que ya no lo importa hace fallar la prueba hasta que se quita, y una vista
- * nueva no entra en ella.
+ * Plan, presupuesto, listas de precios, caja, estado de cuenta e impresos ya
+ * cumplen. Ningún fichero de `components/`, `app/` ni `lib/` importa
+ * `formatCurrency` salvo los de `PENDING`, cada uno con su motivo (DX-354 amplía
+ * la guarda a `lib/`, salvo `lib/format/**`, donde vive el formateador,
+ * `lib/test/**` y `schema.d.ts`). La lista solo encoge: una entrada que ya no
+ * lo importa hace fallar la prueba hasta que se quita, y un fichero nuevo no
+ * entra en ella.
  */
 const SRC = join(__dirname, '..');
 const CURRENCY_MODULE = '@/lib/format/currency';
 
 const FLOW = 'Diálogo o ayudante compartido con pantallas aún sin migrar: pasa con ellas, con el `money` inyectado.';
 const OTHER = 'Pantalla fuera de las cinco superficies de DX-522: pendiente de migrar a sedeMoney.';
+const LIB_FLOW = 'Ayudante de lib/ con el `money` inyectado y `formatCurrency` por defecto: se migra con sus pantallas (DX-354b).';
 
-/** Vistas que aún importan `formatCurrency`. Solo puede encoger. */
+/** Ficheros que aún importan `formatCurrency`. Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
   'components/appointments/cancellation-fee-panel.tsx': OTHER,
   'components/catalog/catalog-view.tsx': OTHER,
@@ -45,6 +48,8 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/receivables/aging-summary.tsx': OTHER,
   'components/receivables/debtor-parts.tsx': OTHER,
   'components/shared/money-input.tsx': FLOW,
+  'lib/payments/billable-plans-api.ts': LIB_FLOW,
+  'lib/payments/payment-adjustments.ts': LIB_FLOW,
 };
 
 function sourceFiles(dir: string): string[] {
@@ -66,20 +71,48 @@ function importsFormatCurrency(source: ts.SourceFile): boolean {
   });
 }
 
-const views = ['components', 'app']
+/** Los ficheros que la guarda mira: `components/`, `app/` y `lib/` salvo lo que no es una vista ni un ayudante de pintura. */
+function scanned(rel: string): boolean {
+  if (/\.test\./.test(rel)) return false;
+  if (rel.startsWith('lib/format/') || rel.startsWith('lib/test/')) return false;
+  return rel !== 'lib/api/schema.d.ts';
+}
+
+function parse(fileName: string, text: string): ts.SourceFile {
+  return ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+}
+
+const views = ['components', 'app', 'lib']
   .flatMap((dir) => sourceFiles(join(SRC, dir)))
-  .map((path) => ({
-    rel: relative(SRC, path).split(sep).join('/'),
-    uses: importsFormatCurrency(ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)),
-  }));
+  .map((path) => ({ rel: relative(SRC, path).split(sep).join('/'), path }))
+  .filter(({ rel }) => scanned(rel))
+  .map(({ rel, path }) => ({ rel, uses: importsFormatCurrency(parse(path, readFileSync(path, 'utf8'))) }));
 
 describe('arquitectura: importes con la sede (DX-522)', () => {
-  it('no view imports formatCurrency outside the pending list', () => {
+  it('no file imports formatCurrency outside the pending list', () => {
     expect(views.filter(({ rel, uses }) => uses && !(rel in PENDING)).map(({ rel }) => rel)).toEqual([]);
   });
 
   it('every pending entry still imports formatCurrency (the list only shrinks)', () => {
     const stale = Object.keys(PENDING).filter((rel) => !views.find((v) => v.rel === rel)?.uses);
     expect(stale).toEqual([]);
+  });
+
+  it('scans lib/ too, and skips lib/format, lib/test, schema.d.ts and tests', () => {
+    expect(views.some((v) => v.rel.startsWith('lib/'))).toBe(true);
+    expect(views.some((v) => v.rel.startsWith('lib/format/') || v.rel.startsWith('lib/test/'))).toBe(false);
+    expect(views.some((v) => v.rel === 'lib/api/schema.d.ts' || /\.test\./.test(v.rel))).toBe(false);
+    expect(scanned('lib/collections/presentation.ts')).toBe(true);
+    expect(scanned('lib/format/currency.ts')).toBe(false);
+    expect(scanned('lib/test/payment-receipt.ts')).toBe(false);
+  });
+
+  it('catches an import of formatCurrency in lib/ and lets other imports through', () => {
+    const imports = (code: string) => importsFormatCurrency(parse('lib/x/presentation.ts', code));
+    expect(imports("import { formatCurrency } from '@/lib/format/currency';")).toBe(true);
+    expect(imports("import { formatCurrency as fc } from '@/lib/format/currency';")).toBe(true);
+    expect(imports("import * as currency from '@/lib/format/currency';")).toBe(true);
+    expect(imports("import { formatAmount } from '@/lib/format/currency';")).toBe(false);
+    expect(imports("import { sedeMoney } from '@/lib/format/sede-number';")).toBe(false);
   });
 });

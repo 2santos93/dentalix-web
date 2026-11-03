@@ -1,4 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import type { OverdueBalance } from '@/lib/collections/collections-api';
 import { incompleteBalanceChipText, overdueChipText } from '@/lib/collections/presentation';
 import { cn } from '@/lib/utils';
@@ -14,13 +15,16 @@ export function OverdueChip({
   balance,
   className,
   compact = false,
+  fmt,
 }: {
   balance: OverdueBalance | null | undefined;
+  /** El formato de la sede de la pantalla para el importe (DX-354); `null` → «—». */
+  fmt: RegionalFormat | null;
   className?: string;
   /** En la tarjeta de la agenda: una línea, sin icono. */
   compact?: boolean;
 }) {
-  const text = overdueChipText(balance);
+  const text = overdueChipText(balance, fmt);
   if (!text) return null;
   return (
     // «Vencido» es danger en todo el producto (DESIGN.md → Status tones).
