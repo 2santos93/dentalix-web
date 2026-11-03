@@ -156,6 +156,8 @@ const eurPlan: BillablePlan = {
   paidOtherCurrencies: [],
   balance: 1800000,
   hasActivePaymentPlan: false,
+  paymentsWithoutRate: [],
+  rateProviderTimedOut: false,
 };
 const usdPlan: BillablePlan = {
   ...eurPlan,

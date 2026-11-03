@@ -46,6 +46,8 @@ function row(overrides: Partial<AgingRow> = {}): AgingRow {
     locationId: 'loc-1',
     oldestAgeDays: 120,
     ageApproximate: true,
+    paymentsWithoutRateCount: 0,
+    rateProviderTimedOut: false,
     currencies: [
       {
         currency: 'VES',
@@ -74,6 +76,8 @@ function page(items: AgingRow[], overrides: Partial<ReceivablesAgingPage> = {}):
     total: items.length,
     page: 1,
     pageSize: 20,
+    paymentsWithoutRateCount: 0,
+    rateProviderTimedOut: false,
     totals: items.length
       ? [
           {
@@ -460,5 +464,53 @@ describe('ReceivablesView (DX-145)', () => {
     const summary = await screen.findByTestId('aging-total-USD');
     expect(within(summary).queryByText('Por vencer')).toBeNull();
     expect(money(summary.textContent)).toContain('Saldo a favor 50,00');
+  });
+
+  describe('DX-472-bis: abonos en otra moneda sin contar', () => {
+    it('proveedor sin responder: aviso con «Reintentar», que vuelve a pedir la cartera, y la fila marcada', async () => {
+      const user = userEvent.setup();
+      mockedAging.mockResolvedValue(
+        page([row({ paymentsWithoutRateCount: 2, rateProviderTimedOut: true })], {
+          paymentsWithoutRateCount: 2,
+          rateProviderTimedOut: true,
+        }),
+      );
+      render(<ReceivablesView token="tok" />);
+
+      expect(await screen.findByText('El proveedor de tasas no respondió, vuelve a intentarlo')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'La cartera todavía no cuenta 2 abonos en otra moneda. Esa deuda queda en «Por vencer» hasta completarla.',
+        ),
+      ).toBeInTheDocument();
+      const tableRow = within(screen.getByRole('table')).getByRole('row', { name: /Ana Pérez/ });
+      expect(within(tableRow).getByText('Cifras incompletas')).toBeInTheDocument();
+
+      const calls = mockedAging.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(mockedAging.mock.calls.length).toBe(calls + 1));
+    });
+
+    it('«sin tasa»: aviso con el recuento, sin «Reintentar»', async () => {
+      mockedAging.mockResolvedValue(page([row({ paymentsWithoutRateCount: 1 })], { paymentsWithoutRateCount: 1 }));
+      render(<ReceivablesView token="tok" />);
+
+      expect(await screen.findByText('1 abono sin tasa')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'La cartera todavía no los cuenta: falta la tasa de cambio de su día. El estado de cuenta de cada paciente dice cuáles son.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+    });
+
+    it('todo contado: sin aviso ni marca', async () => {
+      mockedAging.mockResolvedValue(page([row()]));
+      render(<ReceivablesView token="tok" />);
+
+      await screen.findByRole('table');
+      expect(screen.queryByText(/sin tasa/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Cifras incompletas')).not.toBeInTheDocument();
+    });
   });
 });

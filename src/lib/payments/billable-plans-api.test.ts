@@ -19,6 +19,8 @@ const plan: BillablePlan = {
   paidOtherCurrencies: [],
   balance: 1800000,
   hasActivePaymentPlan: false,
+  paymentsWithoutRate: [],
+  rateProviderTimedOut: false,
 };
 
 describe('listBillablePlans', () => {

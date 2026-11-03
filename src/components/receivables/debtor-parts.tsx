@@ -28,6 +28,8 @@ export const debtorCopy = {
   approximateNote:
     '* Fecha aproximada: parte del saldo no está en cuotas y su antigüedad se cuenta desde la aceptación (o la creación) del plan.',
   credit: (amount: string) => `A favor: ${amount}`,
+  // DX-472-bis: falta contar algún abono en otra moneda (aviso arriba).
+  incomplete: 'Cifras incompletas',
   noPayments: 'Sin abonos',
   noInstallment: 'Sin cuotas por vencer',
   noPhone: 'Sin teléfono',

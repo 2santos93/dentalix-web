@@ -86,6 +86,8 @@ const vesPlan: BillablePlan = {
   paidOtherCurrencies: [],
   balance: 300000,
   hasActivePaymentPlan: false,
+  paymentsWithoutRate: [],
+  rateProviderTimedOut: false,
 };
 
 function vesBalance(balance: number): PlanBalance {

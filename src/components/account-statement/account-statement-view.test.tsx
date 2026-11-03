@@ -319,6 +319,8 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     paidOtherCurrencies: [],
     balance: 1800000,
     hasActivePaymentPlan: false,
+    paymentsWithoutRate: [],
+    rateProviderTimedOut: false,
   };
 
   it.each(['RECEPTION', 'ADMIN'])('%s ve «Registrar abono» y «Plan de cuotas»', async (role) => {

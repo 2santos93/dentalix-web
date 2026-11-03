@@ -20,7 +20,17 @@ export const billablePlanFieldCopy = {
   figures: (balance: string, total: string, paid: string) =>
     `Saldo ${balance} · Total ${total} · Abonado ${paid}`,
   inFavor: 'a favor',
-  otherCurrencies: (list: string) => `También abonado en otra moneda: ${list}`,
+  // DX-472-bis: lo entregado en otra moneda ya cuenta en «Abonado», con su tasa
+  // (salvo lo que se avisa sin contar).
+  otherCurrencies: (list: string) => `Entregado en otra moneda: ${list}`,
+  withoutRate: (n: number) =>
+    n === 1
+      ? 'Sin contar 1 abono en otra moneda: falta la tasa de su día.'
+      : `Sin contar ${n} abonos en otra moneda: falta la tasa de su día.`,
+  providerTimedOut: (n: number) =>
+    n === 1
+      ? 'Sin contar 1 abono en otra moneda: el proveedor de tasas no respondió.'
+      : `Sin contar ${n} abonos en otra moneda: el proveedor de tasas no respondió.`,
 };
 
 interface BillablePlanFieldProps {
@@ -104,6 +114,13 @@ function PlanFigures({ id, plan, money }: { id: string; plan: BillablePlan; mone
       )}
       {others ? (
         <span className="block">{billablePlanFieldCopy.otherCurrencies(others)}</span>
+      ) : null}
+      {plan.paymentsWithoutRate.length > 0 ? (
+        <span className="block text-warning-text">
+          {plan.rateProviderTimedOut
+            ? billablePlanFieldCopy.providerTimedOut(plan.paymentsWithoutRate.length)
+            : billablePlanFieldCopy.withoutRate(plan.paymentsWithoutRate.length)}
+        </span>
       ) : null}
     </p>
   );

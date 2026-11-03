@@ -244,6 +244,8 @@ const receivables: ReceivablesSummary = {
       buckets: { current: 100000, days0to30: 100000, days31to60: 80000, days61to90: 100000, over90: 500000 },
     },
   ],
+  paymentsWithoutRateCount: 0,
+  rateProviderTimedOut: false,
 };
 
 function setActiveSede(id: string | null) {
@@ -458,6 +460,16 @@ describe('Inicio · ADMIN', () => {
     expect(aging).toHaveTextContent('Por vencer');
     expect(aging).toHaveTextContent('Más de 90 días');
     expect(within(aging).getByRole('img', { name: 'Reparto por antigüedad de lo que se debe en VES' })).toBeInTheDocument();
+    expect(screen.queryByText(/Cifras incompletas/)).not.toBeInTheDocument();
+  });
+
+  it('Cartera por antigüedad: avisa si falta contar abonos en otra moneda (DX-472-bis)', async () => {
+    m.receivables.mockResolvedValue({ ...receivables, paymentsWithoutRateCount: 2 });
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    await screen.findByTestId('aging-VES');
+    expect(
+      screen.getByText('Cifras incompletas: falta contar 2 abonos en otra moneda. El detalle está en la cartera.'),
+    ).toBeInTheDocument();
   });
 
   it('un error de Hoy es del bloque (escalón 1) y su reintento vuelve a pedir', async () => {

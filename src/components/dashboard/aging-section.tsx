@@ -12,7 +12,13 @@ import { useLoad } from './use-load';
 
 export const agingCopy = {
   heading: 'Cartera por antigüedad',
-  asOf: (day: string) => `Al ${day}. Por moneda, sin convertir; el saldo a favor no se resta.`,
+  asOf: (day: string) =>
+    `Al ${day}. Por moneda de cada plan, sin sumar monedas entre sí; lo abonado en otra moneda ya cuenta con su tasa. El saldo a favor no se resta.`,
+  // DX-472-bis: lo abonado en otra moneda que no se pudo contar.
+  incomplete: (n: number) =>
+    n === 1
+      ? 'Cifras incompletas: falta contar 1 abono en otra moneda. El detalle está en la cartera.'
+      : `Cifras incompletas: falta contar ${n} abonos en otra moneda. El detalle está en la cartera.`,
   link: 'Ver cartera',
   loading: 'Cargando la cartera…',
   error: 'No pudimos cargar la cartera.',
@@ -78,11 +84,18 @@ export function AgingSection({ token, scopeKey, fmt }: { token: string; scopeKey
       ) : load.data.totals.length === 0 ? (
         <EmptyState role="status" title={copy.emptyTitle} description={copy.emptyDescription} />
       ) : (
-        <ul className="divide-y divide-border-subtle overflow-hidden rounded-xl border border-border bg-surface">
-          {load.data.totals.map((total) => (
-            <AgingCurrency key={total.currency} total={total} fmt={fmt} />
-          ))}
-        </ul>
+        <>
+          <ul className="divide-y divide-border-subtle overflow-hidden rounded-xl border border-border bg-surface">
+            {load.data.totals.map((total) => (
+              <AgingCurrency key={total.currency} total={total} fmt={fmt} />
+            ))}
+          </ul>
+          {load.data.paymentsWithoutRateCount > 0 ? (
+            <p role="status" className="text-xs text-warning-text">
+              {copy.incomplete(load.data.paymentsWithoutRateCount)}
+            </p>
+          ) : null}
+        </>
       )}
     </section>
   );

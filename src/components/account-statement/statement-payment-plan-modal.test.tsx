@@ -22,6 +22,8 @@ const withPaymentPlan: BillablePlan = {
   paidOtherCurrencies: [],
   balance: 3000000,
   hasActivePaymentPlan: true,
+  paymentsWithoutRate: [],
+  rateProviderTimedOut: false,
 };
 
 it('si todos los planes ya tienen cuotas, no manda a recepción a la pestaña clínica que no ve', async () => {

@@ -66,6 +66,8 @@ function billablePlan(currency: string): BillablePlan {
     paidOtherCurrencies: [],
     balance: 5_000_000,
     hasActivePaymentPlan: false,
+    paymentsWithoutRate: [],
+    rateProviderTimedOut: false,
   };
 }
 

@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Lock, SlidersHorizontal } from 'lucide-react';
+import { Download, Lock, SlidersHorizontal, TriangleAlert } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -22,6 +22,9 @@ import { parseMoneyInput } from '@/lib/format/money';
 import { saveCsv } from '@/lib/files/save-csv';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { RateProviderNotice } from '@/components/payments/rate-provider-notice';
+import { withoutRateCopy } from '@/components/payments/without-rate-notice';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -53,7 +56,7 @@ import {
 export const receivablesCopy = {
   title: 'Cartera',
   description:
-    'Lo que deben los pacientes, por antigüedad: a quién llamar primero. Cada saldo es el de su estado de cuenta, por moneda y sin convertir.',
+    'Lo que deben los pacientes, por antigüedad: a quién llamar primero. Cada saldo es el de su estado de cuenta, en la moneda de cada plan: lo abonado en otra moneda ya cuenta con su tasa.',
   ageLabel: 'Antigüedad',
   minBalanceLabel: 'Saldo mínimo',
   minBalancePlaceholder: 'Saldo mínimo',
@@ -93,6 +96,13 @@ export const receivablesCopy = {
   colCollection: 'Gestión',
   noteSaved: (name: string) => `Gestión registrada para ${name}.`,
   promiseSaved: (name: string) => `Compromiso de pago registrado para ${name}.`,
+  // DX-472-bis: abonos en otra moneda que la cartera no pudo contar.
+  providerDetail: (n: number) =>
+    n === 1
+      ? 'La cartera todavía no cuenta 1 abono en otra moneda. Esa deuda queda en «Por vencer» hasta completarla.'
+      : `La cartera todavía no cuenta ${n} abonos en otra moneda. Esa deuda queda en «Por vencer» hasta completarla.`,
+  withoutRateBody:
+    'La cartera todavía no los cuenta: falta la tasa de cambio de su día. El estado de cuenta de cada paciente dice cuáles son.',
 };
 
 type CollectionDialog = { kind: 'note' | 'promise'; row: AgingRow } | null;
@@ -299,11 +309,17 @@ export function ReceivablesView({ token }: { token: string }) {
       cell: (r) => (
         <>
           <DebtCell currencies={r.currencies} />
+          {r.paymentsWithoutRateCount > 0 ? <IncompleteMark /> : null}
           {/* Con un solo tramo ya lo dice la antigüedad; con varios, el desglose. */}
           {bucketLineCount(r) > 1 ? <BucketList currencies={r.currencies} className="mt-1" /> : null}
         </>
       ),
-      mobileCell: (r) => <DebtCell currencies={r.currencies} compact />,
+      mobileCell: (r) => (
+        <>
+          <DebtCell currencies={r.currencies} compact />
+          {r.paymentsWithoutRateCount > 0 ? <IncompleteMark /> : null}
+        </>
+      ),
     },
     {
       id: 'last-payment',
@@ -491,6 +507,8 @@ export function ReceivablesView({ token }: { token: string }) {
           />
         ) : (
           <>
+            {data && !loading ? <RateNotices page={data} onRetry={() => setReloadKey((k) => k + 1)} /> : null}
+
             <AsyncSection
               loading={loading}
               error={loadError}
@@ -579,4 +597,29 @@ export function ReceivablesView({ token }: { token: string }) {
       ) : null}
     </>
   );
+}
+
+/**
+ * DX-472-bis: lo abonado en otra moneda que la cartera no pudo contar, en
+ * todas las filas filtradas. El proveedor que no responde pide reintentar (y
+ * su deuda no se da por vencida); «sin tasa» dice qué falta, sin acción aquí:
+ * se resuelve desde el estado de cuenta o los ajustes de la tasa.
+ */
+function RateNotices({ page, onRetry }: { page: ReceivablesAgingPage; onRetry: () => void }) {
+  if (page.rateProviderTimedOut) {
+    return (
+      <RateProviderNotice detail={receivablesCopy.providerDetail(page.paymentsWithoutRateCount)} onRetry={onRetry} />
+    );
+  }
+  if (page.paymentsWithoutRateCount === 0) return null;
+  return (
+    <Callout tone="warning" icon={TriangleAlert} title={withoutRateCopy.title(page.paymentsWithoutRateCount)}>
+      <p>{receivablesCopy.withoutRateBody}</p>
+    </Callout>
+  );
+}
+
+/** La fila cuyo saldo no cuenta algún abono en otra moneda. */
+function IncompleteMark() {
+  return <span className="block text-xs text-warning-text">{debtorCopy.incomplete}</span>;
 }
