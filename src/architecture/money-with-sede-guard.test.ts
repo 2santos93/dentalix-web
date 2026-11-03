@@ -42,7 +42,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/payments/billable-plan-field.tsx': FLOW,
   'components/payments/payment-adjustments-preview.tsx': FLOW,
   'components/payments/reallocate-payment-modal.tsx': FLOW,
-  'components/payments/use-void-payment.ts': FLOW,
   'components/receivables/aging-summary.tsx': OTHER,
   'components/receivables/debtor-parts.tsx': OTHER,
   'components/shared/money-input.tsx': FLOW,

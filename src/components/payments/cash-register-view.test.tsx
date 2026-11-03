@@ -691,7 +691,7 @@ describe('anular desde la caja (DX-057)', () => {
       name: /anular este abono/i,
     });
     // Dice QUÉ abono se anula: monto, fecha y paciente.
-    expect(money(dialog.textContent)).toMatch(/150\.000,50 VES · 15\/10\/2026 · Ana Gómez/);
+    expect(money(dialog.textContent)).toMatch(/VES 150\.000,50 · 15\/10\/2026 · Ana Gómez/);
 
     await user.click(within(dialog).getByLabelText(/motivo/i));
     await user.paste(REASON);

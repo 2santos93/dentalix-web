@@ -159,10 +159,16 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // Anular (DX-057): «Anular» solo en movimientos con `canVoid` (lo calcula la
   // API para quien consulta); tras anular se recarga todo el estado de cuenta,
   // porque cambian el abonado, el saldo y las cuotas.
-  const voiding = useVoidPayment(token, () => {
-    setReloadKey((k) => k + 1);
-    onChanged?.();
-  });
+  // DX-354: el importe y el día del aviso, con el formato de la sede de la pantalla.
+  const sedeFmt = readyFormat(useSedeFormat(token));
+  const voiding = useVoidPayment(
+    token,
+    () => {
+      setReloadKey((k) => k + 1);
+      onChanged?.();
+    },
+    sedeFmt,
+  );
   // Cobrar (DX-067): recepción registra abonos y planes de cuotas aquí, sin
   // entrar al plan de tratamiento (clínico). Tras cada uno se recarga todo.
   const canCharge = canRecordPayments(getTokenRole(token));
@@ -367,7 +373,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         error={voiding.error}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
-        subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+        subject={voiding.target ? voidPaymentSubject(voiding.target, sedeFmt) : undefined}
         splitLines={voiding.target?.splitLines ?? undefined}
       />
     </section>
