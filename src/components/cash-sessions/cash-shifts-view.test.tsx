@@ -14,6 +14,8 @@ import { listExpenseCategories } from '@/lib/expenses/expense-categories-api';
 import { cashSessionFixture, closedCashSessionFixture, outflowFixture } from '@/lib/test/cash-session';
 import { expenseDetailFixture } from '@/lib/test/expenses';
 import { clinicLocation } from '@/lib/test/locations';
+import { dateTimeIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { moneyWithCode } from '@/lib/format/sede-number';
 
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
   ...jest.requireActual('../../lib/cash-sessions/cash-sessions-api'),
@@ -288,7 +290,7 @@ describe('CashShiftsView: moneda y zona de la sede (GLOBAL-G1)', () => {
     expect(await screen.findByRole('button', { name: 'Abrir caja' })).toBeInTheDocument();
   });
 
-  it('a shift at a location without zone shows «Por configurar», never a bare dash', async () => {
+  it('un turno de una sede sin zona: «Sin dato» en la hora, un solo aviso con Reintentar y nunca otra hora (DX-354b)', async () => {
     mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', timeZone: null })]);
     mockedCurrent.mockResolvedValue({ locationId: 'loc-1', settings, session: cashSessionFixture() });
     mockedList.mockResolvedValue(page([closedCashSessionFixture({ id: 'cs-0' })]));
@@ -296,10 +298,79 @@ describe('CashShiftsView: moneda y zona de la sede (GLOBAL-G1)', () => {
 
     const table = await screen.findByRole('table', { name: 'Turnos de caja' });
     const row = within(table).getAllByRole('row')[1];
-    expect(within(row).getByText('Por configurar')).toBeInTheDocument();
-    expect(within(row).getByText(/no tiene zona horaria/)).toBeInTheDocument();
-    expect(within(row).getByRole('link', { name: /^Por configurar/ })).toHaveAttribute('href', '/caja/turnos/cs-0');
-    expect(within(row).getByRole('button', { name: 'Acciones de turno de Sede principal (hora por configurar)' })).toBeInTheDocument();
-    expect(screen.getByText(/hora por configurar: la sede no tiene zona horaria/)).toBeInTheDocument();
+    expect(within(row).getAllByText('Sin dato').length).toBeGreaterThan(0);
+    expect(within(row).getByRole('button', { name: 'Acciones de turno de Sede principal' })).toBeInTheDocument();
+    expect(screen.getByText(/Abierta el —/)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+  });
+});
+
+describe('CashShiftsView: cada turno con la hora y el importe de SU sede (DX-354b, DX-517-bis)', () => {
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+  // 03:30Z: en Caracas (UTC−4) son las 23:30 del 2 de noviembre; en Berlín (UTC+1), las 04:30 del 3.
+  const INSTANT = '2026-11-03T03:30:00.000Z';
+  const sessions = [
+    closedCashSessionFixture({ id: 'cs-caracas', location: { id: 'sede-caracas', name: 'Caracas' }, openedAt: INSTANT, floats: [{ currency: 'VES', amount: 1234.5 }] }),
+    closedCashSessionFixture({ id: 'cs-berlin', location: { id: 'sede-berlin', name: 'Berlín' }, openedAt: INSTANT, floats: [{ currency: 'EUR', amount: 1234.5 }] }),
+    closedCashSessionFixture({ id: 'cs-miami', location: { id: 'sede-miami', name: 'Miami' }, openedAt: INSTANT, floats: [{ currency: 'USD', amount: 1234.5 }] }),
+  ];
+
+  async function rows() {
+    const table = await screen.findByRole('table', { name: 'Turnos de caja' });
+    return within(table).getAllByRole('row').slice(1);
+  }
+
+  it('«Todas las sedes»: apertura (con el reloj de cada sede) y fondo en la moneda y el formato de su fila', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedCurrent.mockResolvedValue({ locationId: 'sede-caracas', settings, session: null });
+    mockedList.mockResolvedValue(page(sessions));
+    render(<CashShiftsView token={token} />);
+    const [caracas, berlin, miami] = await rows();
+
+    expect(norm(caracas.textContent)).toContain(norm(dateTimeIn('caracas', INSTANT)));
+    expect(norm(berlin.textContent)).toContain(norm(dateTimeIn('berlin', INSTANT)));
+    expect(norm(miami.textContent)).toContain(norm(dateTimeIn('miami', INSTANT)));
+    // La apertura de las 23:30 de Caracas es ya el día siguiente en Berlín, en 24 h; Miami, en 12 h.
+    expect(norm(caracas.textContent)).toContain('02/11/2026');
+    expect(norm(berlin.textContent)).toContain('03.11.2026 04:30');
+    expect(norm(miami.textContent)).toContain('11/02/2026 10:30');
+    // El fondo, en la moneda de su fila, con el formato de su sede.
+    expect(norm(caracas.textContent)).toContain(norm(moneyWithCode(1234.5, 'VES', STAMP_FORMATS.caracas)));
+    expect(norm(berlin.textContent)).toContain(norm(moneyWithCode(1234.5, 'EUR', STAMP_FORMATS.berlin)));
+    expect(norm(berlin.textContent)).toContain('1.234,50 EUR');
+    expect(norm(miami.textContent)).toContain('USD 1,234.50');
+    // Ninguna fila lleva la hora de otra sede.
+    expect(norm(berlin.textContent)).not.toContain(norm(dateTimeIn('caracas', INSTANT)));
+    expect(norm(caracas.textContent)).not.toContain(norm(dateTimeIn('berlin', INSTANT)));
+  });
+
+  it('la caja actual de una sede de Berlín se pinta con su reloj y su moneda', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.berlin, STAMP_SEDES.caracas]);
+    mockedCurrent.mockResolvedValue({
+      locationId: 'sede-berlin',
+      settings,
+      session: cashSessionFixture({ location: { id: 'sede-berlin', name: 'Berlín' }, openedAt: INSTANT, floats: [{ currency: 'EUR', amount: 1234.5 }] }),
+    });
+    mockedList.mockResolvedValue(page([]));
+    render(<CashShiftsView token={token} />);
+    expect(await screen.findByText(new RegExp(`Abierta el ${dateTimeIn('berlin', INSTANT).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))).toBeInTheDocument();
+    expect(norm(screen.getByText(/Fondo/).textContent)).toContain('1.234,50 EUR');
+  });
+
+  it('una fila de una sede desconocida sale «—» con un solo aviso; cargando, sin aviso', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+    mockedCurrent.mockResolvedValue({ locationId: 'sede-caracas', settings, session: null });
+    mockedList.mockResolvedValue(page([sessions[1]]));
+    const { unmount } = render(<CashShiftsView token={token} />);
+    const [row] = await rows();
+    expect(norm(row.textContent)).not.toContain('1.234,50');
+    expect(within(row).getAllByText('Sin dato').length).toBeGreaterThan(0);
+    expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+    unmount();
+
+    mockedLocations.mockReturnValue(new Promise(() => undefined));
+    render(<CashShiftsView token={token} />);
+    await screen.findByText('Aún no hay turnos de caja.').catch(() => undefined);
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
   });
 });
