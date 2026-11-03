@@ -119,6 +119,7 @@ export function AnamnesisInboxView({ token }: { token: string }) {
   return (
     <div className="flex flex-col">
       <PageHeader title={copy.title} description={copy.description} />
+      <SedeStampNote stamp={stamp} />
       <AsyncSection
         loading={loading}
         error={error}
@@ -133,7 +134,6 @@ export function AnamnesisInboxView({ token }: { token: string }) {
         skeleton={<TableSkeleton rows={3} />}
       >
         <div className="flex flex-col gap-3">
-          <SedeStampNote stamp={stamp} />
           <p className="t-caption text-muted tnum">{copy.count(rows.length)}</p>
           <DataList
             label={copy.tableLabel}

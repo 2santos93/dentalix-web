@@ -386,6 +386,8 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
 
     // Mutaciones (DX-354b): una entrada de más hace fallar el máximo; un fichero nuevo
     // que importa `formatCivilDate` fuera de las listas hace fallar la regla 1.
+    // Mutación: falla solo si PENDING ya está EXACTAMENTE en su máximo, y eso es a propósito:
+    // obliga a bajar `MAX_PENDING` en cada PR que migra pantallas.
     const grown = { ...PENDING, 'components/nueva/pantalla.tsx': STAMP };
     expect(Object.keys(grown).length <= MAX_PENDING).toBe(false);
     const fresh = [

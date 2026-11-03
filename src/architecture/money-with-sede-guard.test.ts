@@ -133,7 +133,8 @@ describe('arquitectura: importes con la sede (DX-522)', () => {
 
   it('the pending list never grows beyond its maximum (DX-354b)', () => {
     expect(Object.keys(PENDING).length).toBeLessThanOrEqual(MAX_PENDING);
-    // Una entrada de más hace fallar el máximo.
+    // Una entrada de más hace fallar el máximo. Solo es falsa si PENDING está EXACTAMENTE en el
+    // máximo, a propósito: obliga a bajar `MAX_PENDING` en cada PR que migra pantallas.
     expect(Object.keys({ ...PENDING, 'components/nueva/pantalla.tsx': OTHER }).length <= MAX_PENDING).toBe(false);
   });
 
