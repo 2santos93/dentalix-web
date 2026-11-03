@@ -2,9 +2,10 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { atSede, sedeDayFromToday } from './support/clock';
+import { SEDE_TODAY_TZ, atSede, sedeDayFromToday } from './support/clock';
 import { fillDate, fillTime } from './support/dates';
 import { expectNoHorizontalScroll } from './support/layout';
+import { E2E_TODAY_REGION } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -31,6 +32,14 @@ const admin = { fullName: 'Ana Titular', email: `ana.ob.${suffix}@example.com` }
 const dentist = { fullName: 'Óscar Urgencias', email: `oscar.ob.${suffix}@example.com` };
 const reception = { fullName: 'Rosa Mostrador', email: `rosa.ob.${suffix}@example.com` };
 const lastName = `Sobrecupo${suffix}`.slice(0, 40);
+
+/**
+ * La sede y el navegador van en `SEDE_TODAY_TZ`: la urgencia entra a la hora
+ * real, y «dos horas después» sigue siendo hoy en la lista del día. En la zona
+ * de la suite, desde las 21:55 de la sede la cita movida caía en mañana.
+ */
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
 
 let session: ApiSession;
 let dentistId: string;
@@ -80,6 +89,7 @@ test.beforeAll(async ({ request }) => {
     fullName: admin.fullName,
     email: admin.email,
     password,
+    location: E2E_TODAY_REGION,
   });
   await addStaffViaApi(request, session, { ...dentist, role: 'DENTIST', password });
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
@@ -225,12 +235,12 @@ test('DX-509-bis: mover un sobrecupo a una hora ocupada ofrece el siguiente huec
     overbooked: true,
   });
   // Destino: dentro de tres días a las 10:00, ocupado por otra cita del odontólogo.
-  const day = sedeDayFromToday(3);
+  const day = sedeDayFromToday(3, ZONE);
   await apiPost(request, session, '/appointments', {
     patientId: elsaId,
     providerId: dentistId,
-    start: atSede(day, '10:00').toISOString(),
-    end: atSede(day, '10:30').toISOString(),
+    start: atSede(day, '10:00', ZONE).toISOString(),
+    end: atSede(day, '10:30', ZONE).toISOString(),
   });
 
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -268,7 +278,7 @@ test('DX-509-bis: mover un sobrecupo a una hora ocupada ofrece el siguiente huec
   await dialog.getByRole('button', { name: 'Mover cita' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
   const moved = await apiCall<{ start: string; overbooked: boolean }>(request, 'get', `/appointments/${walkIn.id}`);
-  expect(moved).toMatchObject({ start: atSede(day, '10:30').toISOString(), overbooked: false });
+  expect(moved).toMatchObject({ start: atSede(day, '10:30', ZONE).toISOString(), overbooked: false });
 });
 
 test('DX-509-bis (QA visual): «Pendiente de cerrar» pinta los sobrecupos mantenidos aparte', async ({
@@ -281,7 +291,7 @@ test('DX-509-bis (QA visual): «Pendiente de cerrar» pinta los sobrecupos mante
   await page.route(/\/closing-queue(\?.*)?$/, async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as Record<string, unknown>;
-    const start = atSede(sedeDayFromToday(-1), '10:00');
+    const start = atSede(sedeDayFromToday(-1, ZONE), '10:00', ZONE);
     body.keptOverbooks = {
       total: 1,
       items: [
@@ -294,7 +304,7 @@ test('DX-509-bis (QA visual): «Pendiente de cerrar» pinta los sobrecupos mante
           status: 'COMPLETED',
           locationId: (body.locations as { id: string }[])[0].id,
           locationName: (body.locations as { name: string }[])[0].name,
-          timeZone: 'America/Caracas',
+          timeZone: ZONE,
           professionalId: dentistId,
           professionalName: dentist.fullName,
           keptAt: new Date(start.getTime() - 60 * 60_000).toISOString(),
