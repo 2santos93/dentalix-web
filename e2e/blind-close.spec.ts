@@ -264,6 +264,16 @@ for (const viewport of [
       expect(voided.ok(), await voided.text()).toBeTruthy();
       await page.goto(`${origin}/caja/turnos/${ownSession.id}`);
       const report = page.getByTestId('cash-session-report');
+      // Ronda 4: el grupo Efectivo · USD del arqueo de esa caja cerrada va sin
+      // cobros, esperado ni diferencia (con los cobros vivos delataría la
+      // anulación); el fondo y lo contado se quedan.
+      const arqueo = report.getByRole('table', { name: 'Arqueo por moneda y método' });
+      const cashRow = arqueo.getByRole('row').filter({ hasText: 'Efectivo · USD' });
+      await expect(cashRow.getByTestId('amount-hidden').first()).toBeVisible({ timeout: 15_000 });
+      await expect(cashRow).not.toContainText('145,00');
+      await expect(cashRow).toContainText('140,00');
+      await arqueo.scrollIntoViewIfNeeded();
+      await shot(page, 'sec043-informe-grupo', viewport.width);
       const voidedList = report.getByRole('list', { name: 'Abonos anulados' });
       await expect(voidedList).toContainText('Oculto durante el arqueo', { timeout: 15_000 });
       await expect(voidedList).not.toContainText('45,00');
@@ -276,6 +286,8 @@ for (const viewport of [
       await closeOwnSession(page.request, admin);
       await page.reload();
       await expect(later).toContainText('45,00', { timeout: 15_000 });
+      await expect(cashRow).toContainText('145,00');
+      await expect(cashRow.getByTestId('amount-hidden')).toHaveCount(0);
     } finally {
       await setBlind(page.request, admin, false);
     }

@@ -127,7 +127,7 @@ export function cashValue(current: CurrentCashSession, timeZone: string, fmt: Re
   const session = current.session;
   if (!session) return { value: copy.cashClosed, pending: true, tone: 'warning' };
   const time = fmt ? fmt.time(new Date(session.openedAt), timeZone) : '';
-  const payments = session.expected?.reduce((sum, line) => sum + line.paymentsCount, 0) ?? null;
+  const payments = session.expected?.reduce((sum, line) => sum + (line.paymentsCount ?? 0), 0) ?? null;
   return {
     value: copy.cashOpen(time),
     pending: false,

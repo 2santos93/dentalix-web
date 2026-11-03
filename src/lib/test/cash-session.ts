@@ -47,6 +47,7 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
         outflows: 0,
         outflowsCount: 0,
         expected: 80_000,
+        amountHidden: false,
       },
       {
         currency: 'USD',
@@ -59,6 +60,7 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
         outflows: 0,
         outflowsCount: 0,
         expected: 25_000,
+        amountHidden: false,
       },
     ],
     payments: [
@@ -103,15 +105,15 @@ export function closedCashSessionFixture(overrides: Partial<CashSessionDetail> =
     notes: null,
     suggestedLockDate: '2026-10-17',
     lines: [
-      { currency: 'USD', method: 'CASH' as const, opening: 50_000, expected: 80_000, counted: 79_000, difference: -1_000 },
-      { currency: 'USD', method: 'CARD' as const, opening: 0, expected: 25_000, counted: 25_000, difference: 0 },
+      { currency: 'USD', method: 'CASH' as const, opening: 50_000, expected: 80_000, counted: 79_000, difference: -1_000, amountHidden: false },
+      { currency: 'USD', method: 'CARD' as const, opening: 0, expected: 25_000, counted: 25_000, difference: 0, amountHidden: false },
     ],
   };
   return cashSessionFixture({
     status: 'CLOSED',
     closedAt: closing.closedAt,
     closedBy: closing.closedBy,
-    differences: [{ currency: 'USD', amount: -1_000 }],
+    differences: [{ currency: 'USD', amount: -1_000, amountHidden: false }],
     closing,
     closings: [closing],
     can: { close: false, reopen: true, adjust: true },

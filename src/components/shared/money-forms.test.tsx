@@ -123,7 +123,7 @@ const forms: Record<string, FormDriver> = {
       const session = cashSessionFixture({
         floats: [{ currency, amount: 0 }],
         expected: [
-          { currency, method: 'CASH', opening: 0, payments: expected, paymentsCount: 1, paymentAdjustments: 0, adjustments: 0, outflows: 0, outflowsCount: 0, expected },
+          { currency, method: 'CASH', opening: 0, payments: expected, paymentsCount: 1, paymentAdjustments: 0, adjustments: 0, outflows: 0, outflowsCount: 0, expected, amountHidden: false },
         ],
       });
       render(

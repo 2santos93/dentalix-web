@@ -126,6 +126,23 @@ describe('CashShiftsView (DX-027)', () => {
     expect(screen.getByText('Ves tus turnos.')).toBeInTheDocument();
   });
 
+  it('la diferencia de una moneda oculta durante el arqueo no da cifra ni dice «Cuadra» (SEC-043, ronda 4)', async () => {
+    mockedCurrent.mockResolvedValue({ locationId: 'loc-1', settings, session: null });
+    mockedList.mockResolvedValue(
+      page([
+        closedCashSessionFixture({
+          id: 'cs-0',
+          differences: [{ currency: 'USD', amount: null, amountHidden: true }],
+        }),
+      ]),
+    );
+    render(<CashShiftsView token={token} />);
+    const table = await screen.findByRole('table', { name: 'Turnos de caja' });
+    const [, row] = within(table).getAllByRole('row');
+    expect(row).toHaveTextContent('Oculto durante el arqueo');
+    expect(row).not.toHaveTextContent('Cuadra');
+  });
+
   it('un cierre a ciegas sin motivo que no cuadró se marca «Sin justificar» en la lista (SEC-043)', async () => {
     mockedCurrent.mockResolvedValue({ locationId: 'loc-1', settings, session: null });
     mockedList.mockResolvedValue(

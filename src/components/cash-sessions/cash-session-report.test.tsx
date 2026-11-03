@@ -134,6 +134,47 @@ describe('CashSessionReport (DX-027)', () => {
     expect(later).not.toHaveTextContent(/USD\s?-|−/);
   });
 
+  it('SEC-043 (ronda 4): en una caja cerrada, el grupo con una anulación posterior abierta sale sin cobros, ajustes, salidas, esperado ni diferencia; el resto, con sus cifras', () => {
+    const base = closedCashSessionFixture();
+    const [cash, card] = base.expected!;
+    const hiddenCash = {
+      ...cash,
+      payments: null,
+      paymentsCount: null,
+      paymentAdjustments: null,
+      adjustments: null,
+      outflows: null,
+      outflowsCount: null,
+      expected: null,
+      amountHidden: true,
+    };
+    const closing = {
+      ...base.closing!,
+      lines: base.closing!.lines.map((l) =>
+        l.method === 'CASH' ? { ...l, expected: null, difference: null, amountHidden: true } : l,
+      ),
+    };
+    render(
+      <CashSessionReport
+        session={{
+          ...base,
+          expected: [hiddenCash, card],
+          differences: [{ currency: 'USD', amount: null, amountHidden: true }],
+          closing,
+          closings: [closing],
+        }}
+      />,
+    );
+    const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
+    const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
+    // Cobros, ajustes, salidas, esperado y diferencia: ocultos; fondo y contado, no.
+    expect(within(cashRow).getAllByTestId('amount-hidden')).toHaveLength(5);
+    expect(cashRow).toHaveTextContent(/50\.000,00/);
+    expect(cashRow).toHaveTextContent(/79\.000,00/);
+    expect(within(cardRow).queryByTestId('amount-hidden')).not.toBeInTheDocument();
+    expect(cardRow).toHaveTextContent(/25\.000,00/);
+  });
+
   it('SEC-043 (B4): cuadrado a ciegas con la nota que escribió quien contó', () => {
     const base = closedCashSessionFixture();
     const closing = {
@@ -141,7 +182,7 @@ describe('CashSessionReport (DX-027)', () => {
       blind: true,
       hasDifference: false,
       differenceReason: 'Conté dos veces el cajón',
-      lines: base.closing!.lines.map((l) => ({ ...l, counted: l.expected, difference: 0 })),
+      lines: base.closing!.lines.map((l) => ({ ...l, counted: l.expected ?? 0, difference: 0 })),
     };
     render(<CashSessionReport session={{ ...base, differences: [], closing, closings: [closing] }} />);
     expect(screen.getByText('El arqueo cuadra.')).toBeInTheDocument();
@@ -165,7 +206,7 @@ describe('CashSessionReport (DX-027)', () => {
     render(
       <CashSessionReport
         session={cashSessionFixture({
-          expected: [{ ...cash, paymentAdjustments: 900, expected: 80_900 }, { ...card, paymentAdjustments: -500, expected: card.expected - 500 }],
+          expected: [{ ...cash, paymentAdjustments: 900, expected: 80_900 }, { ...card, paymentAdjustments: -500, expected: card.expected! - 500 }],
         })}
       />,
     );

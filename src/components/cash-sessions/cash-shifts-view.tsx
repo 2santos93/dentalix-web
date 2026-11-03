@@ -17,7 +17,9 @@ import {
   type CurrentCashSession,
 } from '@/lib/cash-sessions/cash-sessions-api';
 import {
+  AMOUNT_HIDDEN_TEXT,
   differenceText,
+  hasVisibleDifference,
   moneyList,
   sessionStatusKey,
 } from '@/lib/cash-sessions/presentation';
@@ -433,7 +435,11 @@ function shiftColumns(
             <span
               className={cn(
                 'font-medium',
-                item.differences.some((d) => d.amount !== 0) ? 'text-danger-text' : 'text-ink',
+                hasVisibleDifference(item.differences)
+                  ? 'text-danger-text'
+                  : item.differences.some((d) => d.amount === null)
+                    ? 'text-muted'
+                    : 'text-ink',
               )}
             >
               {differenceText(item.differences, moneyIn(item.location.id))}
@@ -450,7 +456,13 @@ function shiftColumns(
       mobileCell: (item) =>
         item.status === 'CLOSED' ? (
           <span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
-            <span className={cn(item.differences.some((d) => d.amount !== 0) && 'text-danger-text')}>
+            <span
+              className={cn(
+                hasVisibleDifference(item.differences)
+                  ? 'text-danger-text'
+                  : item.differences.some((d) => d.amount === null) && 'text-muted',
+              )}
+            >
               {differenceText(item.differences, moneyIn(item.location.id))}
             </span>
             {item.unjustifiedDifference ? (
@@ -572,9 +584,13 @@ function CurrentSessionCard({
                     {PAYMENT_METHOD_LABELS[line.method]}{' '}
                     <span className="text-xs text-muted">{line.currency}</span>
                   </span>
-                  <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger-text' : 'text-ink')}>
-                    {sedeMoney(line.expected, line.currency, fmt)}
-                  </span>
+                  {line.expected === null ? (
+                    <span className="text-sm text-muted">{AMOUNT_HIDDEN_TEXT}</span>
+                  ) : (
+                    <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger-text' : 'text-ink')}>
+                      {sedeMoney(line.expected, line.currency, fmt)}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

@@ -120,9 +120,15 @@ interface ArqueoRow {
   paymentAdjustments: number | null;
   adjustments: number | null;
   outflows: number | null;
-  expected: number;
+  expected: number | null;
   counted: number | null;
   difference: number | null;
+  /**
+   * SEC-043: con arqueo ciego, el grupo de una caja cerrada con una
+   * anulación posterior que cuenta en otra caja abierta o pendiente: sin
+   * cobros, ajustes, salidas, esperado ni diferencia.
+   */
+  hidden: boolean;
 }
 
 /**
@@ -148,6 +154,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
         expected: line.expected,
         counted: line.counted,
         difference: line.difference,
+        hidden: line.amountHidden || (breakdown?.amountHidden ?? false),
       };
     });
   }
@@ -163,6 +170,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
     expected: line.expected,
     counted: null,
     difference: null,
+    hidden: line.amountHidden,
   }));
 }
 
@@ -271,6 +279,8 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
               <TableBody>
                 {rows.map((row) => {
                   const money = (n: number | null) => (n === null ? '—' : formatCurrency(n, row.currency));
+                  // SEC-043: en un grupo oculto, las cifras que delatarían la anulación.
+                  const figure = (n: number | null) => (row.hidden ? <HiddenAmount inTable /> : money(n));
                   return (
                     <TableRow key={row.key} className="cash-report-row">
                       <TableCell className={cn('font-medium whitespace-nowrap', STICKY_FIRST)}>
@@ -280,9 +290,9 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                         {money(row.opening)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {money(row.payments)}
+                        {figure(row.payments)}
                         {/* DX-516: impuestos y recargos (+) o descuentos (−) cobrados con esos abonos. */}
-                        {row.paymentAdjustments ? (
+                        {!row.hidden && row.paymentAdjustments ? (
                           <span className="block t-caption text-muted">
                             {copy.paymentAdjustments(
                               `${row.paymentAdjustments > 0 ? '+' : '−'}${formatCurrency(Math.abs(row.paymentAdjustments), row.currency)}`,
@@ -291,17 +301,17 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                         ) : null}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {money(row.adjustments)}
+                        {figure(row.adjustments)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {/* Se restan: con signo, para que la fila se lea como una suma. */}
-                        {money(row.outflows ? -row.outflows : row.outflows)}
+                        {figure(row.outflows ? -row.outflows : row.outflows)}
                       </TableCell>
                       <TableCell
                        
-                        className={cn('text-right font-medium tabular-nums', row.expected < 0 && 'text-danger-text')}
+                        className={cn('text-right font-medium tabular-nums', row.expected !== null && row.expected < 0 && 'text-danger-text')}
                       >
-                        {money(row.expected)}
+                        {figure(row.expected)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {row.counted === null ? copy.notCounted : money(row.counted)}
@@ -313,7 +323,7 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                           row.difference !== null && row.difference !== 0 && 'text-danger-text',
                         )}
                       >
-                        {money(row.difference)}
+                        {figure(row.difference)}
                       </TableCell>
                     </TableRow>
                   );
@@ -622,9 +632,11 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
 }
 
 /** SEC-043: el importe que no se enseña mientras rige el arqueo ciego. */
-function HiddenAmount() {
+function HiddenAmount({ inTable = false }: { inTable?: boolean }) {
+  // En la tabla del arqueo (que en el teléfono se desplaza de lado), en una
+  // línea: partido en cuatro, la fila crece y se lee peor.
   return (
-    <span className="text-sm text-muted" data-testid="amount-hidden">
+    <span className={cn('text-sm text-muted', inTable && 'max-sm:whitespace-nowrap')} data-testid="amount-hidden">
       {copy.amountHidden}
     </span>
   );
