@@ -984,6 +984,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exchange/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tasas de un día para la clínica, según su fuente (DX-374)
+         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo).
+         */
+        get: operations["ExchangeController_rates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExchangeController_convert"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fuente de la tasa de cambio de la clínica (DX-374) */
+        get: operations["ExchangeSettingsController_settings"];
+        /**
+         * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
+         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
+         */
+        put: operations["ExchangeSettingsController_updateClinicSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/manual-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Últimas tasas de cambio manuales de la clínica (DX-374)
+         * @description Del día más reciente al más antiguo y, dentro del día, por moneda.
+         */
+        get: operations["ExchangeSettingsController_manualRates"];
+        put?: never;
+        /**
+         * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
+         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). DX-402: la de un día anterior a `manualSince` sirve, con MANUAL, de tasa de respaldo a los abonos de ese día que siguen sin tasa si el proveedor no tiene la de ese día (GET /payments/rate-backlog/day dice cuántos); nunca cambia una tasa ya congelada. Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
+         */
+        post: operations["ExchangeSettingsController_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/manual-rates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Corrige una tasa manual que ningún abono usó; queda en la auditoría
+         * @description DX-375. Solo cambia la tasa (unidades de la moneda por 1 USD); el día y la moneda no. Cada abono congela la tasa con que se convirtió al registrarse, así que una tasa que ya usa algún abono no se cambia: 409 MANUAL_EXCHANGE_RATE_IN_USE (también lo impide la BD). Corregir una sin usar sí afecta a los abonos que la congelen después.
+         */
+        put: operations["ExchangeSettingsController_correct"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/currency-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Texto propio de cada moneda de la clínica (DX-517) */
+        get: operations["ClinicCurrencyTextsController_texts"];
+        /**
+         * Cambia el texto propio de las monedas de la clínica
+         * @description DX-517. Sustituye la lista entera; vacía = sin textos propios. El texto ocupa el lugar del código ISO en la posición que da el formato de la sede. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto.
+         */
+        put: operations["ClinicCurrencyTextsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/coverages": {
         parameters: {
             query?: never;
@@ -2955,128 +3077,6 @@ export interface paths {
          */
         get: operations["DiscountReportController_csv"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/rates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Tasas de un día para la clínica, según su fuente (DX-374)
-         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo).
-         */
-        get: operations["ExchangeController_rates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/convert": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ExchangeController_convert"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fuente de la tasa de cambio de la clínica (DX-374) */
-        get: operations["ExchangeSettingsController_settings"];
-        /**
-         * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
-         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
-         */
-        put: operations["ExchangeSettingsController_updateClinicSettings"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/manual-rates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Últimas tasas de cambio manuales de la clínica (DX-374)
-         * @description Del día más reciente al más antiguo y, dentro del día, por moneda.
-         */
-        get: operations["ExchangeSettingsController_manualRates"];
-        put?: never;
-        /**
-         * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
-         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). DX-402: la de un día anterior a `manualSince` sirve, con MANUAL, de tasa de respaldo a los abonos de ese día que siguen sin tasa si el proveedor no tiene la de ese día (GET /payments/rate-backlog/day dice cuántos); nunca cambia una tasa ya congelada. Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
-         */
-        post: operations["ExchangeSettingsController_register"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/manual-rates/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Corrige una tasa manual que ningún abono usó; queda en la auditoría
-         * @description DX-375. Solo cambia la tasa (unidades de la moneda por 1 USD); el día y la moneda no. Cada abono congela la tasa con que se convirtió al registrarse, así que una tasa que ya usa algún abono no se cambia: 409 MANUAL_EXCHANGE_RATE_IN_USE (también lo impide la BD). Corregir una sin usar sí afecta a los abonos que la congelen después.
-         */
-        put: operations["ExchangeSettingsController_correct"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/currency-texts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Texto propio de cada moneda de la clínica (DX-517) */
-        get: operations["ClinicCurrencyTextsController_texts"];
-        /**
-         * Cambia el texto propio de las monedas de la clínica
-         * @description DX-517. Sustituye la lista entera; vacía = sin textos propios. El texto ocupa el lugar del código ISO en la posición que da el formato de la sede. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto.
-         */
-        put: operations["ClinicCurrencyTextsController_update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -8172,6 +8172,120 @@ export interface components {
             notes: components["schemas"]["CollectionNoteDto"][];
             promises: components["schemas"]["PaymentPromiseDto"][];
         };
+        /**
+         * @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día).
+         * @enum {string}
+         */
+        ExchangeRateSource: "AUTOMATIC" | "MANUAL";
+        RatesResponseDto: {
+            /** @enum {string} */
+            base: "USD";
+            /** @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día). */
+            source: components["schemas"]["ExchangeRateSource"];
+            /** @description Units of each currency per 1 USD, for the requested date, keyed by its ISO 4217 code (3 letters). Con fuente MANUAL solo trae las monedas con tasa registrada ese día: una moneda que NO aparece está «sin tasa» (no se inventa, no se toma la de otro día ni se pide al proveedor) y convertirla responde 400 EXCHANGE_RATE_MISSING. */
+            rates: {
+                [key: string]: number;
+            };
+        };
+        ConvertResponseDto: {
+            /** @example 100 */
+            amount: number;
+            /** @description Código ISO 4217 de 3 letras. */
+            from: string;
+            /** @description Código ISO 4217 de 3 letras. */
+            to: string;
+            /** @example 2026-07-01 */
+            date: string;
+            /** @example 400000 */
+            result: number;
+            /**
+             * @description Effective from→to rate actually applied.
+             * @example 4000
+             */
+            rateUsed: number;
+        };
+        ExchangeRateSettingsDto: {
+            /**
+             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
+             * @example MANUAL
+             */
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil (sede principal) desde el que rige la fuente MANUAL: los días anteriores se convierten con la tasa automática. Null con AUTOMATIC.
+             * @example 2026-10-30
+             */
+            manualSince: string | null;
+            /** @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia. */
+            baseCurrency: string;
+        };
+        UpdateExchangeRateSettingsDto: {
+            /**
+             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
+             * @example MANUAL
+             */
+            source: components["schemas"]["ExchangeRateSource"];
+        };
+        ManualExchangeRateAuthorDto: {
+            /** Format: uuid */
+            userId: string;
+            /** @example Dra. Ana Pérez */
+            fullName: string | null;
+        };
+        ManualExchangeRateDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Día civil de la tasa.
+             * @example 2026-10-30
+             */
+            date: string;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * @description Unidades de la moneda por 1 USD.
+             * @example 36.5
+             */
+            rate: number;
+            createdBy: components["schemas"]["ManualExchangeRateAuthorDto"];
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description DX-375: algún abono ya congeló esta tasa (como moneda del abono o de destino), así que no se puede cambiar (PUT responde 409).
+             * @example false
+             */
+            inUse: boolean;
+        };
+        RegisterManualExchangeRateDto: {
+            /**
+             * @description Día civil de la tasa (AAAA-MM-DD), desde 2000-01-01 y nunca posterior a hoy en la zona de la sede activa (o de la principal).
+             * @example 2026-10-30
+             */
+            date: string;
+            /** @description Código ISO 4217 de la lista de monedas (GET /currencies). USD no: es la base. */
+            currency: string;
+            /**
+             * @description Unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
+             * @example 36.5
+             */
+            rate: number;
+        };
+        CorrectManualExchangeRateDto: {
+            /**
+             * @description La tasa corregida: unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
+             * @example 36.75
+             */
+            rate: number;
+        };
+        CurrencyTextEntryDto: {
+            /** @description Código ISO 4217 de una moneda del catálogo. */
+            currency: string;
+            /** @description Texto que sustituye al código en los importes: 1 a 8 caracteres en una línea (se recorta). */
+            text: string;
+        };
+        ClinicCurrencyTextsDto: {
+            /** @description El mapa entero, en orden de código. Vacío = nada configurado: los importes llevan el código ISO (DX-378). */
+            entries: components["schemas"]["CurrencyTextEntryDto"][];
+        };
         /** @enum {string} */
         PayerType: "INSURER" | "PREPAID_PLAN" | "PUBLIC_SYSTEM" | "EMPLOYER" | "OTHER";
         CoveragePayerDto: {
@@ -9959,7 +10073,7 @@ export interface components {
             providerId?: string;
             /**
              * Format: uuid
-             * @description DX-211: sillón de la cita. De esta clínica (si no, 404), de la sede de la cita y activo (si no, 400). Otra cita viva en ese sillón y franja: 409 «El sillón X ya está ocupado de HH:MM a HH:MM» (horas de la sede). Sin él, nada cambia.
+             * @description DX-211: sillón de la cita. De esta clínica (si no, 404), de la sede de la cita y activo (si no, 400). Otra cita viva en ese sillón y franja: 409 «El sillón X ya está ocupado de HH:MM a HH:MM» (horas de la sede). Sin él, nada cambia. `null` no es «sin sillón»: 400 (DX-492-bis).
              */
             chairId?: string;
             /** Format: date-time */
@@ -10747,7 +10861,7 @@ export interface components {
             providerId?: string;
             /**
              * Format: uuid
-             * @description DX-211: cambiar el sillón (de la sede de la cita y activo; si no, 400/404) o quitarlo con null. Al cambiarlo o reagendar una cita con sillón se mira que esté libre en la franja (409 con su nombre y horas). Cambiar solo el sillón no anula el enlace de confirmación; queda auditado como movimiento.
+             * @description DX-211: cambiar el sillón (de la sede de la cita y activo; si no, 400/404) o quitarlo con null. Al cambiarlo o reagendar una cita con sillón se mira que esté libre en la franja (409 con su nombre y horas, `code: APPOINTMENT_OVERLAP` y `scope: chair`; DX-492-bis). Un valor que no es un id: 400 en español. Cambiar solo el sillón no anula el enlace de confirmación; queda auditado como movimiento.
              */
             chairId?: string | null;
             /**
@@ -11879,6 +11993,11 @@ export interface components {
             /** @description Solo con `OPEN` o `ACCEPTED`. */
             offer: components["schemas"]["PublicSlotOfferDetailsDto"] | null;
         };
+        /**
+         * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
+         * @enum {string}
+         */
+        HourCycle: "h12" | "h23";
         PublicConfirmationAppointmentDto: {
             /** @description Solo el nombre de pila. */
             patientFirstName: string | null;
@@ -12715,120 +12834,6 @@ export interface components {
             page: number;
             pageSize: number;
         };
-        /**
-         * @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día).
-         * @enum {string}
-         */
-        ExchangeRateSource: "AUTOMATIC" | "MANUAL";
-        RatesResponseDto: {
-            /** @enum {string} */
-            base: "USD";
-            /** @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día). */
-            source: components["schemas"]["ExchangeRateSource"];
-            /** @description Units of each currency per 1 USD, for the requested date, keyed by its ISO 4217 code (3 letters). Con fuente MANUAL solo trae las monedas con tasa registrada ese día: una moneda que NO aparece está «sin tasa» (no se inventa, no se toma la de otro día ni se pide al proveedor) y convertirla responde 400 EXCHANGE_RATE_MISSING. */
-            rates: {
-                [key: string]: number;
-            };
-        };
-        ConvertResponseDto: {
-            /** @example 100 */
-            amount: number;
-            /** @description Código ISO 4217 de 3 letras. */
-            from: string;
-            /** @description Código ISO 4217 de 3 letras. */
-            to: string;
-            /** @example 2026-07-01 */
-            date: string;
-            /** @example 400000 */
-            result: number;
-            /**
-             * @description Effective from→to rate actually applied.
-             * @example 4000
-             */
-            rateUsed: number;
-        };
-        ExchangeRateSettingsDto: {
-            /**
-             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
-             * @example MANUAL
-             */
-            source: components["schemas"]["ExchangeRateSource"];
-            /**
-             * @description Día civil (sede principal) desde el que rige la fuente MANUAL: los días anteriores se convierten con la tasa automática. Null con AUTOMATIC.
-             * @example 2026-10-30
-             */
-            manualSince: string | null;
-            /** @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia. */
-            baseCurrency: string;
-        };
-        UpdateExchangeRateSettingsDto: {
-            /**
-             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
-             * @example MANUAL
-             */
-            source: components["schemas"]["ExchangeRateSource"];
-        };
-        ManualExchangeRateAuthorDto: {
-            /** Format: uuid */
-            userId: string;
-            /** @example Dra. Ana Pérez */
-            fullName: string | null;
-        };
-        ManualExchangeRateDto: {
-            /** Format: uuid */
-            id: string;
-            /**
-             * @description Día civil de la tasa.
-             * @example 2026-10-30
-             */
-            date: string;
-            /** @description Código ISO 4217 de 3 letras. */
-            currency: string;
-            /**
-             * @description Unidades de la moneda por 1 USD.
-             * @example 36.5
-             */
-            rate: number;
-            createdBy: components["schemas"]["ManualExchangeRateAuthorDto"];
-            /** Format: date-time */
-            createdAt: string;
-            /**
-             * @description DX-375: algún abono ya congeló esta tasa (como moneda del abono o de destino), así que no se puede cambiar (PUT responde 409).
-             * @example false
-             */
-            inUse: boolean;
-        };
-        RegisterManualExchangeRateDto: {
-            /**
-             * @description Día civil de la tasa (AAAA-MM-DD), desde 2000-01-01 y nunca posterior a hoy en la zona de la sede activa (o de la principal).
-             * @example 2026-10-30
-             */
-            date: string;
-            /** @description Código ISO 4217 de la lista de monedas (GET /currencies). USD no: es la base. */
-            currency: string;
-            /**
-             * @description Unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
-             * @example 36.5
-             */
-            rate: number;
-        };
-        CorrectManualExchangeRateDto: {
-            /**
-             * @description La tasa corregida: unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
-             * @example 36.75
-             */
-            rate: number;
-        };
-        CurrencyTextEntryDto: {
-            /** @description Código ISO 4217 de una moneda del catálogo. */
-            currency: string;
-            /** @description Texto que sustituye al código en los importes: 1 a 8 caracteres en una línea (se recorta). */
-            text: string;
-        };
-        ClinicCurrencyTextsDto: {
-            /** @description El mapa entero, en orden de código. Vacío = nada configurado: los importes llevan el código ISO (DX-378). */
-            entries: components["schemas"]["CurrencyTextEntryDto"][];
-        };
         CreateDomainDto: {
             /**
              * @description Dominio propio de la clínica (no un subdominio de la plataforma).
@@ -13531,11 +13536,6 @@ export interface components {
             lines: components["schemas"]["ReceiptSplitViewLineDto"][];
             total: components["schemas"]["ReceiptSplitTotalDto"];
         };
-        /**
-         * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
-         * @enum {string}
-         */
-        HourCycle: "h12" | "h23";
         ReceiptRegionalDto: {
             /**
              * @description Zona IANA de la sede.
@@ -16818,6 +16818,11 @@ export interface components {
             end: string;
             /** @enum {string} */
             status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
+            /**
+             * Format: uuid
+             * @description Sede de la cita (DX-354b): la web formatea su hora con el reloj de esa sede.
+             */
+            locationId: string;
         };
         DashboardDto: {
             period: components["schemas"]["DashboardPeriodDto"];
@@ -21639,6 +21644,349 @@ export interface operations {
             };
         };
     };
+    ExchangeController_rates: {
+        parameters: {
+            query: {
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatesResponseDto"];
+                };
+            };
+            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeController_convert: {
+        parameters: {
+            query: {
+                amount: number;
+                /** @description Código ISO 4217 de 3 letras. */
+                from: string;
+                /** @description Código ISO 4217 de 3 letras. */
+                to: string;
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertResponseDto"];
+                };
+            };
+            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExchangeRateSettingsDto"];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_updateClinicSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExchangeRateSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExchangeRateSettingsDto"];
+                };
+            };
+            /** @description Fuente que no es AUTOMATIC ni MANUAL */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_manualRates: {
+        parameters: {
+            query?: {
+                /** @description Cuántas de las últimas tasas traer. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualExchangeRateDto"][];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterManualExchangeRateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualExchangeRateDto"];
+                };
+            };
+            /** @description Tasa que no es > 0 con hasta 8 decimales, moneda fuera de la lista o USD, o fecha inválida o futura en la zona de la sede */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un miembro de la clínica puede registrar una tasa de cambio. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay una tasa registrada para esa moneda en ese día. Si ningún abono la usó, corrígela en la lista. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_correct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectManualExchangeRateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualExchangeRateDto"];
+                };
+            };
+            /** @description Tasa que no es > 0 con hasta 8 decimales */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No encontramos esa tasa de cambio en la clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Esta tasa ya la usa al menos un abono y no se puede cambiar: el saldo de esos abonos se calculó con ella. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicCurrencyTextsController_texts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
+                };
+            };
+            /** @description Solo administración configura cómo se escribe cada moneda. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicCurrencyTextsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
+                };
+            };
+            /** @description Una moneda fuera del catálogo o repetida, un texto vacío, con saltos de línea o de más de 8 caracteres, o más de 30 monedas */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura cómo se escribe cada moneda. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PatientCoveragesController_list: {
         parameters: {
             query?: never;
@@ -24471,7 +24819,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200). DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`) al reactivar una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true` */
+            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera): cuerpo con `code: APPOINTMENT_OVERLAP` y `scope` (`provider` | `patient` | `chair`) para que la web ofrezca el siguiente hueco (DX-509-bis, DX-492-bis). El nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200). DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`) al reactivar una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27609,349 +27957,6 @@ export interface operations {
             };
         };
     };
-    ExchangeController_rates: {
-        parameters: {
-            query: {
-                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
-                date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RatesResponseDto"];
-                };
-            };
-            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeController_convert: {
-        parameters: {
-            query: {
-                amount: number;
-                /** @description Código ISO 4217 de 3 letras. */
-                from: string;
-                /** @description Código ISO 4217 de 3 letras. */
-                to: string;
-                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
-                date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConvertResponseDto"];
-                };
-            };
-            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_settings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExchangeRateSettingsDto"];
-                };
-            };
-            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_updateClinicSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateExchangeRateSettingsDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExchangeRateSettingsDto"];
-                };
-            };
-            /** @description Fuente que no es AUTOMATIC ni MANUAL */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_manualRates: {
-        parameters: {
-            query?: {
-                /** @description Cuántas de las últimas tasas traer. */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManualExchangeRateDto"][];
-                };
-            };
-            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_register: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterManualExchangeRateDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManualExchangeRateDto"];
-                };
-            };
-            /** @description Tasa que no es > 0 con hasta 8 decimales, moneda fuera de la lista o USD, o fecha inválida o futura en la zona de la sede */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo un miembro de la clínica puede registrar una tasa de cambio. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Ya hay una tasa registrada para esa moneda en ese día. Si ningún abono la usó, corrígela en la lista. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_correct: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CorrectManualExchangeRateDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManualExchangeRateDto"];
-                };
-            };
-            /** @description Tasa que no es > 0 con hasta 8 decimales */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No encontramos esa tasa de cambio en la clínica. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Esta tasa ya la usa al menos un abono y no se puede cambiar: el saldo de esos abonos se calculó con ella. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ClinicCurrencyTextsController_texts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
-                };
-            };
-            /** @description Solo administración configura cómo se escribe cada moneda. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ClinicCurrencyTextsController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
-                };
-            };
-            /** @description Una moneda fuera del catálogo o repetida, un texto vacío, con saltos de línea o de más de 8 caracteres, o más de 30 monedas */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo administración configura cómo se escribe cada moneda. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     DomainsController_list: {
         parameters: {
             query?: never;
@@ -30461,7 +30466,7 @@ export interface operations {
                     "application/json": components["schemas"]["CashSessionDetailDto"];
                 };
             };
-            /** @description El arqueo no cuadra: explica el motivo de la diferencia antes de cerrar. */
+            /** @description El arqueo no cuadra: explica el motivo de la diferencia antes de cerrar. (nunca en un cierre a ciegas de quien no es ADMIN) */
             400: {
                 headers: {
                     [name: string]: unknown;
