@@ -245,6 +245,13 @@
       "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
       "requiresUnset": "E2E_MAIL_DIR",
       "reason": "Sin E2E_MAIL_DIR no se puede leer el enlace de la copia del PDF firmado (DX-443)."
+    },
+    {
+      "file": "e2e/documents-sede-format.spec.ts",
+      "title": "una sede sin reloj: «—» en el impreso y el aviso de la sede, nunca otro formato",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede quitar el reloj de una sede",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede quitar el reloj de una sede."
     }
   ]
 }

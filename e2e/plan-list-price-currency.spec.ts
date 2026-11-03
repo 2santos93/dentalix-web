@@ -5,7 +5,6 @@ import { loginAs } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
-import { formatCurrency } from '../src/lib/format/currency';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
 
@@ -37,8 +36,8 @@ const LIST_PRICE_EUR = 100.55;
 const sedeFmt = regionalFormat(E2E_REGION);
 /** Importes de la pestaña del plan: formato de la sede y código ISO (DX-386, DX-489). */
 const sede = (amount: number, currency: string) => moneyWithCode(amount, currency, sedeFmt).replace(/ /g, ' ');
-/** Importes del documento impreso: `formatCurrency` (pendiente de DX-354). */
-const printed = (amount: number, currency: string) => formatCurrency(amount, currency).replace(/ /g, ' ');
+/** Importes del documento impreso: la sede del presupuesto y el código ISO (DX-354). */
+const printed = sede;
 
 let session: ApiSession;
 let patientId = '';
