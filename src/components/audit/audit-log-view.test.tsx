@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AuditLogView } from './audit-log-view';
+import { AuditLogView, auditFiltersFromSearch } from './audit-log-view';
 import { ApiError } from '@/lib/api/client';
 import { listAuditEvents, type AuditEvent, type AuditEventsPage } from '@/lib/audit/audit-api';
 import { listStaff } from '@/lib/staff/staff-api';
@@ -518,6 +518,32 @@ describe('AuditLogView', () => {
         to: '2026-10-17T04:00:00.000Z',
       }),
     );
+  });
+
+  it('SEC-043-bis: abre con los filtros de la URL (quién, recibos y días del turno)', async () => {
+    mockedList.mockResolvedValue(page());
+    const actor = '0193f2a0-1b2c-7d3e-8f40-5a6b7c8d9e0f';
+    const initial = auditFiltersFromSearch(
+      new URLSearchParams({ actorUserId: actor, resourceType: 'PAYMENT_RECEIPT', from: '2026-10-01', to: '2026-10-01' }),
+    );
+    render(<AuditLogView token="tok" initialFilters={initial} />);
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith('tok', {
+        limit: 50,
+        actorUserId: actor,
+        resourceType: 'PAYMENT_RECEIPT',
+        from: '2026-10-01T04:00:00.000Z',
+        to: '2026-10-02T04:00:00.000Z',
+      }),
+    );
+  });
+
+  it('SEC-043-bis: los filtros de la URL que no se reconocen se ignoran', () => {
+    expect(
+      auditFiltersFromSearch(
+        new URLSearchParams({ actorUserId: 'nadie', resourceType: 'NO_EXISTE', from: '2026-02-30', to: 'ayer' }),
+      ),
+    ).toEqual({});
   });
 
   it('DX-362: con otra sede activa, las horas y los días van en su zona (Berlín)', async () => {

@@ -104,6 +104,7 @@ export function closedCashSessionFixture(overrides: Partial<CashSessionDetail> =
     hasDifference: true,
     differenceReason: 'Faltó cambio',
     unjustifiedDifference: false,
+    receiptViews: null as { receipts: number; views: number } | null,
     notes: null,
     suggestedLockDate: '2026-10-17',
     lines: [

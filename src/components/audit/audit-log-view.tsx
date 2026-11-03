@@ -115,7 +115,7 @@ const copy = {
 
 const PAGE_SIZE = 50;
 
-interface Filters {
+export interface Filters {
   actorUserId: string;
   action: AuditAction | '';
   resourceType: AuditResourceType | '';
@@ -130,6 +130,28 @@ const NO_FILTERS: Filters = {
   from: '',
   to: '',
 };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * SEC-043-bis: filtros de partida desde la URL (`?actorUserId=&resourceType=
+ * &from=&to=`), para enlazar desde otra pantalla a «estos eventos». Lo que no
+ * se reconoce se ignora: nunca se pide a la API un filtro inválido.
+ */
+export function auditFiltersFromSearch(params: { get(name: string): string | null }): Partial<Filters> {
+  const out: Partial<Filters> = {};
+  const actor = params.get('actorUserId');
+  if (actor && UUID.test(actor)) out.actorUserId = actor;
+  const resource = params.get('resourceType');
+  if (resource && (AUDIT_RESOURCE_OPTIONS as string[]).includes(resource)) {
+    out.resourceType = resource as AuditResourceType;
+  }
+  const from = params.get('from');
+  const to = params.get('to');
+  if (from && isCivilDay(from)) out.from = from;
+  if (to && isCivilDay(to)) out.to = to;
+  return out;
+}
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -161,6 +183,8 @@ interface AuditLogViewProps {
    */
   patientId?: string;
   onClearPatient?: () => void;
+  /** SEC-043-bis: filtros con los que se abre (de la URL). */
+  initialFilters?: Partial<Filters>;
 }
 
 /**
@@ -181,9 +205,9 @@ interface AuditLogViewProps {
  * «Falta un dato de la sede» con su reintento, nunca otra zona ni otro
  * formato (G1-B).
  */
-export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewProps) {
+export function AuditLogView({ token, patientId, onClearPatient, initialFilters }: AuditLogViewProps) {
   const locked = Boolean(patientId) && !onClearPatient;
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [filters, setFilters] = useState<Filters>(() => ({ ...NO_FILTERS, ...initialFilters }));
   // Pila de cursores: el último es la página que se ve; `null` = la primera.
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   // El reloj de la pantalla. Hasta tenerlo no se pide nada: sin él no hay

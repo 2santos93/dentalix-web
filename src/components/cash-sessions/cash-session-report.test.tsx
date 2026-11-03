@@ -191,6 +191,52 @@ describe('CashSessionReport (DX-027)', () => {
     expect(screen.getByText('Nota de quien contó: Conté dos veces el cajón')).toBeInTheDocument();
   });
 
+  describe('recibos consultados antes de cerrar (SEC-043-bis)', () => {
+    const withViews = (receiptViews: { receipts: number; views: number } | null, linkSessions = true) => {
+      const base = closedCashSessionFixture();
+      const closing = { ...base.closing!, blind: true, receiptViews };
+      render(<CashSessionReport session={{ ...base, closing, closings: [closing] }} linkSessions={linkSessions} />);
+    };
+
+    it('lo dice con el enlace a la auditoría filtrada por quien cerró, los recibos y los días del turno', () => {
+      withViews({ receipts: 3, views: 5 });
+      const line = screen.getByTestId('closing-receipt-views');
+      expect(line).toHaveTextContent('Consultó 3 recibos de esta caja antes de cerrar (5 consultas).');
+      const link = within(line).getByRole('link', { name: 'Ver en la auditoría' });
+      const href = new URL(link.getAttribute('href')!, 'http://x');
+      expect(href.pathname).toBe('/settings/auditoria');
+      expect(Object.fromEntries(href.searchParams)).toEqual({
+        actorUserId: 'u-recep',
+        resourceType: 'PAYMENT_RECEIPT',
+        from: '2026-10-17',
+        to: '2026-10-17',
+      });
+    });
+
+    it('un recibo consultado una vez: en singular y sin el paréntesis', () => {
+      withViews({ receipts: 1, views: 1 });
+      expect(screen.getByTestId('closing-receipt-views')).toHaveTextContent(
+        /^Consultó 1 recibo de esta caja antes de cerrar\. Ver en la auditoría$/,
+      );
+    });
+
+    it('sin consultas no dice nada', () => {
+      withViews({ receipts: 0, views: 0 });
+      expect(screen.queryByTestId('closing-receipt-views')).not.toBeInTheDocument();
+    });
+
+    it('para recepción (null) no hay línea', () => {
+      withViews(null);
+      expect(screen.queryByTestId('closing-receipt-views')).not.toBeInTheDocument();
+    });
+
+    it('en la vista imprimible va sin enlace', () => {
+      withViews({ receipts: 2, views: 2 }, false);
+      const line = screen.getByTestId('closing-receipt-views');
+      expect(within(line).queryByRole('link')).not.toBeInTheDocument();
+    });
+  });
+
   it('cierre a ciegas sin motivo que no cuadró (SEC-043): «Diferencia sin justificar» para revisar', () => {
     const base = closedCashSessionFixture();
     const closing = { ...base.closing!, blind: true, differenceReason: null, unjustifiedDifference: true };

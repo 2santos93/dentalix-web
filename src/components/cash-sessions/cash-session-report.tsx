@@ -59,6 +59,12 @@ const copy = {
   lockDate: 'Fecha de bloqueo sugerida',
   lockDateHint: 'Para el cierre contable de la sede (aún no bloquea nada).',
   blindClose: 'Cerrada con arqueo ciego.',
+  // SEC-043-bis: solo llega para ADMIN. El recibo lleva el importe que el
+  // arqueo ciego oculta en Abonos.
+  receiptViews: (receipts: number, views: number) =>
+    `Consultó ${receipts === 1 ? '1 recibo' : `${receipts} recibos`} de esta caja antes de cerrar` +
+    (views > receipts ? ` (${views} consultas).` : '.'),
+  receiptViewsLink: 'Ver en la auditoría',
   paymentsTitle: 'Cobros del turno',
   // DX-516: ajustes por medio de pago que entran con los abonos.
   paymentAdjustments: (amount: string) => `${amount} por ajustes del medio`,
@@ -361,6 +367,22 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
           </DescriptionList>
         ) : null}
         {closing?.blind ? <p className="mt-3 text-xs text-muted">{copy.blindClose}</p> : null}
+        {closing?.receiptViews && closing.receiptViews.receipts > 0 ? (
+          <p className="mt-2 text-sm" data-testid="closing-receipt-views">
+            {copy.receiptViews(closing.receiptViews.receipts, closing.receiptViews.views)}
+            {linkSessions ? (
+              <>
+                {' '}
+                <Link
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                  href={receiptViewsAuditHref(session.openedOn, closing.suggestedLockDate, closing.closedBy.id)}
+                >
+                  {copy.receiptViewsLink}
+                </Link>
+              </>
+            ) : null}
+          </p>
+        ) : null}
       </Section>
 
       {session.payments ? (
@@ -501,6 +523,20 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
     </article>
     </HeadingLevel.Provider>
   );
+}
+
+/**
+ * SEC-043-bis: la auditoría filtrada por quien cerró, los recibos y los días
+ * del turno (de la apertura al cierre, en la zona de la sede).
+ */
+function receiptViewsAuditHref(fromDay: string, toDay: string, actorUserId: string): string {
+  const params = new URLSearchParams({
+    actorUserId,
+    resourceType: 'PAYMENT_RECEIPT',
+    from: fromDay,
+    to: toDay,
+  });
+  return `/settings/auditoria?${params.toString()}`;
 }
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
