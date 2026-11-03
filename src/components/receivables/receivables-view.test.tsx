@@ -58,6 +58,8 @@ function row(overrides: Partial<AgingRow> = {}): AgingRow {
         oldestAgeDays: 120,
         ageApproximate: true,
         nextInstallment: null,
+        paymentsWithoutRateCount: 0,
+        rateProviderTimedOut: false,
       },
     ],
     lastPayment: { paidOn: '2026-09-30', amount: 50000, currency: 'VES' },

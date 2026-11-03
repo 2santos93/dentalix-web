@@ -18,6 +18,8 @@ import { clinicLocation } from '@/lib/test/locations';
 import { tokenForRole } from '@/lib/test/data-consents';
 import { cashSessionFixture } from '@/lib/test/cash-session';
 import { getReceivablesSummary, type ReceivablesSummary } from './inicio-api';
+import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
+import { withoutRateCopy } from '@/components/payments/without-rate-notice';
 import { getWorkQueuesSummary, type WorkQueueItem, type WorkQueueKey } from '@/lib/work-queues/work-queues-api';
 import { WorkQueuesProvider } from '@/components/work-queues/work-queues-context';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -463,13 +465,32 @@ describe('Inicio · ADMIN', () => {
     expect(screen.queryByText(/Cifras incompletas/)).not.toBeInTheDocument();
   });
 
-  it('Cartera por antigüedad: avisa si falta contar abonos en otra moneda (DX-472-bis)', async () => {
+  it('Cartera por antigüedad, «sin tasa»: el mismo aviso que el estado de cuenta, sin reintento (DX-472-ter)', async () => {
     m.receivables.mockResolvedValue({ ...receivables, paymentsWithoutRateCount: 2 });
     render(<DashboardView token={tokenForRole('ADMIN')} />);
-    await screen.findByTestId('aging-VES');
-    expect(
-      screen.getByText('Cifras incompletas: falta contar 2 abonos en otra moneda. El detalle está en la cartera.'),
-    ).toBeInTheDocument();
+    const section = await screen.findByRole('region', { name: 'Cartera por antigüedad' });
+    await within(section).findByTestId('aging-VES');
+    const notice = within(section).getByText(withoutRateCopy.title(2)).closest('[role="status"]');
+    expect(notice).toHaveTextContent(withoutRateCopy.title(2));
+    expect(notice).toHaveTextContent(withoutRateCopy.body);
+    expect(notice).not.toHaveTextContent(rateProviderCopy.title);
+    expect(within(section).queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+  });
+
+  it('Cartera por antigüedad, proveedor sin respuesta: el aviso del estado de cuenta y «Reintentar» vuelve a pedir (DX-472-ter)', async () => {
+    m.receivables.mockResolvedValueOnce({ ...receivables, paymentsWithoutRateCount: 1, rateProviderTimedOut: true });
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const section = await screen.findByRole('region', { name: 'Cartera por antigüedad' });
+    await within(section).findByTestId('aging-VES');
+    expect(within(section).getByText(rateProviderCopy.title)).toBeInTheDocument();
+    expect(within(section).getByText(rateProviderCopy.notCounted(1))).toBeInTheDocument();
+    expect(within(section).queryByText(withoutRateCopy.title(1))).not.toBeInTheDocument();
+    const calls = m.receivables.mock.calls.length;
+    await userEvent.click(within(section).getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(m.receivables.mock.calls.length).toBe(calls + 1));
+    // Ya respondió: sin aviso.
+    await within(section).findByTestId('aging-VES');
+    expect(within(section).queryByText(rateProviderCopy.title)).not.toBeInTheDocument();
   });
 
   it('un error de Hoy es del bloque (escalón 1) y su reintento vuelve a pedir', async () => {
