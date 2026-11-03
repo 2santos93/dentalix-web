@@ -8,7 +8,6 @@ import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ItemBillableValue, ItemPaidValue, ItemPendingValue } from '@/components/treatment-plans/item-paid-cell';
-import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
 
 const planItemsBalanceCopy = {
   table: 'Cobrado por ítem del plan',
@@ -22,6 +21,16 @@ const planItemsBalanceCopy = {
   empty: 'Este plan todavía no tiene ítems.',
   // Sin "Intenta de nuevo.": SectionError trae su propio botón.
   loadError: 'No pudimos cargar el detalle por ítem.',
+  // DX-472-bis: el aviso «sin tasa» (o del proveedor) va UNA vez, arriba del
+  // estado de cuenta; aquí solo se explica por qué lo cobrado no llega.
+  withoutRate: (n: number) =>
+    n === 1
+      ? '1 abono sin tasa todavía no cuenta aquí: el aviso de arriba dice cuál es y qué hacer.'
+      : `${n} abonos sin tasa todavía no cuentan aquí: el aviso de arriba dice cuáles son y qué hacer.`,
+  providerTimedOut: (n: number) =>
+    n === 1
+      ? '1 abono en otra moneda todavía no cuenta aquí: el proveedor de tasas no respondió (aviso de arriba).'
+      : `${n} abonos en otra moneda todavía no cuentan aquí: el proveedor de tasas no respondió (aviso de arriba).`,
 };
 
 const copy = planItemsBalanceCopy;
@@ -30,7 +39,8 @@ const copy = planItemsBalanceCopy;
  * El detalle «Ver por ítem» de un plan en el estado de cuenta (DX-051):
  * recepción no abre el plan de tratamiento (clínico), así que aquí ve qué
  * cubre lo cobrado, ítem por ítem, y lo que queda «sin imputar». Solo lectura:
- * reasignar es del ADMIN, desde el plan. Se monta al abrirse el desplegable,
+ * reasignar es del ADMIN, desde el plan. Los avisos de tasa van arriba del
+ * estado de cuenta, no aquí (DX-472-bis). Se monta al abrirse el desplegable,
  * así que carga entonces (`GET /treatment-plans/:id/balance`) y no antes. Las
  * cifras van en la moneda que dice el propio saldo (`planCurrency`), con el
  * formato de la sede y el código ISO (DX-386).
@@ -133,10 +143,16 @@ export function PlanItemsBalance({ token, planId }: { token: string; planId: str
             </dl>
           ) : null}
           {/* Sin él, Cobrado + Sin imputar no llega a lo «Abonado» del plan y
-              nada lo explica. DX-375: si son abonos «sin tasa», el aviso lo
-              dice (y cómo resolverlo) en vez de la nota. */}
+              nada lo explica. DX-472-bis: si son abonos «sin tasa» (o que el
+              proveedor no convirtió), una línea que remite al aviso de arriba
+              del estado de cuenta, que ya los lista y dice qué hacer: un solo
+              aviso por pantalla (DESIGN.md › Callout). */}
           {balance.paymentsWithoutRate.length > 0 ? (
-            <WithoutRateNotice token={token} payments={balance.paymentsWithoutRate} />
+            <p className="text-sm text-muted">
+              {balance.rateProviderTimedOut
+                ? copy.providerTimedOut(balance.paymentsWithoutRate.length)
+                : copy.withoutRate(balance.paymentsWithoutRate.length)}
+            </p>
           ) : balance.unconvertedPaymentsCount > 0 ? (
             <p className="text-sm text-muted">{allocationCopy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>
           ) : null}

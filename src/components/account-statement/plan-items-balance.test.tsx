@@ -148,10 +148,12 @@ it('unconverted notice explains abonos without a rate, in singular or plural', a
   ).toBeInTheDocument();
 });
 
-// DX-375: los abonos «sin tasa» no cuentan en el saldo; el aviso lo dice,
-// con la lista y el camino a Ajustes › Tasa de cambio según el rol, y sustituye
-// a la nota de «sin convertir» (son los mismos abonos).
-it('abonos sin tasa: aviso con la lista y, para recepción, a quién pedir la tasa', async () => {
+// DX-472-bis: el aviso «sin tasa» va UNA vez, arriba del estado de cuenta
+// (con la lista y el camino a Ajustes según el rol, ver without-rate-notice y
+// account-statement-view). El detalle por ítem solo explica por qué lo cobrado
+// no llega a lo abonado, sin repetir el aviso, y sustituye a la nota de «sin
+// convertir» (son los mismos abonos).
+it('abonos sin tasa: una línea que remite al aviso de arriba, sin repetirlo', async () => {
   mockedBalance.mockResolvedValue(
     balanceFixture({
       unconvertedPaymentsCount: 1,
@@ -159,36 +161,32 @@ it('abonos sin tasa: aviso con la lista y, para recepción, a quién pedir la ta
     }),
   );
   render(<PlanItemsBalance token={tokenForRole('RECEPTION')} planId="plan-1" />);
-  const notice = (await screen.findByText(withoutRateCopy.title(1))).closest('[role="status"]');
-  expect(await within(notice as HTMLElement).findByText('USD 50,00 del 30/10/2026')).toBeInTheDocument();
-  expect(notice).toHaveTextContent(withoutRateCopy.otherRoles);
+  expect(
+    await screen.findByText('1 abono sin tasa todavía no cuenta aquí: el aviso de arriba dice cuál es y qué hacer.'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(withoutRateCopy.title(1))).not.toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.queryByRole('link')).not.toBeInTheDocument();
   expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
 });
 
-it('abonos sin tasa con fuente manual: al ADMIN le enlaza a Ajustes › Tasa de cambio', async () => {
+it('proveedor sin responder: la línea no habla de «sin tasa»', async () => {
   mockedBalance.mockResolvedValue(
     balanceFixture({
-      paymentsWithoutRate: [{ paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' }],
+      rateProviderTimedOut: true,
+      paymentsWithoutRate: [
+        { paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' },
+        { paymentId: 'p10', amount: 20, currency: 'USD', paidOn: '2026-10-31' },
+      ],
     }),
   );
   render(<PlanItemsBalance token={tokenForRole('ADMIN')} planId="plan-1" />);
-  expect(await screen.findByRole('link', { name: withoutRateCopy.adminLink })).toHaveAttribute(
-    'href',
-    '/settings/tasa-de-cambio',
-  );
-});
-
-it('abonos sin tasa con fuente automática: al ADMIN no le pide registrar una tasa, le explica pasar a manual (DX-386)', async () => {
-  mockedSettings.mockResolvedValue({ source: 'AUTOMATIC', manualSince: null, baseCurrency: 'USD' });
-  mockedBalance.mockResolvedValue(
-    balanceFixture({
-      paymentsWithoutRate: [{ paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' }],
-    }),
-  );
-  render(<PlanItemsBalance token={tokenForRole('ADMIN')} planId="plan-1" />);
-  expect(await screen.findByText(withoutRateCopy.automatic)).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: withoutRateCopy.switchToManualLink })).toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: withoutRateCopy.adminLink })).not.toBeInTheDocument();
+  expect(
+    await screen.findByText(
+      '2 abonos en otra moneda todavía no cuentan aquí: el proveedor de tasas no respondió (aviso de arriba).',
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/sin tasa/)).not.toBeInTheDocument();
 });
 
 it('cancelled plan shows no amounts to charge and the unallocated figure', async () => {

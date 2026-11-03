@@ -17,8 +17,9 @@ import { API_URL } from './support/urls';
  *  1. ADMIN, plan de tratamiento: el aviso «1 abono sin tasa» va junto a las
  *     cifras, el abono lleva «Sin tasa» y el enlace lleva a Ajustes › Tasa de
  *     cambio, donde la tasa se registra y queda corregible (nadie la usó).
- *  2. RECEPCIÓN, estado de cuenta › «Ver por ítem»: el mismo aviso, sin enlace
- *     y diciendo que lo pida a un administrador.
+ *  2. RECEPCIÓN, estado de cuenta: el aviso, una sola vez arriba, sin enlace
+ *     y diciendo que lo pida a un administrador; «Ver por ítem» solo remite a
+ *     él (DX-472-bis).
  *  3. DX-386, otra clínica con la fuente AUTOMÁTICA y sin tasa del proveedor
  *     (la suite no tiene clave): el aviso del ADMIN no invita a registrar una
  *     tasa manual; dice que la del proveedor aún no está y explica pasar a
@@ -199,22 +200,29 @@ test('ADMIN: la tasa registrada desde el aviso se puede corregir mientras ningú
   await expect(page.getByText(`Tasa de ${LOCAL} corregida.`)).toBeVisible();
 });
 
-test('RECEPCIÓN: «Ver por ítem» avisa «sin tasa» sin enlace y dice a quién pedirla', async ({ page }) => {
+test('RECEPCIÓN: el estado de cuenta avisa «sin tasa» una vez, sin enlace, y «Ver por ítem» remite a ese aviso', async ({
+  page,
+}) => {
   await page.setViewportSize(VIEWPORTS[1]);
   await loginAs(page, origin, receptionEmail, password);
   await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
   const statement = page.locator('#tabpanel-account-statement');
-  const toggle = statement.getByRole('button', { name: /^Ver por ítem/ });
-  await expect(toggle).toBeVisible({ timeout: 15_000 });
-  await toggle.click();
-  // DX-472: el mismo aviso va también arriba del estado de cuenta; aquí, el
-  // del detalle por ítem que abre el botón.
-  const detail = statement.locator(`#${await toggle.getAttribute('aria-controls')}`);
-  const notice = detail.getByRole('status').filter({ hasText: '1 abono sin tasa' });
-  await expect(notice).toBeVisible({ timeout: 15_000 });
-  await expect(statement.getByRole('status').filter({ hasText: '1 abono sin tasa' })).toHaveCount(2);
+  // DX-472 (A1) puso el aviso arriba del estado de cuenta. DX-472-bis: es el
+  // único (DESIGN.md › Callout: lo que hay que saber en ESTA pantalla, una
+  // vez); repetirlo en el detalle era ruido para recepción.
+  const notice = statement.getByRole('status').filter({ hasText: '1 abono sin tasa' });
+  await expect(notice).toHaveCount(1, { timeout: 15_000 });
   await expect(notice).toContainText('pide a un administrador que revise la tasa de cambio de ese día');
   await expect(notice.getByRole('link')).toHaveCount(0);
+
+  const toggle = statement.getByRole('button', { name: /^Ver por ítem/ });
+  await toggle.click();
+  const detail = statement.locator(`#${await toggle.getAttribute('aria-controls')}`);
+  // El detalle explica por qué lo cobrado no llega a lo abonado y remite al aviso.
+  const line = detail.getByText('1 abono sin tasa todavía no cuenta aquí: el aviso de arriba dice cuál es y qué hacer.');
+  await expect(line).toBeVisible({ timeout: 15_000 });
+  await expect(detail.getByRole('status').filter({ hasText: '1 abono sin tasa' })).toHaveCount(0);
+  await expect(notice).toHaveCount(1);
   await expectNoHorizontalScroll(page);
 });
 
