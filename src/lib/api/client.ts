@@ -23,11 +23,32 @@ const UNKNOWN_LOCATION = 'unknown location';
 // miembro ya no puede usar (un ADMIN le acotó las sedes y su sesión se renovó).
 const LOCATION_NOT_ALLOWED = 'LOCATION_NOT_ALLOWED';
 
+// SEC-014: código estable del 400 con el que la API rechaza escribir en una
+// sede desactivada. Trae `locationId`: la sede desactivada.
+const LOCATION_INACTIVE = 'LOCATION_INACTIVE';
+
+/**
+ * SEC-014: `true` si la API rechazó una escritura porque la sede de la
+ * CABECERA está desactivada (otra pestaña o un ADMIN la desactivó con esta
+ * abierta). Si la desactivada es la de un dato del cuerpo (el sillón o la
+ * caja de otra sede), la cabecera vale y no se toca.
+ */
+export function isInactiveLocationError(error: ApiError, sentLocationId: string | null): boolean {
+  return (
+    sentLocationId !== null &&
+    error.status === 400 &&
+    error.code === LOCATION_INACTIVE &&
+    error.locationId === sentLocationId
+  );
+}
+
 /**
  * `true` si la API rechazó la sede enviada en `X-Location-Id` y conviene
  * soltarla y reintentar sin cabecera: o no es del tenant (400 «unknown
  * location»: sede borrada, desactivada o de un reseed), o existe pero ya no
- * está entre las permitidas del miembro (DX-089, 403 LOCATION_NOT_ALLOWED).
+ * está entre las permitidas del miembro (DX-089, 403 LOCATION_NOT_ALLOWED),
+ * o está desactivada (SEC-014, 400 LOCATION_INACTIVE de una escritura: ver
+ * `isInactiveLocationError`, que NO se reintenta).
  *
  * OJO con el 403: la API lanza ese mismo código al tocar un RECURSO de otra
  * sede (abrir una cita de l3 con l1 activa); ahí la sede activa es válida y no
@@ -44,6 +65,7 @@ export function isStaleLocationError(
 ): boolean {
   if (!sentLocationId) return false;
   if (error.status === 400 && error.message.toLowerCase().includes(UNKNOWN_LOCATION)) return true;
+  if (isInactiveLocationError(error, sentLocationId)) return true;
   if (error.status !== 403 || error.code !== LOCATION_NOT_ALLOWED) return false;
   const allowedBySentToken = getTokenAllowedLocationIds(token);
   return allowedBySentToken !== null && !allowedBySentToken.includes(sentLocationId);
@@ -419,6 +441,11 @@ async function doFetch(
     // permitidas, que siempre vale. Ver `isStaleLocationError`.
     if (allowLocationReset && isStaleLocationError(error, sentLocationId, opts.token)) {
       setActiveLocationId(null);
+      // SEC-014: la sede desactivada se suelta (las pantallas montadas
+      // recargan con `onLocationChange`), pero la ESCRITURA no se repite sin
+      // cabecera: caería en otra sede sin que nadie la eligiera. Se devuelve
+      // el error («Esta sede está desactivada… Elige una sede activa»).
+      if (isInactiveLocationError(error, sentLocationId)) throw error;
       return doFetch(path, opts, allowRefresh, false);
     }
     throw error;
