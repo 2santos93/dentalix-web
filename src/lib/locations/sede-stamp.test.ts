@@ -106,6 +106,28 @@ describe('stampPainters', () => {
 });
 
 describe('useSedeStamp', () => {
+  it('keeps the identity of the stamp and its painters across renders', async () => {
+    listLocationsMock.mockResolvedValue([caracas, berlin]);
+    const { result, rerender } = renderHook(() => useSedeStamp('tok', ['berlin']));
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    const first = result.current;
+    rerender();
+    rerender();
+    expect(result.current).toBe(first);
+    expect(result.current.date).toBe(first.date);
+  });
+
+  it('marks a screen failure as scope «screen» and a row failure as scope «row»', async () => {
+    listLocationsMock.mockResolvedValue([caracas]);
+    const row = renderHook(() => useSedeStamp('tok', ['fantasma']));
+    await waitFor(() => expect(row.result.current.notice).not.toBeNull());
+    expect(row.result.current.notice?.scope).toBe('row');
+    listLocationsMock.mockRejectedValue(new Error('red'));
+    const screen = renderHook(() => useSedeStamp('tok'));
+    await waitFor(() => expect(screen.result.current.notice).not.toBeNull());
+    expect(screen.result.current.notice?.scope).toBe('screen');
+  });
+
   afterEach(() => {
     act(() => setActiveLocationId(null));
     listLocationsMock.mockReset();

@@ -50,8 +50,12 @@ export interface SedePainters {
 export interface SedeStamp extends SedePainters {
   /** El reloj de la pantalla está listo (el aviso no se pinta mientras carga). */
   ready: boolean;
+  /**
+   * `scope: 'screen'` cuando falla la lista o la sede de la pantalla (lo muestra el dueño de la
+   * página, una vez); `'row'` cuando falla la sede de una fila (lo muestra su sección).
+   */
   /** El aviso de UNA sede sin formato: el error de la pantalla o la primera de `locationIds` que falle. */
-  notice: (SedeClockError & { retry: () => void }) | null;
+  notice: (SedeClockError & { retry: () => void; scope: 'screen' | 'row' }) | null;
   /** El reloj de la pantalla, para lo que lo pide entero (`appointmentLine`, los modales de anestesia y sedación). */
   clock: AgendaClock | null;
 }
@@ -123,23 +127,28 @@ export function stampPainters(clock: AgendaClock | null): SedePainters {
  */
 export function useSedeStamp(token: string, locationIds?: readonly (string | null | undefined)[]): SedeStamp {
   const state = useLocationsState(token);
-  const result = useMemo(
-    () => (state.status === 'ready' ? sedeClockFor(state.locations, state.activeLocationId) : null),
-    [state],
-  );
+  // Dependencias estables (la lista y la sede activa), no `state`, que es un objeto nuevo en cada render:
+  // así el reloj, los pintores y el `stamp` conservan su identidad entre renders.
+  const locations = state.status === 'ready' ? state.locations : null;
+  const activeId = state.status === 'ready' ? state.activeLocationId : null;
+  const failed = state.status === 'error';
+  const retry = state.retry;
+  const result = useMemo(() => (locations ? sedeClockFor(locations, activeId) : null), [locations, activeId]);
   const clock = result?.status === 'ready' ? result.clock : null;
   const painters = useMemo(() => stampPainters(clock), [clock]);
 
-  let notice: SedeStamp['notice'] = null;
-  if (state.status === 'error') {
-    notice = { status: 'error', kind: 'locale', message: SEDE_LOCALE_ERROR, locationId: null, retry: state.retry };
-  } else if (result && result.status === 'error') {
-    notice = { ...result, retry: state.retry };
-  } else if (clock) {
-    const failing = locationIds?.find((id) => id && !clock.of(id));
-    if (failing) {
-      notice = { status: 'error', kind: 'locale', message: SEDE_LOCALE_ERROR, locationId: failing, retry: state.retry };
+  // Qué sede de las filas falla (una sola: el aviso es uno por pantalla).
+  const failingRow = clock ? (locationIds?.find((id) => id && !clock.of(id)) ?? null) : null;
+  const notice = useMemo<SedeStamp['notice']>(() => {
+    if (failed) {
+      return { status: 'error', kind: 'locale', message: SEDE_LOCALE_ERROR, locationId: null, retry, scope: 'screen' };
     }
-  }
-  return { ...painters, ready: clock !== null, notice, clock };
+    if (result && result.status === 'error') return { ...result, retry, scope: 'screen' };
+    if (failingRow) {
+      return { status: 'error', kind: 'locale', message: SEDE_LOCALE_ERROR, locationId: failingRow, retry, scope: 'row' };
+    }
+    return null;
+  }, [failed, result, failingRow, retry]);
+
+  return useMemo(() => ({ ...painters, ready: clock !== null, notice, clock }), [painters, clock, notice]);
 }

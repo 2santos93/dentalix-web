@@ -15,6 +15,7 @@ const failing = (retry = jest.fn()): SedeStamp['notice'] => ({
   message: SEDE_LOCALE_ERROR,
   locationId: 'berlin',
   retry,
+  scope: 'row',
 });
 
 afterEach(() => useAuthStore.setState({ accessToken: null }));
