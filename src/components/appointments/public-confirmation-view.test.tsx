@@ -60,14 +60,65 @@ describe('PublicConfirmationView', () => {
     expect(await screen.findByRole('heading', { name: 'Clínica Sonrisa' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByText(/hola ana/i)).toBeInTheDocument();
-    expect(screen.getByText(/martes, 20 de octubre/i)).toBeInTheDocument();
-    expect(screen.getByText('14:00–14:30')).toBeInTheDocument();
+    // 14:00 UTC es 10:00 a. m. en Caracas (la sede de la cita), no la hora del navegador.
+    expect(screen.getByText(/martes 20 de octubre de 2026/i)).toBeInTheDocument();
+    expect(screen.getByText('10:00 a. m. – 10:30 a. m.')).toBeInTheDocument();
     expect(screen.getByText('Dra. Pérez')).toBeInTheDocument();
     expect(screen.getByText('Sede Norte')).toBeInTheDocument();
     expect(screen.getByText('Av. Libertador 100')).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('tok-1');
     // Abrir NO responde: solo el clic del paciente lo hace.
     expect(respond).not.toHaveBeenCalled();
+  });
+
+  it('DX-354: sede Tokio h23, el día y el rango de hora son los de la sede, no los del navegador', async () => {
+    get.mockResolvedValueOnce(
+      view({
+        appointment: {
+          ...APPOINTMENT,
+          start: '2026-10-20T16:00:00.000Z',
+          end: '2026-10-20T16:30:00.000Z',
+          timeZone: 'Asia/Tokyo',
+          locale: 'ja-JP',
+          hourCycle: 'h23',
+        },
+      }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+    // 16:00 UTC ya es el miércoles 21, 01:00 en Tokio.
+    expect(screen.getByText(/miércoles 21 de octubre de 2026/i)).toBeInTheDocument();
+    expect(screen.getByText('01:00–01:30')).toBeInTheDocument();
+  });
+
+  it('DX-354: sede h12 en-US, el rango lleva «a. m./p. m.» y el cargo por inasistencia el código ISO', async () => {
+    get.mockResolvedValueOnce(
+      view({
+        appointment: { ...APPOINTMENT, timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' },
+        cancellationPolicy: {
+          policyVersionId: 'pv-1',
+          noticeHours: 24,
+          text: '',
+          suggestedFee: 1234.5,
+          currency: 'USD',
+        },
+      }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+    expect(screen.getByText('10:00 a. m. – 10:30 a. m.')).toBeInTheDocument();
+    expect(screen.getByTestId('public-cancellation-policy').textContent?.replace(/\s/g, ' ')).toContain('USD 1,234.50');
+  });
+
+  it('DX-354: sin formato de la sede, «—» y «Llama a la clínica», nunca la hora del navegador', async () => {
+    get.mockResolvedValueOnce(
+      view({ appointment: { ...APPOINTMENT, timeZone: null, locale: null, hourCycle: null } }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+    expect(screen.getByText('Llama a la clínica para confirmar la hora de tu cita.')).toBeInTheDocument();
+    expect(screen.queryByText(/14:00|10:00|octubre/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('—')).toHaveLength(2);
   });
 
   it('aplica el color de la clínica al bloque (white-label)', async () => {

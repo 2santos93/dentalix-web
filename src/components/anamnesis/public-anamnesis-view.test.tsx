@@ -8,7 +8,7 @@ import {
   submitPublicAnamnesis,
   type PublicAnamnesis,
 } from '@/lib/anamnesis/anamnesis-api';
-import { REGIONAL_VE } from '@/lib/test/document-regional';
+import { REGIONAL_DE, REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/anamnesis/anamnesis-api', () => ({
   ...jest.requireActual('../../lib/anamnesis/anamnesis-api'),
@@ -77,6 +77,21 @@ describe('PublicAnamnesisView (DX-099)', () => {
     expect(screen.getByText('Clínica Sonrisas')).toBeInTheDocument();
     // Nada precargado: ninguna respuesta marcada.
     expect(screen.getAllByRole('radio').every((r) => !(r as HTMLInputElement).checked)).toBe(true);
+  });
+
+  it('DX-354: la caducidad sigue el formato de la sede de referencia de la clínica, no el del navegador', async () => {
+    mockedGet.mockResolvedValue(fixture({ regional: REGIONAL_DE }));
+    render(<PublicAnamnesisView linkToken="tok" />);
+    // 15:00 UTC es 16:00 en Berlín (CET).
+    expect(await screen.findByText('El enlace caduca el 30.10.2026 16:00.')).toBeInTheDocument();
+  });
+
+  it('DX-354: sin formato de la sede, «—» y «llama a la clínica»', async () => {
+    mockedGet.mockResolvedValue(fixture({ regional: null }));
+    render(<PublicAnamnesisView linkToken="tok" />);
+    const line = await screen.findByText(/El enlace caduca el —\./);
+    expect(line).toHaveTextContent('Llama a la clínica para saber hasta cuándo es válido el enlace.');
+    expect(line.textContent).not.toMatch(/\d{2}[./]\d{2}[./]\d{4}/);
   });
 
   it('caducado, anulado o ya usado (410) → «Este enlace ya no es válido, contacte con su clínica.»', async () => {

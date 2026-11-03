@@ -35,15 +35,11 @@ const SEDELESS_HELPERS = new Set([
   'formatDateLabel',
 ]);
 
-const PUBLIC_PAGE = 'Página pública: la API no manda la zona ni el formato de la sede (anotado en el informe de DX-378).';
 const ZONE_24H = 'Ya usa la zona de la sede, pero con 24 h fijas: falta pasar a fmt.dateTime/fmt.time.';
 const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del navegador: pendiente de migrar a la sede.';
 
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
-  'components/anamnesis/public-anamnesis-view.tsx': PUBLIC_PAGE,
-  'components/appointments/public-confirmation-view.tsx': PUBLIC_PAGE,
-  'components/reminders/public-reminder-opt-out-view.tsx': PUBLIC_PAGE,
   'components/cash-sessions/cash-shifts-view.tsx': ZONE_24H,
   'lib/clinical/medical-alerts.ts': ZONE_24H,
   'components/anamnesis/anamnesis-inbox-view.tsx': STAMP,

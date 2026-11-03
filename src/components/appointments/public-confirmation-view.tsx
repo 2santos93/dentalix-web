@@ -21,8 +21,7 @@ import {
   type PublicCancellationPolicy,
   type PublicConfirmation,
 } from '@/lib/appointments/confirmations-api';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatDateLabel, formatTime } from '@/lib/format/date';
+import { documentFormat, documentTexts, NO_DOCUMENT_FORMAT, type DocumentFormat } from '@/lib/format/document-format';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -68,6 +67,8 @@ const copy = {
   lateMessage:
     'Si cancelas ahora, cuenta como cancelación tardía según la política de la clínica. Si prefieres, pide que te llamemos para buscar otra hora.',
   acknowledge: 'He leído y acepto la política de cancelación de la clínica',
+  // DX-354: la sede de la cita no tiene zona, formato o reloj: no hay quien lo configure, así que se manda a la clínica.
+  noFormat: 'Llama a la clínica para confirmar la hora de tu cita.',
   acknowledgeRequired: (hours: number) =>
     `Para cancelar con menos de ${hours} h de aviso, marca que aceptas la política de cancelación.`,
 };
@@ -79,23 +80,44 @@ type LoadState =
   | { kind: 'ready'; data: PublicConfirmation };
 
 /**
- * La página pública no recibe la zona ni el reloj de la sede (la API no los
- * manda en la confirmación): el día y la hora salen en los del navegador del
- * paciente. Excepción listada en `src/architecture/sede-clock-guard.test.ts`.
+ * DX-354: el formato de la sede de la cita (zona, locale y reloj que manda la
+ * API, en crudo), no el del navegador del paciente. Si la sede no lo tiene,
+ * `null`: el día y la hora salen «—» y se manda a llamar a la clínica.
  */
-function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointment }) {
+function appointmentFormat(appointment: ConfirmationAppointment): DocumentFormat | null {
+  return documentFormat({
+    timeZone: appointment.timeZone ?? null,
+    locale: appointment.locale ?? null,
+    hourCycle: appointment.hourCycle ?? null,
+  });
+}
+
+function AppointmentSummary({
+  appointment,
+  format,
+}: {
+  appointment: ConfirmationAppointment;
+  format: DocumentFormat | null;
+}) {
+  const doc = documentTexts(format);
+  // En 12 h el rango lleva espacios alrededor del guion («9:00 a. m. – 9:30 a. m.»).
+  const separator = format?.fmt.hourCycle === 'h12' ? ' – ' : '–';
   const rows = [
     {
       icon: CalendarCheck,
       label: copy.dayLabel,
-      value: formatDateLabel(appointment.start, { weekday: 'long', day: 'numeric', month: 'long' }),
+      value: format
+        ? format.fmt.longDate(new Date(appointment.start), format.timeZone)
+        : NO_DOCUMENT_FORMAT,
       sub: null,
     },
     {
       icon: Clock,
       label: copy.timeLabel,
-      value: `${formatTime(appointment.start)}–${formatTime(appointment.end)}`,
-      sub: null,
+      value: format
+        ? `${doc.time(appointment.start)}${separator}${doc.time(appointment.end)}`
+        : NO_DOCUMENT_FORMAT,
+      sub: format ? null : copy.noFormat,
     },
     ...(appointment.providerName
       ? [{ icon: UserRound, label: copy.providerLabel, value: appointment.providerName, sub: null }]
@@ -134,13 +156,15 @@ function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointm
 function CancellationPolicyNotice({
   policy,
   isLate,
+  format,
 }: {
   policy: PublicCancellationPolicy;
   isLate: boolean;
+  format: DocumentFormat | null;
 }) {
   const fee =
     policy.suggestedFee !== null && policy.suggestedFee > 0 && policy.currency
-      ? formatCurrency(policy.suggestedFee, policy.currency)
+      ? documentTexts(format).amount(policy.suggestedFee, policy.currency)
       : null;
   return (
     <section
@@ -289,7 +313,12 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     <p className="mt-1 text-sm text-ink">{copy.responded[state.data.response]}</p>
                   )}
                 </div>
-                {state.data.appointment && <AppointmentSummary appointment={state.data.appointment} />}
+                {state.data.appointment && (
+                  <AppointmentSummary
+                    appointment={state.data.appointment}
+                    format={appointmentFormat(state.data.appointment)}
+                  />
+                )}
               </section>
             )}
 
@@ -301,11 +330,15 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   </span>{' '}
                   {copy.pendingLead}
                 </p>
-                <AppointmentSummary appointment={state.data.appointment} />
+                <AppointmentSummary
+                  appointment={state.data.appointment}
+                  format={appointmentFormat(state.data.appointment)}
+                />
                 {state.data.cancellationPolicy ? (
                   <CancellationPolicyNotice
                     policy={state.data.cancellationPolicy}
                     isLate={state.data.isLate}
+                    format={appointmentFormat(state.data.appointment)}
                   />
                 ) : null}
                 <div className="flex flex-col gap-3">
