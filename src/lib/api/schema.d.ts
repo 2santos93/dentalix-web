@@ -13393,7 +13393,7 @@ export interface components {
             /** @description DX-375: abonos vivos «sin tasa» (en otra moneda y sin tasa de su día): no cuentan en paid, así que el saldo está incompleto hasta que se registre la tasa (Ajustes › Tasa de cambio) y el barrido la congele. Vacío si no hay ninguno. */
             paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
             /**
-             * @description DX-054: el proveedor de tasas no respondió a tiempo (el saldo espera como mucho 4 s a las conversiones en vivo) o se sabe que no contesta: no es que falte la tasa. Los abonos que esperaban su tasa salen en paymentsWithoutRate y no suman en paid: el saldo está incompleto y volver a pedirlo lo completa cuando el proveedor responda. Nunca es un 500.
+             * @description DX-054: el proveedor de tasas no respondió a tiempo (el saldo espera como mucho 4 s a las conversiones en vivo), se sabe que no contesta o su cupo está agotado: no es que falte la tasa. Los abonos que esperaban su tasa salen en paymentsWithoutRate y no suman en paid: el saldo está incompleto y volver a pedirlo lo completa cuando el proveedor responda. Nunca es un 500.
              * @example false
              */
             rateProviderTimedOut: boolean;
@@ -14459,6 +14459,11 @@ export interface components {
             members: components["schemas"]["FamilyStatementMemberDto"][];
             /** @description Suma de los subtotales por moneda, al céntimo. */
             totals: components["schemas"]["FamilyCurrencyAmountsDto"][];
+            /**
+             * @description DX-472: abonos de la familia que no suman por no tener tasa (paymentsWithoutRate de sus planes): las cifras están incompletas.
+             * @example 0
+             */
+            paymentsWithoutRateCount: number;
             /**
              * @description DX-472: en algún plan de la familia, el proveedor de tasas no respondió a tiempo: las cifras están incompletas.
              * @example false

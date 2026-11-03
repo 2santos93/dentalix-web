@@ -665,4 +665,36 @@ describe('AccountStatementView: proveedor de tasas (DX-472)', () => {
     expect(within(usd).getByTestId('balance')).toHaveTextContent('200');
     expect(screen.queryByRole('region', { name: /resumen en VES/i })).not.toBeInTheDocument();
   });
+
+  it('un abono sin tasa se avisa arriba del resumen, sin «Reintentar»', async () => {
+    const plans = accountStatementFixture().plans;
+    mockedGet.mockResolvedValue(
+      accountStatementFixture({
+        plans: [
+          {
+            ...plans[0],
+            paymentsWithoutRate: [{ paymentId: 'p', amount: 3600, currency: 'VES', paidOn: '2026-10-30' }],
+          },
+        ],
+      }),
+    );
+    render(<AccountStatementView token="t" patientId="p-1" />);
+
+    expect(await screen.findByText('1 abono sin tasa')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+  });
+
+  it('una fila sin importes pero con cuota pendiente se sigue viendo', async () => {
+    const [row] = accountStatementFixture().summary;
+    mockedGet.mockResolvedValue(
+      accountStatementFixture({
+        summary: [
+          { ...row, currency: 'USD', budgeted: 0, paid: 0, balance: 0, convertedPaid: 0, convertedBalance: 0 },
+        ],
+      }),
+    );
+    render(<AccountStatementView token="t" patientId="p-1" />);
+
+    expect(await screen.findByRole('region', { name: /resumen en USD/i })).toBeInTheDocument();
+  });
 });

@@ -85,6 +85,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
   const { clinic, patient, range } = statement;
   // M1: con saldo migrado, el «Saldo» no es solo presupuestado − abonado.
   const summary = shownSummaryRows(statement.summary);
+  const withoutRate = statement.plans.flatMap((p) => p.paymentsWithoutRate);
   const withOpening = summary.some((row) => row.openingBalance > 0);
   const filtered = range.from !== null || range.to !== null;
 
@@ -145,6 +146,17 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
             <p className="mt-6 text-sm font-medium" data-testid="statement-incomplete">
               {rateProviderCopy.printed}
             </p>
+          ) : withoutRate.length > 0 ? (
+            <div className="mt-6 text-sm" data-testid="statement-without-rate">
+              <p className="font-medium">{statementCopy.withoutRateIncomplete(withoutRate.length)}</p>
+              <ul className="tabular-nums">
+                {withoutRate.map((p) => (
+                  <li key={p.paymentId}>
+                    {statementCopy.withoutRateItem(formatCurrency(p.amount, p.currency), formatCivilDate(p.paidOn))}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           {summary.length > 0 ? (
             <DocSection title={copy.summaryHeading}>

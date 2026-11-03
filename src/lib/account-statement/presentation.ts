@@ -27,6 +27,12 @@ export const statementCopy = {
   notCounted: 'No suma al saldo',
   // DX-472: lo entregado en otra moneda; «Abonado» ya lo lleva convertido.
   handedOver: (amount: string) => `Entregado: ${amount}`,
+  // DX-472: un abono «sin tasa» no suma: el impreso no puede parecer definitivo.
+  withoutRateIncomplete: (n: number) =>
+    n === 1
+      ? 'Cifras incompletas: 1 abono sin tasa de cambio no cuenta en el saldo.'
+      : `Cifras incompletas: ${n} abonos sin tasa de cambio no cuentan en el saldo.`,
+  withoutRateItem: (amount: string, date: string) => `${amount} del ${date}`,
   inFavor: 'a favor',
   noOverdue: 'Sin cuotas vencidas',
   overdueCount: (n: number) => (n === 1 ? '1 cuota vencida' : `${n} cuotas vencidas`),
@@ -155,10 +161,23 @@ export function installmentLabel(installment: AccountStatementInstallment): stri
  * (y detallada en él): repetirla parecería un saldo a favor que no existe.
  */
 export function shownSummaryRows<
-  T extends { budgeted: number; openingBalance: number; convertedPaid: number; convertedBalance: number },
+  T extends {
+    budgeted: number;
+    openingBalance: number;
+    convertedPaid: number;
+    convertedBalance: number;
+    overdueAmount: number;
+    nextInstallment?: unknown;
+  },
 >(rows: T[]): T[] {
   return rows.filter(
-    (r) => r.budgeted !== 0 || r.openingBalance !== 0 || r.convertedPaid !== 0 || r.convertedBalance !== 0,
+    (r) =>
+      r.budgeted !== 0 ||
+      r.openingBalance !== 0 ||
+      r.convertedPaid !== 0 ||
+      r.convertedBalance !== 0 ||
+      r.overdueAmount !== 0 ||
+      Boolean(r.nextInstallment),
   );
 }
 

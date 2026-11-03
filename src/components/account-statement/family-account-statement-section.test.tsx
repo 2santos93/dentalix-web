@@ -33,6 +33,7 @@ const amounts = (currency: string, budgeted: number, paid: number) => ({
 
 const family: FamilyAccountStatement = {
   rateProviderTimedOut: false,
+  paymentsWithoutRateCount: 0,
   issuedAt: '2026-10-17T15:00:00.000Z',
   clinic: { name: 'Clínica Sonrisas', logoUrl: null, fiscal: EMPTY_CLINIC_FISCAL },
   payer: { id: 'mother', firstName: 'Marta', lastName: 'Gil' },
@@ -133,5 +134,16 @@ describe('Estado de cuenta familiar (DX-203)', () => {
     cleanup();
     render(<FamilyAccountStatementDocument statement={withOpening} />);
     expect(screen.getByText('El saldo incluye el saldo migrado del programa anterior.')).toBeInTheDocument();
+  });
+
+  it('DX-472: los abonos sin tasa se avisan en pantalla y en el impreso', async () => {
+    mockedGet.mockResolvedValue({ ...family, paymentsWithoutRateCount: 2 });
+    render(<FamilyAccountStatementSection token="tok" patientId="mother" />);
+    const text = 'Cifras incompletas: 2 abonos sin tasa de cambio no cuentan en el saldo.';
+    expect(await screen.findByText(text)).toBeInTheDocument();
+
+    cleanup();
+    render(<FamilyAccountStatementDocument statement={{ ...family, paymentsWithoutRateCount: 2 }} />);
+    expect(screen.getByTestId('family-without-rate')).toHaveTextContent(text);
   });
 });

@@ -157,3 +157,25 @@ it.each([
   for (const figure of shown) expect(rowText).toContain(figure);
   expect(/\d,\d\d\b/.test(rowText)).toBe(cents);
 });
+
+describe('DX-472: el impreso no parece definitivo', () => {
+  const withoutRate = { paymentId: 'p', amount: 3600, currency: 'VES', paidOn: '2026-10-30' };
+
+  it('un abono sin tasa se dice y se detalla', () => {
+    const base = accountStatementFixture();
+    render(
+      <AccountStatementDocument
+        statement={{ ...base, plans: [{ ...base.plans[0], paymentsWithoutRate: [withoutRate] }] }}
+      />,
+    );
+    const note = screen.getByTestId('statement-without-rate');
+    expect(note).toHaveTextContent('Cifras incompletas: 1 abono sin tasa de cambio no cuenta en el saldo.');
+    expect(note).toHaveTextContent('3.600');
+    expect(note).toHaveTextContent('30/10/2026');
+  });
+
+  it('sin abonos sin tasa no dice nada', () => {
+    render(<AccountStatementDocument statement={accountStatementFixture()} />);
+    expect(screen.queryByTestId('statement-without-rate')).not.toBeInTheDocument();
+  });
+});

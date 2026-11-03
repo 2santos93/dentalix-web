@@ -58,6 +58,7 @@ import { StatementPaymentPlanModal } from './statement-payment-plan-modal';
 import { PlanItemsBalance } from './plan-items-balance';
 import { canRecordPayments } from '@/lib/payments/billable-plans-api';
 import { RateProviderNotice } from '@/components/payments/rate-provider-notice';
+import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 import { CreditBalanceSection } from '@/components/patient-credit/credit-balance-section';
@@ -408,7 +409,10 @@ function StatementBody({
           paymentsCount={statement.plans.reduce((n, p) => n + p.paymentsWithoutRate.length, 0)}
           onRetry={onRetry}
         />
-      ) : null}
+      ) : (
+        // DX-472: lo no contado no se ve en las cifras; el aviso lo enseña aquí.
+        <WithoutRateNotice token={token} payments={statement.plans.flatMap((p) => p.paymentsWithoutRate)} />
+      )}
 
       {summary.length > 0 ? (
         <div className="flex flex-col gap-3">

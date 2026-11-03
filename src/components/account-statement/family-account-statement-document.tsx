@@ -87,6 +87,10 @@ export function FamilyAccountStatementDocument({
 
       {statement.rateProviderTimedOut ? (
         <p className="mt-6 text-sm font-medium">{rateProviderCopy.printed}</p>
+      ) : statement.paymentsWithoutRateCount > 0 ? (
+        <p className="mt-6 text-sm font-medium" data-testid="family-without-rate">
+          {statementCopy.withoutRateIncomplete(statement.paymentsWithoutRateCount)}
+        </p>
       ) : null}
 
       {totals.length === 0 ? (
