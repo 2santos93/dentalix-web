@@ -1,0 +1,22 @@
+[
+  {
+    "path": "lib/format/zone-city-names-es.json",
+    "term": "America/Bogota",
+    "reason": "Catálogo de zona IANA a ciudad: cubre todas las zonas del mundo, no es una suposición de país."
+  },
+  {
+    "path": "lib/locations/iana-zone-names.json",
+    "term": "America/Bogota",
+    "reason": "Lista IANA completa generada: catálogo de zonas del mundo, no una suposición de país."
+  },
+  {
+    "path": "lib/locations/country-regional.json",
+    "term": "America/Bogota",
+    "reason": "Tabla con la zona horaria típica de todos los países: dato de catálogo, no una regla."
+  },
+  {
+    "path": "lib/locations/country-regional.json",
+    "term": "COP",
+    "reason": "Tabla país a moneda de todos los países: dato de catálogo, no una regla."
+  }
+]

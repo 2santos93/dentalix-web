@@ -43,6 +43,8 @@ jobs:
       # DX-297: Jest resolves compiled form colors in real Chromium.
       - name: Instalar Chromium para las pruebas de contraste
         run: npx playwright install --with-deps chromium
+      - name: Supuestos de país (check:country-assumptions)
+        run: npm run check:country-assumptions
       - run: npx jest --ci
       - run: npm run build
 

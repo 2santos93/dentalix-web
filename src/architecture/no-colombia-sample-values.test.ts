@@ -24,6 +24,9 @@ const EXCLUDED: readonly RegExp[] = [
   /^src\/architecture\/no-location-fallbacks\.test\.ts$/,
   /^src\/architecture\/no-laws\.test\.ts$/,
   /^src\/architecture\/no-colombia-sample-values\.test\.ts$/,
+  // DX-334: la guarda de supuestos de país y sus excepciones nombran los catálogos.
+  /^src\/architecture\/no-country-assumptions\.test\.ts$/,
+  /^src\/architecture\/country-assumptions\.exceptions\.json$/,
 ];
 
 /** El nombre de una migración ya aplicada de la API no es un valor de ejemplo. */
