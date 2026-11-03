@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
+import { Badge } from '@/components/ui/badge';
 
 const copy = {
   titleClosed: 'Informe de cierre de caja',
@@ -43,9 +44,17 @@ const copy = {
   colDifference: 'Diferencia',
   notCounted: 'Sin contar',
   noLines: 'Sin movimientos en este turno.',
-  blind: 'Arqueo ciego: lo esperado y los cobros del turno se ven cuando la caja está cerrada.',
+  blind:
+    'Arqueo ciego: lo esperado, los cobros, las anulaciones y los ajustes del turno se ven cuando la caja está cerrada.',
   differenceReason: 'Motivo de la diferencia',
   squared: 'El arqueo cuadra.',
+  // SEC-043: cerrada a ciegas sin motivo y sin cuadrar; la revisa administración.
+  unjustified: 'Diferencia sin justificar',
+  // SEC-043 (B4): a ciegas, el motivo que escribió quien contó aunque cuadrara.
+  countedNote: (note: string) => `Nota de quien contó: ${note}`,
+  // SEC-043 (M1): cuenta en otra caja aún abierta o pendiente, con arqueo ciego.
+  amountHidden: 'Oculto durante el arqueo',
+  unjustifiedHint: 'Se cerró a ciegas sin motivo: administración la revisa con quien contó.',
   closingNotes: 'Notas del cierre',
   lockDate: 'Fecha de bloqueo sugerida',
   lockDateHint: 'Para el cierre contable de la sede (aún no bloquea nada).',
@@ -110,9 +119,15 @@ interface ArqueoRow {
   paymentAdjustments: number | null;
   adjustments: number | null;
   outflows: number | null;
-  expected: number;
+  expected: number | null;
   counted: number | null;
   difference: number | null;
+  /**
+   * SEC-043: con arqueo ciego, el grupo de una caja cerrada con una
+   * anulación posterior que cuenta en otra caja abierta o pendiente: sin
+   * cobros, ajustes, salidas, esperado ni diferencia.
+   */
+  hidden: boolean;
 }
 
 /**
@@ -138,6 +153,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
         expected: line.expected,
         counted: line.counted,
         difference: line.difference,
+        hidden: line.amountHidden || (breakdown?.amountHidden ?? false),
       };
     });
   }
@@ -153,6 +169,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
     expected: line.expected,
     counted: null,
     difference: null,
+    hidden: line.amountHidden,
   }));
 }
 
@@ -262,6 +279,8 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
               <TableBody>
                 {rows.map((row) => {
                   const money = (n: number | null) => (n === null ? '—' : txt.amount(n, row.currency));
+                  // SEC-043: en un grupo oculto, las cifras que delatarían la anulación.
+                  const figure = (n: number | null) => (row.hidden ? <HiddenAmount inTable /> : money(n));
                   return (
                     <TableRow key={row.key} className="cash-report-row">
                       <TableCell className={cn('font-medium whitespace-nowrap', STICKY_FIRST)}>
@@ -271,9 +290,9 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                         {money(row.opening)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {money(row.payments)}
+                        {figure(row.payments)}
                         {/* DX-516: impuestos y recargos (+) o descuentos (−) cobrados con esos abonos. */}
-                        {row.paymentAdjustments ? (
+                        {!row.hidden && row.paymentAdjustments ? (
                           <span className="block t-caption text-muted">
                             {copy.paymentAdjustments(
                               `${row.paymentAdjustments > 0 ? '+' : '−'}${txt.amount(Math.abs(row.paymentAdjustments), row.currency)}`,
@@ -282,17 +301,17 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                         ) : null}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {money(row.adjustments)}
+                        {figure(row.adjustments)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {/* Se restan: con signo, para que la fila se lea como una suma. */}
-                        {money(row.outflows ? -row.outflows : row.outflows)}
+                        {figure(row.outflows ? -row.outflows : row.outflows)}
                       </TableCell>
                       <TableCell
                        
-                        className={cn('text-right font-medium tabular-nums', row.expected < 0 && 'text-danger-text')}
+                        className={cn('text-right font-medium tabular-nums', row.expected !== null && row.expected < 0 && 'text-danger-text')}
                       >
-                        {money(row.expected)}
+                        {figure(row.expected)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {row.counted === null ? copy.notCounted : money(row.counted)}
@@ -304,7 +323,7 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                           row.difference !== null && row.difference !== 0 && 'text-danger-text',
                         )}
                       >
-                        {money(row.difference)}
+                        {figure(row.difference)}
                       </TableCell>
                     </TableRow>
                   );
@@ -316,7 +335,23 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
         {closing ? (
           <DescriptionList className="mt-4 gap-y-3">
             <Fact label={copy.differenceReason}>
-              {closing.hasDifference ? closing.differenceReason : copy.squared}
+              {closing.unjustifiedDifference ? (
+                <>
+                  <Badge variant="warning" dot>
+                    {copy.unjustified}
+                  </Badge>
+                  <span className="mt-1 block text-xs text-muted">{copy.unjustifiedHint}</span>
+                </>
+              ) : closing.hasDifference ? (
+                closing.differenceReason
+              ) : (
+                <>
+                  {copy.squared}
+                  {closing.differenceReason ? (
+                    <span className="mt-1 block text-xs text-muted">{copy.countedNote(closing.differenceReason)}</span>
+                  ) : null}
+                </>
+              )}
             </Fact>
             <Fact label={copy.lockDate}>
               <span className="tabular-nums">{txt.civilDate(closing.suggestedLockDate)}</span>
@@ -369,46 +404,55 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
         </Section>
       ) : null}
 
-      <Section title={copy.voidedTitle}>
-        {session.voidedPayments.length === 0 ? (
-          <p className="text-muted">{copy.noVoided}</p>
-        ) : (
-          <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-label={copy.voidedLabel}>
-            {session.voidedPayments.map((p) => (
-              <li key={p.id} className="cash-report-row flex flex-col gap-1 py-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-medium">
-                    {p.patient.fullName}
-                    {p.receiptNumber ? <span className="ml-2 text-xs text-muted tabular-nums">{p.receiptNumber}</span> : null}
-                  </span>
-                  <span className="font-medium tabular-nums line-through decoration-1">
-                    {txt.amount(p.amount, p.currency)}
-                  </span>
-                </div>
-                <p className="text-xs text-muted">
-                  {copy.colReason}: {p.voidReason ?? '—'} · {copy.colVoidedBy}: {p.voidedBy?.fullName ?? '—'}
-                  {p.voidedAt ? ` · ${when(p.voidedAt)}` : ''}
-                </p>
-                {p.bookedAsAdjustment ? <p className="text-xs text-warning-text">{copy.bookedElsewhere}</p> : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      {/* SEC-043: con arqueo ciego llegan a null (dejarían deducir lo esperado). */}
+      {session.voidedPayments ? (
+        <Section title={copy.voidedTitle}>
+          {session.voidedPayments.length === 0 ? (
+            <p className="text-muted">{copy.noVoided}</p>
+          ) : (
+            <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-label={copy.voidedLabel}>
+              {session.voidedPayments.map((p) => (
+                <li key={p.id} className="cash-report-row flex flex-col gap-1 py-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-medium">
+                      {p.patient.fullName}
+                      {p.receiptNumber ? <span className="ml-2 text-xs text-muted tabular-nums">{p.receiptNumber}</span> : null}
+                    </span>
+                    {p.amount === null ? (
+                      <HiddenAmount />
+                    ) : (
+                      <span className="font-medium tabular-nums line-through decoration-1">
+                        {txt.amount(p.amount, p.currency)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted">
+                    {copy.colReason}: {p.voidReason ?? '—'} · {copy.colVoidedBy}: {p.voidedBy?.fullName ?? '—'}
+                    {p.voidedAt ? ` · ${when(p.voidedAt)}` : ''}
+                  </p>
+                  {p.bookedAsAdjustment ? <p className="text-xs text-warning-text">{copy.bookedElsewhere}</p> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      ) : null}
 
       <Section title={copy.outflowsTitle}>
         <OutflowList session={session} txt={txt} />
       </Section>
 
-      <Section title={copy.adjustmentsTitle}>
-        <AdjustmentList
-          items={session.adjustments}
-          label={copy.adjustmentsLabel}
-          txt={txt}
-          linkSessions={linkSessions}
-          mode="origin"
-        />
-      </Section>
+      {session.adjustments ? (
+        <Section title={copy.adjustmentsTitle}>
+          <AdjustmentList
+            items={session.adjustments}
+            label={copy.adjustmentsLabel}
+            txt={txt}
+            linkSessions={linkSessions}
+            mode="origin"
+          />
+        </Section>
+      ) : null}
 
       {session.laterAdjustments.length > 0 ? (
         <Section title={copy.laterTitle}>
@@ -563,9 +607,13 @@ function OutflowList({ session, txt }: { session: CashSessionDetail; txt: Docume
                   <span className="font-medium">
                     {txt.time(o.createdAt)} · {outflowSubject(o)}
                   </span>
-                  <span className="font-medium tabular-nums line-through decoration-1">
-                    {txt.amount(o.amount, o.currency)}
-                  </span>
+                  {o.amount === null ? (
+                    <HiddenAmount />
+                  ) : (
+                    <span className="font-medium tabular-nums line-through decoration-1">
+                      {txt.amount(o.amount, o.currency)}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted">
                   {copy.colReason}: {o.voidReason ?? '—'} · {copy.colBy}: {o.createdBy.fullName ?? '—'} ·{' '}
@@ -579,6 +627,17 @@ function OutflowList({ session, txt }: { session: CashSessionDetail; txt: Docume
         </>
       ) : null}
     </div>
+  );
+}
+
+/** SEC-043: el importe que no se enseña mientras rige el arqueo ciego. */
+function HiddenAmount({ inTable = false }: { inTable?: boolean }) {
+  // En la tabla del arqueo (que en el teléfono se desplaza de lado), en una
+  // línea: partido en cuatro, la fila crece y se lee peor.
+  return (
+    <span className={cn('text-sm text-muted', inTable && 'max-sm:whitespace-nowrap')} data-testid="amount-hidden">
+      {copy.amountHidden}
+    </span>
   );
 }
 
@@ -611,9 +670,13 @@ function AdjustmentList({
                   {PAYMENT_METHOD_LABELS[a.method]} · {a.currency}
                 </span>
               </span>
-              <span className={cn('font-semibold tabular-nums', a.amount < 0 && 'text-danger-text')}>
-                {txt.amount(a.amount, a.currency)}
-              </span>
+              {a.amount === null ? (
+                <HiddenAmount />
+              ) : (
+                <span className={cn('font-semibold tabular-nums', a.amount < 0 && 'text-danger-text')}>
+                  {txt.amount(a.amount, a.currency)}
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted">
               {a.payment ? `${a.payment.patient.fullName}${a.payment.receiptNumber ? ` · ${a.payment.receiptNumber}` : ''} · ` : ''}

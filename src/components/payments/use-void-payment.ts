@@ -37,8 +37,12 @@ export function voidPaymentErrorMessage(err: unknown): string {
 /** Lo que identifica el abono en el modal y en el aviso: monto · fecha · paciente. */
 export interface VoidPaymentTarget {
   id: string;
-  amount: number;
-  currency: string;
+  /**
+   * SEC-043: `null` en un abono de una caja abierta con arqueo ciego: se
+   * nombra por fecha y paciente, sin cifra.
+   */
+  amount: number | null;
+  currency: string | null;
   /** Día civil del pago en la zona de su sede (`paidOn`, YYYY-MM-DD; DX-097). */
   paidOn: string;
   patientName?: string;
@@ -54,7 +58,9 @@ export interface VoidPaymentTarget {
  */
 export function voidPaymentSubject(target: VoidPaymentTarget, fmt: RegionalFormat | null): string {
   return [
-    sedeMoney(target.amount, target.currency, fmt),
+    target.amount !== null && target.currency !== null
+      ? sedeMoney(target.amount, target.currency, fmt)
+      : null,
     sedeCivilDate(target.paidOn, fmt),
     target.patientName,
   ]
