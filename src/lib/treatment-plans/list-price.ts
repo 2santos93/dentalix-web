@@ -1,4 +1,3 @@
-import { formatAmount, formatCurrency } from '@/lib/format/currency';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { NO_SEDE_FORMAT, sedeMoney } from '@/lib/format/sede-number';
 
@@ -11,13 +10,10 @@ export interface ListPriceFormat {
   withoutCode: (amount: number) => string;
 }
 
-/** El del presupuesto impreso y su PDF (el mismo `formatCurrency` del resto del documento). */
-export const PRINTED_LIST_PRICE_FORMAT: ListPriceFormat = {
-  withCode: formatCurrency,
-  withoutCode: formatAmount,
-};
-
-/** El de las pantallas del plan: el formato de la sede (DX-386), o «—» mientras no lo hay. */
+/**
+ * El de las pantallas del plan y del presupuesto impreso: el formato de la sede
+ * (DX-386; el del documento, DX-354), o «—» mientras no lo hay.
+ */
 export function sedeListPriceFormat(fmt: RegionalFormat | null): ListPriceFormat {
   return {
     withCode: (amount, currency) => sedeMoney(amount, currency, fmt),

@@ -7,6 +7,7 @@ import { planQuoteFixture } from './plan-quote-fixture';
 import { getExchangeRates } from '@/lib/exchange/exchange-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
@@ -62,7 +63,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
       await screen.findByRole('option', { name: /Dólar/ });
       await userEvent.selectOptions(select, 'USD');
       const total = await screen.findByTestId('quote-second-total');
-      expect((total.textContent ?? '').replace(/\s/g, ' ')).toContain('825,00 USD');
+      expect((total.textContent ?? '').replace(/\s/g, ' ')).toContain('USD 825,00');
       expect(mockedRates).toHaveBeenCalledWith('tok', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
       expect(screen.getByTestId('quote-second-currency')).toHaveTextContent(/automática/);
     });
@@ -168,8 +169,8 @@ describe('PlanQuotePrintView (DX-012)', () => {
       mockedGet.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
-      expect(flat(table)).toContain('Precio de lista 80.000,00 VES');
-      expect(flat(table)).not.toContain('80.000,00 EUR');
+      expect(flat(table)).toContain('Precio de lista VES 80.000,00');
+      expect(flat(table)).not.toContain('EUR 80.000,00');
       expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
       expect(print).toHaveBeenCalledTimes(1);
     });
@@ -192,7 +193,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
       mockedGet.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
-      expect(flat(table)).toMatch(/Precio de lista 80\.000,00(?! (EUR|VES))/);
+      expect(flat(table)).toMatch(/Precio de lista 80\.000,00/);
       expect(screen.getByTestId('quote-list-price-note')).toHaveTextContent(/puede estar en otra moneda/);
       expect(screen.getByTestId('quote-locations-error')).toHaveTextContent(/moneda de la sede/);
       expect(print).not.toHaveBeenCalled();
@@ -201,11 +202,29 @@ describe('PlanQuotePrintView (DX-012)', () => {
       fireEvent.click(within(screen.getByTestId('quote-locations-error')).getByRole('button', { name: 'Reintentar' }));
       await waitFor(() =>
         expect(flat(screen.getByRole('table', { name: 'Procedimientos del presupuesto' }))).toContain(
-          'Precio de lista 80.000,00 VES',
+          'Precio de lista VES 80.000,00',
         ),
       );
       expect(screen.queryByTestId('quote-locations-error')).not.toBeInTheDocument();
       expect(print).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('DX-354: el formato de la sede del presupuesto', () => {
+    it('usa la sede del presupuesto, no la activa; sin ella «—», el aviso fuera del papel y Reintentar lo vuelve a leer', async () => {
+      mockedGet.mockResolvedValueOnce(planQuoteFixture({ regional: null }));
+      mockedGet.mockResolvedValueOnce(
+        planQuoteFixture({ regional: { timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' } }),
+      );
+      renderView();
+      const header = await screen.findByTestId('quote-header');
+      expect(header).toHaveTextContent('—');
+      expect(header.textContent).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+      const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
+      expect(note?.closest('.print\\:hidden')).not.toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(screen.getByTestId('quote-header')).toHaveTextContent('10/16/2026'));
+      expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument();
     });
   });
 });

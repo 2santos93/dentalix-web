@@ -18,7 +18,6 @@ import ts from 'typescript';
 const SRC = join(__dirname, '..');
 const CURRENCY_MODULE = '@/lib/format/currency';
 
-const PRINTED = 'Impreso o documento A4/PDF: sin formato de sede hasta G1-C (DX-354), con la sede del documento.';
 const PUBLIC_PAGE = 'Página pública: la API no manda la zona ni el formato de la sede (ver PUBLIC_PAGE en sede-clock-guard).';
 const FLOW = 'Diálogo o ayudante compartido con pantallas aún sin migrar: pasa con ellas, con el `money` inyectado.';
 const OTHER = 'Pantalla fuera de las cinco superficies de DX-522: pendiente de migrar a sedeMoney.';
@@ -49,7 +48,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/receivables/aging-summary.tsx': OTHER,
   'components/receivables/debtor-parts.tsx': OTHER,
   'components/shared/money-input.tsx': FLOW,
-  'components/treatment-plans/plan-quote-document.tsx': PRINTED,
 };
 
 function sourceFiles(dir: string): string[] {

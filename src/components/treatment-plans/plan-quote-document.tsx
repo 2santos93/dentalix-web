@@ -2,11 +2,11 @@ import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import * as React from 'react';
 import type { PlanQuote, PlanQuoteItem } from '@/lib/treatment-plans/plan-quote-api';
 import { SURFACE_LABELS } from '@/lib/odontogram/surface-labels';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
 import {
-  PRINTED_LIST_PRICE_FORMAT,
+  sedeListPriceFormat,
+  type ListPriceFormat,
   formatListPrice,
   listPriceInPlanCurrency,
 } from '@/lib/treatment-plans/list-price';
@@ -69,9 +69,6 @@ const copy = {
     'La huella no coincide con el contenido guardado: este presupuesto pudo alterarse fuera de Dentalix.',
 };
 
-const money = (value: number, currency: string) => formatCurrency(value, currency);
-const discount = (value: number, currency: string) =>
-  value > 0 ? `−${money(value, currency)}` : copy.noDiscount;
 
 /** ¿El ítem lleva «Precio de lista»? Solo cuando el precio cobrado es otro (convenio o lista de la sede). */
 function hasListPrice(item: PlanQuoteItem): item is PlanQuoteItem & { listPrice: number } {
@@ -79,9 +76,13 @@ function hasListPrice(item: PlanQuoteItem): item is PlanQuoteItem & { listPrice:
 }
 
 /** «Precio de lista» en la moneda del catálogo (DX-489), nunca en la del plan. */
-function listPriceOf(item: PlanQuoteItem, catalogCurrency: string | null): string | null {
+function listPriceOf(
+  item: PlanQuoteItem,
+  catalogCurrency: string | null,
+  listFormat: ListPriceFormat,
+): string | null {
   return hasListPrice(item)
-    ? copy.listPrice(formatListPrice(item.listPrice, catalogCurrency, PRINTED_LIST_PRICE_FORMAT))
+    ? copy.listPrice(formatListPrice(item.listPrice, catalogCurrency, listFormat))
     : null;
 }
 
@@ -110,6 +111,8 @@ export interface QuoteSecondCurrency {
 
 interface PlanQuoteDocumentProps {
   quote: PlanQuote;
+  /** El formato de la sede del presupuesto (`documentFormat(quote.regional)`); `null` → «—» en fechas e importes. */
+  format: DocumentFormat | null;
   /**
    * DX-489: moneda del catálogo (`clinicBaseCurrency`), la del precio de
    * lista; `null` si no se sabe. Si no es la del plan, el precio de lista va
@@ -131,7 +134,13 @@ interface PlanQuoteDocumentProps {
  * papel blanco y tinta oscura explícitos, también en modo oscuro. En pantalla
  * estrecha la tabla se apila en tarjetas; en papel siempre es tabla.
  */
-export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = null }: PlanQuoteDocumentProps) {
+export function PlanQuoteDocument({ quote, format, catalogCurrency, secondCurrency = null }: PlanQuoteDocumentProps) {
+  // DX-354: fechas, horas e importes con el formato de la sede del presupuesto y el código ISO.
+  const doc = documentTexts(format);
+  const money = doc.amount;
+  const discount = (value: number, currency: string) =>
+    value > 0 ? `−${money(value, currency)}` : copy.noDiscount;
+  const listFormat = sedeListPriceFormat(format?.fmt ?? null);
   const { acceptance, currency } = quote;
   const listInPlanCurrency = listPriceInPlanCurrency(catalogCurrency, currency);
   const listPriceNote = !listInPlanCurrency && quote.items.some(hasListPrice);
@@ -176,12 +185,12 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
           <p className="mt-1 text-sm text-[#4b5563]">
             {copy.issuedOn}:{' '}
             <span className="font-medium text-[#111827] tabular-nums">
-              {formatCivilDate(quote.issuedOn)}
+              {doc.civilDate(quote.issuedOn)}
             </span>
           </p>
           <p className="text-sm text-[#4b5563]">
             <span className="font-medium text-[#111827]">{copy.validity(quote.validityDays)}</span>{' '}
-            <span className="tabular-nums">{copy.validUntil(formatCivilDate(quote.validUntil))}</span>
+            <span className="tabular-nums">{copy.validUntil(doc.civilDate(quote.validUntil))}</span>
           </p>
         </div>
       </header>
@@ -234,7 +243,7 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
               </tr>
             ) : (
               orderedItems.map((item,index) => {
-                const listLine = listPriceOf(item, catalogCurrency);
+                const listLine = listPriceOf(item, catalogCurrency, listFormat);
                 return (
                 <React.Fragment key={item.id}>{startsVisit(index)?<tr><th scope="rowgroup" colSpan={6} className="border-b border-[#d1d5db] bg-[#f3f4f6] py-3 text-left font-semibold">{visitTitle(item.id)}</th></tr>:null}<tr className="quote-item border-b border-[#e5e7eb] align-top">
                   <td className="py-2 pr-3 font-medium tabular-nums">{item.toothNumber || copy.noTooth}</td>
@@ -264,7 +273,7 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
             <li className="py-6 text-center text-sm text-[#4b5563]">{copy.emptyItems}</li>
           ) : (
             orderedItems.map((item,index) => {
-              const listLine = listPriceOf(item, catalogCurrency);
+              const listLine = listPriceOf(item, catalogCurrency, listFormat);
               return (
               <li key={item.id} className="py-3 text-sm">
                 {startsVisit(index)?<h2 className="mb-3 text-base font-semibold">{visitTitle(item.id)}</h2>:null}
@@ -336,7 +345,7 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
             {copy.secondRate(
               ratePairLabel(currency, secondCurrency, money),
               paymentRateCopy.source[secondCurrency.source],
-              formatCivilDate(secondCurrency.date),
+              doc.civilDate(secondCurrency.date),
             )}{' '}
             {copy.secondNote(secondCurrency.currency)}
           </p>
@@ -358,7 +367,7 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
             />
             <figcaption className="border-t border-[#111827] pt-2 text-sm">
               <span className="block font-medium">
-                {copy.acceptedBy(acceptance.signerName, formatDateTime(acceptance.acceptedAt))}
+                {copy.acceptedBy(acceptance.signerName, doc.dateTime(acceptance.acceptedAt))}
               </span>
               <span className="text-[#4b5563]">{copy.recordedBy(acceptance.acceptedByName)}</span>
             </figcaption>

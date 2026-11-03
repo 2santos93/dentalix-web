@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, FileX, Lock, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -14,6 +14,8 @@ import { useExchangeRates, type ExchangeRatesState } from '@/components/payments
 import { ratePreviewCopy } from '@/components/payments/payment-rate-preview';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { clinicBaseCurrency } from '@/lib/locations/location-settings';
@@ -84,6 +86,8 @@ export function PlanQuotePrintView({
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
   const forbidden = !allowed || deniedByApi;
+  // DX-354: fechas e importes del documento con el formato de la sede del presupuesto, no el del navegador.
+  const format = useMemo(() => (data ? documentFormat(data.regional) : null), [data]);
   // DX-376: la tasa es la de hoy en la sede; sin zona no se pide ninguna.
   const [second, setSecond] = useState('');
   const zone = useSedeTimeZone(token);
@@ -201,13 +205,23 @@ export function PlanQuotePrintView({
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {data && ready ? (
-          <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
-            <PlanQuoteDocument
-              quote={data}
-              catalogCurrency={catalogCurrency}
-              secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}
-            />
-          </div>
+          <>
+            {format === null ? (
+              <DocumentFormatNote
+                locationId={data.location.id}
+                onRetry={() => setReloadKey((k) => k + 1)}
+                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              />
+            ) : null}
+            <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
+              <PlanQuoteDocument
+                quote={data}
+                format={format}
+                catalogCurrency={catalogCurrency}
+                secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}
+              />
+            </div>
+          </>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
             <EmptyState

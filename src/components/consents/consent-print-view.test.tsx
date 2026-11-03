@@ -1,9 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { ConsentPrintView } from './consent-print-view';
 import { ConsentDocument } from './consent-document';
 import { getPatientConsent, type PatientConsentDocument } from '@/lib/consents/consents-api';
 import { ApiError } from '@/lib/api/client';
-import { REGIONAL_VE } from '@/lib/test/document-regional';
+import { FORMAT_DE, FORMAT_ES, FORMAT_US, REGIONAL_US, REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/consents/consents-api', () => ({
   ...jest.requireActual('../../lib/consents/consents-api'),
@@ -45,7 +47,7 @@ function consentFixture(overrides: Partial<PatientConsentDocument> = {}): Patien
 
 describe('ConsentDocument', () => {
   it('pinta logo y nombre de la clínica, texto, ambas firmas, fecha y huella', () => {
-    render(<ConsentDocument consent={consentFixture()} />);
+    render(<ConsentDocument format={FORMAT_ES} consent={consentFixture()} />);
     const header = screen.getByTestId('consent-header');
     expect(within(header).getByRole('img', { name: 'Clínica Sonrisas' })).toHaveAttribute(
       'src',
@@ -70,13 +72,13 @@ describe('ConsentDocument', () => {
   });
 
   it('avisa si la huella no coincide', () => {
-    render(<ConsentDocument consent={consentFixture({ integrityOk: false })} />);
+    render(<ConsentDocument format={FORMAT_ES} consent={consentFixture({ integrityOk: false })} />);
     expect(screen.getByText(/pudo alterarse fuera de Dentalix/)).toBeInTheDocument();
   });
 
   it('nombra al tutor cuando firma un tutor', () => {
     render(
-      <ConsentDocument
+      <ConsentDocument format={FORMAT_ES}
         consent={consentFixture({ signerType: 'GUARDIAN', signerName: 'Marta', signerDocument: 'Documento A DOC-9' })}
       />,
     );
@@ -84,13 +86,13 @@ describe('ConsentDocument', () => {
   });
 
   it('prints the docTypeName of the DTO, or the generic name when it is missing', () => {
-    const { rerender } = render(<ConsentDocument consent={consentFixture()} />);
+    const { rerender } = render(<ConsentDocument format={FORMAT_ES} consent={consentFixture()} />);
     const header = () => screen.getByText('Documento').closest('div') as HTMLElement;
     expect(header()).toHaveTextContent('ID local DOC-1020');
 
     // API anterior en el hueco del despliegue: sin `docTypeName`, el genérico.
     rerender(
-      <ConsentDocument
+      <ConsentDocument format={FORMAT_ES}
         consent={consentFixture({
           patient: { id: 'p1', firstName: 'Ana', lastName: 'Pérez', docType: 'RESIDENCE_PERMIT', docNumber: 'DOC-1020' } as never,
         })}
@@ -154,7 +156,7 @@ describe('ConsentDocument firmado a distancia (DX-243)', () => {
 
   it('sin la firma del profesional: lo dice, no pinta su firma y muestra las evidencias', () => {
     render(
-      <ConsentDocument
+      <ConsentDocument format={FORMAT_ES}
         consent={consentFixture({
           remote,
           professionalSignature: null,
@@ -173,14 +175,14 @@ describe('ConsentDocument firmado a distancia (DX-243)', () => {
   });
 
   it('completo: las dos firmas y sin aviso', () => {
-    render(<ConsentDocument consent={consentFixture({ remote, remoteIpAddress: '203.0.113.7' })} />);
+    render(<ConsentDocument format={FORMAT_ES} consent={consentFixture({ remote, remoteIpAddress: '203.0.113.7' })} />);
     expect(screen.getByRole('img', { name: 'Firma de Dra. Laura Gómez' })).toBeInTheDocument();
     expect(screen.queryByText(/Falta la firma del profesional/)).not.toBeInTheDocument();
   });
 
   it('firmado por el responsable: las evidencias lo dicen con su nombre, no «por el paciente»', () => {
     render(
-      <ConsentDocument
+      <ConsentDocument format={FORMAT_ES}
         consent={consentFixture({
           remote,
           signerType: 'GUARDIAN',
@@ -199,5 +201,54 @@ describe('ConsentDocument firmado a distancia (DX-243)', () => {
     expect(
       screen.getByText(/^Firmado a distancia por el responsable \(Claudia Navarro\)\. Falta la firma del profesional/),
     ).toBeInTheDocument();
+  });
+});
+
+describe('DX-354: el formato de la sede del consentimiento', () => {
+  const remote = {
+    signatureRequestId: 'sr-1',
+    channel: 'EMAIL' as const,
+    professionalUserId: 'u-prof',
+    destinationMasked: 'a***@example.com',
+    sentAt: '2027-05-03T18:00:00.000Z',
+    openedAt: '2027-05-03T18:30:00.000Z',
+    verifiedAt: '2027-05-03T18:40:00.000Z',
+  };
+  const signed = { signedAt: '2027-05-03T19:05:00.000Z', remote, professionalSignedAt: '2027-05-03T19:10:00.000Z' };
+
+  it('A: sede h12 en-US, la firma y los envíos en 12 h en la zona de la sede', () => {
+    render(<ConsentDocument format={FORMAT_US} consent={consentFixture(signed)} />);
+    expect(screen.getByTestId('consent-header')).toHaveTextContent('05/03/2027 3:05 p. m.');
+    expect(screen.getByText('Enviado:').nextSibling).toHaveTextContent('05/03/2027 2:00 p. m.');
+    expect(screen.getByText('Firma del profesional:').nextSibling).toHaveTextContent('05/03/2027 3:10 p. m.');
+  });
+
+  it('B: sede h23 de-DE, 24 h y orden alemán', () => {
+    render(<ConsentDocument format={FORMAT_DE} consent={consentFixture(signed)} />);
+    expect(screen.getByTestId('consent-header')).toHaveTextContent('03.05.2027 21:05');
+    expect(screen.getByText('Enviado:').nextSibling).toHaveTextContent('03.05.2027 20:00');
+  });
+
+  it('C: sin formato de sede, «—» en las fechas, nunca dd/mm/yyyy', () => {
+    const { container } = render(<ConsentDocument format={null} consent={consentFixture(signed)} />);
+    expect(screen.getByTestId('consent-header')).toHaveTextContent(/Firmado el\s*—/);
+    expect(screen.getByText('Enviado:').nextSibling).toHaveTextContent('—');
+    expect(container.textContent).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+  });
+
+  it('la vista imprimible usa la sede del consentimiento; sin ella, el aviso fuera del papel y Reintentar vuelve a leer', async () => {
+    const print = jest.spyOn(window, 'print').mockImplementation(() => undefined);
+    mockedGet.mockReset();
+    mockedGet.mockResolvedValueOnce(consentFixture({ regional: null }));
+    mockedGet.mockResolvedValueOnce(consentFixture({ regional: REGIONAL_US }));
+    render(<ConsentPrintView token="tok" patientId="p1" consentId="c1" />);
+    expect(await screen.findByTestId('consent-header')).toHaveTextContent(/Firmado el\s*—/);
+    const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
+    expect(note?.closest('.print\\:hidden')).not.toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    // 15:00 UTC es 11:00 a. m. en Nueva York.
+    await waitFor(() => expect(screen.getByTestId('consent-header')).toHaveTextContent('10/16/2026 11:00 a. m.'));
+    expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument();
+    print.mockRestore();
   });
 });

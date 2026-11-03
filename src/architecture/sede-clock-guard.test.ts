@@ -35,17 +35,12 @@ const SEDELESS_HELPERS = new Set([
   'formatDateLabel',
 ]);
 
-const PRINTED = 'Impreso o documento A4/PDF: pendiente de G1-C (DX-354), con la sede del documento.';
 const PUBLIC_PAGE = 'Página pública: la API no manda la zona ni el formato de la sede (anotado en el informe de DX-378).';
 const ZONE_24H = 'Ya usa la zona de la sede, pero con 24 h fijas: falta pasar a fmt.dateTime/fmt.time.';
 const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del navegador: pendiente de migrar a la sede.';
 
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
-  'components/consents/consent-document.tsx': PRINTED,
-  'components/implants/implant-card-document.tsx': PRINTED,
-  'components/postop/postop-document.tsx': PRINTED,
-  'components/treatment-plans/plan-quote-document.tsx': PRINTED,
   'components/anamnesis/public-anamnesis-view.tsx': PUBLIC_PAGE,
   'components/appointments/public-confirmation-view.tsx': PUBLIC_PAGE,
   'components/reminders/public-reminder-opt-out-view.tsx': PUBLIC_PAGE,

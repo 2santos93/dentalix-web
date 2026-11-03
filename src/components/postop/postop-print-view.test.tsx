@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { PostOpPrintView } from './postop-print-view';
 import { PostOpDocument } from './postop-document';
 import { ApiError } from '@/lib/api/api-error';
@@ -6,7 +7,7 @@ import {
   getPatientPostOpDelivery,
   type PostOpDeliveryDocument,
 } from '@/lib/postop/postop-api';
-import { REGIONAL_VE } from '@/lib/test/document-regional';
+import { FORMAT_DE, FORMAT_ES, FORMAT_US, REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/postop/postop-api', () => ({
   ...jest.requireActual('../../lib/postop/postop-api'),
@@ -44,7 +45,7 @@ function documentFixture(overrides: Partial<PostOpDeliveryDocument> = {}): PostO
 
 describe('PostOpDocument', () => {
   it('pinta cabecera de la clínica y la sede, título, texto y pie con código, versión, fecha y autor', () => {
-    render(<PostOpDocument delivery={documentFixture()} />);
+    render(<PostOpDocument format={FORMAT_ES} delivery={documentFixture()} />);
     const header = screen.getByTestId('postop-header');
     expect(within(header).getByRole('img', { name: 'Clínica Sonrisas' })).toHaveAttribute(
       'src',
@@ -66,7 +67,7 @@ describe('PostOpDocument', () => {
 
   it('sin logo ni teléfono de la sede no deja huecos', () => {
     render(
-      <PostOpDocument
+      <PostOpDocument format={FORMAT_ES}
         delivery={documentFixture({
           clinic: { name: 'Clínica Sonrisas', logoUrl: null, primaryColor: null },
           locationPhone: null,
@@ -138,5 +139,34 @@ describe('PostOpPrintView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByTestId('postop-header')).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('DX-354: el formato de la sede de la entrega', () => {
+  // 03:00 UTC del 4 de mayo es todavía el 3 en Nueva York y ya el 4 en Berlín.
+  const late = { deliveredAt: '2027-05-04T03:00:00.000Z' };
+
+  it('A: sede en-US, la fecha mm/dd/yyyy en la zona de la sede', () => {
+    render(<PostOpDocument format={FORMAT_US} delivery={documentFixture(late)} />);
+    expect(screen.getByText('POI-EXO · v2 · entregada el 05/03/2027 por Dra. Laura Gómez')).toBeInTheDocument();
+  });
+
+  it('B: sede de-DE, dd.mm.yyyy en la zona de la sede', () => {
+    render(<PostOpDocument format={FORMAT_DE} delivery={documentFixture(late)} />);
+    expect(screen.getByText('POI-EXO · v2 · entregada el 04.05.2027 por Dra. Laura Gómez')).toBeInTheDocument();
+  });
+
+  it('C: sin formato de sede, «—» y nunca dd/mm/yyyy', () => {
+    render(<PostOpDocument format={null} delivery={documentFixture(late)} />);
+    expect(screen.getByText('POI-EXO · v2 · entregada el — por Dra. Laura Gómez')).toBeInTheDocument();
+  });
+
+  it('la vista imprimible sin región muestra el aviso de la sede fuera del papel', async () => {
+    mockedGet.mockResolvedValue(documentFixture({ regional: null }));
+    jest.spyOn(window, 'print').mockImplementation(() => undefined);
+    render(<PostOpPrintView token="tok" patientId="pat-1" deliveryId="del-1" />);
+    expect(await screen.findByText(/entregada el —/)).toBeInTheDocument();
+    const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
+    expect(note?.closest('.print\\:hidden')).not.toBeNull();
   });
 });
