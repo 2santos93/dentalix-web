@@ -3,16 +3,20 @@ import type { MoveTarget } from '@/lib/appointments/day-grid';
 import { findOpenings } from '@/lib/appointments/waitlist-api';
 import { addCivilDays, wallDay } from '@/lib/time/wall-clock';
 
-/** Código del 409 de solape al mover (profesional o paciente), DX-509-bis. */
+/**
+ * Código del 409 de solape al mover: profesional o paciente (DX-509-bis) y
+ * sillón (DX-492-bis, `scope: 'chair'`).
+ */
 export const APPOINTMENT_OVERLAP = 'APPOINTMENT_OVERLAP';
 
 /** Días que se miran (el del destino incluido) para proponer el siguiente hueco. */
 export const NEXT_OPENING_DAYS = 14;
 
 /**
- * El movimiento de un SOBRECUPO chocó con otra cita (del profesional o del
- * paciente): se puede ofrecer el siguiente hueco libre. Otros 409 (paciente en
- * la clínica, sillón ocupado...) no: el hueco no es el problema.
+ * El movimiento de un SOBRECUPO chocó con otra cita (del profesional, del
+ * paciente o en el sillón): se puede ofrecer el siguiente hueco libre, que con
+ * sillón lo deja libre también. Otros 409 (paciente en la clínica...) no: el
+ * hueco no es el problema.
  */
 export function canOfferNextOpening(appointment: { overbooked?: boolean | null }, err: unknown): boolean {
   return appointment.overbooked === true && err instanceof ApiError && err.code === APPOINTMENT_OVERLAP;
