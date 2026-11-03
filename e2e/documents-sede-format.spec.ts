@@ -400,11 +400,17 @@ test('un documento cuya sede no tiene formato (región nula): «—» y el aviso
   await loginAdmin(page);
   await activate(page, 'us');
   // La API responde `regional: null` cuando a la sede le falta algo; aquí se simula en la respuesta.
-  // Solo la petición a la API: el mismo patrón sin `API_URL` atrapa también la página /print/….
-  await page.route(`${API_URL}/patients/*/account-statement*`, async (route) => {
-    const res = await route.fetch();
-    await route.fulfill({ response: res, json: { ...(await res.json()), regional: null } });
-  });
+  // Solo la llamada de datos: el navegador la hace por el MISMO origen (`/api/v1/…` en el host de la
+  // clínica, que la web reenvía a la API), nunca a `API_URL`. El predicado exige fetch/xhr y la ruta
+  // `/api/v1/…`, así que no atrapa la página `/print/…`.
+  await page.route(
+    (url) => /\/api\/v1\/patients\/[^/]+\/account-statement$/.test(url.pathname),
+    async (route) => {
+      if (!['fetch', 'xhr'].includes(route.request().resourceType())) return route.continue();
+      const res = await route.fetch();
+      await route.fulfill({ response: res, json: { ...(await res.json()), regional: null } });
+    },
+  );
   await page.goto(`${origin}/print/patients/${data.us.patientId}/account-statement`);
   const header = page.getByTestId('statement-header');
   await expect(header).toBeVisible({ timeout: 15_000 });

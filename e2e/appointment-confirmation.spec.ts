@@ -216,8 +216,12 @@ test('con el navegador del paciente en otra zona, el día y la hora son los de l
 
   // Sin formato de la sede (respuesta interceptada) y cancelación tardía con cargo: el paciente no
   // puede aceptar el cargo en línea; ni «—» como importe ni «Cancelar cita».
-  await patientPage.route('**/public/appointment-confirmations/*', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+  await patientPage.route(
+    (url) => /\/api\/v1\/public\/appointment-confirmations\/[^/]+$/.test(url.pathname),
+    async (route) => {
+    if (route.request().method() !== 'GET' || !['fetch', 'xhr'].includes(route.request().resourceType())) {
+      return route.continue();
+    }
     const res = await route.fetch();
     const body = (await res.json()) as Record<string, unknown> & { appointment: Record<string, unknown> };
     await route.fulfill({
@@ -229,7 +233,8 @@ test('con el navegador del paciente en otra zona, el día y la hora son los de l
         appointment: { ...body.appointment, timeZone: null, locale: null, hourCycle: null },
       },
     });
-  });
+    },
+  );
   await patientPage.reload();
   await expect(patientPage.getByTestId('public-fee-needs-clinic')).toContainText('llama a la clínica para cancelar', {
     ignoreCase: true,
