@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { LocationSwitcher, focusLocationSwitcher } from './location-switcher';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
@@ -118,6 +118,26 @@ describe('LocationSwitcher', () => {
       render(<LocationSwitcher />);
 
       await waitFor(() => expect(getActiveLocationId()).toBeNull());
+    });
+
+    it('SEC-014: si el cliente HTTP suelta la sede (400 LOCATION_INACTIVE), el selector pasa a «Todas las sedes» sin recargar y deja de ofrecerla', async () => {
+      setActiveLocationId('l2');
+      mockedList.mockResolvedValue([sede('l1', 'Sede Caracas'), sede('l2', 'Sede Valencia')]);
+
+      render(<LocationSwitcher />);
+      const select = (await screen.findByLabelText('Sede')) as HTMLSelectElement;
+      await waitFor(() => expect(select.value).toBe('l2'));
+
+      // Un ADMIN desactiva Valencia con esta pestaña abierta: la API rechaza la
+      // escritura y `client.ts` suelta la sede (setActiveLocationId(null)).
+      mockedList.mockResolvedValue([sede('l1', 'Sede Caracas'), sede('l2', 'Sede Valencia', false)]);
+      act(() => setActiveLocationId(null));
+
+      await waitFor(() => expect(select.value).toBe(''));
+      expect(screen.getByRole('option', { name: 'Todas las sedes' })).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.queryByRole('option', { name: 'Sede Valencia' })).not.toBeInTheDocument(),
+      );
     });
 
     it('una sede que SÍ existe se respeta', async () => {

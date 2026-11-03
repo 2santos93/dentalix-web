@@ -6,6 +6,7 @@ import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import {
   getActiveLocationId,
+  onLocationChange,
   setActiveLocationId,
 } from '@/lib/locations/location-store';
 import { cn } from '@/lib/utils';
@@ -98,6 +99,25 @@ export function LocationSwitcher({
     hydrate();
   }, []);
 
+  // SEC-014: el cliente HTTP puede soltar la sede por su cuenta (la API dijo
+  // que está desactivada, borrada o ya no es del miembro), y otra pestaña
+  // puede cambiarla. El selector no espera a una recarga: muestra la sede
+  // guardada al momento y vuelve a pedir la lista, que ya no trae la sede
+  // desactivada (y la reconciliación de abajo coloca a un miembro acotado en
+  // una de las suyas).
+  const [reload, setReload] = useState(0);
+  useEffect(
+    () =>
+      onLocationChange(() => {
+        setActive(getActiveLocationId());
+        // Con el proveedor de sesión, olvida su lectura en memoria; sin él
+        // (tests, vistas sueltas) basta con volver a pedirla.
+        requestLocations.invalidate();
+        setReload((n) => n + 1);
+      }),
+    [requestLocations],
+  );
+
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
@@ -156,7 +176,7 @@ export function LocationSwitcher({
     return () => {
       cancelled = true;
     };
-  }, [token, allowedKey, requestLocations]);
+  }, [token, allowedKey, requestLocations, reload]);
 
   // Sin ninguna sede sí se esconde: un selector vacío no ofrece nada. Con una
   // o más, se muestra (ver la nota de arriba).
