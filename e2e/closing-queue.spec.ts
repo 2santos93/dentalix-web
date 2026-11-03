@@ -60,15 +60,16 @@ test('RECEPTION a 390 px: cierra una cita de ayer con «No asistió» y sale de 
   expect(patient).not.toBe('');
 
   // Por teclado: foco en el «⋯» de la primera fila, Enter abre el menú y
-  // «No asistió» se elige con las flechas y Enter.
+  // «No asistió» se elige con las flechas y Enter. El menú pasa el foco a
+  // «Atendida» después de montarse; una flecha pulsada antes se pierde
+  // (DX-530), así que se espera a ese foco y se baja una sola vez.
   await outcome.getByRole('button', { name: `Acciones de ${patient}` }).first().focus();
   await page.keyboard.press('Enter');
   const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Atendida' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
   const noShow = menu.getByRole('menuitem', { name: 'No asistió' });
-  for (let i = 0; i < 4 && !(await noShow.evaluate((el) => el === document.activeElement)); i += 1) {
-    await page.keyboard.press('ArrowDown');
-  }
   await expect(noShow).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByText(`${patient}: No asistió.`)).toBeVisible();
