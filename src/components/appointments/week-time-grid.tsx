@@ -78,11 +78,15 @@ interface WeekTimeGridProps {
   selectedProviderId?: string | null;
 }
 
-/** DX-492: el sillón junto al paciente; si no cabe, se recorta él primero. */
+/**
+ * DX-492: el sillón junto al paciente. DX-492-bis: no encoge; se recorta solo
+ * si pasa del 45 % del chip (nombres de hasta 40 caracteres). Lo que no cabe
+ * lo cede el paciente, que sigue entero en el `title` y en el detalle.
+ */
 function WeekChairLabel({ chair }: { chair: string | null }) {
   if (!chair) return null;
   return (
-    <span data-testid="week-appointment-chair" className="min-w-0 shrink-[20] truncate font-normal">
+    <span data-testid="week-appointment-chair" className="max-w-[45%] shrink-0 truncate font-normal">
       {chair}
     </span>
   );

@@ -29,6 +29,7 @@ let locationId = '';
 let dentistId = '';
 let patientId = '';
 let chairOne = '';
+let chairTwo = '';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -60,7 +61,7 @@ test.beforeAll(async ({ request }) => {
   });
   const one = await apiPost<{ id: string }>(request, session, '/chairs', { locationId, name: 'Sillón 1' });
   chairOne = one.id;
-  await apiPost(request, session, '/chairs', { locationId, name: 'Sillón 2' });
+  chairTwo = (await apiPost<{ id: string }>(request, session, '/chairs', { locationId, name: 'Sillón 2' })).id;
   patientId = (
     await apiPost<{ id: string }>(request, session, '/patients', {
       firstName: 'Carla',
@@ -151,15 +152,41 @@ test('Semana y Mes llevan el sillón en el chip; 390 px sin scroll horizontal', 
     start: atSede(day, '09:00'),
     end: atSede(day, '09:30'),
   });
+  // DX-492-bis: a la misma hora, con la titular, en «Sillón 2» y con un nombre largo: las dos
+  // van a media columna, donde antes el sillón se quedaba sin ancho.
+  const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
+  const adminId = ((await staff.json()) as { userId: string; fullName: string }[]).find(
+    (s) => s.fullName === admin.fullName,
+  )!.userId;
+  const longName = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: 'María Fernanda',
+    lastName: `Rodríguez Villalobos ${lastName}`.slice(0, 40),
+    docType: 'NATIONAL_ID',
+    docNumber: `MFR${suffix}`.slice(0, 20),
+    sex: 'F',
+  });
+  const shared = await apiPost<{ id: string }>(request, session, '/appointments', {
+    patientId: longName.id,
+    providerId: adminId,
+    chairId: chairTwo,
+    start: atSede(day, '09:00'),
+    end: atSede(day, '09:30'),
+  });
   await loginInSede(page);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Semana', exact: true }).click();
   await fillDate(page, 'Fecha', day);
-  // La de `day`, no la primera: las urgencias de hoy pueden caer en esta semana, a media
-  // columna, y ahí un nombre largo deja la etiqueta del sillón sin ancho (se recorta ella antes).
-  const chip = page.locator(`[data-testid="week-grid-appointment"][data-id="${appointment.id}"]`);
-  await expect(chip.getByTestId('week-appointment-chair')).toHaveText('Sillón 1', { timeout: 15_000 });
-  await expect(chip.getByTestId('week-appointment-chair')).toBeVisible();
+  // Por `data-id`, no la primera: las urgencias de hoy pueden caer en esta semana.
+  for (const [id, name] of [
+    [appointment.id, 'Sillón 1'],
+    [shared.id, 'Sillón 2'],
+  ] as const) {
+    const label = page.locator(`[data-testid="week-grid-appointment"][data-id="${id}"]`).getByTestId('week-appointment-chair');
+    await expect(label).toHaveText(name, { timeout: 15_000 });
+    await expect(label).toBeVisible();
+    // Entero, sin recortar: el que cede es el paciente.
+    expect(await label.evaluate((el) => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
   await page.getByRole('button', { name: 'Mes', exact: true }).click();
   await expect(page.getByTestId('month-appointment-chair').filter({ hasText: 'Sillón 1' }).first()).toBeVisible({
     timeout: 15_000,
