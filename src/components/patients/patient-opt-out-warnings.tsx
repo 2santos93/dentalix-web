@@ -5,7 +5,7 @@ import {
   getPatientOptOutWarnings,
   type PatientOptOutMatchWarning,
 } from "@/lib/patients/communication-api";
-import { formatDate } from "@/lib/format/date";
+import { useSedeStamp } from "@/lib/locations/sede-stamp";
 import { SectionError } from "@/components/errors/section-error";
 
 const copy = {
@@ -39,6 +39,8 @@ export function PatientOptOutWarnings({
     kind: "loading",
   });
   const [reloadKey, setReloadKey] = useState(0);
+  // Anidado en «Comunicaciones», que ya muestra el aviso de la sede una vez.
+  const stamp = useSedeStamp(token);
   useEffect(() => {
     let cancelled = false;
     getPatientOptOutWarnings(token, patientId)
@@ -98,7 +100,7 @@ export function PatientOptOutWarnings({
             className="flex flex-wrap gap-x-2 gap-y-1 py-2 tabular-nums"
           >
             <time dateTime={warning.createdAt} className="text-muted">
-              {formatDate(warning.createdAt)}
+              {stamp.date(warning.createdAt)}
             </time>
             <span className="text-ink">
               {copy.counts(warning.matchCount, warning.maxMatches)}

@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { useAuthStore } from '@/lib/auth/auth-store';
 import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readDate, readTime, typeDate, typeTime } from './date-segments-for-tests';
@@ -837,6 +838,8 @@ describe('AgendaView', () => {
 
   it('DX-247: al abrir la cita de un paciente con profilaxis antibiótica el detalle avisa «Requiere premedicación»', async () => {
     mockedListStaff.mockResolvedValue(staff);
+    // La nota de anamnesis lee el formato de la sede con la sesión (DX-354b).
+    useAuthStore.setState({ accessToken: 'tok' });
     mockedListAppointments.mockResolvedValue([
       {
         ...apt1,
@@ -859,9 +862,12 @@ describe('AgendaView', () => {
 
     await user.click(screen.getByTestId('week-grid-appointment'));
     expect(await screen.findByTestId('premedication-notice')).toHaveTextContent('Requiere premedicación');
-    expect(screen.getByTestId('appointment-medical-alerts')).toHaveTextContent(
-      'Anamnesis caducada · última revisión 10/01/2025',
+    await waitFor(() =>
+      expect(screen.getByTestId('appointment-medical-alerts')).toHaveTextContent(
+        'Anamnesis caducada · última revisión 10/01/2025',
+      ),
     );
+    useAuthStore.setState({ accessToken: null });
   });
 
   it('week mode: the detail panel\'s status select reflects the server-confirmed status, not an optimistic one — a failed PATCH leaves it showing the real (unchanged) status', async () => {

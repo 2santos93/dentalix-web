@@ -1,9 +1,17 @@
+import { regionalFormat } from '@/lib/format/regional-format';
+import { stampPainters } from '@/lib/locations/sede-stamp';
+import { clinicLocation } from '@/lib/test/locations';
+import { caracasSede } from '@/lib/test/sede-clock';
+import { testStamp } from '@/lib/test/stamp';
 import {
   coverageVerificationBadge,
   memberNumberCopy,
   memberNumberError,
   requiresMemberNumber,
 } from './member-number';
+
+const caracas = caracasSede({ id: 'caracas' });
+const berlin = clinicLocation({ id: 'berlin', timeZone: 'Europe/Berlin', locale: 'de-DE', hourCycle: 'h23' });
 
 describe('nº de afiliado (SEC-049)', () => {
   it('lo exigen los pagadores externos, no OTHER', () => {
@@ -58,26 +66,40 @@ describe('nº de afiliado (SEC-049)', () => {
   });
 
   it('insignia: verificada con quién y cuándo, sin verificar, o nada con un pagador interno', () => {
+    const stamp = testStamp([caracas]);
     expect(
-      coverageVerificationBadge({
-        payer: { type: 'EMPLOYER' },
-        verifiedAt: '2026-10-20T15:00:00.000Z',
-        verifiedByName: 'Ana Gómez',
-      }),
+      coverageVerificationBadge(
+        { payer: { type: 'EMPLOYER' }, verifiedAt: '2026-10-20T15:00:00.000Z', verifiedByName: 'Ana Gómez' },
+        stamp,
+      ),
     ).toEqual({
       label: 'Verificada',
       variant: 'success',
-      detail: expect.stringMatching(/^Verificada por Ana Gómez el \d{2}\/\d{2}\/2026$/),
+      detail: 'Verificada por Ana Gómez el 20/10/2026',
     });
     expect(
-      coverageVerificationBadge({
-        payer: { type: 'EMPLOYER' },
-        verifiedAt: null,
-        verifiedByName: null,
-      }),
+      coverageVerificationBadge({ payer: { type: 'EMPLOYER' }, verifiedAt: null, verifiedByName: null }, stamp),
     ).toEqual({ label: 'Sin verificar', variant: 'muted', detail: null });
     expect(
-      coverageVerificationBadge({ payer: { type: 'OTHER' }, verifiedAt: null, verifiedByName: null }),
+      coverageVerificationBadge({ payer: { type: 'OTHER' }, verifiedAt: null, verifiedByName: null }, stamp),
     ).toBeNull();
+  });
+
+  it('la fecha de verificación sigue la sede: Caracas 20/10/2026, Berlín 21.10.2026 (03:30Z), sin formato «—»', () => {
+    const coverage = {
+      payer: { type: 'EMPLOYER' as const },
+      verifiedAt: '2026-10-21T03:30:00.000Z',
+      verifiedByName: 'Ana Gómez',
+    };
+    const ve = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+    const de = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
+    const at = new Date(coverage.verifiedAt);
+    expect(coverageVerificationBadge(coverage, testStamp([caracas]))?.detail).toBe(
+      `Verificada por Ana Gómez el ${ve.date(at, 'America/Caracas')}`,
+    );
+    expect(coverageVerificationBadge(coverage, testStamp([berlin]))?.detail).toBe(
+      `Verificada por Ana Gómez el ${de.date(at, 'Europe/Berlin')}`,
+    );
+    expect(coverageVerificationBadge(coverage, stampPainters(null))?.detail).toBe('Verificada por Ana Gómez el —');
   });
 });

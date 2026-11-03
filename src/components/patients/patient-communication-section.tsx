@@ -4,7 +4,8 @@ import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import {
   CHANNEL_LABELS,
   getPatientCommunication,
@@ -165,6 +166,7 @@ export function PatientCommunicationSection({
   onChanged,
 }: PatientCommunicationSectionProps) {
   const ids = useId();
+  const stamp = useSedeStamp(token);
   const [data, setData] = useState<PatientCommunication | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -303,7 +305,7 @@ export function PatientCommunicationSection({
             {optIn ? (
               <span className="tabular-nums">
                 {copy.optIn(
-                  formatDate(optIn.at),
+                  stamp.date(optIn.at),
                   OPT_IN_SOURCE_LABELS[optIn.source],
                   optIn.recordedBy?.fullName ?? null,
                 )}
@@ -318,7 +320,7 @@ export function PatientCommunicationSection({
           <Row label={copy.reminders}>
             {optOut ? (
               <Badge variant="warning" className="whitespace-normal tabular-nums">
-                {copy.optedOut(formatDate(optOut.at), OPT_OUT_SOURCE_LABELS[optOut.source])}
+                {copy.optedOut(stamp.date(optOut.at), OPT_OUT_SOURCE_LABELS[optOut.source])}
               </Badge>
             ) : (
               <span>{copy.remindersActive}</span>
@@ -357,6 +359,7 @@ export function PatientCommunicationSection({
           ) : undefined
         }
       />
+      <SedeStampNote stamp={stamp} />
       {content()}
 
       {draft ? (

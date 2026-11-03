@@ -83,6 +83,7 @@ export function PatientConsentStep({
       >
         {current ? (
           <ConsentScopeFields
+            token={token}
             idPrefix="pcw-consent"
             policy={current}
             value={value}

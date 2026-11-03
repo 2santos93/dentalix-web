@@ -13,7 +13,8 @@ import {
   agreementStatusBadge,
   agreementValidityLabel,
 } from '@/lib/patients/agreement-presentation';
-import { formatCivilDate, formatDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AGREEMENT_KIND_LABELS } from '@/components/agreements/agreement-labels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -72,6 +73,7 @@ export function PatientAgreementSection({
   role,
 }: PatientAgreementSectionProps) {
   const ids = useId();
+  const stamp = useSedeStamp(token);
   const [data, setData] = useState<PatientAgreementResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -254,13 +256,13 @@ export function PatientAgreementSection({
                     {h.agreement.name} · {h.agreement.payer.name}
                   </span>
                   <span className="text-muted tabular-nums">
-                    {h.validFrom ? formatCivilDate(h.validFrom) : 'Sin inicio'}
+                    {h.validFrom ? stamp.civilDate(h.validFrom) : 'Sin inicio'}
                     {' – '}
-                    {h.validTo ? formatCivilDate(h.validTo) : 'Sin fin'}
+                    {h.validTo ? stamp.civilDate(h.validTo) : 'Sin fin'}
                   </span>
                   {h.retiredAt ? (
                     <span className="text-muted tabular-nums">
-                      {copy.retiredOn(formatDate(h.retiredAt))}
+                      {copy.retiredOn(stamp.date(h.retiredAt))}
                     </span>
                   ) : null}
                 </li>
@@ -303,6 +305,7 @@ export function PatientAgreementSection({
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
+      <SedeStampNote stamp={stamp} />
       {content()}
 
       {dialogOpen ? (

@@ -9,7 +9,8 @@ import {
   type PostOpChannel,
   type PostOpDeliverySummary,
 } from '@/lib/postop/postop-api';
-import { formatDate, formatDateTime } from '@/lib/format/date';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
@@ -54,10 +55,12 @@ function ListSkeleton() {
   );
 }
 
-function OpenedBadge({ at }: { at: string | null }) {
+function OpenedBadge({ at, stamp }: { at: string | null; stamp: SedePainters }) {
   if (!at) return null;
+  // Sin formato de sede, la insignia no lleva título (no se anuncia «—»).
+  const when = stamp.maybe.dateTime(at);
   return (
-    <Badge variant="success" title={copy.openedAt(formatDateTime(at))}>
+    <Badge variant="success" title={when ? copy.openedAt(when) : undefined}>
       {copy.opened}
     </Badge>
   );
@@ -74,6 +77,7 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const stamp = useSedeStamp(token);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,7 +120,9 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
       id: 'date',
       header: copy.colDate,
       mobile: 'trailing',
-      cell: (d) => <span className="t-data">{formatDate(d.deliveredAt)}</span>,
+      cellClassName: 't-data',
+      cell: (d) => stamp.date(d.deliveredAt),
+      mobileCell: (d) => stamp.maybe.date(d.deliveredAt),
     },
     {
       id: 'instructions',
@@ -136,13 +142,13 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
       cell: (d) => (
         <span className="flex flex-wrap items-center gap-2">
           <span>{copy.channel[d.channel]}</span>
-          <OpenedBadge at={d.firstOpenedAt} />
+          <OpenedBadge at={d.firstOpenedAt} stamp={stamp} />
         </span>
       ),
       // En la tarjeta, la versión va con el canal (en la tabla, bajo el título).
       mobileCell: (d) => (
         <>
-          <span>{version(d)}</span> · {copy.channel[d.channel]} <OpenedBadge at={d.firstOpenedAt} />
+          <span>{version(d)}</span> · {copy.channel[d.channel]} <OpenedBadge at={d.firstOpenedAt} stamp={stamp} />
         </>
       ),
     },
@@ -162,27 +168,30 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
   ];
 
   return (
-    <AsyncSection
-      loading={loading}
-      error={error}
-      onRetry={() => setReloadKey((k) => k + 1)}
-      skeleton={<ListSkeleton />}
-    >
-      {/* Vacío compacto: es un bloque dentro de la historia clínica, no la página. */}
-      <DataList
-        label={copy.tableLabel}
-        rows={deliveries}
-        columns={columns}
-        getRowKey={(d) => d.id}
-        empty={
-          <EmptyState
-            size="inline"
-            title={copy.empty}
-            description={copy.emptyHint}
-            icon={<ClipboardList aria-hidden />}
-          />
-        }
-      />
-    </AsyncSection>
+    <>
+      <SedeStampNote stamp={stamp} />
+      <AsyncSection
+        loading={loading}
+        error={error}
+        onRetry={() => setReloadKey((k) => k + 1)}
+        skeleton={<ListSkeleton />}
+      >
+        {/* Vacío compacto: es un bloque dentro de la historia clínica, no la página. */}
+        <DataList
+          label={copy.tableLabel}
+          rows={deliveries}
+          columns={columns}
+          getRowKey={(d) => d.id}
+          empty={
+            <EmptyState
+              size="inline"
+              title={copy.empty}
+              description={copy.emptyHint}
+              icon={<ClipboardList aria-hidden />}
+            />
+          }
+        />
+      </AsyncSection>
+    </>
   );
 }

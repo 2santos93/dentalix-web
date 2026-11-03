@@ -53,6 +53,7 @@ import { PerioTab } from '@/components/perio/perio-tab';
 import { PatientPrescriptionsTab } from '@/components/prescriptions/patient-prescriptions-tab';
 import { PatientImplantsTab } from '@/components/implants/patient-implants-tab';
 import { PatientDocumentsTab } from '@/components/patient-documents/patient-documents-tab';
+import { SedeNoticeOwner } from '@/components/locations/sede-stamp-note';
 import { PatientTabPanel as TabPanel } from '@/components/patients/patient-tab-panel';
 import { canRegisterImplants } from '@/lib/implants/implants-api';
 import { AuditLogView } from '@/components/audit/audit-log-view';
@@ -371,6 +372,7 @@ function PatientDetailView() {
   }
 
   return (
+    <SedeNoticeOwner token={accessToken} className="mb-4">
     <div className="flex flex-1 flex-col">
       <PatientRecordHeader
         patient={loading ? null : patient}
@@ -713,5 +715,6 @@ function PatientDetailView() {
         </div>
       ) : null}
     </div>
+    </SedeNoticeOwner>
   );
 }

@@ -1,9 +1,15 @@
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { listLocations } from '@/lib/locations/locations-api';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MedicalHistoryPanel } from './medical-history-panel';
 import { getMedicalHistory, saveMedicalHistory } from '@/lib/patients/clinical-api';
 import { listStaff } from '@/lib/staff/staff-api';
 import type { MedicalHistory } from '@/lib/clinical/clinical-types';
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -136,7 +142,7 @@ describe('MedicalHistoryPanel', () => {
     // test, su `setState` caería fuera de `act()`.
     mockedListStaff.mockReturnValue(new Promise(() => {}));
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
-    expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
+    expect(screen.getAllByRole('status').map((el) => el.textContent).join(' ')).toMatch(/cargando/i);
   });
 
   it('sin anamnesis no repite el aviso: ofrece «Registrar anamnesis» y el formulario sale vacío detrás', async () => {
@@ -357,5 +363,27 @@ describe('MedicalHistoryPanel', () => {
     await user.type(screen.getByLabelText(/notas/i), ' (actualizado)');
     expect(screen.getByRole('button', { name: 'Guardar nueva versión' })).toBeEnabled();
     expect(mockedSave).not.toHaveBeenCalled();
+  });
+});
+
+describe('MedicalHistoryPanel con cada sede (DX-354b)', () => {
+  // 03:30Z del 2 de enero: 1 de enero en Caracas, 2 de enero en Berlín.
+  const at = { ...latest, createdAt: '2026-01-02T03:30:00.000Z' };
+  const mockedSedes = listLocations as jest.Mock;
+  afterEach(() => mockedSedes.mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]));
+
+  it.each([['caracas'], ['berlin']] as const)('con la pantalla en %s: «Registrada el …» con su formato', async (key) => {
+    mockedSedes.mockResolvedValue([STAMP_SEDES[key]]);
+    mockedGet.mockResolvedValue(at);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await waitFor(() => expect(screen.getByText(new RegExp(`^Registrada el ${dateTimeIn(key, at.createdAt)}`))).toBeInTheDocument());
+  });
+
+  it('sin formato: «—» en la frase y el aviso una vez', async () => {
+    mockedSedes.mockRejectedValue(new Error('red'));
+    mockedGet.mockResolvedValue(at);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    expect(await screen.findByText(/^Registrada el —/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText(/No se pudo saber el formato regional/)).toHaveLength(1));
   });
 });
