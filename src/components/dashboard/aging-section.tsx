@@ -6,6 +6,7 @@ import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
+import { RateCountNotice } from '@/components/payments/rate-count-notice';
 import { getReceivablesSummary, overdueOf, type AgingBuckets, type AgingTotal } from './inicio-api';
 import { sectionLinkClass } from './today-section';
 import { useLoad } from './use-load';
@@ -14,11 +15,6 @@ export const agingCopy = {
   heading: 'Cartera por antigüedad',
   asOf: (day: string) =>
     `Al ${day}. Por moneda de cada plan, sin sumar monedas entre sí; lo abonado en otra moneda ya cuenta con su tasa. El saldo a favor no se resta.`,
-  // DX-472-bis: lo abonado en otra moneda que no se pudo contar.
-  incomplete: (n: number) =>
-    n === 1
-      ? 'Cifras incompletas: falta contar 1 abono en otra moneda. El detalle está en la cartera.'
-      : `Cifras incompletas: falta contar ${n} abonos en otra moneda. El detalle está en la cartera.`,
   link: 'Ver cartera',
   loading: 'Cargando la cartera…',
   error: 'No pudimos cargar la cartera.',
@@ -90,11 +86,12 @@ export function AgingSection({ token, scopeKey, fmt }: { token: string; scopeKey
               <AgingCurrency key={total.currency} total={total} fmt={fmt} />
             ))}
           </ul>
-          {load.data.paymentsWithoutRateCount > 0 ? (
-            <p role="status" className="text-xs text-warning-text">
-              {copy.incomplete(load.data.paymentsWithoutRateCount)}
-            </p>
-          ) : null}
+          {/* DX-472-ter: «sin tasa» o «el proveedor no respondió», con los textos del estado de cuenta. */}
+          <RateCountNotice
+            paymentsCount={load.data.paymentsWithoutRateCount}
+            timedOut={load.data.rateProviderTimedOut}
+            onRetry={load.reload}
+          />
         </>
       )}
     </section>

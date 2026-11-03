@@ -14591,6 +14591,10 @@ export interface components {
             /** @description Parte de la deuda envejece desde la fecha del plan (aceptación, presentación o creación), no desde un vencimiento: «fecha aproximada» */
             ageApproximate: boolean;
             nextInstallment: components["schemas"]["AgingNextInstallmentDto"] | null;
+            /** @description DX-472-ter: abonos en otra moneda sin contar en los planes de ESTA moneda (sin tasa o sin respuesta del proveedor); el `paymentsWithoutRateCount` de la fila, por moneda */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-ter: el proveedor de tasas no respondió a tiempo para algún plan de esta moneda */
+            rateProviderTimedOut: boolean;
         };
         AgingLastPaymentDto: {
             /**

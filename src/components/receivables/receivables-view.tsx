@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Lock, SlidersHorizontal, TriangleAlert } from 'lucide-react';
+import { Download, Lock, SlidersHorizontal } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -22,9 +22,7 @@ import { parseMoneyInput } from '@/lib/format/money';
 import { saveCsv } from '@/lib/files/save-csv';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
-import { Callout } from '@/components/ui/callout';
-import { RateProviderNotice } from '@/components/payments/rate-provider-notice';
-import { withoutRateCopy } from '@/components/payments/without-rate-notice';
+import { RateCountNotice } from '@/components/payments/rate-count-notice';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -606,17 +604,14 @@ export function ReceivablesView({ token }: { token: string }) {
  * se resuelve desde el estado de cuenta o los ajustes de la tasa.
  */
 function RateNotices({ page, onRetry }: { page: ReceivablesAgingPage; onRetry: () => void }) {
-  if (page.rateProviderTimedOut) {
-    return (
-      <RateProviderNotice detail={receivablesCopy.providerDetail(page.paymentsWithoutRateCount)} onRetry={onRetry} />
-    );
-  }
-  // Sin el campo (API anterior a DX-472-bis), nada que avisar.
-  if (!page.paymentsWithoutRateCount) return null;
   return (
-    <Callout tone="warning" icon={TriangleAlert} title={withoutRateCopy.title(page.paymentsWithoutRateCount)}>
-      <p>{receivablesCopy.withoutRateBody}</p>
-    </Callout>
+    <RateCountNotice
+      paymentsCount={page.paymentsWithoutRateCount}
+      timedOut={page.rateProviderTimedOut}
+      onRetry={onRetry}
+      providerDetail={receivablesCopy.providerDetail(page.paymentsWithoutRateCount)}
+      withoutRateBody={receivablesCopy.withoutRateBody}
+    />
   );
 }
 

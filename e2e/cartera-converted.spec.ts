@@ -22,6 +22,11 @@ import { API_URL } from './support/urls';
  *    proveedor). La cartera avisa «1 abono sin tasa» y marca la fila.
  *
  * A 1440 y 390 px, sin desplazamiento lateral, y axe en claro y oscuro.
+ *
+ * DX-472-ter: Inicio avisa con los textos del estado de cuenta («1 abono sin
+ * tasa» o «el proveedor no respondió», este con la respuesta de la API
+ * interceptada: la suite no tiene proveedor), y el CSV de la cartera dice en
+ * su última columna qué líneas están incompletas.
  */
 const rawSuffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const password = 'Password123!';
@@ -163,6 +168,66 @@ for (const viewport of VIEWPORTS) {
     expect(violations.dark).toEqual([]);
   });
 }
+
+for (const viewport of VIEWPORTS) {
+  test(`Inicio: «sin tasa» con el texto del estado de cuenta (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await loginAs(page, origin, adminEmail, password);
+    await page.goto(`${origin}/dashboard`);
+    const section = page.getByRole('region', { name: 'Cartera por antigüedad' });
+    const notice = section.getByRole('status').filter({ hasText: '1 abono sin tasa' });
+    await expect(notice).toBeVisible({ timeout: 15_000 });
+    await expect(notice).toContainText('El saldo todavía no los cuenta: falta la tasa de cambio de su día.');
+    await expect(section.getByRole('button', { name: 'Reintentar' })).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+    const violations = await axeInBothThemes(page, notice);
+    expect(violations.light).toEqual([]);
+    expect(violations.dark).toEqual([]);
+  });
+
+  test(`Inicio: el proveedor no respondió, con «Reintentar» (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    // Solo la primera respuesta dice «no respondió»; el reintento llega completo.
+    let first = true;
+    await page.route('**/receivables/aging/summary**', async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as Record<string, unknown>;
+      const timedOut = first;
+      first = false;
+      await route.fulfill({ response, json: { ...body, rateProviderTimedOut: timedOut } });
+    });
+    await loginAs(page, origin, adminEmail, password);
+    await page.goto(`${origin}/dashboard`);
+    const section = page.getByRole('region', { name: 'Cartera por antigüedad' });
+    const notice = section.getByRole('status').filter({ hasText: 'El proveedor de tasas no respondió' });
+    await expect(notice).toBeVisible({ timeout: 15_000 });
+    await expect(notice).toContainText('El saldo todavía no cuenta 1 abono en otra moneda.');
+    await expectNoHorizontalScroll(page);
+    const violations = await axeInBothThemes(page, notice);
+    expect(violations.light).toEqual([]);
+    expect(violations.dark).toEqual([]);
+    await notice.getByRole('button', { name: 'Reintentar' }).click();
+    await expect(section.getByRole('status').filter({ hasText: '1 abono sin tasa' })).toBeVisible({ timeout: 15_000 });
+    await expect(notice).toHaveCount(0);
+  });
+}
+
+test('CSV: la última columna dice qué líneas tienen cifras incompletas', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS[0]);
+  await loginAs(page, origin, adminEmail, password);
+  await page.goto(`${origin}/caja/cartera`);
+  await expect(page.getByRole('row', { name: new RegExp(`Sintasa ${lastName}`) })).toBeVisible({ timeout: 15_000 });
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Exportar CSV' }).click(),
+  ]);
+  const { readFile } = await import('node:fs/promises');
+  const lines = (await readFile((await download.path())!, 'utf8')).replace(/^\uFEFF/, '').trim().split('\r\n');
+  expect(lines[0].split(',').at(-1)).toBe('Cifras incompletas');
+  const lineOf = (name: string) => lines.find((l) => l.startsWith(`"${name} ${lastName}",`)) ?? '';
+  expect(lineOf('Sintasa').split(',').at(-1)).toBe('"Sin tasa"');
+  expect(lineOf('Parcial').split(',').at(-1)).toBe('');
+});
 
 test('cobro: el selector de plan da el saldo convertido del estado de cuenta', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS[1]);
