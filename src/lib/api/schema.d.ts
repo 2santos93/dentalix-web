@@ -3288,7 +3288,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Caja: abonos del período con resumen por moneda y método */
+        /**
+         * Caja: abonos del período con resumen por moneda y método
+         * @description SEC-043: con «arqueo ciego», quien no es ADMIN no recibe los abonos que cuentan en una caja aún abierta (ni en filas ni en el resumen): `blindHidden` lo indica. Aparecen al cerrarla.
+         */
         get: operations["PaymentsController_listCash"];
         put?: never;
         post?: never;
@@ -3307,7 +3310,7 @@ export interface paths {
         };
         /**
          * Caja en CSV: abonos del período con medio y referencia
-         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe.
+         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe. SEC-043: con «arqueo ciego», quien no es ADMIN no recibe los abonos de cajas aún abiertas, como en `GET /payments`.
          */
         get: operations["PaymentsController_listCashCsv"];
         put?: never;
@@ -4127,7 +4130,7 @@ export interface paths {
         };
         /**
          * Una caja: fondo, abonos, anulados, ajustes, arqueo y cierres
-         * @description Con «arqueo ciego» y la caja abierta, quien no es ADMIN recibe `expected` y `payments` a null.
+         * @description Con «arqueo ciego» y la caja abierta, quien no es ADMIN recibe `expected`, `payments`, `voidedPayments` y `adjustments` a null, y los cierres anteriores sin líneas (SEC-043).
          */
         get: operations["CashSessionsController_detail"];
         put?: never;
@@ -4149,7 +4152,7 @@ export interface paths {
         put?: never;
         /**
          * Cerrar la caja con el arqueo por moneda y método
-         * @description Calcula el esperado (fondo + abonos del turno + ajustes) y guarda contado y diferencia. Una diferencia distinta de 0 exige motivo. El cierre es inmutable y deja la fecha de bloqueo sugerida (DX-091).
+         * @description Calcula el esperado (fondo + abonos del turno + ajustes) y guarda contado y diferencia. Una diferencia distinta de 0 exige motivo (400), salvo en un cierre a ciegas de quien no es ADMIN: ese se guarda siempre y, si no cuadra y no trae motivo, queda marcado «diferencia sin justificar» (SEC-043). El cierre es inmutable y deja la fecha de bloqueo sugerida (DX-091).
          */
         post: operations["CashSessionsController_close"];
         delete?: never;
@@ -13144,6 +13147,8 @@ export interface components {
             scope: components["schemas"]["CashScopeDto"];
             /** @description Resumen del período entero con los mismos filtros. */
             summary: components["schemas"]["CashPaymentsSummaryDto"];
+            /** @description SEC-043: rige el arqueo ciego y quien consulta no es ADMIN: filas, total y resumen no incluyen los abonos que cuentan en una caja aún abierta (aparecen al cerrarla). */
+            blindHidden: boolean;
         };
         RecordPaymentDto: {
             /**
@@ -15539,6 +15544,8 @@ export interface components {
             blind: boolean;
             hasDifference: boolean;
             differenceReason: string | null;
+            /** @description SEC-043: cierre a ciegas que no cuadró y llegó sin motivo. Se guardó igual y queda para revisión de administración. */
+            unjustifiedDifference: boolean;
             notes: string | null;
             /**
              * @description Fecha de bloqueo contable sugerida para la sede (día civil del cierre, DX-091). No bloquea nada todavía.
@@ -15582,23 +15589,25 @@ export interface components {
             floats: components["schemas"]["CashMoneyDto"][];
             /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
             differences: components["schemas"]["CashMoneyDto"][];
+            /** @description SEC-043: el último cierre (si está cerrada) es una «diferencia sin justificar». */
+            unjustifiedDifference: boolean;
             notes: string | null;
             /** @example UTC */
             timeZone: string;
-            /** @description Arqueo ciego para quien consulta: `expected` y `payments` vienen a null hasta cerrar. */
+            /** @description Arqueo ciego para quien consulta: `expected`, `payments`, `voidedPayments` y `adjustments` vienen a null hasta cerrar, y los cierres anteriores (si se reabrió) sin líneas (SEC-043). */
             blindHidden: boolean;
             expected: components["schemas"]["CashExpectedLineDto"][] | null;
             payments: components["schemas"]["CashSessionPaymentDto"][] | null;
-            /** @description Anulados (DX-049): no cuentan en el esperado salvo si se anularon con la caja cerrada */
-            voidedPayments: components["schemas"]["CashVoidedPaymentDto"][];
+            /** @description Anulados (DX-049): no cuentan en el esperado salvo si se anularon con la caja cerrada. null con arqueo ciego. */
+            voidedPayments: components["schemas"]["CashVoidedPaymentDto"][] | null;
             /** @description Salidas de caja menor vivas del turno (DX-274). Se ven también con el arqueo ciego. */
             outflows: components["schemas"]["CashOutflowDto"][];
             /** @description Salidas anuladas: no restan salvo si se anularon con la caja cerrada */
             voidedOutflows: components["schemas"]["CashVoidedOutflowDto"][];
             /** @description DX-253: devoluciones de saldo a favor en efectivo del turno: restan en el esperado de CASH (dentro de «Salidas»). */
             creditRefunds: components["schemas"]["CashCreditRefundDto"][];
-            /** @description Ajustes que cuentan en esta caja */
-            adjustments: components["schemas"]["CashAdjustmentDto"][];
+            /** @description Ajustes que cuentan en esta caja. null con arqueo ciego. */
+            adjustments: components["schemas"]["CashAdjustmentDto"][] | null;
             /** @description Ajustes nacidos de esta caja ya cerrada, que cuentan en otra */
             laterAdjustments: components["schemas"]["CashAdjustmentDto"][];
             /** @description Cierre vigente */
@@ -15655,6 +15664,8 @@ export interface components {
             floats: components["schemas"]["CashMoneyDto"][];
             /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
             differences: components["schemas"]["CashMoneyDto"][];
+            /** @description SEC-043: el último cierre (si está cerrada) es una «diferencia sin justificar». */
+            unjustifiedDifference: boolean;
         };
         CashSessionPageDto: {
             items: components["schemas"]["CashSessionSummaryDto"][];

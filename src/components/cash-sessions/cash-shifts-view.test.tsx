@@ -126,6 +126,21 @@ describe('CashShiftsView (DX-027)', () => {
     expect(screen.getByText('Ves tus turnos.')).toBeInTheDocument();
   });
 
+  it('un cierre a ciegas sin motivo que no cuadró se marca «Sin justificar» en la lista (SEC-043)', async () => {
+    mockedCurrent.mockResolvedValue({ locationId: 'loc-1', settings, session: null });
+    mockedList.mockResolvedValue(
+      page([
+        closedCashSessionFixture({ id: 'cs-0', unjustifiedDifference: true }),
+        closedCashSessionFixture({ id: 'cs-9' }),
+      ]),
+    );
+    render(<CashShiftsView token={token} />);
+    const table = await screen.findByRole('table', { name: 'Turnos de caja' });
+    const rows = within(table).getAllByRole('row');
+    expect(within(rows[1]).getByText('Sin justificar')).toBeInTheDocument();
+    expect(within(rows[2]).queryByText('Sin justificar')).not.toBeInTheDocument();
+  });
+
   it('arqueo ciego: no enseña lo esperado', async () => {
     mockedCurrent.mockResolvedValue({
       locationId: 'loc-1',

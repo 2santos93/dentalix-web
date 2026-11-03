@@ -21,7 +21,7 @@ const copy = {
     'Sin la caja abierta en la sede, no se puede registrar un abono en efectivo. Los demás métodos siguen igual.',
   blindTitle: 'Arqueo ciego',
   blindHint:
-    'Al cerrar, recepción cuenta por moneda y método antes de ver lo esperado. Administración lo ve siempre.',
+    'Recepción cuenta por moneda y método antes de ver lo esperado. Mientras su caja está abierta no ve lo esperado, los cobros, las anulaciones ni los ajustes del turno, y la lista de abonos y su CSV no incluyen los de cajas abiertas. Si al cerrar no cuadra y no deja motivo, el cierre queda como «diferencia sin justificar» para que lo revises. Administración lo ve todo siempre.',
   saving: 'Guardando…',
   saved: 'Ajustes de caja guardados.',
   loadError: 'No pudimos cargar los ajustes de caja.',

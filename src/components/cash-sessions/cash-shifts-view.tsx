@@ -38,6 +38,7 @@ import { ResultCount } from '@/components/shared/list-toolbar';
 import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
@@ -58,6 +59,8 @@ const copy = {
   noSessionHint: 'Ábrela con el fondo con el que empiezas: los abonos que registres entran en ella.',
   requireOpen: 'Esta clínica exige caja abierta para cobrar en efectivo.',
   blindNote: 'Arqueo ciego: cuenta antes de ver lo esperado; lo verás cuando cierres la caja.',
+  // SEC-043: cierre a ciegas que no cuadró y llegó sin motivo.
+  unjustified: 'Sin justificar',
   openedAt: (when: string) => `Abierta el ${when}`,
   // GLOBAL-G1: una caja cuya sede no tiene zona no pinta la hora en otra zona.
   noZone: 'Por configurar',
@@ -426,21 +429,35 @@ function shiftColumns(
       mobile: 'trailing',
       cell: (item) =>
         item.status === 'CLOSED' ? (
-          <span
-            className={cn(
-              'font-medium',
-              item.differences.some((d) => d.amount !== 0) ? 'text-danger-text' : 'text-ink',
-            )}
-          >
-            {differenceText(item.differences, moneyIn(item.location.id))}
+          <span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+            <span
+              className={cn(
+                'font-medium',
+                item.differences.some((d) => d.amount !== 0) ? 'text-danger-text' : 'text-ink',
+              )}
+            >
+              {differenceText(item.differences, moneyIn(item.location.id))}
+            </span>
+            {item.unjustifiedDifference ? (
+              <Badge variant="warning" dot>
+                {copy.unjustified}
+              </Badge>
+            ) : null}
           </span>
         ) : (
           <span className="text-muted">—</span>
         ),
       mobileCell: (item) =>
         item.status === 'CLOSED' ? (
-          <span className={cn(item.differences.some((d) => d.amount !== 0) && 'text-danger-text')}>
-            {differenceText(item.differences, moneyIn(item.location.id))}
+          <span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+            <span className={cn(item.differences.some((d) => d.amount !== 0) && 'text-danger-text')}>
+              {differenceText(item.differences, moneyIn(item.location.id))}
+            </span>
+            {item.unjustifiedDifference ? (
+              <Badge variant="warning" dot>
+                {copy.unjustified}
+              </Badge>
+            ) : null}
           </span>
         ) : null,
     },

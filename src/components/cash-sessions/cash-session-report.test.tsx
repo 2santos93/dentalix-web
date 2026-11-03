@@ -65,6 +65,34 @@ describe('CashSessionReport (DX-027)', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
+  it('arqueo ciego abierto (SEC-043): sin anulaciones ni ajustes, que dejarían deducir lo esperado', () => {
+    render(
+      <CashSessionReport
+        session={cashSessionFixture({
+          blindHidden: true,
+          expected: null,
+          payments: null,
+          voidedPayments: null,
+          adjustments: null,
+        })}
+      />,
+    );
+    expect(screen.getByText(/las anulaciones y los ajustes del turno se ven cuando la caja está cerrada/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Anulaciones' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Ajustes en este turno' })).not.toBeInTheDocument();
+    // Las salidas las hizo quien cuenta: siguen a la vista.
+    expect(screen.getByRole('heading', { name: 'Salidas de caja' })).toBeInTheDocument();
+  });
+
+  it('cierre a ciegas sin motivo que no cuadró (SEC-043): «Diferencia sin justificar» para revisar', () => {
+    const base = closedCashSessionFixture();
+    const closing = { ...base.closing!, blind: true, differenceReason: null, unjustifiedDifference: true };
+    render(<CashSessionReport session={{ ...base, unjustifiedDifference: true, closing, closings: [closing] }} />);
+    expect(screen.getByText('Diferencia sin justificar')).toBeInTheDocument();
+    expect(screen.getByText(/administración la revisa con quien contó/)).toBeInTheDocument();
+    expect(screen.getByText('Cerrada con arqueo ciego.')).toBeInTheDocument();
+  });
+
   it('DX-516: los ajustes por medio de pago se ven bajo los cobros y suman al esperado; sin ellos, nada', () => {
     const [cash, card] = cashSessionFixture().expected!;
     const { unmount } = render(<CashSessionReport session={cashSessionFixture()} />);

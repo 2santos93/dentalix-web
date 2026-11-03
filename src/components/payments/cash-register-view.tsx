@@ -39,6 +39,7 @@ import { DateRangePicker } from '@/components/ui/date-picker';
 import { NativeSelect } from '@/components/ui/native-select';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
+import { Callout } from '@/components/ui/callout';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
 import { ResultCount } from '@/components/shared/list-toolbar';
@@ -138,6 +139,10 @@ const copy = {
   periodNote: (days: string) => `${days} · días según la hora de la sede`,
   periodDays: (from: string, to: string) => (from === to ? from : `del ${from} al ${to}`),
   registeredOn: (date: string) => `Registrado el ${date}`,
+  // SEC-043: con arqueo ciego, recepción no ve los abonos de cajas abiertas.
+  blindTitle: 'Arqueo ciego: faltan los abonos de las cajas abiertas',
+  blindHint:
+    'No salen en la lista, el resumen ni el CSV hasta que se cierre su caja, para que nadie pueda saber lo esperado antes de contar. Para ver o anular un abono, imprimir su recibo o cobrar, entra en el plan del paciente.',
   empty: 'No hay abonos en este período.',
   emptyHint: 'Prueba con otro rango de fechas o con otro medio de pago.',
   invoiceSubject: (patient: string, amount: string) => `${patient} · ${amount}`,
@@ -571,6 +576,12 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
         ) : showResults ? (
           <>
+            {!loading && !loadError && data?.blindHidden ? (
+              <Callout tone="info" title={copy.blindTitle} data-testid="cash-blind-hidden">
+                {copy.blindHint}
+              </Callout>
+            ) : null}
+
             {!loading && !loadError && data ? (
               <ResultCount
                 total={data.total}

@@ -31,6 +31,7 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
     reopenCount: 0,
     floats: [{ currency: 'USD', amount: 50_000 }],
     differences: [],
+    unjustifiedDifference: false,
     notes: null,
     timeZone: 'America/Caracas',
     blindHidden: false,
@@ -98,6 +99,7 @@ export function closedCashSessionFixture(overrides: Partial<CashSessionDetail> =
     blind: false,
     hasDifference: true,
     differenceReason: 'Faltó cambio',
+    unjustifiedDifference: false,
     notes: null,
     suggestedLockDate: '2026-10-17',
     lines: [

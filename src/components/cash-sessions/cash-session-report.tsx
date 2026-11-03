@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
+import { Badge } from '@/components/ui/badge';
 
 const copy = {
   titleClosed: 'Informe de cierre de caja',
@@ -44,9 +45,13 @@ const copy = {
   colDifference: 'Diferencia',
   notCounted: 'Sin contar',
   noLines: 'Sin movimientos en este turno.',
-  blind: 'Arqueo ciego: lo esperado y los cobros del turno se ven cuando la caja está cerrada.',
+  blind:
+    'Arqueo ciego: lo esperado, los cobros, las anulaciones y los ajustes del turno se ven cuando la caja está cerrada.',
   differenceReason: 'Motivo de la diferencia',
   squared: 'El arqueo cuadra.',
+  // SEC-043: cerrada a ciegas sin motivo y sin cuadrar; la revisa administración.
+  unjustified: 'Diferencia sin justificar',
+  unjustifiedHint: 'Se cerró a ciegas sin motivo: administración la revisa con quien contó.',
   closingNotes: 'Notas del cierre',
   lockDate: 'Fecha de bloqueo sugerida',
   lockDateHint: 'Para el cierre contable de la sede (aún no bloquea nada).',
@@ -316,7 +321,18 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
         {closing ? (
           <DescriptionList className="mt-4 gap-y-3">
             <Fact label={copy.differenceReason}>
-              {closing.hasDifference ? closing.differenceReason : copy.squared}
+              {closing.unjustifiedDifference ? (
+                <>
+                  <Badge variant="warning" dot>
+                    {copy.unjustified}
+                  </Badge>
+                  <span className="mt-1 block text-xs text-muted">{copy.unjustifiedHint}</span>
+                </>
+              ) : closing.hasDifference ? (
+                closing.differenceReason
+              ) : (
+                copy.squared
+              )}
             </Fact>
             <Fact label={copy.lockDate}>
               <span className="tabular-nums">{formatCivilDate(closing.suggestedLockDate)}</span>
@@ -369,46 +385,51 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
         </Section>
       ) : null}
 
-      <Section title={copy.voidedTitle}>
-        {session.voidedPayments.length === 0 ? (
-          <p className="text-muted">{copy.noVoided}</p>
-        ) : (
-          <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-label={copy.voidedLabel}>
-            {session.voidedPayments.map((p) => (
-              <li key={p.id} className="cash-report-row flex flex-col gap-1 py-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-medium">
-                    {p.patient.fullName}
-                    {p.receiptNumber ? <span className="ml-2 text-xs text-muted tabular-nums">{p.receiptNumber}</span> : null}
-                  </span>
-                  <span className="font-medium tabular-nums line-through decoration-1">
-                    {formatCurrency(p.amount, p.currency)}
-                  </span>
-                </div>
-                <p className="text-xs text-muted">
-                  {copy.colReason}: {p.voidReason ?? '—'} · {copy.colVoidedBy}: {p.voidedBy?.fullName ?? '—'}
-                  {p.voidedAt ? ` · ${when(p.voidedAt)}` : ''}
-                </p>
-                {p.bookedAsAdjustment ? <p className="text-xs text-warning-text">{copy.bookedElsewhere}</p> : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      {/* SEC-043: con arqueo ciego llegan a null (dejarían deducir lo esperado). */}
+      {session.voidedPayments ? (
+        <Section title={copy.voidedTitle}>
+          {session.voidedPayments.length === 0 ? (
+            <p className="text-muted">{copy.noVoided}</p>
+          ) : (
+            <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-label={copy.voidedLabel}>
+              {session.voidedPayments.map((p) => (
+                <li key={p.id} className="cash-report-row flex flex-col gap-1 py-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-medium">
+                      {p.patient.fullName}
+                      {p.receiptNumber ? <span className="ml-2 text-xs text-muted tabular-nums">{p.receiptNumber}</span> : null}
+                    </span>
+                    <span className="font-medium tabular-nums line-through decoration-1">
+                      {formatCurrency(p.amount, p.currency)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted">
+                    {copy.colReason}: {p.voidReason ?? '—'} · {copy.colVoidedBy}: {p.voidedBy?.fullName ?? '—'}
+                    {p.voidedAt ? ` · ${when(p.voidedAt)}` : ''}
+                  </p>
+                  {p.bookedAsAdjustment ? <p className="text-xs text-warning-text">{copy.bookedElsewhere}</p> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      ) : null}
 
       <Section title={copy.outflowsTitle}>
         <OutflowList session={session} when={when} />
       </Section>
 
-      <Section title={copy.adjustmentsTitle}>
-        <AdjustmentList
-          items={session.adjustments}
-          label={copy.adjustmentsLabel}
-          when={when}
-          linkSessions={linkSessions}
-          mode="origin"
-        />
-      </Section>
+      {session.adjustments ? (
+        <Section title={copy.adjustmentsTitle}>
+          <AdjustmentList
+            items={session.adjustments}
+            label={copy.adjustmentsLabel}
+            when={when}
+            linkSessions={linkSessions}
+            mode="origin"
+          />
+        </Section>
+      ) : null}
 
       {session.laterAdjustments.length > 0 ? (
         <Section title={copy.laterTitle}>

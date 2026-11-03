@@ -146,6 +146,7 @@ function response(overrides: Partial<CashPaymentsResponse> = {}): CashPaymentsRe
     from: '2026-10-15',
     to: '2026-10-15',
     scope: { location: null },
+    blindHidden: false,
     summary: {
       count: 2,
       adjustments: [],
@@ -219,6 +220,22 @@ it('pide el día de hoy al entrar y pinta cada abono con paciente, plan, método
   expect(within(row).getByText('Sede principal')).toBeInTheDocument();
   const amount = within(row).getByText(/150\.000,50/);
   expect(amount.closest('td')).toHaveClass('text-right', 'tabular-nums');
+});
+
+it('arqueo ciego (SEC-043): dice que faltan los abonos de cajas abiertas y dónde verlos; sin él, nada', async () => {
+  mockedList.mockResolvedValue(response({ blindHidden: true, items: [], total: 0 }));
+  const { unmount } = render(<CashRegisterView token="tok" />);
+  const callout = await screen.findByTestId('cash-blind-hidden');
+  expect(callout).toHaveTextContent('Arqueo ciego: faltan los abonos de las cajas abiertas');
+  expect(callout).toHaveTextContent(/entra en el plan del paciente/);
+  // El vacío sigue diciendo lo suyo debajo.
+  expect(screen.getByText('No hay abonos en este período.')).toBeInTheDocument();
+  unmount();
+
+  mockedList.mockResolvedValue(response());
+  render(<CashRegisterView token="tok" />);
+  await screen.findByRole('table', { name: /abonos/i });
+  expect(screen.queryByTestId('cash-blind-hidden')).not.toBeInTheDocument();
 });
 
 it('resume el período por moneda y por método en un registro, no en tarjetas', async () => {
