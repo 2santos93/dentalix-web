@@ -79,6 +79,11 @@ describe('stampPainters', () => {
     expect(stamp.civilDate(null)).toBe('—');
   });
 
+  it('exposes the screen format (null without a clock) for painters that bring their own zone', () => {
+    expect(testStamp([caracas]).fmt).toMatchObject({ locale: 'es-VE', hourCycle: 'h12' });
+    expect(stampPainters(null).fmt).toBeNull();
+  });
+
   it('without a clock everything is «—» and maybe gives null (mobileCell)', () => {
     const stamp = stampPainters(null);
     expect(stamp.date(AT)).toBe('—');

@@ -47,35 +47,23 @@ const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del nav
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
   'components/cash-sessions/cash-shifts-view.tsx': ZONE_24H,
-  'lib/clinical/medical-alerts.ts': ZONE_24H,
   'components/collections/patient-collections-section.tsx': STAMP,
   'components/discounts/discount-policy-manager.tsx': STAMP,
   'components/domains/domains-manager.tsx': STAMP,
   'components/expenses/expense-detail-modal.tsx': STAMP,
-  'components/implants/patient-implants-tab.tsx': STAMP,
   'components/inventory/inventory-item-detail.tsx': STAMP,
   'components/inventory/inventory-view.tsx': STAMP,
   'components/locations/cancellation-policy-settings.tsx': STAMP,
   'components/odontogram/tooth-timeline.tsx': STAMP,
   'components/patient-imports/import-history.tsx': STAMP,
-  'components/patients/clinical-entries-list.tsx': STAMP,
-  'components/patients/medical-history-panel.tsx': STAMP,
-  'components/patients/patient-agreement-section.tsx': STAMP,
-  'components/patients/patient-communication-section.tsx': STAMP,
-  'components/patients/patient-opt-out-warnings.tsx': STAMP,
   'components/payments/cash-register-view.tsx': STAMP,
   'components/platform/platform-mfa-card.tsx': STAMP,
-  'components/postop/patient-postop-deliveries.tsx': STAMP,
-  'components/postop/postop-templates-manager.tsx': STAMP,
-  'components/prescriptions/patient-prescriptions-tab.tsx': STAMP,
-  'components/prescriptions/prescription-templates-manager.tsx': STAMP,
   'components/receivables/debtor-parts.tsx': STAMP,
   'components/support-accesses/support-accesses-view.tsx': STAMP,
   'components/treatment-plans/pending-follow-up-view.tsx': STAMP,
   'components/treatment-plans/plan-options-panel.tsx': STAMP,
   'components/treatment-plans/plan-quote-actions.tsx': STAMP,
   'components/treatment-plans/treatment-plans-tab-copy.ts': STAMP,
-  'lib/patients/member-number.ts': STAMP,
   'lib/treatment-plans/item-attribution.ts': STAMP,
   'lib/treatment-plans/plan-options.ts': STAMP,
 };
@@ -85,7 +73,7 @@ const PENDING: Readonly<Record<string, string>> = {
  * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
  * cierre, `PENDING` desaparece.
  */
-const MAX_PENDING = 32;
+const MAX_PENDING = 20;
 
 const CIVIL_W4 = 'Día civil en `dd/mm/yyyy` fijo: se migra a `fmt.civilDate`/`stamp.civilDate` en DX-354b W4.';
 
@@ -95,7 +83,6 @@ const CIVIL_W4 = 'Día civil en `dd/mm/yyyy` fijo: se migra a `fmt.civilDate`/`s
  */
 const CIVIL_PENDING: Readonly<Record<string, string>> = {
   'components/account-statement/account-statement-view.tsx': CIVIL_W4,
-  'components/clinical/anamnesis-review-line.tsx': CIVIL_W4,
   'components/consents/new-consent-modal.tsx': CIVIL_W4,
   'components/implants/implant-lot-search.tsx': CIVIL_W4,
   'components/odontogram/odontogram-tab.tsx': CIVIL_W4,
@@ -113,7 +100,7 @@ const CIVIL_PENDING: Readonly<Record<string, string>> = {
   'lib/patients/agreement-presentation.ts': CIVIL_W4,
   'lib/patients/coverage-presentation.ts': CIVIL_W4,
 };
-const MAX_CIVIL_PENDING = 18;
+const MAX_CIVIL_PENDING = 17;
 
 /** Las pantallas de DX-378 (y las migradas después): no pueden volver a la lista. */
 const MIGRATED = [
@@ -161,6 +148,19 @@ const MIGRATED = [
   'components/data-consents/consent-scope-fields.tsx',
   'components/data-consents/data-consents-tab.tsx',
   'components/data-consents/privacy-policy-settings.tsx',
+  'lib/clinical/medical-alerts.ts',
+  'components/patients/clinical-entries-list.tsx',
+  'components/patients/medical-history-panel.tsx',
+  'components/patients/patient-agreement-section.tsx',
+  'components/patients/patient-communication-section.tsx',
+  'components/patients/patient-opt-out-warnings.tsx',
+  'components/implants/patient-implants-tab.tsx',
+  'components/postop/patient-postop-deliveries.tsx',
+  'components/postop/postop-templates-manager.tsx',
+  'components/prescriptions/patient-prescriptions-tab.tsx',
+  'components/prescriptions/prescription-templates-manager.tsx',
+  'lib/patients/member-number.ts',
+  'components/clinical/anamnesis-review-line.tsx',
 ];
 
 /**

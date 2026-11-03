@@ -1,7 +1,13 @@
+import { dateIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { listLocations } from '@/lib/locations/locations-api';
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { PatientOptOutWarnings } from "./patient-opt-out-warnings";
 import { getPatientOptOutWarnings } from "@/lib/patients/communication-api";
 import { setupUser } from "@/lib/test/user";
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 
 jest.mock("../../lib/patients/communication-api", () => ({
   getPatientOptOutWarnings: jest.fn(),
@@ -123,4 +129,18 @@ it("una respuesta tardía de A no reemplaza los avisos ya cargados de B", async 
   expect(
     screen.queryByText(/6 pacientes coincidentes/),
   ).not.toBeInTheDocument();
+});
+
+describe("PatientOptOutWarnings con cada sede (DX-354b)", () => {
+  const mockedSedes = listLocations as jest.Mock;
+  afterEach(() => mockedSedes.mockResolvedValue([jest.requireActual("../../lib/test/sede-clock").utcSede()]));
+  const CREATED = "2026-10-23T03:30:00.000Z";
+
+  it.each([["caracas"], ["berlin"]] as const)("con la pantalla en %s: la fecha del aviso con su formato", async (key) => {
+    mockedSedes.mockResolvedValue([STAMP_SEDES[key]]);
+    mockedGet.mockResolvedValue([{ ...warning, createdAt: CREATED }]);
+    render(<PatientOptOutWarnings token="tok" patientId="p1" />);
+    await screen.findByRole("heading", { name: "Baja por mensaje sin aplicar" });
+    await waitFor(() => expect(screen.getByText(dateIn(key, CREATED))).toBeInTheDocument());
+  });
 });

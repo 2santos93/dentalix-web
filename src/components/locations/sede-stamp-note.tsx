@@ -23,6 +23,7 @@ export function SedeStampNote({ stamp, className }: SedeStampNoteProps) {
           kind={notice.kind}
           variant="note"
           live={false}
+          description={notice.message}
           locationId={notice.locationId}
           onRetry={notice.retry}
           className={className}

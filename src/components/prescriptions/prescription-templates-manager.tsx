@@ -8,7 +8,8 @@ import {
   listPrescriptionTemplates,
   type PrescriptionTemplate,
 } from '@/lib/prescriptions/prescriptions-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -57,6 +58,7 @@ export function PrescriptionTemplatesManager({ token, allowed }: PrescriptionTem
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const stamp = useSedeStamp(token);
   const [editing, setEditing] = useState<PrescriptionTemplate | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
@@ -144,7 +146,8 @@ export function PrescriptionTemplatesManager({ token, allowed }: PrescriptionTem
       id: 'updated',
       header: copy.colUpdated,
       mobile: 'hidden',
-      cell: (t) => <span className="t-data text-muted">{formatDateTime(t.updatedAt)}</span>,
+      cellClassName: 't-data text-muted',
+      cell: (t) => stamp.dateTime(t.updatedAt),
     },
   ];
 
@@ -168,6 +171,8 @@ export function PrescriptionTemplatesManager({ token, allowed }: PrescriptionTem
           </Button>
         }
       />
+
+      <SedeStampNote stamp={stamp} />
 
       <AsyncSection
         loading={loading}

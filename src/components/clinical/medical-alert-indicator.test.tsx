@@ -1,7 +1,12 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useAuthStore } from '@/lib/auth/auth-store';
 import { MedicalAlertIndicator } from './medical-alert-indicator';
 import type { MedicalAlertFlags } from '@/lib/clinical/medical-alerts';
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 
 const base: MedicalAlertFlags = {
   hasCriticalAlert: false,
@@ -78,6 +83,7 @@ describe('MedicalAlertIndicator (DX-247)', () => {
 
   it('al pasar el ratón se abre y al salir se cierra', async () => {
     jest.useFakeTimers();
+    useAuthStore.setState({ accessToken: 'tok' });
     try {
       render(
         <MedicalAlertIndicator
@@ -87,6 +93,8 @@ describe('MedicalAlertIndicator (DX-247)', () => {
       );
       const button = screen.getByRole('button', { name: 'Alertas médicas de Eva' });
       fireEvent.pointerEnter(button, { pointerType: 'mouse' });
+      // La nota espera al formato de la sede (se lee de la API): «—» y luego la fecha.
+      await act(async () => {});
       expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent(
         'Anamnesis caducada · última revisión 01/09/2026',
       );
@@ -96,6 +104,7 @@ describe('MedicalAlertIndicator (DX-247)', () => {
       });
       expect(screen.queryByTestId('medical-alert-popover')).not.toBeInTheDocument();
     } finally {
+      useAuthStore.setState({ accessToken: null });
       jest.useRealTimers();
     }
   });

@@ -11,9 +11,9 @@ import {
 import { ClinicalEntryAddendumModal } from '@/components/patients/clinical-entry-addendum-modal';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { appointmentLine } from '@/lib/clinical-notes/appointment-line';
-import { useSedeClock } from '@/lib/locations/sede-clock';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -26,7 +26,6 @@ import {
   isPatientWindowRules,
   type AnesthesiaAdministration,
 } from '@/lib/anesthesia/anesthesia-api';
-import { sedeTime } from '@/lib/locations/sede-clock';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { SedationModal } from '@/components/sedation/sedation-modal';
 import {
@@ -57,17 +56,20 @@ const copy = {
   tableLabel: 'Evoluciones del paciente',
   addAddendum: 'Añadir adenda',
   addAddendumFor: (entry: string) => `Añadir adenda a la evolución del ${entry}`,
-  addendaLabel: (entryDate: string) => `Adendas de la evolución del ${entryDate}`,
+  addendaLabel: (entryDate: string | null) =>
+    entryDate ? `Adendas de la evolución del ${entryDate}` : 'Adendas de la evolución',
   addendumHeading: 'Adenda',
   addendumReason: 'Motivo:',
   // DX-212: diagnósticos CIE-10 guardados con la evolución.
-  diagnosesLabel: (entryDate: string) => `Diagnósticos de la evolución del ${entryDate}`,
+  diagnosesLabel: (entryDate: string | null) =>
+    entryDate ? `Diagnósticos de la evolución del ${entryDate}` : 'Diagnósticos de la evolución',
   principal: 'Principal',
   related: 'Relacionado',
   // DX-307: anestesia local registrada en la evolución.
   anesthesia: 'Anestesia',
   anesthesiaFor: (entry: string) => `Anestesia de la evolución del ${entry}`,
-  anesthesiaLabel: (entryDate: string) => `Anestesia local de la evolución del ${entryDate}`,
+  anesthesiaLabel: (entryDate: string | null) =>
+    entryDate ? `Anestesia local de la evolución del ${entryDate}` : 'Anestesia local de la evolución',
   anesthesiaLine: (r: AnesthesiaAdministration) =>
     `${r.anestheticName} · ${formatDecimal(r.carpules)} carp. · ${formatDecimal(r.doseMg)} mg · ${TECHNIQUE_LABELS[r.technique]}${r.site ? ` · ${r.site}` : ''}${r.lot ? ` · Lote ${r.lot}` : ''}`,
   // DX-418: desde las reglas V2 (también V3, DX-420) el acumulado sellado es
@@ -85,7 +87,9 @@ const copy = {
   // QA DX-407: dos evoluciones del mismo día no pueden tener botones con el
   // mismo nombre accesible: fecha, motivo (o el principio de las notas) y la
   // hora en que se registró.
-  entryName: (date: string, what: string, recorded: string) => `${date} · ${what} · registrada ${recorded}`,
+  // Sin formato de sede no se anuncia «—»: el nombre accesible omite la fecha o la hora.
+  entryName: (date: string | null, what: string, recorded: string | null) =>
+    [date, what, recorded ? `registrada ${recorded}` : null].filter(Boolean).join(' · '),
   sedationLine: (s: SedationSheet) =>
     `${GRADE_LABELS[s.grade]}${s.asaClass ? ` · ASA ${s.asaClass}${s.asaEmergency ? 'E' : ''}` : ''} · ${STATUS_LABELS[s.status]}`,
   sedationOverdue: 'Pasó el intervalo de constantes sin toma',
@@ -122,8 +126,9 @@ interface ClinicalEntriesListProps {
  */
 export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' }: ClinicalEntriesListProps) {
   // DX-378: el día de la cita, en la zona y con el formato de la sede.
-  const sede = useSedeClock(token);
-  const clock = sede.status === 'ready' ? sede.clock : null;
+  // Las evoluciones no traen sede aún (PRODUCT.md): todo se pinta con la de la pantalla.
+  const stamp = useSedeStamp(token);
+  const clock = stamp.clock;
   const [entries, setEntries] = useState<ClinicalEntry[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -256,8 +261,11 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
   function entryName(entry: ClinicalEntry): string {
     const notes = entry.notes.trim().replace(/\s+/g, ' ');
     const what = entry.reason?.trim() || (notes.length > 40 ? `${notes.slice(0, 40)}…` : notes);
-    const recorded = clock ? sedeTime(entry.createdAt, clock) : formatDateTime(entry.createdAt);
-    return copy.entryName(formatCivilDate(entry.entryDate), what, recorded);
+    return copy.entryName(
+      stamp.maybe.civilDate(entry.entryDate),
+      what,
+      stamp.maybe.dateTime(entry.createdAt),
+    );
   }
 
   function renderSedationButton(entry: ClinicalEntry) {
@@ -306,13 +314,13 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
     return (
       <div className="mt-2 flex flex-col gap-1">
         <ul
-          aria-label={copy.anesthesiaLabel(formatCivilDate(entry.entryDate))}
+          aria-label={copy.anesthesiaLabel(stamp.maybe.civilDate(entry.entryDate))}
           className="flex flex-col gap-1"
         >
           {records.map((r) => (
             <li key={r.id} className="text-sm text-ink">
               <span className="text-xs font-medium text-muted">{copy.anesthesia} </span>
-              <span className="tabular-nums">{sedeTime(r.administeredAt, clock)}</span>{' '}
+              <span className="tabular-nums">{stamp.time(r.administeredAt)}</span>{' '}
               <span className="tabular-nums">{copy.anesthesiaLine(r)}</span>
               {r.overrideReason ? (
                 <span className="block text-xs text-muted">
@@ -351,7 +359,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
 
   /** «Dra. Ríos · 8 ago 2026 14:32», o solo la marca de tiempo si no hay autor. */
   function recordLine(authorId: string | null, createdAt: string): string {
-    const when = formatDateTime(createdAt);
+    const when = stamp.dateTime(createdAt);
     const author = authorId ? staffById.get(authorId) : undefined;
     return author ? copy.recordedBy(author, when) : copy.recordedAt(when);
   }
@@ -375,7 +383,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
     if (entry.addenda.length === 0) return null;
     return (
       <ol
-        aria-label={copy.addendaLabel(formatCivilDate(entry.entryDate))}
+        aria-label={copy.addendaLabel(stamp.maybe.civilDate(entry.entryDate))}
         className="mt-3 flex flex-col gap-2"
       >
         {entry.addenda.map((addendum) => (
@@ -431,7 +439,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
     if (diagnoses.length === 0) return null;
     return (
       <ul
-        aria-label={copy.diagnosesLabel(formatCivilDate(entry.entryDate))}
+        aria-label={copy.diagnosesLabel(stamp.maybe.civilDate(entry.entryDate))}
         className="mt-2 flex flex-col gap-1"
       >
         {diagnoses.map((d) => (
@@ -479,6 +487,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
           </Button>
         }
       />
+      <SedeStampNote stamp={stamp} />
 
       <AsyncSection
         loading={loading}
@@ -557,7 +566,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
             {entries.map((entry) => (
               <tr key={entry.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3 align-top text-ink tabular-nums">
-                  {formatCivilDate(entry.entryDate)}
+                  {stamp.civilDate(entry.entryDate)}
                   {renderAppointment(entry)}
                 </td>
                 <td className="px-4 py-3 align-top text-ink">{entry.reason ?? copy.reasonFallback}</td>
@@ -590,7 +599,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
               className="rounded-lg border border-border bg-surface p-4 text-sm text-ink"
             >
               <p className="font-medium tabular-nums text-ink">
-                {formatCivilDate(entry.entryDate)}
+                {stamp.civilDate(entry.entryDate)}
               </p>
               {renderAppointment(entry)}
               <p className="mt-1 text-muted">{entry.reason ?? copy.reasonFallback}</p>
@@ -621,7 +630,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
           token={token}
           patientId={patientId}
           entryId={addendumFor.id}
-          entryDateLabel={formatCivilDate(addendumFor.entryDate)}
+          entryDateLabel={stamp.civilDate(addendumFor.entryDate)}
           onCreated={handleAddendumCreated}
         />
       ) : null}
@@ -635,7 +644,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
           token={token}
           patientId={patientId}
           entryId={anesthesiaFor.id}
-          entryDateLabel={formatCivilDate(anesthesiaFor.entryDate)}
+          entryDateLabel={stamp.civilDate(anesthesiaFor.entryDate)}
           canRecord={canRecordAnesthesia}
           canManageCatalog={role === 'ADMIN'}
           clock={clock}
@@ -652,7 +661,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
           token={token}
           patientId={patientId}
           entryId={sedationFor.id}
-          entryDateLabel={formatCivilDate(sedationFor.entryDate)}
+          entryDateLabel={stamp.civilDate(sedationFor.entryDate)}
           role={role}
           userId={getTokenUserId(token)}
           staff={staff}

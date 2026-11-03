@@ -1,5 +1,6 @@
 'use client';
 import { useMemo } from 'react';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { civilNoonUtc } from '@/lib/time/civil-day';
 import { NO_SEDE_FORMAT, moneyWithCode } from '@/lib/format/sede-number';
 import { useLocationsState } from './use-locations-state';
@@ -16,6 +17,14 @@ import { SEDE_LOCALE_ERROR } from './use-sede-format';
 type Maybe<Args extends unknown[]> = (...args: Args) => string | null;
 
 export interface SedePainters {
+  /**
+   * El formato de la sede de la pantalla (`null` cargando o sin formato), para
+   * quien pinta con una zona que no es la de la sede: la de la ficha de un
+   * paciente, p. ej. (`sedeDateLabel(value, timeZone, stamp.fmt)`).
+   */
+  fmt: RegionalFormat | null;
+  /** El formato de la sede `locationId` (o el de la pantalla sin id): para medidas de una fila con el mismo formato que sus fechas. */
+  fmtOf(locationId?: string | null): RegionalFormat | null;
   /** La fecha de un instante en la zona de la sede; «—» sin formato o con un instante inválido. */
   date(iso: string | null | undefined, locationId?: string | null): string;
   /** La hora de un instante con el reloj de la sede. */
@@ -43,6 +52,8 @@ export interface SedeStamp extends SedePainters {
   ready: boolean;
   /** El aviso de UNA sede sin formato: el error de la pantalla o la primera de `locationIds` que falle. */
   notice: (SedeClockError & { retry: () => void }) | null;
+  /** El reloj de la pantalla, para lo que lo pide entero (`appointmentLine`, los modales de anestesia y sedación). */
+  clock: AgendaClock | null;
 }
 
 function instant(iso: string | null | undefined): Date | null {
@@ -90,6 +101,8 @@ export function stampPainters(clock: AgendaClock | null): SedePainters {
     },
   };
   return {
+    fmt: clock?.fmt ?? null,
+    fmtOf: (locationId) => clockOf(locationId)?.fmt ?? null,
     date: (iso, locationId) => maybe.date(iso, locationId) ?? NO_SEDE_FORMAT,
     time: (iso, locationId) => maybe.time(iso, locationId) ?? NO_SEDE_FORMAT,
     dateTime: (iso, locationId) => maybe.dateTime(iso, locationId) ?? NO_SEDE_FORMAT,
@@ -128,5 +141,5 @@ export function useSedeStamp(token: string, locationIds?: readonly (string | nul
       notice = { status: 'error', kind: 'locale', message: SEDE_LOCALE_ERROR, locationId: failing, retry: state.retry };
     }
   }
-  return { ...painters, ready: clock !== null, notice };
+  return { ...painters, ready: clock !== null, notice, clock };
 }

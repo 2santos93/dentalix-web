@@ -1,3 +1,5 @@
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { listLocations } from '@/lib/locations/locations-api';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PrescriptionTemplatesManager } from './prescription-templates-manager';
 import {
@@ -9,6 +11,10 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { postExodoncia } from '@/lib/test/prescriptions';
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 
 jest.mock('../../lib/prescriptions/prescriptions-api', () => ({
   ...jest.requireActual('../../lib/prescriptions/prescriptions-api'),
@@ -115,5 +121,20 @@ describe('PrescriptionTemplatesManager', () => {
     await user.click(within(confirm).getByRole('button', { name: 'Eliminar' }));
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'tpl1'));
     expect(await screen.findByText('Todavía no hay plantillas de receta.')).toBeInTheDocument();
+  });
+});
+
+describe('PrescriptionTemplatesManager con cada sede (DX-354b)', () => {
+  const mockedSedes = listLocations as jest.Mock;
+  afterEach(() => mockedSedes.mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]));
+  // 03:30Z: 1 de noviembre en Caracas, 2 en Berlín.
+  const UPDATED = '2026-11-02T03:30:00.000Z';
+
+  it.each([['caracas'], ['berlin']] as const)('con la pantalla en %s: la última edición con su reloj', async (key) => {
+    mockedSedes.mockResolvedValue([STAMP_SEDES[key]]);
+    mockedList.mockResolvedValue([{ ...postExodoncia, updatedAt: UPDATED }]);
+    render(<PrescriptionTemplatesManager token="tok" allowed />);
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(within(table).getAllByRole('row')[1]).toHaveTextContent(dateTimeIn(key, UPDATED)));
   });
 });

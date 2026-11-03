@@ -11,7 +11,8 @@ import {
   sedeTimeLabel,
   type PatientMedicalAlerts,
 } from '@/lib/clinical/medical-alerts';
-import { formatCivilDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FieldError } from '@/components/errors/field-error';
@@ -61,6 +62,8 @@ export function AnamnesisReviewLine({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // La zona es la de la ficha (la API evaluó «hoy» con ella); el formato y el reloj, los de la sede de la pantalla.
+  const stamp = useSedeStamp(token);
 
   if (failed) return <FieldError label={copy.loadError} onRetry={onReload} className="self-start" />;
   if (!alerts) return null;
@@ -74,11 +77,11 @@ export function AnamnesisReviewLine({
   if (status === 'MISSING') {
     text = copy.missing;
   } else if (today && review) {
-    text = copy.noChangesToday(sedeTimeLabel(review.at, alerts.timeZone), review.byName);
+    text = copy.noChangesToday(sedeTimeLabel(review.at, alerts.timeZone, stamp.fmt), review.byName);
   } else {
     const head = status === 'EXPIRED' ? ANAMNESIS_EXPIRED_LABEL : copy.current;
     text = review
-      ? `${head} · ${copy.reviewed(sedeDateLabel(review.at, alerts.timeZone), review.byName)}`
+      ? `${head} · ${copy.reviewed(sedeDateLabel(review.at, alerts.timeZone, stamp.fmt), review.byName)}`
       : head;
   }
 
@@ -97,58 +100,61 @@ export function AnamnesisReviewLine({
   }
 
   return (
-    <div
-      data-testid="anamnesis-review"
-      data-status={status}
-      className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-    >
-      <div className="flex min-w-0 items-start gap-2 text-sm">
-        <Icon
-          aria-hidden
-          className={cn(
-            'mt-0.5 size-4 shrink-0',
-            status === 'CURRENT' ? 'text-success-text' : 'text-warning-text',
-          )}
+    <div className="flex flex-col gap-2">
+      <div
+        data-testid="anamnesis-review"
+        data-status={status}
+        className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex min-w-0 items-start gap-2 text-sm">
+          <Icon
+            aria-hidden
+            className={cn(
+              'mt-0.5 size-4 shrink-0',
+              status === 'CURRENT' ? 'text-success-text' : 'text-warning-text',
+            )}
+          />
+          <p className={status === 'CURRENT' ? 'text-muted' : 'text-warning-text'}>
+            <span className="font-medium">{text}</span>
+            {status !== 'MISSING' ? (
+              <span className="text-muted">
+                {' '}
+                {copy.validity(alerts.validityMonths)}
+                {status === 'CURRENT' && alerts.anamnesisExpiresOn
+                  ? ` ${copy.expiresOn(stamp.civilDate(alerts.anamnesisExpiresOn))}`
+                  : ''}
+              </span>
+            ) : null}
+          </p>
+        </div>
+        {/* Revisada hoy (versión nueva o «Sin cambios hoy»): no hay nada que confirmar. */}
+        {canConfirm && status !== 'MISSING' && !reviewedToday(review, alerts) ? (
+          <Button
+            type="button"
+            variant="secondary"
+            className="shrink-0 max-sm:min-h-11 max-sm:w-full"
+            onClick={() => {
+              setError(null);
+              setOpen(true);
+            }}
+          >
+            <ClipboardCheck aria-hidden className="size-4" />
+            {copy.confirm}
+          </Button>
+        ) : null}
+        <ConfirmDialog
+          open={open}
+          onOpenChange={setOpen}
+          title={copy.dialogTitle}
+          description={copy.dialogDescription}
+          confirmLabel={copy.dialogConfirm}
+          destructive={false}
+          confirming={saving}
+          error={error}
+          onConfirm={() => void handleConfirm()}
         />
-        <p className={status === 'CURRENT' ? 'text-muted' : 'text-warning-text'}>
-          <span className="font-medium">{text}</span>
-          {status !== 'MISSING' ? (
-            <span className="text-muted">
-              {' '}
-              {copy.validity(alerts.validityMonths)}
-              {status === 'CURRENT' && alerts.anamnesisExpiresOn
-                ? ` ${copy.expiresOn(formatCivilDate(alerts.anamnesisExpiresOn))}`
-                : ''}
-            </span>
-          ) : null}
-        </p>
       </div>
-      {/* Revisada hoy (versión nueva o «Sin cambios hoy»): no hay nada que confirmar. */}
-      {canConfirm && status !== 'MISSING' && !reviewedToday(review, alerts) ? (
-        <Button
-          type="button"
-          variant="secondary"
-          className="shrink-0 max-sm:min-h-11 max-sm:w-full"
-          onClick={() => {
-            setError(null);
-            setOpen(true);
-          }}
-        >
-          <ClipboardCheck aria-hidden className="size-4" />
-          {copy.confirm}
-        </Button>
-      ) : null}
-      <ConfirmDialog
-        open={open}
-        onOpenChange={setOpen}
-        title={copy.dialogTitle}
-        description={copy.dialogDescription}
-        confirmLabel={copy.dialogConfirm}
-        destructive={false}
-        confirming={saving}
-        error={error}
-        onConfirm={() => void handleConfirm()}
-      />
+    <SedeStampNote stamp={stamp} />
     </div>
   );
 }

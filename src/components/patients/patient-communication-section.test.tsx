@@ -1,3 +1,5 @@
+import { dateIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { listLocations } from '@/lib/locations/locations-api';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PatientCommunicationSection } from './patient-communication-section';
 import {
@@ -8,6 +10,10 @@ import {
 } from '@/lib/patients/communication-api';
 import { ApiError } from '@/lib/api/api-error';
 import { setupUser } from '@/lib/test/user';
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 
 jest.mock('../../lib/patients/communication-api', () => ({
   ...jest.requireActual('../../lib/patients/communication-api'),
@@ -390,4 +396,19 @@ it('no consulta avisos si el rol no puede editar comunicaciones', async () => {
   renderSection(false);
   await screen.findByText('Activos');
   expect(getPatientOptOutWarnings).not.toHaveBeenCalled();
+});
+
+describe('PatientCommunicationSection con cada sede (DX-354b)', () => {
+  const mockedSedes = listLocations as jest.Mock;
+  afterEach(() => mockedSedes.mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]));
+  const optOut = { at: '2026-10-21T03:30:00.000Z', source: 'PATIENT_REQUEST' as const, recordedBy: null };
+
+  it.each([['caracas'], ['berlin']] as const)('con la pantalla en %s: la baja con la fecha de su formato', async (key) => {
+    mockedSedes.mockResolvedValue([STAMP_SEDES[key]]);
+    mockedGet.mockResolvedValue(comms({ reminderOptOut: optOut as never }));
+    renderSection();
+    await waitFor(() =>
+      expect(screen.getByText(new RegExp(dateIn(key, optOut.at).replace(/\./g, '\\.')))).toBeInTheDocument(),
+    );
+  });
 });
