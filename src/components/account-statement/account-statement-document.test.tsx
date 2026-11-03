@@ -170,7 +170,7 @@ describe('DX-472: el impreso no parece definitivo', () => {
     );
     const note = screen.getByTestId('statement-without-rate');
     expect(note).toHaveTextContent('Cifras incompletas: 1 abono sin tasa de cambio no cuenta en el saldo.');
-    expect(note).toHaveTextContent('3.600');
+    expect(note).toHaveTextContent('3600,00 VES');
     expect(note).toHaveTextContent('30/10/2026');
   });
 
