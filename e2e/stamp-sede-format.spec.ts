@@ -51,6 +51,14 @@ const VIEWPORTS = [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
 ] as const;
+/** La API no emite un enlace de anamnesis sin política publicada, y el envío público exige la autorización. */
+const POLICY = {
+  policyText: 'Política de tratamiento de datos de la clínica.',
+  generalText: 'Autorizo el tratamiento de mis datos personales.',
+  sensitiveHealthText:
+    'Autorizo el tratamiento de mis datos sensibles de salud (historia clínica). No está obligado a autorizarlo. Finalidad: la atención odontológica.',
+  marketingText: 'Autorizo recibir comunicaciones comerciales.',
+};
 const MEDICATION: Record<Key, string> = { us: 'Paracetamol', de: 'Amoxicilina' };
 
 test.use({ timezoneId: 'Asia/Tokyo' });
@@ -118,13 +126,17 @@ async function submitAnamnesis(request: APIRequestContext, url: string): Promise
   const headers = { 'X-Tenant-Host': new URL(origin).host };
   const res = await request.get(`${API_URL}/public/medical-history/${linkToken}`, { headers });
   expect(res.ok(), `GET del enlace público falló: ${await res.text()}`).toBeTruthy();
-  const { questionnaire } = (await res.json()) as { questionnaire: QuestionnaireShape };
+  const { questionnaire, consent } = (await res.json()) as {
+    questionnaire: QuestionnaireShape;
+    consent: { required: boolean; policy: { id: string } | null };
+  };
+  expect(consent.required, 'la política publicada exige la autorización').toBe(true);
   const state = initialFormState();
   state.answers = Object.fromEntries(questionKeys(questionnaire).map((key) => [key, 'NO' as const]));
   state.declaration = true;
   const post = await request.post(`${API_URL}/public/medical-history/${linkToken}`, {
     headers,
-    data: toSubmitBody(state, questionnaire, null),
+    data: toSubmitBody(state, questionnaire, consent.policy!.id),
   });
   expect(post.ok(), `POST del enlace público falló: ${await post.text()}`).toBeTruthy();
 }
@@ -144,6 +156,7 @@ test.beforeAll(async ({ playwright }) => {
     origin = session.origin;
     ids.us = await createLocationViaApi(request, session, SEDES.us);
     ids.de = await createLocationViaApi(request, session, SEDES.de);
+    await apiPost(request, session, '/privacy-policies', POLICY);
 
     // Una solicitud de anamnesis enviada en cada sede (una paciente por sede).
     for (const key of KEYS) {
@@ -205,6 +218,8 @@ test('«Todas las sedes»: la bandeja de anamnesis dice la hora de la sede de ca
     expect(row, `solicitud de la sede ${key}`).toBeTruthy();
     const line = page.getByRole('row').filter({ hasText: `Paciente${key.toUpperCase()}` });
     await expectContains(line, dateTime(sede, row!.submittedAt));
+    const otherKey: Key = key === 'us' ? 'de' : 'us';
+    expect(norm((await line.textContent()) ?? '')).not.toContain(norm(dateTime(SEDES[otherKey], row!.submittedAt)));
     await expectContains(line, sede.name);
   }
   // La hora de una sede no es la de la otra ni la del navegador (Tokio).
@@ -230,6 +245,8 @@ test('«Todas las sedes»: la pestaña de recetas dice la hora de la sede de cad
     expect(rx, `receta de la sede ${key}`).toBeTruthy();
     const line = table.getByRole('row').filter({ hasText: MEDICATION[key] });
     await expectContains(line, dateTime(sede, rx!.issuedAt));
+    const otherKey: Key = key === 'us' ? 'de' : 'us';
+    expect(norm((await line.textContent()) ?? '')).not.toContain(norm(dateTime(SEDES[otherKey], rx!.issuedAt)));
   }
   await expect(page.getByText(/No se pudo saber el formato regional/)).toHaveCount(0);
   await shoot(page, 'recetas');
