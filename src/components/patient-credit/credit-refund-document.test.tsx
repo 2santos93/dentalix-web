@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { CreditRefundDocument } from './credit-refund-document';
 import type { CreditRefund } from '@/lib/patient-credit/patient-credit-api';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 const refund: CreditRefund = {
   id: 'r-1',
@@ -16,6 +17,7 @@ const refund: CreditRefund = {
   paymentIds: ['pay-1'],
   createdById: 'u-1',
   createdAt: '2026-10-31T15:00:00.000Z',
+  regional: REGIONAL_VE,
   snapshot: {
     number: 'DEV-NOR-000007',
     issuedAt: '2026-10-31T15:00:00.000Z',

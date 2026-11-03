@@ -8,6 +8,7 @@ import {
   submitPublicAnamnesis,
   type PublicAnamnesis,
 } from '@/lib/anamnesis/anamnesis-api';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/anamnesis/anamnesis-api', () => ({
   ...jest.requireActual('../../lib/anamnesis/anamnesis-api'),
@@ -22,6 +23,7 @@ function fixture(overrides: Partial<PublicAnamnesis> = {}): PublicAnamnesis {
   return {
     clinic: { name: 'Clínica Sonrisas', logoUrl: null, primaryColor: '#0E7490' },
     patientFirstName: 'Mariana',
+    regional: REGIONAL_VE,
     expiresAt: '2026-10-30T15:00:00.000Z',
     consent: { required: false, policy: null },
     questionnaire: {

@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { clinicLocation } from '@/lib/test/locations';
 import { listLocations } from '@/lib/locations/locations-api';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 
@@ -35,6 +36,7 @@ const family: FamilyAccountStatement = {
   rateProviderTimedOut: false,
   paymentsWithoutRateCount: 0,
   issuedAt: '2026-10-17T15:00:00.000Z',
+  regional: REGIONAL_VE,
   clinic: { name: 'Clínica Sonrisas', logoUrl: null, fiscal: EMPTY_CLINIC_FISCAL },
   payer: { id: 'mother', firstName: 'Marta', lastName: 'Gil' },
   members: [

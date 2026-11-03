@@ -3,6 +3,7 @@ import { ConsentPrintView } from './consent-print-view';
 import { ConsentDocument } from './consent-document';
 import { getPatientConsent, type PatientConsentDocument } from '@/lib/consents/consents-api';
 import { ApiError } from '@/lib/api/client';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/consents/consents-api', () => ({
   ...jest.requireActual('../../lib/consents/consents-api'),
@@ -37,6 +38,7 @@ function consentFixture(overrides: Partial<PatientConsentDocument> = {}): Patien
     clinic: { name: 'Clínica Sonrisas', logoUrl: 'https://cdn.example.com/logo.png' },
     patient: { id: 'p1', firstName: 'Ana', lastName: 'Pérez', docType: 'NATIONAL_ID', docTypeLabel: null, docTypeName: 'ID local', docNumber: 'DOC-1020' },
     integrityOk: true,
+    regional: REGIONAL_VE,
     ...overrides,
   };
 }

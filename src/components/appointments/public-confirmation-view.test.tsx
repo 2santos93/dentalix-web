@@ -6,6 +6,7 @@ import {
   type PublicConfirmation,
 } from '../../lib/appointments/confirmations-api';
 import { ApiError } from '../../lib/api/client';
+import { PUBLIC_REGIONAL_VE } from '@/lib/test/document-regional';
 
 // jest.mock no reescribe alias: rutas relativas (ver otros *.test.tsx).
 jest.mock('../../lib/appointments/confirmations-api', () => ({
@@ -27,6 +28,7 @@ const APPOINTMENT = {
   providerName: 'Dra. Pérez',
   locationName: 'Sede Norte',
   locationAddress: 'Av. Libertador 100',
+  ...PUBLIC_REGIONAL_VE,
 };
 const CLINIC = { name: 'Clínica Sonrisa', primaryColor: '#7C3AED', logoUrl: null };
 

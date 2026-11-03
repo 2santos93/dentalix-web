@@ -6,6 +6,7 @@ import {
   getPatientPostOpDelivery,
   type PostOpDeliveryDocument,
 } from '@/lib/postop/postop-api';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/postop/postop-api', () => ({
   ...jest.requireActual('../../lib/postop/postop-api'),
@@ -36,6 +37,7 @@ function documentFixture(overrides: Partial<PostOpDeliveryDocument> = {}): PostO
     locationName: 'Sede Norte',
     locationPhone: '601 555 0000',
     patientName: 'Ana Pérez',
+    regional: REGIONAL_VE,
     ...overrides,
   };
 }

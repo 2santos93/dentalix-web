@@ -5,6 +5,7 @@ export function publicAnamnesisFixture(primaryColor = '#0E7490'): PublicAnamnesi
   return {
     clinic: { name: 'Clínica de prueba', logoUrl: null, primaryColor },
     patientFirstName: 'Ejemplo',
+    regional: { timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' },
     expiresAt: '2030-10-30T15:00:00.000Z',
     consent: { required: true, policy: { id: 'synthetic-policy', version: 1,
       sensitiveHealthText: 'Autorización sintética para tratar datos de salud.',

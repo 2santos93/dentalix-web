@@ -7,6 +7,7 @@ import {
 } from '@/lib/reminders/opt-out-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/reminders/opt-out-api', () => ({
   getPublicReminderOptOut: jest.fn(),
@@ -23,6 +24,7 @@ const view = (over: Partial<PublicReminderOptOut> = {}): PublicReminderOptOut =>
   patientFirstName: 'Carolina',
   optedOutAt: null,
   clinic: { name: 'Sonrisas del Norte', primaryColor: '#0E7490', logoUrl: null },
+  regional: REGIONAL_VE,
   ...over,
 });
 
