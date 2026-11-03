@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
-import { fillDate } from './support/dates';
+import { fillDate, fillTime } from './support/dates';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -240,4 +240,86 @@ test('las columnas vacías de otro día dicen «Sin citas este día»', async ({
   await fillDate(page, 'Fecha', sedeDayFromToday(3));
   await expect(page.getByText('Sin citas este día').first()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Sin citas hoy')).toHaveCount(0);
+});
+
+test('DX-492-bis: un sobrecupo con sillón movido a una hora con el sillón ocupado ofrece el siguiente hueco con ese sillón', async ({
+  page,
+  request,
+}) => {
+  const chair = await apiPost<{ id: string }>(request, session, '/chairs', { locationId, name: 'Sillón Caracas' });
+  const dora = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: 'Dora',
+    lastName,
+    docType: 'NATIONAL_ID',
+    docNumber: `49201${suffix}`.slice(0, 20),
+    sex: 'F',
+  });
+  const walkIn = await apiPost<{ id: string; start: string }>(request, session, '/appointments/walk-in', {
+    patientId: dora.id,
+    providerId: dentistId,
+    chairId: chair.id,
+    overbookReason: 'Dolor agudo, no puede esperar',
+  });
+  // Sobrecupo mantenido a sabiendas: otra cita del odontólogo, con otra paciente, ocupa su hora
+  // (o ya la ocupaba: 409).
+  const ines = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: 'Inés',
+    lastName,
+    docType: 'NATIONAL_ID',
+    docNumber: `49202${suffix}`.slice(0, 20),
+    sex: 'F',
+  });
+  const over = new Date(Math.max(Date.now(), new Date(walkIn.start).getTime()) + 5 * 60_000);
+  const blocker = await request.post(`${API_URL}/appointments`, {
+    headers: session.headers,
+    data: {
+      patientId: ines.id,
+      providerId: dentistId,
+      start: over.toISOString(),
+      end: new Date(over.getTime() + 30 * 60_000).toISOString(),
+    },
+  });
+  expect([201, 409], await blocker.text()).toContain(blocker.status());
+  await apiPost(request, session, `/appointments/${walkIn.id}/undo-arrival`, { keepOverbooked: true });
+  const kept = await request.get(`${API_URL}/appointments/${walkIn.id}`, { headers: session.headers });
+  expect(await kept.json()).toMatchObject({ overbooked: true, chairId: chair.id });
+  // Destino: dentro de cuatro días a las 10:00; el odontólogo está libre, pero la titular
+  // ocupa «Sillón Caracas» de 10:00 a 10:30.
+  const target = sedeDayFromToday(4);
+  const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
+  const adminId = ((await staff.json()) as { userId: string; fullName: string }[]).find(
+    (s) => s.fullName === admin.fullName,
+  )!.userId;
+  await apiPost(request, session, '/appointments', {
+    patientId,
+    providerId: adminId,
+    chairId: chair.id,
+    start: atSede(target, '10:00'),
+    end: atSede(target, '10:30'),
+  });
+
+  await loginInSede(page);
+  await page.goto(`${origin}/agenda`);
+  await page.getByRole('button', { name: 'Día', exact: true }).click();
+  await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+  await page.getByRole('button', { name: `Mover a… la cita de Dora ${lastName}` }).click({ timeout: 15_000 });
+  const dialog = page.getByRole('dialog', { name: 'Mover a…' });
+  await fillDate(dialog, 'Fecha', target);
+  await fillTime(dialog, 'Hora de inicio', '10:00');
+  await dialog.getByRole('button', { name: 'Mover cita' }).click();
+  await expect(dialog.getByText('El sillón «Sillón Caracas» ya está ocupado de 10:00 a 10:30')).toBeVisible({
+    timeout: 10_000,
+  });
+  const offer = dialog.getByTestId('move-next-opening');
+  await expect(offer).toContainText('Siguiente hueco libre', { timeout: 10_000 });
+  await expect(offer).toContainText(`10:30 con ${dentist.fullName}, en «Sillón Caracas».`);
+  await offer.getByRole('button', { name: 'Usar este hueco' }).click();
+  await dialog.getByRole('button', { name: 'Mover cita' }).click();
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
+  const moved = await request.get(`${API_URL}/appointments/${walkIn.id}`, { headers: session.headers });
+  expect(await moved.json()).toMatchObject({
+    start: atSede(target, '10:30').toISOString(),
+    chairId: chair.id,
+    overbooked: false,
+  });
 });
