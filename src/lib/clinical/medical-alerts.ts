@@ -3,7 +3,10 @@ import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { SafetyFlags } from '@/lib/clinical/clinical-types';
 import { canWriteClinicalHistory } from '@/lib/clinical/clinical-roles';
-import { civilDateInZone, formatCivilDate, formatDate, formatDateTimeInZone } from '@/lib/format/date';
+import { civilDateInZone } from '@/lib/format/date';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 
 // DX-247: alertas médicas fuera de la ficha (agenda, «En clínica», cabecera de
 // la ficha y cita). Textos puros para que el banner, el indicador y los tests
@@ -64,12 +67,21 @@ export function medicalAlertSeverity(
   return flags.anamnesisStatus === 'CURRENT' ? null : 'attention';
 }
 
-/** Línea de la anamnesis: caducada (con su última revisión) o ausente; null si está al día. */
-export function anamnesisNote(flags: MedicalAlertFlags): string | null {
+/** ¿Hay línea de anamnesis (caducada o ausente)? No depende del formato de la sede. */
+export function hasAnamnesisNote(flags: MedicalAlertFlags): boolean {
+  return flags.anamnesisStatus === 'MISSING' || flags.anamnesisStatus === 'EXPIRED';
+}
+
+/**
+ * Línea de la anamnesis: caducada (con su última revisión) o ausente; null si
+ * está al día. La fecha, con el formato y la zona de la sede de la pantalla
+ * (la ficha de la agenda no trae sede); sin formato, «—» dentro de la frase.
+ */
+export function anamnesisNote(flags: MedicalAlertFlags, stamp: Pick<SedePainters, 'date'>): string | null {
   if (flags.anamnesisStatus === 'MISSING') return ANAMNESIS_MISSING_LABEL;
   if (flags.anamnesisStatus === 'EXPIRED') {
     return flags.anamnesisReviewedAt
-      ? `${ANAMNESIS_EXPIRED_LABEL} · última revisión ${formatDate(flags.anamnesisReviewedAt)}`
+      ? `${ANAMNESIS_EXPIRED_LABEL} · última revisión ${stamp.date(flags.anamnesisReviewedAt)}`
       : ANAMNESIS_EXPIRED_LABEL;
   }
   return null;
@@ -113,14 +125,19 @@ export function confirmedToday(review: AnamnesisLastReview | null | undefined, s
   return review?.kind === 'NO_CHANGES' && reviewedToday(review, sede);
 }
 
-/** `dd/mm/yyyy` de un instante en la zona de la sede. */
-export function sedeDateLabel(value: string, timeZone: string): string {
-  return formatCivilDate(civilDateInZone(value, timeZone));
+/**
+ * La fecha de un instante en la zona de la ficha (la que la API usó para
+ * evaluar «hoy») y con el formato de la sede de la pantalla; «—» sin formato.
+ */
+export function sedeDateLabel(value: string, timeZone: string, fmt: RegionalFormat | null): string {
+  const instant = new Date(value);
+  return fmt && !Number.isNaN(instant.getTime()) ? fmt.date(instant, timeZone) : NO_SEDE_FORMAT;
 }
 
-/** `HH:mm` de un instante en la zona de la sede. */
-export function sedeTimeLabel(value: string, timeZone: string): string {
-  return formatDateTimeInZone(value, timeZone).slice(-5);
+/** La hora de un instante en la zona de la ficha y con el reloj de la sede; «—» sin formato. */
+export function sedeTimeLabel(value: string, timeZone: string, fmt: RegionalFormat | null): string {
+  const instant = new Date(value);
+  return fmt && !Number.isNaN(instant.getTime()) ? fmt.time(instant, timeZone) : NO_SEDE_FORMAT;
 }
 
 /** «Sin cambios hoy»: quien ve la anamnesis (la API responde 403 a recepción). */

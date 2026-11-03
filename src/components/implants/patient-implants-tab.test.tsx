@@ -1,4 +1,5 @@
-import { render, screen, within } from '@testing-library/react';
+import { dateTimeIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PatientImplantsTab } from './patient-implants-tab';
 import {
@@ -12,6 +13,7 @@ import { setupUser } from '@/lib/test/user';
 import { makeImplant, tokenFor } from '@/lib/test/implants';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { regionalFormat } from '@/lib/format/regional-format';
 
 jest.mock('../../lib/implants/implants-api', () => ({
   ...jest.requireActual('../../lib/implants/implants-api'),
@@ -111,7 +113,8 @@ describe('PatientImplantsTab (DX-191)', () => {
     expect(active).toHaveTextContent('Implante · Straumann BLT');
     expect(active).toHaveTextContent('REF021.5310');
     expect(active).toHaveTextContent('LoteLOT-AB12');
-    expect(active).toHaveTextContent('10/10/2026 · Dra. Laura Ruiz');
+    // La sede de la pantalla es de-DE: la fecha civil sigue su formato, no `dd/mm/yyyy` fijo.
+    expect(active).toHaveTextContent(`${regionalFormat({ locale: 'de-DE', hourCycle: 'h23' }).civilDate('2026-10-10')} · Dra. Laura Ruiz`);
     expect(voided).toHaveAttribute('data-status', 'VOIDED');
     expect(voided).toHaveTextContent('Motivo: Lote mal transcrito');
     expect(within(active).getByRole('link', { name: /tarjeta de implante/i })).toHaveAttribute(
@@ -239,5 +242,51 @@ describe('PatientImplantsTab (DX-191)', () => {
     await user.click(submit);
     expect(mockedVoid).toHaveBeenCalledWith(DENTIST, 'impl-1', 'Diente equivocado');
     expect(await screen.findByText(/Motivo: Diente equivocado/)).toBeInTheDocument();
+  });
+});
+
+describe('PatientImplantsTab con la sede de cada implante (DX-354b)', () => {
+  // 03:30Z del 11 de octubre: 10 de octubre 23:30 en Caracas, 11 en Berlín, 10 en Miami.
+  const VOIDED = '2026-10-11T03:30:00.000Z';
+  const { caracas, berlin, miami } = STAMP_SEDES;
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedCatalog.mockResolvedValue([{ manufacturer: 'Straumann', systems: ['BLT'] }]);
+    window.localStorage.clear();
+    // La pantalla es la sede principal (Caracas, es-VE, 12 h); las filas traen la suya.
+    mockedLocations.mockReset().mockResolvedValue([caracas, berlin, miami]);
+  });
+
+  it('cada implante usa el reloj de SU sede, no el de la pantalla; la medida, su formato', async () => {
+    mockedList.mockResolvedValue([
+      makeImplant({ id: 'i-c', toothNumber: '11', locationId: caracas.id, placedOn: '2026-10-10', voidedAt: VOIDED, voidedByName: 'X', voidReason: 'm' }),
+      makeImplant({ id: 'i-b', toothNumber: '12', locationId: berlin.id, placedOn: '2026-10-10', voidedAt: VOIDED, voidedByName: 'X', voidReason: 'm' }),
+      makeImplant({ id: 'i-m', toothNumber: '13', locationId: miami.id, placedOn: '2026-10-10', voidedAt: VOIDED, voidedByName: 'X', voidReason: 'm' }),
+    ]);
+    render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
+    const rowOf = async (tooth: string) =>
+      (await screen.findByRole('list', { name: `Implantes del diente ${tooth}` })).querySelector('li') as HTMLElement;
+    await waitFor(async () => expect(await rowOf('11')).toHaveTextContent(STAMP_FORMATS.caracas.civilDate('2026-10-10')));
+    expect(await rowOf('11')).toHaveTextContent(dateTimeIn('caracas', VOIDED));
+    expect(await rowOf('12')).toHaveTextContent(STAMP_FORMATS.berlin.civilDate('2026-10-10'));
+    expect(await rowOf('12')).toHaveTextContent(dateTimeIn('berlin', VOIDED));
+    expect(await rowOf('12')).toHaveTextContent('4,1 × 10 mm');
+    // La tercera sede (Miami, en-US, 12 h) tampoco usa el formato de la pantalla.
+    expect(await rowOf('13')).toHaveTextContent(dateTimeIn('miami', VOIDED));
+    expect(await rowOf('13')).toHaveTextContent('4.1 × 10 mm');
+    expect(dateTimeIn('berlin', VOIDED)).not.toBe(dateTimeIn('caracas', VOIDED));
+  });
+
+  it('una fila con sede desconocida dice «—», no usa la de la pantalla y el aviso nombra esa sede una vez', async () => {
+    mockedList.mockResolvedValue([
+      makeImplant({ id: 'i-x', toothNumber: '14', locationId: 'sede-fantasma', voidedAt: VOIDED, voidedByName: 'X', voidReason: 'm' }),
+    ]);
+    render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
+    const row = (await screen.findByRole('list', { name: 'Implantes del diente 14' })).querySelector('li') as HTMLElement;
+    await waitFor(() => expect(screen.getAllByText(/No se pudo saber el formato regional/)).toHaveLength(1));
+    expect(row).not.toHaveTextContent(dateTimeIn('caracas', VOIDED));
+    expect(row).toHaveTextContent('—');
+    expect(row).not.toHaveTextContent('× 10 mm');
   });
 });

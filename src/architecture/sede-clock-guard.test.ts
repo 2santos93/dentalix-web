@@ -10,11 +10,15 @@ import ts from 'typescript';
  * `schema.d.ts`:
  *
  * 1. Nadie importa de `@/lib/format/date` los helpers sin sede
- *    (`SEDELESS_HELPERS`: zona del navegador y 24 h fijas, o la zona sin el
- *    reloj), salvo las pantallas que aún no se migraron, listadas una a una
- *    en `PENDING` con su motivo. Una pantalla nueva no entra en la lista: usa
- *    `useSedeClock`/`useSedeFormat`. La lista solo encoge: una entrada que ya
- *    no los importa hace fallar la prueba hasta que se quita.
+ *    (`SEDELESS_HELPERS`: zona del navegador y 24 h fijas, la zona sin el
+ *    reloj, o `formatCivilDate`, que compone `dd/mm/yyyy` a mano), salvo las
+ *    pantallas que aún no se migraron, listadas una a una en `PENDING` con su
+ *    motivo (y, solo para `formatCivilDate`, en `CIVIL_PENDING`, DX-354b W4).
+ *    Una pantalla nueva no entra en las listas: usa `useSedeStamp`/
+ *    `useSedeClock`/`useSedeFormat`. Las listas solo encogen: una entrada que
+ *    ya no los importa hace fallar la prueba hasta que se quita, y
+ *    `MAX_PENDING`/`MAX_CIVIL_PENDING` impiden añadir entradas aunque la lista
+ *    «solo encoja» en este comentario.
  * 2. Nadie llama a `Intl.*Format`/`Intl.PluralRules` ni a
  *    `toLocale(Date|Time)?String` con un locale literal (`'es'`, `"en-US"`…):
  *    el formato lo da la sede; las palabras, `UI_LANGUAGE` dentro de
@@ -33,6 +37,8 @@ const SEDELESS_HELPERS = new Set([
   'formatTimeInZone',
   'formatDateTimeInZone',
   'formatDateLabel',
+  // DX-354b: el mismo defecto (`dd/mm/yyyy` fijo, ajeno al locale de la sede).
+  'formatCivilDate',
 ]);
 
 const ZONE_24H = 'Ya usa la zona de la sede, pero con 24 h fijas: falta pasar a fmt.dateTime/fmt.time.';
@@ -41,46 +47,60 @@ const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del nav
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
   'components/cash-sessions/cash-shifts-view.tsx': ZONE_24H,
-  'lib/clinical/medical-alerts.ts': ZONE_24H,
-  'components/anamnesis/anamnesis-inbox-view.tsx': STAMP,
-  'components/anamnesis/anamnesis-review-view.tsx': STAMP,
-  'components/anamnesis/patient-anamnesis-section.tsx': STAMP,
   'components/collections/patient-collections-section.tsx': STAMP,
-  'components/consents/consent-templates-manager.tsx': STAMP,
-  'components/consents/patient-consents-tab.tsx': STAMP,
-  'components/data-consents/consent-scope-fields.tsx': STAMP,
-  'components/data-consents/data-consents-tab.tsx': STAMP,
-  'components/data-consents/privacy-policy-settings.tsx': STAMP,
   'components/discounts/discount-policy-manager.tsx': STAMP,
   'components/domains/domains-manager.tsx': STAMP,
   'components/expenses/expense-detail-modal.tsx': STAMP,
-  'components/implants/patient-implants-tab.tsx': STAMP,
   'components/inventory/inventory-item-detail.tsx': STAMP,
   'components/inventory/inventory-view.tsx': STAMP,
   'components/locations/cancellation-policy-settings.tsx': STAMP,
   'components/odontogram/tooth-timeline.tsx': STAMP,
   'components/patient-imports/import-history.tsx': STAMP,
-  'components/patients/clinical-entries-list.tsx': STAMP,
-  'components/patients/medical-history-panel.tsx': STAMP,
-  'components/patients/patient-agreement-section.tsx': STAMP,
-  'components/patients/patient-communication-section.tsx': STAMP,
-  'components/patients/patient-opt-out-warnings.tsx': STAMP,
   'components/payments/cash-register-view.tsx': STAMP,
   'components/platform/platform-mfa-card.tsx': STAMP,
-  'components/postop/patient-postop-deliveries.tsx': STAMP,
-  'components/postop/postop-templates-manager.tsx': STAMP,
-  'components/prescriptions/patient-prescriptions-tab.tsx': STAMP,
-  'components/prescriptions/prescription-templates-manager.tsx': STAMP,
   'components/receivables/debtor-parts.tsx': STAMP,
   'components/support-accesses/support-accesses-view.tsx': STAMP,
   'components/treatment-plans/pending-follow-up-view.tsx': STAMP,
   'components/treatment-plans/plan-options-panel.tsx': STAMP,
   'components/treatment-plans/plan-quote-actions.tsx': STAMP,
   'components/treatment-plans/treatment-plans-tab-copy.ts': STAMP,
-  'lib/patients/member-number.ts': STAMP,
   'lib/treatment-plans/item-attribution.ts': STAMP,
   'lib/treatment-plans/plan-options.ts': STAMP,
 };
+
+/**
+ * Aserción del máximo (DX-354b, M2): nadie añade entradas a `PENDING` aunque el
+ * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
+ * cierre, `PENDING` desaparece.
+ */
+const MAX_PENDING = 20;
+
+const CIVIL_W4 = 'Día civil en `dd/mm/yyyy` fijo: se migra a `fmt.civilDate`/`stamp.civilDate` en DX-354b W4.';
+
+/**
+ * Ficheros que solo importan `formatCivilDate` (sin ningún otro ayudante sin
+ * sede, que irían en `PENDING`). Solo puede encoger; se vacía en DX-354b W4.
+ */
+const CIVIL_PENDING: Readonly<Record<string, string>> = {
+  'components/account-statement/account-statement-view.tsx': CIVIL_W4,
+  'components/consents/new-consent-modal.tsx': CIVIL_W4,
+  'components/implants/implant-lot-search.tsx': CIVIL_W4,
+  'components/odontogram/odontogram-tab.tsx': CIVIL_W4,
+  'components/patient-credit/credit-refund-modal.tsx': CIVIL_W4,
+  'components/patients/patient-data-panel.tsx': CIVIL_W4,
+  'components/payments/reallocate-payment-modal.tsx': CIVIL_W4,
+  'components/perio/perio-exam-editor.tsx': CIVIL_W4,
+  'components/perio/perio-tab.tsx': CIVIL_W4,
+  'components/recall/patient-recall-section.tsx': CIVIL_W4,
+  'components/recall/recall-view.tsx': CIVIL_W4,
+  'components/signature-requests/send-to-sign-modal.tsx': CIVIL_W4,
+  'components/treatment-plans/accept-plan-modal.tsx': CIVIL_W4,
+  'components/treatment-plans/payment-plan-section.tsx': CIVIL_W4,
+  'components/treatment-plans/plan-visits-board.tsx': CIVIL_W4,
+  'lib/patients/agreement-presentation.ts': CIVIL_W4,
+  'lib/patients/coverage-presentation.ts': CIVIL_W4,
+};
+const MAX_CIVIL_PENDING = 17;
 
 /** Las pantallas de DX-378 (y las migradas después): no pueden volver a la lista. */
 const MIGRATED = [
@@ -119,6 +139,28 @@ const MIGRATED = [
   'components/cash-sessions/cash-session-report.tsx',
   'components/patient-documents/patient-documents-tab.tsx',
   'lib/audit/audit-labels.ts',
+  // DX-354b W1: cada fila con la sede de su dato (`useSedeStamp`), zona paciente y clínica.
+  'components/anamnesis/anamnesis-inbox-view.tsx',
+  'components/anamnesis/anamnesis-review-view.tsx',
+  'components/anamnesis/patient-anamnesis-section.tsx',
+  'components/consents/consent-templates-manager.tsx',
+  'components/consents/patient-consents-tab.tsx',
+  'components/data-consents/consent-scope-fields.tsx',
+  'components/data-consents/data-consents-tab.tsx',
+  'components/data-consents/privacy-policy-settings.tsx',
+  'lib/clinical/medical-alerts.ts',
+  'components/patients/clinical-entries-list.tsx',
+  'components/patients/medical-history-panel.tsx',
+  'components/patients/patient-agreement-section.tsx',
+  'components/patients/patient-communication-section.tsx',
+  'components/patients/patient-opt-out-warnings.tsx',
+  'components/implants/patient-implants-tab.tsx',
+  'components/postop/patient-postop-deliveries.tsx',
+  'components/postop/postop-templates-manager.tsx',
+  'components/prescriptions/patient-prescriptions-tab.tsx',
+  'components/prescriptions/prescription-templates-manager.tsx',
+  'lib/patients/member-number.ts',
+  'components/clinical/anamnesis-review-line.tsx',
 ];
 
 /**
@@ -243,19 +285,30 @@ function symbolMoneyCalls(source: ts.SourceFile): string[] {
   return found;
 }
 
+/** Regla 1: ficheros que importan un ayudante sin sede sin estar en las listas (`formatCivilDate` solo se tolera en `civilPending`). */
+function rule1Offenders(
+  scannedFiles: readonly { rel: string; source: ts.SourceFile }[],
+  pending: Readonly<Record<string, string>>,
+  civilPending: Readonly<Record<string, string>>,
+): string[] {
+  return scannedFiles
+    .filter(({ rel }) => !(rel in pending))
+    .map(({ rel, source }) => ({
+      rel,
+      used: sedelessImports(source).filter((name) => !(name === 'formatCivilDate' && rel in civilPending)),
+    }))
+    .filter(({ used }) => used.length > 0)
+    .map(({ rel, used }) => `${rel}: ${used.join(', ')}`);
+}
+
 const files = sourceFiles(SRC)
   .map((path) => ({ path, rel: relOf(path) }))
   .filter(({ rel }) => scanned(rel))
   .map(({ path, rel }) => ({ rel, source: parse(path, readFileSync(path, 'utf8')) }));
 
 describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
-  it('no file imports the sede-less date helpers outside the pending list', () => {
-    const offenders = files
-      .filter(({ rel }) => !(rel in PENDING))
-      .map(({ rel, source }) => ({ rel, used: sedelessImports(source) }))
-      .filter(({ used }) => used.length > 0)
-      .map(({ rel, used }) => `${rel}: ${used.join(', ')}`);
-    expect(offenders).toEqual([]);
+  it('no file imports the sede-less date helpers outside the pending lists', () => {
+    expect(rule1Offenders(files, PENDING, CIVIL_PENDING)).toEqual([]);
   });
 
   it('every pending entry still exists and still needs the exception (the list only shrinks)', () => {
@@ -266,10 +319,24 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
     expect(stale).toEqual([]);
   });
 
+  it('every civil-pending entry still imports formatCivilDate and is not also in PENDING (the list only shrinks)', () => {
+    const stale = Object.keys(CIVIL_PENDING).filter((rel) => {
+      const file = files.find((f) => f.rel === rel);
+      return !file || !sedelessImports(file.source).includes('formatCivilDate') || rel in PENDING;
+    });
+    expect(stale).toEqual([]);
+  });
+
+  it('the pending lists never grow beyond their maximum (DX-354b)', () => {
+    expect(Object.keys(PENDING).length).toBeLessThanOrEqual(MAX_PENDING);
+    expect(Object.keys(CIVIL_PENDING).length).toBeLessThanOrEqual(MAX_CIVIL_PENDING);
+  });
+
   it('the agenda and the FE-078 screens are migrated and cannot return to the list', () => {
     for (const rel of MIGRATED) {
       expect([rel, existsSync(join(SRC, rel))]).toEqual([rel, true]);
       expect([rel, rel in PENDING]).toEqual([rel, false]);
+      expect([rel, rel in CIVIL_PENDING]).toEqual([rel, false]);
     }
   });
 
@@ -309,12 +376,31 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
     expect(imports("import { formatTime } from '@/lib/format/date';")).toEqual(['formatTime']);
     expect(imports("import { formatDate as f, civilDateLabel } from '@/lib/format/date';")).toEqual(['formatDate']);
     expect(imports("import * as dates from '@/lib/format/date';")).toEqual(['*']);
+    expect(imports("import { formatCivilDate } from '@/lib/format/date';")).toEqual(['formatCivilDate']);
     expect(imports("import { civilDateLabel, firstOfMonth } from '@/lib/format/date';")).toEqual([]);
     expect(imports("import { sedeTime } from '@/lib/locations/sede-clock';")).toEqual([]);
     const relativeImports = (file: string, code: string) => sedelessImports(parse(join(SRC, file), code));
     expect(relativeImports('lib/appointments/x.ts', "import { formatTime } from '../format/date';")).toEqual(['formatTime']);
     expect(relativeImports('lib/format/x.ts', "import { formatDate } from './date';")).toEqual(['formatDate']);
     expect(relativeImports('lib/appointments/x.ts', "import { formatTime } from './date';")).toEqual([]);
+
+    // Mutaciones (DX-354b): una entrada de más hace fallar el máximo; un fichero nuevo
+    // que importa `formatCivilDate` fuera de las listas hace fallar la regla 1.
+    // Mutación: falla solo si PENDING ya está EXACTAMENTE en su máximo, y eso es a propósito:
+    // obliga a bajar `MAX_PENDING` en cada PR que migra pantallas.
+    const grown = { ...PENDING, 'components/nueva/pantalla.tsx': STAMP };
+    expect(Object.keys(grown).length <= MAX_PENDING).toBe(false);
+    const fresh = [
+      { rel: 'components/nueva/pantalla.tsx', source: parse('x.tsx', "import { formatCivilDate } from '@/lib/format/date';") },
+    ];
+    expect(rule1Offenders(fresh, PENDING, CIVIL_PENDING)).toEqual(['components/nueva/pantalla.tsx: formatCivilDate']);
+    expect(rule1Offenders(fresh, PENDING, { 'components/nueva/pantalla.tsx': CIVIL_W4 })).toEqual([]);
+    const both = [
+      { rel: 'components/nueva/pantalla.tsx', source: parse('x.tsx', "import { formatCivilDate, formatDate } from '@/lib/format/date';") },
+    ];
+    expect(rule1Offenders(both, PENDING, { 'components/nueva/pantalla.tsx': CIVIL_W4 })).toEqual([
+      'components/nueva/pantalla.tsx: formatDate',
+    ]);
 
     const money = (code: string) => symbolMoneyCalls(parse('x.tsx', code)).length;
     expect(money('fmt.money(1, "USD"); clock.fmt.money(1, c);')).toBe(2);

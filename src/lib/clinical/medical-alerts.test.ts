@@ -1,3 +1,7 @@
+import { regionalFormat } from '@/lib/format/regional-format';
+import { caracasSede } from '@/lib/test/sede-clock';
+import { clinicLocation } from '@/lib/test/locations';
+import { testStamp } from '@/lib/test/stamp';
 import {
   ANAMNESIS_EXPIRED_LABEL,
   ANAMNESIS_MISSING_LABEL,
@@ -7,6 +11,7 @@ import {
   canConfirmAnamnesis,
   canManageAnamnesisSettings,
   confirmedToday,
+  hasAnamnesisNote,
   medicalAlertHeadline,
   medicalAlertLines,
   medicalAlertSeverity,
@@ -16,6 +21,12 @@ import {
   sedeTimeLabel,
   type MedicalAlertFlags,
 } from './medical-alerts';
+
+// Jest corre con TZ=UTC: ninguna sede de estas pruebas es la del entorno.
+const caracas = caracasSede({ id: 'caracas' });
+const berlin = clinicLocation({ id: 'berlin', timeZone: 'Europe/Berlin', locale: 'de-DE', hourCycle: 'h23' });
+const ve12 = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+const de24 = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
 
 const flags = (over: Partial<MedicalAlertFlags> = {}): MedicalAlertFlags => ({
   hasCriticalAlert: false,
@@ -57,13 +68,29 @@ describe('medical-alerts (DX-247)', () => {
   });
 
   it('«Sin anamnesis» y «Anamnesis caducada», nunca «sin alertas»', () => {
-    expect(anamnesisNote(flags({ anamnesisStatus: 'MISSING', anamnesisReviewedAt: null }))).toBe(
+    const stamp = testStamp([caracas]);
+    expect(anamnesisNote(flags({ anamnesisStatus: 'MISSING', anamnesisReviewedAt: null }), stamp)).toBe(
       ANAMNESIS_MISSING_LABEL,
     );
-    expect(anamnesisNote(flags({ anamnesisStatus: 'EXPIRED' }))).toBe(
-      `${ANAMNESIS_EXPIRED_LABEL} · última revisión 01/09/2026`,
+    expect(anamnesisNote(flags({ anamnesisStatus: 'EXPIRED' }), stamp)).toBe(
+      `${ANAMNESIS_EXPIRED_LABEL} · última revisión ${ve12.date(new Date('2026-09-01T12:00:00.000Z'), 'America/Caracas')}`,
     );
-    expect(anamnesisNote(flags())).toBeNull();
+    expect(anamnesisNote(flags(), stamp)).toBeNull();
+  });
+
+  it('la fecha de la última revisión sigue el formato de la sede de la pantalla', () => {
+    // 03:30Z del 2 de septiembre: 1 de septiembre en Caracas, 2 en Berlín.
+    const expired = flags({ anamnesisStatus: 'EXPIRED', anamnesisReviewedAt: '2026-09-02T03:30:00.000Z' });
+    expect(anamnesisNote(expired, testStamp([caracas]))).toBe(`${ANAMNESIS_EXPIRED_LABEL} · última revisión 01/09/2026`);
+    expect(anamnesisNote(expired, testStamp([berlin]))).toBe(`${ANAMNESIS_EXPIRED_LABEL} · última revisión 02.09.2026`);
+    // Sin formato: la frase sigue completa, con «—».
+    expect(anamnesisNote(expired, { date: () => '—' })).toBe(`${ANAMNESIS_EXPIRED_LABEL} · última revisión —`);
+  });
+
+  it('hasAnamnesisNote no depende del formato: caducada o ausente sí, al día no', () => {
+    expect(hasAnamnesisNote(flags({ anamnesisStatus: 'EXPIRED' }))).toBe(true);
+    expect(hasAnamnesisNote(flags({ anamnesisStatus: 'MISSING' }))).toBe(true);
+    expect(hasAnamnesisNote(flags())).toBe(false);
   });
 
   it('el resumen accesible junta premedicación, alertas y anamnesis', () => {
@@ -101,8 +128,20 @@ describe('medical-alerts (DX-247)', () => {
     // Una versión guardada hoy también es una revisión de hoy.
     expect(reviewedToday({ ...late, kind: 'UPDATED' }, sede)).toBe(true);
     expect(reviewedToday(null, sede)).toBe(false);
-    expect(sedeDateLabel(late.at, sede.timeZone)).toBe('20/10/2026');
-    expect(sedeTimeLabel(late.at, sede.timeZone)).toBe('23:30');
+  });
+
+  it('las etiquetas de la ficha: zona de la ficha, formato y reloj de la sede de la pantalla', () => {
+    const at = '2026-10-21T03:30:00.000Z';
+    // La ficha es de Caracas (23:30 del 20/10); la pantalla puede ser 12 h o 24 h.
+    expect(sedeDateLabel(at, 'America/Caracas', ve12)).toBe(ve12.date(new Date(at), 'America/Caracas'));
+    expect(sedeDateLabel(at, 'America/Caracas', ve12)).toBe('20/10/2026');
+    expect(sedeTimeLabel(at, 'America/Caracas', ve12)).toBe('11:30 p. m.');
+    expect(sedeDateLabel(at, 'America/Caracas', de24)).toBe('20.10.2026');
+    expect(sedeTimeLabel(at, 'America/Caracas', de24)).toBe('23:30');
+    // Sin formato, o con un instante inválido: «—».
+    expect(sedeDateLabel(at, 'America/Caracas', null)).toBe('—');
+    expect(sedeTimeLabel(at, 'America/Caracas', null)).toBe('—');
+    expect(sedeDateLabel('no es una fecha', 'America/Caracas', ve12)).toBe('—');
   });
 
   it('roles: «Sin cambios hoy» los clínicos; la vigencia, solo ADMIN', () => {

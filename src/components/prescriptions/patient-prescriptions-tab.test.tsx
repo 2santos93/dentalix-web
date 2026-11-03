@@ -1,3 +1,5 @@
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { listLocations } from '@/lib/locations/locations-api';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PatientPrescriptionsTab } from './patient-prescriptions-tab';
 import {
@@ -7,6 +9,10 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { makePrescription, tokenFor } from '@/lib/test/prescriptions';
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede({ id: 'loc1' })]),
+}));
 
 jest.mock('../../lib/prescriptions/prescriptions-api', () => ({
   ...jest.requireActual('../../lib/prescriptions/prescriptions-api'),
@@ -145,5 +151,46 @@ describe('PatientPrescriptionsTab', () => {
     await waitFor(() => expect(mockedVoid).toHaveBeenCalledWith(DENTIST, 'rx1', 'Error de dosis'));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(within(table).getAllByRole('row')[1]).toHaveTextContent('Motivo: Error de dosis');
+  });
+});
+
+describe('PatientPrescriptionsTab con la sede de cada receta (DX-354b)', () => {
+  // 03:30Z del 17 de octubre: 16 de octubre 23:30 en Caracas, 17 en Berlín, 16 en Miami.
+  const ISSUED = '2026-10-17T03:30:00.000Z';
+  const { caracas, berlin, miami } = STAMP_SEDES;
+  const mockedSedes = listLocations as jest.Mock;
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    window.localStorage.clear();
+    // La pantalla es Caracas (12 h, es-VE); cada receta trae la sede que la emitió.
+    mockedSedes.mockResolvedValue([caracas, berlin, miami]);
+  });
+  afterEach(() => mockedSedes.mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede({ id: 'loc1' })]));
+
+  it('cada receta se lee con el reloj de SU sede, también en el nombre accesible de su menú', async () => {
+    mockedList.mockResolvedValue([
+      makePrescription({ id: 'rx-c', locationId: caracas.id, issuedAt: ISSUED }),
+      makePrescription({ id: 'rx-b', locationId: berlin.id, issuedAt: ISSUED }),
+      makePrescription({ id: 'rx-m', locationId: miami.id, issuedAt: ISSUED }),
+    ]);
+    render(<PatientPrescriptionsTab token={tokenFor('ADMIN', 'u-admin')} patientId="p1" />);
+    const table = await screen.findByRole('table', { name: 'Recetas del paciente' });
+    const [, rc, rb, rm] = within(table).getAllByRole('row');
+    await waitFor(() => expect(rc).toHaveTextContent(dateTimeIn('caracas', ISSUED)));
+    expect(rb).toHaveTextContent(dateTimeIn('berlin', ISSUED));
+    expect(rm).toHaveTextContent(dateTimeIn('miami', ISSUED));
+    expect(dateTimeIn('berlin', ISSUED)).not.toBe(dateTimeIn('caracas', ISSUED));
+    expect(within(rb).getByRole('button', { name: `Acciones de receta del ${dateTimeIn('berlin', ISSUED)}` })).toBeInTheDocument();
+  });
+
+  it('una receta de sede desconocida: «—», nombre accesible sin fecha y un solo aviso', async () => {
+    mockedList.mockResolvedValue([makePrescription({ id: 'rx-x', locationId: 'sede-fantasma', issuedAt: ISSUED })]);
+    render(<PatientPrescriptionsTab token={tokenFor('ADMIN', 'u-admin')} patientId="p1" />);
+    const table = await screen.findByRole('table', { name: 'Recetas del paciente' });
+    await waitFor(() => expect(screen.getAllByText(/No se pudo saber el formato regional/)).toHaveLength(1));
+    const [, row] = within(table).getAllByRole('row');
+    expect(row).toHaveTextContent('Sin dato');
+    expect(within(row).getByRole('button', { name: 'Acciones de receta' })).toBeInTheDocument();
   });
 });

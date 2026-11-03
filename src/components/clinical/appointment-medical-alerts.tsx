@@ -5,12 +5,13 @@ import {
   MEDICAL_ALERTS_TITLE,
   PREMEDICATION_HINT,
   PREMEDICATION_LABEL,
-  anamnesisNote,
+  hasAnamnesisNote,
   getPatientMedicalAlerts,
   medicalAlertLines,
   medicalAlertSeverity,
   type MedicalAlertFlags,
 } from '@/lib/clinical/medical-alerts';
+import { AnamnesisNoteText } from '@/components/clinical/anamnesis-note-text';
 import { FieldError } from '@/components/errors/field-error';
 
 const copy = {
@@ -27,7 +28,6 @@ const copy = {
 export function AppointmentMedicalAlerts({ flags }: { flags: MedicalAlertFlags | null | undefined }) {
   if (!flags || !medicalAlertSeverity(flags)) return null;
   const lines = medicalAlertLines(flags);
-  const note = anamnesisNote(flags);
   return (
     <div data-testid="appointment-medical-alerts" className="flex flex-col gap-2">
       {flags.requiresPremedication ? (
@@ -56,14 +56,14 @@ export function AppointmentMedicalAlerts({ flags }: { flags: MedicalAlertFlags |
           </ul>
         </div>
       ) : null}
-      {note ? (
+      {hasAnamnesisNote(flags) ? (
         <p className="flex items-center gap-1.5 text-sm text-warning-text">
           {flags.anamnesisStatus === 'MISSING' ? (
             <ClipboardX aria-hidden className="size-4 shrink-0" />
           ) : (
             <ClipboardClock aria-hidden className="size-4 shrink-0" />
           )}
-          {note}
+          <AnamnesisNoteText flags={flags} />
         </p>
       ) : null}
     </div>

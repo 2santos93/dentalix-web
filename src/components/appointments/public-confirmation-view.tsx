@@ -21,10 +21,11 @@ import {
   type PublicCancellationPolicy,
   type PublicConfirmation,
 } from '@/lib/appointments/confirmations-api';
-import { documentFormat, documentTexts, NO_DOCUMENT_FORMAT, type DocumentFormat } from '@/lib/format/document-format';
+import { documentFormat, documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
+import { MissingValue } from '@/components/ui/missing-value';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
@@ -68,7 +69,6 @@ const copy = {
     'Si cancelas ahora, cuenta como cancelación tardía según la política de la clínica. Si prefieres, pide que te llamemos para buscar otra hora.',
   acknowledge: 'He leído y acepto la política de cancelación de la clínica',
   // DX-354: la sede de la cita no tiene zona, formato o reloj: no hay quien lo configure, así que se manda a la clínica.
-  missing: 'Sin dato',
   noFormat: 'Llama a la clínica para confirmar la hora de tu cita.',
   // DX-354: con la sede sin formato no se puede escribir el cargo: nunca «—» en su lugar; se cancela por teléfono.
   feeNeedsClinicTitle: 'Para cancelar ahora, llama a la clínica',
@@ -108,16 +108,6 @@ function cancelNeedsClinic(data: PublicConfirmation): boolean {
   if (!policy || !appointment || !data.isLate) return false;
   const hasFee = policy.suggestedFee !== null && policy.suggestedFee > 0 && Boolean(policy.currency);
   return hasFee && appointmentFormat(appointment) === null;
-}
-
-/** El «—» de un dato que la sede no permite escribir, con texto para lectores de pantalla. */
-function MissingValue() {
-  return (
-    <>
-      <span aria-hidden>{NO_DOCUMENT_FORMAT}</span>
-      <span className="sr-only">{copy.missing}</span>
-    </>
-  );
 }
 
 function AppointmentSummary({

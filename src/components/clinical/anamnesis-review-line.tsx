@@ -11,7 +11,7 @@ import {
   sedeTimeLabel,
   type PatientMedicalAlerts,
 } from '@/lib/clinical/medical-alerts';
-import { formatCivilDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FieldError } from '@/components/errors/field-error';
@@ -61,6 +61,9 @@ export function AnamnesisReviewLine({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // El aviso lo muestra la sección que contiene esta línea (una vez por pantalla).
+  // La zona es la de la ficha (la API evaluó «hoy» con ella); el formato y el reloj, los de la sede de la pantalla.
+  const stamp = useSedeStamp(token);
 
   if (failed) return <FieldError label={copy.loadError} onRetry={onReload} className="self-start" />;
   if (!alerts) return null;
@@ -74,11 +77,11 @@ export function AnamnesisReviewLine({
   if (status === 'MISSING') {
     text = copy.missing;
   } else if (today && review) {
-    text = copy.noChangesToday(sedeTimeLabel(review.at, alerts.timeZone), review.byName);
+    text = copy.noChangesToday(sedeTimeLabel(review.at, alerts.timeZone, stamp.fmt), review.byName);
   } else {
     const head = status === 'EXPIRED' ? ANAMNESIS_EXPIRED_LABEL : copy.current;
     text = review
-      ? `${head} · ${copy.reviewed(sedeDateLabel(review.at, alerts.timeZone), review.byName)}`
+      ? `${head} · ${copy.reviewed(sedeDateLabel(review.at, alerts.timeZone, stamp.fmt), review.byName)}`
       : head;
   }
 
@@ -117,7 +120,7 @@ export function AnamnesisReviewLine({
               {' '}
               {copy.validity(alerts.validityMonths)}
               {status === 'CURRENT' && alerts.anamnesisExpiresOn
-                ? ` ${copy.expiresOn(formatCivilDate(alerts.anamnesisExpiresOn))}`
+                ? ` ${copy.expiresOn(stamp.civilDate(alerts.anamnesisExpiresOn))}`
                 : ''}
             </span>
           ) : null}
