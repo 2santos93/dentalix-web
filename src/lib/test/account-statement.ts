@@ -1,5 +1,6 @@
 import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
 import type { AccountStatement } from '@/lib/account-statement/account-statement-api';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 /**
  * Estado de cuenta de prueba: dos monedas, un abono anulado, un plan cancelado
@@ -10,6 +11,7 @@ export function accountStatementFixture(
 ): AccountStatement {
   return {
     issuedAt: '2026-10-15T15:30:00.000Z',
+    regional: REGIONAL_VE,
     clinic: { name: 'Clínica Sonrisas', logoUrl: null, fiscal: EMPTY_CLINIC_FISCAL },
     patient: {
       id: 'pat-1',

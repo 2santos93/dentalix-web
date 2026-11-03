@@ -163,6 +163,8 @@ export function RecordPaymentModal({
   const fmt = readyFormat(useSedeFormat(token));
   const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const timeZone = readyTimeZone(zone);
+  // La fecha de «Plan del …» en la zona y el formato de la sede (DX-354).
+  const planDates = fmt && timeZone ? { fmt, timeZone } : null;
   const today = timeZone ? sedeToday(timeZone) : '';
   const [form, setForm] = useState<FormState>(() => initialForm(today));
   // La clave y lo que identifica la petición que ya viajó con ella (como la
@@ -384,7 +386,7 @@ export function RecordPaymentModal({
           : money(saved.total, saved.planCurrency),
         saved.payments.length,
         head ? sedeCivilDate(head.paidOn, fmt) : '',
-        savedPlan ? statementCopy.planLabel(savedPlan.createdAt) : '',
+        savedPlan ? statementCopy.planLabel(savedPlan.createdAt, planDates) : '',
         saved.receiptNumber,
       );
       onRecorded(
@@ -482,7 +484,7 @@ export function RecordPaymentModal({
         savedOpening
           ? copy.openingLabel(savedOpening.concept)
           : savedPlan
-            ? statementCopy.planLabel(savedPlan.createdAt)
+            ? statementCopy.planLabel(savedPlan.createdAt, planDates)
             : '',
       );
       onRecorded(saved.exchangeRateStatus === 'MISSING' ? `${recorded} ${copy.recordedWithoutRate}` : recorded);
@@ -564,6 +566,7 @@ export function RecordPaymentModal({
               }}
               disabled={submitting}
               money={money}
+              planDates={planDates}
             />
           )}
           {plan || opening ? (

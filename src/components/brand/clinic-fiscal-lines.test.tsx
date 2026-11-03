@@ -5,6 +5,7 @@ import { planQuoteFixture } from '@/components/treatment-plans/plan-quote-fixtur
 import { makePrescriptionDocument } from '@/lib/test/prescriptions';
 import { ClinicFiscalLines } from './clinic-fiscal-lines';
 import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
+import { FORMAT_ES } from '@/lib/test/document-regional';
 
 describe('ClinicFiscalLines (DX-019)', () => {
   it('razón social · identificador con su nombre, dirección y contacto', () => {
@@ -31,9 +32,9 @@ describe('documentos emitidos (DX-019)', () => {
   const FROZEN = { ...EMPTY_CLINIC_FISCAL, legalName: 'Sonrisas S.A.', taxId: 'J-1', taxIdLabel: 'ID fiscal' };
 
   it('el presupuesto imprime su foto; sin foto, ningún dato fiscal', () => {
-    const { rerender } = render(<PlanQuoteDocument catalogCurrency="USD" quote={planQuoteFixture({ clinicFiscal: FROZEN })} />);
+    const { rerender } = render(<PlanQuoteDocument format={FORMAT_ES} catalogCurrency="USD" quote={planQuoteFixture({ clinicFiscal: FROZEN })} />);
     expect(screen.getByTestId('clinic-fiscal')).toHaveTextContent('Sonrisas S.A. · ID fiscal J-1');
-    rerender(<PlanQuoteDocument catalogCurrency="USD" quote={planQuoteFixture({ clinicFiscal: null })} />);
+    rerender(<PlanQuoteDocument format={FORMAT_ES} catalogCurrency="USD" quote={planQuoteFixture({ clinicFiscal: null })} />);
     expect(screen.queryByTestId('clinic-fiscal')).not.toBeInTheDocument();
   });
 

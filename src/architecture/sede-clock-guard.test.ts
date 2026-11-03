@@ -35,25 +35,11 @@ const SEDELESS_HELPERS = new Set([
   'formatDateLabel',
 ]);
 
-const PRINTED = 'Impreso o documento A4/PDF: pendiente de G1-C (DX-354), con la sede del documento.';
-const PUBLIC_PAGE = 'Página pública: la API no manda la zona ni el formato de la sede (anotado en el informe de DX-378).';
 const ZONE_24H = 'Ya usa la zona de la sede, pero con 24 h fijas: falta pasar a fmt.dateTime/fmt.time.';
 const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del navegador: pendiente de migrar a la sede.';
 
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
-  'components/account-statement/account-statement-document.tsx': PRINTED,
-  'components/account-statement/family-account-statement-document.tsx': PRINTED,
-  'components/consents/consent-document.tsx': PRINTED,
-  'components/implants/implant-card-document.tsx': PRINTED,
-  'components/payments/payment-receipt-document.tsx': PRINTED,
-  'components/postop/postop-document.tsx': PRINTED,
-  'components/treatment-plans/plan-quote-document.tsx': PRINTED,
-  'lib/account-statement/presentation.ts': PRINTED,
-  'components/anamnesis/public-anamnesis-view.tsx': PUBLIC_PAGE,
-  'components/appointments/public-confirmation-view.tsx': PUBLIC_PAGE,
-  'components/reminders/public-reminder-opt-out-view.tsx': PUBLIC_PAGE,
-  'components/cash-sessions/cash-session-report.tsx': ZONE_24H,
   'components/cash-sessions/cash-shifts-view.tsx': ZONE_24H,
   'lib/clinical/medical-alerts.ts': ZONE_24H,
   'components/anamnesis/anamnesis-inbox-view.tsx': STAMP,
@@ -73,7 +59,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/inventory/inventory-view.tsx': STAMP,
   'components/locations/cancellation-policy-settings.tsx': STAMP,
   'components/odontogram/tooth-timeline.tsx': STAMP,
-  'components/patient-documents/patient-documents-tab.tsx': STAMP,
   'components/patient-imports/import-history.tsx': STAMP,
   'components/patients/clinical-entries-list.tsx': STAMP,
   'components/patients/medical-history-panel.tsx': STAMP,
@@ -92,7 +77,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/treatment-plans/plan-options-panel.tsx': STAMP,
   'components/treatment-plans/plan-quote-actions.tsx': STAMP,
   'components/treatment-plans/treatment-plans-tab-copy.ts': STAMP,
-  'lib/audit/audit-labels.ts': STAMP,
   'lib/patients/member-number.ts': STAMP,
   'lib/treatment-plans/item-attribution.ts': STAMP,
   'lib/treatment-plans/plan-options.ts': STAMP,
@@ -121,6 +105,20 @@ const MIGRATED = [
   'components/expenses/expenses-summary-view.tsx',
   // DX-362: el registro de auditoría, con la zona de la pantalla y su desfase en cada hora.
   'components/audit/audit-log-view.tsx',
+  'components/payments/payment-receipt-document.tsx',
+  'components/account-statement/account-statement-document.tsx',
+  'components/account-statement/family-account-statement-document.tsx',
+  'components/consents/consent-document.tsx',
+  'components/implants/implant-card-document.tsx',
+  'components/postop/postop-document.tsx',
+  'components/treatment-plans/plan-quote-document.tsx',
+  'lib/account-statement/presentation.ts',
+  'components/anamnesis/public-anamnesis-view.tsx',
+  'components/appointments/public-confirmation-view.tsx',
+  'components/reminders/public-reminder-opt-out-view.tsx',
+  'components/cash-sessions/cash-session-report.tsx',
+  'components/patient-documents/patient-documents-tab.tsx',
+  'lib/audit/audit-labels.ts',
 ];
 
 /**

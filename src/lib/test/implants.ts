@@ -1,4 +1,5 @@
 import type { ImplantCard, ImplantLotMatch, PatientImplant } from '@/lib/implants/implants-api';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 export { tokenFor } from './prescriptions';
 
@@ -41,6 +42,7 @@ export function makeImplantCard(overrides: Partial<ImplantCard> = {}): ImplantCa
     patientDocument: 'Documento nacional DOC-0002',
     patientBirthDate: '1980-05-02',
     clinicName: 'Clínica Demo',
+    regional: REGIONAL_VE,
     locations: [{ id: 'loc-1', name: 'Sede principal', address: 'Av. Urdaneta 72' }],
     placedOn: '2026-10-10',
     professionals: ['Dra. Laura Ruiz'],

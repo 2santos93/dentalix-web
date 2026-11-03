@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VoidPaymentModal } from './void-payment-modal';
+import { voidPaymentSubject } from './use-void-payment';
+import { regionalFormat } from '@/lib/format/regional-format';
 
 function setup(props: Partial<React.ComponentProps<typeof VoidPaymentModal>> = {}) {
   const onConfirm = jest.fn();
@@ -93,4 +95,13 @@ it('DX-390: avisa de que una forma de pago de un cobro dividido se anula con tod
   expect(screen.getByRole('note')).toHaveTextContent(
     'Es una de las 3 formas de pago de un mismo cobro: se anulan todas y su recibo.',
   );
+});
+
+it('DX-354: muestra el importe con el código ISO y la fecha de la sede', () => {
+  const subject = voidPaymentSubject(
+    { id: 'p', amount: 1234.5, currency: 'USD', paidOn: '2027-07-15', patientName: 'Ana' },
+    regionalFormat({ locale: 'en-US', hourCycle: 'h12' }),
+  );
+  setup({ subject });
+  expect(screen.getByText(/USD.1,234\.50 · 07\/15\/2027 · Ana/)).toBeInTheDocument();
 });

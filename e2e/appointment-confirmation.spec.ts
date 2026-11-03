@@ -5,6 +5,8 @@ import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
 import { API_URL } from './support/urls';
 import { atSede, sedeDayFromToday } from './support/clock';
+import { apiPost, createLocationViaApi, registerClinicViaApi } from './support/api';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e DX-005 — confirmación de cita por enlace firmado, de punta a punta y sin
@@ -151,4 +153,95 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   await fillDate(page, 'Fecha', day);
   await expect(row.getByRole('combobox', { name: /Estado de la cita de/ })).toHaveText('Confirmada', { timeout: 10_000 });
   await expect(row.getByText('Confirmación pendiente')).toHaveCount(0);
+});
+
+// DX-354: la página pública pinta con la sede de la cita, no con la zona del navegador del paciente.
+test('con el navegador del paciente en otra zona, el día y la hora son los de la sede (Tokio, 24 h)', async ({
+  browser,
+  request,
+}) => {
+  const tokyoSubdomain = `test-confirma-tk-${suffix}`.slice(0, 40);
+  const session = await registerClinicViaApi(request, {
+    subdomain: tokyoSubdomain,
+    clinicName: `Clinica Tokio ${suffix}`,
+    fullName: 'Dra. Tokio',
+    email: `confirma.tk.${suffix}@example.com`,
+    password,
+  });
+  const sede = {
+    name: 'Sede Tokio',
+    country: 'JP',
+    currency: 'JPY',
+    timeZone: 'Asia/Tokyo',
+    locale: 'ja-JP',
+    hourCycle: 'h23',
+  } as const;
+  const sedeId = await createLocationViaApi(request, session, sede);
+  const at = { ...session, headers: { ...session.headers, 'X-Location-Id': sedeId } };
+  const staff = (await (await request.get(`${API_URL}/staff`, { headers: session.headers })).json()) as {
+    userId: string;
+  }[];
+  const patient = await apiPost<{ id: string }>(request, at, '/patients', {
+    firstName: 'Hana',
+    lastName: `Tokio${suffix}`.slice(0, 40),
+    docType: 'PASSPORT',
+    docNumber: `TK${suffix}`.slice(0, 20),
+    sex: 'F',
+    phone: '+81 90 1234 5678',
+  });
+  await request.put(`${API_URL}/locations/schedule`, { headers: at.headers, data: { ranges: [] } });
+  const start = new Date(Math.ceil((Date.now() + 2 * 24 * 60 * 60_000) / 300_000) * 300_000);
+  const end = new Date(start.getTime() + 30 * 60_000);
+  const appt = await apiPost<{ id: string }>(request, at, '/appointments', {
+    patientId: patient.id,
+    providerId: staff[0].userId,
+    start: start.toISOString(),
+    end: end.toISOString(),
+    reason: `Control ${suffix}`,
+  });
+  const link = await apiPost<{ url: string }>(request, at, `/appointments/${appt.id}/confirmation-link`, {});
+
+  // El navegador del paciente está en otra zona (Los Ángeles): no cuenta.
+  const context = await browser.newContext({ timezoneId: 'America/Los_Angeles', viewport: { width: 390, height: 844 } });
+  const patientPage = await context.newPage();
+  await patientPage.goto(link.url);
+  const fmt = regionalFormat({ locale: sede.locale, hourCycle: sede.hourCycle });
+  const norm = (text: string) => text.replace(/\s+/g, ' ');
+  await expect(patientPage.getByText('Hola Hana,')).toBeVisible({ timeout: 15_000 });
+  const summary = patientPage.locator('dl').first();
+  await expect.poll(async () => norm((await summary.textContent()) ?? '')).toContain(norm(fmt.longDate(start, sede.timeZone)));
+  await expect
+    .poll(async () => norm((await summary.textContent()) ?? ''))
+    .toContain(`${fmt.time(start, sede.timeZone)}–${fmt.time(end, sede.timeZone)}`);
+
+  // Sin formato de la sede (respuesta interceptada) y cancelación tardía con cargo: el paciente no
+  // puede aceptar el cargo en línea; ni «—» como importe ni «Cancelar cita».
+  await patientPage.route(
+    (url) => /\/api\/v1\/public\/appointment-confirmations\/[^/]+$/.test(url.pathname),
+    async (route) => {
+    if (route.request().method() !== 'GET' || !['fetch', 'xhr'].includes(route.request().resourceType())) {
+      return route.continue();
+    }
+    const res = await route.fetch();
+    const body = (await res.json()) as Record<string, unknown> & { appointment: Record<string, unknown> };
+    await route.fulfill({
+      response: res,
+      json: {
+        ...body,
+        isLate: true,
+        cancellationPolicy: { policyVersionId: 'pv-e2e', noticeHours: 24, text: '', suggestedFee: 25, currency: 'USD' },
+        appointment: { ...body.appointment, timeZone: null, locale: null, hourCycle: null },
+      },
+    });
+    },
+  );
+  await patientPage.reload();
+  await expect(patientPage.getByTestId('public-fee-needs-clinic')).toContainText('llama a la clínica para cancelar', {
+    ignoreCase: true,
+    timeout: 15_000,
+  });
+  await expect(patientPage.getByRole('button', { name: 'Cancelar cita' })).toHaveCount(0);
+  await expect(patientPage.getByText('Llama a la clínica para confirmar la hora de tu cita.')).toBeVisible();
+  await expect(patientPage.getByText(/Cargo por inasistencia/)).toHaveCount(0);
+  await context.close();
 });

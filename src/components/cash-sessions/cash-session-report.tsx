@@ -8,8 +8,7 @@ import {
 import { ADJUSTMENT_KIND_LABELS } from '@/lib/cash-sessions/arqueo';
 import { moneyList, sessionStatusLabel } from '@/lib/cash-sessions/presentation';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDateTimeInZone, formatTimeInZone } from '@/lib/format/date';
+import { documentFormat, documentTexts, type DocumentTexts } from '@/lib/format/document-format';
 import {
   Table,
   TableBody,
@@ -20,6 +19,7 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
+import { Badge } from '@/components/ui/badge';
 
 const copy = {
   titleClosed: 'Informe de cierre de caja',
@@ -44,9 +44,17 @@ const copy = {
   colDifference: 'Diferencia',
   notCounted: 'Sin contar',
   noLines: 'Sin movimientos en este turno.',
-  blind: 'Arqueo ciego: lo esperado y los cobros del turno se ven cuando la caja está cerrada.',
+  blind:
+    'Arqueo ciego: lo esperado, los cobros, las anulaciones y los ajustes del turno se ven cuando la caja está cerrada.',
   differenceReason: 'Motivo de la diferencia',
   squared: 'El arqueo cuadra.',
+  // SEC-043: cerrada a ciegas sin motivo y sin cuadrar; la revisa administración.
+  unjustified: 'Diferencia sin justificar',
+  // SEC-043 (B4): a ciegas, el motivo que escribió quien contó aunque cuadrara.
+  countedNote: (note: string) => `Nota de quien contó: ${note}`,
+  // SEC-043 (M1): cuenta en otra caja aún abierta o pendiente, con arqueo ciego.
+  amountHidden: 'Oculto durante el arqueo',
+  unjustifiedHint: 'Se cerró a ciegas sin motivo: administración la revisa con quien contó.',
   closingNotes: 'Notas del cierre',
   lockDate: 'Fecha de bloqueo sugerida',
   lockDateHint: 'Para el cierre contable de la sede (aún no bloquea nada).',
@@ -111,9 +119,15 @@ interface ArqueoRow {
   paymentAdjustments: number | null;
   adjustments: number | null;
   outflows: number | null;
-  expected: number;
+  expected: number | null;
   counted: number | null;
   difference: number | null;
+  /**
+   * SEC-043: con arqueo ciego, el grupo de una caja cerrada con una
+   * anulación posterior que cuenta en otra caja abierta o pendiente: sin
+   * cobros, ajustes, salidas, esperado ni diferencia.
+   */
+  hidden: boolean;
 }
 
 /**
@@ -139,6 +153,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
         expected: line.expected,
         counted: line.counted,
         difference: line.difference,
+        hidden: line.amountHidden || (breakdown?.amountHidden ?? false),
       };
     });
   }
@@ -154,6 +169,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
     expected: line.expected,
     counted: null,
     difference: null,
+    hidden: line.amountHidden,
   }));
 }
 
@@ -192,8 +208,9 @@ const HeadingLevel = React.createContext<'h2' | 'h3'>('h2');
  * de implante).
  */
 export function CashSessionReport({ session, linkSessions = true, titleAs: Title = 'h1', paper = true }: CashSessionReportProps) {
-  const zone = session.timeZone;
-  const when = (iso: string) => formatDateTimeInZone(iso, zone);
+  // DX-354: fechas, horas e importes con la zona, el reloj y el formato de la sede del turno; sin ellos, «—».
+  const txt = documentTexts(documentFormat(session.regional));
+  const when = txt.dateTime;
   const closing = session.closing;
   const rows = arqueoRows(session);
 
@@ -234,7 +251,7 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
           {closing ? copy.at(closing.closedBy.fullName ?? '—', when(closing.closedAt)) : '—'}
         </Fact>
         <Fact label={copy.float}>
-          <span className="tabular-nums">{moneyList(session.floats)}</span>
+          <span className="tabular-nums">{moneyList(session.floats, undefined, txt.amount)}</span>
         </Fact>
         {session.notes ? <Fact label={copy.notes}>{session.notes}</Fact> : null}
       </DescriptionList>
@@ -261,7 +278,9 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
               </TableHeader>
               <TableBody>
                 {rows.map((row) => {
-                  const money = (n: number | null) => (n === null ? '—' : formatCurrency(n, row.currency));
+                  const money = (n: number | null) => (n === null ? '—' : txt.amount(n, row.currency));
+                  // SEC-043: en un grupo oculto, las cifras que delatarían la anulación.
+                  const figure = (n: number | null) => (row.hidden ? <HiddenAmount inTable /> : money(n));
                   return (
                     <TableRow key={row.key} className="cash-report-row">
                       <TableCell className={cn('font-medium whitespace-nowrap', STICKY_FIRST)}>
@@ -271,28 +290,28 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                         {money(row.opening)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {money(row.payments)}
+                        {figure(row.payments)}
                         {/* DX-516: impuestos y recargos (+) o descuentos (−) cobrados con esos abonos. */}
-                        {row.paymentAdjustments ? (
+                        {!row.hidden && row.paymentAdjustments ? (
                           <span className="block t-caption text-muted">
                             {copy.paymentAdjustments(
-                              `${row.paymentAdjustments > 0 ? '+' : '−'}${formatCurrency(Math.abs(row.paymentAdjustments), row.currency)}`,
+                              `${row.paymentAdjustments > 0 ? '+' : '−'}${txt.amount(Math.abs(row.paymentAdjustments), row.currency)}`,
                             )}
                           </span>
                         ) : null}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {money(row.adjustments)}
+                        {figure(row.adjustments)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {/* Se restan: con signo, para que la fila se lea como una suma. */}
-                        {money(row.outflows ? -row.outflows : row.outflows)}
+                        {figure(row.outflows ? -row.outflows : row.outflows)}
                       </TableCell>
                       <TableCell
                        
-                        className={cn('text-right font-medium tabular-nums', row.expected < 0 && 'text-danger-text')}
+                        className={cn('text-right font-medium tabular-nums', row.expected !== null && row.expected < 0 && 'text-danger-text')}
                       >
-                        {money(row.expected)}
+                        {figure(row.expected)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {row.counted === null ? copy.notCounted : money(row.counted)}
@@ -304,7 +323,7 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                           row.difference !== null && row.difference !== 0 && 'text-danger-text',
                         )}
                       >
-                        {money(row.difference)}
+                        {figure(row.difference)}
                       </TableCell>
                     </TableRow>
                   );
@@ -316,10 +335,26 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
         {closing ? (
           <DescriptionList className="mt-4 gap-y-3">
             <Fact label={copy.differenceReason}>
-              {closing.hasDifference ? closing.differenceReason : copy.squared}
+              {closing.unjustifiedDifference ? (
+                <>
+                  <Badge variant="warning" dot>
+                    {copy.unjustified}
+                  </Badge>
+                  <span className="mt-1 block text-xs text-muted">{copy.unjustifiedHint}</span>
+                </>
+              ) : closing.hasDifference ? (
+                closing.differenceReason
+              ) : (
+                <>
+                  {copy.squared}
+                  {closing.differenceReason ? (
+                    <span className="mt-1 block text-xs text-muted">{copy.countedNote(closing.differenceReason)}</span>
+                  ) : null}
+                </>
+              )}
             </Fact>
             <Fact label={copy.lockDate}>
-              <span className="tabular-nums">{formatCivilDate(closing.suggestedLockDate)}</span>
+              <span className="tabular-nums">{txt.civilDate(closing.suggestedLockDate)}</span>
               <span className="block text-xs text-muted">{copy.lockDateHint}</span>
             </Fact>
             {closing.notes ? <Fact label={copy.closingNotes}>{closing.notes}</Fact> : null}
@@ -348,7 +383,7 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                   {session.payments.map((p) => (
                     <TableRow key={p.id} className="cash-report-row">
                       <TableCell className="tabular-nums">
-                        {formatCivilDate(p.paidOn)}
+                        {txt.civilDate(p.paidOn)}
                       </TableCell>
                       <TableCell>{p.patient.fullName}</TableCell>
                       <TableCell className="tabular-nums">
@@ -358,7 +393,7 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                         {p.method ? PAYMENT_METHOD_LABELS[p.method] : copy.methodNone}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
-                        {formatCurrency(p.amount, p.currency)}
+                        {txt.amount(p.amount, p.currency)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -369,53 +404,62 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
         </Section>
       ) : null}
 
-      <Section title={copy.voidedTitle}>
-        {session.voidedPayments.length === 0 ? (
-          <p className="text-muted">{copy.noVoided}</p>
-        ) : (
-          <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-label={copy.voidedLabel}>
-            {session.voidedPayments.map((p) => (
-              <li key={p.id} className="cash-report-row flex flex-col gap-1 py-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-medium">
-                    {p.patient.fullName}
-                    {p.receiptNumber ? <span className="ml-2 text-xs text-muted tabular-nums">{p.receiptNumber}</span> : null}
-                  </span>
-                  <span className="font-medium tabular-nums line-through decoration-1">
-                    {formatCurrency(p.amount, p.currency)}
-                  </span>
-                </div>
-                <p className="text-xs text-muted">
-                  {copy.colReason}: {p.voidReason ?? '—'} · {copy.colVoidedBy}: {p.voidedBy?.fullName ?? '—'}
-                  {p.voidedAt ? ` · ${when(p.voidedAt)}` : ''}
-                </p>
-                {p.bookedAsAdjustment ? <p className="text-xs text-warning-text">{copy.bookedElsewhere}</p> : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      {/* SEC-043: con arqueo ciego llegan a null (dejarían deducir lo esperado). */}
+      {session.voidedPayments ? (
+        <Section title={copy.voidedTitle}>
+          {session.voidedPayments.length === 0 ? (
+            <p className="text-muted">{copy.noVoided}</p>
+          ) : (
+            <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-label={copy.voidedLabel}>
+              {session.voidedPayments.map((p) => (
+                <li key={p.id} className="cash-report-row flex flex-col gap-1 py-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-medium">
+                      {p.patient.fullName}
+                      {p.receiptNumber ? <span className="ml-2 text-xs text-muted tabular-nums">{p.receiptNumber}</span> : null}
+                    </span>
+                    {p.amount === null ? (
+                      <HiddenAmount />
+                    ) : (
+                      <span className="font-medium tabular-nums line-through decoration-1">
+                        {txt.amount(p.amount, p.currency)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted">
+                    {copy.colReason}: {p.voidReason ?? '—'} · {copy.colVoidedBy}: {p.voidedBy?.fullName ?? '—'}
+                    {p.voidedAt ? ` · ${when(p.voidedAt)}` : ''}
+                  </p>
+                  {p.bookedAsAdjustment ? <p className="text-xs text-warning-text">{copy.bookedElsewhere}</p> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      ) : null}
 
       <Section title={copy.outflowsTitle}>
-        <OutflowList session={session} when={when} />
+        <OutflowList session={session} txt={txt} />
       </Section>
 
-      <Section title={copy.adjustmentsTitle}>
-        <AdjustmentList
-          items={session.adjustments}
-          label={copy.adjustmentsLabel}
-          when={when}
-          linkSessions={linkSessions}
-          mode="origin"
-        />
-      </Section>
+      {session.adjustments ? (
+        <Section title={copy.adjustmentsTitle}>
+          <AdjustmentList
+            items={session.adjustments}
+            label={copy.adjustmentsLabel}
+            txt={txt}
+            linkSessions={linkSessions}
+            mode="origin"
+          />
+        </Section>
+      ) : null}
 
       {session.laterAdjustments.length > 0 ? (
         <Section title={copy.laterTitle}>
           <AdjustmentList
             items={session.laterAdjustments}
             label={copy.laterLabel}
-            when={when}
+            txt={txt}
             linkSessions={linkSessions}
             mode="destination"
           />
@@ -484,8 +528,7 @@ function outflowSubject(outflow: { category: string; supplier: string | null }):
  * (R6), porque no dicen cuánto se espera. Las anuladas van aparte, con su
  * título, el importe tachado (como los abonos anulados) y su motivo.
  */
-function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso: string) => string }) {
-  const zone = session.timeZone;
+function OutflowList({ session, txt }: { session: CashSessionDetail; txt: DocumentTexts }) {
   const { outflows, voidedOutflows } = session;
   const creditRefunds = session.creditRefunds ?? [];
   const voidedId = React.useId();
@@ -510,13 +553,13 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
               {creditRefunds.map((r) => (
                 <TableRow key={r.id} className="cash-report-row">
                   <TableCell className="tabular-nums">
-                    {formatTimeInZone(r.createdAt, zone)}
+                    {txt.time(r.createdAt)}
                   </TableCell>
                   <TableCell className="tabular-nums">{r.number}</TableCell>
                   <TableCell>{r.patient.fullName}</TableCell>
                   <TableCell>{r.createdBy.fullName ?? '—'}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {formatCurrency(r.amount, r.currency)}
+                    {txt.amount(r.amount, r.currency)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -540,13 +583,13 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
               {outflows.map((o) => (
                 <TableRow key={o.id} className="cash-report-row">
                   <TableCell className="tabular-nums">
-                    {formatTimeInZone(o.createdAt, zone)}
+                    {txt.time(o.createdAt)}
                   </TableCell>
                   <TableCell>{o.category}</TableCell>
                   <TableCell>{o.supplier ?? '—'}</TableCell>
                   <TableCell>{o.createdBy.fullName ?? '—'}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {formatCurrency(o.amount, o.currency)}
+                    {txt.amount(o.amount, o.currency)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -562,16 +605,20 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
               <li key={o.id} className="cash-report-row flex flex-col gap-1 py-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-medium">
-                    {formatTimeInZone(o.createdAt, zone)} · {outflowSubject(o)}
+                    {txt.time(o.createdAt)} · {outflowSubject(o)}
                   </span>
-                  <span className="font-medium tabular-nums line-through decoration-1">
-                    {formatCurrency(o.amount, o.currency)}
-                  </span>
+                  {o.amount === null ? (
+                    <HiddenAmount />
+                  ) : (
+                    <span className="font-medium tabular-nums line-through decoration-1">
+                      {txt.amount(o.amount, o.currency)}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted">
                   {copy.colReason}: {o.voidReason ?? '—'} · {copy.colBy}: {o.createdBy.fullName ?? '—'} ·{' '}
                   {copy.colVoidedBy}: {o.voidedBy?.fullName ?? '—'}
-                  {o.voidedAt ? ` · ${when(o.voidedAt)}` : ''}
+                  {o.voidedAt ? ` · ${txt.dateTime(o.voidedAt)}` : ''}
                 </p>
                 {o.bookedAsAdjustment ? <p className="text-xs text-warning-text">{copy.outflowBookedElsewhere}</p> : null}
               </li>
@@ -583,16 +630,27 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
   );
 }
 
+/** SEC-043: el importe que no se enseña mientras rige el arqueo ciego. */
+function HiddenAmount({ inTable = false }: { inTable?: boolean }) {
+  // En la tabla del arqueo (que en el teléfono se desplaza de lado), en una
+  // línea: partido en cuatro, la fila crece y se lee peor.
+  return (
+    <span className={cn('text-sm text-muted', inTable && 'max-sm:whitespace-nowrap')} data-testid="amount-hidden">
+      {copy.amountHidden}
+    </span>
+  );
+}
+
 function AdjustmentList({
   items,
   label,
-  when,
+  txt,
   linkSessions,
   mode,
 }: {
   items: CashAdjustment[];
   label: string;
-  when: (iso: string) => string;
+  txt: DocumentTexts;
   linkSessions: boolean;
   /** `origin`: de qué caja viene; `destination`: en qué caja cuenta. */
   mode: 'origin' | 'destination';
@@ -602,7 +660,7 @@ function AdjustmentList({
     <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-label={label}>
       {items.map((a) => {
         const origin = a.originalSession;
-        const originText = origin ? copy.fromSession(origin.openedBy.fullName ?? '—', when(origin.openedAt)) : null;
+        const originText = origin ? copy.fromSession(origin.openedBy.fullName ?? '—', txt.dateTime(origin.openedAt)) : null;
         return (
           <li key={a.id} className="cash-report-row flex flex-col gap-1 py-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -612,15 +670,19 @@ function AdjustmentList({
                   {PAYMENT_METHOD_LABELS[a.method]} · {a.currency}
                 </span>
               </span>
-              <span className={cn('font-semibold tabular-nums', a.amount < 0 && 'text-danger-text')}>
-                {formatCurrency(a.amount, a.currency)}
-              </span>
+              {a.amount === null ? (
+                <HiddenAmount />
+              ) : (
+                <span className={cn('font-semibold tabular-nums', a.amount < 0 && 'text-danger-text')}>
+                  {txt.amount(a.amount, a.currency)}
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted">
               {a.payment ? `${a.payment.patient.fullName}${a.payment.receiptNumber ? ` · ${a.payment.receiptNumber}` : ''} · ` : ''}
               {a.expensePayment ? `${outflowSubject(a.expensePayment)} · ` : ''}
               {a.reason ? `${a.reason} · ` : ''}
-              {a.createdBy.fullName ?? '—'} · {when(a.createdAt)}
+              {a.createdBy.fullName ?? '—'} · {txt.dateTime(a.createdAt)}
             </p>
             {mode === 'origin' && origin ? (
               <p className="text-xs">

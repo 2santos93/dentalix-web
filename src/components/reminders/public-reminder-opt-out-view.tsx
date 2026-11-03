@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { BellOff, LinkIcon } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
-import { formatDate } from '@/lib/format/date';
+import { documentFormat, documentTexts } from '@/lib/format/document-format';
 import {
   confirmPublicReminderOptOut,
   getPublicReminderOptOut,
@@ -29,6 +29,9 @@ const copy = {
   doneTitle: 'Listo: ya no recibirás recordatorios',
   doneSince: (at: string) =>
     `Desde el ${at} no te enviamos avisos automáticos de tus citas. Si quieres volver a recibirlos, pídeselo a la clínica.`,
+  // DX-354: la sede de referencia de la clínica no tiene formato; no hay quien lo configure desde aquí.
+  doneNoDate:
+    'Ya no te enviamos avisos automáticos de tus citas. Para saber desde cuándo, llama a la clínica. Si quieres volver a recibirlos, pídeselo a la clínica.',
   invalidTitle: 'Este enlace caducó',
   invalidMessage:
     'Este enlace ya no está disponible. Comunícate con la clínica para dejar de recibir recordatorios.',
@@ -40,6 +43,16 @@ type LoadState =
   | { kind: 'error' }
   | { kind: 'invalid' }
   | { kind: 'ready'; data: PublicReminderOptOut };
+
+/**
+ * DX-354: desde cuándo no se envían avisos, con el formato de la sede de
+ * referencia de la clínica (la principal), no el del navegador. Sin él, sin
+ * fecha y que llame a la clínica.
+ */
+function optedOutMessage(data: PublicReminderOptOut): string {
+  const format = documentFormat(data.regional);
+  return format ? copy.doneSince(documentTexts(format).date(data.optedOutAt)) : copy.doneNoDate;
+}
 
 /**
  * Página pública `/baja/[token]` (DX-128): el paciente deja de recibir los
@@ -118,7 +131,7 @@ export function PublicReminderOptOutView({ optOutToken }: { optOutToken: string 
                 <PublicNotice
                   icon={BellOff}
                   title={copy.doneTitle}
-                  message={copy.doneSince(formatDate(state.data.optedOutAt))}
+                  message={optedOutMessage(state.data)}
                 />
               </div>
             ) : (

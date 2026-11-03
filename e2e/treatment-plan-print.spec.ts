@@ -5,6 +5,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 import { registerClinicViaApi } from './support/api';
 import { DEMO_CURRENCY, DEMO_REGION } from './support/demo';
 import { regionalFormat } from '../src/lib/format/regional-format';
+import { moneyWithCode } from '../src/lib/format/sede-number';
 
 /**
  * e2e (DX-012): presupuesto imprimible del plan y aceptación firmada.
@@ -182,7 +183,7 @@ async function expectPrintableQuote(
   const crownRow = table.getByRole('row').filter({ hasText: data.labels[0] });
   await expect(crownRow).toContainText('21');
   await expect(crownRow).toContainText(figure(CROWN));
-  await expect(crownRow).toContainText(`−${figure(CROWN_DISCOUNT)}`);
+  await expect(crownRow).toContainText(`−${moneyWithCode(CROWN_DISCOUNT, DEMO_CURRENCY, sedeFormat)}`);
   await expect(crownRow).toContainText(figure(CROWN - CROWN_DISCOUNT));
   if (checkPdf) {
     const pdf = await printPage.pdf({ format: 'A4', preferCSSPageSize: true });

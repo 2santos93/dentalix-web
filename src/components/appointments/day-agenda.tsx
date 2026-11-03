@@ -277,7 +277,7 @@ export function DayAgenda({
                         patientName={patientLabel(appointment, patientNames)}
                       />
                       <ConfirmationBadge appointment={appointment} />
-                      <OverdueChip balance={appointment.balance} />
+                      <OverdueChip balance={appointment.balance} fmt={clock.fmt} />
                       <CoverageChip coverage={appointment.coverage} compact />
                       <AttendanceBadge counts={appointment.attendance} />
                       {/* DX-509: solo mientras es sobrecupo. */}
@@ -363,7 +363,7 @@ export function DayAgenda({
                   .join(' · ')}
               </p>
               <ConfirmationBadge appointment={appointment} className="mt-2" />
-              <OverdueChip balance={appointment.balance} className="mt-2" />
+              <OverdueChip balance={appointment.balance} className="mt-2" fmt={clock.fmt} />
               <CoverageChip coverage={appointment.coverage} compact className="mt-2" />
               <AttendanceBadge counts={appointment.attendance} className="mt-2" />
               <OverbookedChip overbooked={appointment.overbooked} status={appointment.status} className="mt-2" />

@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/input';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
-import { formatDateTime } from '@/lib/format/date';
+import { documentFormat, documentTexts } from '@/lib/format/document-format';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -44,6 +44,8 @@ const copy = {
   intro:
     'Antes de su cita, conteste estas preguntas sobre su salud. Su odontólogo las revisará; nada cambia en su historia hasta entonces.',
   expires: (when: string) => `El enlace caduca el ${when}.`,
+  // DX-354: la sede de referencia de la clínica no tiene formato; no hay quien lo configure desde aquí.
+  expiresNoFormat: 'Llama a la clínica para saber hasta cuándo es válido el enlace.',
   consentTitle: 'Autorización para tratar sus datos de salud',
   consentLead: 'Para responder necesitamos su autorización. Lea el texto de la clínica:',
   consentCheck: 'Autorizo el tratamiento de mis datos de salud en los términos anteriores.',
@@ -189,9 +191,7 @@ export function PublicAnamnesisView({ linkToken }: { linkToken: string }) {
                   <h1 ref={headingRef} tabIndex={-1} className="t-display text-ink">{copy.title}</h1>
                   <p className="text-base text-ink">{copy.greeting(state.data.patientFirstName)}</p>
                   <p className="text-sm text-muted">{copy.intro}</p>
-                  <p className="text-xs text-muted tabular-nums">
-                    {copy.expires(formatDateTime(state.data.expiresAt))}
-                  </p>
+                  <ExpiryLine expiresAt={state.data.expiresAt} regional={state.data.regional} />
                 </div>
                 {state.data.consent.required && !consentAccepted ? (
                   <ConsentStep data={state.data} onAccept={() => setConsentAccepted(true)} />
@@ -209,6 +209,21 @@ export function PublicAnamnesisView({ linkToken }: { linkToken: string }) {
         )}
       </main>
     </div>
+  );
+}
+
+/**
+ * DX-354: la caducidad del enlace con el formato de la sede de referencia de la
+ * clínica (la principal), no el del navegador del paciente. Si esa sede no lo
+ * tiene: «—» y que llame a la clínica (aquí no hay quien lo configure).
+ */
+function ExpiryLine({ expiresAt, regional }: { expiresAt: string; regional: PublicAnamnesis['regional'] }) {
+  const format = documentFormat(regional);
+  return (
+    <p className="text-xs text-muted tabular-nums">
+      {copy.expires(documentTexts(format).dateTime(expiresAt))}
+      {format ? '' : ` ${copy.expiresNoFormat}`}
+    </p>
   );
 }
 

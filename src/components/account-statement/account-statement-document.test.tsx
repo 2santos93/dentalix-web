@@ -6,13 +6,14 @@ import {
   emptyAccountStatementFixture,
   openingBalanceStatementFixture,
 } from '@/lib/test/account-statement';
+import { FORMAT_DE, FORMAT_ES, FORMAT_US } from '@/lib/test/document-regional';
 
 function money(text: string | null | undefined): string {
   return (text ?? '').replace(/\s/g, ' ');
 }
 
 it('lleva cabecera de clínica, datos del paciente y fecha de emisión', () => {
-  render(<AccountStatementDocument statement={accountStatementFixture()} />);
+  render(<AccountStatementDocument statement={accountStatementFixture()} format={FORMAT_ES} />);
 
   const header = screen.getByTestId('statement-header');
   expect(header).toHaveTextContent('Clínica Sonrisas');
@@ -27,7 +28,7 @@ it('lleva cabecera de clínica, datos del paciente y fecha de emisión', () => {
 
 it('prints the docTypeName of the DTO, or the generic name when it is missing', () => {
   const base = accountStatementFixture();
-  const { rerender } = render(<AccountStatementDocument statement={base} />);
+  const { rerender } = render(<AccountStatementDocument statement={base} format={FORMAT_ES} />);
   expect(screen.getByText('ID local DOC-0001')).toBeInTheDocument();
 
   // API anterior en el hueco del despliegue: sin `docTypeName`, el genérico.
@@ -35,6 +36,7 @@ it('prints the docTypeName of the DTO, or the generic name when it is missing', 
   void _omit;
   rerender(
     <AccountStatementDocument
+      format={FORMAT_ES}
       statement={{ ...base, patient: { ...withoutName, docType: 'PASSPORT' } as typeof base.patient }}
     />,
   );
@@ -45,6 +47,7 @@ it('prints the docTypeName of the DTO, or the generic name when it is missing', 
 it('pinta el logo de la clínica cuando existe', () => {
   render(
     <AccountStatementDocument
+      format={FORMAT_ES}
       statement={accountStatementFixture({
         clinic: {
           name: 'Clínica Sonrisas',
@@ -61,7 +64,7 @@ it('pinta el logo de la clínica cuando existe', () => {
 });
 
 it('incluye resumen por moneda, planes, movimientos y cuotas — y ningún botón', () => {
-  render(<AccountStatementDocument statement={accountStatementFixture()} />);
+  render(<AccountStatementDocument statement={accountStatementFixture()} format={FORMAT_ES} />);
 
   const summary = screen.getByRole('table', { name: /resumen/i });
   const vesRow = within(summary).getByRole('row', { name: /VES/ });
@@ -81,7 +84,7 @@ it('incluye resumen por moneda, planes, movimientos y cuotas — y ningún botó
 });
 
 it('dice cuándo no hay nada que listar en vez de dejar tablas vacías', () => {
-  render(<AccountStatementDocument statement={emptyAccountStatementFixture()} />);
+  render(<AccountStatementDocument statement={emptyAccountStatementFixture()} format={FORMAT_ES} />);
   expect(screen.getByText(/no tiene planes con valor ni abonos/i)).toBeInTheDocument();
   expect(screen.queryByRole('table')).not.toBeInTheDocument();
 });
@@ -89,6 +92,7 @@ it('dice cuándo no hay nada que listar en vez de dejar tablas vacías', () => {
 it('indica el rango cuando los movimientos vienen filtrados', () => {
   render(
     <AccountStatementDocument
+      format={FORMAT_ES}
       statement={accountStatementFixture({
         range: { from: '2026-09-01', to: '2026-09-30' },
       })}
@@ -98,7 +102,7 @@ it('indica el rango cuando los movimientos vienen filtrados', () => {
 });
 
 it('DX-262: el documento lista el saldo migrado con su fecha de corte', () => {
-  render(<AccountStatementDocument statement={openingBalanceStatementFixture()} />);
+  render(<AccountStatementDocument statement={openingBalanceStatementFixture()} format={FORMAT_ES} />);
   const table = screen.getByRole('table', { name: 'Saldos migrados' });
   expect(table).toHaveTextContent('Ortodoncia 2025');
   expect(table).toHaveTextContent('23/10/2026 (aprox.)');
@@ -114,7 +118,7 @@ it('DX-262: el documento lista el saldo migrado con su fecha de corte', () => {
 });
 
 it('DX-395: el impreso nombra el medio de la clínica y la referencia, no el método antiguo', () => {
-  render(<AccountStatementDocument statement={accountStatementFixture()} />);
+  render(<AccountStatementDocument statement={accountStatementFixture()} format={FORMAT_ES} />);
   const movements = screen.getByRole('table', { name: /movimientos/i });
   const row = within(movements).getByRole('row', { name: /Pago móvil/ });
   expect(row).toHaveTextContent('Pago móvil · Ref. ABC 123');
@@ -132,6 +136,7 @@ it.each([
   const plan = { ...base.plans[0], currency, budgeted, paid, balance };
   render(
     <AccountStatementDocument
+      format={FORMAT_ES}
       statement={{
         ...base,
         summary: [
@@ -165,6 +170,7 @@ describe('DX-472: el impreso no parece definitivo', () => {
     const base = accountStatementFixture();
     render(
       <AccountStatementDocument
+        format={FORMAT_ES}
         statement={{ ...base, plans: [{ ...base.plans[0], paymentsWithoutRate: [withoutRate] }] }}
       />,
     );
@@ -175,7 +181,49 @@ describe('DX-472: el impreso no parece definitivo', () => {
   });
 
   it('sin abonos sin tasa no dice nada', () => {
-    render(<AccountStatementDocument statement={accountStatementFixture()} />);
+    render(<AccountStatementDocument statement={accountStatementFixture()} format={FORMAT_ES} />);
     expect(screen.queryByTestId('statement-without-rate')).not.toBeInTheDocument();
+  });
+});
+
+// DX-354: fechas, horas e importes con la sede del documento.
+describe('DX-354: el formato de la sede del documento', () => {
+  const withRateless = () => {
+    const base = accountStatementFixture();
+    return { ...base, plans: [{ ...base.plans[0], paymentsWithoutRate: [{ paymentId: 'p', amount: 1234.5, currency: 'USD', paidOn: '2027-07-15' }] }] };
+  };
+
+  it('A: sede h12 en-US, la hora de la emisión en 12 h y el importe con código', () => {
+    render(
+      <AccountStatementDocument
+        statement={{ ...withRateless(), issuedAt: '2027-05-03T19:05:00.000Z' }}
+        format={FORMAT_US}
+      />,
+    );
+    expect(screen.getByTestId('statement-header')).toHaveTextContent('05/03/2027 3:05 p. m.');
+    expect(money(screen.getByTestId('statement-without-rate').textContent)).toContain('USD 1,234.50 del 07/15/2027');
+  });
+
+  it('B: sede h23 de-DE, 24 h, orden alemán e importe con código', () => {
+    render(
+      <AccountStatementDocument
+        statement={{ ...withRateless(), issuedAt: '2027-05-03T19:05:00.000Z' }}
+        format={FORMAT_DE}
+      />,
+    );
+    expect(screen.getByTestId('statement-header')).toHaveTextContent('03.05.2027 21:05');
+    expect(money(screen.getByTestId('statement-without-rate').textContent)).toContain('1.234,50 USD del 15.07.2027');
+  });
+
+  it('C: sin formato de sede, todo «—», sin símbolo ni dd/mm/yyyy', () => {
+    const { container } = render(<AccountStatementDocument statement={withRateless()} format={null} />);
+    expect(screen.getByTestId('statement-header')).toHaveTextContent(/emisión\s*—/i);
+    expect(screen.getByTestId('statement-without-rate')).toHaveTextContent('— del —');
+    const text = container.textContent ?? '';
+    expect(text).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+    expect(text).not.toMatch(/\d[.,]\d{2}/);
+    expect(text).not.toContain('US$');
+    // Los nombres de los planes dependen de la fecha: «Plan del —».
+    expect(screen.getByRole('table', { name: /planes/i })).toHaveTextContent('Plan del —');
   });
 });

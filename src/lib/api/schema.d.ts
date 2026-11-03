@@ -3288,7 +3288,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Caja: abonos del período con resumen por moneda y método */
+        /**
+         * Caja: abonos del período con resumen por moneda y método
+         * @description SEC-043: con «arqueo ciego», quien no es ADMIN recibe los abonos que cuentan en una caja aún abierta sin importe ni moneda (`amountHidden`), y el resumen no los suma: `blindHidden` lo indica. Recibo y anulación funcionan igual; las cifras vuelven al cerrarla.
+         */
         get: operations["PaymentsController_listCash"];
         put?: never;
         post?: never;
@@ -3307,7 +3310,7 @@ export interface paths {
         };
         /**
          * Caja en CSV: abonos del período con medio y referencia
-         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe.
+         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe. SEC-043: con «arqueo ciego», quien no es ADMIN recibe los abonos de cajas aún abiertas sin moneda ni ajustes, con «Oculto durante el arqueo» en Importe y Total cobrado (no suman en una hoja de cálculo).
          */
         get: operations["PaymentsController_listCashCsv"];
         put?: never;
@@ -4127,7 +4130,7 @@ export interface paths {
         };
         /**
          * Una caja: fondo, abonos, anulados, ajustes, arqueo y cierres
-         * @description Con «arqueo ciego» y la caja abierta, quien no es ADMIN recibe `expected` y `payments` a null.
+         * @description Con «arqueo ciego» y la caja abierta, quien no es ADMIN recibe `expected`, `payments`, `voidedPayments` y `adjustments` a null, y los cierres anteriores sin líneas (SEC-043).
          */
         get: operations["CashSessionsController_detail"];
         put?: never;
@@ -4149,7 +4152,7 @@ export interface paths {
         put?: never;
         /**
          * Cerrar la caja con el arqueo por moneda y método
-         * @description Calcula el esperado (fondo + abonos del turno + ajustes) y guarda contado y diferencia. Una diferencia distinta de 0 exige motivo. El cierre es inmutable y deja la fecha de bloqueo sugerida (DX-091).
+         * @description Calcula el esperado (fondo + abonos del turno + ajustes) y guarda contado y diferencia. Una diferencia distinta de 0 exige motivo (400), salvo en un cierre a ciegas de quien no es ADMIN: ese se guarda siempre y, si no cuadra y no trae motivo, queda marcado «diferencia sin justificar» (SEC-043). El cierre es inmutable y deja la fecha de bloqueo sugerida (DX-091).
          */
         post: operations["CashSessionsController_close"];
         delete?: never;
@@ -11886,6 +11889,21 @@ export interface components {
             providerName: string | null;
             locationName: string;
             locationAddress: string | null;
+            /**
+             * @description DX-354: zona IANA de la sede de la cita, en crudo. null si la sede no la tiene.
+             * @example America/Caracas
+             */
+            timeZone: string | null;
+            /**
+             * @description DX-354: formato regional (BCP 47) de la sede de la cita, en crudo. null si la sede no lo tiene.
+             * @example es-VE
+             */
+            locale: string | null;
+            /**
+             * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
+             * @example h12
+             */
+            hourCycle: components["schemas"]["HourCycle"] | null;
         };
         ConfirmationLinkDto: {
             /** @description URL pública en el host de la clínica. Contiene el token en claro: se entrega solo aquí. */
@@ -12380,6 +12398,20 @@ export interface components {
             name: string;
             address: string | null;
         };
+        DocumentRegionalDto: {
+            /**
+             * @description Zona IANA de la sede.
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /**
+             * @description Locale canónico: separadores y orden de las fechas.
+             * @example es-VE
+             */
+            locale: string;
+            /** @description Reloj de la sede: 12 h o 24 h. */
+            hourCycle: components["schemas"]["HourCycle"];
+        };
         PlanQuotePatientDto: {
             name: string;
             /** @example Documento nacional DOC-0001 */
@@ -12479,6 +12511,8 @@ export interface components {
             /** @description DX-019: datos fiscales. Aceptado: los congelados al firmar; null si no los llevaba (nunca los de hoy). */
             clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             location: components["schemas"]["PlanQuoteLocationDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del presupuesto (la de la firma si ya se aceptó). null si le falta algo: el presupuesto se lee igual y la web pinta «—». No forma parte del contenido firmado. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patient: components["schemas"]["PlanQuotePatientDto"];
             /** @description Profesional que creó el plan */
             professionalName: string | null;
@@ -13017,10 +13051,15 @@ export interface components {
             registeredOn: string;
             /** @description Si `registeredOn` es hoy en la zona de la sede del abono. */
             registeredToday: boolean;
-            /** @example 150000 */
-            amount: number;
-            /** @description Código ISO 4217 de 3 letras. */
-            currency: string;
+            /**
+             * @description SEC-043: `null` con `amountHidden`.
+             * @example 150000
+             */
+            amount: number | null;
+            /** @description Código ISO 4217 de 3 letras. SEC-043: `null` con `amountHidden`. */
+            currency: string | null;
+            /** @description SEC-043: rige el arqueo ciego, quien consulta no es ADMIN y el abono cuenta en una caja aún abierta. Va sin `amount`, `currency`, `collectedAmount`, `notes` ni `reference` (null) y sin `adjustments` (vacío), y no suma en el resumen. Recibo y anulación funcionan igual. Las cifras vuelven al cerrar la caja. */
+            amountHidden: boolean;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
             /** @description DX-377: medio de pago (el inicial de su método si el abono es de una réplica anterior). */
@@ -13048,10 +13087,10 @@ export interface components {
             /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
             adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
             /**
-             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`.
+             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`. SEC-043: `null` con `amountHidden`.
              * @example 103
              */
-            collectedAmount: number;
+            collectedAmount: number | null;
         };
         CashScopeDto: {
             /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
@@ -13144,6 +13183,8 @@ export interface components {
             scope: components["schemas"]["CashScopeDto"];
             /** @description Resumen del período entero con los mismos filtros. */
             summary: components["schemas"]["CashPaymentsSummaryDto"];
+            /** @description SEC-043: rige el arqueo ciego y quien consulta no es ADMIN: el resumen no suma los abonos que cuentan en una caja aún abierta y esas filas van sin importe (`amountHidden`). Las cifras vuelven al cerrarla. */
+            blindHidden: boolean;
         };
         RecordPaymentDto: {
             /**
@@ -13491,7 +13532,7 @@ export interface components {
             total: components["schemas"]["ReceiptSplitTotalDto"];
         };
         /**
-         * @description Reloj de la sede: 12 h o 24 h.
+         * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
          * @enum {string}
          */
         HourCycle: "h12" | "h23";
@@ -14407,6 +14448,8 @@ export interface components {
             /** Format: date-time */
             issuedAt: string;
             clinic: components["schemas"]["AccountStatementClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede en contexto (o la principal) para formatear el impreso. null si a la sede le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patient: components["schemas"]["AccountStatementPatientDto"];
             addressee: components["schemas"]["AccountStatementAddresseeDto"];
             range: components["schemas"]["AccountStatementRangeDto"];
@@ -14460,6 +14503,8 @@ export interface components {
             /** Format: date-time */
             issuedAt: string;
             clinic: components["schemas"]["AccountStatementClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede en contexto (o la principal) para formatear el impreso. null si a la sede le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             payer: components["schemas"]["FamilyMemberPatientDto"];
             members: components["schemas"]["FamilyStatementMemberDto"][];
             /** @description Suma de los subtotales por moneda, al céntimo. */
@@ -14591,6 +14636,10 @@ export interface components {
             /** @description Parte de la deuda envejece desde la fecha del plan (aceptación, presentación o creación), no desde un vencimiento: «fecha aproximada» */
             ageApproximate: boolean;
             nextInstallment: components["schemas"]["AgingNextInstallmentDto"] | null;
+            /** @description DX-472-ter: abonos en otra moneda sin contar en los planes de ESTA moneda (sin tasa o sin respuesta del proveedor); el `paymentsWithoutRateCount` de la fila, por moneda */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-ter: el proveedor de tasas no respondió a tiempo para algún plan de esta moneda */
+            rateProviderTimedOut: boolean;
         };
         AgingLastPaymentDto: {
             /**
@@ -14802,6 +14851,8 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             snapshot: components["schemas"]["RefundReceiptSnapshotDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del comprobante. null si le falta algo: el comprobante se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
         };
         CreditTransferDto: {
             /** Format: uuid */
@@ -15335,24 +15386,34 @@ export interface components {
             currency: string;
             amount: number;
         };
+        CashDifferenceDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: la moneda tiene una anulación posterior que cuenta en otra caja abierta o pendiente (con lo contado, daría el esperado). */
+            amountHidden: boolean;
+        };
         CashExpectedLineDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /** @description Fondo inicial (solo efectivo) */
             opening: number;
-            /** @description Abonos del turno que cuentan */
-            payments: number;
-            paymentsCount: number;
+            /** @description Abonos del turno que cuentan. SEC-043: null con `amountHidden`. */
+            payments: number | null;
+            paymentsCount: number | null;
             /** @description DX-516: ajustes por medio de pago de esos abonos, con signo (impuestos y recargos +, descuentos −); 0 sin ajustes. */
-            paymentAdjustments: number;
+            paymentAdjustments: number | null;
             /** @description Ajustes que entraron en esta caja (con signo) */
-            adjustments: number;
+            adjustments: number | null;
             /** @description Salidas de caja menor del turno (DX-274), en positivo: se restan. Solo en efectivo. */
-            outflows: number;
-            outflowsCount: number;
+            outflows: number | null;
+            outflowsCount: number | null;
             /** @description opening + payments + paymentAdjustments + adjustments − outflows (puede ser negativo) */
-            expected: number;
+            expected: number | null;
+            /** @description SEC-043: con arqueo ciego y sin ser ADMIN, en una caja cerrada con una anulación posterior que cuenta en otra caja abierta o pendiente, las cifras del grupo (salvo el fondo) van a null. */
+            amountHidden: boolean;
         };
         CashSessionPaymentDto: {
             /** Format: uuid */
@@ -15388,7 +15449,6 @@ export interface components {
              * @example 2026-10-17
              */
             paidOn: string;
-            amount: number;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
@@ -15399,8 +15459,12 @@ export interface components {
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
-            /** @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). */
-            collectedAmount: number;
+            /** @description SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: null con `amountHidden`. */
+            collectedAmount: number | null;
+            /** @description SEC-043: con arqueo ciego y quien consulta sin ser ADMIN, cuenta en una caja aún abierta o pendiente: `amount` va a null. */
+            amountHidden: boolean;
             /** Format: date-time */
             voidedAt: string | null;
             voidedBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -15437,12 +15501,15 @@ export interface components {
             /** @example Mensajería */
             category: string;
             supplier: string | null;
-            amount: number;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** Format: date-time */
             createdAt: string;
             createdBy: components["schemas"]["CashStaffRefDto"];
+            /** @description SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: con arqueo ciego y quien consulta sin ser ADMIN, cuenta en una caja aún abierta o pendiente: `amount` va a null. */
+            amountHidden: boolean;
             /** Format: date-time */
             voidedAt: string | null;
             voidedBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -15501,8 +15568,10 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
-            /** @description Con signo */
-            amount: number;
+            /** @description Con signo. SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: con arqueo ciego y quien consulta sin ser ADMIN, cuenta en una caja aún abierta o pendiente: `amount` va a null. */
+            amountHidden: boolean;
             reason: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -15512,6 +15581,8 @@ export interface components {
              * @description Caja donde cuenta; null = pendiente de la siguiente que se abra en la sede
              */
             sessionId: string | null;
+            /** @description SEC-043: estado de esa caja; null si está pendiente. */
+            sessionStatus: components["schemas"]["CashSessionStatus"] | null;
             payment: components["schemas"]["CashAdjustmentPaymentDto"] | null;
             /** @description OUTFLOW_VOID: la salida de caja anulada y su gasto */
             expensePayment: components["schemas"]["CashAdjustmentExpensePaymentDto"] | null;
@@ -15523,10 +15594,13 @@ export interface components {
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             opening: number;
-            expected: number;
+            /** @description SEC-043: null con `amountHidden`. */
+            expected: number | null;
             counted: number;
-            /** @description counted − expected */
-            difference: number;
+            /** @description counted − expected. SEC-043: null con `amountHidden`. */
+            difference: number | null;
+            /** @description SEC-043: el grupo tiene una anulación posterior que cuenta en otra caja abierta o pendiente: sin esperado ni diferencia. `counted` se queda. */
+            amountHidden: boolean;
         };
         CashClosingDto: {
             /** Format: uuid */
@@ -15539,6 +15613,8 @@ export interface components {
             blind: boolean;
             hasDifference: boolean;
             differenceReason: string | null;
+            /** @description SEC-043: cierre a ciegas que no cuadró y llegó sin motivo. Se guardó igual y queda para revisión de administración. */
+            unjustifiedDifference: boolean;
             notes: string | null;
             /**
              * @description Fecha de bloqueo contable sugerida para la sede (día civil del cierre, DX-091). No bloquea nada todavía.
@@ -15581,24 +15657,28 @@ export interface components {
             /** @description Fondo inicial por moneda */
             floats: components["schemas"]["CashMoneyDto"][];
             /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
-            differences: components["schemas"]["CashMoneyDto"][];
+            differences: components["schemas"]["CashDifferenceDto"][];
+            /** @description SEC-043: el último cierre (si está cerrada) es una «diferencia sin justificar». */
+            unjustifiedDifference: boolean;
             notes: string | null;
             /** @example UTC */
             timeZone: string;
-            /** @description Arqueo ciego para quien consulta: `expected` y `payments` vienen a null hasta cerrar. */
+            /** @description DX-354: zona, locale y reloj de la sede de la caja para formatear el cierre impreso. null si le falta algo: la caja se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
+            /** @description Arqueo ciego para quien consulta: `expected`, `payments`, `voidedPayments` y `adjustments` vienen a null hasta cerrar, y los cierres anteriores (si se reabrió) sin líneas (SEC-043). */
             blindHidden: boolean;
             expected: components["schemas"]["CashExpectedLineDto"][] | null;
             payments: components["schemas"]["CashSessionPaymentDto"][] | null;
-            /** @description Anulados (DX-049): no cuentan en el esperado salvo si se anularon con la caja cerrada */
-            voidedPayments: components["schemas"]["CashVoidedPaymentDto"][];
+            /** @description Anulados (DX-049): no cuentan en el esperado salvo si se anularon con la caja cerrada. null con arqueo ciego. */
+            voidedPayments: components["schemas"]["CashVoidedPaymentDto"][] | null;
             /** @description Salidas de caja menor vivas del turno (DX-274). Se ven también con el arqueo ciego. */
             outflows: components["schemas"]["CashOutflowDto"][];
             /** @description Salidas anuladas: no restan salvo si se anularon con la caja cerrada */
             voidedOutflows: components["schemas"]["CashVoidedOutflowDto"][];
             /** @description DX-253: devoluciones de saldo a favor en efectivo del turno: restan en el esperado de CASH (dentro de «Salidas»). */
             creditRefunds: components["schemas"]["CashCreditRefundDto"][];
-            /** @description Ajustes que cuentan en esta caja */
-            adjustments: components["schemas"]["CashAdjustmentDto"][];
+            /** @description Ajustes que cuentan en esta caja. null con arqueo ciego. */
+            adjustments: components["schemas"]["CashAdjustmentDto"][] | null;
             /** @description Ajustes nacidos de esta caja ya cerrada, que cuentan en otra */
             laterAdjustments: components["schemas"]["CashAdjustmentDto"][];
             /** @description Cierre vigente */
@@ -15654,7 +15734,9 @@ export interface components {
             /** @description Fondo inicial por moneda */
             floats: components["schemas"]["CashMoneyDto"][];
             /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
-            differences: components["schemas"]["CashMoneyDto"][];
+            differences: components["schemas"]["CashDifferenceDto"][];
+            /** @description SEC-043: el último cierre (si está cerrada) es una «diferencia sin justificar». */
+            unjustifiedDifference: boolean;
         };
         CashSessionPageDto: {
             items: components["schemas"]["CashSessionSummaryDto"][];
@@ -16969,6 +17051,8 @@ export interface components {
             /** @description data:image/png;base64,…; null en uno firmado a distancia hasta que firma el profesional */
             professionalSignature: string | null;
             clinic: components["schemas"]["ConsentClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del documento (la de la firma a distancia, o la sede en contexto). null si le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patient: components["schemas"]["ConsentPatientDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
             integrityOk: boolean;
@@ -17220,6 +17304,8 @@ export interface components {
             clinic: components["schemas"]["PostOpClinicBrandingDto"];
             locationName: string;
             locationPhone: string | null;
+            /** @description DX-354: zona, locale y reloj de la sede de la entrega. null si le falta algo: la entrega se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patientName: string;
         };
         PublicPostOpDto: {
@@ -17528,6 +17614,8 @@ export interface components {
             patientFirstName: string | null;
             /** Format: date-time */
             expiresAt: string;
+            /** @description DX-354: zona, locale y reloj de la sede principal de la clínica (la activa más antigua), para pintar `expiresAt`. null si le falta algo: la página pinta «—» y pide llamar a la clínica. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             questionnaire: components["schemas"]["AnamnesisQuestionnaireDto"];
             consent: components["schemas"]["PublicConsentDto"];
         };
@@ -18592,6 +18680,8 @@ export interface components {
             /** Format: date */
             patientBirthDate: string | null;
             clinicName: string;
+            /** @description DX-354: zona, locale y reloj de la sede de la tarjeta (la de los implantes si es una; si junta varias, la activa). null si le falta algo: la tarjeta se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             locations: components["schemas"]["ImplantCardLocationDto"][];
             /** Format: date */
             placedOn: string;
@@ -19134,6 +19224,8 @@ export interface components {
             /** Format: date-time */
             optedOutAt: string | null;
             clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
+            /** @description DX-354: zona, locale y reloj de la sede principal de la clínica (la activa más antigua), para pintar `optedOutAt`. null si le falta algo: la página pinta «—» y pide llamar a la clínica. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
         };
         /** @enum {string} */
         RecallKind: "HYGIENE" | "CHECKUP";

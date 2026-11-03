@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { clinicLocation } from '@/lib/test/locations';
 import { listLocations } from '@/lib/locations/locations-api';
+import { FORMAT_DE, FORMAT_ES, FORMAT_US, REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 
@@ -35,6 +36,7 @@ const family: FamilyAccountStatement = {
   rateProviderTimedOut: false,
   paymentsWithoutRateCount: 0,
   issuedAt: '2026-10-17T15:00:00.000Z',
+  regional: REGIONAL_VE,
   clinic: { name: 'Clínica Sonrisas', logoUrl: null, fiscal: EMPTY_CLINIC_FISCAL },
   payer: { id: 'mother', firstName: 'Marta', lastName: 'Gil' },
   members: [
@@ -92,7 +94,7 @@ describe('Estado de cuenta familiar (DX-203)', () => {
   });
 
   it('el documento nombra el parentesco del pagador, no el del dependiente', () => {
-    render(<FamilyAccountStatementDocument statement={family} />);
+    render(<FamilyAccountStatementDocument statement={family} format={FORMAT_ES} />);
     const rows = screen.getAllByTestId('family-member-row');
     expect(rows[1].textContent).toContain('Pagador: madre');
   });
@@ -117,7 +119,7 @@ describe('Estado de cuenta familiar (DX-203)', () => {
   });
 
   it('el documento imprimible: solo nombres e importes, subtotal por paciente y total', () => {
-    render(<FamilyAccountStatementDocument statement={family} />);
+    render(<FamilyAccountStatementDocument statement={family} format={FORMAT_ES} />);
     expect(screen.getByRole('heading', { name: 'Estado de cuenta familiar' })).toBeInTheDocument();
     expect(screen.getAllByTestId('family-member-row')).toHaveLength(3);
     expect(screen.getByTestId('family-total').textContent).toMatch(/1\.550\.000,55/);
@@ -132,7 +134,7 @@ describe('Estado de cuenta familiar (DX-203)', () => {
     render(<FamilyAccountStatementSection token="tok" patientId="mother" />);
     expect(await screen.findByText('El saldo incluye el saldo migrado del programa anterior.')).toBeInTheDocument();
     cleanup();
-    render(<FamilyAccountStatementDocument statement={withOpening} />);
+    render(<FamilyAccountStatementDocument statement={withOpening} format={FORMAT_ES} />);
     expect(screen.getByText('El saldo incluye el saldo migrado del programa anterior.')).toBeInTheDocument();
   });
 
@@ -143,7 +145,43 @@ describe('Estado de cuenta familiar (DX-203)', () => {
     expect(await screen.findByText(text)).toBeInTheDocument();
 
     cleanup();
-    render(<FamilyAccountStatementDocument statement={{ ...family, paymentsWithoutRateCount: 2 }} />);
+    render(<FamilyAccountStatementDocument statement={{ ...family, paymentsWithoutRateCount: 2 }} format={FORMAT_ES} />);
     expect(screen.getByTestId('family-without-rate')).toHaveTextContent(text);
+  });
+
+  it('DX-354 A: sede h12 en-US, la hora de la emisión en 12 h y el total con código', () => {
+    render(
+      <FamilyAccountStatementDocument
+        statement={{ ...family, issuedAt: '2027-05-03T19:05:00.000Z' }}
+        format={FORMAT_US}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Estado de cuenta familiar' }).closest('header')).toHaveTextContent(
+      '05/03/2027 3:05 p. m.',
+    );
+    expect(screen.getByTestId('family-total').textContent).toMatch(/USD.1,550,000\.55/);
+  });
+
+  it('DX-354 B: sede h23 de-DE, 24 h y el importe con código', () => {
+    render(
+      <FamilyAccountStatementDocument
+        statement={{ ...family, issuedAt: '2027-05-03T19:05:00.000Z' }}
+        format={FORMAT_DE}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Estado de cuenta familiar' }).closest('header')).toHaveTextContent(
+      '03.05.2027 21:05',
+    );
+    expect(screen.getByTestId('family-total').textContent).toMatch(/1\.550\.000,55.USD/);
+  });
+
+  it('DX-354 C: sin formato de sede, «—» en la emisión y en los importes', () => {
+    const { container } = render(<FamilyAccountStatementDocument statement={family} format={null} />);
+    expect(screen.getByRole('heading', { name: 'Estado de cuenta familiar' }).closest('header')).toHaveTextContent(/emisión\s*—/i);
+    expect(screen.getByTestId('family-total')).toHaveTextContent('—');
+    const text = container.textContent ?? '';
+    expect(text).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+    expect(text).not.toMatch(/\d[.,]\d{2}/);
+    expect(text).not.toContain('US$');
   });
 });

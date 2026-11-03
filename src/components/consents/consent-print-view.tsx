@@ -1,9 +1,11 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, FileX, Lock, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { getPatientConsent, type PatientConsentDocument } from '@/lib/consents/consents-api';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { ConsentDocument } from './consent-document';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -48,6 +50,8 @@ export function ConsentPrintView({
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
   const forbidden = !allowed || deniedByApi;
+  // DX-354: el formato de la sede del documento, no el del navegador.
+  const format = useMemo(() => (data ? documentFormat(data.regional) : null), [data]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -73,11 +77,11 @@ export function ConsentPrintView({
   }, [token, patientId, consentId, reloadKey, allowed]);
 
   useEffect(() => {
-    if (data && !printed.current) {
+    if (data && format !== null && !printed.current) {
       printed.current = true;
       window.print();
     }
-  }, [data]);
+  }, [data, format]);
 
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=consents`;
 
@@ -99,7 +103,7 @@ export function ConsentPrintView({
             {copy.back}
           </Link>
         </Button>
-        <Button type="button" onClick={() => window.print()} disabled={!data}>
+        <Button type="button" onClick={() => window.print()} disabled={!data || format === null}>
           <Printer aria-hidden />
           {copy.print}
         </Button>
@@ -107,9 +111,17 @@ export function ConsentPrintView({
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {data ? (
-          <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
-            <ConsentDocument consent={data} />
-          </div>
+          <>
+            {format === null ? (
+              <DocumentFormatNote
+                onRetry={() => setReloadKey((k) => k + 1)}
+                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              />
+            ) : null}
+            <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
+              <ConsentDocument consent={data} format={format} />
+            </div>
+          </>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
             <EmptyState

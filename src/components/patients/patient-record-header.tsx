@@ -3,6 +3,7 @@ import Link from 'next/link';
 import * as React from 'react';
 import { Building2, ChevronLeft, MoreHorizontal, Pencil, ShieldCheck } from 'lucide-react';
 import type { Patient } from '@/lib/patients/patients-api';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { ageFrom } from '@/lib/patients/age';
 import { displayPhone } from '@/lib/phone/display-phone';
@@ -140,6 +141,8 @@ interface PatientRecordHeaderProps {
    * secundaria: una primaria por vista.
    */
   editPrimary?: boolean;
+  /** El formato de la sede de la pantalla para el importe del saldo vencido (DX-354); `null` → el chip sin importe. */
+  fmt: RegionalFormat | null;
 }
 
 /**
@@ -175,6 +178,7 @@ export function PatientRecordHeader({
   attendanceFailed = false,
   onRetryAttendance,
   editPrimary = true,
+  fmt,
 }: PatientRecordHeaderProps) {
   const items = patient ? identityItems(patient) : [];
   const alertSeverity = patient ? medicalAlertSeverity(medicalAlerts) : null;
@@ -322,7 +326,7 @@ export function PatientRecordHeader({
           ) : null}
           <AttendanceBadge counts={attendance?.totals} />
           {/* DX-150: «Saldo vencido · N días» (importe solo ADMIN y RECEPTION). */}
-          {patient.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
+          {patient.balance?.hasOverdue ? <OverdueChip balance={patient.balance} fmt={fmt} /> : null}
           {/* DX-472-bis: «Saldo con cifras incompletas» si no hay vencido que avise. */}
           <IncompleteBalanceChip balance={patient.balance} />
           {/* DX-153: «Cobertura vencida». DX-105: «Convenio: X». */}

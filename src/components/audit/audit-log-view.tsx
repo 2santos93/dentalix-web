@@ -47,7 +47,7 @@ import {
 import { configChangeItems, type ConfigChangeItem } from '@/lib/audit/config-change';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
-import { screenLocation, sedeClockFor, type SedeClockError } from '@/lib/locations/sede-clock';
+import { screenLocation, sedeClockFor, type SedeClock, type SedeClockError } from '@/lib/locations/sede-clock';
 import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { isValidRange, MAX_RANGE_DAYS } from '@/lib/payments/cash-period';
@@ -306,7 +306,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
     ? items.map((event) => ({
         event,
         time: auditTime(event, clock, locationNames),
-        detail: eventDetail(event, locationNames),
+        detail: eventDetail(event, locationNames, clock),
         change: configChangeItems(event.metadata, clock.fmt),
       }))
     : [];
@@ -512,7 +512,11 @@ function ConfigChangeValue({ item }: { item: ConfigChangeItem }) {
   );
 }
 
-function eventDetail(event: AuditEvent, locationNames: LocationNames | null): string | null {
+function eventDetail(
+  event: AuditEvent,
+  locationNames: LocationNames | null,
+  clock: SedeClock | null,
+): string | null {
   return (
     communicationDetail(event.metadata) ??
     confirmationLinkDetail(event.metadata) ??
@@ -522,10 +526,10 @@ function eventDetail(event: AuditEvent, locationNames: LocationNames | null): st
     cashSessionDetail(event.metadata) ??
     sedationDetail(event.metadata) ??
     chairDetail(event.metadata) ??
-    scheduleChangeDetail(event.metadata) ??
+    scheduleChangeDetail(event.metadata, clock?.fmt ?? null) ??
     cancellationDetail(event.metadata) ??
     patientFlowDetail(event.metadata) ??
-    planItemAttributionDetail(event.metadata) ??
+    planItemAttributionDetail(event.metadata, clock) ??
     importBatchDetail(event.metadata) ??
     healthRegistrationDetail(event.metadata) ??
     clinicSettingsDetail(event.metadata) ??

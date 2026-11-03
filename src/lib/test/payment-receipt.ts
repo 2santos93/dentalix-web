@@ -14,7 +14,8 @@ export function paymentReceiptFixture(overrides: Partial<PaymentReceipt> = {}): 
     voidReason: null,
     exchangeRate: null,
     split: null,
-    regional: null,
+    // Locale `es` y UTC: fechas `dd/mm/yyyy hh:mm` e importes `150.000,00 USD`, como se leían los textos de estas pruebas.
+    regional: { timeZone: 'UTC', locale: 'es', hourCycle: 'h23' },
     snapshot: {
       version: 1,
       clinic: { name: 'Clínica Sonrisas', legalName: null, taxId: null, address: null },

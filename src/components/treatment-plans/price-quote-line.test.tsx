@@ -1,4 +1,7 @@
-import { PRINTED_LIST_PRICE_FORMAT, formatListPrice } from '@/lib/treatment-plans/list-price';
+import { formatListPrice, sedeListPriceFormat } from '@/lib/treatment-plans/list-price';
+import { FORMAT_ES } from '@/lib/test/document-regional';
+
+const PRINTED_LIST_PRICE_FORMAT = sedeListPriceFormat(FORMAT_ES.fmt);
 import { itemPriceOriginText, priceSourceText } from './price-quote-line';
 
 /** Catálogo en la moneda del plan (USD). */

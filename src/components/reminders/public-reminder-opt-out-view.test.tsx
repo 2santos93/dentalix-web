@@ -7,6 +7,7 @@ import {
 } from '@/lib/reminders/opt-out-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { REGIONAL_US, REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/reminders/opt-out-api', () => ({
   getPublicReminderOptOut: jest.fn(),
@@ -23,6 +24,7 @@ const view = (over: Partial<PublicReminderOptOut> = {}): PublicReminderOptOut =>
   patientFirstName: 'Carolina',
   optedOutAt: null,
   clinic: { name: 'Sonrisas del Norte', primaryColor: '#0E7490', logoUrl: null },
+  regional: REGIONAL_VE,
   ...over,
 });
 
@@ -53,7 +55,26 @@ describe('PublicReminderOptOutView (DX-128)', () => {
     expect(mockedConfirm).toHaveBeenCalledWith('tok');
     expect(await screen.findByRole('heading', { name: 'Listo: ya no recibirás recordatorios' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    // 15:00 UTC del 17/10 es el 17/10 en Caracas, la sede de referencia de la clínica.
     expect(screen.getByText(/Desde el 17\/10\/2026/)).toBeInTheDocument();
+  });
+
+  it('DX-354: la fecha de la baja sigue el formato de la sede de referencia de la clínica', async () => {
+    mockedGet.mockResolvedValue(
+      view({ status: 'OPTED_OUT', optedOutAt: '2026-10-17T15:00:00.000Z', regional: REGIONAL_US }),
+    );
+    render(<PublicReminderOptOutView optOutToken="tok" />);
+    expect(await screen.findByText(/Desde el 10\/17\/2026/)).toBeInTheDocument();
+  });
+
+  it('DX-354: sin formato de la sede, sin fecha y «llama a la clínica», nunca la del navegador', async () => {
+    mockedGet.mockResolvedValue(
+      view({ status: 'OPTED_OUT', optedOutAt: '2026-10-17T15:00:00.000Z', regional: null }),
+    );
+    render(<PublicReminderOptOutView optOutToken="tok" />);
+    const message = await screen.findByText(/Para saber desde cuándo, llama a la clínica/);
+    expect(message).toBeInTheDocument();
+    expect(message.textContent).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
   });
 
   it('si ya estaba dado de baja lo muestra sin pedir nada', async () => {

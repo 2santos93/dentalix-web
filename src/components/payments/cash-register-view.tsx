@@ -39,6 +39,7 @@ import { DateRangePicker } from '@/components/ui/date-picker';
 import { NativeSelect } from '@/components/ui/native-select';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
+import { Callout } from '@/components/ui/callout';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
 import { ResultCount } from '@/components/shared/list-toolbar';
@@ -138,6 +139,12 @@ const copy = {
   periodNote: (days: string) => `${days} · días según la hora de la sede`,
   periodDays: (from: string, to: string) => (from === to ? from : `del ${from} al ${to}`),
   registeredOn: (date: string) => `Registrado el ${date}`,
+  // SEC-043: con arqueo ciego, recepción no ve los abonos de cajas abiertas.
+  blindTitle: 'Arqueo ciego: los abonos de las cajas abiertas van sin importe',
+  blindHint:
+    'Salen en la lista para que puedas ver su recibo o anularlos desde «⋯», pero sin importe, y el resumen y el CSV no los suman: así nadie sabe lo esperado antes de contar. Las cifras vuelven al cerrar la caja.',
+  // SEC-043: el importe de una fila de una caja abierta con arqueo ciego.
+  amountHidden: 'Oculto durante el arqueo',
   empty: 'No hay abonos en este período.',
   emptyHint: 'Prueba con otro rango de fechas o con otro medio de pago.',
   invoiceSubject: (patient: string, amount: string) => `${patient} · ${amount}`,
@@ -231,7 +238,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // Anular (DX-057): «Anular» solo sale en las filas con `canVoid` (lo calcula
   // la API para quien consulta); tras anular se recarga la caja, que solo
   // lista abonos activos, y con ella el resumen.
-  const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1));
+  const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1), fmt);
   // Recibo de caja (DX-136): ver, reimprimir o enviar el de cualquier fila.
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
@@ -425,17 +432,22 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
       header: copy.colAmount,
       numeric: true,
       mobile: 'trailing',
-      cell: (payment) => (
+      cell: (payment) =>
+        payment.amountHidden || payment.amount === null || payment.currency === null ? (
+          <span className="text-sm text-muted" data-testid="amount-hidden">
+            {copy.amountHidden}
+          </span>
+        ) : (
         <span className="flex flex-col items-end">
           <span className="font-medium text-ink">{money(payment.amount, payment.currency)}</span>
           {/* DX-516: con ajustes por medio de pago, lo que entró de verdad. */}
           {payment.adjustments.length > 0 ? (
             <span className="t-caption text-muted tabular-nums">
-              {copy.collectedRow(money(payment.collectedAmount, payment.currency))}
+              {copy.collectedRow(money(payment.collectedAmount ?? payment.amount, payment.currency))}
             </span>
           ) : null}
         </span>
-      ),
+        ),
     },
   ];
 
@@ -571,6 +583,12 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
         ) : showResults ? (
           <>
+            {!loading && !loadError && data?.blindHidden ? (
+              <Callout tone="info" title={copy.blindTitle} data-testid="cash-blind-hidden">
+                {copy.blindHint}
+              </Callout>
+            ) : null}
+
             {!loading && !loadError && data ? (
               <ResultCount
                 total={data.total}
@@ -609,7 +627,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         paymentId: payment.id,
                         subject: copy.invoiceSubject(
                           payment.patient.fullName,
-                          money(payment.amount, payment.currency),
+                          payment.amount !== null && payment.currency !== null
+                            ? money(payment.amount, payment.currency)
+                            : formatCivilDate(payment.paidOn),
                         ),
                         externalInvoiceNumber: payment.externalInvoiceNumber,
                       }),
@@ -680,7 +700,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         error={voiding.error}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
-        subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+        subject={voiding.target ? voidPaymentSubject(voiding.target, fmt) : undefined}
         splitLines={voiding.target?.splitLines ?? undefined}
       />
     </>

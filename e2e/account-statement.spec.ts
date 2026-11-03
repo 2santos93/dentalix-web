@@ -38,11 +38,6 @@ const password = 'Password123!';
 const patientFirstName = 'Rosa';
 const patientLastName = `EstadoCuenta${suffix}`;
 
-// Impreso: `formatCurrency` (pendiente de DX-354), locale `es`.
-const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
-function money(amount: number): string {
-  return usd.format(amount);
-}
 /** DX-522: el estado de cuenta en pantalla, con el formato de la sede y el código ISO («USD 1.000,00»). */
 const sedeFmt = regionalFormat(E2E_REGION);
 const sedeUsd = (amount: number): string => moneyWithCode(amount, 'USD', sedeFmt);
@@ -169,7 +164,7 @@ test('estado de cuenta: ficha → pestaña → imprimir muestra un documento lim
   await expect(header).toContainText('Fecha de emisión');
   await expect(printPage.getByText(`${patientFirstName} ${patientLastName}`)).toBeVisible();
   await expect(printPage.getByRole('table', { name: 'Resumen por moneda' })).toContainText(
-    money(700),
+    sedeUsd(700),
   );
 
   // Sin el shell de la app: ni raíl ni pestañas de la ficha.

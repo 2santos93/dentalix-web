@@ -3,6 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 import { openPatientTab } from './support/patient-tabs';
+import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
+import { moneyWithCode } from '../src/lib/format/sede-number';
 
 /**
  * e2e (DX-253): saldo a favor en el estado de cuenta, a 1440 px y a 390 px.
@@ -128,7 +131,8 @@ for (const viewport of [
     const receipt = page.getByRole('dialog', { name: 'Devolución registrada' });
     const document = receipt.getByTestId('refund-document');
     await expect(document).toContainText(/DEV-[A-Z0-9]+-000001/);
-    await expect(document).toContainText(money(40));
+    // El comprobante pinta con la sede del documento y el código ISO delante.
+    await expect(document).toContainText(moneyWithCode(40, 'USD', regionalFormat(E2E_REGION)));
     await expect(document).toContainText('El paciente se muda de ciudad');
     await expect(receipt.getByTestId('signature-line')).toHaveCount(2);
 
