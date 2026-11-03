@@ -97,4 +97,10 @@ describe('SedeConfigError', () => {
     expect(screen.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute('href', '/settings/sedes?sede=loc-1');
     useAuthStore.setState({ accessToken: null });
   });
+
+  it('note with live={false} does not repeat the status role (it lives inside a persistent region)', () => {
+    render(<SedeConfigError kind="locale" variant="note" live={false} onRetry={jest.fn()} />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+  });
 });
