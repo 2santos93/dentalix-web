@@ -400,14 +400,16 @@ test('un documento cuya sede no tiene formato (región nula): «—» y el aviso
   await loginAdmin(page);
   await activate(page, 'us');
   // La API responde `regional: null` cuando a la sede le falta algo; aquí se simula en la respuesta.
-  await page.route('**/patients/*/account-statement*', async (route) => {
+  // Solo la petición a la API: el mismo patrón sin `API_URL` atrapa también la página /print/….
+  await page.route(`${API_URL}/patients/*/account-statement*`, async (route) => {
     const res = await route.fetch();
     await route.fulfill({ response: res, json: { ...(await res.json()), regional: null } });
   });
   await page.goto(`${origin}/print/patients/${data.us.patientId}/account-statement`);
   const header = page.getByTestId('statement-header');
   await expect(header).toBeVisible({ timeout: 15_000 });
-  await expectContains(header, 'Fecha de emisión —');
+  // dt y dd van pegados en el textContent: «Fecha de emisión—».
+  await expect(header).toHaveText(/Fecha de emisión\s*—/);
   await expect(page.getByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeVisible();
   const text = norm((await page.locator('.statement-print-root').textContent()) ?? '');
   expect(text).not.toMatch(/\d{1,2}[/.]\d{1,2}[/.]\d{4}/);
