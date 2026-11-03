@@ -4,6 +4,7 @@ import { AccountStatementPrintView } from './account-statement-print-view';
 import { getAccountStatement } from '@/lib/account-statement/account-statement-api';
 import { accountStatementFixture } from '@/lib/test/account-statement';
 import { ApiError } from '@/lib/api/client';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 
 jest.mock('../../lib/account-statement/account-statement-api', () => ({
   ...jest.requireActual('../../lib/account-statement/account-statement-api'),
@@ -78,4 +79,21 @@ it('un 404 dice que no hay tal paciente, sin un reintento que no lo arreglaría'
   expect(await screen.findByText(/no encontramos este paciente/i)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
   expect(printSpy).not.toHaveBeenCalled();
+});
+
+it('DX-354: usa el formato de la sede del estado de cuenta; sin él, «—» y el aviso de la sede (solo en pantalla)', async () => {
+  mockedGet.mockResolvedValueOnce(accountStatementFixture({ regional: null }));
+  mockedGet.mockResolvedValueOnce(
+    accountStatementFixture({ regional: { timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' } }),
+  );
+  render(<AccountStatementPrintView token="tok" patientId="pat-1" />);
+
+  expect(await screen.findByTestId('statement-header')).toHaveTextContent(/emisión\s*—/i);
+  const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
+  expect(note?.closest('.print\\:hidden')).not.toBeNull();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+  // 15:30 UTC es 11:30 en Nueva York.
+  await waitFor(() => expect(screen.getByTestId('statement-header')).toHaveTextContent('10/15/2026 11:30 a. m.'));
+  expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument();
 });

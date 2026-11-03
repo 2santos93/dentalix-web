@@ -25,11 +25,8 @@ const OTHER = 'Pantalla fuera de las cinco superficies de DX-522: pendiente de m
 
 /** Vistas que aún importan `formatCurrency`. Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
-  'components/account-statement/account-statement-document.tsx': PRINTED,
-  'components/account-statement/family-account-statement-document.tsx': PRINTED,
   'components/appointments/cancellation-fee-panel.tsx': OTHER,
   'components/appointments/public-confirmation-view.tsx': PUBLIC_PAGE,
-  'components/cash-sessions/cash-session-report.tsx': PRINTED,
   'components/catalog/catalog-view.tsx': OTHER,
   'components/collections/patient-collections-section.tsx': OTHER,
   'components/currency-texts/currency-texts-form.tsx': OTHER,
@@ -39,7 +36,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/expenses/expense-payment-modal.tsx': OTHER,
   'components/locations/cancellation-policy-settings.tsx': OTHER,
   'components/patient-credit/credit-balance-section.tsx': OTHER,
-  'components/patient-credit/credit-refund-document.tsx': PRINTED,
   'components/patient-credit/credit-refund-modal.tsx': OTHER,
   'components/patient-credit/credit-transfer-modal.tsx': OTHER,
   'components/patient-imports/balances-step.tsx': OTHER,

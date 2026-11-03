@@ -42,17 +42,13 @@ const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del nav
 
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
-  'components/account-statement/account-statement-document.tsx': PRINTED,
-  'components/account-statement/family-account-statement-document.tsx': PRINTED,
   'components/consents/consent-document.tsx': PRINTED,
   'components/implants/implant-card-document.tsx': PRINTED,
   'components/postop/postop-document.tsx': PRINTED,
   'components/treatment-plans/plan-quote-document.tsx': PRINTED,
-  'lib/account-statement/presentation.ts': PRINTED,
   'components/anamnesis/public-anamnesis-view.tsx': PUBLIC_PAGE,
   'components/appointments/public-confirmation-view.tsx': PUBLIC_PAGE,
   'components/reminders/public-reminder-opt-out-view.tsx': PUBLIC_PAGE,
-  'components/cash-sessions/cash-session-report.tsx': ZONE_24H,
   'components/cash-sessions/cash-shifts-view.tsx': ZONE_24H,
   'lib/clinical/medical-alerts.ts': ZONE_24H,
   'components/anamnesis/anamnesis-inbox-view.tsx': STAMP,

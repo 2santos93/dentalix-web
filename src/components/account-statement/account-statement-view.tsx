@@ -29,6 +29,7 @@ import {
 import { planQuotePrintHref } from '@/lib/treatment-plans/plan-quote-api';
 import { sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { readyClock, useSedeClock } from '@/lib/locations/sede-clock';
 import { formatCivilDate } from '@/lib/format/date';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -339,6 +340,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
       ) : null}
 
       <CreditRefundDialog
+        token={token}
         refund={issuedRefund}
         onOpenChange={(open) => {
           if (!open) setIssuedRefund(null);
@@ -397,9 +399,11 @@ function StatementBody({
   onTransferred: (notice: string) => void;
   onRefunded: (refund: CreditRefund) => void;
 }) {
-  const planName = planNamer(statement.plans);
   // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
   const fmt = readyFormat(useSedeFormat(token));
+  // DX-354: las fechas de «Plan del …» y de corte, con la zona y el formato de la sede.
+  const clock = readyClock(useSedeClock(token));
+  const planName = planNamer(statement.plans, clock);
   const money: Money = (amount, code) => sedeMoney(amount, code, fmt);
   const summary = shownSummaryRows(statement.summary);
   return (
@@ -440,7 +444,7 @@ function StatementBody({
             getRowKey={(o) => o.id}
             columns={[
               { id: 'concept', header: statementCopy.colConcept, cell: (o) => <span className="break-words">{o.concept}</span> },
-              { id: 'asOf', header: statementCopy.colAsOf, cell: (o) => <span className="tabular-nums">{openingAsOfLabel(o)}</span> },
+              { id: 'asOf', header: statementCopy.colAsOf, cell: (o) => <span className="tabular-nums">{openingAsOfLabel(o, clock)}</span> },
               { id: 'amount', header: copy.colAmount, numeric: true, cell: (o) => money(o.amount, o.currency) },
               { id: 'paid', header: statementCopy.colOpeningPaid, numeric: true, cell: (o) => money(o.paid, o.currency) },
               {

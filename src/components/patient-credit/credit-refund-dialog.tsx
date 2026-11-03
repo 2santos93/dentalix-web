@@ -1,10 +1,14 @@
 'use client';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Printer } from 'lucide-react';
 import {
+  getCreditRefund,
   refundPrintHref,
   type CreditRefund,
 } from '@/lib/patient-credit/patient-credit-api';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import {
   Dialog,
   DialogContent,
@@ -27,12 +31,24 @@ const copy = {
 
 /** El comprobante recién emitido (DX-253), con impresión A4 o tirilla. */
 export function CreditRefundDialog({
-  refund,
+  token,
+  refund: issued,
   onOpenChange,
 }: {
+  token: string;
   refund: CreditRefund | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  // DX-354: «Reintentar» del aviso de la sede vuelve a leer el comprobante,
+  // que trae el formato de la sede con sus valores de hoy.
+  const [reread, setReread] = useState<CreditRefund | null>(null);
+  const refund = reread && reread.id === issued?.id ? reread : issued;
+  function retryFormat() {
+    if (!issued) return;
+    getCreditRefund(token, issued.id)
+      .then(setReread)
+      .catch(() => undefined);
+  }
   return (
     <Dialog open={refund !== null} onOpenChange={onOpenChange}>
       {refund ? (
@@ -41,6 +57,9 @@ export function CreditRefundDialog({
             <DialogTitle>{copy.title}</DialogTitle>
             <DialogDescription>{copy.description}</DialogDescription>
           </DialogHeader>
+          {documentFormat(refund.regional) === null ? (
+            <DocumentFormatNote locationId={refund.locationId} onRetry={retryFormat} />
+          ) : null}
           <div className="overflow-hidden rounded-lg border border-border">
             <CreditRefundDocument refund={refund} />
           </div>

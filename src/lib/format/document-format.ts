@@ -1,5 +1,6 @@
 import { regionalFormat, type RegionalFormat } from '@/lib/format/regional-format';
-import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import { NO_SEDE_FORMAT, moneyWithCode } from '@/lib/format/sede-number';
+import type { CurrencyTexts } from '@/lib/format/currency-text';
 
 /** El formato de un documento: el helper de la sede y la zona con la que pintar sus instantes. */
 export interface DocumentFormat {
@@ -40,4 +41,62 @@ export function documentFormat(
     if (e instanceof RangeError) return null;
     throw e;
   }
+}
+
+/** Lo que un documento pinta con el formato de su sede; sin él, «—» en todo. */
+export interface DocumentTexts {
+  /** Un importe con el código ISO de su moneda (DX-378), o el texto de la clínica para ella. */
+  amount(value: number, currency: string): string;
+  /** Un día civil `YYYY-MM-DD`; un día mal formado sale «—». */
+  civilDate(day: string | null | undefined): string;
+  /** La fecha de un instante ISO en la zona de la sede. */
+  date(iso: string | null | undefined): string;
+  /** La hora de un instante ISO en la zona y el reloj de la sede. */
+  time(iso: string | null | undefined): string;
+  /** Fecha y hora de un instante ISO en la zona y el reloj de la sede. */
+  dateTime(iso: string | null | undefined): string;
+}
+
+function instant(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Los pintores de un documento con su `DocumentFormat`. Con `null` (la sede no
+ * tiene formato) todo sale «—», nunca otro formato (DX-354). `texts`: los
+ * textos de moneda de la clínica salvo que el documento traiga los suyos
+ * congelados (el recibo).
+ */
+export function documentTexts(format: DocumentFormat | null, texts?: CurrencyTexts): DocumentTexts {
+  if (!format) {
+    return {
+      amount: () => NO_DOCUMENT_FORMAT,
+      civilDate: () => NO_DOCUMENT_FORMAT,
+      date: () => NO_DOCUMENT_FORMAT,
+      time: () => NO_DOCUMENT_FORMAT,
+      dateTime: () => NO_DOCUMENT_FORMAT,
+    };
+  }
+  const { fmt, timeZone } = format;
+  const at = (iso: string | null | undefined, paint: (d: Date) => string): string => {
+    const d = instant(iso);
+    return d ? paint(d) : NO_DOCUMENT_FORMAT;
+  };
+  return {
+    amount: (value, currency) => moneyWithCode(value, currency, fmt, texts),
+    civilDate: (day) => {
+      if (!day) return NO_DOCUMENT_FORMAT;
+      try {
+        return fmt.civilDate(day.slice(0, 10));
+      } catch (e) {
+        if (e instanceof RangeError) return NO_DOCUMENT_FORMAT;
+        throw e;
+      }
+    },
+    date: (iso) => at(iso, (d) => fmt.date(d, timeZone)),
+    time: (iso) => at(iso, (d) => fmt.time(d, timeZone)),
+    dateTime: (iso) => at(iso, (d) => fmt.dateTime(d, timeZone)),
+  };
 }

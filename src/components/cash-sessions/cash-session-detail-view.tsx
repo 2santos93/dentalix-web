@@ -1,6 +1,8 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import Link from 'next/link';
 import { Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -165,6 +167,13 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
           kind="currency"
           onRetry={() => setReloadKey((k) => k + 1)}
           locationId={session.location.id}
+          className="mb-4"
+        />
+      ) : null}
+      {documentFormat(session.regional) === null ? (
+        <DocumentFormatNote
+          locationId={session.location.id}
+          onRetry={() => setReloadKey((k) => k + 1)}
           className="mb-4"
         />
       ) : null}

@@ -12,6 +12,8 @@ import { formatCivilDate } from '@/lib/format/date';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { CashSessionReport } from './cash-session-report';
 
 const copy = {
@@ -104,9 +106,18 @@ export function CashSessionPrintView({ token, sessionId, allowed = true }: CashS
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {session ? (
-          <div className="mx-auto max-w-[210mm] sm:rounded-xl sm:border sm:border-border print:border-0">
-            <CashSessionReport session={session} linkSessions={false} />
-          </div>
+          <>
+            {documentFormat(session.regional) === null ? (
+              <DocumentFormatNote
+                locationId={session.location.id}
+                onRetry={() => setReloadKey((k) => k + 1)}
+                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              />
+            ) : null}
+            <div className="mx-auto max-w-[210mm] sm:rounded-xl sm:border sm:border-border print:border-0">
+              <CashSessionReport session={session} linkSessions={false} />
+            </div>
+          </>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
             <EmptyState role="status" icon={<Lock aria-hidden />} title={copy.forbiddenTitle} description={copy.forbiddenHint} />

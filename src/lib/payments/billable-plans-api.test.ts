@@ -8,6 +8,7 @@ import {
   listBillablePlans,
   type BillablePlan,
 } from './billable-plans-api';
+import { FORMAT_ES } from '@/lib/test/document-regional';
 
 const plan: BillablePlan = {
   id: 'plan-1',
@@ -61,20 +62,20 @@ describe('canRecordPayments', () => {
 
 describe('billablePlanLabel', () => {
   it('nombra el plan por su fecha, su estado y lo que falta', () => {
-    expect(billablePlanLabel(plan).replace(/\s/g, ' ')).toBe(
+    expect(billablePlanLabel(plan, FORMAT_ES).replace(/\s/g, ' ')).toBe(
       'Plan del 01/08/2026 · Aceptado · Saldo 1.800.000,00 USD',
     );
   });
 
   it('un saldo negativo se lee «a favor»', () => {
-    expect(billablePlanLabel({ ...plan, balance: -50 }).replace(/\s/g, ' ')).toContain(
+    expect(billablePlanLabel({ ...plan, balance: -50 }, FORMAT_ES).replace(/\s/g, ' ')).toContain(
       '50,00 USD a favor',
     );
   });
 
   it('pinta el saldo con el formateador que recibe (DX-386: el de la sede, con el código ISO)', () => {
     const money = (amount: number, currency: string) => `${currency} ${amount}`;
-    expect(billablePlanLabel(plan, money)).toBe('Plan del 01/08/2026 · Aceptado · Saldo USD 1800000');
-    expect(billablePlanLabel({ ...plan, balance: -50 }, money)).toContain('USD 50 a favor');
+    expect(billablePlanLabel(plan, FORMAT_ES, money)).toBe('Plan del 01/08/2026 · Aceptado · Saldo USD 1800000');
+    expect(billablePlanLabel({ ...plan, balance: -50 }, FORMAT_ES, money)).toContain('USD 50 a favor');
   });
 });

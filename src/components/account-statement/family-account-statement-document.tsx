@@ -6,8 +6,7 @@ import type {
 } from '@/lib/account-statement/account-statement-api';
 import { shownSummaryRows, statementCopy } from '@/lib/account-statement/presentation';
 import { RELATIONSHIP_LABELS } from '@/lib/patients/responsible-parties-api';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatDateTime } from '@/lib/format/date';
+import { documentTexts, type DocumentFormat, type DocumentTexts } from '@/lib/format/document-format';
 import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
 import { DocSection, DocTable, Td, Th } from './account-statement-document';
 
@@ -36,8 +35,8 @@ export const familyStatementCopy = {
 };
 const copy = familyStatementCopy;
 
-function balanceText(row: FamilyCurrencyAmounts): string {
-  return `${formatCurrency(Math.abs(row.convertedBalance), row.currency)}${
+function balanceText(row: FamilyCurrencyAmounts, doc: DocumentTexts): string {
+  return `${doc.amount(Math.abs(row.convertedBalance), row.currency)}${
     row.convertedBalance < 0 ? ` ${statementCopy.inFavor}` : ''
   }`;
 }
@@ -49,9 +48,13 @@ function balanceText(row: FamilyCurrencyAmounts): string {
  */
 export function FamilyAccountStatementDocument({
   statement,
+  format,
 }: {
   statement: FamilyAccountStatement;
+  /** El formato de la sede del documento (`documentFormat`); `null` → «—» en fechas e importes. */
+  format: DocumentFormat | null;
 }) {
+  const doc = documentTexts(format);
   const { clinic, payer, members } = statement;
   const totals = shownSummaryRows(statement.totals);
   const rows = members.flatMap<{
@@ -75,7 +78,7 @@ export function FamilyAccountStatementDocument({
           {copy.issuedAt}
           <br />
           <span className="font-medium text-[#111827] tabular-nums">
-            {formatDateTime(statement.issuedAt)}
+            {doc.dateTime(statement.issuedAt)}
           </span>
         </p>
       </header>
@@ -111,12 +114,12 @@ export function FamilyAccountStatementDocument({
               {totals.map((t) => (
                 <tr key={t.currency} data-testid="family-total">
                   <Th scope="row">{t.currency}</Th>
-                  <Td right>{formatCurrency(t.budgeted, t.currency)}</Td>
-                  <Td right>{formatCurrency(t.convertedPaid, t.currency)}</Td>
+                  <Td right>{doc.amount(t.budgeted, t.currency)}</Td>
+                  <Td right>{doc.amount(t.convertedPaid, t.currency)}</Td>
                   <Td right strong>
-                    {balanceText(t)}
+                    {balanceText(t, doc)}
                   </Td>
-                  <Td right>{t.overdueAmount > 0 ? formatCurrency(t.overdueAmount, t.currency) : copy.none}</Td>
+                  <Td right>{t.overdueAmount > 0 ? doc.amount(t.overdueAmount, t.currency) : copy.none}</Td>
                 </tr>
               ))}
             </tbody>
@@ -156,10 +159,10 @@ export function FamilyAccountStatementDocument({
                 {row ? (
                   <>
                     <Td>{row.currency}</Td>
-                    <Td right>{formatCurrency(row.budgeted, row.currency)}</Td>
-                    <Td right>{formatCurrency(row.convertedPaid, row.currency)}</Td>
+                    <Td right>{doc.amount(row.budgeted, row.currency)}</Td>
+                    <Td right>{doc.amount(row.convertedPaid, row.currency)}</Td>
                     <Td right strong>
-                      {balanceText(row)}
+                      {balanceText(row, doc)}
                     </Td>
                   </>
                 ) : (
