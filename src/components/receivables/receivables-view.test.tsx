@@ -13,6 +13,7 @@ import { ApiError } from '@/lib/api/client';
 import { notifyError } from '@/components/errors/notify';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { regionalFormat } from '@/lib/format/regional-format';
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -158,6 +159,21 @@ describe('ReceivablesView (DX-145)', () => {
     expect(screen.getByTestId('scope-marker')).toHaveTextContent('Sede principal');
     expect(screen.getByText('1 deudor')).toBeInTheDocument();
     expect(mockedAging).toHaveBeenCalledWith('tok', { page: 1 });
+  });
+
+  it('DX-354b (I1): «Antigüedad contada al …» sale con el formato de la sede (es-VE, de-DE, en-US) y «—» sin formato', async () => {
+    mockedAging.mockResolvedValue(page([row()]));
+    for (const [locale, hourCycle] of [['es-VE', 'h12'], ['de-DE', 'h23'], ['en-US', 'h12']] as const) {
+      jest.mocked(listLocations).mockResolvedValue([clinicLocation({ locale, hourCycle })]);
+      const { unmount } = render(<ReceivablesView token="tok" />);
+      const day = regionalFormat({ locale, hourCycle }).civilDate('2026-10-17');
+      expect(await screen.findByText(`Antigüedad contada al ${day}, en días del calendario de la sede.`)).toBeInTheDocument();
+      unmount();
+    }
+    jest.mocked(listLocations).mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    render(<ReceivablesView token="tok" />);
+    expect(await screen.findByText('Antigüedad contada al —, en días del calendario de la sede.')).toBeInTheDocument();
+    expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
   });
 
   it('resume los totales por tramo y moneda', async () => {
