@@ -382,8 +382,11 @@ known, `moneyWithCode`/`sedeMoney` (`src/lib/format/sede-number.ts`). No screen 
 («450,00 USD», «VES 1.234,50»), never a CLDR symbol: in a multi-currency product «$» or
 «US$» do not mean the same in every country. Decimals follow DX-340 (2, or 0 for a
 currency without minor units when the amount is whole); separators follow the locale.
-A view never calls `formatCurrency` (no location): it uses `sedeMoney`/`moneyWithCode`, and renders
-«—» while the location format loads (DX-522; `money-with-sede-guard.test.ts`, whose pending list only shrinks).
+A view never calls `formatCurrency` (no location): on a screen with a sede it paints through
+`useSedeStamp` (`stamp.money(amount, currency, locationId?)`) or, in `lib/**`, through the
+`stampPainters` it receives as a parameter; both end in `moneyWithCode` and render «—» while the
+location format loads (DX-522, DX-354b; `money-with-sede-guard.test.ts`, which has no pending
+list left: no file outside `lib/format/**` imports `formatCurrency`).
 
 **The Currency Text Rule (DX-517).** A clinic may say how it writes a currency it uses
 (Ajustes › Monedas, ADMIN only, audited): a map ISO code → text of 1–8 characters on one
@@ -405,7 +408,48 @@ Without a text, nothing changes: the code, exactly as before.
 - A pasted amount written with the clinic's text («Bs. 1.234,50») reads like the code.
 
 ### Dates and times
-No native `<input type="date">`, `type="time"` or `type="datetime-local"`: the browser paints
+**Whose clock paints it (DX-354b).** Every date, time and amount of the staff app is painted
+with the zone, the locale and the 12/24 h clock of **the sede of the data**, never the browser's
+and never a hand-composed `dd/mm/yyyy` or `HH:mm`:
+- **The sede of the data.** A record that carries a `locationId` (an appointment, a payment, a
+  cash shift, an expense, an implant, a prescription, a follow-up, an anamnesis request) is
+  painted with THAT sede, row by row: in «Todas las sedes» a Caracas appointment reads
+  «9:00 a. m.» and a Berlin one «15:00» in the same list. Inside one row the date, the time and
+  the amount always come from the same clock.
+- **The reference sede.** A record with no sede (a template, a policy, the clinical history, an
+  aggregated ledger) is painted with the sede of the screen: the active one, or the main one
+  (the oldest active) in «Todas las sedes».
+- **The painter.** `useSedeStamp(token, locationIds?)` (`src/lib/locations/sede-stamp.ts`) gives
+  `stamp.date`, `time`, `dateTime`, `civilDate` and `money`, each with an optional `locationId`;
+  `stamp.maybe.*` return `null` instead of «—» for a `DataList` `mobileCell` (a mobile cell is
+  omitted, never «—»). `lib/**` has no hooks: it receives `stampPainters(clock)` (or a
+  `civilDate` painter) as a parameter. A civil day (`YYYY-MM-DD`, a birth date, a due date) goes
+  through `civilDate` and never through a zone; an instant goes through `date`/`dateTime`.
+- **A missing format is «—» plus one notice.** If the sede is loading, failed, or has no
+  zone/locale/clock, the value is «—» and `<SedeStampNote stamp={stamp} />` explains it ONCE per
+  screen or modal (with «Reintentar», and «Configurar sede» only for ADMIN). While loading there
+  is «—» and no notice. A sentence whose date is incidental («Tienes hasta el …») leaves the date
+  out rather than ending in «—»; a sentence whose date is the subject keeps the «—». Never
+  another sede's format, never the browser's. A button or a message that is sent or announced
+  (WhatsApp follow-up, an `aria-label`) never contains «—»: it is disabled or loses the phrase.
+- **Screen readers.** The notice lives in a `role="status"` region that is mounted empty and
+  filled afterwards (`SedeStampNote`, `DocumentFormatNote active={missing}`: always mounted,
+  never inside a conditional; `sede-clock-guard` rule 5). A bare «—» in a table cell is wrapped
+  by `DataList` in `MissingValue`, which says «Sin dato» to a screen reader.
+- **«Today».** `sedeToday(timeZone)` with `useSedeTimeZone`, or `civilDateInZone(iso, timeZone)`
+  for the day of an instant. Near midnight the browser may be a day ahead of the sede (Tokyo is
+  13 h ahead of Caracas): form maxima, the week of the roster and «this month» use the sede's
+  day. Without a zone the date field is replaced by `SedeConfigError variant="field"`.
+- **No sede at all.** The platform console (`/admin`, Dentalix staff) writes instants as
+  `platformInstant(iso)`, ISO 8601 with its zone: `2026-11-03 14:05 UTC`. It may only be
+  imported from `components/platform/**`.
+- **Guards.** `sede-clock-guard` (nothing but the five neutral helpers is imported from
+  `lib/format/date`; no literal-locale `Intl`/`toLocale*`; no `fmt.money`; `platformInstant`
+  only in the console; `DocumentFormatNote` always mounted) and `hand-composed-time-guard` (no
+  local `Date` getter, no `padStart` on both sides of a `:` or a `/`) fail CI; neither has a
+  list of pending screens. Examples use Venezuela and USD/VES; nothing here is country-specific.
+
+**Native inputs.** No native `<input type="date">`, `type="time"` or `type="datetime-local"`: the browser paints
 them in ITS language, not the clinic's — a Spanish receptionist on an English Chrome sees
 `mm/dd/yyyy` and 04/05 changes month. In a clinical record that is a patient-safety bug. Use
 the primitives in `src/components/ui` (react-aria segmented fields); a jest guard
