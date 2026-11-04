@@ -42,6 +42,8 @@ interface CashAdjustmentModalProps {
   onOpenChange: (open: boolean) => void;
   token: string;
   sessionId: string;
+  /** La sede de la caja: la vista previa del importe usa SU formato. */
+  locationId: string;
   defaultCurrency: string;
   onCreated: (adjustment: CashAdjustment) => void;
 }
@@ -52,10 +54,11 @@ export function CashAdjustmentModal({
   onOpenChange,
   token,
   sessionId,
+  locationId,
   defaultCurrency,
   onCreated,
 }: CashAdjustmentModalProps) {
-  const stamp = useSedeStamp(token);
+  const stamp = useSedeStamp(token, [locationId]);
   const id = useId();
   const [sign, setSign] = useState<1 | -1>(-1);
   const [amount, setAmount] = useState('');
@@ -124,7 +127,7 @@ export function CashAdjustmentModal({
       <div className="grid gap-3 sm:grid-cols-3">
         <FormField htmlFor={`${id}-amount`} label={copy.amount} error={amountError}>
           <MoneyInput
-            money={stamp.money}
+            money={(amount, code) => stamp.money(amount, code, locationId)}
             id={`${id}-amount`}
             currency={currency}
             requirePositive

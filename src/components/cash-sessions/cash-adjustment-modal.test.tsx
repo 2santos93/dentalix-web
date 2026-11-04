@@ -1,8 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CashAdjustmentModal } from './cash-adjustment-modal';
 import { addCashAdjustment, type CashAdjustment } from '@/lib/cash-sessions/cash-sessions-api';
 import { ApiError } from '@/lib/api/client';
+import { listLocations } from '@/lib/locations/locations-api';
+import { STAMP_SEDES } from '@/lib/test/stamp';
+
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
   ...jest.requireActual('../../lib/cash-sessions/cash-sessions-api'),
@@ -33,7 +37,7 @@ const adjustment: CashAdjustment = {
   originalSession: null,
 };
 
-function renderModal() {
+function renderModal(locationId = 'sede-caracas') {
   const onCreated = jest.fn();
   render(
     <CashAdjustmentModal
@@ -41,6 +45,7 @@ function renderModal() {
       onOpenChange={() => undefined}
       token="tok"
       sessionId="cs-1"
+      locationId={locationId}
       defaultCurrency="VES"
       onCreated={onCreated}
     />,
@@ -51,7 +56,29 @@ function renderModal() {
 const submit = () => screen.getByRole('button', { name: 'Registrar ajuste' });
 
 describe('CashAdjustmentModal (DX-027, DX-252)', () => {
-  beforeEach(() => mockedAdd.mockReset());
+  beforeEach(() => {
+    mockedAdd.mockReset();
+    jest.mocked(listLocations).mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+  });
+
+  it('la vista previa del importe usa el formato de la sede de LA CAJA (DX-354b): Caracas, Berlín y Miami', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    try {
+      for (const [id, expected] of [
+        ['sede-caracas', 'VES 1.234,50'],
+        ['sede-berlin', '1.234,50 VES'],
+        ['sede-miami', 'VES 1,234.50'],
+      ] as const) {
+        const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+        renderModal(id);
+        await user.type(screen.getByLabelText('Importe'), '1234,5');
+        await waitFor(() => expect(document.body.textContent?.replace(/\s/g, ' ')).toContain(`Se guardará: ${expected}`), { timeout: 3000 });
+        cleanup();
+      }
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('exige un importe mayor que 0 y el motivo antes de llamar a la API', async () => {
     const user = userEvent.setup();

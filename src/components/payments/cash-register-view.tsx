@@ -652,6 +652,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                               paidOn: payment.paidOn,
                               patientName: payment.patient.fullName,
                               splitLines: payment.splitLines,
+                              fmt: stamp.fmtOf(payment.location.id),
                             }),
                         },
                       ]

@@ -48,6 +48,11 @@ export interface VoidPaymentTarget {
   patientName?: string;
   /** DX-390: formas de pago de su cobro dividido (se anulan juntas); `null`/ausente si es suelto. */
   splitLines?: number | null;
+  /**
+   * DX-354b (E1): el formato de la sede DEL ABONO (`stamp.fmtOf(location.id)`), con prioridad sobre el
+   * del gancho; `undefined` = el del gancho. En la caja de «Todas las sedes» cada abono es de la suya.
+   */
+  fmt?: RegionalFormat | null;
 }
 
 /**
@@ -56,7 +61,8 @@ export interface VoidPaymentTarget {
  * con otra sede activa). Importe con el código ISO y día con el orden de la
  * sede; sin él (cargando o sin formato), «—».
  */
-export function voidPaymentSubject(target: VoidPaymentTarget, fmt: RegionalFormat | null): string {
+export function voidPaymentSubject(target: VoidPaymentTarget, hookFmt: RegionalFormat | null): string {
+  const fmt = target.fmt !== undefined ? target.fmt : hookFmt;
   return [
     target.amount !== null && target.currency !== null
       ? sedeMoney(target.amount, target.currency, fmt)
@@ -73,7 +79,8 @@ export function voidPaymentSubject(target: VoidPaymentTarget, fmt: RegionalForma
  * recibo, que es lo que la API anula. Del cobro no se repite el importe de la
  * línea pulsada: no es lo que se anuló.
  */
-function voidedNotice(target: VoidPaymentTarget, fmt: RegionalFormat | null): string {
+function voidedNotice(target: VoidPaymentTarget, hookFmt: RegionalFormat | null): string {
+  const fmt = target.fmt !== undefined ? target.fmt : hookFmt;
   if (target.splitLines && target.splitLines > 1) {
     const rest = [sedeCivilDate(target.paidOn, fmt), target.patientName].filter(Boolean).join(' · ');
     return copy.voidedSplit(target.splitLines, rest);

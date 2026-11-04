@@ -209,6 +209,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
           onOpenChange={(open) => !open && setModal(null)}
           token={token}
           sessionId={session.id}
+          locationId={session.location.id}
           defaultCurrency={currency}
           onCreated={() => done(copy.adjusted)}
         />

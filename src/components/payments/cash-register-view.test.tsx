@@ -1174,3 +1174,49 @@ describe('cada abono con el formato de su sede, también en «Todas las sedes» 
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
   });
 });
+
+describe('anular un abono de otra sede en «Todas las sedes» (DX-354b, E1)', () => {
+  const berlin: CashPayment = {
+    ...anaCash,
+    id: 'pay-berlin-void',
+    amount: 120,
+    currency: 'EUR',
+    collectedAmount: 120,
+    paidOn: '2026-10-20',
+    registeredOn: '2026-10-20',
+    location: { id: 'sede-berlin', name: 'Berlín' },
+    patient: { id: 'pat-b', fullName: 'Greta Weber' },
+  };
+
+  it('el diálogo y el aviso usan el formato de la sede del abono (Berlín), no el de la pantalla (Caracas)', async () => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+    mockedList.mockResolvedValue(response({ items: [berlin], total: 1 }));
+    mockedVoid.mockResolvedValue(undefined);
+    render(<CashRegisterView token="tok" />);
+    await screen.findByRole('table', { name: /abonos/i });
+    await pickRowAction(user, /greta weber/, 'Anular');
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    const text = (dialog.textContent ?? '').replace(/\s/g, ' ');
+    expect(text).toContain('120,00 EUR');
+    expect(text).toContain('20.10.2026');
+    expect(text).not.toContain('EUR 120,00');
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste('Cobro registrado dos veces');
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const notice = await screen.findByText(/Abono anulado/i);
+    expect((notice.textContent ?? '').replace(/\s/g, ' ')).toContain('120,00 EUR · 20.10.2026');
+  });
+
+  it('un abono de una sede que no está en la lista se nombra con «—», no con el formato de la pantalla', async () => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+    mockedList.mockResolvedValue(response({ items: [berlin], total: 1 }));
+    render(<CashRegisterView token="tok" />);
+    await screen.findByRole('table', { name: /abonos/i });
+    await pickRowAction(user, /greta weber/, 'Anular');
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(dialog.textContent).not.toMatch(/120/);
+  });
+});
