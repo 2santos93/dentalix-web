@@ -177,6 +177,18 @@ const MONEY_WITH_CODE = [
   'components/treatment-plans/payment-plan-section.tsx',
   'components/treatment-plans/price-quote-line.tsx',
   'components/discounts/bulk-discount-modal.tsx',
+  // DX-394: el resto de pantallas del plan, «Imputar abono», «Plan de cuotas» y el estado de cuenta.
+  'components/treatment-plans/plan-payments-list.tsx',
+  'components/treatment-plans/plan-payment-form-modal.tsx',
+  'components/treatment-plans/plan-options-comparison.tsx',
+  'components/treatment-plans/accept-plan-modal.tsx',
+  'components/payments/reallocate-payment-modal.tsx',
+  'components/payments/split-payment-lines.tsx',
+  'components/payments/payment-adjustments-preview.tsx',
+  'components/payments/billable-plan-field.tsx',
+  'components/account-statement/account-statement-view.tsx',
+  'components/account-statement/statement-payment-plan-modal.tsx',
+  'components/account-statement/family-account-statement-section.tsx',
 ];
 
 /** Los nombres que el fichero importa de `@/lib/format/currency`. */
