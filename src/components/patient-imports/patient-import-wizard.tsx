@@ -31,11 +31,10 @@ import {
 import { saveCsv } from '@/lib/files/save-csv';
 import { BalancesStep } from './balances-step';
 import { ColumnMappingFields } from './column-mapping-fields';
-import { formatCurrency } from '@/lib/format/currency';
 import { ImportIssuesTable } from './import-issues-table';
 import { ImportProgress } from './import-progress';
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { sedeNumber } from '@/lib/format/sede-number';
+import { sedeMoney, sedeNumber } from '@/lib/format/sede-number';
 import {
   documentText,
   documentTypeName,
@@ -542,7 +541,7 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
                 {wizardCopy.balancesNote(
                   dryRun.balances.preparedCount,
                   n(dryRun.balances.preparedCount),
-                  dryRun.balances.validTotals.map((t) => formatCurrency(t.amount, t.currency)).join(' · '),
+                  dryRun.balances.validTotals.map((t) => sedeMoney(t.amount, t.currency, fmt)).join(' · '),
                 )}
               </li>
             ) : null}
