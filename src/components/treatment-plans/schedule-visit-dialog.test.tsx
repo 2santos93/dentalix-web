@@ -74,7 +74,7 @@ beforeEach(() => {
       openings: [
         { start: "2027-04-01T09:00:00Z", end: "2027-04-01T09:30:00Z" },
       ],
-      truncated: false,
+      truncated: false, defaultHours: false,
     } as Awaited<ReturnType<typeof findOpenings>>);
 });
 function mount() {

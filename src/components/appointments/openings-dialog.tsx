@@ -28,6 +28,7 @@ import { isCivilDay } from '@/lib/time/civil-day';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/shared/form-field';
 import { EmptyState } from '@/components/shared/empty-state';
+import { defaultHoursNote } from '@/lib/locations/default-business-hours';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { civilDateLabel } from '@/lib/format/date';
@@ -138,6 +139,8 @@ export function OpeningsDialog({
   const [reloadKey, setReloadKey] = useState(0);
   const [openings, setOpenings] = useState<Opening[]>([]);
   const [truncated, setTruncated] = useState(false);
+  // DX-533: la sede no tiene horario y se buscó en el de alta.
+  const [defaultHours, setDefaultHours] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bookingStart, setBookingStart] = useState<string | null>(null);
@@ -179,6 +182,7 @@ export function OpeningsDialog({
         if (cancelled) return;
         setOpenings(result.openings);
         setTruncated(result.truncated);
+        setDefaultHours(result.defaultHours);
         setLoadError(null);
       } catch (err) {
         if (!cancelled) setLoadError(apiErrorMessage(err, copy.loadError));
@@ -314,7 +318,11 @@ export function OpeningsDialog({
               className="py-10"
             />
           ) : groups.length === 0 ? (
-            <EmptyState role="status" title={copy.empty} description={copy.emptyHint} />
+            <EmptyState
+              role="status"
+              title={copy.empty}
+              description={defaultHours ? `${copy.emptyHint} ${defaultHoursNote(clock.fmt)}` : copy.emptyHint}
+            />
           ) : (
             <>
               {groups.map((group) => (
@@ -351,6 +359,11 @@ export function OpeningsDialog({
                 </div>
               ))}
               {truncated ? <p className="text-xs text-muted">{copy.truncated}</p> : null}
+              {defaultHours ? (
+                <p data-testid="openings-default-hours" className="text-xs text-muted">
+                  {defaultHoursNote(clock.fmt)}
+                </p>
+              ) : null}
             </>
           )}
         </section>

@@ -26,8 +26,9 @@ export function canOfferNextOpening(appointment: { overbooked?: boolean | null }
  * DX-509-bis: el primer hueco libre del profesional destino, en la sede de la
  * cita, que empieza a la hora pedida o después y en el que cabe su duración
  * (con las otras citas del paciente; la propia no ocupa). Con `chairId`
- * (DX-509-ter), además libre ese sillón. `null` si no hay ninguno en
- * `NEXT_OPENING_DAYS` días.
+ * (DX-509-ter), además libre ese sillón. `target: null` si no hay ninguno en
+ * `NEXT_OPENING_DAYS` días; `defaultHours` (DX-533): la sede no tiene horario
+ * y se buscó en el de alta.
  */
 export async function findNextOpening(
   token: string,
@@ -35,10 +36,10 @@ export async function findNextOpening(
   target: MoveTarget,
   timeZone: string,
   chairId?: string | null,
-): Promise<MoveTarget | null> {
+): Promise<{ target: MoveTarget | null; defaultHours: boolean }> {
   const duration = new Date(appointment.end).getTime() - new Date(appointment.start).getTime();
   const from = wallDay(target.start, timeZone);
-  const { openings } = await findOpenings(token, {
+  const { openings, defaultHours } = await findOpenings(token, {
     providerId: target.providerId,
     locationId: appointment.locationId,
     from,
@@ -53,11 +54,14 @@ export async function findNextOpening(
     const start = Math.max(new Date(opening.start).getTime(), wanted);
     if (new Date(opening.end).getTime() - start >= duration) {
       return {
-        start: new Date(start).toISOString(),
-        end: new Date(start + duration).toISOString(),
-        providerId: target.providerId,
+        target: {
+          start: new Date(start).toISOString(),
+          end: new Date(start + duration).toISOString(),
+          providerId: target.providerId,
+        },
+        defaultHours,
       };
     }
   }
-  return null;
+  return { target: null, defaultHours };
 }

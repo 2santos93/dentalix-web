@@ -27,6 +27,7 @@ import { isCivilDay } from '@/lib/time/civil-day';
 import type { Chair } from '@/lib/chairs/chairs-api';
 import { chairDisplayName } from '@/lib/chairs/chair-columns';
 import { endSentence } from '@/lib/format/text';
+import { defaultHoursNote } from '@/lib/locations/default-business-hours';
 
 const copy = {
   title: 'Mover a…',
@@ -67,8 +68,8 @@ const copy = {
 /** `chair`: el nombre del sillón con el que se buscó (DX-492-bis); sin él, null. */
 type NextOpening =
   | { status: 'searching' }
-  | { status: 'found'; target: MoveTarget; chair: string | null }
-  | { status: 'none'; chair: string | null }
+  | { status: 'found'; target: MoveTarget; chair: string | null; defaultHours: boolean }
+  | { status: 'none'; chair: string | null; defaultHours: boolean }
   | { status: 'error' };
 
 interface MoveAppointmentDialogProps {
@@ -149,9 +150,11 @@ export function MoveAppointmentDialog({
     const searchChairId = chairId && isActiveChair(chairId) ? chairId : null;
     const chair = chairName(searchChairId ?? '');
     findNextOpening(token, appointment, target, timeZone, searchChairId).then(
-      (found) => {
+      ({ target: found, defaultHours }) => {
         if (search.current === id) {
-          setNextOpening(found ? { status: 'found', target: found, chair } : { status: 'none', chair });
+          setNextOpening(
+            found ? { status: 'found', target: found, chair, defaultHours } : { status: 'none', chair, defaultHours },
+          );
         }
       },
       () => {
@@ -275,6 +278,12 @@ export function MoveAppointmentDialog({
               : nextOpening.status === 'none'
                 ? copy.noNextOpening(nextOpening.chair)
                 : copy.nextOpeningError}
+          {/* DX-533: en una sede sin horario solo se proponen huecos del de alta. */}
+          {(nextOpening.status === 'found' || nextOpening.status === 'none') && nextOpening.defaultHours ? (
+            <span data-testid="move-default-hours" className="mt-1 block text-xs">
+              {defaultHoursNote(fmt)}
+            </span>
+          ) : null}
         </Callout>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">

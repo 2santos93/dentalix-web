@@ -16,6 +16,7 @@ const openings = (list: [string, string][]) => ({
   timeZone: 'America/Caracas',
   durationMinutes: 30,
   truncated: false,
+  defaultHours: false,
   openings: list.map(([start, end]) => ({ start, end })),
 });
 
@@ -51,9 +52,8 @@ describe('next-opening (DX-509-bis)', () => {
     // Destino 11/11 15:10 UTC (11:10 en Caracas).
     const target = { start: '2026-11-11T15:10:00.000Z', end: '2026-11-11T15:40:00.000Z', providerId: 'prov-2' };
     await expect(findNextOpening('tok', appointment, target, 'America/Caracas')).resolves.toEqual({
-      start: '2026-11-11T16:05:00.000Z',
-      end: '2026-11-11T16:35:00.000Z',
-      providerId: 'prov-2',
+      target: { start: '2026-11-11T16:05:00.000Z', end: '2026-11-11T16:35:00.000Z', providerId: 'prov-2' },
+      defaultHours: false,
     });
     expect(mocked).toHaveBeenCalledWith('tok', {
       providerId: 'prov-2',
@@ -79,9 +79,21 @@ describe('next-opening (DX-509-bis)', () => {
     mocked.mockResolvedValueOnce(openings([['2026-11-11T14:00:00.000Z', '2026-11-11T17:00:00.000Z']]));
     const target = { start: '2026-11-11T15:10:00.000Z', end: '2026-11-11T15:40:00.000Z', providerId: 'p' };
     await expect(findNextOpening('tok', appointment, target, 'UTC')).resolves.toMatchObject({
-      start: '2026-11-11T15:10:00.000Z',
+      target: { start: '2026-11-11T15:10:00.000Z' },
     });
     mocked.mockResolvedValueOnce(openings([]));
-    await expect(findNextOpening('tok', appointment, target, 'UTC')).resolves.toBeNull();
+    await expect(findNextOpening('tok', appointment, target, 'UTC')).resolves.toEqual({
+      target: null,
+      defaultHours: false,
+    });
+  });
+
+  it('DX-533: dice si la sede no tiene horario y se buscó en el de alta', async () => {
+    mocked.mockResolvedValueOnce({ ...openings([]), defaultHours: true });
+    const target = { start: '2026-11-11T23:00:00.000Z', end: '2026-11-11T23:30:00.000Z', providerId: 'p' };
+    await expect(findNextOpening('tok', appointment, target, 'UTC')).resolves.toEqual({
+      target: null,
+      defaultHours: true,
+    });
   });
 });
