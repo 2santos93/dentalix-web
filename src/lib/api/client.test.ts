@@ -19,11 +19,14 @@ import {
   ApiError,
   bootstrapSession,
   fileNameFromDisposition,
+  isInactiveLocationError,
+  isStaleLocationError,
   NetworkError,
 } from './client';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import {
   getActiveLocationId,
+  onLocationChange,
   setActiveLocationId,
 } from '@/lib/locations/location-store';
 
@@ -1004,5 +1007,80 @@ describe('apiFetch — fallo de red (DX-063)', () => {
     const timeout = new DOMException('timed out', 'TimeoutError');
     global.fetch = jest.fn().mockRejectedValue(timeout) as unknown as typeof fetch;
     await expect(apiFetch('/x')).rejects.toBe(timeout);
+  });
+});
+
+// SEC-014: una pestaña abierta mientras un ADMIN desactiva su sede. La API
+// rechaza sus escrituras con 400 LOCATION_INACTIVE y nombra la sede: si es la
+// de la cabecera, se suelta (las pantallas recargan) pero la escritura NO se
+// repite sin cabecera, porque caería en otra sede sin que nadie la eligiera.
+describe('apiFetch — sede desactivada (SEC-014)', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+    window.localStorage.clear();
+  });
+
+  const inactive = (locationId: string) => ({
+    statusCode: 400,
+    error: 'Bad Request',
+    code: 'LOCATION_INACTIVE',
+    message:
+      'Esta sede está desactivada: puedes consultar su historial, pero no registrar cambios en ella. Elige una sede activa.',
+    locationId,
+  });
+
+  it('la de la cabecera: suelta la sede, avisa a las pantallas y devuelve el error sin repetir la escritura', async () => {
+    setActiveLocationId('sede-oeste');
+    const avisos = jest.fn();
+    const off = onLocationChange(avisos);
+    const spy = jest.fn(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => inactive('sede-oeste'),
+    }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(
+      apiFetch('/inventory/items', { method: 'POST', body: { name: 'Guantes' }, token: 'T' }),
+    ).rejects.toMatchObject({
+      status: 400,
+      code: 'LOCATION_INACTIVE',
+      message: expect.stringContaining('Esta sede está desactivada'),
+    });
+    off();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getActiveLocationId()).toBeNull();
+    expect(avisos).toHaveBeenCalled();
+  });
+
+  it('la de un dato del cuerpo (otra sede): la sede activa se queda y no se reintenta', async () => {
+    setActiveLocationId('sede-centro');
+    const spy = jest.fn(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => inactive('sede-oeste'),
+    }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(
+      apiFetch('/chairs', { method: 'POST', body: { locationId: 'sede-oeste' }, token: 'T' }),
+    ).rejects.toMatchObject({ status: 400, code: 'LOCATION_INACTIVE' });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getActiveLocationId()).toBe('sede-centro');
+  });
+
+  it('isStaleLocationError lo reconoce solo con la sede enviada; isInactiveLocationError lo separa de los que sí se reintentan', () => {
+    const err = new ApiError(400, 'Esta sede está desactivada', {
+      code: 'LOCATION_INACTIVE',
+      locationId: 'sede-oeste',
+    });
+    expect(isStaleLocationError(err, 'sede-oeste', 'T')).toBe(true);
+    expect(isInactiveLocationError(err, 'sede-oeste')).toBe(true);
+    expect(isStaleLocationError(err, 'sede-centro', 'T')).toBe(false);
+    expect(isStaleLocationError(err, null, 'T')).toBe(false);
+    const unknown = new ApiError(400, 'Unknown location for this clinic');
+    expect(isStaleLocationError(unknown, 'sede-oeste', 'T')).toBe(true);
+    expect(isInactiveLocationError(unknown, 'sede-oeste')).toBe(false);
   });
 });
