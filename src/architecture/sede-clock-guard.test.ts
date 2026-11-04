@@ -41,7 +41,6 @@ const SEDELESS_HELPERS = new Set([
   'formatCivilDate',
 ]);
 
-const ZONE_24H = 'Ya usa la zona de la sede, pero con 24 h fijas: falta pasar a fmt.dateTime/fmt.time.';
 const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del navegador: pendiente de migrar a la sede.';
 
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
