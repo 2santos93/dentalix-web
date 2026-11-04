@@ -114,6 +114,7 @@ const copy = {
       : endSentence(`Fuera del horario de atención. Ese día se atiende: ${ranges}`),
   hoursHint: (ranges: string) => `Horario de ese día: ${ranges}`,
   hoursHintClosed: 'La sede no atiende ese día.',
+  hoursUnavailable: 'No pudimos leer el horario: la agenda lo comprobará al guardar.',
   // DX-233: aviso no bloqueante (la API decide: aviso o 409 en modo estricto).
   providerOffSchedule: (name: string, ranges: string) =>
     ranges === ''
@@ -258,6 +259,7 @@ export function AppointmentForm({
   // Horario de atención de la sede activa: `null` = sin configurar => sin
   // restricción (misma semántica que el backend).
   const [hours, setHours] = useState<BusinessHours | null>(null);
+  const [hoursFailed, setHoursFailed] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const providerDay = useProviderDay(token, providerId, date, locationId);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -332,13 +334,18 @@ export function AppointmentForm({
       setStaffLoading(true);
       try {
         const res = await listStaff(token);
-        // Best-effort: si el horario no se puede leer, no se bloquea el
-        // formulario — el backend sigue validando y es la autoridad.
+        // Si el horario no se puede leer, no se bloquea el formulario — el
+        // backend sigue validando y es la autoridad — pero se dice (DX-116).
         void (locationId ? getLocationSchedule(token,locationId) : getLocationSchedule(token))
           .then((h) => {
-            if (!cancelled) setHours(h);
+            if (!cancelled) {
+              setHours(h);
+              setHoursFailed(false);
+            }
           })
-          .catch(() => {});
+          .catch(() => {
+            if (!cancelled) setHoursFailed(true);
+          });
         if (cancelled) return;
         setStaff(res);
         setStaffError(false);
@@ -854,6 +861,11 @@ export function AppointmentForm({
               {describeDay(civilWeekday(date), hours, clock.fmt) === ''
                 ? copy.hoursHintClosed
                 : copy.hoursHint(describeDay(civilWeekday(date), hours, clock.fmt))}
+            </p>
+          )}
+          {hoursFailed && (
+            <p role="status" className="text-xs text-muted">
+              {copy.hoursUnavailable}
             </p>
           )}
         </div>

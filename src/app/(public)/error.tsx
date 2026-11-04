@@ -1,11 +1,16 @@
 'use client';
 
+import { useEffect } from 'react';
+import { reportBoundaryError } from '@/components/errors/report-boundary-error';
 import { PublicNotice } from '@/components/shared/public-page';
 import { Button } from '@/components/ui/button';
 import { CloudOff } from 'lucide-react';
 
 /** Public segment boundary. Never expose the thrown value or token in the UI. */
-export default function PublicError({ retry }: { error: unknown; retry: () => void }) {
+export default function PublicError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
+  useEffect(() => {
+    reportBoundaryError(error);
+  }, [error]);
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-4 px-4 py-8">
       <PublicNotice
