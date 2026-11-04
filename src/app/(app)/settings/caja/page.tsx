@@ -9,6 +9,8 @@ import { CashSettingsForm } from '@/components/cash-sessions/cash-settings-form'
 import { PaymentMethodsManager } from '@/components/payment-methods/payment-methods-manager';
 import { canManagePaymentMethods } from '@/lib/payments/payment-methods-api';
 import { ReceiptSettingsForm } from '@/components/payments/receipt-settings-form';
+import { CreditPolicyForm } from '@/components/patient-credit/credit-policy-form';
+import { canManageCreditPolicy } from '@/lib/patient-credit/patient-credit-api';
 import { canManageReceiptSettings } from '@/lib/payments/receipt-settings-api';
 
 const copy = {
@@ -20,7 +22,7 @@ const copy = {
   checkingSession: 'Verificando sesión…',
 };
 
-/** Ajustes de caja de la clínica (DX-027), sus medios de pago (DX-377) y su recibo (DX-515). Solo ADMIN. */
+/** Ajustes de caja de la clínica (DX-027), sus medios de pago (DX-377) su recibo (DX-515) y el tope de recepción del saldo a favor (DX-432). Solo ADMIN. */
 export default function CashSettingsPage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -49,6 +51,8 @@ export default function CashSettingsPage() {
       <PaymentMethodsManager token={accessToken} allowed={canManagePaymentMethods(getTokenRole(accessToken))} />
       {/* DX-515: título y leyenda del recibo de caja (solo ADMIN). */}
       {canManageReceiptSettings(getTokenRole(accessToken)) ? <ReceiptSettingsForm token={accessToken} /> : null}
+      {/* DX-432: tope de recepción del saldo a favor (solo ADMIN). */}
+      {canManageCreditPolicy(getTokenRole(accessToken)) ? <CreditPolicyForm token={accessToken} /> : null}
     </SettingsPage>
   );
 }

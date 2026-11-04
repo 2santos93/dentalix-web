@@ -271,3 +271,27 @@ describe('CreditBalanceSection con el formato de la sede (DX-354b)', () => {
     expect(norm(screen.getByTestId('credit-row').textContent)).not.toContain('300');
   });
 });
+
+it('DX-432: con el tope de recepción en 0 las dos acciones quedan deshabilitadas con su explicación y no abren nada', async () => {
+  const user = userEvent.setup();
+  render(
+    <CreditBalanceSection
+      token="tok"
+      statement={vesCredit()}
+      planName={planName}
+      canAct
+      actBlockedReason="Recepción no puede traspasar ni devolver saldo a favor en esta clínica: pídeselo a administración."
+      onTransferred={jest.fn()}
+      onRefunded={jest.fn()}
+    />,
+  );
+  await user.click(screen.getByRole('button', { name: /^Acciones de/ }));
+  const menu = await screen.findByRole('menu');
+  for (const name of [/Aplicar a otro plan/, /Devolver/]) {
+    const item = within(menu).getByRole('menuitem', { name });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveAccessibleDescription(/pídeselo a administración/);
+    await user.click(item);
+  }
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});

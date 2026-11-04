@@ -16,6 +16,13 @@ export interface RowAction {
   onSelect: () => void;
   icon?: React.ReactNode;
   disabled?: boolean;
+  /**
+   * DX-432: la acción existe pero no se puede ahora, y el porqué se lee sin
+   * pasar el ratón: una línea bajo la etiqueta, ligada como descripción
+   * accesible. Sigue enfocable (un `disabled` de Radix la saca del recorrido
+   * con teclado) y no hace nada al elegirla: el menú se queda abierto.
+   */
+  disabledReason?: string;
   /** Quita o inutiliza algo. Se tinta en rojo solo al enfocarlo. */
   destructive?: boolean;
   /** Traza una línea encima de este ítem: separa lo que edita de lo que quita. */
@@ -53,6 +60,7 @@ export function RowActions({
 }: RowActionsProps) {
   const trigger = React.useRef<HTMLButtonElement>(null);
   const pending = React.useRef<(() => void) | null>(null);
+  const reasonId = React.useId();
 
   // La acción elegida corre DESPUÉS de que el menú se cierre y devuelva el foco
   // a su «⋯»: si abre un Dialog, el diálogo recuerda el «⋯» (no la opción, que
@@ -103,18 +111,36 @@ export function RowActions({
         {actions.map((action, i) => (
           <React.Fragment key={action.label}>
             {action.separatorBefore && i > 0 ? <DropdownMenuSeparator /> : null}
-            <DropdownMenuItem
-              disabled={action.disabled}
-              destructive={action.destructive}
-              onSelect={() => {
-                pending.current = action.onSelect;
-                // Red de seguridad: si el menú no avisa del cierre, corre igual.
-                window.setTimeout(runPending, 0);
-              }}
-            >
-              {action.icon}
-              {action.label}
-            </DropdownMenuItem>
+            {action.disabledReason ? (
+              <DropdownMenuItem
+                aria-disabled="true"
+                aria-describedby={`${reasonId}-${i}`}
+                destructive={action.destructive}
+                className="items-start opacity-70"
+                onSelect={(event) => event.preventDefault()}
+              >
+                {action.icon}
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span>{action.label}</span>
+                  <span id={`${reasonId}-${i}`} className="t-caption max-w-64 whitespace-normal text-muted">
+                    {action.disabledReason}
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                disabled={action.disabled}
+                destructive={action.destructive}
+                onSelect={() => {
+                  pending.current = action.onSelect;
+                  // Red de seguridad: si el menú no avisa del cierre, corre igual.
+                  window.setTimeout(runPending, 0);
+                }}
+              >
+                {action.icon}
+                {action.label}
+              </DropdownMenuItem>
+            )}
           </React.Fragment>
         ))}
       </DropdownMenuContent>

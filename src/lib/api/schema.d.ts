@@ -14410,6 +14410,8 @@ export interface components {
             createdById: string | null;
             /** @description Si quien consulta puede anular este abono: ADMIN cualquiera activo; RECEPTION solo los suyos registrados el mismo día (calendario de la sede del abono). `false` si ya está anulado. Solo orienta a la interfaz: `DELETE /payments/:id` vuelve a aplicar la regla. */
             canVoid: boolean;
+            /** @description DX-432: por qué este abono no se anula aunque su rol pueda (es referencia de una devolución, que no se deshace), con el texto del 409 de `DELETE /payments/:id`. `null` si nada lo impide. La interfaz lo pinta como «Anular» deshabilitado con esta explicación. */
+            voidBlockedReason: string | null;
             /** @description Abono anulado: se lista pero no suma. */
             voided: boolean;
             /** Format: date-time */
@@ -14882,7 +14884,7 @@ export interface components {
             /** @description DX-354: zona, locale y reloj de la sede del comprobante. null si le falta algo: el comprobante se lee igual y la web pinta «—». */
             regional: components["schemas"]["DocumentRegionalDto"] | null;
         };
-        CreditTransferDto: {
+        CreditTransferMovementDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -14900,9 +14902,11 @@ export interface components {
             createdById: string;
             /** Format: date-time */
             createdAt: string;
+            /** @description DX-432: nombre de quien traspasó; `null` si ya no es (ni fue) miembro de la clínica. */
+            createdByName: string | null;
         };
         PatientCreditMovementsDto: {
-            transfers: components["schemas"]["CreditTransferDto"][];
+            transfers: components["schemas"]["CreditTransferMovementDto"][];
             refunds: components["schemas"]["CreditRefundDto"][];
         };
         CreditPolicyDto: {

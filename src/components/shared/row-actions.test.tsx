@@ -120,4 +120,34 @@ describe('RowActions', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
   });
+
+  it('DX-432: una acción con disabledReason no corre, sigue enfocable y dice por qué (accesible)', async () => {
+    const onSelect = jest.fn();
+    const user = setupUser();
+    render(
+      <RowActions
+        label="Acciones de X"
+        actions={[
+          { label: 'Recibo', onSelect: jest.fn() },
+          { label: 'Anular', onSelect, destructive: true, disabledReason: 'Es referencia de una devolución.' },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /acciones de x/i }));
+    const item = await screen.findByRole('menuitem', { name: /Anular/ });
+    // No se rinde como «disabled» de Radix (saldría del orden de foco): aria-disabled y descripción.
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).not.toHaveAttribute('data-disabled');
+    expect(item).toHaveAccessibleDescription('Es referencia de una devolución.');
+    expect(screen.getByText('Es referencia de una devolución.')).toBeVisible();
+
+    // Alcanzable con el teclado y sin efecto: el menú se queda abierto con la explicación.
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(item).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.click(item);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
 });
