@@ -137,8 +137,9 @@ describe('FormModal touchTargets (DX-394)', () => {
     // Todo botón del modal (Cancelar, Guardar, los de dentro) con altura mínima de 44 px bajo `sm`.
     expect(dialog.className).toContain('max-sm:[&_button]:min-h-11');
     expect(screen.getByRole('button', { name: 'Cerrar' }).className).toContain('max-sm:size-11');
-    // Sin prefijo `max-sm:` no hay tamaño táctil: el aspecto de escritorio es el de siempre.
-    expect(screen.getByRole('button', { name: 'Cerrar' }).className).toContain('p-1');
+    // El tamaño táctil va siempre tras `max-sm:`: ninguna clase de alto/ancho de 44 px sin prefijo (escritorio intacto).
+    const unprefixed = screen.getByRole('button', { name: 'Cerrar' }).className.split(/\s+/).filter((c) => /^(size|h|w|min-h)-11$/.test(c));
+    expect(unprefixed).toEqual([]);
   });
 
   it('sin touchTargets no se fuerza la altura de los botones', () => {

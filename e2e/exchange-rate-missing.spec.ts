@@ -196,15 +196,19 @@ for (const viewport of VIEWPORTS) {
     await panel.getByRole('button', { name: 'Registrar abono' }).first().click();
     const modal = page.getByRole('dialog', { name: 'Registrar abono' });
     await expect(modal).toBeVisible();
+    // Tras la animación de apertura (escala .98 → 1) el sondeo ve la medida final. A 1440 la X es de 24 px por
+    // diseño: solo se mide a 390 (DX-395); los botones del pie, siempre.
     const targets = [
-      modal.getByRole('button', { name: 'Cerrar' }),
       modal.getByRole('button', { name: 'Cancelar' }),
       modal.getByRole('button', { name: 'Registrar abono' }),
+      ...(viewport.width === 390 ? [modal.getByRole('button', { name: 'Cerrar' })] : []),
     ];
+    const minHeight = viewport.width === 390 ? 44 : 32;
     for (const target of targets) {
-      const box = await target.boundingBox();
-      expect(box?.height ?? 0, 'alto del botón').toBeGreaterThanOrEqual(viewport.width === 390 ? 44 : 32);
-      if (viewport.width === 390) expect(box?.width ?? 0, 'ancho del botón').toBeGreaterThanOrEqual(44);
+      await expect.poll(async () => (await target.boundingBox())?.height ?? 0, { message: 'alto del botón' }).toBeGreaterThanOrEqual(minHeight);
+      if (viewport.width === 390) {
+        await expect.poll(async () => (await target.boundingBox())?.width ?? 0, { message: 'ancho del botón' }).toBeGreaterThanOrEqual(44);
+      }
     }
     await modal.getByRole('button', { name: 'Cerrar' }).click();
     await expect(modal).toHaveCount(0);

@@ -71,6 +71,7 @@ function rateDays(payments: PaymentWithoutRate[], settings: ExchangeRateSettings
  */
 export function WithoutRateNotice({ token, payments }: { token: string; payments: PaymentWithoutRate[] }) {
   const fmt = readyFormat(useSedeFormat(token));
+  // `PaymentWithoutRateDto` no trae sede: los abonos son del plan que se ve en la pantalla, así que «hoy» es el de la sede de la pantalla.
   const clock = readyClock(useSedeClock(token));
   const canRegister = canManageExchangeRates(getTokenRole(token));
   const settings = useExchangeRateSettings(token, canRegister && payments.length > 0);
