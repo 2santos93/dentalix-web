@@ -23,44 +23,16 @@ import ts from 'typescript';
 const SRC = join(__dirname, '..');
 const CURRENCY_MODULE = '@/lib/format/currency';
 
-const FLOW = 'Diálogo o ayudante compartido con pantallas aún sin migrar: pasa con ellas, con el `money` inyectado.';
-const OTHER = 'Pantalla fuera de las cinco superficies de DX-522: pendiente de migrar a sedeMoney.';
-const LIB_FLOW = 'Ayudante de lib/ con el `money` inyectado y `formatCurrency` por defecto: se migra con sus pantallas (DX-354b).';
 
 /**
  * Aserción del máximo (DX-354b, M2): nadie añade entradas a `PENDING` aunque el
  * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
  * cierre, `PENDING` desaparece.
  */
-const MAX_PENDING = 24;
+const MAX_PENDING = 0;
 
 /** Ficheros que aún importan `formatCurrency`. Solo puede encoger. */
-const PENDING: Readonly<Record<string, string>> = {
-  'components/appointments/cancellation-fee-panel.tsx': OTHER,
-  'components/catalog/catalog-view.tsx': OTHER,
-  'components/collections/patient-collections-section.tsx': OTHER,
-  'components/currency-texts/currency-texts-form.tsx': OTHER,
-  'components/dashboard/period-results-section.tsx': OTHER,
-  'components/expenses/expense-detail-modal.tsx': OTHER,
-  'components/expenses/expense-form-modal.tsx': OTHER,
-  'components/expenses/expense-payment-modal.tsx': OTHER,
-  'components/locations/cancellation-policy-settings.tsx': OTHER,
-  'components/patient-credit/credit-balance-section.tsx': OTHER,
-  'components/patient-credit/credit-refund-modal.tsx': OTHER,
-  'components/patient-credit/credit-transfer-modal.tsx': OTHER,
-  'components/patient-imports/balances-step.tsx': OTHER,
-  'components/patient-imports/import-progress.tsx': OTHER,
-  'components/patient-imports/patient-import-wizard.tsx': OTHER,
-  'components/payment-plans/create-payment-plan-modal.tsx': FLOW,
-  'components/payments/billable-plan-field.tsx': FLOW,
-  'components/payments/payment-adjustments-preview.tsx': FLOW,
-  'components/payments/reallocate-payment-modal.tsx': FLOW,
-  'components/receivables/aging-summary.tsx': OTHER,
-  'components/receivables/debtor-parts.tsx': OTHER,
-  'components/shared/money-input.tsx': FLOW,
-  'lib/payments/billable-plans-api.ts': LIB_FLOW,
-  'lib/payments/payment-adjustments.ts': LIB_FLOW,
-};
+const PENDING: Readonly<Record<string, string>> = {};
 
 /**
  * DX-354: documentos y ayudantes que ya pintan sus importes con `moneyWithCode`
@@ -83,6 +55,31 @@ const MIGRATED = [
   'lib/cash-sessions/presentation.ts',
   'lib/treatment-plans/list-price.ts',
   'components/payments/payment-receipt-document.tsx',
+  // DX-354b W2: caja, cobros, cartera, gastos, saldo a favor, catálogo e importaciones con el `money` de la sede.
+  'components/appointments/cancellation-fee-panel.tsx',
+  'components/catalog/catalog-view.tsx',
+  'components/collections/patient-collections-section.tsx',
+  'components/currency-texts/currency-texts-form.tsx',
+  'components/dashboard/period-results-section.tsx',
+  'components/expenses/expense-detail-modal.tsx',
+  'components/expenses/expense-form-modal.tsx',
+  'components/expenses/expense-payment-modal.tsx',
+  'components/locations/cancellation-policy-settings.tsx',
+  'components/patient-credit/credit-balance-section.tsx',
+  'components/patient-credit/credit-refund-modal.tsx',
+  'components/patient-credit/credit-transfer-modal.tsx',
+  'components/patient-imports/balances-step.tsx',
+  'components/patient-imports/import-progress.tsx',
+  'components/patient-imports/patient-import-wizard.tsx',
+  'components/payment-plans/create-payment-plan-modal.tsx',
+  'components/payments/billable-plan-field.tsx',
+  'components/payments/payment-adjustments-preview.tsx',
+  'components/payments/reallocate-payment-modal.tsx',
+  'components/receivables/aging-summary.tsx',
+  'components/receivables/debtor-parts.tsx',
+  'components/shared/money-input.tsx',
+  'lib/payments/billable-plans-api.ts',
+  'lib/payments/payment-adjustments.ts',
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -135,7 +132,7 @@ describe('arquitectura: importes con la sede (DX-522)', () => {
     expect(Object.keys(PENDING).length).toBeLessThanOrEqual(MAX_PENDING);
     // Una entrada de más hace fallar el máximo. Solo es falsa si PENDING está EXACTAMENTE en el
     // máximo, a propósito: obliga a bajar `MAX_PENDING` en cada PR que migra pantallas.
-    expect(Object.keys({ ...PENDING, 'components/nueva/pantalla.tsx': OTHER }).length <= MAX_PENDING).toBe(false);
+    expect(Object.keys({ ...PENDING, 'components/nueva/pantalla.tsx': 'Pantalla nueva: no entra en la lista.' }).length <= MAX_PENDING).toBe(false);
   });
 
   it('the migrated documents and helpers cannot return to formatCurrency or the pending list', () => {
