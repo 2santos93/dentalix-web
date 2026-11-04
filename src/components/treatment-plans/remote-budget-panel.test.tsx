@@ -1,3 +1,4 @@
+import { testStamp } from '@/lib/test/stamp';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PlanQuoteActions } from './plan-quote-actions';
 import {
@@ -118,7 +119,7 @@ const OPTIONS: SignatureRequestOptions = {
 };
 
 function renderActions(p: TreatmentPlan, role: 'DENTIST' | 'ASSISTANT' | 'RECEPTION' = 'DENTIST') {
-  render(<PlanQuoteActions token="tok" patientId="p1" plan={p} role={role} onAccepted={jest.fn()} />);
+  render(<PlanQuoteActions token="tok" patientId="p1" plan={p} role={role} onAccepted={jest.fn()} stamp={testStamp()} />);
 }
 
 describe('Enviar a aceptar el presupuesto (DX-415)', () => {

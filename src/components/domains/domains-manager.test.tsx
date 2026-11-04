@@ -13,6 +13,9 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { notifyError } from '@/components/errors/notify';
 import { setupUser } from '@/lib/test/user';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 
 jest.mock('../../lib/domains/domains-api', () => ({
   ...jest.requireActual('../../lib/domains/domains-api'),
@@ -21,9 +24,11 @@ jest.mock('../../lib/domains/domains-api', () => ({
   verifyDomain: jest.fn(),
   deleteDomain: jest.fn(),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), info: jest.fn() } }));
 
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedList = listDomains as jest.MockedFunction<typeof listDomains>;
 const mockedRegister = registerDomain as jest.MockedFunction<typeof registerDomain>;
 const mockedVerify = verifyDomain as jest.MockedFunction<typeof verifyDomain>;
@@ -91,6 +96,7 @@ describe('DomainsManager (SEC-009)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedList.mockResolvedValue([pending, verified, disabled, expired]);
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
   });
 
   it('solo ADMIN: otro rol ve el aviso y no se pide nada', () => {
@@ -271,6 +277,68 @@ describe('DomainsManager (SEC-009)', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar dominio' }));
     expect(await within(dialog).findByText('Dominio no encontrado.')).toBeInTheDocument();
+  });
+});
+
+describe('DomainsManager: fechas con el formato de la sede (DX-354b)', () => {
+  // 02:30Z: en Caracas (UTC-4) aún es el día anterior; ni el navegador (UTC en jest) ni Tokio cambian la hora de la sede.
+  const expiresAt = '2026-10-21T02:30:00.000Z';
+  const verifiedAt = '2026-10-01T02:30:00.000Z';
+  const disabledAt = '2026-10-16T02:30:00.000Z';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedList.mockResolvedValue([
+      domain({ expiresAt }),
+      { ...verified, verifiedAt },
+      { ...disabled, disabledAt },
+    ]);
+  });
+
+  it('Caracas (12 h): «Tienes hasta el …», «Abre Dentalix desde el …» y «Desde el …» con su reloj', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+    render(<DomainsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Dominios propios' });
+    await waitFor(() =>
+      expect(within(item('citas.sonrisa.com')).getByText(`Sin verificar. Tienes hasta el ${dateTimeIn('caracas', expiresAt)}.`)).toBeInTheDocument(),
+    );
+    expect(within(item('www.sonrisa.com')).getByText(`Abre Dentalix desde el ${dateTimeIn('caracas', verifiedAt)}.`)).toBeInTheDocument();
+    expect(within(item('old.sonrisa.com')).getByText(`Desde el ${dateTimeIn('caracas', disabledAt)} dejó de abrir Dentalix.`)).toBeInTheDocument();
+  });
+
+  it('Berlín (24 h): la misma entrada, otra salida; y el diálogo usa el mismo reloj', async () => {
+    const user = setupUser();
+    mockedLocations.mockResolvedValue([STAMP_SEDES.berlin]);
+    render(<DomainsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Dominios propios' });
+    await waitFor(() =>
+      expect(within(item('citas.sonrisa.com')).getByText(`Sin verificar. Tienes hasta el ${dateTimeIn('berlin', expiresAt)}.`)).toBeInTheDocument(),
+    );
+    expect(dateTimeIn('berlin', expiresAt)).not.toBe(dateTimeIn('caracas', expiresAt));
+    const dialog = await openDomain(user, 'citas.sonrisa.com');
+    expect(within(dialog).getByText(`Publica este registro TXT y verifícalo antes del ${dateTimeIn('berlin', expiresAt)}.`)).toBeInTheDocument();
+  });
+
+  it('sin formato de la sede: la frase se dice completa sin la fecha (nunca «hasta el —») y un solo aviso', async () => {
+    const user = setupUser();
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    render(<DomainsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Dominios propios' });
+    expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    expect(within(item('citas.sonrisa.com')).getByText('Sin verificar. Aún está dentro de su plazo.')).toBeInTheDocument();
+    expect(within(item('www.sonrisa.com')).getByText('Abre Dentalix.')).toBeInTheDocument();
+    expect(within(item('old.sonrisa.com')).getByText('Dejó de abrir Dentalix.')).toBeInTheDocument();
+    const dialog = await openDomain(user, 'citas.sonrisa.com');
+    expect(within(dialog).getByText('Publica este registro TXT y verifícalo dentro de su plazo.')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('—');
+  });
+
+  it('mientras las sedes cargan: frase sin fecha y sin aviso', async () => {
+    mockedLocations.mockReturnValue(new Promise(() => undefined));
+    render(<DomainsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Dominios propios' });
+    expect(within(item('citas.sonrisa.com')).getByText('Sin verificar. Aún está dentro de su plazo.')).toBeInTheDocument();
+    expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
   });
 });
 

@@ -1,12 +1,17 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DiscountPolicyManager } from './discount-policy-manager';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 import { getDiscountPolicy, updateDiscountPolicy, type DiscountPolicy } from '@/lib/discounts/discounts-api';
 
 jest.mock('../../lib/discounts/discounts-api', () => ({
   getDiscountPolicy: jest.fn(),
   updateDiscountPolicy: jest.fn(),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedGet = getDiscountPolicy as jest.MockedFunction<typeof getDiscountPolicy>;
 const mockedUpdate = updateDiscountPolicy as jest.MockedFunction<typeof updateDiscountPolicy>;
 
@@ -22,6 +27,7 @@ describe('DiscountPolicyManager (DX-204)', () => {
   beforeEach(() => {
     mockedGet.mockReset();
     mockedUpdate.mockReset();
+    mockedLocations.mockReset().mockResolvedValue([STAMP_SEDES.caracas]);
   });
 
   it('sin permiso: el aviso, sin pedir nada a la API', () => {
@@ -82,5 +88,36 @@ describe('DiscountPolicyManager (DX-204)', () => {
       }),
     );
     expect(await screen.findByText('20 %', { selector: 'td' })).toBeInTheDocument();
+  });
+
+  describe('«Cambiada el …» con el formato de la sede (DX-354b)', () => {
+    const CHANGED: DiscountPolicy = { ...DEFAULT, isDefault: false, updatedAt: '2026-10-17T02:30:00.000Z', updatedById: 'u1' };
+
+    it('Caracas (12 h) y Berlín (24 h): la misma entrada, dos salidas', async () => {
+      mockedGet.mockResolvedValue(CHANGED);
+      const { unmount } = render(<DiscountPolicyManager token="tok" allowed />);
+      expect(await screen.findByText(`Cambiada el ${dateTimeIn('caracas', CHANGED.updatedAt!)}.`)).toBeInTheDocument();
+      unmount();
+      mockedLocations.mockResolvedValue([STAMP_SEDES.berlin]);
+      render(<DiscountPolicyManager token="tok" allowed />);
+      expect(await screen.findByText(`Cambiada el ${dateTimeIn('berlin', CHANGED.updatedAt!)}.`)).toBeInTheDocument();
+      expect(dateTimeIn('berlin', CHANGED.updatedAt!)).not.toBe(dateTimeIn('caracas', CHANGED.updatedAt!));
+    });
+
+    it('sin formato de la sede: «—» y un solo aviso; cargando, «—» sin aviso', async () => {
+      mockedGet.mockResolvedValue(CHANGED);
+      mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+      render(<DiscountPolicyManager token="tok" allowed />);
+      expect(await screen.findByText('Cambiada el —.')).toBeInTheDocument();
+      expect(screen.getAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    });
+
+    it('mientras cargan las sedes: «—» sin aviso', async () => {
+      mockedGet.mockResolvedValue(CHANGED);
+      mockedLocations.mockReturnValue(new Promise(() => undefined));
+      render(<DiscountPolicyManager token="tok" allowed />);
+      expect(await screen.findByText('Cambiada el —.')).toBeInTheDocument();
+      expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
+    });
   });
 });

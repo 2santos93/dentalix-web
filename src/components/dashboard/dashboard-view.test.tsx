@@ -15,6 +15,7 @@ import {
   type LocationsComparison,
 } from '@/lib/reports/reports-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { STAMP_SEDES, timeIn } from '@/lib/test/stamp';
 import { tokenForRole } from '@/lib/test/data-consents';
 import { cashSessionFixture } from '@/lib/test/cash-session';
 import { getReceivablesSummary, type ReceivablesSummary } from './inicio-api';
@@ -169,7 +170,20 @@ function dashboard(): Dashboard {
       byCurrency: { VES: 1000000, USD: 60 },
     },
     lowStockItems: { count: 0, items: [] },
-    upcomingAppointments: [],
+    // El contrato de la API trae la sede de cada próxima cita (DX-354b, API1).
+    upcomingAppointments: [
+      {
+        id: 'up-1',
+        patientId: 'p-1',
+        patientFirstName: 'María',
+        patientLastName: 'López',
+        providerId: 'staff-1',
+        start: '2026-08-16T13:00:00.000Z',
+        end: '2026-08-16T13:30:00.000Z',
+        status: 'SCHEDULED',
+        locationId: 'loc-1',
+      },
+    ],
     patientCount: 42,
   };
 }
@@ -510,6 +524,67 @@ describe('Inicio · ADMIN', () => {
     ).toBeInTheDocument();
     expect(m.listAppointments).not.toHaveBeenCalled();
     expect(m.getDashboard).not.toHaveBeenCalled();
+  });
+});
+
+describe('Inicio · Hoy: la hora de cada fila con el reloj de SU sede (DX-354b, E1)', () => {
+  // 13:00Z del 15 de agosto: Caracas (UTC−4, 12 h) 9:00 a. m.; Berlín (UTC+2 en verano, 24 h) 15:00.
+  const at = '2026-08-15T13:00:00.000Z';
+  const caracas = { ...STAMP_SEDES.caracas, id: 'loc-1', name: 'Sede principal' };
+  const berlin = { ...STAMP_SEDES.berlin, id: 'loc-berlin', name: 'Berlín', createdAt: '2026-02-01T00:00:00.000Z' };
+
+  function rowOf(name: string): HTMLElement {
+    return screen.getByRole('link', { name }).closest('li') as HTMLElement;
+  }
+
+  it('«Todas las sedes»: una cita de Caracas en 12 h y otra de Berlín en 24 h, cada una con SU reloj', async () => {
+    m.listLocations.mockResolvedValue([caracas, berlin]);
+    m.listAppointments.mockResolvedValue([
+      appointment({ id: 'c', patientId: 'p-c', patientFirstName: 'Carolina', patientLastName: 'Ruiz', start: at, locationId: 'loc-1' }),
+      appointment({ id: 'b', patientId: 'p-b', patientFirstName: 'Jonas', patientLastName: 'Weber', start: at, locationId: 'loc-berlin' }),
+    ]);
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    await within(today).findByRole('list', { name: 'Citas de hoy' });
+    const caracasTime = timeIn('caracas', at);
+    const berlinTime = timeIn('berlin', at);
+    expect(caracasTime).not.toBe(berlinTime);
+    expect(caracasTime).toMatch(/9:00/);
+    expect(berlinTime).toBe('15:00');
+    await waitFor(() => expect(within(rowOf('Carolina Ruiz')).getByText(caracasTime)).toBeInTheDocument());
+    expect(within(rowOf('Jonas Weber')).getByText(berlinTime)).toBeInTheDocument();
+    // Ninguna fila usa el reloj de la otra ni cae al de la pantalla.
+    expect(within(rowOf('Carolina Ruiz')).queryByText(berlinTime)).not.toBeInTheDocument();
+    expect(within(rowOf('Jonas Weber')).queryByText(caracasTime)).not.toBeInTheDocument();
+  });
+
+  it('una cita de una sede desconocida: «—» (no la hora de la pantalla) y un solo aviso', async () => {
+    m.listLocations.mockResolvedValue([caracas, berlin]);
+    m.listAppointments.mockResolvedValue([
+      appointment({ id: 'x', patientId: 'p-x', patientFirstName: 'Ana', patientLastName: 'Sin Sede', start: at, locationId: 'sede-borrada' }),
+      appointment({ id: 'y', patientId: 'p-y', patientFirstName: 'Beto', patientLastName: 'Sin Sede', start: at, locationId: 'sede-borrada' }),
+      appointment({ id: 'c', patientId: 'p-c', patientFirstName: 'Carolina', patientLastName: 'Ruiz', start: at, locationId: 'loc-1' }),
+    ]);
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    await within(today).findByRole('list', { name: 'Citas de hoy' });
+    expect(within(rowOf('Ana Sin Sede')).getByText('—')).toBeInTheDocument();
+    expect(within(rowOf('Ana Sin Sede')).queryByText(timeIn('caracas', at))).not.toBeInTheDocument();
+    expect(await within(today).findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    // La fila con sede conocida sigue bien.
+    expect(within(rowOf('Carolina Ruiz')).getByText(timeIn('caracas', at))).toBeInTheDocument();
+  });
+
+  it('con una sola sede nada cambia: todas las filas con su reloj y sin aviso', async () => {
+    m.listLocations.mockResolvedValue([caracas]);
+    m.listAppointments.mockResolvedValue([
+      appointment({ id: 'c', patientId: 'p-c', patientFirstName: 'Carolina', patientLastName: 'Ruiz', start: at, locationId: 'loc-1' }),
+    ]);
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    await within(today).findByRole('list', { name: 'Citas de hoy' });
+    await waitFor(() => expect(within(rowOf('Carolina Ruiz')).getByText(timeIn('caracas', at))).toBeInTheDocument());
+    expect(within(today).queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
   });
 });
 

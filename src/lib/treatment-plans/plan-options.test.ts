@@ -14,6 +14,8 @@ import {
   SELECTABLE_REJECTION_REASONS,
 } from './plan-options';
 import type { TreatmentPlan } from './treatment-plans-api';
+import { dateIn, STAMP_SEDES, testStamp } from '@/lib/test/stamp';
+import { stampPainters } from '@/lib/locations/sede-stamp';
 
 function plan(overrides: Partial<TreatmentPlan> & { id: string }): TreatmentPlan {
   return {
@@ -125,34 +127,51 @@ describe('motivos de rechazo', () => {
 });
 
 describe('mensaje de WhatsApp', () => {
-  it('saluda, nombra la clínica y la fecha, sin datos clínicos', () => {
-    const text = followUpMessage({
-      patientName: 'Ana Pérez',
-      clinicName: 'Clínica Sonrisa',
-      presentedAt: '2026-10-07T15:00:00.000Z',
-    });
+  const caracas = testStamp([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+  const presentedAt = '2026-11-05T02:00:00.000Z'; // en Caracas aún es el 4; en Berlín, el 5
+
+  it('saluda, nombra la clínica y la fecha de la sede de la pantalla (es-VE), sin datos clínicos', () => {
+    const text = followUpMessage({ patientName: 'Ana Pérez', clinicName: 'Clínica Sonrisa', presentedAt }, caracas);
     expect(text).toBe(
-      'Hola Ana, te escribimos de Clínica Sonrisa por el presupuesto que te presentamos el 07/10/2026. ¿Te quedó alguna duda o quieres agendar para empezar?',
+      `Hola Ana, te escribimos de Clínica Sonrisa por el presupuesto que te presentamos el ${dateIn('caracas', presentedAt)}. ¿Te quedó alguna duda o quieres agendar para empezar?`,
     );
+    expect(dateIn('caracas', presentedAt)).toBe('04/11/2026');
+  });
+
+  it('con la sede donde se presentó, la fecha es la de esa sede', () => {
+    const text = followUpMessage(
+      { patientName: 'Ana', clinicName: null, presentedAt, presentedLocationId: STAMP_SEDES.berlin.id },
+      caracas,
+    );
+    expect(text).toContain(`el ${dateIn('berlin', presentedAt)}.`);
+    expect(dateIn('berlin', presentedAt)).not.toBe(dateIn('caracas', presentedAt));
   });
 
   it('sin clínica conocida dice «de la clínica»', () => {
+    expect(followUpMessage({ patientName: 'Ana', clinicName: null, presentedAt }, caracas)).toContain(
+      'te escribimos de la clínica por',
+    );
+  });
+
+  it('sin formato de la sede (o con una sede desconocida) la frase no se envía: null, nunca «—»', () => {
+    expect(followUpMessage({ patientName: 'Ana', clinicName: null, presentedAt }, stampPainters(null))).toBeNull();
     expect(
-      followUpMessage({ patientName: 'Ana', clinicName: null, presentedAt: '2026-10-07T15:00:00.000Z' }),
-    ).toContain('te escribimos de la clínica por');
+      followUpMessage({ patientName: 'Ana', clinicName: null, presentedAt, presentedLocationId: 'otra' }, caracas),
+    ).toBeNull();
+    const item = { patientName: 'Ana', patientWhatsApp: '584121112222', presentedAt };
+    expect(followUpWhatsAppHref(item, 'Sonrisa', stampPainters(null))).toBeNull();
   });
 
   it('wa.me con el número E.164 y el texto codificado; sin número, null', () => {
     const href = followUpWhatsAppHref(
-      { patientName: 'Ana', patientWhatsApp: '584121112222', presentedAt: '2026-10-07T15:00:00.000Z' },
+      { patientName: 'Ana', patientWhatsApp: '584121112222', presentedAt },
       'Sonrisa',
+      caracas,
     );
     expect(href?.startsWith('https://wa.me/584121112222?text=Hola%20Ana')).toBe(true);
+    expect(decodeURIComponent(href ?? '')).not.toContain('—');
     expect(
-      followUpWhatsAppHref(
-        { patientName: 'Ana', patientWhatsApp: null, presentedAt: '2026-10-07T15:00:00.000Z' },
-        'Sonrisa',
-      ),
+      followUpWhatsAppHref({ patientName: 'Ana', patientWhatsApp: null, presentedAt }, 'Sonrisa', caracas),
     ).toBeNull();
   });
 });

@@ -33,6 +33,8 @@ import { canRecordPayments } from '@/lib/payments/billable-plans-api';
 import { optionGroupOf, patchableStatuses } from '@/lib/treatment-plans/plan-options';
 import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import type { DiscountRules } from '@/lib/discounts/discount-rules';
 import { Button } from '@/components/ui/button';
@@ -184,6 +186,13 @@ export function TreatmentPlansTab({
 
   // Selected plan's detail (items + total).
   const [planDetail, setPlanDetail] = useState<TreatmentPlan | null>(null);
+  // DX-354b: las fechas del plan salen con el reloj de la sede del dato (presentó, aceptó,
+  // realizó el ítem); sin sede en el dato, con el de la pantalla. Un solo aviso (abajo).
+  const stamp = useSedeStamp(token, [
+    planDetail?.presentedLocationId,
+    planDetail?.acceptedLocationId,
+    ...(planDetail?.items ?? []).map((item) => item.performedLocationId),
+  ]);
   const [planDetailLoading, setPlanDetailLoading] = useState(false);
   const [planDetailError, setPlanDetailError] = useState<string | null>(null);
   const [planDetailRefreshing, setPlanDetailRefreshing] = useState(false);
@@ -919,6 +928,7 @@ export function TreatmentPlansTab({
           }
         />
         {createPlanError && <InlineError>{createPlanError}</InlineError>}
+        <SedeStampNote stamp={stamp} />
         {planCreated && !createPlanError && (
           <p role="status" className="text-sm font-medium text-success-text">
             {copy.planCreated}
@@ -936,7 +946,7 @@ export function TreatmentPlansTab({
             <NativeSelect id="tp-plan-select" value={selectedPlanId ?? ''} onChange={(e) => setSelectedPlanId(e.target.value)}>
               {plans.map((plan, index) => (
                 <option key={plan.id} value={plan.id}>
-                  {copy.planOptionLabel(plan.createdAt, plan.status, index + 1, plan.optionLabel)}
+                  {copy.planOptionLabel(plan.createdAt, plan.status, index + 1, plan.optionLabel, stamp)}
                 </option>
               ))}
             </NativeSelect>
@@ -1021,6 +1031,7 @@ export function TreatmentPlansTab({
                 role={role}
                 onAccepted={handlePlanAccepted}
                 acceptPrimary={primary === 'accept'}
+                stamp={stamp}
               />
 
               {/* La opción que se le presenta al paciente (DX-040): presentar,
@@ -1032,6 +1043,7 @@ export function TreatmentPlansTab({
                 role={role}
                 onChanged={handlePlanOptionsChanged}
                 onSelectPlan={setSelectedPlanId}
+                stamp={stamp}
               />
 
               {/* UNA región de dinero: las cuatro cifras del PLAN en una fila
@@ -1158,6 +1170,7 @@ export function TreatmentPlansTab({
                           onVoidFee={role === 'ADMIN' ? setFeeToVoid : undefined}
                           itemBalances={itemBalances}
                           fmt={sedeFmt}
+                          stamp={stamp}
                           locked={signed}
                           closed={closed}
                           markDoneOnly={planDetail?.status === 'COMPLETED'}

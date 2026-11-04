@@ -45,6 +45,7 @@ import { getPaymentAllocations, replacePaymentAllocations } from '@/lib/payments
 import { presentPlan } from '@/lib/treatment-plans/plan-options-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { dateIn, dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 import { getPlanVisits } from '@/lib/treatment-plans/plan-visits-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -1486,19 +1487,41 @@ describe('TreatmentPlansTab', () => {
       performedByName: 'Dra. Laura Gómez',
       performedLocationId: 'loc-norte',
       performedLocationName: 'Sede Norte',
-      completedAt: new Date(2026, 9, 20, 10, 0).toISOString(),
+      // 02:30Z: el 19 en Caracas (la pantalla) y el 20 en Berlín (la sede donde se realizó).
+      completedAt: '2026-10-20T02:30:00.000Z',
     };
     const legacyDone: TreatmentPlanItem = { ...item1, id: 'item-9', toothNumber: '47', status: 'DONE' };
+
+    afterEach(() => {
+      // La sede de la prueba de la fecha por fila no se hereda en las siguientes.
+      jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
+    });
 
     it('la ficha dice quién, cuándo y en qué sede, o «Sin atribuir»', async () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura, legacyDone], total: 0 });
+      // La pantalla es Caracas (12 h); «Sede Norte» es Berlín: la fecha sale con el reloj de la sede donde se realizó (DX-354b, E1).
+      jest.mocked(listLocations).mockResolvedValue([
+        clinicLocation({ currency: 'VES' }),
+        { ...STAMP_SEDES.berlin, id: 'loc-norte', name: 'Sede Norte' },
+      ]);
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-      expect(within(table).getByText('Realizado por Dra. Laura Gómez · 20/10/2026 · Sede Norte')).toBeInTheDocument();
+      const line = `Realizado por Dra. Laura Gómez · ${dateIn('berlin', doneByLaura.completedAt!)} · Sede Norte`;
+      expect(dateIn('berlin', doneByLaura.completedAt!)).not.toBe(dateIn('caracas', doneByLaura.completedAt!));
+      expect(await within(table).findByText(line)).toBeInTheDocument();
       expect(within(table).getByText('Sin atribuir')).toBeInTheDocument();
       // La lista móvil dice lo mismo.
-      expect(screen.getAllByText('Realizado por Dra. Laura Gómez · 20/10/2026 · Sede Norte')).toHaveLength(2);
+      expect(screen.getAllByText(line)).toHaveLength(2);
+    });
+
+    it('si la sede donde se realizó no se conoce, la fecha es «—» con el aviso (no la de la pantalla)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura], total: 0 });
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(await within(table).findByText('Realizado por Dra. Laura Gómez · — · Sede Norte')).toBeInTheDocument();
+      expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
     });
 
     it('otra dentista no puede sacarlo de «Realizado» ni corregirlo', async () => {
@@ -1943,7 +1966,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={dentistToken} />);
 
       expect(
-        await screen.findByText('Aceptado y firmado por Ana García el 16/10/2026 15:30'),
+        await screen.findByText(`Aceptado y firmado por Ana García el ${dateTimeIn('caracas', '2026-10-16T15:30:00.000Z')}`),
       ).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Aceptar con firma' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^quitar$/i })).not.toBeInTheDocument();

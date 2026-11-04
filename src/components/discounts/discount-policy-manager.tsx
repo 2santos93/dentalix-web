@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Lock } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { getDiscountPolicy, type DiscountPolicy } from '@/lib/discounts/discounts-api';
 import { ROLE_LABELS } from '@/lib/discounts/discount-rules';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
@@ -52,6 +53,8 @@ export function DiscountPolicyManager({ token, allowed }: DiscountPolicyManagerP
   const [editing, setEditing] = useState(false);
   const [modalKey, setModalKey] = useState(0);
   const [announcement, setAnnouncement] = useState('');
+  // DX-354b: la política es de la clínica (sin sede en el dato): «Cambiada el …» con la sede de la pantalla.
+  const stamp = useSedeStamp(token);
 
   useEffect(() => {
     if (!allowed) return;
@@ -93,6 +96,7 @@ export function DiscountPolicyManager({ token, allowed }: DiscountPolicyManagerP
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
+      <SedeStampNote stamp={stamp} />
       <AsyncSection
         loading={loading}
         error={error}
@@ -114,7 +118,7 @@ export function DiscountPolicyManager({ token, allowed }: DiscountPolicyManagerP
                   <>
                     <span className="text-ink">{policyManagerCopy.threshold(policy.reasonRequiredAbovePercent)}</span>
                     {policy.isDefault || !policy.updatedAt ? null : (
-                      <> {policyManagerCopy.updatedAt(formatDateTime(policy.updatedAt))}</>
+                      <> {policyManagerCopy.updatedAt(stamp.dateTime(policy.updatedAt))}</>
                     )}
                   </>
                 }

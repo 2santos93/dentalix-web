@@ -7,6 +7,7 @@ import type { PlanItemBalance } from '@/lib/payments/payments-api';
 import { DISCOUNT_REASON_LABELS, effectiveDiscount, type DiscountReasonCode } from '@/lib/discounts/discount-rules';
 import { ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { formatListPrice, sedeListPriceFormat } from '@/lib/treatment-plans/list-price';
 import type { TreatmentPlanItem, TreatmentPlanItemStatus } from '@/lib/treatment-plans/treatment-plans-api';
 import { voidFeeCopy } from '@/components/appointments/fee-reason-modal';
@@ -102,6 +103,8 @@ export interface ItemsTableProps {
    * (precio, descuento, cobrado, pendiente); `null` mientras carga («—»).
    */
   fmt: RegionalFormat | null;
+  /** DX-354b: el pintor de la pantalla, para la fecha de «Realizado por …» (la de la sede donde se realizó). */
+  stamp: SedePainters;
 }
 
 /**
@@ -111,11 +114,13 @@ export interface ItemsTableProps {
 function ItemAttributionLine({
   item,
   onCorrect,
+  stamp,
 }: {
   item: TreatmentPlanItem;
   onCorrect?: (itemId: string) => void;
+  stamp: SedePainters;
 }) {
-  const text = attributionText(item);
+  const text = attributionText(item, stamp);
   if (!text) return null;
   return (
     <span className="flex flex-wrap items-center gap-x-2 t-caption text-muted">
@@ -305,6 +310,7 @@ export function ItemsTable({
   itemBalances,
   selection,
   fmt,
+  stamp,
 }: ItemsTableProps) {
   // DX-489: un único formato para los importes del plan, el de la sede (el de
   // la lista de abonos); el precio de lista, en la moneda del catálogo.
@@ -413,7 +419,7 @@ export function ItemsTable({
                           </span>
                         )}
                       </span>
-                      <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
+                      <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} stamp={stamp} />
                       <FeeItemLine
                         item={item}
                         label={procedureName(item, catalogById)}
@@ -486,7 +492,7 @@ export function ItemsTable({
                 </div>
               ) : null}
               <div className="mt-1">
-                <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
+                <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} stamp={stamp} />
               </div>
               {isFee(item) ? (
                 <div className="mt-2">

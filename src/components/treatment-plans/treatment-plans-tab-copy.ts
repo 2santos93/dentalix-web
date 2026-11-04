@@ -1,4 +1,4 @@
-import { formatDateTime } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { parseMoneyInput } from '@/lib/format/money';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
@@ -59,9 +59,10 @@ export const copy = {
     createdAt: string,
     status: TreatmentPlanStatus,
     number: number,
-    optionLabel?: string | null,
+    optionLabel: string | null | undefined,
+    stamp: Pick<SedePainters, 'dateTime'>,
   ) =>
-    `Plan ${number} · ${formatDateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}${optionLabel ? ` · ${optionLabel}` : ''}`,
+    `Plan ${number} · ${stamp.dateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}${optionLabel ? ` · ${optionLabel}` : ''}`,
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',
   loadingPlanDetail: 'Cargando plan…',

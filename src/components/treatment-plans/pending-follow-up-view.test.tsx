@@ -11,6 +11,7 @@ import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import { ApiError } from '@/lib/api/client';
 import { clinicLocation } from '@/lib/test/locations';
+import { dateIn, STAMP_SEDES } from '@/lib/test/stamp';
 
 jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
   listPendingFollowUp: jest.fn(),
@@ -255,5 +256,96 @@ describe('PendingFollowUpView (DX-040)', () => {
       await waitFor(() => expect(mockedReject).toHaveBeenCalledTimes(3));
       expect(mockedReject).toHaveBeenLastCalledWith('tok', 'plan-b', { reason: 'PRICE' });
     });
+  });
+});
+
+describe('PendingFollowUpView: cada fila con la sede donde se presentó (DX-354b, E1)', () => {
+  // 02:30Z: en Caracas todavía es el 7 de octubre; en Berlín ya es el 7 (04:30) y en Miami el 6.
+  const presentedAt = '2026-10-07T02:30:00.000Z';
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedActive.mockReturnValue(null);
+    mockedClinic.mockResolvedValue('Clínica Demo');
+    mockedLocations.mockResolvedValue([
+      STAMP_SEDES.caracas,
+      STAMP_SEDES.berlin,
+      STAMP_SEDES.miami,
+    ]);
+  });
+
+  it('la fecha, el importe y el mensaje de WhatsApp de cada fila usan el reloj y el formato de SU sede', async () => {
+    mockedList.mockResolvedValue(
+      page([
+        item({
+          planId: 'a',
+          optionGroupId: 'a',
+          patientName: 'Carolina Ruiz',
+          presentedAt,
+          presentedLocationId: STAMP_SEDES.caracas.id,
+          total: 1234.5,
+          currency: 'USD',
+        }),
+        item({
+          planId: 'b',
+          optionGroupId: 'b',
+          patientName: 'Jonas Weber',
+          presentedAt,
+          presentedLocationId: STAMP_SEDES.berlin.id,
+          total: 1234.5,
+          currency: 'EUR',
+        }),
+        item({
+          planId: 'c',
+          optionGroupId: 'c',
+          patientName: 'Mia Torres',
+          presentedAt,
+          presentedLocationId: STAMP_SEDES.miami.id,
+          total: 1234.5,
+          currency: 'USD',
+        }),
+      ]),
+    );
+    render(<PendingFollowUpView token="tok" />);
+    const caracas = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+    const berlin = screen.getByRole('row', { name: /Jonas Weber/ });
+    const miami = screen.getByRole('row', { name: /Mia Torres/ });
+    const day = (sede: 'caracas' | 'berlin' | 'miami') => dateIn(sede, presentedAt);
+    expect(day('caracas')).not.toBe(day('miami'));
+    await waitFor(() => expect(caracas).toHaveTextContent(day('caracas')));
+    expect(berlin).toHaveTextContent(day('berlin'));
+    expect(miami).toHaveTextContent(day('miami'));
+    expect(money(caracas.textContent)).toContain(money('USD 1.234,50'));
+    expect(money(berlin.textContent)).toContain(money('1.234,50 EUR'));
+    expect(money(miami.textContent)).toContain(money('USD 1,234.50'));
+    // El mensaje de WhatsApp lleva el día de la sede de la fila.
+    const href = (row: HTMLElement) => decodeURIComponent(within(row).getByRole('link', { name: /WhatsApp a/ }).getAttribute('href') ?? '');
+    expect(href(caracas)).toContain(`presentamos el ${day('caracas')}.`);
+    expect(href(miami)).toContain(`presentamos el ${day('miami')}.`);
+  });
+
+  it('una sede desconocida: fecha e importe «—», WhatsApp deshabilitado (nunca «—» en el mensaje) y un solo aviso', async () => {
+    mockedList.mockResolvedValue(
+      page([
+        item({ planId: 'a', optionGroupId: 'a', patientName: 'Carolina Ruiz', presentedLocationId: 'sede-borrada' }),
+        item({ planId: 'b', optionGroupId: 'b', patientName: 'Jonas Weber', presentedLocationId: 'sede-borrada' }),
+      ]),
+    );
+    render(<PendingFollowUpView token="tok" />);
+    const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+    expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    expect(within(row).queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument();
+    const blocked = within(row).getByRole('button', { name: /WhatsApp a Carolina Ruiz: no disponible/ });
+    expect(blocked).toBeDisabled();
+    expect(row).not.toHaveTextContent('2026');
+  });
+
+  it('mientras las sedes cargan: «—» sin aviso', async () => {
+    mockedLocations.mockReturnValue(new Promise(() => undefined));
+    mockedList.mockResolvedValue(page([item({ presentedLocationId: STAMP_SEDES.berlin.id })]));
+    render(<PendingFollowUpView token="tok" />);
+    const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+    expect(row).not.toHaveTextContent('2026');
+    expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
   });
 });

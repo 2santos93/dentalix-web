@@ -13,7 +13,7 @@ import {
   SIGNABLE_PLAN_STATUSES,
   type PlanQuote,
 } from '@/lib/treatment-plans/plan-quote-api';
-import { formatDateTime } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { Button } from '@/components/ui/button';
 import { AcceptPlanModal } from './accept-plan-modal';
 import { RemoteAcceptanceEvidence, RemoteBudgetPanel } from './remote-budget-panel';
@@ -41,6 +41,8 @@ interface PlanQuoteActionsProps {
    * por el estado del plan (`planPrimaryAction`); si no, va en secundario.
    */
   acceptPrimary?: boolean;
+  /** El pintor de la pantalla (su dueño pinta el aviso de la sede, una vez). */
+  stamp: SedePainters;
 }
 
 /**
@@ -57,6 +59,7 @@ export function PlanQuoteActions({
   role,
   onAccepted,
   acceptPrimary = true,
+  stamp,
 }: PlanQuoteActionsProps) {
   const [accepting, setAccepting] = useState(false);
   const acceptance = plan.acceptance ?? null;
@@ -77,7 +80,7 @@ export function PlanQuoteActions({
             <span className="font-medium text-ink tabular-nums">
               {(acceptance.remote ? copy.acceptedRemotely : copy.acceptedBy)(
                 acceptance.signerName,
-                formatDateTime(acceptance.acceptedAt),
+                stamp.dateTime(acceptance.acceptedAt, plan.acceptedLocationId),
               )}
             </span>
             <span className="block text-muted">{copy.locked}</span>
