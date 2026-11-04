@@ -4,7 +4,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 import { loginAs } from './support/auth';
 import { expectTouchTarget } from './support/touch-targets';
 import { E2E_BROWSER_LOCALE } from './support/regional';
-import { DEMO_CURRENCY, DEMO_TIME_ZONE } from './support/demo';
+import { DEMO_CURRENCY, DEMO_LOCATION_REGIONS } from './support/demo';
 
 /**
  * DX-050 · Producción atribuible. En la clínica demo (`npm run seed:demo`), la
@@ -94,15 +94,19 @@ async function noOverflow(page: Page) {
   ).toBeLessThanOrEqual(0);
 }
 
-/** Hoy en la zona de la sede demo (Caracas) como lo pinta la ficha (dd/mm/aaaa). */
+/**
+ * Hoy en la zona de la «Sede Norte», con el formato regional de ESA sede (la ficha
+ * pinta la fecha del realizado con la sede donde se realizó, DX-354b): el locale y
+ * la zona salen de la región de la sede, no de un `dd/mm/aaaa` fijo.
+ */
 function todayInDemoSede(): string {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: DEMO_TIME_ZONE,
+  const { locale, timeZone } = DEMO_LOCATION_REGIONS['Sede Norte'];
+  return new Intl.DateTimeFormat(locale, {
+    timeZone,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   }).format(new Date());
-  return parts;
 }
 
 test.setTimeout(120_000);

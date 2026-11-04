@@ -52,12 +52,6 @@ const PENDING: Readonly<Record<string, string>> = {
   'components/odontogram/tooth-timeline.tsx': STAMP,
   'components/platform/platform-mfa-card.tsx': STAMP,
   'components/support-accesses/support-accesses-view.tsx': STAMP,
-  'components/treatment-plans/pending-follow-up-view.tsx': STAMP,
-  'components/treatment-plans/plan-options-panel.tsx': STAMP,
-  'components/treatment-plans/plan-quote-actions.tsx': STAMP,
-  'components/treatment-plans/treatment-plans-tab-copy.ts': STAMP,
-  'lib/treatment-plans/item-attribution.ts': STAMP,
-  'lib/treatment-plans/plan-options.ts': STAMP,
 };
 
 /**
@@ -65,7 +59,7 @@ const PENDING: Readonly<Record<string, string>> = {
  * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
  * cierre, `PENDING` desaparece.
  */
-const MAX_PENDING = 13;
+const MAX_PENDING = 7;
 
 const CIVIL_W4 = 'Día civil en `dd/mm/yyyy` fijo: se migra a `fmt.civilDate`/`stamp.civilDate` en DX-354b W4.';
 
@@ -161,6 +155,13 @@ const MIGRATED = [
   'components/receivables/debtor-parts.tsx',
   'components/patient-credit/credit-refund-modal.tsx',
   'components/payments/reallocate-payment-modal.tsx',
+  // DX-354b W3: planes de tratamiento, con la sede del dato (o el pintor por parámetro en `lib/**`).
+  'components/treatment-plans/pending-follow-up-view.tsx',
+  'components/treatment-plans/plan-options-panel.tsx',
+  'components/treatment-plans/plan-quote-actions.tsx',
+  'components/treatment-plans/treatment-plans-tab-copy.ts',
+  'lib/treatment-plans/item-attribution.ts',
+  'lib/treatment-plans/plan-options.ts',
 ];
 
 /**

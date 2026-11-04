@@ -1,3 +1,5 @@
+import { dateIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { testStamp } from '@/lib/test/stamp';
 import { attendsAt, attributionInstant, attributionText, isAttendingRole } from './item-attribution';
 
 describe('atribución del ítem realizado (DX-050)', () => {
@@ -16,30 +18,35 @@ describe('atribución del ítem realizado (DX-050)', () => {
   });
 
   it('«Realizado por X · fecha · sede», sin la sede si no se sabe, o «Sin atribuir»', () => {
-    const at = new Date(2026, 9, 20, 10, 0).toISOString();
+    const at = '2026-10-20T10:00:00.000Z';
+    const stamp = testStamp([STAMP_SEDES.caracas]);
+    const expected = dateIn('caracas', at);
     expect(
       attributionText({
         status: 'DONE',
         performedByName: 'Dra. Laura Gómez',
         completedAt: at,
         performedLocationName: 'Sede Norte',
-      }),
-    ).toBe('Realizado por Dra. Laura Gómez · 20/10/2026 · Sede Norte');
+        performedLocationId: null,
+      }, stamp),
+    ).toBe(`Realizado por Dra. Laura Gómez · ${expected} · Sede Norte`);
     expect(
       attributionText({
         status: 'DONE',
         performedByName: 'Dra. Laura Gómez',
         completedAt: at,
         performedLocationName: null,
-      }),
-    ).toBe('Realizado por Dra. Laura Gómez · 20/10/2026');
+        performedLocationId: null,
+      }, stamp),
+    ).toBe(`Realizado por Dra. Laura Gómez · ${expected}`);
     expect(
       attributionText({
         status: 'DONE',
         performedByName: null,
         completedAt: null,
         performedLocationName: null,
-      }),
+        performedLocationId: null,
+      }, stamp),
     ).toBe('Sin atribuir');
     expect(
       attributionText({
@@ -47,8 +54,34 @@ describe('atribución del ítem realizado (DX-050)', () => {
         performedByName: null,
         completedAt: null,
         performedLocationName: null,
-      }),
+        performedLocationId: null,
+      }, stamp),
     ).toBeNull();
+  });
+});
+
+describe('la fecha del realizado sale con la sede donde se realizó (DX-354b, E1)', () => {
+  // 02:00Z: en Caracas aún es el 20; en Berlín ya es el 21.
+  const at = '2026-10-21T02:00:00.000Z';
+  const done = (performedLocationId: string | null) => ({
+    status: 'DONE' as const,
+    performedByName: 'Dra. Laura Gómez',
+    completedAt: at,
+    performedLocationName: null,
+    performedLocationId,
+  });
+  const stamp = testStamp([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+
+  it('con sede en el dato, su reloj; sin ella, el de la pantalla', () => {
+    expect(attributionText(done(STAMP_SEDES.berlin.id), stamp)).toBe(
+      `Realizado por Dra. Laura Gómez · ${dateIn('berlin', at)}`,
+    );
+    expect(attributionText(done(null), stamp)).toBe(`Realizado por Dra. Laura Gómez · ${dateIn('caracas', at)}`);
+    expect(dateIn('berlin', at)).not.toBe(dateIn('caracas', at));
+  });
+
+  it('con una sede desconocida, «—»: nunca la de la pantalla', () => {
+    expect(attributionText(done('sede-que-no-existe'), stamp)).toBe('Realizado por Dra. Laura Gómez · —');
   });
 });
 
