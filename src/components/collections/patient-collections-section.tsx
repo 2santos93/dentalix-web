@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { HandCoins, NotebookPen } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import {
   getPatientCollections,
   type PatientCollections,
@@ -67,6 +67,8 @@ export function PatientCollectionsSection({
   const [reloadKey, setReloadKey] = useState(0);
   const [dialog, setDialog] = useState<'note' | 'promise' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Cada compromiso y cada gestión con el formato de SU sede (DX-354b, E1); si la fila no trae sede, la de la pantalla.
+  const stamp = useSedeStamp(token, [...(data?.promises ?? []).map((p) => p.locationId), ...(data?.notes ?? []).map((n) => n.locationId)]);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +123,8 @@ export function PatientCollectionsSection({
         {notice}
       </p>
 
+      <SedeStampNote stamp={stamp} />
+
       <AsyncSection
         loading={loading}
         error={error}
@@ -142,17 +146,17 @@ export function PatientCollectionsSection({
                     <span className="flex flex-wrap items-center gap-2">
                       <StatusBadge kind="paymentPromise" status={p.status} />
                       <span className="font-medium tabular-nums text-ink">
-                        {collectionsCopy.promiseLine(formatCurrency(p.amount, p.currency), formatCivilDate(p.dueDate))}
+                        {collectionsCopy.promiseLine(stamp.money(p.amount, p.currency, p.locationId), stamp.civilDate(p.dueDate, p.locationId))}
                       </span>
                     </span>
                     <span className="text-xs text-muted tabular-nums">
-                      {collectionsCopy.covered(formatCurrency(p.covered, p.currency))} ·{' '}
-                      {formatDateTime(p.createdAt)} {collectionsCopy.by(p.createdBy.fullName)}
+                      {collectionsCopy.covered(stamp.money(p.covered, p.currency, p.locationId))} ·{' '}
+                      {stamp.dateTime(p.createdAt, p.locationId)} {collectionsCopy.by(p.createdBy.fullName)}
                     </span>
                     {/* Si se volvió a cumplir con otro abono, ya no aplica. */}
                     {p.reopenedAt && p.status !== 'KEPT' ? (
                       <span className="text-xs text-warning-text tabular-nums">
-                        {collectionsCopy.reopened(formatDateTime(p.reopenedAt))}
+                        {collectionsCopy.reopened(stamp.dateTime(p.reopenedAt, p.locationId))}
                       </span>
                     ) : null}
                   </li>
@@ -173,7 +177,7 @@ export function PatientCollectionsSection({
                     </span>
                     {n.text ? <p className="whitespace-pre-line break-words text-ink">{n.text}</p> : null}
                     <span className="text-xs text-muted tabular-nums">
-                      {formatDateTime(n.createdAt)} {collectionsCopy.by(n.author.fullName)}
+                      {stamp.dateTime(n.createdAt, n.locationId)} {collectionsCopy.by(n.author.fullName)}
                     </span>
                   </li>
                 ))}

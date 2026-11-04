@@ -87,6 +87,7 @@ export function PlanItemForm({
   onAdded,
   submitPrimary = true,
 }: PlanItemFormProps) {
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   // Add-item form state.
   const [toothNumber, setToothNumber] = useState('');
   const [catalogItemId, setCatalogItemId] = useState('');
@@ -306,6 +307,7 @@ export function PlanItemForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="tp-price" label={copy.priceLabel} error={itemAmountErrors.price}>
           <MoneyInput
+            money={money}
             id="tp-price"
             currency={addCurrency}
             value={price}
@@ -371,6 +373,7 @@ export function PlanItemForm({
           error={itemAmountErrors.discount}
         >
           <MoneyInput
+            money={money}
             id="tp-discount"
             currency={addCurrency}
             disabled={addNoDiscount}

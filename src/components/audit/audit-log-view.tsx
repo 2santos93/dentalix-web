@@ -52,7 +52,7 @@ import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { isValidRange, MAX_RANGE_DAYS } from '@/lib/payments/cash-period';
 import { isCivilDay } from '@/lib/time/civil-day';
-import { wallInstant } from '@/lib/time/wall-clock';
+import { addCivilDays, wallInstant } from '@/lib/time/wall-clock';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -74,6 +74,8 @@ const copy = {
   filtersLabel: 'Filtros de la auditoría',
   actorLabel: 'Usuario',
   actorAll: 'Todos los usuarios',
+  // SEC-043-bis: el usuario del enlace ya no está en el personal.
+  actorInactive: 'Persona ya no activa',
   actorUnavailable: 'Usuarios no disponibles',
   actionLabel: 'Acción',
   actionAll: 'Todas las acciones',
@@ -115,7 +117,7 @@ const copy = {
 
 const PAGE_SIZE = 50;
 
-interface Filters {
+export interface Filters {
   actorUserId: string;
   action: AuditAction | '';
   resourceType: AuditResourceType | '';
@@ -130,6 +132,33 @@ const NO_FILTERS: Filters = {
   from: '',
   to: '',
 };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * SEC-043-bis: filtros de partida desde la URL (`?actorUserId=&resourceType=
+ * &from=&to=`), para enlazar desde otra pantalla a «estos eventos». Lo que no
+ * se reconoce se ignora: nunca se pide a la API un filtro inválido.
+ */
+export function auditFiltersFromSearch(params: { get(name: string): string | null }): Partial<Filters> {
+  const out: Partial<Filters> = {};
+  const actor = params.get('actorUserId');
+  if (actor && UUID.test(actor)) out.actorUserId = actor;
+  const resource = params.get('resourceType');
+  if (resource && (AUDIT_RESOURCE_OPTIONS as string[]).includes(resource)) {
+    out.resourceType = resource as AuditResourceType;
+  }
+  const from = params.get('from');
+  const to = params.get('to');
+  if (from && isCivilDay(from)) out.from = from;
+  if (to && isCivilDay(to)) out.to = to;
+  // Un rango más largo del que admite la API se recorta por el principio
+  // (lo más reciente es lo que se busca) en vez de abrir con un error.
+  if (out.from && out.to && out.from <= out.to && !isValidRange({ from: out.from, to: out.to })) {
+    out.from = addCivilDays(out.to, -(MAX_RANGE_DAYS - 1));
+  }
+  return out;
+}
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -161,6 +190,8 @@ interface AuditLogViewProps {
    */
   patientId?: string;
   onClearPatient?: () => void;
+  /** SEC-043-bis: filtros con los que se abre (de la URL). */
+  initialFilters?: Partial<Filters>;
 }
 
 /**
@@ -181,9 +212,9 @@ interface AuditLogViewProps {
  * «Falta un dato de la sede» con su reintento, nunca otra zona ni otro
  * formato (G1-B).
  */
-export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewProps) {
+export function AuditLogView({ token, patientId, onClearPatient, initialFilters }: AuditLogViewProps) {
   const locked = Boolean(patientId) && !onClearPatient;
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [filters, setFilters] = useState<Filters>(() => ({ ...NO_FILTERS, ...initialFilters }));
   // Pila de cursores: el último es la página que se ve; `null` = la primera.
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   // El reloj de la pantalla. Hasta tenerlo no se pide nada: sin él no hay
@@ -717,6 +748,11 @@ function ActorFilter({
               {member.fullName}
             </option>
           ))}
+          {/* SEC-043-bis: un enlace con alguien que ya no está en el personal
+              no deja el filtro vacío: se ve qué se está filtrando. */}
+          {value && staff && !staff.some((m) => m.userId === value) ? (
+            <option value={value}>{copy.actorInactive}</option>
+          ) : null}
         </NativeSelect>
       )}
     </FormField>

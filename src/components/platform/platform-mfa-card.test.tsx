@@ -36,6 +36,26 @@ describe('PlatformMfaCard (SEC-008, DX-021-bis)', () => {
     expect(screen.queryByText(/No tienes códigos/)).not.toBeInTheDocument();
   });
 
+  it('la fecha de alta sale en UTC con la palabra «UTC», sin sede ni hora del navegador (DX-354b, E8)', async () => {
+    // 22:30 en Caracas del 1 de octubre ya es el 2 en UTC: el día que se pinta es el de UTC.
+    mockedGet.mockResolvedValue({ ...ACTIVE, enabledAt: '2026-10-02T02:30:00.000Z' });
+    render(<PlatformMfaCard token="tok" />);
+    expect(
+      await screen.findByText(/^Activa desde el 2026-10-02 02:30 UTC\./),
+    ).toBeInTheDocument();
+    // Sin sede en esta pantalla: nada de «a. m.» ni de aviso de formato.
+    expect(screen.queryByText(/formato regional/)).not.toBeInTheDocument();
+  });
+
+  it('la espera de seguridad también sale en UTC', async () => {
+    const future = new Date(Date.now() + 3_600_000);
+    mockedGet.mockResolvedValue({ ...ACTIVE, breakGlassAvailableAt: future.toISOString() });
+    render(<PlatformMfaCard token="tok" />);
+    const iso = future.toISOString();
+    const expected = `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+    expect(await screen.findByText(new RegExp(`desde el ${expected}\\.`))).toBeInTheDocument();
+  });
+
   it('ya no ofrece activarla: el alta es la del login', async () => {
     mockedGet.mockResolvedValue(ACTIVE);
     render(<PlatformMfaCard token="tok" />);

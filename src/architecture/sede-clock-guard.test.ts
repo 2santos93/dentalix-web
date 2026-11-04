@@ -27,6 +27,9 @@ import ts from 'typescript';
  *    símbolo local («$», «US$», «Bs.S»), ambiguo en un producto bimonetario.
  *    Los importes con el formato de la sede llevan siempre el código ISO:
  *    `sedeMoney`/`moneyWithCode` de `@/lib/format/sede-number`.
+ * 4. `platformInstant` (el instante en UTC de la consola de plataforma, sin
+ *    sede, DX-354b E8) solo se importa desde `components/platform/**`: en
+ *    cualquier otra pantalla sería «un formato que no es el de la sede».
  */
 const SRC = join(__dirname, '..');
 const FORMAT_DATE_MODULES = new Set(['@/lib/format/date']);
@@ -41,31 +44,11 @@ const SEDELESS_HELPERS = new Set([
   'formatCivilDate',
 ]);
 
-const ZONE_24H = 'Ya usa la zona de la sede, pero con 24 h fijas: falta pasar a fmt.dateTime/fmt.time.';
 const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del navegador: pendiente de migrar a la sede.';
 
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
-  'components/cash-sessions/cash-shifts-view.tsx': ZONE_24H,
-  'components/collections/patient-collections-section.tsx': STAMP,
-  'components/discounts/discount-policy-manager.tsx': STAMP,
-  'components/domains/domains-manager.tsx': STAMP,
-  'components/expenses/expense-detail-modal.tsx': STAMP,
-  'components/inventory/inventory-item-detail.tsx': STAMP,
-  'components/inventory/inventory-view.tsx': STAMP,
-  'components/locations/cancellation-policy-settings.tsx': STAMP,
   'components/odontogram/tooth-timeline.tsx': STAMP,
-  'components/patient-imports/import-history.tsx': STAMP,
-  'components/payments/cash-register-view.tsx': STAMP,
-  'components/platform/platform-mfa-card.tsx': STAMP,
-  'components/receivables/debtor-parts.tsx': STAMP,
-  'components/support-accesses/support-accesses-view.tsx': STAMP,
-  'components/treatment-plans/pending-follow-up-view.tsx': STAMP,
-  'components/treatment-plans/plan-options-panel.tsx': STAMP,
-  'components/treatment-plans/plan-quote-actions.tsx': STAMP,
-  'components/treatment-plans/treatment-plans-tab-copy.ts': STAMP,
-  'lib/treatment-plans/item-attribution.ts': STAMP,
-  'lib/treatment-plans/plan-options.ts': STAMP,
 };
 
 /**
@@ -73,7 +56,7 @@ const PENDING: Readonly<Record<string, string>> = {
  * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
  * cierre, `PENDING` desaparece.
  */
-const MAX_PENDING = 20;
+const MAX_PENDING = 1;
 
 const CIVIL_W4 = 'Día civil en `dd/mm/yyyy` fijo: se migra a `fmt.civilDate`/`stamp.civilDate` en DX-354b W4.';
 
@@ -86,9 +69,7 @@ const CIVIL_PENDING: Readonly<Record<string, string>> = {
   'components/consents/new-consent-modal.tsx': CIVIL_W4,
   'components/implants/implant-lot-search.tsx': CIVIL_W4,
   'components/odontogram/odontogram-tab.tsx': CIVIL_W4,
-  'components/patient-credit/credit-refund-modal.tsx': CIVIL_W4,
   'components/patients/patient-data-panel.tsx': CIVIL_W4,
-  'components/payments/reallocate-payment-modal.tsx': CIVIL_W4,
   'components/perio/perio-exam-editor.tsx': CIVIL_W4,
   'components/perio/perio-tab.tsx': CIVIL_W4,
   'components/recall/patient-recall-section.tsx': CIVIL_W4,
@@ -100,7 +81,7 @@ const CIVIL_PENDING: Readonly<Record<string, string>> = {
   'lib/patients/agreement-presentation.ts': CIVIL_W4,
   'lib/patients/coverage-presentation.ts': CIVIL_W4,
 };
-const MAX_CIVIL_PENDING = 17;
+const MAX_CIVIL_PENDING = 15;
 
 /** Las pantallas de DX-378 (y las migradas después): no pueden volver a la lista. */
 const MIGRATED = [
@@ -161,6 +142,31 @@ const MIGRATED = [
   'components/prescriptions/prescription-templates-manager.tsx',
   'lib/patients/member-number.ts',
   'components/clinical/anamnesis-review-line.tsx',
+  // DX-354b W2: caja, cobros, cartera, gastos e importaciones: cada fila con la sede de su dato.
+  'components/cash-sessions/cash-shifts-view.tsx',
+  'components/collections/patient-collections-section.tsx',
+  'components/expenses/expense-detail-modal.tsx',
+  'components/locations/cancellation-policy-settings.tsx',
+  'components/patient-imports/import-history.tsx',
+  'components/payments/cash-register-view.tsx',
+  'components/receivables/debtor-parts.tsx',
+  'components/patient-credit/credit-refund-modal.tsx',
+  'components/payments/reallocate-payment-modal.tsx',
+  // DX-354b W3: planes de tratamiento, con la sede del dato (o el pintor por parámetro en `lib/**`).
+  'components/treatment-plans/pending-follow-up-view.tsx',
+  'components/treatment-plans/plan-options-panel.tsx',
+  'components/treatment-plans/plan-quote-actions.tsx',
+  'components/treatment-plans/treatment-plans-tab-copy.ts',
+  'lib/treatment-plans/item-attribution.ts',
+  'lib/treatment-plans/plan-options.ts',
+  // DX-354b W3: inventario y ajustes de clínica, con la sede de la pantalla (el dato no trae sede).
+  'components/discounts/discount-policy-manager.tsx',
+  'components/domains/domains-manager.tsx',
+  'components/inventory/inventory-item-detail.tsx',
+  'components/inventory/inventory-view.tsx',
+  'components/support-accesses/support-accesses-view.tsx',
+  // DX-354b W3 (E8): la consola de plataforma no tiene sede; escribe el instante en UTC con su zona (`platformInstant`).
+  'components/platform/platform-mfa-card.tsx',
 ];
 
 /**
@@ -274,7 +280,11 @@ function symbolMoneyCalls(source: ts.SourceFile): string[] {
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'money'
+      node.expression.name.text === 'money' &&
+      // `stamp.money(…)` es el pintor de la sede (`moneyWithCode`, con el código ISO), no `RegionalFormat.money`.
+      // Ojo: se salva por el NOMBRE del receptor, no por su tipo; un `RegionalFormat` guardado en una variable
+      // llamada `stamp` se saltaría la regla.
+      !/(^|\.)stamp$/.test(node.expression.expression.getText(source))
     ) {
       const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
       found.push(`${line + 1}: ${node.getText(source).split('\n')[0]}`);
@@ -299,6 +309,25 @@ function rule1Offenders(
     }))
     .filter(({ used }) => used.length > 0)
     .map(({ rel, used }) => `${rel}: ${used.join(', ')}`);
+}
+
+/** Regla 4: quien importa `platformInstant` (de `@/lib/format/platform-instant` o por ruta relativa). */
+function importsPlatformInstant(source: ts.SourceFile): boolean {
+  return source.statements.some((statement) => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) return false;
+    const specifier = statement.moduleSpecifier.text;
+    const resolved = specifier.startsWith('.')
+      ? relative(SRC, join(source.fileName, '..', specifier)).split(sep).join('/')
+      : specifier.replace(/^@\//, '');
+    return resolved === 'lib/format/platform-instant';
+  });
+}
+
+/** Regla 4: los ficheros fuera de `components/platform/**` que importan `platformInstant`. */
+function rule4Offenders(scannedFiles: readonly { rel: string; source: ts.SourceFile }[]): string[] {
+  return scannedFiles
+    .filter(({ rel, source }) => !rel.startsWith('components/platform/') && importsPlatformInstant(source))
+    .map(({ rel }) => rel);
 }
 
 const files = sourceFiles(SRC)
@@ -348,6 +377,13 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
   it('no amount is painted with the currency symbol (fmt.money) outside lib/format: always the ISO code', () => {
     const offenders = files.flatMap(({ rel, source }) => symbolMoneyCalls(source).map((hit) => `${rel}:${hit}`));
     expect(offenders).toEqual([]);
+  });
+
+  it('platformInstant (UTC, sin sede) solo se importa desde components/platform (DX-354b, E8)', () => {
+    expect(rule4Offenders(files)).toEqual([]);
+    // La consola lo usa de verdad: la regla no se cumple por falta de uso.
+    const card = files.find((f) => f.rel === 'components/platform/platform-mfa-card.tsx');
+    expect(card && importsPlatformInstant(card.source)).toBe(true);
   });
 
   it('the DX-386 payment screens paint amounts with the ISO code and never go back to formatCurrency', () => {
@@ -402,9 +438,26 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
       'components/nueva/pantalla.tsx: formatDate',
     ]);
 
+    // Mutación de la regla 4: otra carpeta que importe `platformInstant` falla; la consola, no; ni alias ni ruta relativa se escapan.
+    const platformImport = "import { platformInstant } from '@/lib/format/platform-instant';";
+    const at = (rel: string, code: string) => [{ rel, source: parse(join(SRC, rel), code) }];
+    expect(rule4Offenders(at('components/audit/audit-log-view.tsx', platformImport))).toEqual([
+      'components/audit/audit-log-view.tsx',
+    ]);
+    expect(rule4Offenders(at('components/platform/platform-mfa-card.tsx', platformImport))).toEqual([]);
+    expect(
+      rule4Offenders(
+        at('components/audit/audit-log-view.tsx', "import { platformInstant } from '../../lib/format/platform-instant';"),
+      ),
+    ).toEqual(['components/audit/audit-log-view.tsx']);
+    expect(rule4Offenders(at('components/audit/audit-log-view.tsx', "import { sedeTime } from '@/lib/locations/sede-clock';"))).toEqual([]);
+
     const money = (code: string) => symbolMoneyCalls(parse('x.tsx', code)).length;
     expect(money('fmt.money(1, "USD"); clock.fmt.money(1, c);')).toBe(2);
     expect(money('sedeMoney(1, "USD", fmt); moneyWithCode(1, c, fmt); formatCurrency(1, c);')).toBe(0);
+    // El pintor de la sede lleva el código ISO: se permite; el símbolo de `RegionalFormat`, no.
+    expect(money('stamp.money(1, "USD"); props.stamp.money(1, c, id);')).toBe(0);
+    expect(money('stamp.fmt.money(1, "USD"); fmt.money(1, c);')).toBe(2);
 
     const locales = (code: string) => literalLocaleCalls(parse('x.tsx', code)).length;
     expect(locales("new Intl.NumberFormat('es', { maximumFractionDigits: 2 });")).toBe(1);

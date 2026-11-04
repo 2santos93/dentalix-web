@@ -1,3 +1,5 @@
+import { dateIn, STAMP_SEDES, testStamp } from '@/lib/test/stamp';
+import { stampPainters, type SedePainters } from '@/lib/locations/sede-stamp';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PlanOptionsPanel } from './plan-options-panel';
@@ -44,7 +46,12 @@ function plan(overrides: Partial<TreatmentPlan> = {}): TreatmentPlan {
   };
 }
 
-function renderPanel(p: TreatmentPlan, role: ClinicRole, group: TreatmentPlan[] = []) {
+function renderPanel(
+  p: TreatmentPlan,
+  role: ClinicRole,
+  group: TreatmentPlan[] = [],
+  stamp: SedePainters = testStamp([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]),
+) {
   const props = {
     token: 'tok',
     plan: p,
@@ -52,6 +59,7 @@ function renderPanel(p: TreatmentPlan, role: ClinicRole, group: TreatmentPlan[] 
     role,
     onChanged: jest.fn().mockResolvedValue(undefined),
     onSelectPlan: jest.fn(),
+    stamp,
   };
   render(<PlanOptionsPanel {...props} />);
   return props;
@@ -99,7 +107,9 @@ describe('PlanOptionsPanel (DX-040)', () => {
       plan({ status: 'PRESENTED', presentedAt: '2026-10-07T15:00:00.000Z', optionLabel: 'Opción A' }),
       'DENTIST',
     );
-    expect(screen.getByText('Presentado al paciente el 07/10/2026')).toBeInTheDocument();
+    expect(
+      screen.getByText(`Presentado al paciente el ${dateIn('caracas', '2026-10-07T15:00:00.000Z')}`),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Marcar rechazado' }));
     await user.click(await screen.findByRole('radio', { name: 'Precio' }));
     await user.click(screen.getByRole('button', { name: 'Marcar rechazado' }));
@@ -117,8 +127,43 @@ describe('PlanOptionsPanel (DX-040)', () => {
       }),
       'DENTIST',
     );
-    expect(screen.getByText('Rechazado el 10/10/2026 · Otro')).toBeInTheDocument();
+    expect(
+      screen.getByText(`Rechazado el ${dateIn('caracas', '2026-10-10T15:00:00.000Z')} · Otro`),
+    ).toBeInTheDocument();
     expect(screen.getByText('Se muda de ciudad')).toBeInTheDocument();
+  });
+
+  it('«Presentado» sale con el reloj de la sede donde se presentó (Berlín), no con el de la pantalla (Caracas)', () => {
+    const presentedAt = '2026-10-08T02:30:00.000Z'; // 7 de octubre en Caracas, 8 en Berlín
+    renderPanel(
+      plan({ status: 'PRESENTED', presentedAt, presentedLocationId: STAMP_SEDES.berlin.id }),
+      'DENTIST',
+    );
+    expect(screen.getByText(`Presentado al paciente el ${dateIn('berlin', presentedAt)}`)).toBeInTheDocument();
+    expect(dateIn('berlin', presentedAt)).not.toBe(dateIn('caracas', presentedAt));
+  });
+
+  it('una sede de la fila sin formato o desconocida: «—», nunca la fecha de la pantalla', () => {
+    const presentedAt = '2026-10-08T02:30:00.000Z';
+    renderPanel(
+      plan({ status: 'PRESENTED', presentedAt, presentedLocationId: 'sede-borrada' }),
+      'DENTIST',
+    );
+    expect(screen.getByText('Presentado al paciente el —')).toBeInTheDocument();
+  });
+
+  it('sin formato de la pantalla (cargando o error): «—» en las dos fechas', () => {
+    renderPanel(
+      plan({
+        status: 'REJECTED',
+        rejectedAt: '2026-10-10T15:00:00.000Z',
+        rejectionReason: 'OTHER',
+      }),
+      'DENTIST',
+      [],
+      stampPainters(null),
+    );
+    expect(screen.getByText('Rechazado el — · Otro')).toBeInTheDocument();
   });
 
   it('crear alternativa abre el modal, y al crearla se recarga y se abre la nueva', async () => {

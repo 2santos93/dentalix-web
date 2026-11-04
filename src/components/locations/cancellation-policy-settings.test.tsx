@@ -11,6 +11,8 @@ import {
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { ApiError } from '@/lib/api/client';
 import { clinicLocation } from '@/lib/test/locations';
+import { dateTimeIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { moneyWithCode } from '@/lib/format/sede-number';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -212,8 +214,8 @@ describe('CancellationPolicySettings: moneda de la sede (GLOBAL-G1)', () => {
     await user.type(within(dialog).getByLabelText('Importe sugerido (opcional)'), '3000');
     await user.click(within(dialog).getByRole('button', { name: 'Guardar versión nueva' }));
     expect(mockedCreate).toHaveBeenCalledWith('tok', 'loc-1', expect.objectContaining({ suggestedFee: 3000, currency: 'JPY' }));
-    // «Importe sugerido: 3000 JPY», sin decimales.
-    expect(await screen.findByText(/Importe sugerido: 3000\sJPY$/)).toBeInTheDocument();
+    // «Importe sugerido: JPY 3.000», sin decimales y con el formato de la sede (es-VE).
+    expect(await screen.findByText(/Importe sugerido: JPY\s3\.000$/)).toBeInTheDocument();
   });
 
   it('location without currency shows SedeConfigError and never a currency of its country', async () => {
@@ -235,5 +237,43 @@ describe('CancellationPolicySettings: moneda de la sede (GLOBAL-G1)', () => {
     mockedLocations.mockResolvedValue([{ ...SEDE, currency: 'EUR' }]);
     await user.click(within(dialog).getByRole('button', { name: /reintentar/i }));
     expect(await within(dialog).findByLabelText('Moneda')).toHaveValue('EUR');
+  });
+});
+
+describe('CancellationPolicySettings: cada versión con el formato de SU sede (DX-354b)', () => {
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+  const fee = (locationId: string, currency: string) =>
+    version(1, { locationId, suggestedFee: 1234.5, currency, createdAt: '2026-11-03T03:30:00.000Z' });
+
+  it.each([
+    ['sede-caracas', 'caracas', 'VES', 'VES 1.234,50'],
+    ['sede-berlin', 'berlin', 'EUR', '1.234,50 EUR'],
+    ['sede-miami', 'miami', 'USD', 'USD 1,234.50'],
+  ] as const)('la sede %s pinta su importe sugerido y la fecha de su versión con su formato', async (id, key, currency, expected) => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedGet.mockImplementation(async (_token, locationId) => ({
+      locationId,
+      current: fee(locationId, locationId === id ? currency : 'USD'),
+      versions: [fee(locationId, locationId === id ? currency : 'USD')],
+    }));
+    render(<CancellationPolicySettings token="tok" locationId={id} />);
+    const line = await screen.findByText(/Importe sugerido:/);
+    expect(norm(line.textContent)).toContain(norm(moneyWithCode(1234.5, currency, STAMP_FORMATS[key])));
+    expect(norm(line.textContent)).toContain(expected);
+    await user.click(screen.getByRole('button', { name: /Historial de versiones/ }));
+    const version1 = await screen.findByText(/Versión 1 ·/);
+    expect(norm(version1.textContent)).toContain(norm(dateTimeIn(key, '2026-11-03T03:30:00.000Z')));
+  });
+
+  it('la lista de todas las sedes mezcla formatos fila a fila y muestra un solo aviso si una sede no tiene formato', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, clinicLocation({ id: 'sede-rota', name: 'Rota', locale: null, hourCycle: null })]);
+    mockedGet.mockImplementation(async (_token, locationId) => ({
+      locationId,
+      current: fee(locationId, 'USD'),
+      versions: [fee(locationId, 'USD')],
+    }));
+    render(<CancellationPolicySettings token="tok" />);
+    expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
   });
 });

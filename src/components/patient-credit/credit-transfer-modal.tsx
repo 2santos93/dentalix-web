@@ -7,12 +7,14 @@ import { MoneyInput } from '@/components/shared/money-input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatCurrency } from '@/lib/format/currency';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { parseMoneyInput } from '@/lib/format/money';
 import { transferCredit } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatementPlan } from '@/lib/account-statement/account-statement-api';
 import { creditPreviewCopy, type CreditSource } from './credit-balance';
 import { CreditPreview } from './credit-preview';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 const copy = {
   title: 'Aplicar saldo a favor a otro plan',
@@ -56,6 +58,7 @@ export function CreditTransferModal({
   planName,
   onDone,
 }: CreditTransferModalProps) {
+  const stamp = useSedeStamp(token);
   const [targetId, setTargetId] = useState(targets[0]?.id ?? '');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
@@ -73,15 +76,15 @@ export function CreditTransferModal({
         ? [
             {
               label: creditPreviewCopy.creditLeft,
-              value: formatCurrency(Math.max(0, source.credit - value), source.currency),
+              value: stamp.money(Math.max(0, source.credit - value), source.currency),
             },
             {
               label: creditPreviewCopy.targetBalance(planName(target.id)),
-              value: formatCurrency(target.balance - value, source.currency),
+              value: stamp.money(target.balance - value, source.currency),
             },
           ]
         : [],
-    [target, source, value, planName],
+    [target, source, value, planName, stamp],
   );
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -92,7 +95,7 @@ export function CreditTransferModal({
       return;
     }
     if (Math.round(parsed.value * 100) > Math.round(source.credit * 100)) {
-      setAmountError(copy.overCredit(formatCurrency(source.credit, source.currency)));
+      setAmountError(copy.overCredit(stamp.money(source.credit, source.currency)));
       return;
     }
     setAmountError(null);
@@ -116,7 +119,7 @@ export function CreditTransferModal({
     setSubmitting(true);
     try {
       await transferCredit(token, source.planId, body, key.current.key);
-      onDone(copy.done(formatCurrency(parsed.value, source.currency), planName(target.id)));
+      onDone(copy.done(stamp.money(parsed.value, source.currency), planName(target.id)));
     } catch (err) {
       setError(apiErrorMessage(err, { fallback: copy.failed }));
     } finally {
@@ -133,11 +136,13 @@ export function CreditTransferModal({
       onSubmit={(e) => void handleSubmit(e)}
       submitLabel={copy.submit}
       submitting={submitting}
-      submitDisabled={!target}
+      // Sin el formato de la sede no se puede decir el tope del traspaso: no se envía a ciegas.
+      submitDisabled={!target || stamp.money(source.credit, source.currency) === NO_SEDE_FORMAT}
       error={error}
     >
+      <SedeStampNote stamp={stamp} />
       <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink tabular-nums">
-        {creditPreviewCopy.source(planName(source.planId), formatCurrency(source.credit, source.currency))}
+        {creditPreviewCopy.source(planName(source.planId), stamp.money(source.credit, source.currency))}
       </p>
       {targets.length === 0 ? (
         <p role="note" className="text-sm text-muted">
@@ -154,13 +159,14 @@ export function CreditTransferModal({
             >
               {targets.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {`${planName(t.id)} · ${creditPreviewCopy.balance(formatCurrency(t.balance, t.currency))}`}
+                  {`${planName(t.id)} · ${creditPreviewCopy.balance(stamp.money(t.balance, t.currency))}`}
                 </option>
               ))}
             </NativeSelect>
           </FormField>
           <FormField htmlFor="ct-amount" label={copy.amount} error={amountError}>
             <MoneyInput
+              money={stamp.money}
               id="ct-amount"
               currency={source.currency}
               requirePositive

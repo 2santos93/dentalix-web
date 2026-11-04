@@ -1,6 +1,9 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { InventoryItem } from './inventory-item-detail';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { dateIn, STAMP_SEDES } from '@/lib/test/stamp';
 // Relative path: SWC no reescribe el alias '@/' dentro de jest.mock, así que el
 // mock debe resolver al mismo módulo absoluto que importa el componente.
 import {
@@ -15,6 +18,8 @@ const push = jest.fn();
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 jest.mock('../../lib/inventory/inventory-api', () => ({
   getInventoryItem: jest.fn(),
   recordInventoryMovement: jest.fn(),
@@ -54,6 +59,7 @@ describe('InventoryItem', () => {
     push.mockClear();
     mockedGetItem.mockReset();
     mockedRecord.mockReset();
+    mockedLocations.mockReset().mockResolvedValue([STAMP_SEDES.caracas]);
   });
 
   it('loads the item and renders its ledger with signed quantities', async () => {
@@ -174,5 +180,38 @@ describe('InventoryItem', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Sí, eliminar' }));
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'item1'));
     expect(push).toHaveBeenCalledWith('/inventory');
+  });
+
+  describe('fechas del libro de movimientos con el formato de la sede (DX-354b)', () => {
+    // 02:30Z: el día anterior en Caracas, el mismo día en Berlín.
+    const at = '2026-07-04T02:30:00.000Z';
+    const withDate = () => detail({ movements: [{ ...detail().movements![0], occurredAt: at }] });
+
+    it('Caracas y Berlín pintan la misma entrada con su día', async () => {
+      mockedGetItem.mockResolvedValue(withDate());
+      const { unmount } = render(<InventoryItem token="tok" id="item1" />);
+      await screen.findByText('Jeringas');
+      expect(await screen.findByText(dateIn('caracas', at))).toBeInTheDocument();
+      unmount();
+      mockedLocations.mockResolvedValue([STAMP_SEDES.berlin]);
+      render(<InventoryItem token="tok" id="item1" />);
+      await screen.findByText('Jeringas');
+      expect(await screen.findByText(dateIn('berlin', at))).toBeInTheDocument();
+      expect(dateIn('berlin', at)).not.toBe(dateIn('caracas', at));
+    });
+
+    it('sin formato de la sede: «—» (con texto para el lector) y un solo aviso; cargando, sin aviso', async () => {
+      mockedGetItem.mockResolvedValue(withDate());
+      mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+      const { unmount } = render(<InventoryItem token="tok" id="item1" />);
+      await screen.findByText('Jeringas');
+      expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+      expect(screen.getByText('Sin dato')).toBeInTheDocument();
+      unmount();
+      mockedLocations.mockReturnValue(new Promise(() => undefined));
+      render(<InventoryItem token="tok" id="item1" />);
+      await screen.findByText('Jeringas');
+      expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
+    });
   });
 });

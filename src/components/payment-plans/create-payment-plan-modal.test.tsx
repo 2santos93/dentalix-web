@@ -4,18 +4,30 @@ import { CreatePaymentPlanModal } from './create-payment-plan-modal';
 import { ApiError } from '@/lib/api/client';
 import { createPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
 import { regionalFormat } from '@/lib/format/regional-format';
-import { sedeMoney } from '@/lib/format/sede-number';
+import { moneyWithCode, sedeMoney } from '@/lib/format/sede-number';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { stampPainters } from '@/lib/locations/sede-stamp';
+import { testAgendaClock } from '@/lib/test/sede-clock';
 
 jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
   createPaymentPlan: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+
 const mockedCreate = createPaymentPlan as jest.MockedFunction<typeof createPaymentPlan>;
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+/** El `money` de la pantalla que abre el modal: Caracas (es-VE) o Berlín (de-DE). */
+const caracasMoney = stampPainters(testAgendaClock([STAMP_SEDES.caracas, STAMP_SEDES.berlin])).money;
+const berlinMoney = stampPainters(testAgendaClock([STAMP_SEDES.berlin, STAMP_SEDES.caracas])).money;
 
 const PLAN = { id: 'plan-1', currency: 'VES', billable: 1200000 };
 
 beforeEach(() => {
   mockedCreate.mockReset();
+  mockedLocations.mockReset().mockResolvedValue([clinicLocation()]);
 });
 
 function renderModal(props: Partial<React.ComponentProps<typeof CreatePaymentPlanModal>> = {}) {
@@ -27,6 +39,7 @@ function renderModal(props: Partial<React.ComponentProps<typeof CreatePaymentPla
       onOpenChange={onOpenChange}
       token="tok"
       plan={PLAN}
+      money={caracasMoney}
       onCreated={onCreated}
       {...props}
     />,
@@ -34,8 +47,11 @@ function renderModal(props: Partial<React.ComponentProps<typeof CreatePaymentPla
   return { ...utils, onCreated, onOpenChange };
 }
 
-it('propone 12 cuotas mensuales desde hoy, sin pie y el total facturable del plan', () => {
+it('propone 12 cuotas mensuales desde hoy, sin pie y el total facturable del plan', async () => {
   renderModal();
+  await waitFor(() =>
+    expect(screen.getByRole('dialog').querySelector<HTMLInputElement>('input[name="pp-start"]')?.value).toMatch(/^\d{4}-\d{2}-\d{2}$/),
+  );
   const dialog = screen.getByRole('dialog', { name: 'Crear plan de pagos' });
   expect(within(dialog).getByLabelText('N.º de cuotas')).toHaveValue(12);
   expect(within(dialog).getByLabelText('Periodicidad')).toHaveValue('MONTHLY');
@@ -45,7 +61,46 @@ it('propone 12 cuotas mensuales desde hoy, sin pie y el total facturable del pla
   expect(dialog.querySelector<HTMLInputElement>('input[name="pp-start"]')?.value).toMatch(
     /^\d{4}-\d{2}-\d{2}$/,
   );
-  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Cuota: 100.000,00 VES');
+  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Cuota: VES 100.000,00');
+});
+
+it('la vista previa sale con el formato de cada sede: Caracas «VES 100.000,00», Berlín «100.000,00 VES» (DX-354b)', () => {
+  const { unmount } = renderModal({ money: caracasMoney });
+  expect(screen.getByRole('dialog').textContent).toContain(`Cuota: ${moneyWithCode(100000, 'VES', STAMP_FORMATS.caracas)}`);
+  unmount();
+  renderModal({ money: berlinMoney });
+  expect(screen.getByRole('dialog').textContent).toContain(`Cuota: ${moneyWithCode(100000, 'VES', STAMP_FORMATS.berlin)}`);
+  expect(screen.getByRole('dialog').textContent).not.toContain(moneyWithCode(100000, 'VES', STAMP_FORMATS.caracas));
+});
+
+describe('la fecha de inicio por defecto es el día de la sede, no el del navegador (DX-354b, E9)', () => {
+  const REAL_CLOCK = [
+    'hrtime', 'nextTick', 'performance', 'queueMicrotask', 'requestAnimationFrame',
+    'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'setImmediate',
+    'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout',
+  ] as const;
+  afterEach(() => jest.useRealTimers());
+
+  it.each([
+    // 02:30 UTC: en Caracas (UTC−4) aún es el 2 de noviembre; en Tokio (UTC+9), ya el 3.
+    ['America/Caracas', '2026-11-02'],
+    ['Asia/Tokyo', '2026-11-03'],
+  ])('con el reloj del navegador a las 02:30Z, en %s hoy es %s', async (timeZone, expected) => {
+    jest.useFakeTimers({ now: new Date('2026-11-03T02:30:00Z'), doNotFake: [...REAL_CLOCK] });
+    mockedLocations.mockResolvedValue([clinicLocation({ timeZone })]);
+    renderModal();
+    await waitFor(() =>
+      expect(screen.getByRole('dialog').querySelector<HTMLInputElement>('input[name="pp-start"]')?.value).toBe(expected),
+    );
+  });
+
+  it('sin la zona de la sede no hay fecha por defecto: aviso con Reintentar y no se puede crear', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ timeZone: null })]);
+    renderModal();
+    expect(await screen.findByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Crear' })).toBeDisabled();
+    expect(screen.getByRole('dialog').querySelector('input[name="pp-start"]')).toBeNull();
+  });
 });
 
 it('DX-489: desde el plan de tratamiento, la vista previa sale con el formato de la sede (código delante)', () => {
@@ -107,7 +162,7 @@ it('DX-241: pie y total con miles se leen como en el resto de la app', async () 
   await user.type(within(dialog).getByLabelText('Pie (opcional)'), '200.000');
   await user.clear(within(dialog).getByLabelText('Total a financiar'));
   await user.type(within(dialog).getByLabelText('Total a financiar'), '1.400.000');
-  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Financiado: 1.200.000,00 VES · Cuota: 100.000,00 VES');
+  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Financiado: VES 1.200.000,00 · Cuota: VES 100.000,00');
   await user.click(within(dialog).getByRole('button', { name: 'Crear' }));
   await waitFor(() =>
     expect(mockedCreate).toHaveBeenCalledWith(
@@ -171,6 +226,7 @@ it('al cambiar de plan, el total vuelve al facturable del plan nuevo', () => {
       onOpenChange={onOpenChange}
       token="tok"
       plan={{ id: 'plan-2', currency: 'USD', billable: 900 }}
+      money={caracasMoney}
       onCreated={onCreated}
     />,
   );

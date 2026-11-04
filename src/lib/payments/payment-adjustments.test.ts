@@ -1,5 +1,9 @@
 import vectors from './payment-adjustment-vectors.json';
 import { roundingDigits } from '@/lib/money/line-rounding';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { stampPainters } from '@/lib/locations/sede-stamp';
+import { testAgendaClock } from '@/lib/test/sede-clock';
 import {
   adjustmentCalculationText,
   collectedAmount,
@@ -39,11 +43,17 @@ describe('ajustes por medio de pago (DX-516)', () => {
     expect(collectedAmount(c.amount, lines)).toBe(c.collected);
   });
 
-  it('pinta el cálculo y el importe con signo', () => {
+  it('pinta el cálculo y el importe con signo con el formato de la sede (DX-354b)', () => {
+    const caracas = stampPainters(testAgendaClock([STAMP_SEDES.caracas, STAMP_SEDES.berlin])).money;
+    const berlin = stampPainters(testAgendaClock([STAMP_SEDES.berlin, STAMP_SEDES.caracas])).money;
+    const fixed = { calculation: 'FIXED', percent: null, fixedAmount: 1234.5, fixedCurrency: 'VES' } as const;
     expect(percentText(7.5)).toBe('7,5 %');
-    expect(adjustmentCalculationText({ calculation: 'PERCENT', percent: 3, fixedAmount: null, fixedCurrency: null })).toBe('3 %');
-    expect(adjustmentCalculationText({ calculation: 'FIXED', percent: null, fixedAmount: 2, fixedCurrency: 'USD' })).toMatch(/2,00/);
-    expect(signedAdjustmentAmount({ type: 'DISCOUNT', amount: 5, currency: 'USD' })).toMatch(/^−5,00/);
-    expect(signedAdjustmentAmount({ type: 'TAX', amount: 3, currency: 'USD' })).toMatch(/^\+3,00/);
+    expect(adjustmentCalculationText({ calculation: 'PERCENT', percent: 3, fixedAmount: null, fixedCurrency: null }, caracas)).toBe('3 %');
+    expect(adjustmentCalculationText(fixed, caracas)).toBe(moneyWithCode(1234.5, 'VES', STAMP_FORMATS.caracas));
+    expect(adjustmentCalculationText(fixed, berlin)).toBe(moneyWithCode(1234.5, 'VES', STAMP_FORMATS.berlin));
+    expect(adjustmentCalculationText(fixed, caracas)).toBe('VES\u00a01.234,50');
+    expect(adjustmentCalculationText(fixed, berlin)).toBe('1.234,50\u00a0VES');
+    expect(signedAdjustmentAmount({ type: 'DISCOUNT', amount: 5, currency: 'USD' }, caracas)).toBe('−USD\u00a05,00');
+    expect(signedAdjustmentAmount({ type: 'TAX', amount: 3, currency: 'USD' }, berlin)).toBe('+3,00\u00a0USD');
   });
 });

@@ -191,6 +191,122 @@ describe('CashSessionReport (DX-027)', () => {
     expect(screen.getByText('Nota de quien contó: Conté dos veces el cajón')).toBeInTheDocument();
   });
 
+  describe('recibos consultados antes de cerrar (SEC-043-bis)', () => {
+    const withViews = (
+      receiptViews: { receipts: number; views: number } | null,
+      { linkSessions = true, blind = true }: { linkSessions?: boolean; blind?: boolean } = {},
+    ) => {
+      const base = closedCashSessionFixture();
+      const closing = { ...base.closing!, blind, receiptViews };
+      render(<CashSessionReport session={{ ...base, closing, closings: [closing] }} linkSessions={linkSessions} />);
+    };
+
+    it('dice quién cerró, cuántos recibos y consultas, y enlaza la auditoría de esos días (con margen por la zona)', () => {
+      withViews({ receipts: 3, views: 5 });
+      const line = screen.getByTestId('closing-receipt-views');
+      expect(line).toHaveTextContent(
+        'Paola Martínez consultó 3 recibos de esta caja antes de cerrar (5 consultas).',
+      );
+      const link = within(line).getByRole('link', { name: 'Ver las consultas de recibos de esos días' });
+      expect(link).toHaveClass('text-primary-text');
+      const href = new URL(link.getAttribute('href')!, 'http://x');
+      expect(href.pathname).toBe('/settings/auditoria');
+      // Apertura y cierre del 17/10 en Caracas: un día más a cada lado.
+      expect(Object.fromEntries(href.searchParams)).toEqual({
+        actorUserId: 'u-recep',
+        resourceType: 'PAYMENT_RECEIPT',
+        from: '2026-10-16',
+        to: '2026-10-18',
+      });
+    });
+
+    it('el día del cierre sale de su hora en la zona de la sede, no de la fecha de bloqueo', () => {
+      const base = closedCashSessionFixture();
+      // 01:00 UTC del 18 = 21:00 del 17 en Caracas.
+      const closing = {
+        ...base.closing!,
+        blind: true,
+        closedAt: '2026-10-18T01:00:00.000Z',
+        suggestedLockDate: '2026-10-25',
+        receiptViews: { receipts: 1, views: 1 },
+      };
+      render(<CashSessionReport session={{ ...base, closing, closings: [closing] }} />);
+      const href = new URL(
+        screen.getByRole('link', { name: 'Ver las consultas de recibos de esos días' }).getAttribute('href')!,
+        'http://x',
+      );
+      expect(href.searchParams.get('to')).toBe('2026-10-18');
+    });
+
+    it('un recibo consultado una vez: en singular y sin el paréntesis', () => {
+      withViews({ receipts: 1, views: 1 });
+      expect(screen.getByTestId('closing-receipt-views')).toHaveTextContent(
+        /^Paola Martínez consultó 1 recibo de esta caja antes de cerrar\. Ver las consultas de recibos de esos días$/,
+      );
+    });
+
+    it('cada cierre a ciegas del historial con consultas, numerado; la vuelta 2 enlaza desde su reapertura', () => {
+      const base = closedCashSessionFixture();
+      const first = { ...base.closing!, id: 'cl-1', sequence: 1, blind: true, receiptViews: { receipts: 2, views: 2 } };
+      const second = {
+        ...base.closing!,
+        id: 'cl-2',
+        sequence: 2,
+        blind: true,
+        closedAt: '2026-10-20T23:00:00.000Z',
+        receiptViews: { receipts: 1, views: 1 },
+      };
+      render(
+        <CashSessionReport
+          session={{
+            ...base,
+            reopenCount: 1,
+            closing: second,
+            closings: [second, first],
+            reopenings: [
+              {
+                id: 'r-1',
+                sequence: 1,
+                reopenedAt: '2026-10-19T15:00:00.000Z',
+                reopenedBy: { id: 'u-admin', fullName: 'Admin' },
+                reason: 'Revisar el cambio',
+              },
+            ],
+          }}
+        />,
+      );
+      const lines = screen.getAllByTestId('closing-receipt-views');
+      expect(lines.map((l) => l.textContent)).toEqual([
+        expect.stringMatching(/^Cierre 1: Paola Martínez consultó 2 recibos/),
+        expect.stringMatching(/^Cierre 2: Paola Martínez consultó 1 recibo /),
+      ]);
+      const href = new URL(within(lines[1]).getByRole('link').getAttribute('href')!, 'http://x');
+      expect(href.searchParams.get('from')).toBe('2026-10-18');
+      expect(href.searchParams.get('to')).toBe('2026-10-21');
+    });
+
+    it('sin consultas no dice nada', () => {
+      withViews({ receipts: 0, views: 0 });
+      expect(screen.queryByTestId('closing-receipt-views')).not.toBeInTheDocument();
+    });
+
+    it('para recepción (null) no hay línea', () => {
+      withViews(null);
+      expect(screen.queryByTestId('closing-receipt-views')).not.toBeInTheDocument();
+    });
+
+    it('un cierre con el esperado a la vista (la API manda null) no lleva línea', () => {
+      withViews(null, { blind: false });
+      expect(screen.queryByTestId('closing-receipt-views')).not.toBeInTheDocument();
+    });
+
+    it('en el impreso no aparece (el papel circula)', () => {
+      withViews({ receipts: 2, views: 2 }, { linkSessions: false });
+      expect(screen.queryByTestId('closing-receipt-views')).not.toBeInTheDocument();
+      expect(screen.queryByText(/consultó/)).not.toBeInTheDocument();
+    });
+  });
+
   it('cierre a ciegas sin motivo que no cuadró (SEC-043): «Diferencia sin justificar» para revisar', () => {
     const base = closedCashSessionFixture();
     const closing = { ...base.closing!, blind: true, differenceReason: null, unjustifiedDifference: true };

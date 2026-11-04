@@ -11,6 +11,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { MoneyInput } from '@/components/shared/money-input';
 import { parseMoneyInput } from '@/lib/format/money';
 import { CurrencySelect } from '@/components/shared/currency-select';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 export const promiseDialogCopy = {
   title: 'Compromiso de pago',
@@ -50,6 +51,7 @@ export function PaymentPromiseDialog({
   currencies,
   onSaved,
 }: PaymentPromiseDialogProps) {
+  const stamp = useSedeStamp(token);
   const options = currencies;
   const [amountText, setAmountText] = useState('');
   const [currency, setCurrency] = useState(options[0] ?? '');
@@ -113,6 +115,7 @@ export function PaymentPromiseDialog({
       <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
         <FormField htmlFor="pp-amount" label={promiseDialogCopy.amount} error={errors.amount}>
           <MoneyInput
+            money={stamp.money}
             id="pp-amount"
             currency={currency}
             requirePositive

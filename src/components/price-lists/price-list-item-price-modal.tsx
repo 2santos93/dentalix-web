@@ -48,6 +48,7 @@ export function PriceListItemPriceModal({
   onSaved,
 }: PriceListItemPriceModalProps) {
   const fmt = readyFormat(useSedeFormat(token));
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const [price, setPrice] = useState(row.price === null ? '' : moneyInputText(row.price));
   const [priceError, setPriceError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -92,6 +93,7 @@ export function PriceListItemPriceModal({
     >
       <FormField htmlFor="price-list-item-price" label={copy.price} hint={copy.hint} error={priceError}>
         <MoneyInput
+          money={money}
           id="price-list-item-price"
           currency={currency}
           value={price}

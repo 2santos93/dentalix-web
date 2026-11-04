@@ -152,8 +152,8 @@ test('recepción cobra 100,00 en efectivo: el modal anticipa el impuesto y el to
   await dialog.getByLabel('Método').selectOption({ label: 'Efectivo' });
   const preview = dialog.getByRole('region', { name: 'Ajustes de este medio de pago' });
   await expect(preview).toContainText('Impuesto 3 %');
-  await expect(preview).toContainText('+3,00 USD', { timeout: 15_000 });
-  await expect(preview).toContainText('103,00 USD');
+  await expect(preview).toContainText('+USD 3,00', { timeout: 15_000 });
+  await expect(preview).toContainText('USD 103,00');
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     await expectDialogInsideViewport(page, dialog);

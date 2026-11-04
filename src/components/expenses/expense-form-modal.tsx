@@ -13,7 +13,6 @@ import {
 } from '@/lib/expenses/expenses-api';
 import { EXPENSE_RECEIPT_ACCEPT, EXPENSE_RECEIPT_RULES } from '@/lib/expenses/presentation';
 import type { SingleFileUploadRequest } from '@/lib/files/upload-single-file';
-import { formatCurrency } from '@/lib/format/currency';
 import { moneyInputText } from '@/lib/format/money';
 import { collapseSpaces } from '@/lib/format/text';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
@@ -45,7 +44,8 @@ import {
 } from './expense-payment-fields';
 import type { ExpenseCategoriesState } from './use-expense-categories';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
-import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 export const expenseFormCopy = {
   ...expenseFieldsCopy,
@@ -167,6 +167,8 @@ export function ExpenseFormModal({
   const editing = expense !== undefined;
   const hasPayments = (expense?.payments.length ?? 0) > 0;
   const [form, setForm] = useState<FormState>(() => initialState(locations, defaultLocationId, expense));
+  // DX-354b: los importes del gasto con el formato de SU sede (la elegida en el formulario).
+  const stamp = useSedeStamp(token, [form.locationId, expense?.locationId]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -221,7 +223,7 @@ export function ExpenseFormModal({
     const { amount, error: amountError } = parseExpenseAmount(form.amount, form.currency);
     if (amountError) next.amount = amountError;
     if (amount !== null && expense && Math.round(amount * 100) < Math.round(expense.paidAmount * 100)) {
-      next.amount = expenseFormCopy.amountMin(formatCurrency(expense.paidAmount, expense.currency));
+      next.amount = expenseFormCopy.amountMin(stamp.money(expense.paidAmount, expense.currency, expense.locationId));
     }
     if (!form.invoiceDate) next.invoiceDate = expenseFormCopy.invoiceDateRequired;
     else if (today && form.invoiceDate > today) next.invoiceDate = expenseFormCopy.invoiceDateFuture;
@@ -304,6 +306,7 @@ export function ExpenseFormModal({
       onCloseAutoFocus={onCloseAutoFocus}
     >
       {zoneError ? <SectionError description={zoneError} onRetry={retryZone} /> : null}
+      <SedeStampNote stamp={stamp} />
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField
           htmlFor="expense-location"
@@ -385,6 +388,7 @@ export function ExpenseFormModal({
       <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
         <FormField htmlFor="expense-amount" label={expenseFormCopy.amount} error={errors.amount}>
           <MoneyInput
+            money={(amount, code) => stamp.money(amount, code, form.locationId)}
             id="expense-amount"
             currency={form.currency}
             requirePositive
@@ -463,11 +467,6 @@ export function ExpenseFormModal({
             upload={upload}
             disabled={submitting}
             fmt={receiptFormat}
-            formatNotice={
-              form.locationId && onRetryLocations ? (
-                <SedeConfigError kind="locale" variant="note" onRetry={onRetryLocations} locationId={form.locationId} />
-              ) : null
-            }
           />
 
           <div className="flex flex-col gap-4 border-t border-border-subtle pt-4">

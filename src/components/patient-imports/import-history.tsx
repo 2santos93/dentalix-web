@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Pagination } from '@/components/shared/pagination';
 import { notifyError } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { 
   downloadErrorsCsv,
   isInProgress,
@@ -97,6 +97,8 @@ export function ImportHistory({
 }) {
   const n = (value: number) => sedeNumber(value, fmt);
   const [items, setItems] = React.useState<ImportBatch[]>([]);
+  // La fecha de confirmación con zona, formato y reloj de la sede del lote (`b.locationId`, DX-354b); el aviso lo pone la pantalla.
+  const stamp = useSedeStamp(token, items.map((b) => b.locationId));
   const [page, setPage] = React.useState(1);
   const [total, setTotal] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(0);
@@ -271,7 +273,7 @@ export function ImportHistory({
                 </span>
               </div>
               <p className="tabular-nums text-muted">
-                {historyCopy.meta(formatDateTime(b.confirmedAt ?? b.createdAt), b.createdBy.fullName)}
+                {historyCopy.meta(stamp.dateTime(b.confirmedAt ?? b.createdAt, b.locationId), b.createdBy.fullName)}
               </p>
               {b.balances && b.balances.progress.ambiguous > 0 ? (
                 <p className="text-warning-text">{historyCopy.ambiguous(b.balances.progress.ambiguous, n(b.balances.progress.ambiguous))}</p>

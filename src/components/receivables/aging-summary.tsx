@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { formatCurrency } from '@/lib/format/currency';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { BUCKET_LABELS, BUCKET_ORDER } from '@/lib/receivables/presentation';
 import type { AgingTotal } from '@/lib/receivables/receivables-api';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,7 @@ const copy = {
  * Una moneda sin nada por cobrar (solo saldo a favor) no pinta cinco tramos a
  * cero; en el teléfono, los tramos a cero tampoco salen (crítica ops §5).
  */
-export function AgingSummary({ totals }: { totals: AgingTotal[] }) {
+export function AgingSummary({ totals, stamp }: { totals: AgingTotal[]; stamp: SedePainters }) {
   const headingId = React.useId();
   if (totals.length === 0) return null;
   return (
@@ -33,14 +33,14 @@ export function AgingSummary({ totals }: { totals: AgingTotal[] }) {
       </h2>
       <div className="divide-y divide-border-subtle">
         {totals.map((total) => (
-          <CurrencyTotals key={total.currency} total={total} />
+          <CurrencyTotals key={total.currency} total={total} stamp={stamp} />
         ))}
       </div>
     </section>
   );
 }
 
-function CurrencyTotals({ total }: { total: AgingTotal }) {
+function CurrencyTotals({ total, stamp }: { total: AgingTotal; stamp: SedePainters }) {
   const labelId = React.useId();
   const hasBuckets = BUCKET_ORDER.some((bucket) => total.buckets[bucket] > 0);
   return (
@@ -52,7 +52,7 @@ function CurrencyTotals({ total }: { total: AgingTotal }) {
         </p>
         <p className="text-sm text-muted">
           {copy.debt}{' '}
-          <span className="font-medium tabular-nums text-ink">{formatCurrency(total.debt, total.currency)}</span>
+          <span className="font-medium tabular-nums text-ink">{stamp.money(total.debt, total.currency)}</span>
         </p>
       </div>
       {hasBuckets ? (
@@ -74,7 +74,7 @@ function CurrencyTotals({ total }: { total: AgingTotal }) {
                     bucket === 'over90' && amount > 0 ? 'text-danger-text' : 'text-ink',
                   )}
                 >
-                  {formatCurrency(amount, total.currency)}
+                  {stamp.money(amount, total.currency)}
                 </dd>
               </div>
             );
@@ -85,7 +85,7 @@ function CurrencyTotals({ total }: { total: AgingTotal }) {
         <p className="mt-2 text-xs text-muted">
           {copy.credit}{' '}
           <span className="font-medium tabular-nums text-success-text">
-            {formatCurrency(total.credit, total.currency)}
+            {stamp.money(total.credit, total.currency)}
           </span>
           {' · '}
           {copy.creditHint}

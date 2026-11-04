@@ -15,7 +15,11 @@ import { startDownload } from '@/lib/patient-documents/download';
 import { expenseDetailFixture, expenseLocations, expensePaymentFixture } from '@/lib/test/expenses';
 import { setupUser } from '@/lib/test/user';
 import type { ExpenseCategoriesState } from './use-expense-categories';
+import { listLocations } from '@/lib/locations/locations-api';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { dateTimeIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('./use-expense-today', () => ({ useExpenseToday: () => ({ today: '2026-10-24', error: null, retry: jest.fn() }) }));
 jest.mock('../../lib/expenses/expenses-api', () => ({
   ...jest.requireActual('../../lib/expenses/expenses-api'),
@@ -38,6 +42,7 @@ jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]),
 }));
 
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedGet = getExpense as jest.MockedFunction<typeof getExpense>;
 const mockedVoid = voidExpense as jest.MockedFunction<typeof voidExpense>;
 const mockedVoidPayment = voidExpensePayment as jest.MockedFunction<typeof voidExpensePayment>;
@@ -67,8 +72,9 @@ const partial = expenseDetailFixture({ status: 'PARTIAL', paidAmount: 50_000, pe
   voidedPayment,
 ]);
 
-function renderDetail(locations = expenseLocations, onRetryLocations = jest.fn(), locationsSettled = true) {
+function renderDetail(locations = expenseLocations) {
   const onChanged = jest.fn();
+  mockedLocations.mockResolvedValue(locations);
   render(
     <ExpenseDetailModal
       open
@@ -76,8 +82,6 @@ function renderDetail(locations = expenseLocations, onRetryLocations = jest.fn()
       token="tok"
       expenseId="exp-1"
       locations={locations}
-      locationsSettled={locationsSettled}
-      onRetryLocations={onRetryLocations}
       categories={categories}
       onManageCategories={jest.fn()}
       onChanged={onChanged}
@@ -88,6 +92,7 @@ function renderDetail(locations = expenseLocations, onRetryLocations = jest.fn()
 
 describe('ExpenseDetailModal (DX-274)', () => {
   beforeEach(() => {
+    mockedLocations.mockReset().mockResolvedValue(expenseLocations);
     mockedGet.mockReset().mockResolvedValue(partial);
     mockedVoid.mockReset();
     mockedVoidPayment.mockReset();
@@ -103,7 +108,7 @@ describe('ExpenseDetailModal (DX-274)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental C.A.' });
     await screen.findByText(/Transferencia rechazada/);
     auditRenderedControls([{ html: dialog.outerHTML, selector: 'button[aria-label^="Anular"]' }]);
-    expect(within(dialog).getByRole('button', { name: /^Anular pago de 50\.000,00\sUSD del 21\/10\/2026$/ })).toHaveTextContent('Anular pago');
+    expect(within(dialog).getByRole('button', { name: /^Anular pago de USD\s50\.000,00 del 21\/10\/2026$/ })).toHaveTextContent('Anular pago');
   });
 
   it('enseña los datos, el estado y los pagos con la caja de la salida', async () => {
@@ -299,47 +304,44 @@ describe('ExpenseDetailModal (DX-274)', () => {
     expect(await screen.findByText('1.5 MB')).toBeInTheDocument();
   });
 
-  it('sede del gasto sin formato: tamaño «—» y el aviso, cuyo Reintentar relee las sedes', async () => {
+  it('sede del gasto sin formato: tamaño «—», un solo aviso y su Reintentar relee las sedes', async () => {
     const user = setupUser();
-    const retry = jest.fn();
     mockedGet.mockResolvedValue({
       ...expenseDetailFixture({ locationId: 'loc-2' }),
       attachment: { name: 'luz.pdf', mimeType: 'application/pdf', sizeBytes: 1.5 * 1024 * 1024, sha256: 'ab' },
     });
-    renderDetail([expenseLocations[0], { ...expenseLocations[1], locale: null, hourCycle: null }], retry);
+    renderDetail([expenseLocations[0], { ...expenseLocations[1], locale: null, hourCycle: null }]);
     expect(await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
     expect(screen.queryByText(/MB$/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+    mockedLocations.mockClear();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
-    expect(retry).toHaveBeenCalled();
+    await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
   });
 
-  it('mientras cargan las sedes no hay aviso de formato (sin destello); al cargar, sí', async () => {
+  it('mientras cargan las sedes no hay aviso de formato (sin destello); al cargar sin formato, sí', async () => {
+    let resolve: (value: typeof expenseLocations) => void = () => undefined;
+    mockedLocations.mockReturnValue(new Promise((r) => (resolve = r)));
     mockedGet.mockResolvedValue({
       ...expenseDetailFixture({ locationId: 'loc-2' }),
       attachment: { name: 'luz.pdf', mimeType: 'application/pdf', sizeBytes: 1.5 * 1024 * 1024, sha256: 'ab' },
     });
-    const props = {
-      open: true,
-      onOpenChange: jest.fn(),
-      token: 'tok',
-      expenseId: 'exp-1',
-      onRetryLocations: jest.fn(),
-      categories,
-      onManageCategories: jest.fn(),
-      onChanged: jest.fn(),
-    };
-    const { rerender } = render(<ExpenseDetailModal {...props} locations={[]} locationsSettled={false} />);
-    expect(await screen.findByText('luz.pdf', { exact: false })).toBeInTheDocument();
-    expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
-    // Cargadas, la sede del gasto no tiene formato: ahora sí, el aviso.
-    rerender(
+    render(
       <ExpenseDetailModal
-        {...props}
-        locations={[expenseLocations[0], { ...expenseLocations[1], locale: null, hourCycle: null }]}
-        locationsSettled
+        open
+        onOpenChange={jest.fn()}
+        token="tok"
+        expenseId="exp-1"
+        locations={[]}
+        categories={categories}
+        onManageCategories={jest.fn()}
+        onChanged={jest.fn()}
       />,
     );
-    expect(screen.getByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
+    expect(await screen.findByText('luz.pdf', { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
+    resolve([expenseLocations[0], { ...expenseLocations[1], locale: null, hourCycle: null }]);
+    expect(await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
   });
 
   it('si la lista de sedes falla, el aviso sí sale (con su Reintentar)', async () => {
@@ -347,8 +349,60 @@ describe('ExpenseDetailModal (DX-274)', () => {
       ...expenseDetailFixture({ locationId: 'loc-2' }),
       attachment: { name: 'luz.pdf', mimeType: 'application/pdf', sizeBytes: 1.5 * 1024 * 1024, sha256: 'ab' },
     });
-    renderDetail([], jest.fn(), true);
+    mockedLocations.mockRejectedValue(new Error('boom'));
+    render(
+      <ExpenseDetailModal
+        open
+        onOpenChange={jest.fn()}
+        token="tok"
+        expenseId="exp-1"
+        locations={[]}
+        categories={categories}
+        onManageCategories={jest.fn()}
+        onChanged={jest.fn()}
+      />,
+    );
     expect(await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
+  });
+
+  it('un gasto de la sede de Berlín en EUR sale «1.234,50 EUR», con sus fechas y su hora de registro de Berlín (no los de Caracas)', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    const payment = expensePaymentFixture({ id: 'pay-b', amount: 1234.5, currency: 'EUR', paidOn: '2026-10-20' });
+    mockedGet.mockResolvedValue({
+      ...expenseDetailFixture({
+        locationId: 'sede-berlin',
+        currency: 'EUR',
+        amount: 1234.5,
+        paidAmount: 0,
+        pendingAmount: 1234.5,
+        invoiceDate: '2026-10-20',
+        dueDate: '2026-11-19',
+        createdAt: '2026-11-03T03:30:00.000Z',
+      }),
+      payments: [payment],
+    });
+    render(
+      <ExpenseDetailModal
+        open
+        onOpenChange={jest.fn()}
+        token="tok"
+        expenseId="exp-1"
+        locations={[STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]}
+        categories={categories}
+        onManageCategories={jest.fn()}
+        onChanged={jest.fn()}
+      />,
+    );
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('Berlín');
+    const text = (dialog.textContent ?? '').replace(/\s/g, ' ');
+    expect(text).toContain('1.234,50 EUR');
+    expect(text).toContain(moneyWithCode(1234.5, 'EUR', STAMP_FORMATS.berlin).replace(/\s/g, ' '));
+    expect(text).toContain('20.10.2026');
+    expect(text).toContain('19.11.2026');
+    expect(text).toContain(dateTimeIn('berlin', '2026-11-03T03:30:00.000Z').replace(/\s/g, ' '));
+    expect(text).not.toContain(dateTimeIn('caracas', '2026-11-03T03:30:00.000Z').replace(/\s/g, ' '));
+    expect(text).not.toContain('EUR 1.234,50');
   });
 
   it('un gasto de una sede inactiva sigue diciendo de cuál es', async () => {
@@ -364,8 +418,6 @@ describe('ExpenseDetailModal (DX-274)', () => {
           { ...expenseLocations[1], id: 'loc-3', name: 'Sede cerrada', isActive: false },
         ]}
         categories={categories}
-        locationsSettled
-        onRetryLocations={jest.fn()}
         onManageCategories={jest.fn()}
         onChanged={jest.fn()}
       />,

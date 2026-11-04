@@ -3,18 +3,27 @@ import userEvent from '@testing-library/user-event';
 import { PatientCollectionsSection } from './patient-collections-section';
 import { getPatientCollections } from '@/lib/collections/collections-api';
 import { ApiError } from '@/lib/api/client';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { dateTimeIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { moneyWithCode } from '@/lib/format/sede-number';
 
 jest.mock('../../lib/collections/collections-api', () => ({
   getPatientCollections: jest.fn(),
   createCollectionNote: jest.fn(),
   createPaymentPromise: jest.fn(),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedGet = getPatientCollections as jest.MockedFunction<typeof getPatientCollections>;
 
 const patient = { id: 'pat-1', fullName: 'Ana Pérez' };
 
 describe('PatientCollectionsSection (DX-150)', () => {
-  beforeEach(() => mockedGet.mockReset());
+  beforeEach(() => {
+    mockedGet.mockReset();
+    mockedLocations.mockReset().mockResolvedValue([clinicLocation({ id: 'loc-1' })]);
+  });
 
   it('vacío: lo dice y ofrece registrar gestión y compromiso', async () => {
     mockedGet.mockResolvedValue({ notes: [], promises: [] });
@@ -176,5 +185,71 @@ describe('PatientCollectionsSection (DX-150)', () => {
       expect(await screen.findByText('Abierto')).toBeInTheDocument();
       expect(screen.getByText(/se anuló el abono que lo cumplía/)).toBeInTheDocument();
     });
+  });
+});
+
+describe('PatientCollectionsSection: cada compromiso y gestión con el formato de su sede (DX-354b)', () => {
+  const promise = (id: string, locationId: string, currency: string) => ({
+    id,
+    patientId: 'pat-1',
+    locationId,
+    amount: 1234.5,
+    currency,
+    dueDate: '2026-11-15',
+    status: 'OPEN' as const,
+    createdBy: { id: 'u1', fullName: 'Rita' },
+    createdAt: '2026-11-03T03:30:00.000Z',
+    settledAt: null,
+    reopenedAt: null,
+    covered: 0,
+  });
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+
+  it('el compromiso de Berlín sale «1.234,50 EUR», con su fecha y hora de Berlín; el de Miami, en en-US; el de Caracas, en es-VE', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedGet.mockResolvedValue({
+      notes: [],
+      promises: [
+        promise('pp-c', 'sede-caracas', 'VES'),
+        promise('pp-b', 'sede-berlin', 'EUR'),
+        promise('pp-m', 'sede-miami', 'USD'),
+      ],
+    });
+    render(<PatientCollectionsSection token="tok" patient={patient} />);
+    const rows = await screen.findAllByTestId('promise-row');
+    const [caracas, berlin, miami] = rows.map((row) => norm(row.textContent));
+    expect(caracas).toContain(norm(moneyWithCode(1234.5, 'VES', STAMP_FORMATS.caracas)));
+    expect(berlin).toContain(norm(moneyWithCode(1234.5, 'EUR', STAMP_FORMATS.berlin)));
+    expect(berlin).toContain('1.234,50 EUR');
+    expect(berlin).toContain(STAMP_FORMATS.berlin.civilDate('2026-11-15'));
+    expect(berlin).toContain(norm(dateTimeIn('berlin', '2026-11-03T03:30:00.000Z')));
+    expect(miami).toContain('USD 1,234.50');
+    expect(miami).toContain(norm(dateTimeIn('miami', '2026-11-03T03:30:00.000Z')));
+    expect(caracas).toContain(norm(dateTimeIn('caracas', '2026-11-03T03:30:00.000Z')));
+    expect(berlin).not.toContain(norm(dateTimeIn('caracas', '2026-11-03T03:30:00.000Z')));
+  });
+
+  it('una gestión sin sede usa la de la pantalla; una promesa de una sede desconocida sale «—» con un solo aviso', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.berlin]);
+    mockedGet.mockResolvedValue({
+      notes: [
+        {
+          id: 'n1',
+          patientId: 'pat-1',
+          locationId: null,
+          channel: 'CALL',
+          outcome: 'PROMISED_PAYMENT',
+          text: null,
+          author: { id: 'u1', fullName: 'Rita' },
+          createdAt: '2026-11-03T03:30:00.000Z',
+        },
+      ],
+      promises: [promise('pp-x', 'sede-desconocida', 'EUR')],
+    });
+    render(<PatientCollectionsSection token="tok" patient={patient} />);
+    const note = await screen.findByTestId('note-row');
+    expect(norm(note.textContent)).toContain(norm(dateTimeIn('berlin', '2026-11-03T03:30:00.000Z')));
+    expect(norm(screen.getByTestId('promise-row').textContent)).not.toContain('1.234,50');
+    expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
   });
 });
