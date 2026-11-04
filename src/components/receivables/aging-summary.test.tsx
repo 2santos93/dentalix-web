@@ -45,4 +45,18 @@ describe('AgingSummary (DX-145, DX-354b)', () => {
     expect(usd).toContain('Por cobrar —');
     expect(usd).not.toMatch(/1[.,]334/);
   });
+  it('DX-181 (FE-044): ningún importe se trunca; una cifra de 9 dígitos salta de línea, no se corta', () => {
+    const stamp = stampPainters(testAgendaClock([STAMP_SEDES.caracas]));
+    const big = { current: 0, days0to30: 123456789, days31to60: 987654321, days61to90: 1, over90: 555555555 };
+    render(<AgingSummary totals={[{ currency: 'VES', patients: 3, debt: 1666666666, credit: 0, buckets: big } as AgingTotal]} stamp={stamp} />);
+    const dds = screen.getByTestId('aging-total-VES').querySelectorAll('dd');
+    expect(dds.length).toBeGreaterThan(0);
+    dds.forEach((dd) => {
+      expect(dd.className).not.toMatch(/truncate|overflow-hidden|text-ellipsis/);
+      expect(dd.className).toContain('tabular-nums');
+      expect(dd.className).toContain('[overflow-wrap:anywhere]');
+    });
+    expect(norm(screen.getByTestId('aging-total-VES').textContent)).toContain('VES 123.456.789,00');
+    expect(screen.getByTestId('aging-total-VES').querySelector('dl')?.className).not.toContain('sm:grid-cols-5');
+  });
 });

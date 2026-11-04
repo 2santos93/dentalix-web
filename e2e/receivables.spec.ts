@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import AxeBuilder from '@axe-core/playwright';
 import { test, expect, type Page } from './support/test';
 import { loginAs } from './support/auth';
 import { apiLogin, apiPost, type ApiSession } from './support/api';
@@ -198,3 +199,40 @@ test('a 390 px los importes de cada tarjeta no se salen de ella (deudas de millo
   expect(overflowing, 'contenido fuera de la tarjeta').toEqual([]);
   await expectNoHorizontalScroll(page);
 });
+
+// DX-181 (FE-044): el resumen por antigüedad nunca recorta un importe, a ningún ancho.
+for (const width of [640, 768, 1024, 1440]) {
+  test(`a ${width} px el resumen por antigüedad no recorta ningún importe`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await loginAs(page, origin, RECEPTION, DEMO_PASSWORD);
+    await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
+    await page.goto(`${origin}/caja/cartera`);
+    const summary = page.getByRole('region', { name: 'Resumen por antigüedad' });
+    await expect(summary).toBeVisible({ timeout: 15_000 });
+    const clipped = await summary.locator('dd').evaluateAll((cells) =>
+      cells.flatMap((dd) => {
+        const style = getComputedStyle(dd);
+        const bad =
+          dd.scrollWidth > dd.clientWidth ||
+          style.textOverflow === 'ellipsis' ||
+          (dd.textContent ?? '').includes('…');
+        return bad ? [`${dd.textContent}: ${dd.scrollWidth}>${dd.clientWidth}`] : [];
+      }),
+    );
+    expect(clipped, 'importes recortados').toEqual([]);
+    await expectNoHorizontalScroll(page);
+  });
+}
+
+// DX-181 (FE-050 / axe): la cartera sin violaciones graves a 390 y 1440 px.
+for (const width of [390, 1440]) {
+  test(`axe en /caja/cartera a ${width} px: sin violaciones serias ni críticas`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await loginAs(page, origin, RECEPTION, DEMO_PASSWORD);
+    await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
+    await page.goto(`${origin}/caja/cartera`);
+    await expect(page.getByRole('region', { name: 'Resumen por antigüedad' })).toBeVisible({ timeout: 15_000 });
+    const axe = await new AxeBuilder({ page }).analyze();
+    expect(axe.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+  });
+}
