@@ -163,6 +163,16 @@ for (const viewport of VIEWPORTS) {
   test(`ADMIN: el saldo del plan avisa «sin tasa» y enlaza a Ajustes › Tasa de cambio (${viewport.name})`, async ({
     page,
   }) => {
+    // DX-394: ningún aviso de hidratación ni de anidación del DOM en la consola.
+    const domWarnings: string[] = [];
+    page.on('console', (msg) => {
+      if (/hydrat|validateDOMNesting|cannot (be a descendant|contain)|In HTML, /i.test(msg.text())) {
+        domWarnings.push(msg.text());
+      }
+    });
+    page.on('pageerror', (err) => {
+      if (/hydrat/i.test(err.message)) domWarnings.push(err.message);
+    });
     await page.setViewportSize(viewport);
     await loginAs(page, origin, adminEmail, password);
     const panel = await openPlanTab(page);
@@ -179,6 +189,26 @@ for (const viewport of VIEWPORTS) {
     await expect(panel.getByText(/^Sin tasa/).locator('visible=true').first()).toBeVisible();
     // DX-386: el importe del abono con el código ISO y el formato de la sede, sin símbolo.
     await expect(panel.getByText(PAYMENT_TEXT).locator('visible=true').first()).toBeVisible();
+    // DX-394: ninguna cifra de la pestaña Plan lleva el símbolo «US$».
+    expect(await panel.innerText()).not.toContain('US$');
+
+    // DX-394: «Registrar abono» con botones del pie y «Cerrar» de al menos 44 px.
+    await panel.getByRole('button', { name: 'Registrar abono' }).first().click();
+    const modal = page.getByRole('dialog', { name: 'Registrar abono' });
+    await expect(modal).toBeVisible();
+    const targets = [
+      modal.getByRole('button', { name: 'Cerrar' }),
+      modal.getByRole('button', { name: 'Cancelar' }),
+      modal.getByRole('button', { name: 'Registrar abono' }),
+    ];
+    for (const target of targets) {
+      const box = await target.boundingBox();
+      expect(box?.height ?? 0, 'alto del botón').toBeGreaterThanOrEqual(viewport.width === 390 ? 44 : 32);
+      if (viewport.width === 390) expect(box?.width ?? 0, 'ancho del botón').toBeGreaterThanOrEqual(44);
+    }
+    await modal.getByRole('button', { name: 'Cerrar' }).click();
+    await expect(modal).toHaveCount(0);
+    expect(domWarnings, 'avisos de hidratación/anidación').toEqual([]);
 
     await notice.getByRole('link', { name: 'Registrar la tasa en Ajustes › Tasa de cambio' }).click();
     await expect(page).toHaveURL(/\/settings\/tasa-de-cambio$/);
