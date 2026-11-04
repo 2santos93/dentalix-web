@@ -127,3 +127,23 @@ describe('FormModal errorRetry (QA DX-470)', () => {
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeDisabled();
   });
 });
+
+describe('FormModal touchTargets (DX-394)', () => {
+  const props = { open: true, onOpenChange: jest.fn(), title: 'Registrar abono', onSubmit: jest.fn() };
+
+  it('en móvil, los botones del pie y «Cerrar» miden 44 px; en escritorio no cambian', () => {
+    render(<FormModal {...props} touchTargets>Campos</FormModal>);
+    const dialog = screen.getByRole('dialog');
+    // Todo botón del modal (Cancelar, Guardar, los de dentro) con altura mínima de 44 px bajo `sm`.
+    expect(dialog.className).toContain('max-sm:[&_button]:min-h-11');
+    expect(screen.getByRole('button', { name: 'Cerrar' }).className).toContain('max-sm:size-11');
+    // El tamaño táctil va siempre tras `max-sm:`: ninguna clase de alto/ancho de 44 px sin prefijo (escritorio intacto).
+    const unprefixed = screen.getByRole('button', { name: 'Cerrar' }).className.split(/\s+/).filter((c) => /^(size|h|w|min-h)-11$/.test(c));
+    expect(unprefixed).toEqual([]);
+  });
+
+  it('sin touchTargets no se fuerza la altura de los botones', () => {
+    render(<FormModal {...props}>Campos</FormModal>);
+    expect(screen.getByRole('dialog').className).not.toContain('min-h-11');
+  });
+});

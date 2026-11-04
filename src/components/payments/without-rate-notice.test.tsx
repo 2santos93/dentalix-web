@@ -3,6 +3,8 @@ import { tokenForRole } from '@/lib/test/data-consents';
 import { clinicLocation } from '@/lib/test/locations';
 import { listLocations } from '@/lib/locations/locations-api';
 import { getExchangeRateSettings } from '@/lib/exchange/exchange-settings-api';
+import { civilDateInZone } from '@/lib/format/date';
+import { addDaysIso } from '@/lib/locations/provider-schedule';
 import { WithoutRateNotice, withoutRateCopy } from './without-rate-notice';
 
 // DX-378: importe y día con el formato de la sede (fixture explícito es-VE).
@@ -28,6 +30,8 @@ beforeEach(() => {
 });
 
 const ONE = [{ paymentId: 'p1', amount: 50, currency: 'USD', paidOn: '2026-10-30' }];
+/** Hoy en la zona de la sede del fixture (America/Caracas), calculado en cada test. */
+const today = () => civilDateInZone(new Date(), 'America/Caracas') as string;
 
 describe('WithoutRateNotice (DX-375)', () => {
   it('sin abonos sin tasa no pinta nada', () => {
@@ -67,9 +71,39 @@ describe('WithoutRateNotice (DX-375)', () => {
     expect(mockedSettings).toHaveBeenCalledWith(tokenForRole('ADMIN'));
   });
 
+  // DX-394: la manual rige desde hoy; si ningún abono es de hoy o posterior, pasar a manual no les sirve.
+  it('con fuente automática, «Pasar a tasa manual» solo aparece si algún abono es de hoy o posterior en la sede', async () => {
+    mockedSettings.mockResolvedValue(AUTOMATIC);
+    const TODAY = today();
+    const past = [{ paymentId: 'p1', amount: 50, currency: 'USD', paidOn: addDaysIso(TODAY, -1) }];
+    const todayOrLater = [...past, { paymentId: 'p2', amount: 20, currency: 'USD', paidOn: TODAY }];
+    const token = tokenForRole('ADMIN');
+    const { rerender } = render(<WithoutRateNotice token={token} payments={todayOrLater} />);
+    // Con hoy en la lista el enlace aparece: la sede ya cargó y el reloj está listo.
+    expect(await screen.findByRole('link', { name: withoutRateCopy.switchToManualLink })).toBeInTheDocument();
+    // Con el reloj listo, la misma pantalla con solo un abono de ayer ya no lo propone (no es vacío).
+    rerender(<WithoutRateNotice token={token} payments={past} />);
+    expect(screen.getByText(withoutRateCopy.automatic)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: withoutRateCopy.switchToManualLink })).not.toBeInTheDocument();
+    expect(screen.queryByText(withoutRateCopy.switchToManualHint)).not.toBeInTheDocument();
+    // Un día posterior a hoy (la manual ya rige) sí.
+    rerender(
+      <WithoutRateNotice
+        token={token}
+        payments={[{ paymentId: 'p3', amount: 5, currency: 'USD', paidOn: addDaysIso(TODAY, 1) }]}
+      />,
+    );
+    expect(screen.getByRole('link', { name: withoutRateCopy.switchToManualLink })).toBeInTheDocument();
+  });
+
   it('con fuente automática no invita a registrar una tasa: el proveedor aún no la da y, para el ADMIN, explica pasar a manual', async () => {
     mockedSettings.mockResolvedValue(AUTOMATIC);
-    render(<WithoutRateNotice token={tokenForRole('ADMIN')} payments={ONE} />);
+    render(
+      <WithoutRateNotice
+        token={tokenForRole('ADMIN')}
+        payments={[{ paymentId: 'p1', amount: 50, currency: 'USD', paidOn: today() }]}
+      />,
+    );
     expect(await screen.findByText(withoutRateCopy.automatic)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: withoutRateCopy.switchToManualLink })).toHaveAttribute(
       'href',

@@ -4,7 +4,9 @@ import { TriangleAlert } from 'lucide-react';
 import type { components } from '@/lib/api/schema';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageExchangeRates, type ExchangeRateSettings } from '@/lib/exchange/exchange-settings-api';
+import { civilDateInZone } from '@/lib/format/date';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
+import { readyClock, useSedeClock } from '@/lib/locations/sede-clock';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Callout } from '@/components/ui/callout';
 import { useExchangeRateSettings, type ExchangeRateSettingsState } from './use-exchange-rate-settings';
@@ -69,6 +71,8 @@ function rateDays(payments: PaymentWithoutRate[], settings: ExchangeRateSettings
  */
 export function WithoutRateNotice({ token, payments }: { token: string; payments: PaymentWithoutRate[] }) {
   const fmt = readyFormat(useSedeFormat(token));
+  // `PaymentWithoutRateDto` no trae sede: los abonos son del plan que se ve en la pantalla, así que «hoy» es el de la sede de la pantalla.
+  const clock = readyClock(useSedeClock(token));
   const canRegister = canManageExchangeRates(getTokenRole(token));
   const settings = useExchangeRateSettings(token, canRegister && payments.length > 0);
   if (payments.length === 0) return null;
@@ -83,7 +87,7 @@ export function WithoutRateNotice({ token, payments }: { token: string; payments
         ))}
       </ul>
       {canRegister ? (
-        <AdminAction settings={settings} payments={payments} />
+        <AdminAction settings={settings} payments={payments} timeZone={clock?.timeZone ?? null} />
       ) : (
         <p className="mt-1">{withoutRateCopy.otherRoles}</p>
       )}
@@ -94,9 +98,17 @@ export function WithoutRateNotice({ token, payments }: { token: string; payments
 /**
  * Qué puede hacer el ADMIN según la fuente (DX-386): con manual, registrar la
  * tasa; con la del proveedor, esperar o, si no puede, pasar a manual sabiendo
- * desde cuándo rige. Mientras se lee la fuente, nada que proponer todavía.
+ * desde cuándo rige (solo si algún abono es de hoy o posterior, DX-394). Mientras se lee la fuente, nada que proponer todavía.
  */
-function AdminAction({ settings, payments }: { settings: ExchangeRateSettingsState; payments: PaymentWithoutRate[] }) {
+function AdminAction({
+  settings,
+  payments,
+  timeZone,
+}: {
+  settings: ExchangeRateSettingsState;
+  payments: PaymentWithoutRate[];
+  timeZone: string | null;
+}) {
   if (settings.status === 'idle' || settings.status === 'loading') return null;
   if (settings.status === 'error') {
     return (
@@ -108,7 +120,12 @@ function AdminAction({ settings, payments }: { settings: ExchangeRateSettingsSta
     );
   }
   const days = rateDays(payments, settings.settings);
-  const automatic = settings.settings.source === 'AUTOMATIC';
+  // DX-394: la manual rige desde hoy (en la sede). Si ningún abono es de hoy o
+  // posterior, pasar a manual no le sirve a ninguno: no se propone (ni mientras
+  // no se sabe qué día es hoy en la sede).
+  const today = timeZone ? civilDateInZone(new Date(), timeZone) : null;
+  const automatic =
+    settings.settings.source === 'AUTOMATIC' && today !== null && payments.some((p) => p.paidOn >= today);
   return (
     <>
       {days.provider ? <p className="mt-1">{withoutRateCopy.automatic}</p> : null}
