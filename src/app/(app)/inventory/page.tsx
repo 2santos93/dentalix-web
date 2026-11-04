@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { InventoryView } from '@/components/inventory/inventory-view';
+import { RouteRoleGate } from '@/components/layouts/route-role-gate';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app's
 // copy convention until next-intl wiring lands.
@@ -41,5 +42,9 @@ export default function InventoryPage() {
     return null;
   }
 
-  return <InventoryView token={accessToken} />;
+  return (
+    <RouteRoleGate href="/inventory" token={accessToken}>
+      <InventoryView token={accessToken} />
+    </RouteRoleGate>
+  );
 }
