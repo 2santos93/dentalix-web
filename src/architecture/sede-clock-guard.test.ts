@@ -45,13 +45,8 @@ const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del nav
 
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
-  'components/discounts/discount-policy-manager.tsx': STAMP,
-  'components/domains/domains-manager.tsx': STAMP,
-  'components/inventory/inventory-item-detail.tsx': STAMP,
-  'components/inventory/inventory-view.tsx': STAMP,
   'components/odontogram/tooth-timeline.tsx': STAMP,
   'components/platform/platform-mfa-card.tsx': STAMP,
-  'components/support-accesses/support-accesses-view.tsx': STAMP,
 };
 
 /**
@@ -59,7 +54,7 @@ const PENDING: Readonly<Record<string, string>> = {
  * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
  * cierre, `PENDING` desaparece.
  */
-const MAX_PENDING = 7;
+const MAX_PENDING = 2;
 
 const CIVIL_W4 = 'Día civil en `dd/mm/yyyy` fijo: se migra a `fmt.civilDate`/`stamp.civilDate` en DX-354b W4.';
 
@@ -162,6 +157,12 @@ const MIGRATED = [
   'components/treatment-plans/treatment-plans-tab-copy.ts',
   'lib/treatment-plans/item-attribution.ts',
   'lib/treatment-plans/plan-options.ts',
+  // DX-354b W3: inventario y ajustes de clínica, con la sede de la pantalla (el dato no trae sede).
+  'components/discounts/discount-policy-manager.tsx',
+  'components/domains/domains-manager.tsx',
+  'components/inventory/inventory-item-detail.tsx',
+  'components/inventory/inventory-view.tsx',
+  'components/support-accesses/support-accesses-view.tsx',
 ];
 
 /**

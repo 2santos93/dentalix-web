@@ -43,7 +43,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 // Search box waits this long after the last keystroke before hitting the
 // server — same value/rationale as `AppointmentForm`'s
@@ -170,6 +171,8 @@ export function InventoryView({ token }: InventoryViewProps) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // DX-354b: el movimiento no trae sede: las fechas del historial salen con la sede de la pantalla.
+  const stamp = useSedeStamp(token);
 
   // Búsqueda, filtro de bajo mínimo y paginación: viven en estado del
   // componente (no en la URL, a propósito — ver el plan). `query` es lo que
@@ -574,7 +577,11 @@ export function InventoryView({ token }: InventoryViewProps) {
       id: 'date',
       header: copy.colMovementDate,
       mobile: 'meta',
-      cell: (m) => <span className="tabular-nums">{formatDateTime(m.occurredAt)}</span>,
+      cellClassName: 'tabular-nums',
+      // Texto plano (no un <span>): así la tabla puede decir «Sin dato» al lector cuando falta el formato.
+      cell: (m) => stamp.dateTime(m.occurredAt),
+      // DESIGN «Tables»: en el teléfono, sin formato la celda se omite en vez de decir «—».
+      mobileCell: (m) => stamp.maybe.dateTime(m.occurredAt),
     },
     {
       id: 'type',
@@ -780,6 +787,7 @@ export function InventoryView({ token }: InventoryViewProps) {
             <DialogTitle>{historyItem ? copy.historyTitle(historyItem.name) : copy.historyTitle('')}</DialogTitle>
             <DialogDescription>{copy.historyDescription}</DialogDescription>
           </DialogHeader>
+          <SedeStampNote stamp={stamp} />
           <AsyncSection
             loading={historyLoading}
             error={historyError}

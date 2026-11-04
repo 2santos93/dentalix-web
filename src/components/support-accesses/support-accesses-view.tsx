@@ -7,7 +7,8 @@ import {
   type SupportAccess,
   type SupportAccessesPage,
 } from '@/lib/support-accesses/support-accesses-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -38,52 +39,58 @@ const PAGE_SIZE = 20;
  * Tabla en tablet y escritorio; en el teléfono, tarjeta: quién y cuándo en la
  * línea 1; por qué, hasta cuándo y el origen debajo.
  */
-const columns: DataListColumn<SupportAccess>[] = [
-  {
-    id: 'who',
-    header: copy.colWho,
-    mobile: 'primary',
-    cell: (a) => (
-      <span className="flex min-w-0 flex-col">
-        <span>{a.userFullName}</span>
-        <span className="t-caption break-all">{a.userEmail}</span>
-      </span>
-    ),
-    mobileCell: (a) => a.userFullName,
-  },
-  {
-    id: 'when',
-    header: copy.colWhen,
-    mobile: 'trailing',
-    cellClassName: 't-data whitespace-nowrap',
-    cell: (a) => formatDateTime(a.createdAt),
-  },
-  {
-    id: 'reason',
-    header: copy.colReason,
-    cell: (a) => <span className="block max-w-md whitespace-pre-line break-words">{a.reason}</span>,
-    mobileCell: (a) => a.reason,
-  },
-  {
-    id: 'until',
-    header: copy.colUntil,
-    cellClassName: 't-data whitespace-nowrap',
-    cell: (a) => formatDateTime(a.expiresAt),
-    mobileCell: (a) => copy.until(formatDateTime(a.expiresAt)),
-  },
-  {
-    id: 'origin',
-    header: copy.colOrigin,
-    cell: (a) => <OriginCell ip={a.ip} userAgent={a.userAgent} />,
-    mobileCell: (a) => (
-      <>
-        <span>{a.userEmail}</span>
-        <span aria-hidden> · </span>
-        <span>{originText(a.ip, a.userAgent)}</span>
-      </>
-    ),
-  },
-];
+function columnsFor(stamp: SedePainters): DataListColumn<SupportAccess>[] {
+  return [
+    {
+      id: 'who',
+      header: copy.colWho,
+      mobile: 'primary',
+      cell: (a) => (
+        <span className="flex min-w-0 flex-col">
+          <span>{a.userFullName}</span>
+          <span className="t-caption break-all">{a.userEmail}</span>
+        </span>
+      ),
+      mobileCell: (a) => a.userFullName,
+    },
+    {
+      id: 'when',
+      header: copy.colWhen,
+      mobile: 'trailing',
+      cellClassName: 't-data whitespace-nowrap',
+      cell: (a) => stamp.dateTime(a.createdAt),
+    },
+    {
+      id: 'reason',
+      header: copy.colReason,
+      cell: (a) => <span className="block max-w-md whitespace-pre-line break-words">{a.reason}</span>,
+      mobileCell: (a) => a.reason,
+    },
+    {
+      id: 'until',
+      header: copy.colUntil,
+      cellClassName: 't-data whitespace-nowrap',
+      cell: (a) => stamp.dateTime(a.expiresAt),
+      // En el teléfono, sin formato la celda se omite: no dice «Hasta —».
+      mobileCell: (a) => {
+        const when = stamp.maybe.dateTime(a.expiresAt);
+        return when === null ? null : copy.until(when);
+      },
+    },
+    {
+      id: 'origin',
+      header: copy.colOrigin,
+      cell: (a) => <OriginCell ip={a.ip} userAgent={a.userAgent} />,
+      mobileCell: (a) => (
+        <>
+          <span>{a.userEmail}</span>
+          <span aria-hidden> · </span>
+          <span>{originText(a.ip, a.userAgent)}</span>
+        </>
+      ),
+    },
+  ];
+}
 
 /**
  * El vacío enseña la forma del registro: las columnas que tendrá, en fantasma,
@@ -127,6 +134,8 @@ export function SupportAccessesView({ token }: { token: string }) {
   const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const cursor = cursors[cursors.length - 1];
+  // DX-354b: el registro es de la clínica (no trae sede): se pinta con la sede de la pantalla.
+  const stamp = useSedeStamp(token);
 
   useEffect(() => {
     if (!token) return;
@@ -164,9 +173,11 @@ export function SupportAccessesView({ token }: { token: string }) {
   }
 
   const items = data?.items ?? [];
+  const columns = columnsFor(stamp);
 
   return (
     <div className="flex flex-col gap-3">
+      <SedeStampNote stamp={stamp} />
       <AsyncSection
         loading={loading}
         error={loadError}
