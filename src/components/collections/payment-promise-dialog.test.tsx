@@ -1,8 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { PaymentPromiseDialog } from './payment-promise-dialog';
+import { PaymentPromiseDialog, promiseDialogCopy } from './payment-promise-dialog';
 import { createPaymentPromise } from '@/lib/collections/collections-api';
-import { todayLocal } from '@/lib/collections/presentation';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { ApiError } from '@/lib/api/client';
 
 jest.mock('../../lib/collections/collections-api', () => ({
@@ -31,10 +31,11 @@ function setup() {
   return { onSaved, onOpenChange };
 }
 
+// DX-354b: el «hoy» del compromiso es el de la sede (Caracas en el fixture), no el del navegador.
+const SEDE_ZONE = 'America/Caracas';
 function inDays(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return todayLocal(d);
+  const d = new Date(Date.parse(`${sedeToday(SEDE_ZONE)}T12:00:00Z`) + n * 86_400_000);
+  return d.toISOString().slice(0, 10);
 }
 
 /** «Pagará hasta el» es un `DatePicker` (segmentos dd/mm/aaaa, sin locale de sede → «es»). */
@@ -55,6 +56,31 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     expect(await screen.findByText('Escribe un importe mayor que 0.')).toBeInTheDocument();
     expect(screen.getByText('Elige la fecha del compromiso.')).toBeInTheDocument();
     expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('DX-354b (E9): con el navegador ya en el día 5, el 4 es «hoy» en la sede (Caracas) y vale; el 3 es pasado', async () => {
+    jest.useFakeTimers({
+      now: new Date('2026-11-05T02:30:00Z'),
+      doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    });
+    try {
+      mockedCreate.mockResolvedValue({ id: 'pp1' } as never);
+      setup();
+      await userEvent.type(screen.getByLabelText('Importe'), '100');
+      await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'USD');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar compromiso' })).toBeEnabled());
+      await typeDate('2026-11-03');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
+      expect(await screen.findByText(promiseDialogCopy.dueDatePast)).toBeInTheDocument();
+      expect(mockedCreate).not.toHaveBeenCalled();
+      await typeDate('2026-11-04');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', { amount: 100, currency: 'USD', dueDate: '2026-11-04' }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('DX-241: «150.50» en USD se guarda como 150,5 (no 15 050)', async () => {

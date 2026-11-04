@@ -70,7 +70,7 @@ export const expensesSummaryCopy = {
   currencyNote: 'Cada moneda va por separado: nunca se suman ni se convierten.',
   // Sin «Intenta de nuevo.»: AsyncSection → SectionError trae «Reintentar».
   loadError: 'No pudimos cargar el resumen.',
-  zoneError: 'No pudimos obtener la zona horaria de la sede. Reintenta o elige un rango de meses.',
+  zoneError: 'No pudimos obtener la zona horaria de la sede. Reintenta.',
   badRequest: 'El periodo no es válido. Revisa «Desde» y «Hasta».',
   forbiddenTitle: 'Tu rol no tiene acceso al resumen de gastos.',
   forbiddenHint: 'Los gastos de la sede son para la administración de la clínica.',
@@ -192,10 +192,10 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
       reloadLocations();
     } else setReloadKey((key) => key + 1);
   }
-  // Los meses que ofrecen los selectores: de la sede si ya se sabe; si no, del
-  // reloj del navegador, solo para poder elegir un rango a mano (no se pide nada
-  // hasta que la persona lo elige).
-  const monthOptions = summaryMonthOptions(currentMonth ?? browserMonth(), [effectiveFrom, effectiveTo]);
+  // Los meses que ofrecen los selectores salen del mes en curso de la SEDE (DX-354b, E9). Sin su zona
+  // (cargando o en error) no hay mes en curso: los selectores no se ofrecen y el error de zona, con su
+  // Reintentar, ocupa su sitio; nunca se cuenta el mes con el reloj del navegador.
+  const monthOptions = currentMonth ? summaryMonthOptions(currentMonth, [effectiveFrom, effectiveTo]) : [];
 
   return (
     <>
@@ -212,20 +212,24 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
       <div className="flex flex-col gap-3" {...expensesPanelProps(tabs)}>
         {!forbidden ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
-              <MonthSelect
-                label={expensesSummaryCopy.fromLabel}
-                value={effectiveFrom}
-                options={monthOptions}
-                onCommit={setFromMonth}
-              />
-              <MonthSelect
-                label={expensesSummaryCopy.toLabel}
-                value={effectiveTo}
-                options={monthOptions}
-                onCommit={setToMonth}
-              />
-            </div>
+            {currentMonth ? (
+              <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
+                <MonthSelect
+                  label={expensesSummaryCopy.fromLabel}
+                  value={effectiveFrom}
+                  options={monthOptions}
+                  onCommit={setFromMonth}
+                />
+                <MonthSelect
+                  label={expensesSummaryCopy.toLabel}
+                  value={effectiveTo}
+                  options={monthOptions}
+                  onCommit={setToMonth}
+                />
+              </div>
+            ) : (
+              <span aria-hidden />
+            )}
             <Button
               type="button"
               variant="secondary"
@@ -386,11 +390,6 @@ const STICKY_FIRST = 'max-sm:sticky max-sm:left-0 max-sm:z-[1] max-sm:bg-surface
 
 /** Meses que se ofrecen hacia atrás desde el en curso (cinco años). */
 const MONTHS_BACK = 59;
-
-function browserMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
 
 /**
  * Los meses del selector, del más reciente al más antiguo: el siguiente al en

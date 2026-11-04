@@ -48,7 +48,6 @@ const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del nav
 
 /** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
 const PENDING: Readonly<Record<string, string>> = {
-  'components/odontogram/tooth-timeline.tsx': STAMP,
 };
 
 /**
@@ -56,7 +55,7 @@ const PENDING: Readonly<Record<string, string>> = {
  * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
  * cierre, `PENDING` desaparece.
  */
-const MAX_PENDING = 1;
+const MAX_PENDING = 0;
 
 /** Ficheros que solo importan `formatCivilDate`: vacía desde DX-354b W4 (T23); la retira T26. */
 const CIVIL_PENDING: Readonly<Record<string, string>> = {};

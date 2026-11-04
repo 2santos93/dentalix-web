@@ -1,4 +1,4 @@
-import { canManageCollections, overdueChipText, todayLocal } from './presentation';
+import { canManageCollections, overdueChipText } from './presentation';
 import { FORMAT_ES, FORMAT_US } from '@/lib/test/document-regional';
 
 const money = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
@@ -38,9 +38,5 @@ describe('cobranza: presentación (DX-150)', () => {
     expect(canManageCollections('DENTIST')).toBe(false);
     expect(canManageCollections('ASSISTANT')).toBe(false);
     expect(canManageCollections(null)).toBe(false);
-  });
-
-  it('hoy en la hora local del navegador', () => {
-    expect(todayLocal(new Date(2026, 10, 5, 23, 30))).toBe('2026-11-05');
   });
 });

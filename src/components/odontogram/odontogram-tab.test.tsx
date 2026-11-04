@@ -296,6 +296,20 @@ describe('OdontogramTab', () => {
     expect(link).toHaveTextContent('Documentos del diente');
   });
 
+  it('DX-354b (E9): sin la zona de la sede el selector «Ver la carta al» se sustituye por su error con Reintentar', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ timeZone: null })]);
+    try {
+      render(<OdontogramTab token="tok" patientId="p1" initialTooth="11" />);
+      expect(await screen.findByText('Sin zona de sede')).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: /ver la carta al/i })).not.toBeInTheDocument();
+    } finally {
+      (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation()]);
+    }
+  });
+
   it('DX-354b: el aviso de la carta lleva el día con el formato de la sede (de-DE, en-US)', async () => {
     const user = userEvent.setup();
     const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
