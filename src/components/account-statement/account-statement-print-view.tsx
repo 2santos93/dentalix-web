@@ -94,7 +94,7 @@ export function AccountStatementPrintView({
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=account-statement`;
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-surface-sunken print:bg-white">
+    <div className="statement-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
       {data ? (
         <title>{copy.documentTitle(`${data.patient.firstName} ${data.patient.lastName}`)}</title>
       ) : null}
