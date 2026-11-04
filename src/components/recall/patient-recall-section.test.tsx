@@ -9,7 +9,11 @@ import {
   type PatientRecalls,
 } from '@/lib/recall/recall-api';
 import { PatientRecallSection } from './patient-recall-section';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/recall/recall-api', () => ({
   getPatientRecalls: jest.fn(),
   setPatientRecall: jest.fn(),
@@ -60,6 +64,25 @@ describe('PatientRecallSection (DX-015)', () => {
     mockedGet.mockReset();
     mockedSet.mockReset();
     mockedContact.mockReset();
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ id: 'l1' })]);
+  });
+
+  it('DX-354b: el vencimiento y el contacto salen con la sede de cada uno (recall de Berlín, contacto sin sede con la de la pantalla)', async () => {
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([
+      { ...STAMP_SEDES.caracas, id: 'l1' },
+      STAMP_SEDES.berlin,
+    ]);
+    mockedGet.mockResolvedValue({
+      ...data,
+      recalls: data.recalls.map((r) => ({ ...r, locationId: STAMP_SEDES.berlin.id })),
+    });
+    render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+    const row = await screen.findByTestId('recall-row-CHECKUP');
+    await waitFor(() => expect(row).toHaveTextContent(`Vence el ${STAMP_FORMATS.berlin.civilDate('2026-10-10')}`));
+    const contact = data.contacts[0];
+    expect(screen.getByTestId('recall-contact-row')).toHaveTextContent(
+      STAMP_FORMATS.caracas.dateTime(new Date(contact.createdAt), 'America/Caracas'),
+    );
   });
 
   it('un renglón por tipo con estado y vencimiento, y el historial de contactos', async () => {

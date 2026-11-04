@@ -54,6 +54,7 @@ import { PatientPrescriptionsTab } from '@/components/prescriptions/patient-pres
 import { PatientImplantsTab } from '@/components/implants/patient-implants-tab';
 import { PatientDocumentsTab } from '@/components/patient-documents/patient-documents-tab';
 import { SedeNoticeOwner } from '@/components/locations/sede-stamp-note';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { PatientTabPanel as TabPanel } from '@/components/patients/patient-tab-panel';
 import { canRegisterImplants } from '@/lib/implants/implants-api';
 import { AuditLogView } from '@/components/audit/audit-log-view';
@@ -168,6 +169,8 @@ function PatientDetailView() {
   // odontograma) y de la línea de revisión de la anamnesis.
   // DX-354: el importe del chip «Saldo vencido» con el formato de la sede de la pantalla (sin token no pide nada).
   const sedeFormat = readyFormat(useSedeFormat(accessToken ?? ''));
+  // DX-354b: las fechas de la ficha (nacimiento, consentimiento, retención) con el formato de la sede; el aviso lo da `SedeNoticeOwner`.
+  const stamp = useSedeStamp(accessToken ?? '');
   const medicalAlerts = usePatientMedicalAlerts(accessToken, patientId);
   // DX-279: insignia de inasistencias y cancelaciones tardías (12 meses).
   const attendance = usePatientAttendance(accessToken, patientId);
@@ -380,7 +383,7 @@ function PatientDetailView() {
         onEdit={() => setEditing(true)}
         editPrimary={activeTab === 'data'}
         menuActions={menuActions}
-        retention={patient && !loading ? retentionChip(patient) : null}
+        retention={patient && !loading ? retentionChip(patient, stamp) : null}
         medicalAlerts={medicalAlerts.data}
         medicalAlertsFailed={medicalAlerts.failed}
         onRetryMedicalAlerts={medicalAlerts.reload}
@@ -465,7 +468,7 @@ function PatientDetailView() {
             {/* DX-099/DX-247: «Sin anamnesis» como UN aviso con sus dos
                 salidas, y el estado de los enlaces enviados. */}
             {anamnesisBlock('data')}
-            <PatientDataPanel patient={patient} docTypeNames={docTypeNames} />
+            <PatientDataPanel patient={patient} docTypeNames={docTypeNames} stamp={stamp} />
             {/* DX-128: canal de los recordatorios, móvil, opt-in y baja. Lo ven
                 todos; lo cambian recepción y ADMIN. */}
             <PatientCommunicationSection
@@ -514,7 +517,7 @@ function PatientDetailView() {
             />
             {/* DX-039: retención (lo ven todos); los controles de ADMIN
                 están en el menú «⋯» de la cabecera. */}
-            <PatientRetentionSection patient={patient} />
+            <PatientRetentionSection patient={patient} stamp={stamp} />
           </TabPanel>
 
           <PatientEditModal

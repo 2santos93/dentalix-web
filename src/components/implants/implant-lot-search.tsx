@@ -12,7 +12,8 @@ import {
   type ImplantLotMatch,
   type ImplantLotQuery,
 } from '@/lib/implants/implants-api';
-import { formatCivilDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { notifyError } from '@/components/errors/notify';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -63,6 +64,8 @@ const copy = {
  * retirada de lote no puede dejar fuera a un paciente operado en otra sede.
  */
 export function ImplantLotSearch({ token, allowed }: { token: string; allowed: boolean }) {
+  // DX-354b: el día de colocación con el formato de la sede de la pantalla (la búsqueda es de toda la clínica y la fila no trae sede).
+  const stamp = useSedeStamp(token);
   const [lot, setLot] = useState('');
   const [reference, setReference] = useState('');
   const [query, setQuery] = useState<ImplantLotQuery | null>(null);
@@ -155,11 +158,11 @@ export function ImplantLotSearch({ token, allowed }: { token: string; allowed: b
       header: copy.colDate,
       cell: (m) => (
         <span className="flex flex-col whitespace-nowrap">
-          <span className="t-data">{formatCivilDate(m.placedOn)}</span>
+          <span className="t-data">{stamp.civilDate(m.placedOn)}</span>
           <span className="text-muted">{copy.tooth(m.toothNumber)}</span>
         </span>
       ),
-      mobileCell: (m) => `${formatCivilDate(m.placedOn)} · ${copy.tooth(m.toothNumber)}`,
+      mobileCell: (m) => [stamp.maybe.civilDate(m.placedOn), copy.tooth(m.toothNumber)].filter(Boolean).join(' · '),
     },
     {
       id: 'product',
@@ -233,6 +236,7 @@ export function ImplantLotSearch({ token, allowed }: { token: string; allowed: b
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
+      <SedeStampNote stamp={stamp} />
 
       {query === null ? (
         <EmptyState icon={<Search aria-hidden />} title={copy.idleTitle} description={copy.idleHint} />

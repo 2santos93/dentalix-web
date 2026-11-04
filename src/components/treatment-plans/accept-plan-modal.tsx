@@ -11,9 +11,10 @@ import {
   planQuotePrintHref,
   type PlanQuote,
 } from '@/lib/treatment-plans/plan-quote-api';
-import { sedeMoney } from '@/lib/format/sede-number';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import { formatCivilDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { SignaturePad } from '@/components/shared/signature-pad';
@@ -69,6 +70,8 @@ export function AcceptPlanModal({
 }: AcceptPlanModalProps) {
   // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
   const fmt = readyFormat(useSedeFormat(token));
+  // DX-354b: el aviso único de la sede sin formato (importes y vigencia en «—»); un aviso por modal.
+  const stamp = useSedeStamp(token);
   const [quote, setQuote] = useState<PlanQuote | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -201,7 +204,7 @@ export function AcceptPlanModal({
             ))}
             <p className="flex flex-wrap items-center justify-between gap-2 t-caption text-muted">
               <span className="tabular-nums">
-                {copy.validity(quote.validityDays, formatCivilDate(quote.validUntil))}
+                {copy.validity(quote.validityDays, sedeCivilDate(quote.validUntil, fmt))}
               </span>
               <Link
                 href={planQuotePrintHref(patientId, planId)}
@@ -215,6 +218,7 @@ export function AcceptPlanModal({
               </Link>
             </p>
           </section>
+          <SedeStampNote stamp={stamp} />
 
           <FormField htmlFor="accept-signer-name" label={copy.signerName} hint={copy.signerHint}>
             <Input

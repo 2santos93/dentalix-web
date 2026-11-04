@@ -142,6 +142,7 @@ import {
 import { cn } from '@/lib/utils';
 import { civilDateLabel } from '@/lib/format/date';
 import { sedeTimeRange, useSedeClock, type AgendaClock } from '@/lib/locations/sede-clock';
+import { stampPainters } from '@/lib/locations/sede-stamp';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
@@ -1772,7 +1773,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     <DescriptionItem label={copy.detailReason}>{liveDetailAppointment.reason}</DescriptionItem>
                   ) : null}
                 </DescriptionList>
-                <CoverageDetailLine coverage={liveDetailAppointment.coverage} />
+                <CoverageDetailLine
+                  coverage={liveDetailAppointment.coverage}
+                  stamp={{ civilDate: (day) => stampPainters(clock).civilDate(day, liveDetailAppointment.locationId) }}
+                />
                 <FormField htmlFor="detail-status" label={copy.statusLabel}>
                   {/* DX-295: las flechas no cambian la cita; solo Enter o un clic. */}
                   <AppointmentStatusSelect

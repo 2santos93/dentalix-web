@@ -2,14 +2,13 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatCivilDate } from '@/lib/format/date';
-import { useSedeClock } from '@/lib/locations/sede-clock';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import {
   CHANNEL_LABELS,
   KIND_LABELS,
   KIND_ORDER,
   OUTCOME_LABELS,
-  contactMoment,
   intervalLabel,
 } from '@/lib/recall/presentation';
 import { getPatientRecalls, type PatientRecall, type PatientRecalls, type RecallKind } from '@/lib/recall/recall-api';
@@ -61,9 +60,12 @@ export function PatientRecallSection({
   canSet: boolean;
   canContact: boolean;
 }) {
-  const sede = useSedeClock(token);
-  const clock = sede.status === 'ready' ? sede.clock : null;
   const [data, setData] = useState<PatientRecalls | null>(null);
+  // DX-354b: cada recall y cada contacto con el formato y el reloj de SU sede; un solo aviso por sección.
+  const stamp = useSedeStamp(token, [
+    ...(data?.recalls.map((r) => r.locationId) ?? []),
+    ...(data?.contacts.map((c) => c.locationId) ?? []),
+  ]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -99,6 +101,7 @@ export function PatientRecallSection({
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
+      <SedeStampNote stamp={stamp} />
       <AsyncSection
         loading={loading}
         error={error}
@@ -123,12 +126,12 @@ export function PatientRecallSection({
                   </span>
                   <span className="text-xs text-muted tabular-nums">
                     {recall
-                      ? `${intervalLabel(recall.intervalMonths)} · ${copy.due(formatCivilDate(recall.dueAt))}`
+                      ? `${intervalLabel(recall.intervalMonths)} · ${copy.due(stamp.civilDate(recall.dueAt, recall.locationId))}`
                       : copy.notSet}
                   </span>
                   {recall?.status === 'PAUSED' && recall.disabledUntil ? (
                     <span className="text-xs text-muted tabular-nums">
-                      {copy.pausedUntil(formatCivilDate(recall.disabledUntil), recall.disabledReason)}
+                      {copy.pausedUntil(stamp.civilDate(recall.disabledUntil, recall.locationId), recall.disabledReason)}
                     </span>
                   ) : null}
                 </span>
@@ -173,7 +176,7 @@ export function PatientRecallSection({
                   </span>
                   {c.note ? <p className="whitespace-pre-line break-words text-ink">{c.note}</p> : null}
                   <span className="text-xs text-muted tabular-nums">
-                    {contactMoment(c.createdAt, clock)} {copy.by(c.author.fullName)}
+                    {stamp.dateTime(c.createdAt, c.locationId)} {copy.by(c.author.fullName)}
                   </span>
                 </li>
               ))}

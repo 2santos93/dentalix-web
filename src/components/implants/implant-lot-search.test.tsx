@@ -1,10 +1,14 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { ImplantLotSearch } from './implant-lot-search';
 import { downloadImplantLotCsv, searchImplantLots } from '@/lib/implants/implants-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { makeLotMatch } from '@/lib/test/implants';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { regionalFormat } from '@/lib/format/regional-format';
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/implants/implants-api', () => ({
   ...jest.requireActual('../../lib/implants/implants-api'),
   searchImplantLots: jest.fn(),
@@ -18,8 +22,25 @@ describe('ImplantLotSearch (DX-191)', () => {
   beforeEach(() => {
     mockedSearch.mockReset();
     mockedCsv.mockReset();
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation()]);
     URL.createObjectURL = jest.fn(() => 'blob:x');
     URL.revokeObjectURL = jest.fn();
+  });
+
+  it('DX-354b: el día de colocación sale con el formato de la sede (es-VE, en-US, de-DE), sin zona', async () => {
+    const user = setupUser();
+    const match = makeLotMatch();
+    mockedSearch.mockResolvedValue([match]);
+    for (const [locale, hourCycle] of [['es-VE', 'h12'], ['en-US', 'h12'], ['de-DE', 'h23']] as const) {
+      (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ locale, hourCycle })]);
+      const { unmount } = render(<ImplantLotSearch token="t" allowed />);
+      await user.type(screen.getByLabelText('Lote'), 'LOT-AB12');
+      await user.click(screen.getByRole('button', { name: 'Buscar' }));
+      const table = await screen.findByRole('table', { name: 'Pacientes que recibieron el lote o la referencia' });
+      const day = regionalFormat({ locale, hourCycle }).civilDate(match.placedOn.slice(0, 10));
+      await waitFor(() => expect(within(table).getAllByRole('row')[1]).toHaveTextContent(day));
+      unmount();
+    }
   });
 
   it('sin rol ADMIN: aviso y nada de búsqueda', () => {

@@ -14,7 +14,8 @@ import {
 } from '@/lib/consents/consents-api';
 import { listPlans, type TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
-import { formatCivilDate } from '@/lib/format/date';
+import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import {
   consentGuardian,
   getPatientResponsibles,
@@ -60,8 +61,9 @@ const copy = {
   planNone: 'Sin plan asociado',
   planHint: 'Rellena {{tratamiento}} con los procedimientos del plan.',
   plansError: 'Planes no disponibles',
-  planOption: (plan: TreatmentPlan) =>
-    `${PLAN_STATUS_LABELS[plan.status]} · ${formatCivilDate(plan.createdAt)}`,
+  // DX-354b: el día de creación del plan (un instante) en la zona y el formato de la sede de la pantalla.
+  planOption: (plan: TreatmentPlan, stamp: Pick<SedeStamp, 'date'>) =>
+    `${PLAN_STATUS_LABELS[plan.status]} · ${stamp.date(plan.createdAt)}`,
   previewRegion: 'Texto del consentimiento',
   previewError: 'No pudimos preparar la vista previa.',
   signerLegend: '¿Quién firma?',
@@ -127,6 +129,7 @@ export function NewConsentModal({
   onSigned,
 }: NewConsentModalProps) {
   const [step, setStep] = useState<Step>(0);
+  const stamp = useSedeStamp(token);
 
   const [templates, setTemplates] = useState<ConsentTemplate[] | null>(null);
   const [templatesFailed, setTemplatesFailed] = useState(false);
@@ -375,12 +378,13 @@ export function NewConsentModal({
                     <option value="">{copy.planNone}</option>
                     {plans.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {copy.planOption(p)}
+                        {copy.planOption(p, stamp)}
                       </option>
                     ))}
                   </NativeSelect>
                 )}
               </FormField>
+              <SedeStampNote stamp={stamp} />
             </>
           ) : null}
 

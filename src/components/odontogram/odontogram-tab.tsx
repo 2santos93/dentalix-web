@@ -30,7 +30,8 @@ import {
 } from '@/lib/odontogram/dentition';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
-import { formatCivilDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Callout } from '@/components/ui/callout';
 import { Button } from '@/components/ui/button';
@@ -205,6 +206,8 @@ export function OdontogramTab({
   // Solo lectura en cuanto se pide una fecha y hasta que vuelve la carta de hoy.
   const readOnly = asOf !== null || shownAsOf !== null;
   const role = getTokenRole(token);
+  // DX-354b: la fecha «a la fecha de» con el formato de la sede de la pantalla.
+  const stamp = useSedeStamp(token);
   const userId = getTokenUserId(token);
 
   useEffect(() => {
@@ -428,9 +431,10 @@ export function OdontogramTab({
 
         {shownAsOf ? (
           <Callout tone="warning" role="status">
-            {copy.asOfNotice(formatCivilDate(`${shownAsOf}T00:00:00.000Z`))}
+            {copy.asOfNotice(stamp.civilDate(shownAsOf))}
           </Callout>
         ) : null}
+        <SedeStampNote stamp={stamp} />
 
         {/* The chart and its key read as one object: the field, then its
             caption. The refresh notice rides on that same line so nothing

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NewConsentModal } from './new-consent-modal';
 import {
   listConsentTemplates,
@@ -13,7 +13,12 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { PLAN_WITHOUT_OPTIONS } from '../treatment-plans/plan-fixture';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { dateIn } from '@/lib/test/stamp';
+import { regionalFormat } from '@/lib/format/regional-format';
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/consents/consents-api', () => ({
   ...jest.requireActual('../../lib/consents/consents-api'),
   listConsentTemplates: jest.fn(),
@@ -157,11 +162,29 @@ async function goToSignatures(user: ReturnType<typeof setupUser>, withPlan = fal
 describe('NewConsentModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation()]);
     mockedTemplates.mockResolvedValue([template]);
     mockedPlans.mockResolvedValue([plan, { ...plan, id: 'plan-x', status: 'CANCELLED' }]);
     mockedPreview.mockResolvedValue(preview);
     mockedSign.mockResolvedValue({ id: 'c1' } as never);
     mockedResponsibles.mockResolvedValue(responsibles());
+  });
+
+  it('DX-354b: el día del plan sale con el formato de la sede (es-VE, de-DE, en-US) y en su zona', async () => {
+    const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+    // 2026-09-01T00:00Z es todavía el 31 de agosto en Caracas (UTC-4): el día es el de la sede, no el UTC.
+    expect(dateIn('caracas', '2026-09-01T00:00:00.000Z')).toBe('31/08/2026');
+    for (const [locale, hourCycle, timeZone] of [
+      ['es-VE', 'h12', 'America/Caracas'],
+      ['de-DE', 'h23', 'Europe/Berlin'],
+      ['en-US', 'h12', 'America/New_York'],
+    ] as const) {
+      mockedLocations.mockResolvedValue([clinicLocation({ locale, hourCycle, timeZone })]);
+      renderModal();
+      const day = regionalFormat({ locale, hourCycle }).date(new Date('2026-09-01T00:00:00.000Z'), timeZone);
+      expect(await screen.findByRole('option', { name: new RegExp(`· ${day.replace(/[./]/g, '\\$&')}$`) })).toBeInTheDocument();
+      cleanup();
+    }
   });
 
   it('DX-203: un menor viene con el firmante tutor precargado desde su responsable', async () => {

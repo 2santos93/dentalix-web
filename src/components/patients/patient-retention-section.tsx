@@ -21,12 +21,7 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { NativeSelect } from '@/components/ui/native-select';
 import { SectionHeader } from '@/components/ui/section-header';
 import { DATA_SECTION_CLASS } from './data-section';
-
-/** `YYYY-MM-DD` (o ISO) → `DD/MM/AAAA`, sin pasar por la zona del navegador. */
-export function formatCivilDate(value: string): string {
-  const [y, m, d] = value.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
-}
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 
 // El 409 de retención lleva la fecha y la salida (supresión parcial): es más
 // largo que el tope por defecto de `apiErrorMessage`.
@@ -102,10 +97,10 @@ type Status =
   | { kind: 'expired'; date: string }
   | { kind: 'none' };
 
-function statusOf(patient: Patient): Status {
+function statusOf(patient: Patient, stamp: SedePainters): Status {
   if (patient.retentionExtended === 'PERMANENT') return { kind: 'permanent' };
   if (!patient.retentionUntil) return { kind: 'none' };
-  const date = formatCivilDate(patient.retentionUntil);
+  const date = stamp.civilDate(patient.retentionUntil);
   return patient.underRetention ? { kind: 'until', date } : { kind: 'expired', date };
 }
 
@@ -113,14 +108,14 @@ function statusOf(patient: Patient): Status {
  * La ayuda de la retención, una sola para la sección y el chip de la cabecera
  * (DX-330): el plazo de la clínica, o el anterior si manda un suelo.
  */
-export function retentionHint(patient: Patient): string {
+export function retentionHint(patient: Patient, stamp: SedePainters): string {
   const extension = patient.retentionExtended ?? 'NONE';
   if (
     extension !== 'PERMANENT' &&
     patient.retentionFromPreviousTerm &&
     patient.retentionUntil
   ) {
-    return copy.previousTermHint(formatCivilDate(patient.retentionUntil));
+    return copy.previousTermHint(stamp.civilDate(patient.retentionUntil));
   }
   return copy.hint[extension](patient.clinicRetentionYears);
 }
@@ -181,9 +176,9 @@ export const retentionActionLabels = {
  * riesgo — tono neutro, nunca ámbar junto a «Sin anamnesis» (critique-core §7).
  * `null` sin atenciones clínicas: no hay nada que decir en la cabecera.
  */
-export function retentionChip(patient: Patient): { text: string; hint: string | null } | null {
-  const status = statusOf(patient);
-  const hint = patient.underRetention ? retentionHint(patient) : null;
+export function retentionChip(patient: Patient, stamp: SedePainters): { text: string; hint: string | null } | null {
+  const status = statusOf(patient, stamp);
+  const hint = patient.underRetention ? retentionHint(patient, stamp) : null;
   switch (status.kind) {
     case 'until':
       return { text: copy.chip.until(status.date), hint };
@@ -202,8 +197,8 @@ export function retentionChip(patient: Patient): { text: string; hint: string | 
  * Lo ven todos. Los controles (ADMIN) están en el menú «⋯» de la cabecera:
  * son acciones raras y delicadas, no van a la vista en cada pestaña.
  */
-export function PatientRetentionSection({ patient }: { patient: Patient }) {
-  const status = statusOf(patient);
+export function PatientRetentionSection({ patient, stamp }: { patient: Patient; stamp: SedePainters }) {
+  const status = statusOf(patient, stamp);
   return (
     <section aria-label={copy.sectionLabel} className={DATA_SECTION_CLASS}>
       <SectionHeader as="h2" title={copy.sectionTitle} />
@@ -216,11 +211,11 @@ export function PatientRetentionSection({ patient }: { patient: Patient }) {
           ) : null}
         </p>
         {patient.underRetention ? (
-          <p className="text-sm text-muted">{retentionHint(patient)}</p>
+          <p className="text-sm text-muted">{retentionHint(patient, stamp)}</p>
         ) : null}
         {patient.partiallySuppressedAt ? (
           <p className="text-sm text-muted tnum">
-            {copy.suppressed(formatCivilDate(patient.partiallySuppressedAt))}
+            {copy.suppressed(stamp.date(patient.partiallySuppressedAt))}
           </p>
         ) : null}
       </div>

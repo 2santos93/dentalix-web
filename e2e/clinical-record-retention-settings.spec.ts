@@ -8,6 +8,8 @@ import { expectDialogInsideViewport, expectNoHorizontalScroll, expectNoHorizonta
 import { shot } from './support/qa-shot';
 import { expectTouchTarget } from './support/touch-targets';
 import { API_URL, tenantOrigin } from './support/urls';
+import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e DX-330: el plazo de conservación de la historia clínica es de la clínica
@@ -74,9 +76,9 @@ test.beforeAll(async ({ request }) => {
 
 const retention = (page: Page) => page.getByRole('region', { name: 'Retención de la historia clínica' });
 
-function ddmmyyyy(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-');
-  return `${d}/${m}/${y}`;
+/** El día civil con el formato de la sede de la suite (DX-354b): el mismo de la app, calculado con `Intl`, no a mano. */
+function shownDay(isoDate: string): string {
+  return regionalFormat(E2E_REGION).civilDate(isoDate.slice(0, 10));
 }
 
 /** `GET /patients/:id`: lo que la API calcula para la ficha. */
@@ -151,7 +153,7 @@ test('ADMIN: una clínica nueva está en el mínimo de la plataforma, con la sec
   await page.goto(`${origin}/patients/${patientId}`);
   const { retentionUntil, clinicRetentionYears } = await patientRetention(page);
   expect(clinicRetentionYears).toBe(base);
-  await expect(retention(page).getByText(`Historia en retención hasta ${ddmmyyyy(retentionUntil)}`)).toBeVisible({
+  await expect(retention(page).getByText(`Historia en retención hasta ${shownDay(retentionUntil)}`)).toBeVisible({
     timeout: 15_000,
   });
   await expect(retention(page)).toContainText(`Se conserva ${base} años desde la última atención`);
@@ -178,7 +180,7 @@ test('ADMIN sube el plazo: ve el aviso de las 24 horas y la ficha dice el plazo 
   const detail = await patientRetention(page);
   expect(detail.clinicRetentionYears).toBe(raised);
   expect(detail.retentionFromPreviousTerm).toBe(false);
-  await expect(retention(page).getByText(`Historia en retención hasta ${ddmmyyyy(detail.retentionUntil)}`)).toBeVisible({
+  await expect(retention(page).getByText(`Historia en retención hasta ${shownDay(detail.retentionUntil)}`)).toBeVisible({
     timeout: 15_000,
   });
   await expect(retention(page)).toContainText(`Se conserva ${raised} años desde la última atención`);
@@ -214,7 +216,7 @@ test('ADMIN baja dentro de la ventana: ve el texto de corrección, confirma y la
   const detail = await patientRetention(page);
   expect(detail.clinicRetentionYears).toBe(base);
   expect(detail.retentionFromPreviousTerm).toBe(false);
-  await expect(retention(page).getByText(`Historia en retención hasta ${ddmmyyyy(detail.retentionUntil)}`)).toBeVisible({
+  await expect(retention(page).getByText(`Historia en retención hasta ${shownDay(detail.retentionUntil)}`)).toBeVisible({
     timeout: 15_000,
   });
   await expect(retention(page)).toContainText(`Se conserva ${base} años desde la última atención`);

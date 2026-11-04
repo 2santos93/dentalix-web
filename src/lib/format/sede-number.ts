@@ -66,7 +66,11 @@ export function sedeMoney(amount: number, currency: string, fmt: RegionalFormat 
   return fmt ? moneyWithCode(amount, currency, fmt) : NO_SEDE_FORMAT;
 }
 
-/** Un día civil `YYYY-MM-DD` con el formato de la sede (DX-378), o «—» sin él. */
+/**
+ * Un día civil con el formato de la sede (DX-378), o «—» sin él. Acepta `YYYY-MM-DD`
+ * o el ISO de medianoche UTC con que la API manda los días (DX-354b): el día es el
+ * de los 10 primeros caracteres, sin pasar por ninguna zona.
+ */
 export function sedeCivilDate(day: string, fmt: RegionalFormat | null): string {
-  return fmt ? fmt.civilDate(day) : NO_SEDE_FORMAT;
+  return fmt ? fmt.civilDate(day.slice(0, 10)) : NO_SEDE_FORMAT;
 }

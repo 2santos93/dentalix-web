@@ -4,9 +4,13 @@ import { ApiError } from '@/lib/api/client';
 import { listRecallDue, type RecallDueItem, type RecallDuePage } from '@/lib/recall/recall-api';
 import { overdueLabel, recallMessage } from '@/lib/recall/presentation';
 import { RecallView, recallCopy } from './recall-view';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('../../lib/clinic-branding', () => ({ fetchClinicName: jest.fn().mockResolvedValue('Clínica Sol') }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/recall/recall-api', () => ({ listRecallDue: jest.fn(), createRecallContact: jest.fn() }));
 const mockedList = listRecallDue as jest.MockedFunction<typeof listRecallDue>;
 
@@ -29,7 +33,36 @@ const item = (over: Partial<RecallDueItem> = {}): RecallDueItem => ({
 const page = (items: RecallDueItem[]): RecallDuePage => ({ items, total: items.length, page: 1, pageSize: 20 });
 
 describe('RecallView (DX-015)', () => {
-  beforeEach(() => mockedList.mockReset());
+  beforeEach(() => {
+    mockedList.mockReset();
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ id: 'l1' })]);
+  });
+
+  it('DX-354b: el vencimiento y el último contacto de cada fila salen con el formato y el reloj de SU sede', async () => {
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([
+      { ...STAMP_SEDES.caracas, id: 'l1' },
+      STAMP_SEDES.berlin,
+      STAMP_SEDES.miami,
+    ]);
+    const contact = { channel: 'CALL', outcome: 'NO_ANSWER', createdAt: '2026-10-20T15:00:00.000Z' } as const;
+    mockedList.mockResolvedValue(
+      page([
+        item({ recallId: 'r1', patientName: 'Ana Pérez', locationId: 'l1', lastContact: contact }),
+        item({ recallId: 'r2', patientName: 'Luis Gómez', locationId: STAMP_SEDES.berlin.id, lastContact: contact }),
+        item({ recallId: 'r3', patientName: 'Eva Ruiz', locationId: STAMP_SEDES.miami.id, lastContact: contact }),
+      ]),
+    );
+    render(<RecallView token="tok" />);
+    const expected = (key: 'caracas' | 'berlin' | 'miami') => ({
+      due: STAMP_FORMATS[key].civilDate('2026-10-10'),
+      last: STAMP_FORMATS[key].dateTime(new Date(contact.createdAt), STAMP_SEDES[key].timeZone!),
+    });
+    for (const [name, key] of [['Ana Pérez', 'caracas'], ['Luis Gómez', 'berlin'], ['Eva Ruiz', 'miami']] as const) {
+      const row = (await screen.findByText(name)).closest('tr')!;
+      await waitFor(() => expect(row).toHaveTextContent(expected(key).due));
+      expect(row).toHaveTextContent(expected(key).last);
+    }
+  });
 
   it('vacío: «Nadie pendiente de control»', async () => {
     mockedList.mockResolvedValue(page([]));

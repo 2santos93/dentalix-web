@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { tokenFor } from '@/lib/test/prescriptions';
 import { PerioTab } from './perio-tab';
@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { regionalFormat } from '@/lib/format/regional-format';
 
 jest.mock('../../lib/perio/perio-api', () => ({
   ...jest.requireActual('../../lib/perio/perio-api'),
@@ -14,6 +15,8 @@ jest.mock('../../lib/perio/perio-api', () => ({
   getPerioExam: jest.fn(),
 }));
 
+// DX-354b: la sede de la suite es de-DE, y los días de los exámenes salen con su formato («04.10.2026»).
+const DE = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
@@ -89,9 +92,9 @@ describe('PerioTab', () => {
     const table = await screen.findByRole('table', { name: /histórico/i });
     const rows = within(table).getAllByRole('row');
     expect(rows).toHaveLength(3);
-    expect(rows[1]).toHaveTextContent('04/10/2026');
+    await waitFor(() => expect(rows[1]).toHaveTextContent(DE.civilDate('2026-10-04')));
     expect(rows[1]).toHaveTextContent('Borrador');
-    expect(rows[2]).toHaveTextContent('15/04/2026');
+    expect(rows[2]).toHaveTextContent(DE.civilDate('2026-04-15'));
     expect(rows[2]).toHaveTextContent('Dra. Laura Gómez');
     expect(rows[2]).toHaveTextContent('Finalizado');
     expect(await within(rows[2]).findByText('62,5 %')).toBeInTheDocument();
@@ -107,6 +110,8 @@ describe('PerioTab', () => {
     const row = within(table).getAllByRole('row')[1];
     expect(await within(row).findByText('62.5%')).toBeInTheDocument();
     expect(row).toHaveTextContent('12.5%');
+    // DX-354b: el día del examen con el formato de la sede (en-US: mes primero).
+    expect(row).toHaveTextContent(regionalFormat({ locale: 'en-US', hourCycle: 'h12' }).civilDate('2026-04-15'));
   });
 
   it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
@@ -149,10 +154,10 @@ describe('PerioTab', () => {
     );
     render(<PerioTab token="tok" patientId="p1" />);
     const table = await screen.findByRole('table', { name: /histórico/i });
-    await user.click(within(table).getByRole('button', { name: 'Abrir examen del 10/10/2026' }));
+    await user.click(await within(table).findByRole('button', { name: `Abrir examen del ${DE.civilDate('2026-10-10')}` }));
     expect(
       await screen.findByRole('checkbox', {
-        name: /comparar con el examen anterior \(15\/04\/2026\)/i,
+        name: `Comparar con el examen anterior (${DE.civilDate('2026-04-15')})`,
       }),
     ).toBeInTheDocument();
   });
@@ -164,8 +169,8 @@ describe('PerioTab', () => {
     render(<PerioTab token="tok" patientId="p1" />);
     const table = await screen.findByRole('table', { name: /histórico/i });
     await user.click(
-      within(table).getByRole('button', {
-        name: 'Abrir examen del 15/04/2026',
+      await within(table).findByRole('button', {
+        name: `Abrir examen del ${DE.civilDate('2026-04-15')}`,
       }),
     );
     expect(mockedGet).toHaveBeenCalledWith('tok', 'p1', 'e1');

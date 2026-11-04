@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OdontogramTab } from './odontogram-tab';
 import { Toaster } from '@/components/errors/toaster';
@@ -30,6 +30,15 @@ jest.mock('../../lib/odontogram/odontogram-api', () => ({
   voidToothRecord: jest.fn(),
   VOID_REASON_MAX: 500,
 }));
+
+// DX-354b: el día de la carta y el de cada registro salen con el formato de la sede (es-VE).
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
+}));
+
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { regionalFormat } from '@/lib/format/regional-format';
 
 const mockedListCatalog = listCatalogItems as jest.MockedFunction<typeof listCatalogItems>;
 const mockedGetOdontogram = getOdontogram as jest.MockedFunction<typeof getOdontogram>;
@@ -140,11 +149,13 @@ describe('OdontogramTab', () => {
     mockedGetDentition.mockResolvedValue(adult);
   });
 
-  it('shows the full-page loading status only on the initial load', () => {
+  it('shows the full-page loading status only on the initial load', async () => {
     mockedGetOdontogram.mockReturnValue(new Promise(() => {}));
     mockedListCatalog.mockReturnValue(new Promise(() => {}));
     render(<OdontogramTab token="tok" patientId="p1" />);
     expect(screen.getByRole('status')).toHaveTextContent(/cargando odontograma/i);
+    // Deja que acabe la carga de las sedes (DX-354b) dentro de la prueba.
+    await act(async () => {});
   });
 
   it('dibuja la dentición mixta de un niño de 7 años y pinta un registro en el 64 (sin aviso de «no aparecen»)', async () => {
@@ -283,6 +294,24 @@ describe('OdontogramTab', () => {
     const link = await screen.findByRole('link', { name: 'Documentos del diente 11' });
     expect(link).toHaveAttribute('href', '/patients/p1?tab=documents&tooth=11');
     expect(link).toHaveTextContent('Documentos del diente');
+  });
+
+  it('DX-354b: el aviso de la carta lleva el día con el formato de la sede (de-DE, en-US)', async () => {
+    const user = userEvent.setup();
+    const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    for (const [locale, hourCycle] of [['de-DE', 'h23'], ['en-US', 'h12']] as const) {
+      mockedLocations.mockResolvedValue([clinicLocation({ locale, hourCycle })]);
+      const { unmount } = render(<OdontogramTab token="tok" patientId="p1" initialTooth="11" />);
+      await screen.findByRole('form', { name: /registrar en el diente 11/i });
+      await typeAsOf(user, '2026-10-05');
+      const day = regionalFormat({ locale, hourCycle }).civilDate('2026-10-05');
+      expect(await screen.findByText(new RegExp(`carta al ${day.replace(/\./g, '\\.')} · solo lectura`, 'i'))).toBeInTheDocument();
+      unmount();
+    }
+    mockedLocations.mockResolvedValue([clinicLocation()]);
   });
 
   it('«Ver la carta al» recarga a esa fecha en solo lectura, con aviso y sin acciones', async () => {

@@ -17,7 +17,6 @@ import { activeSedeSelect } from './support/nav';
 import { dataList, dataListRows } from './support/data-list';
 import { cashCollected, choosePeriod, collectedOf, comparisonRow, nonZero } from './support/comparison';
 import { API_URL, tenantOrigin } from './support/urls';
-import { formatCivilDate } from '../src/lib/format/date';
 import { countryName } from '../src/lib/locations/countries';
 import { zoneCityName } from '../src/lib/format/zone';
 import { regionalFormat } from '../src/lib/format/regional-format';
@@ -505,8 +504,8 @@ test('a pending coverage shows its start date after today', async ({ page, reque
       hasText: 'Pendiente de inicio',
     });
     await expect(row).toBeVisible({ timeout: 15_000 });
-    // La ficha pinta la fecha con `formatCivilDate` (coverage-presentation.ts), no con el formato de la sede.
-    await expect(row).toContainText(`Desde ${formatCivilDate(validFrom)}`);
+    // DX-354b: la ficha pinta la fecha de inicio con el formato de la sede de la pantalla (la principal).
+    await expect(row).toContainText(`Desde ${regionalFormat(principal).civilDate(validFrom)}`);
     await bringToTop(page, row, 'center');
     await checkScreen(page, 'coverage-pending', viewport.width);
   }

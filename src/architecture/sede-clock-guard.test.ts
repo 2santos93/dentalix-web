@@ -58,30 +58,9 @@ const PENDING: Readonly<Record<string, string>> = {
  */
 const MAX_PENDING = 1;
 
-const CIVIL_W4 = 'Día civil en `dd/mm/yyyy` fijo: se migra a `fmt.civilDate`/`stamp.civilDate` en DX-354b W4.';
-
-/**
- * Ficheros que solo importan `formatCivilDate` (sin ningún otro ayudante sin
- * sede, que irían en `PENDING`). Solo puede encoger; se vacía en DX-354b W4.
- */
-const CIVIL_PENDING: Readonly<Record<string, string>> = {
-  'components/account-statement/account-statement-view.tsx': CIVIL_W4,
-  'components/consents/new-consent-modal.tsx': CIVIL_W4,
-  'components/implants/implant-lot-search.tsx': CIVIL_W4,
-  'components/odontogram/odontogram-tab.tsx': CIVIL_W4,
-  'components/patients/patient-data-panel.tsx': CIVIL_W4,
-  'components/perio/perio-exam-editor.tsx': CIVIL_W4,
-  'components/perio/perio-tab.tsx': CIVIL_W4,
-  'components/recall/patient-recall-section.tsx': CIVIL_W4,
-  'components/recall/recall-view.tsx': CIVIL_W4,
-  'components/signature-requests/send-to-sign-modal.tsx': CIVIL_W4,
-  'components/treatment-plans/accept-plan-modal.tsx': CIVIL_W4,
-  'components/treatment-plans/payment-plan-section.tsx': CIVIL_W4,
-  'components/treatment-plans/plan-visits-board.tsx': CIVIL_W4,
-  'lib/patients/agreement-presentation.ts': CIVIL_W4,
-  'lib/patients/coverage-presentation.ts': CIVIL_W4,
-};
-const MAX_CIVIL_PENDING = 15;
+/** Ficheros que solo importan `formatCivilDate`: vacía desde DX-354b W4 (T23); la retira T26. */
+const CIVIL_PENDING: Readonly<Record<string, string>> = {};
+const MAX_CIVIL_PENDING = 0;
 
 /** Las pantallas de DX-378 (y las migradas después): no pueden volver a la lista. */
 const MIGRATED = [
@@ -167,6 +146,23 @@ const MIGRATED = [
   'components/support-accesses/support-accesses-view.tsx',
   // DX-354b W3 (E8): la consola de plataforma no tiene sede; escribe el instante en UTC con su zona (`platformInstant`).
   'components/platform/platform-mfa-card.tsx',
+  // DX-354b W4: los días civiles (nacimiento, vigencias, vencimientos) con el formato de la sede, sin `formatCivilDate`.
+  'components/account-statement/account-statement-view.tsx',
+  'components/consents/new-consent-modal.tsx',
+  'components/implants/implant-lot-search.tsx',
+  'components/odontogram/odontogram-tab.tsx',
+  'components/patients/patient-data-panel.tsx',
+  'components/perio/perio-exam-editor.tsx',
+  'components/perio/perio-tab.tsx',
+  'components/recall/patient-recall-section.tsx',
+  'components/recall/recall-view.tsx',
+  'components/signature-requests/send-to-sign-modal.tsx',
+  'components/treatment-plans/accept-plan-modal.tsx',
+  'components/treatment-plans/payment-plan-section.tsx',
+  'components/treatment-plans/plan-visits-board.tsx',
+  'lib/patients/agreement-presentation.ts',
+  'lib/patients/coverage-presentation.ts',
+  'components/patients/patient-retention-section.tsx',
 ];
 
 /**
@@ -430,11 +426,11 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
       { rel: 'components/nueva/pantalla.tsx', source: parse('x.tsx', "import { formatCivilDate } from '@/lib/format/date';") },
     ];
     expect(rule1Offenders(fresh, PENDING, CIVIL_PENDING)).toEqual(['components/nueva/pantalla.tsx: formatCivilDate']);
-    expect(rule1Offenders(fresh, PENDING, { 'components/nueva/pantalla.tsx': CIVIL_W4 })).toEqual([]);
+    expect(rule1Offenders(fresh, PENDING, { 'components/nueva/pantalla.tsx': 'motivo' })).toEqual([]);
     const both = [
       { rel: 'components/nueva/pantalla.tsx', source: parse('x.tsx', "import { formatCivilDate, formatDate } from '@/lib/format/date';") },
     ];
-    expect(rule1Offenders(both, PENDING, { 'components/nueva/pantalla.tsx': CIVIL_W4 })).toEqual([
+    expect(rule1Offenders(both, PENDING, { 'components/nueva/pantalla.tsx': 'motivo' })).toEqual([
       'components/nueva/pantalla.tsx: formatDate',
     ]);
 
