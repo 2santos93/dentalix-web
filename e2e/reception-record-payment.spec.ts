@@ -103,6 +103,18 @@ async function seed(
   return { patientId: patient.id, emptyPatientId: empty.id, lastName };
 }
 
+/** Un día civil en la zona de la sede de e2e, `offset` días desde hoy. */
+function sedeDay(offset: number): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: DEMO_REGION.timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(Date.now() + offset * 86_400_000));
+}
+const sedeToday = () => sedeDay(0);
+const sedeTomorrow = () => sedeDay(1);
+
 async function expectNoHorizontalScroll(page: Page): Promise<void> {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -180,11 +192,29 @@ for (const viewport of [
     await submit.click();
     await expect(dialog.getByRole('alert')).toContainText('Escribe un importe mayor que 0.');
 
+    // DX-075: mañana EN LA SEDE (no en el navegador) se rechaza junto al campo,
+    // sin llamar a la API.
+    const tomorrow = sedeTomorrow();
+    const dateGroup = dialog.getByRole('group', { name: 'Fecha de pago' });
+    await dialog.getByLabel('Importe').fill(String(PAYMENT));
+    await dateGroup.getByRole('spinbutton').first().click();
+    await page.keyboard.type(tomorrow.split('-').reverse().join(''));
+    await submit.click();
+    await expect(dialog.getByText('La fecha de pago no puede ser posterior a hoy.')).toBeVisible();
+    await expect(dateGroup.getByRole('spinbutton').first()).toBeFocused();
+    await expect(dialog).toBeVisible();
+
+    // Vuelve a hoy: el segmento del día lo vuelve a escribir.
+    await dateGroup.getByRole('spinbutton').first().click();
+    await page.keyboard.type(sedeToday().split('-').reverse().join(''));
     await dialog.getByLabel('Importe').fill(String(PAYMENT));
     await dialog.getByLabel('Método').selectOption({ label: 'Efectivo' });
     await submit.click();
     await expect(dialog).toBeHidden({ timeout: 10_000 });
-    await expect(page.getByRole('status').filter({ hasText: 'Abono registrado' })).toBeVisible();
+    // DX-075: el aviso de éxito es un toast, a la vista sin scroll (390 y 1440).
+    const recordedToast = page.locator('[data-sonner-toast]').filter({ hasText: 'Abono registrado' });
+    await expect(recordedToast).toBeVisible();
+    await expect(recordedToast).toBeInViewport();
 
     // El estado de cuenta se recarga con el abono y el saldo nuevo.
     const summary = panel.getByRole('region', { name: `Resumen en ${DEMO_CURRENCY}` });
@@ -208,7 +238,7 @@ for (const viewport of [
     await planDialog.getByRole('button', { name: 'Crear' }).click();
     await expect(planDialog).toBeHidden({ timeout: 10_000 });
     await expect(
-      page.getByRole('status').filter({ hasText: 'Plan de cuotas creado' }),
+      page.locator('[data-sonner-toast]').filter({ hasText: 'Plan de cuotas creado' }),
     ).toBeVisible();
     await expect(panel.getByRole('table', { name: 'Calendario de cuotas' })).toBeVisible({
       timeout: 10_000,

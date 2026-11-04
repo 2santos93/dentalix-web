@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { CalendarClock, ChevronDown, FileText, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
@@ -175,7 +176,6 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // entrar al plan de tratamiento (clínico). Tras cada uno se recarga todo.
   const canCharge = canRecordPayments(getTokenRole(token));
   const [chargeModal, setChargeModal] = useState<'payment' | 'payment-plan' | null>(null);
-  const [chargeNotice, setChargeNotice] = useState<string | null>(null);
   // Recibo de caja (DX-136) de cualquier movimiento, también de los anulados
   // (sale marcado «ANULADO»).
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
@@ -184,13 +184,14 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   const [issuedRefund, setIssuedRefund] = useState<CreditRefund | null>(null);
 
   function openCharge(kind: 'payment' | 'payment-plan') {
-    setChargeNotice(null);
     setChargeModal(kind);
   }
 
   function charged(notice: string) {
     setChargeModal(null);
-    setChargeNotice(notice);
+    // DX-075: el éxito sale como aviso (sonner), a la vista a 390 y 1440 px;
+    // antes era una línea al pie del estado de cuenta, fuera de pantalla.
+    toast.success(notice);
     setReloadKey((k) => k + 1);
     onChanged?.();
   }
@@ -309,7 +310,6 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
               onTransferred={charged}
               onRefunded={(refund) => {
                 setIssuedRefund(refund);
-                setChargeNotice(null);
                 setReloadKey((k) => k + 1);
                 onChanged?.();
               }}
@@ -318,13 +318,10 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         </AsyncSection>
       )}
 
-      {/* Avisos de la última anulación y del último cobro: fuera de
+      {/* Aviso de la última anulación (el del cobro es un toast): fuera de
           AsyncSection para que la recarga no los borre. */}
       <p role="status" className={voiding.notice ? 'text-sm text-success-text' : 'sr-only'}>
         {voiding.notice}
-      </p>
-      <p role="status" className={chargeNotice ? 'text-sm text-success-text' : 'sr-only'}>
-        {chargeNotice}
       </p>
 
       {showCharge ? (

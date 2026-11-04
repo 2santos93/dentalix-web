@@ -405,6 +405,24 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   );
 });
 
+it('DX-075: un día posterior a hoy en la sede se rechaza junto al campo, con el foco y sin llamar a la API', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([eurPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+
+  await user.type(within(dialog).getByLabelText('Importe'), '150000');
+  await typePaymentDate(user, dialog, '2099-01-01');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  expect(await within(dialog).findByText('La fecha de pago no puede ser posterior a hoy.')).toBeInTheDocument();
+  expect(mockedRecord).not.toHaveBeenCalled();
+  await waitFor(() => expect(dialog.querySelector('#rp-date-error')).not.toBeNull());
+  expect(document.activeElement).toHaveAttribute('role', 'spinbutton');
+  expect(document.activeElement?.closest('#rp-date')).not.toBeNull();
+});
+
 it('DX-516: sin ajustes en el medio no se pinta nada; con ellos, el ajuste sobre el importe y el total a cobrar', async () => {
   const user = userEvent.setup();
   mockedList.mockResolvedValue([eurPlan]);

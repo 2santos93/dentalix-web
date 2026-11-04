@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { parseMoneyInput } from '@/lib/format/money';
 import type { RegionalFormat } from '@/lib/format/regional-format';
@@ -84,6 +85,7 @@ export function PlanPaymentFormModal({
   const [validationError, setValidationError] = useState<string | null>(null);
   // DX-241: el motivo de un monto que no vale va junto al campo (escalón 4).
   const [amountError, setAmountError] = useState<string | null>(null);
+  const [dateError, setDateError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // DX-376: cobrar en otra moneda que la del plan enseña, antes de guardar, la
@@ -97,6 +99,7 @@ export function PlanPaymentFormModal({
     e.preventDefault();
     setValidationError(null);
     setAmountError(null);
+    setDateError(null);
     setSubmitError(null);
 
     const currencyValue = paymentCurrency.trim().toUpperCase();
@@ -115,6 +118,12 @@ export function PlanPaymentFormModal({
       setValidationError(copy.invalidPaymentDate);
       return;
     }
+    // DX-075: «hoy» es el de la sede; un día posterior se dice junto al campo.
+    if (sedeTimeZone && paymentDate > sedeToday(sedeTimeZone)) {
+      setDateError(copy.futurePaymentDate);
+      document.getElementById('tp-payment-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
+      return;
+    }
     // DX-395: la referencia o el motivo que faltan se marcan en su campo,
     // que recibe el foco.
     if (!paymentMethodFields.validate()) return;
@@ -129,7 +138,10 @@ export function PlanPaymentFormModal({
         ...paymentMethodFields.body(),
         ...(paymentNotes.trim() ? { notes: paymentNotes.trim() } : {}),
       };
-      await recordPayment(token, plan.id, input, idempotencyKey);
+      const saved = await recordPayment(token, plan.id, input, idempotencyKey);
+      // Éxito con el sistema de avisos del repo (sonner): visible en cualquier
+      // alto de pantalla, sin depender de dónde esté el scroll.
+      toast.success(copy.paymentRecorded(stamp.money(saved.amount, saved.currency)));
       onOpenChange(false);
       await onRecorded();
     } catch (err) {
@@ -201,7 +213,7 @@ export function PlanPaymentFormModal({
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel}>
+        <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel} error={dateError}>
           {sedeZone.status === 'error' && paymentDate === '' ? (
             <SedeConfigError kind="timeZone" variant="field" retryId="tp-payment-date" onRetry={sedeZone.retry} />
           ) : (
@@ -209,7 +221,13 @@ export function PlanPaymentFormModal({
               id="tp-payment-date"
               name="tp-payment-date"
               value={paymentDate || null}
-              onChange={(next) => setPaymentDate(next ?? '')}
+              max={sedeTimeZone ? sedeToday(sedeTimeZone) : undefined}
+              aria-invalid={dateError ? true : undefined}
+              aria-describedby={dateError ? fieldErrorId('tp-payment-date') : undefined}
+              onChange={(next) => {
+                setPaymentDate(next ?? '');
+                setDateError(null);
+              }}
             />
           )}
         </FormField>

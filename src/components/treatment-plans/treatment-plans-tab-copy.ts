@@ -215,6 +215,8 @@ export const copy = {
   invalidPaymentAmount: 'Escribe un importe mayor que 0.',
   invalidPaymentCurrency: 'Ingresa una moneda válida.',
   invalidPaymentDate: 'Ingresa una fecha válida.',
+  futurePaymentDate: 'La fecha de pago no puede ser posterior a hoy.',
+  paymentRecorded: (amount: string) => `Abono registrado: ${amount}.`,
   genericAddPaymentError: 'No pudimos registrar el abono. Intenta de nuevo.',
   paymentsTableCaption: 'Abonos del plan de tratamiento',
   colPaymentDate: 'Fecha',
