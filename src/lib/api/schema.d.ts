@@ -15602,6 +15602,12 @@ export interface components {
             /** @description SEC-043: el grupo tiene una anulación posterior que cuenta en otra caja abierta o pendiente: sin esperado ni diferencia. `counted` se queda. */
             amountHidden: boolean;
         };
+        CashReceiptViewsDto: {
+            /** @description Recibos distintos abiertos o impresos */
+            receipts: number;
+            /** @description Consultas en total (ver e imprimir) */
+            views: number;
+        };
         CashClosingDto: {
             /** Format: uuid */
             id: string;
@@ -15615,6 +15621,8 @@ export interface components {
             differenceReason: string | null;
             /** @description SEC-043: cierre a ciegas que no cuadró y llegó sin motivo. Se guardó igual y queda para revisión de administración. */
             unjustifiedDifference: boolean;
+            /** @description SEC-043-bis: recibos de abonos de esta caja que quien la cerró abrió o imprimió entre la apertura y este cierre (VIEW y PRINT de la auditoría). Solo para ADMIN y en un cierre a ciegas; null en los demás casos. */
+            receiptViews: components["schemas"]["CashReceiptViewsDto"] | null;
             notes: string | null;
             /**
              * @description Fecha de bloqueo contable sugerida para la sede (día civil del cierre, DX-091). No bloquea nada todavía.

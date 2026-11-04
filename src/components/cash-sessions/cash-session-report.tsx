@@ -3,6 +3,7 @@ import Link from 'next/link';
 import {
   cashSessionHref,
   type CashAdjustment,
+  type CashClosing,
   type CashSessionDetail,
 } from '@/lib/cash-sessions/cash-sessions-api';
 import { ADJUSTMENT_KIND_LABELS } from '@/lib/cash-sessions/arqueo';
@@ -18,6 +19,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { civilDateInZone } from '@/lib/format/date';
+import { addCivilDays } from '@/lib/time/wall-clock';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { Badge } from '@/components/ui/badge';
 
@@ -59,6 +62,14 @@ const copy = {
   lockDate: 'Fecha de bloqueo sugerida',
   lockDateHint: 'Para el cierre contable de la sede (aún no bloquea nada).',
   blindClose: 'Cerrada con arqueo ciego.',
+  // SEC-043-bis: solo llega para ADMIN. El recibo lleva el importe que el
+  // arqueo ciego oculta en Abonos.
+  receiptViews: (who: string, receipts: number, views: number) =>
+    `${who} consultó ${receipts === 1 ? '1 recibo' : `${receipts} recibos`} de esta caja antes de cerrar` +
+    (views > receipts ? ` (${views} consultas).` : '.'),
+  receiptViewsWho: 'Quien cerró',
+  receiptViewsClosing: (n: number) => `Cierre ${n}: `,
+  receiptViewsLink: 'Ver las consultas de recibos de esos días',
   paymentsTitle: 'Cobros del turno',
   // DX-516: ajustes por medio de pago que entran con los abonos.
   paymentAdjustments: (amount: string) => `${amount} por ajustes del medio`,
@@ -361,6 +372,10 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
           </DescriptionList>
         ) : null}
         {closing?.blind ? <p className="mt-3 text-xs text-muted">{copy.blindClose}</p> : null}
+        {/* SEC-043-bis: solo en pantalla (el papel circula) y solo para ADMIN
+            (la API no lo manda a nadie más): cada cierre a ciegas del
+            historial en el que quien cerró consultó recibos de la caja. */}
+        {linkSessions ? <ReceiptViewsLines session={session} /> : null}
       </Section>
 
       {session.payments ? (
@@ -500,6 +515,61 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
       </section>
     </article>
     </HeadingLevel.Provider>
+  );
+}
+
+/**
+ * SEC-043-bis: la auditoría filtrada por quien cerró y los recibos, en los
+ * días del turno: desde la apertura (o la reapertura de esa vuelta) hasta el
+ * cierre, contados en la zona de la sede de la caja. La auditoría cuenta los
+ * días con el reloj de la sede activa de la pantalla, que puede ser otra: se
+ * amplía un día a cada lado para que la lista nunca se quede corta (puede
+ * traer de más; la cifra de la línea es la exacta).
+ */
+export function receiptViewsAuditHref(
+  session: Pick<CashSessionDetail, 'openedAt' | 'timeZone' | 'reopenings'>,
+  closing: Pick<CashClosing, 'sequence' | 'closedAt' | 'closedBy'>,
+): string | null {
+  const reopening = session.reopenings.find((r) => r.sequence === closing.sequence - 1);
+  const fromDay = civilDateInZone(reopening?.reopenedAt ?? session.openedAt, session.timeZone);
+  const toDay = civilDateInZone(closing.closedAt, session.timeZone);
+  if (!fromDay || !toDay) return null;
+  const params = new URLSearchParams({
+    actorUserId: closing.closedBy.id,
+    resourceType: 'PAYMENT_RECEIPT',
+    from: addCivilDays(fromDay, -1),
+    to: addCivilDays(toDay, 1),
+  });
+  return `/settings/auditoria?${params.toString()}`;
+}
+
+function ReceiptViewsLines({ session }: { session: CashSessionDetail }) {
+  const flagged = session.closings.filter((c) => c.blind && c.receiptViews && c.receiptViews.receipts > 0);
+  if (flagged.length === 0) return null;
+  const numbered = session.closings.length > 1;
+  return (
+    <ul className="mt-2 flex flex-col gap-1 text-sm">
+      {[...flagged]
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((closing) => {
+          const views = closing.receiptViews!;
+          const href = receiptViewsAuditHref(session, closing);
+          return (
+            <li key={closing.id} data-testid="closing-receipt-views">
+              {numbered ? copy.receiptViewsClosing(closing.sequence) : null}
+              {copy.receiptViews(closing.closedBy.fullName ?? copy.receiptViewsWho, views.receipts, views.views)}
+              {href ? (
+                <>
+                  {' '}
+                  <Link className="font-medium text-primary-text underline-offset-2 hover:underline" href={href}>
+                    {copy.receiptViewsLink}
+                  </Link>
+                </>
+              ) : null}
+            </li>
+          );
+        })}
+    </ul>
   );
 }
 
