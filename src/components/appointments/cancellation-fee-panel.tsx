@@ -397,7 +397,6 @@ function ChargeFeeModal({
       onCloseAutoFocus={onCloseAutoFocus}
     >
       {stale ? <FeeConflictNotice /> : null}
-      <SedeStampNote stamp={stamp} />
       <FormField
         htmlFor={amountId}
         label={copy.amount}

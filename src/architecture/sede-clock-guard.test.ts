@@ -276,6 +276,8 @@ function symbolMoneyCalls(source: ts.SourceFile): string[] {
       ts.isPropertyAccessExpression(node.expression) &&
       node.expression.name.text === 'money' &&
       // `stamp.money(…)` es el pintor de la sede (`moneyWithCode`, con el código ISO), no `RegionalFormat.money`.
+      // Ojo: se salva por el NOMBRE del receptor, no por su tipo; un `RegionalFormat` guardado en una variable
+      // llamada `stamp` se saltaría la regla.
       !/(^|\.)stamp$/.test(node.expression.expression.getText(source))
     ) {
       const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));

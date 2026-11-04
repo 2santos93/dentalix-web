@@ -74,4 +74,13 @@ describe('PeriodResultsSection: lo cobrado con el formato de la sede (DX-354b)',
     await within(incomes).findByText('—', { selector: 'dd' });
     expect(norm(incomes.textContent)).not.toMatch(/1[.,]234/);
   });
+
+  it('sin formato de la sede el subtítulo del período dice «—», no el día ISO crudo', async () => {
+    jest.mocked(getDashboard).mockResolvedValue(dashboard('VES', 1234.5));
+    render(
+      <PeriodResultsSection token="tok" timeZone="America/Caracas" scopeKey="loc-1" currency={ready('VES')} fmt={null} />,
+    );
+    await screen.findByTestId('dashboard-incomes');
+    expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
 });

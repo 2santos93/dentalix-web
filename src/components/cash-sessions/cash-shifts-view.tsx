@@ -49,7 +49,6 @@ import type { CashViewTabs } from '@/components/payments/cash-register-view';
 import { OpenCashSessionModal } from './open-cash-session-modal';
 import { CloseCashSessionModal } from './close-cash-session-modal';
 import { CashOutflowModal } from './cash-outflow-modal';
-import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -481,7 +480,7 @@ function CurrentSessionCard({
   onOutflow: () => void;
 }) {
   const session: CashSessionDetail | null = current.session;
-  const openedAt = session ? stamp.dateTime(session.openedAt, current.locationId) : null;
+  const openedAt = session ? stamp.dateTime(session.openedAt, current.locationId) : '';
   const headingId = React.useId();
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
@@ -492,7 +491,7 @@ function CurrentSessionCard({
           </h2>
           {session ? (
             <p className="text-sm text-muted tabular-nums">
-              {copy.openedAt(openedAt ?? NO_SEDE_FORMAT)} · {copy.float}{' '}
+              {copy.openedAt(openedAt)} · {copy.float}{' '}
               {moneyList(session.floats, undefined, (amount, currency) => stamp.money(amount, currency, current.locationId))}
             </p>
           ) : (

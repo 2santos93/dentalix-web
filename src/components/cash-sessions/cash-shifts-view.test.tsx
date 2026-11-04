@@ -370,7 +370,7 @@ describe('CashShiftsView: cada turno con la hora y el importe de SU sede (DX-354
 
     mockedLocations.mockReturnValue(new Promise(() => undefined));
     render(<CashShiftsView token={token} />);
-    await screen.findByText('Aún no hay turnos de caja.').catch(() => undefined);
+    await waitFor(() => expect(mockedList).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
   });
 });

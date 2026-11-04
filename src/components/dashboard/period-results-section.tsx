@@ -5,7 +5,7 @@ import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { presetRange } from '@/lib/payments/cash-period';
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { sedeMoney } from '@/lib/format/sede-number';
+import { NO_SEDE_FORMAT, sedeMoney, sedeNumber } from '@/lib/format/sede-number';
 import { isValidPeriod, MAX_PERIOD_DAYS } from '@/lib/reports/period-presets';
 import type { DashboardCurrency } from '@/lib/locations/sede-regional-summary';
 import {
@@ -129,7 +129,7 @@ export function PeriodResultsSection({
     canQuery,
     copy.comparisonError,
   );
-  const civil = (day: string) => (fmt ? fmt.civilDate(day) : day);
+  const civil = (day: string) => (fmt ? fmt.civilDate(day) : NO_SEDE_FORMAT);
   const report = comparison.status === 'ready' ? comparison.data : null;
   const subtitle = canQuery
     ? [
@@ -284,7 +284,7 @@ function IncomesFigure({
   }
   const incomes = state.data.incomes;
   const mixed = Object.keys(incomes.byCurrency).some((c) => c !== incomes.currency);
-  const n = fmt ? fmt.number(incomes.count) : String(incomes.count);
+  const n = sedeNumber(incomes.count, fmt);
   return (
     <dl className="contents">
       <Cell className="max-md:col-span-2" label={copy.collectedLabel(incomes.currency)} testId="dashboard-incomes">
