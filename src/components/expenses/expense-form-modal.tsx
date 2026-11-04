@@ -44,8 +44,8 @@ import {
 } from './expense-payment-fields';
 import type { ExpenseCategoriesState } from './use-expense-categories';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
-import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 export const expenseFormCopy = {
   ...expenseFieldsCopy,
@@ -306,6 +306,7 @@ export function ExpenseFormModal({
       onCloseAutoFocus={onCloseAutoFocus}
     >
       {zoneError ? <SectionError description={zoneError} onRetry={retryZone} /> : null}
+      <SedeStampNote stamp={stamp} />
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField
           htmlFor="expense-location"
@@ -466,11 +467,6 @@ export function ExpenseFormModal({
             upload={upload}
             disabled={submitting}
             fmt={receiptFormat}
-            formatNotice={
-              form.locationId && onRetryLocations ? (
-                <SedeConfigError kind="locale" variant="note" onRetry={onRetryLocations} locationId={form.locationId} />
-              ) : null
-            }
           />
 
           <div className="flex flex-col gap-4 border-t border-border-subtle pt-4">

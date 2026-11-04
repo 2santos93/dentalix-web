@@ -45,7 +45,7 @@ jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]),
 }));
 
-const mockRequestLocations = jest.fn();
+const mockRequestLocations = Object.assign(jest.fn(), { invalidate: jest.fn() });
 const mockedList = listExpenses as jest.MockedFunction<typeof listExpenses>;
 const mockedCsv = downloadExpensesCsv as jest.MockedFunction<typeof downloadExpensesCsv>;
 const mockedCategories = listExpenseCategories as jest.MockedFunction<typeof listExpenseCategories>;
@@ -249,7 +249,8 @@ describe('ExpensesView (DX-274)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo gasto' });
     expect(within(dialog).getByText('Sedes no disponibles')).toBeInTheDocument();
     mockRequestLocations.mockResolvedValue(expenseLocations);
-    await user.click(within(dialog).getAllByRole('button', { name: 'Reintentar' })[0]);
+    // El del campo Sede (el aviso único de la sede también trae el suyo).
+    await user.click(within(within(dialog).getByText('Sedes no disponibles').parentElement!).getByRole('button', { name: 'Reintentar' }));
     expect(await within(dialog).findByRole('combobox', { name: 'Sede' })).toHaveValue('loc-1');
   });
 

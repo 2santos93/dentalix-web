@@ -202,28 +202,34 @@ describe('ExpenseFormModal (DX-274)', () => {
     expect(mockedCreate.mock.calls[0][1].attachmentUploadId).toBe('up-1');
   });
 
-  it('sede del gasto sin formato: tamaño «—» con el aviso de esa sede y su Reintentar', async () => {
+  it('sede del gasto sin formato: un solo aviso de la sede, con Configurar sede y su Reintentar (E4)', async () => {
     const user = setupUser();
-    const retry = jest.fn();
+    const broken = [{ ...expenseLocations[0], locale: 'en-US', hourCycle: null }, expenseLocations[1]];
+    mockedLocations.mockResolvedValue(broken);
     useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
     try {
-      renderModal({
-        locations: [{ ...expenseLocations[0], locale: 'en-US', hourCycle: null }, expenseLocations[1]],
-        onRetryLocations: retry,
-      });
-      expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
-      await user.upload(screen.getByLabelText('Soporte'), new File(['%PDF-'], 'luz.pdf', { type: 'application/pdf' }));
+      renderModal({ locations: broken, defaultLocationId: 'loc-1' });
       const note = await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
+      expect(screen.getAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
       const status = note.closest('[role="status"]') as HTMLElement;
       expect(within(status).getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
         'href',
         '/settings/sedes?sede=loc-1',
       );
+      mockedLocations.mockClear();
       await user.click(within(status).getByRole('button', { name: 'Reintentar' }));
-      expect(retry).toHaveBeenCalled();
+      await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
     } finally {
       useAuthStore.setState({ accessToken: null });
     }
+  });
+
+  it('al EDITAR un gasto de una sede sin formato sale el aviso (no «—» sin explicación)', async () => {
+    const broken = [{ ...expenseLocations[0], locale: null, hourCycle: null }, expenseLocations[1]];
+    mockedLocations.mockResolvedValue(broken);
+    const expense = expenseDetailFixture({ paidAmount: 50_000, pendingAmount: 100_000, status: 'PARTIAL' }, [expensePaymentFixture()]);
+    renderModal({ expense, locations: broken });
+    expect(await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
   });
 
   it('sede del gasto con formato: el tamaño con su formato y sin aviso', async () => {
