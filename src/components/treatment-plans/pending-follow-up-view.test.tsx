@@ -274,6 +274,38 @@ describe('PendingFollowUpView: cada fila con la sede donde se presentó (DX-354b
     ]);
   });
 
+  it('DX-354b (T26-ter): cada opción anidada de un presupuesto lleva el importe con el formato de SU sede', async () => {
+    mockedList.mockResolvedValue(
+      page([
+        item({
+          planId: 'o1',
+          optionGroupId: 'g1',
+          optionLabel: 'Opción A',
+          patientName: 'Carolina Ruiz',
+          presentedAt: '2026-10-01T15:00:00.000Z',
+          presentedLocationId: STAMP_SEDES.caracas.id,
+          total: 1234.5,
+          currency: 'USD',
+        }),
+        item({
+          planId: 'o2',
+          optionGroupId: 'g1',
+          optionLabel: 'Opción B',
+          patientName: 'Carolina Ruiz',
+          presentedAt: '2026-10-02T15:00:00.000Z',
+          presentedLocationId: STAMP_SEDES.berlin.id,
+          total: 1234.5,
+          currency: 'EUR',
+        }),
+      ]),
+    );
+    render(<PendingFollowUpView token="tok" />);
+    const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+    await waitFor(() => expect(money(row.textContent)).toContain(money('Opción A · USD 1.234,50')));
+    // La opción B es de Berlín: su línea va con el formato de Berlín, no con el de la sede de la opción más antigua.
+    expect(money(row.textContent)).toContain(money('Opción B · 1.234,50 EUR'));
+  });
+
   it('la fecha, el importe y el mensaje de WhatsApp de cada fila usan el reloj y el formato de SU sede', async () => {
     mockedList.mockResolvedValue(
       page([

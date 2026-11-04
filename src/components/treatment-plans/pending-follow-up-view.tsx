@@ -233,7 +233,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
               {row.options.map((o) => (
                 // Una línea por opción (Z1): a 1440 px el monto bajaba solo a otra línea.
                 <li key={o.planId} className="t-caption whitespace-nowrap text-muted tabular-nums">
-                  {o.optionLabel ?? copy.noOption} · {stamp.money(o.total, o.currency, row.presentedLocationId)}
+                  {o.optionLabel ?? copy.noOption} · {stamp.money(o.total, o.currency, o.presentedLocationId)}
                 </li>
               ))}
             </ul>
