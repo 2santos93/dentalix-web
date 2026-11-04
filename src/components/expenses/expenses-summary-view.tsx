@@ -227,9 +227,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                   onCommit={setToMonth}
                 />
               </div>
-            ) : (
-              <span aria-hidden />
-            )}
+            ) : null}
             <Button
               type="button"
               variant="secondary"
