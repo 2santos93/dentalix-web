@@ -249,6 +249,13 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     await typeDate(user, dialog, '31102026');
     await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
     expect(await within(dialog).findByText(rateFormCopy.dateFuture)).toBeInTheDocument();
+    // DX-381: marcado como inválido y descrito por el error, sin burbuja nativa (el form es noValidate) y sin llamar a la API.
+    const group = dateGroup(dialog);
+    expect(group).toHaveAttribute('data-invalid', 'true');
+    expect(group.getAttribute('aria-describedby')).toContain('manual-rate-form-date-error');
+    expect(document.getElementById('manual-rate-form-date-error')).toHaveTextContent(rateFormCopy.dateFuture);
+    expect(dialog.querySelector('form')).toHaveAttribute('novalidate');
+    expect(mockedRegister).not.toHaveBeenCalled();
     await typeDate(user, dialog, '30102026');
     const select = within(dialog).getByLabelText(rateFormCopy.currency);
     await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());

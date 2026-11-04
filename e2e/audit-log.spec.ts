@@ -32,6 +32,8 @@ const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
 const DENTIST_EMAIL = process.env.E2E_DEMO_DENTIST_EMAIL ?? 'dentista@demo.dentalix.app';
 
+const RATE_DAY = '2026-10-29';
+
 const VIEWPORTS = [
   { name: 'escritorio', width: 1440, height: 900 },
   { name: 'móvil', width: 390, height: 844 },
@@ -68,6 +70,8 @@ async function seed(
     reason: 'Control',
     notes: 'Evolución de prueba',
   });
+  // DX-381: el alta de una tasa manual queda con moneda, día y tasa.
+  await send('post', '/exchange/manual-rates', { date: RATE_DAY, currency: 'EUR', rate: 0.91 });
   await send('get', `/patients/${patient.id}/medical-history`);
   return patient.id;
 }
@@ -124,6 +128,8 @@ for (const viewport of VIEWPORTS) {
     await expect(table.getByText('Historia clínica').first()).toBeVisible();
     await expect(table.getByRole('link', { name: `Paula ${lastName}` }).first()).toBeVisible();
     await expect(table.getByText('Administrador/a').first()).toBeVisible();
+    // DX-381: el detalle de la tasa dice moneda · día · tasa con el formato de la sede.
+    await expect(table.getByText('EUR · 29/10/2026 · 0,91').first()).toBeVisible();
     // Nunca contenido clínico, solo quién, qué y cuándo.
     await expect(page.getByText(ALLERGY)).toHaveCount(0);
     await expectNoHorizontalScroll(page);

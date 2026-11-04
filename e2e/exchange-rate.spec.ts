@@ -88,7 +88,10 @@ async function fillRate(page: Page, rate: string): Promise<Locator> {
   // Hoy de la sede es el máximo: mañana no se envía.
   await fillDate(dialog, 'Fecha', sedeTomorrow());
   await dialog.getByRole('button', { name: 'Registrar tasa' }).click();
+  // DX-381: el error va en español junto al campo (marcado inválido), sin burbuja nativa del navegador.
   await expect(dialog.getByText('Ese día aún no ha llegado en la sede.')).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'Fecha', exact: true })).toHaveAttribute('data-invalid', 'true');
+  await expect(dialog.locator('form')).toHaveAttribute('novalidate', '');
   await fillDate(dialog, 'Fecha', sedeToday());
   const currency = dialog.getByLabel('Moneda');
   await expect(currency.locator(`option[value="${CURRENCY}"]`)).toHaveCount(1, { timeout: 15_000 });
