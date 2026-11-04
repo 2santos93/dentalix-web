@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PublicSignedCopyView, publicSignedCopyCopy } from './public-signed-copy-view';
 import {
   downloadPublicSignedPdfCopy,
@@ -66,6 +66,32 @@ describe('PublicSignedCopyView (DX-443)', () => {
     expect(download).toHaveBeenCalledWith('tok-1');
     expect(await screen.findByText(publicSignedCopyCopy.downloadedTitle)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: publicSignedCopyCopy.download })).not.toBeInTheDocument();
+  });
+
+  it('DX-487: «Volver a descargar» reusa la misma URL firmada sin gastar otra vez y desaparece al caducar', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    try {
+      get.mockResolvedValueOnce(copyOf());
+      download.mockResolvedValueOnce({
+        url: 'https://api.example/files/signed?x=1',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        fileName: 'Consentimiento.pdf',
+      });
+      render(<PublicSignedCopyView token="tok-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: publicSignedCopyCopy.download }));
+      const again = await screen.findByRole('button', { name: publicSignedCopyCopy.downloadAgain });
+      fireEvent.click(again);
+      expect(start).toHaveBeenCalledTimes(2);
+      expect(start).toHaveBeenLastCalledWith('https://api.example/files/signed?x=1');
+      expect(download).toHaveBeenCalledTimes(1);
+      act(() => {
+        jest.advanceTimersByTime(60_000);
+      });
+      expect(screen.queryByRole('button', { name: publicSignedCopyCopy.downloadAgain })).not.toBeInTheDocument();
+      expect(screen.getByText(publicSignedCopyCopy.downloadedTitle)).toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('un enlace ya usado dice «enlace usado» sin botón', async () => {

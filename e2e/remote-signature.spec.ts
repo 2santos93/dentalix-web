@@ -281,6 +281,14 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       expect(download.suggestedFilename()).toMatch(/^Consentimiento firmado - .+\.pdf$/);
       await expect(page.getByRole('heading', { name: 'Descarga iniciada' })).toBeVisible();
 
+      // DX-487: si no se guardó, la misma URL firmada durante un minuto, sin gastar otra vez.
+      const [again] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: 'Volver a descargar' }).click(),
+      ]);
+      expect(again.suggestedFilename()).toMatch(/^Consentimiento firmado - .+\.pdf$/);
+      await expectNoHorizontalScroll(page);
+
       // Una sola vez: después, «enlace usado».
       await page.goto(`${origin}/copia/${copyToken}`);
       await expect(page.getByRole('heading', { name: 'Este enlace ya se usó' })).toBeVisible();

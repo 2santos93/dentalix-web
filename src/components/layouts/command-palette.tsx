@@ -9,6 +9,8 @@ import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import { visibleSettingsSections } from '@/components/settings/settings-sections';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { Button } from '@/components/ui/button';
+import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
 import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appointment';
 import { canManageRecall } from '@/lib/recall/presentation';
@@ -27,6 +29,7 @@ const copy = {
   actions: 'Acciones',
   searching: 'Buscando pacientes…',
   searchFailed: 'No se pudo buscar pacientes. Revisa la conexión e inténtalo de nuevo.',
+  retry: 'Reintentar',
   minChars: 'Escribe al menos 2 letras para buscar pacientes.',
   noResults: (q: string) => `Nada coincide con «${q}».`,
   newAppointment: 'Nueva cita',
@@ -82,6 +85,7 @@ export function CommandPalette({
   const debounced = useDebouncedValue(query.trim(), DEBOUNCE_MS);
   const [patients, setPatients] = React.useState<Patient[]>([]);
   const [patientState, setPatientState] = React.useState<'idle' | 'loading' | 'error'>('idle');
+  const [searchAttempt, setSearchAttempt] = React.useState(0);
   const [active, setActive] = React.useState(0);
   const listId = React.useId();
   const listRef = React.useRef<HTMLUListElement>(null);
@@ -122,7 +126,7 @@ export function CommandPalette({
     return () => {
       cancelled = true;
     };
-  }, [open, token, debounced, searchable]);
+  }, [open, token, debounced, searchable, searchAttempt]);
 
   const go = React.useCallback(
     (href: string) => {
@@ -271,7 +275,7 @@ export function CommandPalette({
   let status: string | null = null;
   if (trimmed.length === 1) status = copy.minChars;
   else if (trimmed.length >= 2 && patientState === 'loading') status = copy.searching;
-  else if (trimmed.length >= 2 && patientState === 'error') status = copy.searchFailed;
+  const searchError = trimmed.length >= 2 && patientState === 'error';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -309,6 +313,14 @@ export function CommandPalette({
           />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {searchError && (
+            <div className="flex flex-col items-start gap-2 px-3 py-2">
+              <InlineError>{copy.searchFailed}</InlineError>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setSearchAttempt((n) => n + 1)}>
+                {copy.retry}
+              </Button>
+            </div>
+          )}
           {status && (
             <p role="status" className="px-3 py-2 text-sm text-muted">
               {status}
@@ -357,7 +369,7 @@ export function CommandPalette({
               );
             })}
           </ul>
-          {options.length === 0 && !status && (
+          {options.length === 0 && !status && !searchError && (
             <p role="status" className="px-3 py-6 text-center text-sm text-muted">
               {copy.noResults(trimmed)}
             </p>

@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { TriangleAlert } from 'lucide-react';
 import { getPatientLivePublicLinks, type LivePublicLinks } from '@/lib/patients/patients-api';
 import { FieldError } from '@/components/errors/field-error';
+import { Callout } from '@/components/ui/callout';
 import { Skeleton } from '@/components/ui/skeleton';
 
 type Kind = Exclude<keyof LivePublicLinks, 'total'>;
@@ -100,22 +100,15 @@ export function ArchiveLinksNotice({ token, patientId }: ArchiveLinksNoticeProps
   }
 
   return (
-    <div
-      role="status"
-      className="flex min-w-0 flex-col gap-2 rounded-lg border border-warning/40 bg-warning/5 p-3"
-    >
-      <p className="flex items-start gap-2 text-sm font-semibold text-ink">
-        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-        <span className="tnum">{archiveLinksCopy.title(links.total)}</span>
-      </p>
-      <ul aria-label={archiveLinksCopy.listLabel} className="flex flex-col gap-1 pl-6 text-sm text-ink">
+    <Callout tone="warning" title={<span className="tnum">{archiveLinksCopy.title(links.total)}</span>}>
+      <ul aria-label={archiveLinksCopy.listLabel} className="flex flex-col gap-1 pl-4">
         {KINDS.filter((kind) => links[kind] > 0).map((kind) => (
           <li key={kind} className="tnum list-disc">
             {archiveLinksCopy.kinds[kind](links[kind])}
           </li>
         ))}
       </ul>
-      <p className="pl-6 text-sm text-muted">{archiveLinksCopy.explanation}</p>
-    </div>
+      <p className="mt-2 text-muted">{archiveLinksCopy.explanation}</p>
+    </Callout>
   );
 }

@@ -51,8 +51,8 @@ interface Snapshot {
  * leen la MISMA respuesta, así que sus números nunca difieren. Fuera de
  * Inicio se piden solo las listas del menú; en Inicio (o con «Mi día»
  * montado), todas, desde la primera lectura. Se
- * relee al cambiar de pantalla o de sede, cada minuto y al recibir
- * `WORK_QUEUES_CHANGED_EVENT`.
+ * relee al cambiar de pantalla o de sede, cada minuto con la pestaña visible,
+ * al volver a ella y al recibir `WORK_QUEUES_CHANGED_EVENT`.
  *
  * Contadores del menú: un fallo deja el último valor (es un contador; cada
  * lista tiene su propio estado de error en su pantalla). «Mi día»: un fallo
@@ -118,13 +118,21 @@ export function WorkQueuesProvider({
           if (!cancelled) setFailedKey(requestKey);
         });
     void load();
-    const timer = setInterval(() => void load(), POLL_MS);
+    // DX-487: con la pestaña oculta no se sondea; al volver se relee al momento.
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void load();
+    }, POLL_MS);
     const onChanged = () => void load();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
     window.addEventListener(WORK_QUEUES_CHANGED_EVENT, onChanged);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
       clearInterval(timer);
       window.removeEventListener(WORK_QUEUES_CHANGED_EVENT, onChanged);
+      document.removeEventListener('visibilitychange', onVisible);
     };
     // `requestKey` resume rol, sede, listas y reintento; `pathname` relee al navegar.
     // eslint-disable-next-line react-hooks/exhaustive-deps

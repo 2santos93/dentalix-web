@@ -16,7 +16,7 @@ import {
   type ClosingTreatment,
 } from '@/lib/appointments/closing-queue-api';
 import { getPlan, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { ApiError } from '@/lib/api/api-error';
 import { notifyClosingQueueChanged } from '@/components/appointments/closing-queue-count';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
@@ -129,8 +129,9 @@ export function ClosingQueueView({ token }: { token: string }) {
   const [cancelling, setCancelling] = useState<Cancelling | null>(null);
   const [evolutionFor, setEvolutionFor] = useState<ClosingAppointment | null>(null);
   const [markingDone, setMarkingDone] = useState<MarkingDone | null>(null);
-  const [locations, setLocations] = useState<ClinicLocation[]>([]);
-  const [locationsKey, setLocationsKey] = useState(0);
+  // La lista de sedes de la sesión (DX-487): sin otra petición por pantalla.
+  const locationsState = useLocationsState(token);
+  const locations = locationsState.status === 'ready' ? locationsState.locations : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -152,18 +153,6 @@ export function ClosingQueueView({ token }: { token: string }) {
       cancelled = true;
     };
   }, [token, reloadKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    listLocations(token)
-      .then((data) => {
-        if (!cancelled) setLocations(data ?? []);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [token, locationsKey]);
 
   /**
    * Tras cerrar o descartar: relee la lista (el contenido sigue en pantalla si
@@ -473,7 +462,7 @@ export function ClosingQueueView({ token }: { token: string }) {
           activeLocationId={markingDone.row.locationId}
           locationName={markingDone.row.locationName}
           locations={locations}
-          onRetryLocations={() => setLocationsKey((k) => k + 1)}
+          onRetryLocations={locationsState.retry}
           appointmentId={markingDone.row.appointmentId}
           preferredPerformerId={markingDone.row.professionalId}
           onSaved={() => {
