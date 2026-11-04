@@ -12,8 +12,8 @@ import { listLocations, type ClinicLocation } from '@/lib/locations/locations-ap
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { CURRENCY_TEXT_MAX, isCurrencyText } from '@/lib/format/currency-text';
 import { setClinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
-import { formatCurrency } from '@/lib/format/currency';
-import { moneyWithCode } from '@/lib/format/sede-number';
+import { NO_SEDE_FORMAT, moneyWithCode } from '@/lib/format/sede-number';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -119,6 +119,7 @@ export function CurrencyTextsForm({ token, allowed }: { token: string; allowed: 
           token={token}
           loaded={loaded}
           onSaved={(saved) => setLoaded({ ...loaded, saved })}
+          onRetryLocations={() => setReloadKey((k) => k + 1)}
         />
       )}
     </SettingsSection>
@@ -129,10 +130,13 @@ function CurrencyTextsFields({
   token,
   loaded,
   onSaved,
+  onRetryLocations,
 }: {
   token: string;
   loaded: Loaded;
   onSaved: (saved: Texts) => void;
+  /** Vuelve a leer las sedes (la nota de «sin formato» lo ofrece). */
+  onRetryLocations: () => void;
 }) {
   const router = useRouter();
   const { draft, setDraft, dirty, discard, commit } = useSettingsDraft<Texts>(loaded.saved, sameTexts);
@@ -176,7 +180,7 @@ function CurrencyTextsFields({
     const text = (draft[code] ?? '').trim();
     const texts = isCurrencyText(text) ? { [code]: text } : {};
     const fmt = formatFor(code);
-    return fmt ? moneyWithCode(SAMPLE, code, fmt, texts) : formatCurrency(SAMPLE, code, undefined, texts);
+    return fmt ? moneyWithCode(SAMPLE, code, fmt, texts) : NO_SEDE_FORMAT;
   }
 
   function setText(code: string, value: string) {
@@ -221,8 +225,14 @@ function CurrencyTextsFields({
     }
   }
 
+  // Ninguna sede tiene formato regional: los ejemplos salen «—» (nunca con otro formato) y se dice por qué, una vez.
+  const missingFormat = rows.length > 0 && rows.some((code) => formatFor(code) === null);
+
   return (
     <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-4">
+      <div role="status">
+        {missingFormat ? <SedeConfigError kind="locale" variant="note" live={false} onRetry={onRetryLocations} /> : null}
+      </div>
       <SettingRows>
         {rows.map((code) => {
           const inputId = `currency-text-${code}`;

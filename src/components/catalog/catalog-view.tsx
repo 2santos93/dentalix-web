@@ -28,10 +28,12 @@ import type { RowAction } from '@/components/shared/row-actions';
 import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { notifyError } from '@/components/errors/notify';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
-import { formatAmount, formatCurrency } from '@/lib/format/currency';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { clinicBaseCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
 
@@ -153,21 +155,24 @@ const DEFAULT_COLOR = '#0E7490';
  * siempre en USD). Mientras no se sabe la moneda — cargando, o si las sedes no
  * cargaron — el importe va sin símbolo: nunca con una moneda que no es la suya.
  */
-function formatPrice(price: number, currency: string | null | undefined): string {
-  return currency ? formatCurrency(price, currency) : formatAmount(price);
+function formatPrice(price: number, currency: string | null | undefined, stamp: SedePainters): string {
+  if (currency) return stamp.money(price, currency);
+  return stamp.fmt ? stamp.fmt.number(price, { min: 2, max: 2 }) : NO_SEDE_FORMAT;
 }
 
 /** La celda de precio: importe, «Sin precio» (procedimiento) o nada (diagnóstico). */
 function PriceCell({
   item,
   currency,
+  stamp,
   fallback,
 }: {
   item: DentalCatalogItem;
   currency: string | null;
+  stamp: SedePainters;
   fallback: React.ReactNode;
 }) {
-  if (item.defaultPrice != null) return <>{formatPrice(item.defaultPrice, currency)}</>;
+  if (item.defaultPrice != null) return <>{formatPrice(item.defaultPrice, currency, stamp)}</>;
   if (item.kind === 'PROCEDURE') return <Badge variant="warning">{copy.noPrice}</Badge>;
   return <>{fallback}</>;
 }
@@ -199,6 +204,7 @@ interface CatalogViewProps {
  * history in `ToothRecord` / plan items that reference it is preserved.
  */
 export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
+  const stamp = useSedeStamp(token);
   // Moneda base de la clínica (la común de sus sedes activas, GLOBAL-G1). Con
   // sedes en monedas distintas, el importe va sin símbolo. Si las sedes no
   // cargaron o alguna no tiene moneda tampoco lleva símbolo, y además se dice
@@ -523,10 +529,10 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       header: copy.colPrice,
       numeric: true,
       mobile: 'trailing',
-      cell: (item) => <PriceCell item={item} currency={currency} fallback={copy.priceFallback} />,
+      cell: (item) => <PriceCell item={item} currency={currency} stamp={stamp} fallback={copy.priceFallback} />,
       mobileCell: (item) =>
         item.defaultPrice == null && item.kind === 'DIAGNOSIS' ? null : (
-          <PriceCell item={item} currency={currency} fallback={null} />
+          <PriceCell item={item} currency={currency} stamp={stamp} fallback={null} />
         ),
     },
     {
@@ -678,6 +684,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
               error={priceError}
             >
               <MoneyInput
+                money={stamp.money}
                 id="catalog-price"
                 currency={currency ?? ''}
                 value={price}
@@ -733,6 +740,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
           // Los precios siguen siendo correctos (sin símbolo): una nota, no una sección rota.
           <SedeConfigError kind="currency" variant="note" onRetry={locationsState.retry} />
         ) : null}
+        <SedeStampNote stamp={stamp} />
 
         {!loading && !loadError && hasAny ? (
           <ResultCount

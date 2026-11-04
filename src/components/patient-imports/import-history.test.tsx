@@ -7,6 +7,9 @@ import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
 import { ImportHistory } from './import-history';
 import { regionalFormat } from '@/lib/format/regional-format';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 
 /** Sede de prueba con ajustes explícitos (los recuentos de estos tests no llegan a mil). */
 const FMT = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
@@ -25,6 +28,7 @@ jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   undoBalances: jest.fn(),
   downloadErrorsCsv: jest.fn(),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 
 const mockedList = listImports as jest.MockedFunction<typeof listImports>;
@@ -45,7 +49,10 @@ const page = (items = [completed]) => ({
   pageSize: 20,
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+});
 
 
 /** Informe y deshacer viven en el «⋯» del lote (RowActions). */
@@ -308,4 +315,49 @@ it('DX-262: «Retirar saldos migrados» retira solo los saldos (aunque los pacie
   expect(mockedUndo).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.queryByRole('button', { name: /retirar los saldos migrados/i })).not.toBeInTheDocument();
+});
+
+describe('ImportHistory: la fecha de confirmación con la sede de la pantalla (DX-354b)', () => {
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+
+  it.each(['caracas', 'berlin', 'miami'] as const)('con la sede de %s la fecha y la hora salen con su zona, formato y reloj', async (key) => {
+    jest.mocked(listLocations).mockResolvedValue([{ ...STAMP_SEDES[key], id: 'loc-1' }]);
+    mockedList.mockResolvedValue(page());
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    await waitFor(() => expect(norm(list.textContent)).toContain(norm(dateTimeIn(key, '2026-10-21T14:05:00.000Z'))));
+  });
+
+  it('las 14:05Z del 21 de octubre: Caracas 10:05 a. m., Berlín 16:05 (24 h), no la hora del navegador (UTC)', async () => {
+    jest.mocked(listLocations).mockResolvedValue([{ ...STAMP_SEDES.berlin, id: 'loc-1' }]);
+    mockedList.mockResolvedValue(page());
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    await waitFor(() => expect(norm(list.textContent)).toContain('21.10.2026 16:05'));
+    expect(norm(list.textContent)).not.toContain('14:05');
+  });
+
+  it('sin formato de la sede la fecha sale «—»', async () => {
+    jest.mocked(listLocations).mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedList.mockResolvedValue(page());
+    render(<ImportHistory token="tok" reloadKey={0} fmt={null} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    expect(norm(list.textContent)).toContain('—');
+    expect(norm(list.textContent)).not.toContain('2026');
+  });
+
+  it('el lote de otra sede se fecha con el reloj de ESA sede (Berlín y Miami) aunque la pantalla sea de Caracas', async () => {
+    jest.mocked(listLocations).mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedList.mockResolvedValue(
+      page([
+        { ...completed, id: 'b-berlin', fileName: 'berlin.csv', locationId: 'sede-berlin' },
+        { ...completed, id: 'b-miami', fileName: 'miami.csv', locationId: 'sede-miami' },
+      ]),
+    );
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    await waitFor(() => expect(norm(list.textContent)).toContain(norm(dateTimeIn('berlin', '2026-10-21T14:05:00.000Z'))));
+    expect(norm(list.textContent)).toContain(norm(dateTimeIn('miami', '2026-10-21T14:05:00.000Z')));
+    expect(norm(list.textContent)).not.toContain(norm(dateTimeIn('caracas', '2026-10-21T14:05:00.000Z')));
+  });
 });

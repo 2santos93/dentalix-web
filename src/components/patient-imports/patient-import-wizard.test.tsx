@@ -534,6 +534,8 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     await user.click(screen.getByRole('button', { name: 'Continuar' }));
     expect(screen.getByRole('heading', { name: 'Confirmar la importación' })).toBeInTheDocument();
     expect(screen.getByText(/3 saldos migrados/)).toBeInTheDocument();
+    // DX-354b: los totales de la nota de confirmación, con el formato de la sede (de-DE: «201.000,50 VES · 40,00 USD»).
+    expect(screen.getByText(/También se crearán/).textContent?.replace(/\s/g, ' ')).toContain('201.000,50 VES · 40,00 USD');
   });
 
   it('QA D1: por defecto no se añade a quien ya tiene saldo migrado; marcar la casilla vuelve a validar la misma hoja', async () => {

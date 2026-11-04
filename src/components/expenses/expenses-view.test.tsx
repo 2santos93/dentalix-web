@@ -13,6 +13,7 @@ import { listExpenseCategories } from '@/lib/expenses/expense-categories-api';
 import { saveCsv } from '@/lib/files/save-csv';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { notifyError } from '@/components/errors/notify';
+import { STAMP_SEDES } from '@/lib/test/stamp';
 import { expenseDetailFixture, expenseFixture, expenseLocations } from '@/lib/test/expenses';
 import { setupUser } from '@/lib/test/user';
 import { getLocationSchedule } from '@/lib/locations/schedule-api';
@@ -44,7 +45,7 @@ jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]),
 }));
 
-const mockRequestLocations = jest.fn();
+const mockRequestLocations = Object.assign(jest.fn(), { invalidate: jest.fn() });
 const mockedList = listExpenses as jest.MockedFunction<typeof listExpenses>;
 const mockedCsv = downloadExpensesCsv as jest.MockedFunction<typeof downloadExpensesCsv>;
 const mockedCategories = listExpenseCategories as jest.MockedFunction<typeof listExpenseCategories>;
@@ -91,6 +92,26 @@ describe('ExpensesView (DX-274)', () => {
     render(<ExpensesView token="tok" />);
     expect(await screen.findByText(/No pudimos obtener la zona horaria de la sede/)).toBeInTheDocument();
     expect(mockedList).not.toHaveBeenCalled();
+  });
+
+  it('DX-354b (E1): en «Todas las sedes» cada gasto sale con el formato de SU sede (Caracas, Berlín y Miami)', async () => {
+    mockRequestLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedList.mockResolvedValue(
+      page([
+        expenseFixture({ id: 'e-c', locationId: 'sede-caracas', supplier: 'Prov Caracas', currency: 'VES', amount: 1234.5, invoiceDate: '2026-10-20' }),
+        expenseFixture({ id: 'e-b', locationId: 'sede-berlin', supplier: 'Prov Berlin', currency: 'EUR', amount: 1234.5, invoiceDate: '2026-10-20' }),
+        expenseFixture({ id: 'e-m', locationId: 'sede-miami', supplier: 'Prov Miami', currency: 'USD', amount: 1234.5, invoiceDate: '2026-10-20' }),
+      ]),
+    );
+    render(<ExpensesView token="tok" />);
+    const table = await screen.findByRole('table', { name: /^Gastos del periodo/ });
+    const norm = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
+    await waitFor(() => expect(norm(within(table).getByRole('row', { name: /Prov Berlin/ }))).toContain('1.234,50 EUR'));
+    expect(norm(within(table).getByRole('row', { name: /Prov Berlin/ }))).toContain('20.10.2026');
+    expect(norm(within(table).getByRole('row', { name: /Prov Miami/ }))).toContain('USD 1,234.50');
+    expect(norm(within(table).getByRole('row', { name: /Prov Miami/ }))).toContain('10/20/2026');
+    expect(norm(within(table).getByRole('row', { name: /Prov Caracas/ }))).toContain('VES 1.234,50');
+    expect(norm(within(table).getByRole('row', { name: /Prov Caracas/ }))).toContain('20/10/2026');
   });
 
   it('DX-378 (FE-078): la fecha y los importes con el formato de la sede (en-US), no con «es»', async () => {
@@ -219,14 +240,17 @@ describe('ExpensesView (DX-274)', () => {
 
   it('si las sedes no cargan, el alta lo dice en el campo Sede y deja reintentar', async () => {
     const user = setupUser();
-    mockRequestLocations.mockRejectedValueOnce(new Error('red'));
+    // El alta y la pantalla piden las sedes por separado: todas las lecturas fallan hasta el reintento.
+    mockRequestLocations.mockRejectedValue(new Error('red'));
     render(<ExpensesView token="tok" />);
     await screen.findByText(/No pudimos obtener la zona horaria de la sede/);
     expect(mockedList).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Nuevo gasto' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo gasto' });
     expect(within(dialog).getByText('Sedes no disponibles')).toBeInTheDocument();
-    await user.click(within(dialog).getAllByRole('button', { name: 'Reintentar' })[0]);
+    mockRequestLocations.mockResolvedValue(expenseLocations);
+    // El del campo Sede (el aviso único de la sede también trae el suyo).
+    await user.click(within(within(dialog).getByText('Sedes no disponibles').parentElement!).getByRole('button', { name: 'Reintentar' }));
     expect(await within(dialog).findByRole('combobox', { name: 'Sede' })).toHaveValue('loc-1');
   });
 

@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { formatAmount, formatCurrency } from '@/lib/format/currency';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { moneyInputCopy, parseMoneyInput } from '@/lib/format/money';
 import { cn } from '@/lib/utils';
 
@@ -31,16 +31,29 @@ interface MoneyInputProps extends NativeProps {
    * avisa en vez de prometer «Se guardará: 0,00».
    */
   requirePositive?: boolean;
+  /**
+   * Cómo se pinta el importe de la vista previa (DX-354b): el formato de la sede
+   * de la pantalla (`stamp.money`), sin valor por defecto. Sin formato («—»), la
+   * vista previa calla: el aviso de la sede de la pantalla explica por qué.
+   */
+  money: (amount: number, currency: string) => string;
 }
 
 /** La línea bajo el campo para un texto ya «asentado». */
-function previewText(text: string, currency: string, requirePositive: boolean): string {
+function previewText(
+  text: string,
+  currency: string,
+  requirePositive: boolean,
+  money: (amount: number, currency: string) => string,
+): string {
   if (text.trim() === '') return '';
   const parsed = parseMoneyInput(text, currency);
   if (!parsed.ok) return parsed.message;
   if (requirePositive && parsed.value <= 0) return moneyInputCopy.positive;
-  const formatted = currency ? formatCurrency(parsed.value, currency) : formatAmount(parsed.value);
-  return moneyInputCopy.preview(formatted);
+  // Sin moneda elegida no hay formato que prometer; sin formato de sede («—»), tampoco.
+  if (!currency) return '';
+  const formatted = money(parsed.value, currency);
+  return formatted === NO_SEDE_FORMAT ? '' : moneyInputCopy.preview(formatted);
 }
 
 /**
@@ -60,6 +73,7 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(
       currency,
       containerClassName,
       requirePositive = false,
+      money,
       className,
       id,
       'aria-describedby': describedBy,
@@ -78,7 +92,7 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(
     }, [value]);
 
     const invalid = props['aria-invalid'] === true || props['aria-invalid'] === 'true';
-    const preview = invalid ? '' : previewText(settled, currency, requirePositive);
+    const preview = invalid ? '' : previewText(settled, currency, requirePositive, money);
 
     return (
       <div className={cn('flex min-w-0 flex-col gap-1', containerClassName)}>

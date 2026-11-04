@@ -2,6 +2,9 @@ import { render, screen } from '@testing-library/react';
 import { BillablePlanField } from './billable-plan-field';
 import { FORMAT_ES } from '@/lib/test/document-regional';
 import type { BillablePlan } from '@/lib/payments/billable-plans-api';
+import { stampPainters } from '@/lib/locations/sede-stamp';
+import { testAgendaClock } from '@/lib/test/sede-clock';
+import { STAMP_SEDES } from '@/lib/test/stamp';
 
 const money = (amount: number, currency: string) => `${currency} ${amount}`;
 
@@ -22,14 +25,14 @@ function plan(overrides: Partial<BillablePlan> = {}): BillablePlan {
   };
 }
 
-function renderField(p: BillablePlan) {
+function renderField(p: BillablePlan, moneyFn: (amount: number, currency: string) => string = money) {
   render(
     <BillablePlanField
       id="plan"
       state={{ plans: [p], loading: false, failed: false, retry: jest.fn() }}
       value={p.id}
       onChange={jest.fn()}
-      money={money}
+      money={moneyFn}
       planDates={FORMAT_ES}
     />,
   );
@@ -86,5 +89,25 @@ describe('BillablePlanField (DX-472-bis)', () => {
     expect(
       screen.getByText('Sin contar 2 abonos en otra moneda: el proveedor de tasas no respondió.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('BillablePlanField con el formato de la sede (DX-354b)', () => {
+  const caracas = stampPainters(testAgendaClock([STAMP_SEDES.caracas, STAMP_SEDES.berlin])).money;
+  const berlin = stampPainters(testAgendaClock([STAMP_SEDES.berlin, STAMP_SEDES.caracas])).money;
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+
+  it('el saldo y las cifras del plan salen con el formato de cada sede: «VES 1.234,50» y «1.234,50 VES»', () => {
+    const ves = plan({ currency: 'VES', balance: 1234.5, total: 2000, paid: 765.5, paidOtherCurrencies: [] });
+    const first = render(
+      <BillablePlanField id="plan" state={{ plans: [ves], loading: false, failed: false, retry: jest.fn() }} value={ves.id} onChange={jest.fn()} money={caracas} planDates={FORMAT_ES} />,
+    );
+    expect(norm(first.container.textContent)).toContain('Saldo VES 1.234,50');
+    first.unmount();
+    const second = render(
+      <BillablePlanField id="plan" state={{ plans: [ves], loading: false, failed: false, retry: jest.fn() }} value={ves.id} onChange={jest.fn()} money={berlin} planDates={FORMAT_ES} />,
+    );
+    expect(norm(second.container.textContent)).toContain('Saldo 1.234,50 VES');
+    expect(norm(second.container.textContent)).not.toContain('VES 1.234,50');
   });
 });

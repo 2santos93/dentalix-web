@@ -1,6 +1,5 @@
 'use client';
 import { billablePlanLabel, type BillablePlan, type MoneyFormatter } from '@/lib/payments/billable-plans-api';
-import { formatCurrency } from '@/lib/format/currency';
 import type { DocumentFormat } from '@/lib/format/document-format';
 import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
@@ -42,8 +41,8 @@ interface BillablePlanFieldProps {
   /** Motivo por el que un plan no se puede elegir aquí, o `null` si se puede. */
   unavailableReason?: (plan: BillablePlan) => string | null;
   disabled?: boolean;
-  /** Cómo se pintan los importes (DX-386: el formato de la sede, si la pantalla lo tiene). */
-  money?: MoneyFormatter;
+  /** Cómo se pintan los importes: el formato de la sede de la pantalla (`stamp.money`, DX-354b). */
+  money: MoneyFormatter;
   /** Zona y formato de la sede con que se escribe la fecha del plan («Plan del …», DX-354); sin ellos, «—». */
   planDates: DocumentFormat | null;
 }
@@ -62,7 +61,7 @@ export function BillablePlanField({
   onChange,
   unavailableReason,
   disabled,
-  money = formatCurrency,
+  money,
   planDates,
 }: BillablePlanFieldProps) {
   const selected = state.plans?.find((p) => p.id === value) ?? null;

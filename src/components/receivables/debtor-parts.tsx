@@ -6,8 +6,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
 import type { RowAction } from '@/components/shared/row-actions';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDate } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import {
   BUCKET_LABELS,
   BUCKET_ORDER,
@@ -107,7 +106,19 @@ export function AgeMeta({ row }: { row: AgingRow }) {
 }
 
 /** Deuda por moneda, con el saldo a favor aparte. */
-export function DebtCell({ currencies, compact = false }: { currencies: AgingCurrency[]; compact?: boolean }) {
+/** Los importes y fechas de la deuda salen con el formato de SU sede (`row.locationId`, DX-354b, E1); sin ella (`null`), la de la pantalla. */
+export function DebtCell({
+  currencies,
+  stamp,
+  locationId,
+  compact = false,
+}: {
+  currencies: AgingCurrency[];
+  stamp: SedePainters;
+  /** La sede de la deuda (`AgingRowDto.locationId`); `null`/ausente = la de la pantalla. */
+  locationId?: string | null;
+  compact?: boolean;
+}) {
   // En la tarjeta del teléfono, solo lo que se debe: una moneda con solo saldo
   // a favor no pinta «0,00» junto al nombre.
   const shown = compact && currencies.some((c) => c.debt > 0) ? currencies.filter((c) => c.debt > 0) : currencies;
@@ -116,10 +127,10 @@ export function DebtCell({ currencies, compact = false }: { currencies: AgingCur
     <span className="flex flex-col gap-0.5">
       {shown.map((c) => (
         <span key={c.currency} className="whitespace-nowrap tabular-nums">
-          <span className="font-medium text-ink">{formatCurrency(c.debt, c.currency)}</span>
+          <span className="font-medium text-ink">{stamp.money(c.debt, c.currency, locationId)}</span>
           {withCredit && c.credit > 0 ? (
             <span className="block text-xs text-success-text">
-              {debtorCopy.credit(formatCurrency(c.credit, c.currency))}
+              {debtorCopy.credit(stamp.money(c.credit, c.currency, locationId))}
             </span>
           ) : null}
         </span>
@@ -134,12 +145,22 @@ export function bucketLineCount(row: AgingRow): number {
 }
 
 /** Solo los tramos con importe, de más antiguo a más nuevo. */
-export function BucketList({ currencies, className }: { currencies: AgingCurrency[]; className?: string }) {
+export function BucketList({
+  currencies,
+  stamp,
+  locationId,
+  className,
+}: {
+  currencies: AgingCurrency[];
+  stamp: SedePainters;
+  locationId?: string | null;
+  className?: string;
+}) {
   const lines = currencies.flatMap((c) =>
     [...BUCKET_ORDER]
       .reverse()
       .filter((bucket) => c.buckets[bucket] > 0)
-      .map((bucket) => ({ key: `${c.currency}-${bucket}`, bucket, amount: formatCurrency(c.buckets[bucket], c.currency) })),
+      .map((bucket) => ({ key: `${c.currency}-${bucket}`, bucket, amount: stamp.money(c.buckets[bucket], c.currency, locationId) })),
   );
   return (
     <dl className={cn('grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs', className)}>
@@ -155,25 +176,25 @@ export function BucketList({ currencies, className }: { currencies: AgingCurrenc
   );
 }
 
-export function LastPayment({ row }: { row: AgingRow }) {
+export function LastPayment({ row, stamp }: { row: AgingRow; stamp: SedePainters }) {
   if (!row.lastPayment) return <span className="text-muted">{debtorCopy.noPayments}</span>;
   return (
     <span className="whitespace-nowrap tabular-nums">
-      {formatCivilDate(row.lastPayment.paidOn)}
+      {stamp.civilDate(row.lastPayment.paidOn, row.locationId)}
       <span className="block text-xs text-muted">
-        {formatCurrency(row.lastPayment.amount, row.lastPayment.currency)}
+        {stamp.money(row.lastPayment.amount, row.lastPayment.currency, row.locationId)}
       </span>
     </span>
   );
 }
 
-export function NextInstallment({ row }: { row: AgingRow }) {
+export function NextInstallment({ row, stamp }: { row: AgingRow; stamp: SedePainters }) {
   if (!row.nextInstallment) return <span className="block max-w-[8rem] text-muted">{debtorCopy.noInstallment}</span>;
   return (
     <span className="whitespace-nowrap tabular-nums">
-      {formatCivilDate(row.nextInstallment.dueDate)}
+      {stamp.civilDate(row.nextInstallment.dueDate, row.locationId)}
       <span className="block text-xs text-muted">
-        {formatCurrency(row.nextInstallment.amount, row.nextInstallment.currency)}
+        {stamp.money(row.nextInstallment.amount, row.nextInstallment.currency, row.locationId)}
       </span>
     </span>
   );
@@ -220,7 +241,7 @@ export function ContactButtons({ row, clinicName }: { row: AgingRow; clinicName:
  * hay; si no, la última gestión (canal · resultado, fecha). El historial entero
  * está en el estado de cuenta. DX-215: un compromiso reabierto lo dice.
  */
-export function CollectionCell({ row, compact = false }: { row: AgingRow; compact?: boolean }) {
+export function CollectionCell({ row, stamp, compact = false }: { row: AgingRow; stamp: SedePainters; compact?: boolean }) {
   const { lastNote, promise } = row;
   if (!lastNote && !promise) return <span className="text-muted">{debtorCopy.noCollection}</span>;
   const noteLabel = lastNote ? `${CHANNEL_LABELS[lastNote.channel]} · ${OUTCOME_LABELS[lastNote.outcome]}` : null;
@@ -228,7 +249,7 @@ export function CollectionCell({ row, compact = false }: { row: AgingRow; compac
     <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5" data-testid="promise-status">
       <StatusBadge kind="paymentPromise" status={promise.status} className="whitespace-nowrap" />
       <span className="text-xs text-muted tabular-nums">
-        {debtorCopy.promiseLine(formatCurrency(promise.amount, promise.currency), formatCivilDate(promise.dueDate))}
+        {debtorCopy.promiseLine(stamp.money(promise.amount, promise.currency, row.locationId), stamp.civilDate(promise.dueDate, row.locationId))}
       </span>
     </span>
   ) : null;
@@ -244,7 +265,7 @@ export function CollectionCell({ row, compact = false }: { row: AgingRow; compac
       {lastNote && !promise ? (
         <span className="min-w-0 text-ink">
           <span>{noteLabel}</span>
-          <span className="text-muted tabular-nums"> · {formatDate(lastNote.createdAt)}</span>
+          <span className="text-muted tabular-nums"> · {stamp.date(lastNote.createdAt, row.locationId)}</span>
         </span>
       ) : null}
     </span>

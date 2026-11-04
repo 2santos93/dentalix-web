@@ -27,10 +27,9 @@ import {
 import {
   PAYMENT_METHOD_LABELS,
 } from '@/lib/payments/payment-method';
-import { sedeMoney } from '@/lib/format/sede-number';
-import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { PAYMENT_ADJUSTMENT_TYPE_LABELS, signedAdjustmentAmount } from '@/lib/payments/payment-adjustments';
-import { formatCivilDate, formatDate } from '@/lib/format/date';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -119,7 +118,7 @@ const copy = {
   receiptAction: 'Recibo',
   // El «⋯» de cada fila: «Acciones de abono de Ana Gómez».
   rowLabel: (patient: string) => `abono de ${patient}`,
-  planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
+  planLabel: (createdAt: string) => `Plan del ${createdAt}`,
   // DX-262: abono contra el saldo migrado (sin plan).
   openingLabel: (concept: string) => (concept ? `Saldo migrado · ${concept}` : 'Saldo migrado'),
   // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
@@ -200,9 +199,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // atajos muestran `SedeConfigError` (el rango personalizado no la necesita).
   const zone = useSedeTimeZone(token);
   const timeZone = readyTimeZone(zone);
-  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
-  const fmt = readyFormat(useSedeFormat(token));
-  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
+  // DX-354b (DX-517-bis): cada abono con la fecha, la hora y el importe de SU sede (`payment.location.id`),
+  // también con «Todas las sedes»; el resumen y el rango, con la sede de la pantalla. Cargando, «—».
   const [period, setPeriod] = useState<PeriodChoice>('today');
   // El rango que se CONSULTA. Con un atajo sale del día de la sede (y se
   // recalcula si cambia la sede); en personalizado se copia de los campos solo
@@ -229,6 +227,11 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<CashPaymentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  // DX-354b (DX-517-bis): cada abono con la fecha y el importe de SU sede (`payment.location.id`), también con
+  // «Todas las sedes»; el resumen y el rango, con la sede de la pantalla. Cargando, «—».
+  const stamp = useSedeStamp(token, data?.items.map((payment) => payment.location.id));
+  const fmt = stamp.fmt;
+  const money = (amount: number, code: string) => stamp.money(amount, code);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Un 403 no es un fallo que se arregle reintentando: va aparte del error de
   // carga, como aviso sin botón.
@@ -361,11 +364,11 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
       header: copy.colDate,
       cell: (payment) => (
         <span className="tabular-nums">
-          {formatCivilDate(payment.paidOn)}
-          <RegisteredNote payment={payment} />
+          {stamp.civilDate(payment.paidOn, payment.location.id)}
+          <RegisteredNote payment={payment} stamp={stamp} />
         </span>
       ),
-      mobileCell: (payment) => formatCivilDate(payment.paidOn),
+      mobileCell: (payment) => stamp.maybe.civilDate(payment.paidOn, payment.location.id),
     },
     {
       id: 'patient',
@@ -383,8 +386,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     {
       id: 'target',
       header: copy.colPlan,
-      cell: (payment) => <span className="text-muted">{targetLabel(payment)}</span>,
-      mobileCell: targetLabel,
+      cell: (payment) => <span className="text-muted">{targetLabel(payment, stamp)}</span>,
+      mobileCell: (payment) => targetLabel(payment, stamp),
     },
     {
       id: 'method',
@@ -439,11 +442,11 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           </span>
         ) : (
         <span className="flex flex-col items-end">
-          <span className="font-medium text-ink">{money(payment.amount, payment.currency)}</span>
+          <span className="font-medium text-ink">{stamp.money(payment.amount, payment.currency, payment.location.id)}</span>
           {/* DX-516: con ajustes por medio de pago, lo que entró de verdad. */}
           {payment.adjustments.length > 0 ? (
             <span className="t-caption text-muted tabular-nums">
-              {copy.collectedRow(money(payment.collectedAmount ?? payment.amount, payment.currency))}
+              {copy.collectedRow(stamp.money(payment.collectedAmount ?? payment.amount, payment.currency, payment.location.id))}
             </span>
           ) : null}
         </span>
@@ -453,6 +456,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
 
   return (
     <>
+      <SedeStampNote stamp={stamp} />
       <PageHeader
         title={copy.title}
         description={copy.description}
@@ -556,7 +560,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
 
         {range && timeZone && customError === null ? (
           <p className="text-sm text-muted tabular-nums" data-testid="cash-period-note" title={timeZone}>
-            {copy.periodNote(copy.periodDays(formatCivilDate(range.from), formatCivilDate(range.to)))}
+            {copy.periodNote(copy.periodDays(stamp.civilDate(range.from), stamp.civilDate(range.to)))}
           </p>
         ) : null}
 
@@ -628,8 +632,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         subject: copy.invoiceSubject(
                           payment.patient.fullName,
                           payment.amount !== null && payment.currency !== null
-                            ? money(payment.amount, payment.currency)
-                            : formatCivilDate(payment.paidOn),
+                            ? stamp.money(payment.amount, payment.currency, payment.location.id)
+                            : stamp.civilDate(payment.paidOn, payment.location.id),
                         ),
                         externalInvoiceNumber: payment.externalInvoiceNumber,
                       }),
@@ -648,6 +652,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                               paidOn: payment.paidOn,
                               patientName: payment.patient.fullName,
                               splitLines: payment.splitLines,
+                              fmt: stamp.fmtOf(payment.location.id),
                             }),
                         },
                       ]
@@ -708,9 +713,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
 }
 
 /** A qué fue el abono: un plan o un saldo migrado (QA D2). */
-function targetLabel(payment: CashPayment): string {
+function targetLabel(payment: CashPayment, stamp: SedeStamp): string {
   return payment.treatmentPlan
-    ? copy.planLabel(payment.treatmentPlan.createdAt)
+    ? copy.planLabel(stamp.date(payment.treatmentPlan.createdAt, payment.location.id))
     : copy.openingLabel(payment.openingBalance?.concept ?? '');
 }
 
@@ -725,13 +730,13 @@ function mediumOptionLabel(medium: ClinicPaymentMethod): string {
  * abono con fecha de pago antigua: la regla mira el día de registro en la sede,
  * y ese día (`registeredOn`, `registeredToday`) lo calcula la API.
  */
-function RegisteredNote({ payment }: { payment: CashPayment }) {
+function RegisteredNote({ payment, stamp }: { payment: CashPayment; stamp: SedeStamp }) {
   if (payment.registeredOn === payment.paidOn) return null;
   return (
     <span className="t-caption block font-normal text-muted">
       {payment.registeredToday
         ? copy.registeredToday
-        : copy.registeredOn(formatCivilDate(`${payment.registeredOn}T00:00:00.000Z`))}
+        : copy.registeredOn(stamp.civilDate(payment.registeredOn, payment.location.id))}
     </span>
   );
 }

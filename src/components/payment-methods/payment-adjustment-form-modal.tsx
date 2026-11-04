@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 export const paymentAdjustmentFormCopy = {
   createTitle: 'Nuevo ajuste por medio de pago',
@@ -100,6 +101,7 @@ export function PaymentAdjustmentFormModal({
   editing,
   onSaved,
 }: PaymentAdjustmentFormModalProps) {
+  const stamp = useSedeStamp(token);
   const current = editing?.adjustment ?? null;
   const [methodId, setMethodId] = useState(editing?.method.id ?? methods.find((m) => m.active)?.id ?? '');
   const [type, setType] = useState<PaymentAdjustmentType>(current?.type ?? 'TAX');
@@ -283,6 +285,7 @@ export function PaymentAdjustmentFormModal({
             error={errors.fixedAmount}
           >
             <MoneyInput
+              money={stamp.money}
               id="adj-fixedAmount"
               value={fixedAmount}
               currency={fixedCurrency}

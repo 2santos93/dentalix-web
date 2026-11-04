@@ -1,6 +1,10 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CancellationFeePanel } from './cancellation-fee-panel';
 import { ApiError } from '../../lib/api/api-error';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 import {
   chargeCancellationFee,
   getCancellationFee,
@@ -16,6 +20,7 @@ jest.mock('../../lib/cancellations/cancellation-fee-api', () => ({
   waiveCancellationFee: jest.fn(),
   voidCancellationFee: jest.fn(),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -26,6 +31,7 @@ jest.mock('next/link', () => ({
   ),
 }));
 
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const get = getCancellationFee as jest.Mock;
 const charge = chargeCancellationFee as jest.Mock;
 const waive = waiveCancellationFee as jest.Mock;
@@ -89,6 +95,7 @@ describe('CancellationFeePanel (DX-291)', () => {
     charge.mockReset();
     waive.mockReset();
     voidFee.mockReset();
+    mockedLocations.mockReset().mockResolvedValue([clinicLocation()]);
   });
 
   it('muestra el importe sugerido y las dos acciones', async () => {
@@ -178,7 +185,7 @@ describe('CancellationFeePanel (DX-291)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Generar cargo' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Generar cargo' }));
     expect(await within(dialog).findByText('Esta cita ya tiene su cargo generado.')).toBeInTheDocument();
-    expect(within(dialog).getByRole('status')).toHaveTextContent(/cambió mientras lo tenías abierto/);
+    expect(within(dialog).getByText(/cambió mientras lo tenías abierto/)).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Generar cargo' })).not.toBeInTheDocument();
     // El importe era del estado viejo: ya no se edita, y un Enter no reenvía.
     expect(within(dialog).getByLabelText('Importe')).toBeDisabled();
@@ -343,7 +350,8 @@ describe('CancellationFeePanel (DX-291)', () => {
       await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
       // El diálogo no se cierra solo: el mensaje del 409 se sigue leyendo.
       expect(screen.getByRole('dialog', { name: 'Anular el cargo' })).toBeInTheDocument();
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+      // El panel pasa a su rama de error y el diálogo se vuelve a montar: se busca de nuevo.
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Anular el cargo' })).getByRole('button', { name: 'Cancelar' }));
       await screen.findByText('Cargo sin cargar');
       // El encabezado sigue sobre el error de sección y recibe el foco.
       await waitFor(() => expect(screen.getByRole('heading', { name: /Cargo por inasistencia/ })).toHaveFocus());
@@ -360,5 +368,32 @@ describe('CancellationFeePanel (DX-291)', () => {
         await screen.findByText(/El ítem del plan cobra .*1.*, no lo que dice el cargo/),
       ).toBeInTheDocument();
     });
+  });
+});
+
+describe('CancellationFeePanel con el formato de la sede (DX-354b)', () => {
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+
+  it.each([
+    ['caracas', 'VES 50.000,00'],
+    ['berlin', '50.000,00 VES'],
+    ['miami', 'VES 50,000.00'],
+  ] as const)('el importe sugerido sale con el formato de la sede de la pantalla (%s)', async (key, expected) => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES[key]]);
+    get.mockResolvedValue(view());
+    render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+    const line = await screen.findByText(/Importe sugerido:/);
+    expect(norm(line.textContent)).toContain(norm(moneyWithCode(50000, 'VES', STAMP_FORMATS[key])));
+    expect(norm(line.textContent)).toContain(expected);
+  });
+
+  it('sin formato de la sede no dice ninguna cifra, avisa una vez y no deja generar el cargo a ciegas', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    get.mockResolvedValue(view());
+    render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+    expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+    expect(screen.queryByText(/50[.,]000/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Generar cargo/ }));
+    expect(await screen.findByRole('button', { name: 'Generar cargo' })).toBeDisabled();
   });
 });
