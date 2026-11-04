@@ -8242,7 +8242,7 @@ export interface components {
              */
             manualSince: string | null;
             /**
-             * @description DX-384. Con fuente MANUAL, hasta cuántos días de antigüedad puede tener la última tasa manual registrada que se usa cuando no hay tasa del día del abono (día civil de su sede). 0 = solo la tasa del mismo día. El abono congela esa tasa con su fecha; registrar después la del día no la cambia. Pasado el plazo, el abono queda «sin tasa». 3 por defecto en una clínica nueva; en el PUT, sin este campo el plazo no cambia.
+             * @description DX-384. Con fuente MANUAL, hasta cuántos días de antigüedad puede tener la última tasa manual registrada que se usa cuando no hay tasa del día del abono (día civil de su sede). 0 = solo la tasa del mismo día. El abono congela esa tasa con su fecha; registrar después la del día no la cambia. Pasado el plazo, el abono queda «sin tasa». Nunca se usa una tasa anterior a `manualSince` (esas son el respaldo de DX-402 de su propio día). 3 por defecto en una clínica nueva; en el PUT, sin este campo el plazo no cambia.
              * @example 3
              */
             manualRateMaxAgeDays: number;
@@ -8256,7 +8256,7 @@ export interface components {
              */
             source?: components["schemas"]["ExchangeRateSource"];
             /**
-             * @description DX-384. Con fuente MANUAL, hasta cuántos días de antigüedad puede tener la última tasa manual registrada que se usa cuando no hay tasa del día del abono (día civil de su sede). 0 = solo la tasa del mismo día. El abono congela esa tasa con su fecha; registrar después la del día no la cambia. Pasado el plazo, el abono queda «sin tasa». 3 por defecto en una clínica nueva; en el PUT, sin este campo el plazo no cambia.
+             * @description DX-384. Con fuente MANUAL, hasta cuántos días de antigüedad puede tener la última tasa manual registrada que se usa cuando no hay tasa del día del abono (día civil de su sede). 0 = solo la tasa del mismo día. El abono congela esa tasa con su fecha; registrar después la del día no la cambia. Pasado el plazo, el abono queda «sin tasa». Nunca se usa una tasa anterior a `manualSince` (esas son el respaldo de DX-402 de su propio día). 3 por defecto en una clínica nueva; en el PUT, sin este campo el plazo no cambia.
              * @example 3
              */
             manualRateMaxAgeDays?: number;
@@ -10671,6 +10671,8 @@ export interface components {
             openings: components["schemas"]["OpeningDto"][];
             /** @description Había más de 200 huecos: acota el rango. */
             truncated: boolean;
+            /** @description DX-533: la sede no tiene horario configurado y los huecos se buscaron en el horario de alta (lun–vie 9:00–13:00 y 15:00–19:00, sáb 9:00–13:00, hora de la sede). Reservar fuera de él sigue permitido. */
+            defaultHours: boolean;
         };
         InClinicItemDto: {
             /** Format: uuid */

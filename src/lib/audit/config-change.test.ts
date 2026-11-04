@@ -340,3 +340,18 @@ describe("datos de la clínica en la auditoría (DX-019)", () => {
     expect(logo?.[0]).toMatchObject({ field: "logo", label: "Logo" });
   });
 });
+
+describe("DX-384: plazo de la última tasa manual", () => {
+  it("lo dice en español, con su unidad", () => {
+    const list = configChangeItems({
+      reason: "EXCHANGE_RATE_MAX_AGE",
+      configChange: {
+        before: { manualRateMaxAgeDays: 3 },
+        after: { manualRateMaxAgeDays: 0 },
+      },
+    });
+    expect(configChangeText(list!)).toBe(
+      "Días de validez de la última tasa manual: 3 → 0 días",
+    );
+  });
+});

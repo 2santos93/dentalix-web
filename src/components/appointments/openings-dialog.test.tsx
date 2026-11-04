@@ -77,7 +77,7 @@ describe('OpeningsDialog (DX-122)', () => {
       end: at('2031-03-10', '10:00'),
       chair: { id: 'c2', name: 'Sillón 2', active: true },
     };
-    const result = { timeZone: 'UTC', durationMinutes: 30, truncated: false, openings: [opening] };
+    const result = { timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, openings: [opening] };
 
     it('un sillón filtra la búsqueda; el hueco dice el libre y «Agendar aquí» lo guarda', async () => {
       mockedChairs.mockResolvedValue(chairs);
@@ -121,7 +121,7 @@ describe('OpeningsDialog (DX-122)', () => {
     mockedOpenings.mockResolvedValue({
       timeZone: 'America/Caracas',
       durationMinutes: 30,
-      truncated: true,
+      truncated: true, defaultHours: false,
       openings: [
         { start: at('2031-03-10', '09:00'), end: at('2031-03-10', '12:00') },
         { start: at('2031-03-10', '15:00'), end: at('2031-03-10', '19:00') },
@@ -142,7 +142,7 @@ describe('OpeningsDialog (DX-122)', () => {
   });
 
   it('vacío: lo dice y sugiere otra búsqueda', async () => {
-    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 30, truncated: false, openings: [] });
+    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, openings: [] });
     renderDialog();
     expect(await screen.findByText('No hay huecos libres en estas fechas')).toBeInTheDocument();
   });
@@ -150,7 +150,7 @@ describe('OpeningsDialog (DX-122)', () => {
   it('error con Reintentar', async () => {
     mockedOpenings
       .mockRejectedValueOnce(new ApiError(500, 'boom'))
-      .mockResolvedValueOnce({ timeZone: 'UTC', durationMinutes: 30, truncated: false, openings: [] });
+      .mockResolvedValueOnce({ timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, openings: [] });
     renderDialog();
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos buscar huecos.');
@@ -162,7 +162,7 @@ describe('OpeningsDialog (DX-122)', () => {
     mockedOpenings.mockResolvedValue({
       timeZone: 'UTC',
       durationMinutes: 30,
-      truncated: false,
+      truncated: false, defaultHours: false,
       openings: [{ start: at('2031-03-10', '09:00'), end: at('2031-03-10', '12:00') }],
     });
     mockedSchedule.mockRejectedValue(

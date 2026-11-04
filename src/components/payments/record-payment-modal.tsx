@@ -264,6 +264,10 @@ export function RecordPaymentModal({
     isSplit && plan !== null && split.lines.some((l) => lineCurrency(l.currency) !== plan.currency);
   // DX-384: las monedas del cobro (abono, líneas y plan) para que la API dé, con tasa
   // manual y sin la del día, la última registrada dentro del plazo y su fecha.
+  // Limitación conocida: en un cobro dividido con varias monedas distintas de USD se piden
+  // todas juntas (una fecha común), mientras la API cotiza cada línea con su par; con tasas
+  // sueltas en fechas distintas la previsualización puede diferir de lo que se congela.
+  // Con USD/VES no ocurre.
   const rateCurrencies = [currency, plan?.currency ?? '', ...split.lines.map((l) => lineCurrency(l.currency))].filter(
     (c) => c !== '',
   );

@@ -165,7 +165,7 @@ function PreviewBody({
     paymentRateCopy.source[source],
     // DX-384: «tasa del 30/10/2026» si es la última registrada, de un día anterior al del abono.
     // (`rateDate` falta en la API anterior al despliegue: el día del abono.)
-    rateDayLabel((state.rates as { rateDate?: string }).rateDate ?? date, date, (day) => sedeCivilDate(day, fmt)),
+    rateDayLabel(state.rates.rateDate ?? date, date, (day) => sedeCivilDate(day, fmt)),
   );
   if (amount === null) {
     return (

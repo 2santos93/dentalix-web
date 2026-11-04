@@ -15,7 +15,7 @@ const appointment = {
 const openings = (list: [string, string][]) => ({
   timeZone: 'America/Caracas',
   durationMinutes: 30,
-  truncated: false,
+  truncated: false, defaultHours: false,
   openings: list.map(([start, end]) => ({ start, end })),
 });
 

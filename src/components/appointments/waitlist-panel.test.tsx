@@ -172,7 +172,7 @@ describe('WaitlistPanel (DX-122)', () => {
       timeZone: 'America/Caracas',
       durationMinutes: 45,
       openings: [opening],
-      truncated: false,
+      truncated: false, defaultHours: false,
     });
     const created = {
       id: 'apt-9',
@@ -216,7 +216,7 @@ describe('WaitlistPanel (DX-122)', () => {
       openings: [
         { start: new Date('2031-03-10T09:00:00').toISOString(), end: new Date('2031-03-10T12:00:00').toISOString() },
       ],
-      truncated: false,
+      truncated: false, defaultHours: false,
     });
     mockedSchedule.mockRejectedValue(
       new ApiError(409, 'x', {
