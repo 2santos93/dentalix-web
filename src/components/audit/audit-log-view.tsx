@@ -37,6 +37,7 @@ import {
   clinicSettingsDetail,
   receiptDetail,
   exchangeRateBackupDetail,
+  exchangeRateDetail,
   locationCalendarDetail,
   patientFlowDetail,
   importBatchDetail,
@@ -567,6 +568,7 @@ function eventDetail(
     locationCalendarDetail(event.metadata) ??
     receiptDetail(event.metadata) ??
     exchangeRateBackupDetail(event.metadata) ??
+    exchangeRateDetail(event.metadata, clock?.fmt ?? null) ??
     anamnesisDetail(event.metadata) ??
     signatureRequestDetail(event.metadata)
   );

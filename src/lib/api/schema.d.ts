@@ -6622,6 +6622,20 @@ export interface components {
             /** @description Las monedas de la cotización (ISO 4217). */
             currencies: string[];
         };
+        AuditExchangeRateDto: {
+            /** @description ISO 4217, nunca USD. */
+            currency: string;
+            /**
+             * Format: date
+             * @example 2026-10-29
+             */
+            day: string;
+            /**
+             * @description Unidades de la moneda por 1 USD, decimal en texto.
+             * @example 36.5
+             */
+            rate: string;
+        };
         AuditConfigChangeDto: {
             /**
              * @description Valores antes del cambio (o del retiro).
@@ -6690,6 +6704,8 @@ export interface components {
             staffAccess?: components["schemas"]["AuditStaffAccessChangeDto"];
             /** @description DX-402: el barrido congeló en un abono (`reason` EXCHANGE_RATE_BACKUP, `origin` JOB, sin usuario) la tasa manual de un día anterior a «manual desde», como tasa de respaldo de un día sin tasa del proveedor. Solo días y monedas; ni importes ni la tasa. */
             exchangeRateBackup?: components["schemas"]["AuditExchangeRateBackupDto"];
+            /** @description DX-381: alta de una tasa de cambio manual (`resourceId` = la tasa): moneda, día y tasa. Nada del autor ni de los abonos. */
+            exchangeRate?: components["schemas"]["AuditExchangeRateDto"];
             /** @description DX-360: configuración de la clínica (sedes, horario, recordatorios, dominios, política de datos, tipos de cita, pagadores, plantillas, inventario): los campos que cambiaron con su antes y después, o un lado en un alta o un retiro. El texto libre o largo (cuerpo de una plantilla, notas, motivo) solo figura en `changedFields`; nunca secretos (token de un dominio) ni datos de pacientes. */
             configChange?: components["schemas"]["AuditConfigChangeDto"];
             /** @description DX-330: cambio del plazo de conservación de la historia clínica (`reason` CLINICAL_RECORD_RETENTION_SETTINGS): dirección, pacientes protegidos, plazos vigentes y si corrigió una subida reciente. Solo códigos y enteros. */
@@ -13200,7 +13216,7 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
-             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en UTC−5) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC. DX-054: 400 si va a más de 24 h en el futuro (un día civil cuenta desde su primer instante en UTC+14); las fechas pasadas no tienen límite. También en el abono al saldo migrado.
+             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en UTC−5) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC. DX-075: un día civil posterior a hoy en la zona de la sede es 400 («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: un instante a más de 24 h en el futuro es 400 (también un día civil si la sede no tiene zona); las fechas pasadas no tienen límite. También en el abono al saldo migrado.
              * @example 2026-10-16
              */
             paidAt: string;
@@ -13344,7 +13360,7 @@ export interface components {
         };
         RecordSplitPaymentDto: {
             /**
-             * @description El día civil `YYYY-MM-DD` (o un instante con `Z` o desfase) de TODO el cobro, como en un abono (DX-097). DX-054: 400 si va a más de 24 h en el futuro.
+             * @description El día civil `YYYY-MM-DD` (o un instante con `Z` o desfase) de TODO el cobro, como en un abono (DX-097). DX-075: un día civil posterior a hoy en la sede es 400. DX-054: un instante a más de 24 h en el futuro es 400.
              * @example 2026-10-30
              */
             paidAt: string;
@@ -15599,6 +15615,12 @@ export interface components {
             /** @description La caja cerrada de la que viene (enlace al original) */
             originalSession: components["schemas"]["CashSessionRefDto"] | null;
         };
+        CashReceiptViewsDto: {
+            /** @description Recibos distintos abiertos o impresos */
+            receipts: number;
+            /** @description Consultas en total (ver e imprimir) */
+            views: number;
+        };
         CashClosingLineDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -15611,12 +15633,6 @@ export interface components {
             difference: number | null;
             /** @description SEC-043: el grupo tiene una anulación posterior que cuenta en otra caja abierta o pendiente: sin esperado ni diferencia. `counted` se queda. */
             amountHidden: boolean;
-        };
-        CashReceiptViewsDto: {
-            /** @description Recibos distintos abiertos o impresos */
-            receipts: number;
-            /** @description Consultas en total (ver e imprimir) */
-            views: number;
         };
         CashClosingDto: {
             /** Format: uuid */
@@ -15631,7 +15647,7 @@ export interface components {
             differenceReason: string | null;
             /** @description SEC-043: cierre a ciegas que no cuadró y llegó sin motivo. Se guardó igual y queda para revisión de administración. */
             unjustifiedDifference: boolean;
-            /** @description SEC-043-bis: recibos de abonos de esta caja que quien la cerró abrió o imprimió entre la apertura y este cierre (VIEW y PRINT de la auditoría). Solo para ADMIN y en un cierre a ciegas; null en los demás casos. */
+            /** @description SEC-043-bis: recibos de abonos de esta caja que quien la cerró abrió o imprimió entre la apertura (o la última reapertura) y este cierre (VIEW y PRINT de la auditoría; abonos de la caja y de todo ajuste que cuenta en ella). Solo para ADMIN y en un cierre a ciegas; null en los demás casos. */
             receiptViews: components["schemas"]["CashReceiptViewsDto"] | null;
             notes: string | null;
             /**
@@ -28523,7 +28539,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-054: `paidAt` a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
+            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-075: `paidAt` como día civil posterior a hoy en la sede («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: `paidAt` como instante a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28570,7 +28586,7 @@ export interface operations {
                     "application/json": components["schemas"]["SplitPaymentDto"];
                 };
             };
-            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. DX-054: `paidAt` a más de 24 h en el futuro. */
+            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. DX-075: `paidAt` como día civil posterior a hoy en la sede. DX-054: `paidAt` como instante a más de 24 h en el futuro. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28623,7 +28639,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description Otra moneda que la del saldo, o el abono supera lo pendiente (mensaje en español). DX-054: `paidAt` a más de 24 h en el futuro. */
+            /** @description Otra moneda que la del saldo, o el abono supera lo pendiente (mensaje en español). DX-075: `paidAt` como día civil posterior a hoy en la sede. DX-054: `paidAt` como instante a más de 24 h en el futuro. */
             400: {
                 headers: {
                     [name: string]: unknown;

@@ -1,7 +1,7 @@
 import type { AuditAction, AuditEvent, AuditResourceType } from './audit-api';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { BadgeProps } from '@/components/ui/badge';
-import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import { NO_SEDE_FORMAT, sedeCivilDate } from '@/lib/format/sede-number';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMinute, type SedeClock } from '@/lib/locations/sede-clock';
 import { DOC_TYPE_LABEL, genericDocTypeName } from '@/lib/patients/doc-type';
@@ -814,6 +814,20 @@ export function exchangeRateBackupDetail(metadata: AuditMetadata): string | null
     currencies.length > 0 ? ` (${currencies.join(', ')})` : ''
   }`;
   return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
+}
+
+/**
+ * DX-381: alta de una tasa de cambio manual: «VES · 29/10/2026 · 36,5» (moneda,
+ * día y tasa con el formato de la sede; hasta 8 decimales, como la API). Sin
+ * formato de sede, «—» en lugar del día y de la tasa, nunca otro formato.
+ * null si el evento no trae `exchangeRate`.
+ */
+export function exchangeRateDetail(metadata: AuditMetadata, fmt: RegionalFormat | null): string | null {
+  const rate = metadata.exchangeRate;
+  if (!rate) return null;
+  const value = Number(rate.rate);
+  const shown = fmt && Number.isFinite(value) ? fmt.number(value, { min: 0, max: 8 }) : NO_SEDE_FORMAT;
+  return `${rate.currency} · ${sedeCivilDate(rate.day, fmt)} · ${shown}`;
 }
 
 /** DX-316: qué cambió en el calendario de una sede, o null si el evento no es de él. */

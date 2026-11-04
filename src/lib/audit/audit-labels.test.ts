@@ -2,6 +2,7 @@ import { regionalFormat } from '@/lib/format/regional-format';
 import type { AuditEvent } from './audit-api';
 import {
   exchangeRateBackupDetail,
+  exchangeRateDetail,
   receiptDetail,
   cancellationDetail,
   importBatchDetail,
@@ -759,5 +760,64 @@ describe('recibo no fiscal en la auditoría (DX-515)', () => {
     ['CLINIC_LOGO', 'Logo de la clínica'],
   ])('%s → %s', (reason, text) => {
     expect(receiptDetail({ reason })).toBe(text);
+  });
+});
+
+describe('exchangeRateDetail (DX-381)', () => {
+  const VES = { currency: 'VES', day: '2026-10-29', rate: '36.5' };
+  const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+
+  it('moneda · día · tasa con el formato de la sede', () => {
+    expect(exchangeRateDetail({ exchangeRate: VES }, H23)).toBe('VES · 29/10/2026 · 36,5');
+    expect(exchangeRateDetail({ exchangeRate: VES }, ES_VE)).toBe('VES · 29/10/2026 · 36,5');
+    expect(exchangeRateDetail({ exchangeRate: VES }, H12)).toBe('VES · 10/29/2026 · 36.5');
+  });
+
+  it('los decimales de la tasa se conservan hasta 8, sin ceros de más', () => {
+    expect(exchangeRateDetail({ exchangeRate: { ...VES, rate: '40.12345678' } }, H23)).toBe(
+      'VES · 29/10/2026 · 40,12345678',
+    );
+    expect(exchangeRateDetail({ exchangeRate: { ...VES, rate: '0.91' } }, H23)).toBe('VES · 29/10/2026 · 0,91');
+  });
+
+  it('sin el formato de la sede no inventa otro: «—»', () => {
+    expect(exchangeRateDetail({ exchangeRate: VES }, null)).toBe('VES · — · —');
+  });
+
+  it('null si el evento no trae tasa', () => {
+    expect(exchangeRateDetail({}, H23)).toBeNull();
+    expect(exchangeRateDetail({ reason: 'EXCHANGE_RATE_BACKUP' }, H23)).toBeNull();
+  });
+});
+
+describe('staffDetail › cambio de sedes del miembro (DX-381)', () => {
+  const CENTRO = '3f1c2a10-0000-4000-8000-000000000001';
+  const NORTE = '3f1c2a10-0000-4000-8000-000000000002';
+  const names = locationNameMap([
+    { id: CENTRO, name: 'Sede Centro' },
+    { id: NORTE, name: 'Sede Norte' },
+  ]);
+  const change = (before: string[] | null, after: string[] | null): AuditMetadata => ({
+    reason: 'LOCATIONS_CHANGED',
+    staffAccess: { before: { locationIds: before }, after: { locationIds: after } },
+  });
+
+  it('antes → después por nombre de sede', () => {
+    expect(staffDetail(change([CENTRO], [CENTRO, NORTE]), names)).toBe(
+      'Sedes del miembro cambiadas · Sedes: Sede Centro → Sede Centro, Sede Norte',
+    );
+  });
+
+  it('null = «Todas las sedes» en cualquiera de los lados', () => {
+    expect(staffDetail(change(null, [NORTE]), names)).toBe(
+      'Sedes del miembro cambiadas · Sedes: Todas las sedes → Sede Norte',
+    );
+    expect(staffDetail(change([CENTRO], null), names)).toBe(
+      'Sedes del miembro cambiadas · Sedes: Sede Centro → Todas las sedes',
+    );
+  });
+
+  it('un evento anterior, sin antes ni después, sigue diciendo solo el motivo', () => {
+    expect(staffDetail({ reason: 'LOCATIONS_CHANGED' }, names)).toBe('Sedes del miembro cambiadas');
   });
 });
