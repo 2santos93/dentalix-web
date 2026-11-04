@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { addExpensePayment, type ExpenseDetail } from '@/lib/expenses/expenses-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { useExpenseToday } from './use-expense-today';
 import { SectionError } from '@/components/errors/section-error';
@@ -17,6 +17,7 @@ import {
   type ExpensePaymentValue,
 } from './expense-payment-fields';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 export const expensePaymentCopy = {
   title: 'Registrar pago',
@@ -56,7 +57,7 @@ export function ExpensePaymentModal({
   onSaved,
   onCloseAutoFocus,
 }: ExpensePaymentModalProps) {
-  const stamp = useSedeStamp(token);
+  const stamp = useSedeStamp(token, [expense.locationId]);
   const configured = useExpenseToday(token, expense.locationId, open && !suppliedToday);
   const today = suppliedToday ?? configured.today;
   const [amount, setAmount] = useState(() => moneyInputText(expense.pendingAmount));
@@ -71,7 +72,7 @@ export function ExpensePaymentModal({
     setLastToday(today);
     setPayment((value) => ({ ...value, paidOn: value.paidOn || today }));
   }
-  const pending = formatCurrency(expense.pendingAmount, expense.currency);
+  const pending = stamp.money(expense.pendingAmount, expense.currency, expense.locationId);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -96,7 +97,7 @@ export function ExpensePaymentModal({
         { amount: parsed.value, ...paymentBody(payment) },
         idempotencyKey,
       );
-      onSaved(saved, expensePaymentCopy.saved(formatCurrency(parsed.value, expense.currency)));
+      onSaved(saved, expensePaymentCopy.saved(stamp.money(parsed.value, expense.currency, expense.locationId)));
       onOpenChange(false);
     } catch (err) {
       setError(apiErrorMessage(err, { fallback: expensePaymentCopy.saveError }));
@@ -114,15 +115,17 @@ export function ExpensePaymentModal({
       onSubmit={(e) => void handleSubmit(e)}
       submitLabel={expensePaymentCopy.submit}
       submitting={submitting}
-      submitDisabled={!today}
+      // Sin el formato de la sede no se puede decir el pendiente que se paga: no se envía a ciegas.
+      submitDisabled={!today || pending === NO_SEDE_FORMAT}
       error={error}
       touchTargets
       onCloseAutoFocus={onCloseAutoFocus}
     >
       {configured.error ? <SectionError description={configured.error} onRetry={configured.retry} /> : null}
+      <SedeStampNote stamp={stamp} />
       <FormField htmlFor="expense-pay-amount" label={expensePaymentCopy.amount(expense.currency)} error={amountError}>
         <MoneyInput
-          money={stamp.money}
+          money={(amount, code) => stamp.money(amount, code, expense.locationId)}
           id="expense-pay-amount"
           currency={expense.currency}
           requirePositive

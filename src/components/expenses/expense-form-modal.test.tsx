@@ -9,9 +9,12 @@ import { setupUser } from '@/lib/test/user';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { tokenFor } from '@/lib/test/prescriptions';
 import type { ExpenseCategoriesState } from './use-expense-categories';
+import { listLocations } from '@/lib/locations/locations-api';
+import { STAMP_SEDES } from '@/lib/test/stamp';
 
 const mockExpenseToday: { today: string | null; error: string | null; retry: jest.Mock } = { today: '2026-10-24', error: null, retry: jest.fn() };
 jest.mock('./use-expense-today', () => ({ useExpenseToday: () => mockExpenseToday }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/expenses/expenses-api', () => ({
   ...jest.requireActual('../../lib/expenses/expenses-api'),
   createExpense: jest.fn(),
@@ -30,6 +33,7 @@ jest.mock('../../lib/reference/currencies-api', () => ({
   ]),
 }));
 
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedCreate = createExpense as jest.MockedFunction<typeof createExpense>;
 const mockedUpdate = updateExpense as jest.MockedFunction<typeof updateExpense>;
 const mockedSuppliers = suggestExpenseSuppliers as jest.MockedFunction<typeof suggestExpenseSuppliers>;
@@ -80,6 +84,9 @@ function isoOf(name: string): HTMLInputElement {
 }
 
 describe('ExpenseFormModal (DX-274)', () => {
+  beforeEach(() => {
+    mockedLocations.mockReset().mockResolvedValue(expenseLocations);
+  });
   beforeEach(() => {
     Object.assign(mockExpenseToday, { today: '2026-10-24', error: null });
     mockExpenseToday.retry.mockReset();
@@ -357,5 +364,31 @@ describe('ExpenseFormModal (DX-274)', () => {
     rerender(<ExpenseFormModal {...props} locations={expenseLocations} />);
     expect(screen.getByLabelText('Sede')).toHaveValue('loc-2');
     expect(screen.getByLabelText('Importe')).toHaveValue('8000');
+  });
+});
+
+describe('ExpenseFormModal: el mínimo ya pagado con el formato de la sede del gasto (DX-354b)', () => {
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+
+  it.each([
+    ['sede-berlin', 'de-DE', '50.000,00 USD'],
+    ['sede-miami', 'en-US', 'USD 50,000.00'],
+    ['sede-caracas', 'es-VE', 'USD 50.000,00'],
+  ] as const)('el gasto de %s (%s) dice «%s»', async (locationId, _locale, expected) => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    const user = setupUser();
+    const expense = expenseDetailFixture(
+      { locationId, paidAmount: 50_000, pendingAmount: 100_000, status: 'PARTIAL' },
+      [expensePaymentFixture()],
+    );
+    renderModal({ expense, locations: [STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami] });
+    await waitFor(() => expect(screen.getByLabelText('Importe')).toHaveValue('150000'));
+    await user.clear(screen.getByLabelText('Importe'));
+    await user.type(screen.getByLabelText('Importe'), '40000');
+    // La API (y el mock) leen la sede del gasto: esperamos a que su formato esté.
+    await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    const message = await screen.findByText(/No puede ser menor que lo ya pagado/);
+    await waitFor(() => expect(norm(message.textContent)).toContain(expected));
   });
 });

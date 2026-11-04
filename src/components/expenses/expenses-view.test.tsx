@@ -219,13 +219,15 @@ describe('ExpensesView (DX-274)', () => {
 
   it('si las sedes no cargan, el alta lo dice en el campo Sede y deja reintentar', async () => {
     const user = setupUser();
-    mockRequestLocations.mockRejectedValueOnce(new Error('red'));
+    // El alta y la pantalla piden las sedes por separado: todas las lecturas fallan hasta el reintento.
+    mockRequestLocations.mockRejectedValue(new Error('red'));
     render(<ExpensesView token="tok" />);
     await screen.findByText(/No pudimos obtener la zona horaria de la sede/);
     expect(mockedList).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Nuevo gasto' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo gasto' });
     expect(within(dialog).getByText('Sedes no disponibles')).toBeInTheDocument();
+    mockRequestLocations.mockResolvedValue(expenseLocations);
     await user.click(within(dialog).getAllByRole('button', { name: 'Reintentar' })[0]);
     expect(await within(dialog).findByRole('combobox', { name: 'Sede' })).toHaveValue('loc-1');
   });

@@ -5,7 +5,7 @@ import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { presetRange } from '@/lib/payments/cash-period';
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
 import { isValidPeriod, MAX_PERIOD_DAYS } from '@/lib/reports/period-presets';
 import type { DashboardCurrency } from '@/lib/locations/sede-regional-summary';
 import {
@@ -288,7 +288,7 @@ function IncomesFigure({
   return (
     <dl className="contents">
       <Cell className="max-md:col-span-2" label={copy.collectedLabel(incomes.currency)} testId="dashboard-incomes">
-        <dd className="t-data text-lg font-semibold text-ink">{formatCurrency(incomes.totalConverted, incomes.currency)}</dd>
+        <dd className="t-data text-lg font-semibold text-ink">{sedeMoney(incomes.totalConverted, incomes.currency, fmt)}</dd>
         <dd className="text-xs text-muted">
           <span className="t-data">{copy.payments(n, incomes.count === 1)}</span>
           {incomes.count > 0 ? (
