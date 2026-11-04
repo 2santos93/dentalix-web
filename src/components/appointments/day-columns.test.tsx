@@ -135,6 +135,25 @@ describe('DayColumns (DX-121)', () => {
     expect(within(dark).getByText(/Endodoncia · Agendada/)).toBeInTheDocument();
   });
 
+  it.each(['CANCELLED', 'NO_SHOW'] as const)(
+    'la cita %s se apaga con relleno neutro y borde discontinuo, sin opacidad ni color del tipo (AA)',
+    (status) => {
+      renderColumns({
+        appointments: [
+          appointment({
+            id: 'apt-off',
+            status,
+            appointmentType: { id: 't', name: 'Endodoncia', durationMinutes: 30, color: '#7C3AED' },
+          }),
+        ],
+      });
+      const card = screen.getByTestId('day-column-appointment');
+      expect(card.className).not.toMatch(/opacity-/);
+      expect(card).toHaveClass('border-dashed', 'bg-surface-sunken', 'text-ink');
+      expect(card.getAttribute('style') ?? '').not.toMatch(/background-color/);
+    },
+  );
+
   it('un color que no es #RRGGBB nunca llega al estilo (cae al neutro)', () => {
     renderColumns({
       appointments: [

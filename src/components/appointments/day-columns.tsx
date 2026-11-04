@@ -611,11 +611,14 @@ export function DayColumns({
                 )}
 
                 {laid.map(({ appointment: a, start, end, lane, laneCount }) => {
-                  const colors = cardColors(a);
                   const patient = patientLabel(a);
                   const range = sedeTimeRange(a.start, a.end, clock.of(a.locationId));
                   const dragging = drag?.started && drag.appointment.id === a.id;
                   const inactive = a.status === 'CANCELLED' || a.status === 'NO_SHOW';
+                  // Cancelada o no asistió: se apaga con relleno hundido y borde
+                  // discontinuo, nunca con opacidad (DESIGN.md): la opacidad bajaba
+                  // el texto y las insignias de dentro por debajo de AA.
+                  const colors = inactive ? undefined : cardColors(a);
                   const wantsEarlier = a.wantsEarlier && !inactive;
                   // DX-247: también en las citas de 15 min (24 px de alto).
                   const hasMedicalAlert = medicalAlertSeverity(a.medicalAlerts) !== null;
@@ -632,9 +635,9 @@ export function DayColumns({
                         // alerta (DX-247) no se recorta en las citas de 15 min.
                         'group absolute rounded-md border text-left',
                         !colors && 'border-border bg-surface-sunken text-ink',
+                        inactive && 'border-dashed',
                         canDrag && 'cursor-grab active:cursor-grabbing',
                         (dragging || pendingId === a.id) && 'opacity-50',
-                        inactive && 'opacity-60',
                       )}
                       style={{
                         ...colors,
