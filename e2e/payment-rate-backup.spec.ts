@@ -118,7 +118,7 @@ for (const viewport of VIEWPORTS) {
       await expect(page).toHaveURL(/\/settings\/tasa-de-cambio$/);
 
       // 2. Pasa a manual: rige desde hoy.
-      await page.getByRole('button', { name: 'Cambiar' }).click();
+      await page.getByRole('button', { name: 'Cambiar', exact: true }).click();
       const sourceDialog = page.getByRole('dialog', { name: 'Cambiar de dónde sale la tasa' });
       await expect(sourceDialog).toContainText('respaldo');
       await sourceDialog.getByRole('radio', { name: /Manual/ }).check();

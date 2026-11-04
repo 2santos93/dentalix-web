@@ -4,7 +4,14 @@ import { FieldError } from '@/components/errors/field-error';
 import { Button } from '@/components/ui/button';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
-import { convertWithRate, paymentRateCopy, quoteFromRates, ratePairLabel, ratePerBase } from '@/lib/payments/payment-rate';
+import {
+  convertWithRate,
+  paymentRateCopy,
+  quoteFromRates,
+  ratePairLabel,
+  ratePerBase,
+  rateDayLabel,
+} from '@/lib/payments/payment-rate';
 import { rateProviderCopy } from './rate-provider-notice';
 import type { ExchangeRatesState } from './use-exchange-rates';
 
@@ -156,7 +163,9 @@ function PreviewBody({
   const rateLine = copy.rate(
     ratePairLabel(paymentCurrency, rate, money),
     paymentRateCopy.source[source],
-    sedeCivilDate(date, fmt),
+    // DX-384: «tasa del 30/10/2026» si es la última registrada, de un día anterior al del abono.
+    // (`rateDate` falta en la API anterior al despliegue: el día del abono.)
+    rateDayLabel((state.rates as { rateDate?: string }).rateDate ?? date, date, (day) => sedeCivilDate(day, fmt)),
   );
   if (amount === null) {
     return (

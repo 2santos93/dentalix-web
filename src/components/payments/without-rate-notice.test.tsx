@@ -19,8 +19,18 @@ jest.mock('../../lib/exchange/exchange-settings-api', () => ({
   getExchangeRateSettings: jest.fn(),
 }));
 const mockedSettings = jest.mocked(getExchangeRateSettings);
-const MANUAL = { source: 'MANUAL' as const, manualSince: '2026-10-01', baseCurrency: 'USD' };
-const AUTOMATIC = { source: 'AUTOMATIC' as const, manualSince: null, baseCurrency: 'USD' };
+const MANUAL = {
+  source: 'MANUAL' as const,
+  manualSince: '2026-10-01',
+  manualRateMaxAgeDays: 3,
+  baseCurrency: 'USD',
+};
+const AUTOMATIC = {
+  source: 'AUTOMATIC' as const,
+  manualSince: null,
+  manualRateMaxAgeDays: 3,
+  baseCurrency: 'USD',
+};
 
 beforeEach(() => {
   mockedLocations.mockReset();

@@ -262,7 +262,12 @@ export function RecordPaymentModal({
   const lineCurrency = (c: string) => c || plan?.currency || '';
   const splitOtherCurrency =
     isSplit && plan !== null && split.lines.some((l) => lineCurrency(l.currency) !== plan.currency);
-  const rates = useExchangeRates(token, form.date, open && (otherCurrency || splitOtherCurrency));
+  // DX-384: las monedas del cobro (abono, líneas y plan) para que la API dé, con tasa
+  // manual y sin la del día, la última registrada dentro del plazo y su fecha.
+  const rateCurrencies = [currency, plan?.currency ?? '', ...split.lines.map((l) => lineCurrency(l.currency))].filter(
+    (c) => c !== '',
+  );
+  const rates = useExchangeRates(token, form.date, open && (otherCurrency || splitOtherCurrency), rateCurrencies);
   // Lo pendiente sale del saldo del plan con los abonos en otra moneda ya
   // convertidos: `plan.balance` (lista de cobrables) no los descuenta.
   const balance = usePlanBalance(token, plan?.id ?? null, open && (otherCurrency || isSplit), balanceRefresh);

@@ -84,7 +84,12 @@ function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {
 beforeEach(() => {
   mockedBalance.mockReset();
   mockedSettings.mockReset();
-  mockedSettings.mockResolvedValue({ source: 'MANUAL', manualSince: '2026-10-01', baseCurrency: 'USD' });
+  mockedSettings.mockResolvedValue({
+    source: 'MANUAL',
+    manualSince: '2026-10-01',
+    manualRateMaxAgeDays: 3,
+    baseCurrency: 'USD',
+  });
 });
 
 it('loads on open and shows procedure, tooth, status, A pagar, Cobrado, Pendiente', async () => {

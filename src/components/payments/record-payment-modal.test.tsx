@@ -215,7 +215,14 @@ beforeEach(() => {
   mockedLocations.mockReset();
   mockedLocations.mockResolvedValue([clinicLocation()]);
   mockedRates.mockReset();
-  mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { EUR: 4000, VES: 36.5 } });
+  mockedRates.mockImplementation((_token, date) =>
+    Promise.resolve({
+      base: 'USD',
+      source: 'AUTOMATIC',
+      rates: { EUR: 4000, VES: 36.5 },
+      rateDate: date,
+    }),
+  );
   mockedBalance.mockReset();
   mockedBalance.mockResolvedValue(usdBalance());
 });
@@ -789,18 +796,31 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
 
     await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
     const date = paymentDate(dialog);
-    expect(mockedRates).toHaveBeenCalledWith('tok', date);
+    expect(mockedRates).toHaveBeenCalledWith('tok', date, ['USD', 'VES']);
     const [y, m, d] = date.split('-');
     const text = money(preview(dialog).textContent);
     expect(text).toContain(`Tasa: 1 USD = VES 36,50 · automática · ${d}/${m}/${y}`);
     expect(text).toContain('Pendiente tras el abonoUSD 450,00');
   });
 
+  // DX-384: la clínica no registró la tasa del día y se usa la última registrada, de un día anterior.
+  it('si la tasa es de un día anterior al del abono, la previsualización dice «tasa del …»', async () => {
+    mockedRates.mockImplementation(() =>
+      Promise.resolve({ base: 'USD', source: 'MANUAL', rates: { VES: 36.5 }, rateDate: '2026-10-30' }),
+    );
+    const { user, dialog } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
+    expect(money(preview(dialog).textContent)).toContain('Tasa: 1 USD = VES 36,50 · manual · tasa del 30/10/2026');
+    expect(mockedRates).toHaveBeenCalledWith('tok', paymentDate(dialog), ['USD', 'VES']);
+  });
+
   it('cambiar la fecha pide la tasa de ese día', async () => {
     const { user, dialog } = await openUsdPlan();
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await typePaymentDate(user, dialog, '2026-10-01');
-    await waitFor(() => expect(mockedRates).toHaveBeenLastCalledWith('tok', '2026-10-01'));
+    await waitFor(() => expect(mockedRates).toHaveBeenLastCalledWith('tok', '2026-10-01', ['USD', 'VES']));
   });
 
   it('sin importe enseña la tasa e invita a escribirlo', async () => {
@@ -857,8 +877,19 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     );
     expect(preview(dialog)).not.toHaveTextContent(recordPaymentCopy.preview.error);
     // Se puede volver a consultar sin esperar al barrido.
-    mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 36.5 } });
-    await user.click(within(dialog).getByRole('button', { name: recordPaymentCopy.preview.retry }));
+    mockedRates.mockImplementation((_token, date) =>
+      Promise.resolve({
+        base: 'USD',
+        source: 'AUTOMATIC',
+        rates: { VES: 36.5 },
+        rateDate: date,
+      }),
+    );
+    await user.click(
+      within(dialog).getByRole('button', {
+        name: recordPaymentCopy.preview.retry,
+      }),
+    );
     await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
 
     await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
@@ -894,7 +925,14 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
   });
 
   it('sin tasa del día lo dice y deja guardar: el abono queda «sin tasa»', async () => {
-    mockedRates.mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: {} });
+    mockedRates.mockImplementation((_token, date) =>
+      Promise.resolve({
+        base: 'USD',
+        source: 'MANUAL',
+        rates: {},
+        rateDate: date,
+      }),
+    );
     mockedRecord.mockResolvedValue(
       savedPayment({ amount: 1825, currency: 'VES', treatmentPlanId: 'plan-usd', exchangeRateStatus: 'MISSING' }),
     );
@@ -957,7 +995,14 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
   });
 
   it('la tasa del día se recorta a 8 decimales, como la congela la API', async () => {
-    mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 0.123456785 } });
+    mockedRates.mockImplementation((_token, date) =>
+      Promise.resolve({
+        base: 'USD',
+        source: 'AUTOMATIC',
+        rates: { VES: 0.123456785 },
+        rateDate: date,
+      }),
+    );
     mockedBalance.mockResolvedValue(usdBalance({ billable: 100000, balance: 100000 }));
     const { user, dialog } = await openUsdPlan();
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
@@ -974,7 +1019,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     // Teclear por segmentos emite los años intermedios (0002, 0020, 0202…)
     // mientras se escribe el año.
     await typePaymentDate(user, dialog, '2026-10-01');
-    await waitFor(() => expect(mockedRates).toHaveBeenCalledWith('tok', '2026-10-01'));
+    await waitFor(() => expect(mockedRates).toHaveBeenCalledWith('tok', '2026-10-01', ['USD', 'VES']));
     expect(mockedRates).toHaveBeenCalledTimes(1);
   });
 

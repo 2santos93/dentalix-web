@@ -55,7 +55,14 @@ describe('PlanQuotePrintView (DX-012)', () => {
   describe('DX-376: segunda moneda opcional', () => {
     it('sin elegir no pide tasas; al elegir una pinta su total con la tasa de hoy en la sede', async () => {
       mockedGet.mockResolvedValue(planQuoteFixture());
-      mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 4000 } });
+      mockedRates.mockImplementation((_token, date) =>
+        Promise.resolve({
+          base: 'USD',
+          source: 'AUTOMATIC',
+          rates: { VES: 4000 },
+          rateDate: date,
+        }),
+      );
       renderView();
       await screen.findByTestId('quote-header');
       expect(mockedRates).not.toHaveBeenCalled();
@@ -70,7 +77,14 @@ describe('PlanQuotePrintView (DX-012)', () => {
 
     it('sin tasa de hoy lo dice y no imprime la segunda moneda', async () => {
       mockedGet.mockResolvedValue(planQuoteFixture());
-      mockedRates.mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: {} });
+      mockedRates.mockImplementation((_token, date) =>
+        Promise.resolve({
+          base: 'USD',
+          source: 'MANUAL',
+          rates: {},
+          rateDate: date,
+        }),
+      );
       renderView();
       await screen.findByTestId('quote-header');
       await screen.findByRole('option', { name: /Dólar/ });
@@ -81,9 +95,12 @@ describe('PlanQuotePrintView (DX-012)', () => {
 
     it('si falla la consulta lo dice con reintento', async () => {
       mockedGet.mockResolvedValue(planQuoteFixture());
-      mockedRates
-        .mockRejectedValueOnce(new Error('red'))
-        .mockResolvedValueOnce({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 4000 } });
+      mockedRates.mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce({
+        base: 'USD',
+        source: 'AUTOMATIC',
+        rates: { VES: 4000 },
+        rateDate: '2026-10-30',
+      });
       renderView();
       await screen.findByTestId('quote-header');
       await screen.findByRole('option', { name: /Dólar/ });

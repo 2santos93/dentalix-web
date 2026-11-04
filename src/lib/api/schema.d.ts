@@ -993,7 +993,7 @@ export interface paths {
         };
         /**
          * Tasas de un día para la clínica, según su fuente (DX-374)
-         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo).
+         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo). DX-384: con MANUAL y `currencies`, si alguna no tiene tasa ese día se devuelve la última fecha anterior, dentro del plazo de la clínica, que las tiene todas; `rateDate` dice de qué día son las tasas.
          */
         get: operations["ExchangeController_rates"];
         put?: never;
@@ -1027,11 +1027,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Fuente de la tasa de cambio de la clínica (DX-374) */
+        /** Fuente de la tasa de cambio de la clínica y plazo de la última tasa registrada (DX-374, DX-384) */
         get: operations["ExchangeSettingsController_settings"];
         /**
          * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
-         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
+         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento. DX-384: `manualRateMaxAgeDays` (0..30, 3 por defecto) es hasta cuántos días de antigüedad puede tener la última tasa manual que se usa cuando no hay la del día del abono (0 = solo la del mismo día); cualquiera de los dos campos puede ir solo. Si cambia, evento CLINIC_SETTINGS con reason EXCHANGE_RATE_MAX_AGE y el antes y el después, en la misma transacción, y los abonos aplazados «sin tasa» se intentan ya. Solo ADMIN (403 al resto).
          */
         put: operations["ExchangeSettingsController_updateClinicSettings"];
         post?: never;
@@ -8202,6 +8202,11 @@ export interface components {
             rates: {
                 [key: string]: number;
             };
+            /**
+             * @description DX-384: día civil (AAAA-MM-DD) de estas tasas. Es el pedido (`date`) salvo con fuente MANUAL cuando se pidieron `currencies` sin tasa ese día y se devuelve la última fecha anterior dentro del plazo de la clínica que las tiene todas. Nunca posterior a `date`.
+             * @example 2026-10-30
+             */
+            rateDate: string;
         };
         ConvertResponseDto: {
             /** @example 100 */
@@ -8212,6 +8217,11 @@ export interface components {
             to: string;
             /** @example 2026-07-01 */
             date: string;
+            /**
+             * @description DX-384: día civil de la tasa usada. Es `date` salvo con tasa manual cuando la clínica no registró la de ese día y se usó la última dentro de su plazo.
+             * @example 2026-06-30
+             */
+            rateDate: string;
             /** @example 400000 */
             result: number;
             /**
@@ -8222,7 +8232,7 @@ export interface components {
         };
         ExchangeRateSettingsDto: {
             /**
-             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
+             * @description De dónde sale la tasa del día: AUTOMATIC (proveedor) o MANUAL (la que registra la clínica).
              * @example MANUAL
              */
             source: components["schemas"]["ExchangeRateSource"];
@@ -8231,15 +8241,25 @@ export interface components {
              * @example 2026-10-30
              */
             manualSince: string | null;
+            /**
+             * @description DX-384. Con fuente MANUAL, hasta cuántos días de antigüedad puede tener la última tasa manual registrada que se usa cuando no hay tasa del día del abono (día civil de su sede). 0 = solo la tasa del mismo día. El abono congela esa tasa con su fecha; registrar después la del día no la cambia. Pasado el plazo, el abono queda «sin tasa». 3 por defecto en una clínica nueva; en el PUT, sin este campo el plazo no cambia.
+             * @example 3
+             */
+            manualRateMaxAgeDays: number;
             /** @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia. */
             baseCurrency: string;
         };
         UpdateExchangeRateSettingsDto: {
             /**
-             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
+             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa» (salvo el plazo de `manualRateMaxAgeDays`). Los días anteriores al paso a MANUAL siguen con la automática. Sin este campo la fuente no cambia.
              * @example MANUAL
              */
-            source: components["schemas"]["ExchangeRateSource"];
+            source?: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description DX-384. Con fuente MANUAL, hasta cuántos días de antigüedad puede tener la última tasa manual registrada que se usa cuando no hay tasa del día del abono (día civil de su sede). 0 = solo la tasa del mismo día. El abono congela esa tasa con su fecha; registrar después la del día no la cambia. Pasado el plazo, el abono queda «sin tasa». 3 por defecto en una clínica nueva; en el PUT, sin este campo el plazo no cambia.
+             * @example 3
+             */
+            manualRateMaxAgeDays?: number;
         };
         ManualExchangeRateAuthorDto: {
             /** Format: uuid */
@@ -13249,10 +13269,10 @@ export interface components {
              * @example 1
              */
             toPerBase: number;
-            /** @description AUTOMATIC: la del proveedor; MANUAL: la que registró la clínica para ese día */
+            /** @description AUTOMATIC: la del proveedor; MANUAL: la que registró la clínica (para ese día o, DX-384, la última dentro del plazo de la clínica) */
             source: components["schemas"]["ExchangeRateSource"];
             /**
-             * @description Día civil (AAAA-MM-DD) de la tasa: el del abono en su sede
+             * @description Día civil (AAAA-MM-DD) de la tasa USADA. Es el del abono en su sede salvo con fuente MANUAL cuando la clínica no registró la de ese día y se usó la última dentro de su plazo (DX-384, `manualRateMaxAgeDays`): entonces es anterior al del abono. Se congela con el abono: registrar después la tasa del día no lo cambia.
              * @example 2026-10-30
              */
             date: string;
@@ -21688,6 +21708,8 @@ export interface operations {
             query: {
                 /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
                 date: string;
+                /** @description DX-384. Códigos ISO 4217 separados por comas de las monedas con que se va a convertir ese día (la del abono y la de su plan). Con fuente MANUAL y plazo de la clínica > 0, si alguna no tiene tasa registrada ese día se devuelven las tasas de la última fecha anterior, dentro del plazo, que las tiene todas (`rateDate`). Sin este parámetro solo se devuelven las tasas del día exacto. */
+                currencies?: string;
             };
             header?: never;
             path?: never;
@@ -21821,7 +21843,7 @@ export interface operations {
                     "application/json": components["schemas"]["ExchangeRateSettingsDto"];
                 };
             };
-            /** @description Fuente que no es AUTOMATIC ni MANUAL */
+            /** @description Fuente que no es AUTOMATIC ni MANUAL, plazo que no es un entero de 0 a 30, o ninguno de los dos campos */
             400: {
                 headers: {
                     [name: string]: unknown;
