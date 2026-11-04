@@ -3,7 +3,7 @@ import { Suspense, useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { SettingsPage } from '@/components/settings/settings-page';
-import { AuditLogView } from '@/components/audit/audit-log-view';
+import { AuditLogView, auditFiltersFromSearch } from '@/components/audit/audit-log-view';
 
 const copy = {
   title: 'Auditoría',
@@ -34,6 +34,10 @@ function AuditSettingsView() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const patientId = searchParams.get('patientId') ?? undefined;
+  // SEC-043-bis: el enlace «recibos consultados» del cierre de caja abre la
+  // auditoría ya filtrada (quién, recibos y días).
+  const initialFilters = auditFiltersFromSearch(searchParams);
+  const filtersKey = searchParams.toString();
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -53,9 +57,10 @@ function AuditSettingsView() {
     <SettingsPage title={copy.title} description={copy.description} scope="clinic" width="wide">
       <AuditLogView
         // Otra ficha, otra lista: el estado de filtros y páginas no se arrastra.
-        key={patientId ?? 'clinic'}
+        key={patientId ?? `clinic:${filtersKey}`}
         token={accessToken}
         patientId={patientId}
+        initialFilters={initialFilters}
         onClearPatient={patientId ? () => router.replace(pathname) : undefined}
       />
     </SettingsPage>
