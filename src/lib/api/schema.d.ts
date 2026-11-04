@@ -10635,6 +10635,8 @@ export interface components {
             openings: components["schemas"]["OpeningDto"][];
             /** @description Había más de 200 huecos: acota el rango. */
             truncated: boolean;
+            /** @description DX-533: la sede no tiene horario configurado y los huecos se buscaron en el horario de alta (lun–vie 9:00–13:00 y 15:00–19:00, sáb 9:00–13:00, hora de la sede). Reservar fuera de él sigue permitido. */
+            defaultHours: boolean;
         };
         InClinicItemDto: {
             /** Format: uuid */
