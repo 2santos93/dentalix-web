@@ -226,7 +226,7 @@ export function ContingencyAgendaDialog({ open, onOpenChange, token, defaultLoca
             </Button>
             {now.kind === 'error' ? <InlineError>{now.message}</InlineError> : null}
             {now.kind === 'done' ? (
-              <p role="status" className="text-sm text-success">
+              <p role="status" className="text-sm text-success-text">
                 {copy.downloaded(now.fileName)}
               </p>
             ) : null}
@@ -252,7 +252,7 @@ export function ContingencyAgendaDialog({ open, onOpenChange, token, defaultLoca
                       ? copy.nightlyReady(fmt.dateTime(new Date(nightlyInfo.generatedAt), timeZone), nightlyInfo.appointmentCount ?? 0)
                       : copy.nightlyReadyNoFormat(nightlyInfo.appointmentCount ?? 0)}
                   </p>
-                  {!nightlyInfo.current ? <p className="text-sm text-warning">{copy.nightlyStale}</p> : null}
+                  {!nightlyInfo.current ? <p className="text-sm text-warning-text">{copy.nightlyStale}</p> : null}
                   <Button
                     type="button"
                     variant="secondary"
@@ -266,7 +266,7 @@ export function ContingencyAgendaDialog({ open, onOpenChange, token, defaultLoca
                   </Button>
                   {lastNight.kind === 'error' ? <InlineError>{lastNight.message}</InlineError> : null}
                   {lastNight.kind === 'done' ? (
-                    <p role="status" className="text-sm text-success">
+                    <p role="status" className="text-sm text-success-text">
                       {copy.downloaded(lastNight.fileName)}
                     </p>
                   ) : null}

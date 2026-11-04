@@ -87,6 +87,41 @@ describe('WorkQueuesProvider (DX-503)', () => {
     expect(summary.mock.calls.at(-1)?.[1]).toBeUndefined();
   });
 
+  it('DX-487: con la pestaña oculta no sondea; al volver relee al momento', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    const setVisibility = (state: DocumentVisibilityState) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
+    };
+    try {
+      render(
+        <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname="/agenda">
+          <Badge k="CLOSING_QUEUE" />
+        </WorkQueuesProvider>,
+      );
+      await act(async () => {});
+      expect(summary).toHaveBeenCalledTimes(1);
+
+      setVisibility('hidden');
+      await act(async () => {
+        jest.advanceTimersByTime(180_000);
+      });
+      expect(summary).toHaveBeenCalledTimes(1);
+
+      setVisibility('visible');
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(summary).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        jest.advanceTimersByTime(60_000);
+      });
+      expect(summary).toHaveBeenCalledTimes(3);
+    } finally {
+      setVisibility('visible');
+      jest.useRealTimers();
+    }
+  });
+
   it('sin «Mi día» montado pide solo las listas del menú', async () => {
     render(
       <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname="/patients">
