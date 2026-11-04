@@ -5,7 +5,8 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { listAppointments, type ListAppointment } from '@/lib/appointments/appointments-api';
 import { medicalAlertLines, ANAMNESIS_EXPIRED_LABEL, ANAMNESIS_MISSING_LABEL } from '@/lib/clinical/medical-alerts';
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { wallDayRange } from '@/lib/time/wall-clock';
 import { SectionHeader } from '@/components/ui/section-header';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -114,6 +115,10 @@ export function TodaySection({
     !mine || userId !== null,
     copy.error,
   );
+  // DX-354b (E1): la hora de cada fila sale con el reloj de SU sede (`locationId` de la cita), no con el
+  // de la pantalla: en «Todas las sedes» una cita de Caracas va en 12 h y una de Berlín en 24 h. El día de
+  // la cabecera, las cuentas y el «hoy» siguen siendo los de la sede de la pantalla. Un solo aviso.
+  const stamp = useSedeStamp(token, load.status === 'ready' ? load.data.map((a) => a.locationId) : []);
   const heading = mine ? copy.headingMine : copy.heading;
   const dayLabel = fmt ? capitalize(fmt.civilLongDate(today, { year: false })) : today;
 
@@ -130,6 +135,7 @@ export function TodaySection({
           </Link>
         }
       />
+      <SedeStampNote stamp={stamp} />
       {load.status === 'error' ? (
         <SectionError description={load.message} onRetry={load.reload} />
       ) : load.status !== 'ready' ? (
@@ -139,7 +145,7 @@ export function TodaySection({
           appointments={load.data}
           mine={mine}
           scopeLabel={scopeLabel}
-          timeZone={timeZone}
+          stamp={stamp}
           fmt={fmt}
           staffNames={staffNames}
         />
@@ -152,14 +158,15 @@ function TodayBody({
   appointments,
   mine,
   scopeLabel,
-  timeZone,
+  stamp,
   fmt,
   staffNames,
 }: {
   appointments: ListAppointment[];
   mine: boolean;
   scopeLabel: string;
-  timeZone: string;
+  stamp: SedePainters;
+  /** El formato de la sede de la pantalla: solo para las cuentas del resumen. */
   fmt: RegionalFormat | null;
   staffNames: Record<string, string>;
 }) {
@@ -210,7 +217,7 @@ function TodayBody({
               appointment={a}
               showProvider={!mine}
               providerLabel={staffNames[a.providerId] ?? ''}
-              time={fmt ? fmt.time(new Date(a.start), timeZone) : NO_SEDE_FORMAT}
+              time={stamp.time(a.start, a.locationId)}
             />
           ))}
         </ul>

@@ -1,10 +1,14 @@
 import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { accessTokenOf, registerAndLogin } from './support/auth';
+import { mkdirSync } from 'node:fs';
+import { accessTokenOf, loginAs, registerAndLogin } from './support/auth';
+import { apiPost, createLocationViaApi, registerClinicViaApi, type ApiSession } from './support/api';
+import { expectNoHorizontalScroll } from './support/layout';
+import { regionalFormat } from '../src/lib/format/regional-format';
 import { disableBusinessHours } from './support/business-hours';
 import { API_URL } from './support/urls';
 import { SEDE_TODAY_TZ, sedeTime } from './support/clock';
-import { E2E_TODAY_REGION } from './support/regional';
+import { E2E_TODAY_REGION, type RegionalSettings } from './support/regional';
 
 /**
  * e2e: register clinic + login (the registering user is ADMIN — the only role
@@ -302,4 +306,149 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   // --- «Cartera por antigüedad»: the plan is fully paid, nobody owes ---
   const aging = page.getByRole('region', { name: 'Cartera por antigüedad' });
   await expect(aging.getByText('Nadie debe.')).toBeVisible();
+});
+
+/**
+ * DX-354b (W3), criterio 4: «Hoy» en «Todas las sedes» pinta la hora de cada
+ * cita con el reloj de SU sede, y no con el de la pantalla ni con el del
+ * navegador. La suite de arriba no lo distingue (el navegador y la sede están
+ * en la misma zona); aquí el navegador está en `Asia/Tokyo` y la clínica tiene
+ * dos sedes:
+ * - la principal (la de la pantalla en «Todas las sedes»): la zona de la suite
+ *   (`SEDE_TODAY_TZ`, con al menos 3 h hasta su medianoche), `es-VE`, 12 h;
+ * - «Sede DE»: `Europe/Berlin`, `de-DE`, 24 h.
+ * Una cita de hoy en cada una (a 3 y a 45 minutos vista, para que ambas caigan
+ * en el día de la principal a cualquier hora); la hora esperada sale de
+ * `regionalFormat` con la zona y el reloj de cada sede, sobre el instante que
+ * devolvió la API. Capturas a 390 y 1440 px (claro y oscuro) en `E2E_QA_DIR`.
+ */
+test.describe('Inicio: «Todas las sedes» con el navegador en otra zona (DX-354b)', () => {
+  test.use({ timezoneId: 'Asia/Tokyo' });
+
+  const MAIN: RegionalSettings = { ...E2E_TODAY_REGION, hourCycle: 'h12' };
+  const DE: { name: string } & RegionalSettings = {
+    name: 'Sede DE',
+    country: 'DE',
+    currency: 'EUR',
+    timeZone: 'Europe/Berlin',
+    locale: 'de-DE',
+    hourCycle: 'h23',
+  };
+  const QA_DIR = process.env.E2E_QA_DIR;
+  const multiSuffix = `${suffix}m`.slice(0, 12);
+
+  test('cada cita de Hoy dice la hora de su sede (12 h en la principal, 24 h en Berlín)', async ({ page }) => {
+    test.setTimeout(240_000);
+    const request = page.request;
+    const multiEmail = `test.user.dashboard.multi.${multiSuffix}@example.com`;
+    const session: ApiSession = await registerClinicViaApi(request, {
+      subdomain: `test-clinic-dash-multi-${multiSuffix}`,
+      clinicName: `Test Clinic Dashboard Multi ${multiSuffix}`,
+      fullName,
+      email: multiEmail,
+      password,
+      location: MAIN,
+    });
+    const deId = await createLocationViaApi(request, session, DE);
+    const at = (locationId: string): ApiSession => ({
+      ...session,
+      headers: { ...session.headers, 'X-Location-Id': locationId },
+    });
+
+    // Una sede nueva nace con horario de atención: sin restricción en las dos, para que las citas a
+    // «ahora + N min» no dependan de la hora ni del día de la corrida (`disableBusinessHours`).
+    const locations = (await (await request.get(`${API_URL}/locations`, { headers: session.headers })).json()) as {
+      id: string;
+      name: string;
+    }[];
+    for (const location of locations) {
+      const res = await request.put(`${API_URL}/locations/schedule`, {
+        headers: { ...session.headers, 'X-Location-Id': location.id },
+        data: { ranges: [] },
+      });
+      expect(res.ok(), `Desactivar el horario de ${location.name} falló: ${await res.text()}`).toBeTruthy();
+    }
+    const mainId = locations.find((l) => l.id !== deId)!.id;
+
+    const staffResponse = await request.get(`${API_URL}/staff`, { headers: session.headers });
+    expect(staffResponse.ok(), `Listing staff failed: ${await staffResponse.text()}`).toBeTruthy();
+    const staff = (await staffResponse.json()) as { userId: string; role: string }[];
+    const owner = staff.find((member) => member.role === 'OWNER') ?? staff[0];
+
+    const sedes = [
+      { key: 'main', id: mainId, region: MAIN, minutes: 3, firstName: 'Carolina' },
+      { key: 'de', id: deId, region: DE, minutes: 45, firstName: 'Jonas' },
+    ] as const;
+    const booked: { lastName: string; start: string; region: RegionalSettings }[] = [];
+    for (const sede of sedes) {
+      const lastName = `Multi${sede.key}${multiSuffix}`.slice(0, 30);
+      const patient = await apiPost<{ id: string }>(request, at(sede.id), '/patients', {
+        firstName: sede.firstName,
+        lastName,
+        docType: 'PASSPORT',
+        docNumber: `DM${sede.key}${multiSuffix}`.slice(0, 20),
+        sex: 'F',
+      });
+      const start = new Date(Date.now() + sede.minutes * 60 * 1000);
+      const appointment = await apiPost<{ id: string; start: string; locationId?: string }>(
+        request,
+        at(sede.id),
+        '/appointments',
+        {
+          patientId: patient.id,
+          providerId: owner.userId,
+          start: start.toISOString(),
+          end: new Date(start.getTime() + 30 * 60 * 1000).toISOString(),
+          reason: `Control ${sede.key} ${multiSuffix}`,
+        },
+      );
+      booked.push({ lastName, start: appointment.start, region: sede.region });
+    }
+
+    await loginAs(page, session.origin, multiEmail, password);
+    // Sin sede activa: la pantalla es la principal y cada fila trae la suya.
+    await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
+    await page.goto(`${session.origin}/dashboard`);
+    await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible();
+    await expect(page.getByTestId('dashboard-scope')).toContainText('Todas las sedes');
+
+    const today = page.getByRole('region', { name: 'Hoy' });
+    await expect(today.getByRole('list', { name: 'Citas de hoy' })).toBeVisible({ timeout: 15_000 });
+    const times: string[] = [];
+    for (const appointment of booked) {
+      const expected = regionalFormat({ locale: appointment.region.locale, hourCycle: appointment.region.hourCycle }).time(
+        new Date(appointment.start),
+        appointment.region.timeZone,
+      );
+      times.push(expected);
+      const row = today.getByRole('listitem').filter({ hasText: appointment.lastName });
+      await expect(row.locator('time')).toHaveText(expected, { timeout: 15_000 });
+    }
+    // Cada reloj es el de su sede: 12 h con «a. m./p. m.» en la principal, 24 h «HH:MM» en Berlín.
+    expect(times[0]).toMatch(/^\d{1,2}:\d{2} [ap]\. m\.$/);
+    expect(times[1]).toMatch(/^\d{2}:\d{2}$/);
+    // Ni el reloj del navegador (Tokio) ni el aviso de formato.
+    const tokyo = regionalFormat({ locale: MAIN.locale, hourCycle: MAIN.hourCycle }).time(
+      new Date(booked[0].start),
+      'Asia/Tokyo',
+    );
+    await expect(today.getByText(tokyo, { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/No se pudo saber el formato regional/)).toHaveCount(0);
+
+    for (const viewport of [
+      { width: 1440, height: 900 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expectNoHorizontalScroll(page);
+      if (!QA_DIR) continue;
+      mkdirSync(QA_DIR, { recursive: true });
+      await page.mouse.move(0, 0);
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme });
+        await page.screenshot({ path: `${QA_DIR}/inicio-hoy-todas-las-sedes-${viewport.width}-${scheme}.png` });
+      }
+      await page.emulateMedia({ colorScheme: 'light' });
+    }
+  });
 });
