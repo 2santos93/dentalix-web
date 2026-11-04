@@ -170,6 +170,70 @@ function handComposedTexts(source: ts.SourceFile): string[] {
   return found;
 }
 
+/**
+ * Regla 3: un día civil recompuesto a mano: `….split('-')….reverse().join('/')`, `….join('/')` sobre un
+ * `split('-')` o una plantilla `${d}/${m}/${y}` con las tres piezas sacadas de un `split('-')`.
+ */
+function handComposedCivilDays(source: ts.SourceFile): string[] {
+  const found: string[] = [];
+  // Identificadores que valen una parte de un `x.split('-')` (desestructurados o indexados).
+  const parts = new Set<string>();
+  const isSplitDash = (node: ts.Node): boolean =>
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === 'split' &&
+    node.arguments.length === 1 &&
+    ts.isStringLiteralLike(node.arguments[0]) &&
+    node.arguments[0].text === '-';
+  const containsSplitDash = (node: ts.Node): boolean => {
+    let hit = false;
+    const walk = (n: ts.Node) => {
+      if (isSplitDash(n)) hit = true;
+      if (!hit) ts.forEachChild(n, walk);
+    };
+    walk(node);
+    return hit;
+  };
+  const collect = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) && node.initializer && containsSplitDash(node.initializer)) {
+      if (ts.isArrayBindingPattern(node.name)) {
+        node.name.elements.forEach((e) => ts.isBindingElement(e) && ts.isIdentifier(e.name) && parts.add(e.name.text));
+      } else if (ts.isIdentifier(node.name)) parts.add(node.name.text);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(source);
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'join' &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteralLike(node.arguments[0]) &&
+      node.arguments[0].text === '/' &&
+      containsSplitDash(node.expression.expression)
+    ) {
+      found.push(where(source, node));
+    }
+    if (ts.isTemplateExpression(node) && node.templateSpans.length >= 2) {
+      const ids = node.templateSpans.map((span) => span.expression);
+      const between = node.templateSpans.slice(0, -1).every((span) => span.literal.text === '/');
+      if (between && node.head.text === '') {
+        const fromSplit = ids.every(
+          (e) =>
+            (ts.isIdentifier(e) && parts.has(e.text)) ||
+            (ts.isElementAccessExpression(e) &&
+              (containsSplitDash(e.expression) || (ts.isIdentifier(e.expression) && parts.has(e.expression.text)))),
+        );
+        if (fromSplit) found.push(where(source, node));
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
 const files = sourceFiles(SRC)
   .map((path) => ({ path, rel: relOf(path) }))
   .filter(({ rel }) => scanned(rel))
@@ -187,6 +251,10 @@ function composedOffenders(list: readonly { rel: string; source: ts.SourceFile }
     .flatMap(({ rel, source }) => handComposedTexts(source).map((hit) => `${rel}:${hit}`));
 }
 
+function civilDayOffenders(list: readonly { rel: string; source: ts.SourceFile }[]): string[] {
+  return list.flatMap(({ rel, source }) => handComposedCivilDays(source).map((hit) => `${rel}:${hit}`));
+}
+
 describe('arquitectura: ninguna hora ni día se compone a mano (DX-354b, DX-520-bis)', () => {
   it('no local Date getter outside the documented exceptions', () => {
     expect(getterOffenders(files)).toEqual([]);
@@ -194,6 +262,20 @@ describe('arquitectura: ninguna hora ni día se compone a mano (DX-354b, DX-520-
 
   it('no template, concatenation or join zero-pads a time (HH:mm) or a day (dd/mm) outside the machine values', () => {
     expect(composedOffenders(files)).toEqual([]);
+  });
+
+  it('no civil day is recomposed by hand (split/reverse/join or ${d}/${m}/${y}) (DX-354b, W4 round 1)', () => {
+    expect(civilDayOffenders(files)).toEqual([]);
+  });
+
+  it('catches a civil day recomposed from split(\'-\') and lets other joins and templates through', () => {
+    const at = (code: string) => civilDayOffenders([{ rel: 'components/x/y.tsx', source: parse('x.tsx', code) }]);
+    expect(at("const a = iso.split('-').reverse().join('/');")).toHaveLength(1);
+    expect(at("const a = data.asOf.split('-').reverse().join('/');")).toHaveLength(1);
+    expect(at("const [y, m, d] = day.split('-'); const a = `${d}/${m}/${y}`;")).toHaveLength(1);
+    expect(at("const parts = day.split('-'); const a = `${parts[2]}/${parts[1]}/${parts[0]}`;")).toHaveLength(1);
+    // Otros usos legítimos: ruta, ids, año-mes, join con otro separador.
+    expect(at("const a = `${base}/${id}/print`; const b = ['a','b'].join('/'); const [y, m] = day.split('-'); const c = `${y}-${m}`;")).toEqual([]);
   });
 
   it('every exception still exists and still needs it (no stale entries)', () => {
