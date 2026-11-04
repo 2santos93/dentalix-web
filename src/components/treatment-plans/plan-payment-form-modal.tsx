@@ -1,11 +1,11 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { toast } from 'sonner';
+import { notifySuccess } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { parseMoneyInput } from '@/lib/format/money';
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { readyTimeZone, sedeToday, type SedeZoneState } from '@/lib/locations/use-sede-time-zone';
+import { SEDE_TIME_ZONE_ERROR, readyTimeZone, sedeToday, type SedeZoneState } from '@/lib/locations/use-sede-time-zone';
 import { recordPayment, type PlanBalance, type RecordPaymentInput } from '@/lib/payments/payments-api';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { CurrencySelect } from '@/components/shared/currency-select';
@@ -119,8 +119,9 @@ export function PlanPaymentFormModal({
       return;
     }
     // DX-075: «hoy» es el de la sede; un día posterior se dice junto al campo.
-    if (sedeTimeZone && paymentDate > sedeToday(sedeTimeZone)) {
-      setDateError(copy.futurePaymentDate);
+    if (!sedeTimeZone || paymentDate > sedeToday(sedeTimeZone)) {
+      // Sin zona lista no hay «hoy»: también se dice junto al campo.
+      setDateError(sedeTimeZone ? copy.futurePaymentDate : SEDE_TIME_ZONE_ERROR);
       document.getElementById('tp-payment-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
       return;
     }
@@ -141,7 +142,7 @@ export function PlanPaymentFormModal({
       const saved = await recordPayment(token, plan.id, input, idempotencyKey);
       // Éxito con el sistema de avisos del repo (sonner): visible en cualquier
       // alto de pantalla, sin depender de dónde esté el scroll.
-      toast.success(copy.paymentRecorded(stamp.money(saved.amount, saved.currency)));
+      notifySuccess(copy.paymentRecorded(stamp.money(saved.amount, saved.currency)));
       onOpenChange(false);
       await onRecorded();
     } catch (err) {

@@ -50,3 +50,19 @@ export function notifyError(message: string, opts: NotifyErrorOptions = {}): str
   });
   return id;
 }
+
+/** Un éxito corriente se lee y se va; 10 s dan para leerlo con calma. */
+export const SUCCESS_DURATION_MS = 10_000;
+
+interface NotifySuccessOptions {
+  /**
+   * El aviso lleva algo que hay que leer y no perder (una advertencia, un
+   * número de recibo): no caduca; el botón de cerrar del `Toaster` es la salida.
+   */
+  persistent?: boolean;
+}
+
+/** Un éxito como toast: 10 s, o sin caducidad si `persistent`. */
+export function notifySuccess(message: string, opts: NotifySuccessOptions = {}): void {
+  toast.success(message, { duration: opts.persistent ? Infinity : SUCCESS_DURATION_MS });
+}

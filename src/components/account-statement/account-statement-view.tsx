@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { notifySuccess } from '@/components/errors/notify';
 import { CalendarClock, ChevronDown, FileText, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
@@ -187,11 +187,11 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
     setChargeModal(kind);
   }
 
-  function charged(notice: string) {
+  function charged(notice: string, opts?: { persistent?: boolean }) {
     setChargeModal(null);
     // DX-075: el éxito sale como aviso (sonner), a la vista a 390 y 1440 px;
     // antes era una línea al pie del estado de cuenta, fuera de pantalla.
-    toast.success(notice);
+    notifySuccess(notice, opts);
     setReloadKey((k) => k + 1);
     onChanged?.();
   }

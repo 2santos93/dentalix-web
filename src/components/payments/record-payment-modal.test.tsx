@@ -372,6 +372,8 @@ it('un abono guardado sin tasa lo dice en el aviso', async () => {
   await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
   expect(onRecorded.mock.calls[0][0]).toMatch(/^Abono registrado: USD\s50,00 · .+\. /);
   expect(onRecorded.mock.calls[0][0]).toContain(recordPaymentCopy.recordedWithoutRate);
+  // DX-075: la advertencia de «sin tasa» no puede caducar sola.
+  expect(onRecorded.mock.calls[0][1]).toEqual({ persistent: true });
 });
 
 it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', async () => {
@@ -402,6 +404,7 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   );
   expect(onRecorded).toHaveBeenCalledWith(
     expect.stringMatching(/^Abono registrado: EUR\s150\.000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
+    { persistent: false },
   );
 });
 
@@ -421,6 +424,21 @@ it('DX-075: un día posterior a hoy en la sede se rechaza junto al campo, con el
   await waitFor(() => expect(dialog.querySelector('#rp-date-error')).not.toBeNull());
   expect(document.activeElement).toHaveAttribute('role', 'spinbutton');
   expect(document.activeElement?.closest('#rp-date')).not.toBeNull();
+});
+
+it('DX-075: el calendario topa en hoy de la sede: el día siguiente a hoy no se puede elegir', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([eurPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.click(within(within(dialog).getByRole('group', { name: 'Fecha de pago' })).getByRole('button'));
+
+  // «Última fecha disponible» la marca react-aria desde `maxValue`; sin `max` no sale.
+  const last = await screen.findByRole('button', { name: /Última fecha disponible/ });
+  const cells = Array.from(document.querySelectorAll('[role="grid"] [role="gridcell"]'));
+  const next = cells[cells.indexOf(last.closest('[role="gridcell"]') as Element) + 1];
+  expect(next).toHaveAttribute('aria-disabled', 'true');
 });
 
 it('DX-516: sin ajustes en el medio no se pinta nada; con ellos, el ajuste sobre el importe y el total a cobrar', async () => {
@@ -692,6 +710,7 @@ it('el aviso dice lo que la API registró, no lo que quedó en el formulario (re
   await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
   expect(onRecorded).toHaveBeenCalledWith(
     expect.stringMatching(/^Abono registrado: EUR\s1\.?000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
+    { persistent: false },
   );
 });
 

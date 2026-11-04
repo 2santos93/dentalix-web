@@ -33,7 +33,7 @@ import { usePaymentLocationHint } from './use-payment-location-hint';
 import { useExchangeRates } from './use-exchange-rates';
 import { PaymentRatePreview, ratePreviewCopy, type PreviewPlanBalance } from './payment-rate-preview';
 import { usePlanBalance } from './use-plan-balance';
-import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SEDE_TIME_ZONE_ERROR, readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import {
   PaymentMethodSelect,
@@ -130,7 +130,8 @@ interface RecordPaymentModalProps {
    */
   openingBalances?: AccountStatementOpeningBalance[];
   /** Tras registrar, con el aviso a enseñar: quien abre cierra y recarga. */
-  onRecorded: (notice: string) => void;
+  /** `persistent`: el aviso lleva una advertencia o un recibo que no debe perderse. */
+  onRecorded: (notice: string, opts?: { persistent?: boolean }) => void;
 }
 
 /**
@@ -392,11 +393,10 @@ export function RecordPaymentModal({
         savedPlan ? statementCopy.planLabel(savedPlan.createdAt, planDates) : '',
         saved.receiptNumber,
       );
-      onRecorded(
-        saved.payments.some((p) => p.exchangeRateStatus === 'MISSING')
-          ? `${recorded} ${copy.recordedWithoutRate}`
-          : recorded,
-      );
+      const withoutRate = saved.payments.some((p) => p.exchangeRateStatus === 'MISSING');
+      onRecorded(withoutRate ? `${recorded} ${copy.recordedWithoutRate}` : recorded, {
+        persistent: withoutRate || Boolean(saved.receiptNumber),
+      });
     } catch (err) {
       // La clave NO cambia: el reintento de este cobro la reusa.
       if (err instanceof ApiError && err.code === SPLIT_PAYMENT_EXCEEDS_BALANCE) {
@@ -446,7 +446,14 @@ export function RecordPaymentModal({
     }
     // DX-075: «hoy» es el de la sede (nunca el reloj del navegador); un día
     // posterior se dice junto al campo, con el foco, sin llamar a la API.
-    if (today && form.date > today) {
+    // Sin zona lista no hay «hoy» con el que contar: se dice junto al campo en
+    // vez de dejar pasar el día (la API lo rechazaría con un aviso genérico).
+    if (!today) {
+      setDateError(SEDE_TIME_ZONE_ERROR);
+      document.getElementById('rp-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
+      return;
+    }
+    if (form.date > today) {
       setDateError(copy.futureDate);
       // El id de `DatePicker` es el del grupo: el foco va a su primer segmento.
       document.getElementById('rp-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
@@ -499,7 +506,8 @@ export function RecordPaymentModal({
             ? statementCopy.planLabel(savedPlan.createdAt, planDates)
             : '',
       );
-      onRecorded(saved.exchangeRateStatus === 'MISSING' ? `${recorded} ${copy.recordedWithoutRate}` : recorded);
+      const withoutRate = saved.exchangeRateStatus === 'MISSING';
+      onRecorded(withoutRate ? `${recorded} ${copy.recordedWithoutRate}` : recorded, { persistent: withoutRate });
     } catch (err) {
       // La clave NO cambia: el reintento de este mismo abono la reusa y el
       // servidor lo deduplica en vez de cobrar dos veces.
