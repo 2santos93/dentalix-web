@@ -290,16 +290,15 @@ describe('ExpensesSummaryView (DX-274)', () => {
     expect(mockRequestLocations.mock.calls.length).toBeGreaterThan(readsBefore);
   });
 
-  it('una zona inválida no tiene respaldo y deja consultar un rango manual explícito', async () => {
+  it('una zona inválida no tiene respaldo: error con Reintentar, sin selectores de mes ni consulta (DX-354b, E9)', async () => {
     jest.mocked(getLocationSchedule).mockResolvedValue({ timezone: 'Invalid/Zone', ranges: [] });
     render(<ExpensesSummaryView token="t" />);
     expect(await screen.findByText(/No pudimos obtener la zona horaria de la sede/)).toBeInTheDocument();
     expect(mockedSummary).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-08' } });
-    expect(mockedSummary).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-09' } });
-    expect(await screen.findByTestId('summary-row')).toBeInTheDocument();
-    expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-08-01', to: '2026-09-30' });
+    // Sin la zona de la sede no hay «mes en curso»: no se ofrecen meses contados con el reloj del navegador.
+    expect(screen.queryByLabelText('Desde')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Hasta')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
   });
 
   it('sin horario configurado no usa la zona inferida por país del listado de sedes', async () => {
@@ -309,16 +308,22 @@ describe('ExpensesSummaryView (DX-274)', () => {
     expect(mockedSummary).not.toHaveBeenCalled();
   });
 
-  it('la zona real que llega tarde no cambia el rango que la persona ya eligió', async () => {
-    let resolveLocations!: (value: typeof expenseLocations) => void;
-    mockRequestLocations.mockReturnValue(new Promise((resolve) => { resolveLocations = resolve; }));
-    render(<ExpensesSummaryView token="t" />);
-    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-08' } });
-    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-09' } });
-    await screen.findByTestId('summary-row');
-    await act(async () => resolveLocations(expenseLocations));
-    expect(mockedSummary).toHaveBeenCalledTimes(1);
-    expect(screen.getByLabelText('Desde')).toHaveValue('2026-08');
-    expect(screen.getByLabelText('Hasta')).toHaveValue('2026-09');
+  it('mientras llega la zona de la sede no hay selectores ni consulta; al llegar ofrece los meses de la sede', async () => {
+    // Otros casos de este archivo devuelven los relojes reales: se fija el reloj de este.
+    jest.useFakeTimers({ now: new Date('2026-10-15T00:00:00Z'), advanceTimers: true });
+    try {
+      let resolveLocations!: (value: typeof expenseLocations) => void;
+      mockRequestLocations.mockReturnValue(new Promise((resolve) => { resolveLocations = resolve; }));
+      render(<ExpensesSummaryView token="t" />);
+      expect(screen.queryByLabelText('Desde')).not.toBeInTheDocument();
+      expect(mockedSummary).not.toHaveBeenCalled();
+      await act(async () => resolveLocations(expenseLocations));
+      await screen.findByTestId('summary-row');
+      expect(mockedSummary).toHaveBeenCalledTimes(1);
+      expect(screen.getByLabelText('Desde')).toHaveValue('2026-05');
+      expect(screen.getByLabelText('Hasta')).toHaveValue('2026-10');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

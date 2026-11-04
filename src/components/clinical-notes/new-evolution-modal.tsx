@@ -16,6 +16,8 @@ import {
 } from '@/lib/clinical-notes/compose';
 import { appointmentLine } from '@/lib/clinical-notes/appointment-line';
 import { useSedeClock } from '@/lib/locations/sede-clock';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
@@ -72,18 +74,6 @@ interface NewEvolutionModalProps {
   onCreated: (entry: ClinicalEntry) => void;
 }
 
-/** Día local `yyyy-mm-dd` de un instante. */
-function localDay(d: Date): string {
-  const month = `${d.getMonth() + 1}`.padStart(2, '0');
-  const day = `${d.getDate()}`.padStart(2, '0');
-  return `${d.getFullYear()}-${month}-${day}`;
-}
-
-/** Hoy en formato `yyyy-mm-dd`, para topar la fecha de atención. */
-function todayISO(): string {
-  return localDay(new Date());
-}
-
 /**
  * «Nueva evolución» (DX-170): selector de plantilla con búsqueda, TODAS sus
  * preguntas a la vez y el texto compuesto, que se ve mientras se contesta y
@@ -105,6 +95,8 @@ export function NewEvolutionModal({
   // DX-378: el día de la cita, en la zona y con el formato de la sede.
   const sede = useSedeClock(token);
   const clock = sede.status === 'ready' ? sede.clock : null;
+  // DX-354b (E9): «hoy» es el de la sede de la pantalla, no el del navegador (Tokio ya está en el 5 cuando Caracas va por el 4).
+  const today = clock ? sedeToday(clock.timeZone) : null;
   const [templates, setTemplates] = useState<NoteTemplate[] | null>(null);
   const [templatesFailed, setTemplatesFailed] = useState(false);
   const [templatesReloadKey, setTemplatesReloadKey] = useState(0);
@@ -164,7 +156,7 @@ export function NewEvolutionModal({
     setNotesError(null);
     setDateError(null);
     setDiagnosesError(null);
-    if (!appointment && entryDate && entryDate > todayISO()) {
+    if (!appointment && entryDate && today !== null && entryDate > today) {
       setDateError(copy.futureDate);
       return;
     }
@@ -211,6 +203,8 @@ export function NewEvolutionModal({
       submitLabel={copy.submit}
       submitting={submitting}
       error={error}
+      // Sin el día de la sede no se puede topar la fecha de atención (la API la valida igual).
+      submitDisabled={!appointment && today === null}
       size="lg"
     >
       {appointment ? (
@@ -232,13 +226,19 @@ export function NewEvolutionModal({
           >
             {/* Fecha que la persona ya sabe: DateField (sin calendario), en el
                 formato de la sede, nunca el type=date del navegador. */}
-            <DateField
-              id="evo-entry-date"
-              max={todayISO()}
-              value={entryDate === '' ? null : entryDate}
-              isInvalid={!!dateError}
-              onChange={(next) => setEntryDate(next ?? '')}
-            />
+            {sede.status === 'error' ? (
+              // Sin la zona de la sede no hay «hoy» con el que topar la fecha: el campo se sustituye por su error (escalón 2).
+              <SedeConfigError kind={sede.kind} variant="field" retryId="evo-entry-date" onRetry={sede.retry} />
+            ) : (
+              <DateField
+                id="evo-entry-date"
+                max={today ?? undefined}
+                disabled={today === null}
+                value={entryDate === '' ? null : entryDate}
+                isInvalid={!!dateError}
+                onChange={(next) => setEntryDate(next ?? '')}
+              />
+            )}
           </FormField>
         )}
         <FormField htmlFor="evo-reason" label={copy.reason}>

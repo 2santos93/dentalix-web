@@ -3,7 +3,7 @@
  * puede leer.
  *
  * `birthDate` es una fecha civil (se guarda como medianoche UTC del día
- * elegido, ver `formatCivilDate`), así que se lee con getters UTC — usar
+ * elegido; se pinta con `stamp.civilDate`, que tampoco usa zona), así que se lee con getters UTC — usar
  * getters locales aquí hace que la edad caiga un día antes de la fecha real
  * al oeste de UTC.
  *

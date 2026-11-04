@@ -1,6 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PlanVisitsBoard } from "./plan-visits-board";
+import { listLocations } from "@/lib/locations/locations-api";
+import { clinicLocation } from "@/lib/test/locations";
+import { regionalFormat } from "@/lib/format/regional-format";
 import {
   getPlanVisits,
   updatePlanVisits,
@@ -10,6 +13,7 @@ jest.mock("../../lib/treatment-plans/plan-visits-api", () => ({
   getPlanVisits: jest.fn(),
   updatePlanVisits: jest.fn(),
 }));
+jest.mock("../../lib/locations/locations-api", () => ({ listLocations: jest.fn() }));
 jest.mock("./schedule-visit-dialog", () => ({
   ScheduleVisitDialog: () => null,
 }));
@@ -37,6 +41,7 @@ const plan = {
 } as unknown as TreatmentPlan;
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
   jest.mocked(getPlanVisits).mockResolvedValue({
     planId: "plan1",
     items: [],
@@ -211,6 +216,23 @@ it("muestra el día civil autoritativo aunque el instante caiga en el día anter
     />,
   );
   expect(await screen.findByText("01/04/2027")).toBeInTheDocument();
+});
+it("DX-354b: la fecha mínima sugerida sale con el formato de la sede (en-US, de-DE)", async () => {
+  const data = await jest.mocked(getPlanVisits).getMockImplementation()!("token", "plan1");
+  jest.mocked(getPlanVisits).mockResolvedValue({
+    ...data,
+    visits: data.visits.map((v) =>
+      v.number === 2 ? { ...v, minimumDate: "2027-04-01T00:00:00Z", minimumDay: "2027-04-01" } : v,
+    ),
+  });
+  for (const [locale, hourCycle] of [["en-US", "h12"], ["de-DE", "h23"]] as const) {
+    jest.mocked(listLocations).mockResolvedValue([clinicLocation({ locale, hourCycle })]);
+    const { unmount } = render(
+      <PlanVisitsBoard token="token" plan={plan} role="DENTIST" onChanged={jest.fn()} renderItems={() => null} />,
+    );
+    expect(await screen.findByText(regionalFormat({ locale, hourCycle }).civilDate("2027-04-01"))).toBeInTheDocument();
+    unmount();
+  }
 });
 it("DX-291: un ítem sin diente (cargo administrativo) no deja «diente ,» en la etiqueta", () => {
   const feePlan = {

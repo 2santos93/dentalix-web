@@ -2,6 +2,8 @@ import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
+import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e (DX-039): retención de la historia clínica.
@@ -34,9 +36,9 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-function ddmmyyyy(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-');
-  return `${d}/${m}/${y}`;
+/** El día civil con el formato de la sede de la suite (DX-354b): el mismo de la app, calculado con `Intl`, no a mano. */
+function shownDay(isoDate: string): string {
+  return regionalFormat(E2E_REGION).civilDate(isoDate.slice(0, 10));
 }
 
 /** «Archivar paciente» está en el menú «⋯» («Más acciones») de la cabecera de la ficha. */
@@ -88,7 +90,7 @@ for (const viewport of VIEWPORTS) {
       retentionUntil: string;
       clinicRetentionYears: number;
     };
-    const until = ddmmyyyy(retentionUntil);
+    const until = shownDay(retentionUntil);
 
     await page.goto(`${origin}/patients/${retained.id}`);
     const section = page.getByRole('region', {

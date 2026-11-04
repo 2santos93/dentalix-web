@@ -43,6 +43,7 @@ import { DocumentViewerDialog } from './document-viewer-dialog';
 import { ToothChipsInput } from './tooth-chips-input';
 import { VoidDocumentModal } from './void-document-modal';
 import { readyClock, useSedeClock } from '@/lib/locations/sede-clock';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 const copy = {
@@ -172,13 +173,6 @@ const FDI_OPTIONS: string[] = [
   ...[5, 6, 7, 8].flatMap((q) => [1, 2, 3, 4, 5].map((t) => `${q}${t}`)),
 ];
 
-/** Hoy (YYYY-MM-DD) en la zona del navegador: tope de la fecha clínica. */
-function todayLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 function TabSkeleton() {
   return (
     <div role="status" aria-label={copy.loading} className="flex flex-col gap-3">
@@ -240,6 +234,8 @@ export function PatientDocumentsTab({
   const sedeClock = useSedeClock(token);
   const clock = readyClock(sedeClock);
   const fmt = clock?.fmt ?? null;
+  // DX-354b (E9): el tope de la fecha clínica («hoy») es el de la sede de la pantalla, no el del navegador.
+  const today = clock ? sedeToday(clock.timeZone) : null;
   const stamp = (iso: string) => (clock ? clock.fmt.dateTime(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT);
   /** El `AbortController` de cada subida en curso, para «Cancelar» (QA D2). */
   const uploadControllers = useRef(new Map<string, AbortController>());
@@ -460,9 +456,9 @@ export function PatientDocumentsTab({
             <FormField htmlFor={field('date')} label={copy.clinicalDate} className="min-w-0">
               <DateField
                 id={field('date')}
-                max={todayLocal()}
+                max={today ?? undefined}
                 value={item.clinicalDate || null}
-                disabled={locked}
+                disabled={locked || today === null}
                 onChange={(value) => updateItem(item.key, { clinicalDate: value ?? '' })}
               />
             </FormField>

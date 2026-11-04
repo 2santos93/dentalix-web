@@ -18,11 +18,10 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { RateProviderNotice, rateProviderCopy } from '@/components/payments/rate-provider-notice';
-import { formatCivilDate } from '@/lib/format/date';
 // DX-489: con el formato de la sede, como el resto de importes del plan
 // (`moneyWithCode` nunca lanza con un código que Intl no acepta).
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { sedeMoney } from '@/lib/format/sede-number';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 
 const copy = {
   heading: 'Plan de pagos',
@@ -229,7 +228,7 @@ function PaymentPlanSummary({ plan, currency, fmt }: { plan: PaymentPlan; curren
         {money(plan.remaining)}
       </DescriptionItem>
       <DescriptionItem label={copy.nextDue} numeric>
-        {plan.nextDue ? `${formatCivilDate(plan.nextDue.dueDate)} · ${money(plan.nextDue.amount)}` : copy.none}
+        {plan.nextDue ? `${sedeCivilDate(plan.nextDue.dueDate, fmt)} · ${money(plan.nextDue.amount)}` : copy.none}
       </DescriptionItem>
       {plan.overdueCount > 0 ? (
         <DescriptionItem label={copy.overdue} numeric valueClassName="font-medium text-danger-text">
@@ -291,7 +290,7 @@ function InstallmentsTable({ plan, currency, fmt }: { plan: PaymentPlan; currenc
       cell: (r) => <span className="font-medium tabular-nums">{r.label}</span>,
       mobileCell: (r) => (r.key === 'down' ? r.label : `#${r.label}`),
     },
-    { id: 'due', header: copy.colDue, cell: (r) => <span className="tabular-nums">{formatCivilDate(r.dueDate)}</span> },
+    { id: 'due', header: copy.colDue, cell: (r) => <span className="tabular-nums">{sedeCivilDate(r.dueDate, fmt)}</span> },
     { id: 'amount', header: copy.colAmount, numeric: true, cell: (r) => money(r.amount), mobile: 'hidden' },
     {
       id: 'covered',

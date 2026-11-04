@@ -3,11 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { apiPost, createLocationViaApi, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
+import { axeInBothThemes } from './support/axe';
+import { atSede, sedeDayFromToday } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import type { RegionalSettings } from './support/regional';
 import { API_URL } from './support/urls';
 import { initialFormState, questionKeys, toSubmitBody, type QuestionnaireShape } from '../src/lib/anamnesis/anamnesis-form';
 import { regionalFormat } from '../src/lib/format/regional-format';
+import { civilDateLabel } from '../src/lib/format/date';
 
 /**
  * e2e DX-354b (W1): las listas de personal pintan cada FILA con el reloj de SU
@@ -250,4 +253,96 @@ test('«Todas las sedes»: la pestaña de recetas dice la hora de la sede de cad
   }
   await expect(page.getByText(/No se pudo saber el formato regional/)).toHaveCount(0);
   await shoot(page, 'recetas');
+});
+
+/**
+ * DX-354b (T24, E9): la semana del cuadrante es la del «hoy» de la SEDE, no la
+ * del navegador. El reloj del navegador (Tokio, 13 h por delante de Caracas) se
+ * fija a las 22:30 de ayer en la sede, que en Tokio ya es otro día: el día
+ * resaltado como «hoy» tiene que ser el de la sede.
+ */
+test('Cuadrante: el día de hoy es el de la sede aunque el navegador (Tokio) ya esté en el día siguiente', async ({ page }) => {
+  const day = sedeDayFromToday(-1);
+  await page.clock.setFixedTime(atSede(day, '22:30'));
+  await loginAs(page, origin, adminEmail, password);
+  await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
+  await page.goto(`${origin}/settings/horarios?tab=cuadrante`);
+  const label = (iso: string) => civilDateLabel(iso, { weekday: 'long', day: 'numeric', month: 'long' });
+  const sedeDay = page.getByRole('group', { name: label(day) }).first();
+  await expect(sedeDay).toBeVisible({ timeout: 15_000 });
+  await expect(sedeDay).toHaveClass(/bg-primary-subtle/);
+  // El día siguiente (el de Tokio) se ve en la semana o no, pero nunca está resaltado como hoy.
+  const next = new Date(`${day}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  const nextCell = page.getByRole('group', { name: label(next.toISOString().slice(0, 10)) }).first();
+  if (await nextCell.count()) await expect(nextCell).not.toHaveClass(/bg-primary-subtle/);
+});
+
+/**
+ * DX-354b (criterio 9): `axe` limpio en las pantallas con «—» y el aviso de la
+ * sede. `GET /locations` se intercepta y devuelve las sedes SIN `hourCycle`
+ * (la zona sigue válida): las fechas salen «—» («Sin dato» para un lector de
+ * pantalla) y cada pantalla muestra UN aviso con «Reintentar». La región
+ * `role="status"` existe antes y después de que el aviso se rellene.
+ */
+const NOTE = /No se pudo saber el formato regional o el reloj de la sede/;
+async function withoutHourCycle(page: Page): Promise<void> {
+  await page.route('**/locations', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const response = await route.fetch();
+    const sedes = (await response.json()) as Record<string, unknown>[];
+    await route.fulfill({ response, json: sedes.map((sede) => ({ ...sede, hourCycle: null })) });
+  });
+}
+async function expectNoViolations(page: Page, scope: Locator, name: string): Promise<void> {
+  const violations = await axeInBothThemes(page, scope);
+  expect.soft(violations.light, `${name} claro`).toEqual([]);
+  expect.soft(violations.dark, `${name} oscuro`).toEqual([]);
+}
+
+test('a11y: la bandeja de anamnesis con «Sin dato» y el aviso, axe limpio en claro y oscuro', async ({ page }) => {
+  await loginAs(page, origin, adminEmail, password);
+  await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
+  await page.goto(`${origin}/anamnesis-por-revisar`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Anamnesis por revisar' })).toBeVisible({ timeout: 15_000 });
+  // Con formato: la región de estado ya existe y está vacía (no hay aviso).
+  const main = page.getByRole('main');
+  await expect(main.getByRole('row').filter({ hasText: 'PacienteUS' })).toBeVisible();
+  await expect(main.getByText(NOTE)).toHaveCount(0);
+  expect(await main.getByRole('status').count()).toBeGreaterThan(0);
+
+  await withoutHourCycle(page);
+  await page.reload();
+  await expect(main.getByRole('row').filter({ hasText: 'PacienteUS' })).toBeVisible({ timeout: 15_000 });
+  await expect(main.getByText(NOTE)).toHaveCount(1);
+  await expect(main.getByText('Sin dato').first()).toBeAttached();
+  await expectNoViolations(page, main, 'bandeja de anamnesis');
+
+  // Reintentar con el formato bueno: el aviso se va y la región de estado sigue ahí.
+  await page.unroute('**/locations');
+  await main.getByRole('button', { name: 'Reintentar' }).click();
+  await expect(main.getByText(NOTE)).toHaveCount(0);
+  expect(await main.getByRole('status').count()).toBeGreaterThan(0);
+});
+
+test('a11y: la caja con el aviso de la sede, axe limpio en claro y oscuro', async ({ page }) => {
+  await loginAs(page, origin, adminEmail, password);
+  await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
+  await withoutHourCycle(page);
+  await page.goto(`${origin}/caja`);
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { level: 1, name: 'Caja' })).toBeVisible({ timeout: 15_000 });
+  await expect(main.getByText(NOTE)).toHaveCount(1);
+  await expectNoViolations(page, main, 'caja');
+});
+
+test('a11y: el panel «Hoy» con el aviso de la sede, axe limpio en claro y oscuro', async ({ page }) => {
+  await loginAs(page, origin, adminEmail, password);
+  await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
+  await withoutHourCycle(page);
+  await page.goto(`${origin}/dashboard`);
+  const today = page.getByRole('region', { name: 'Hoy' });
+  await expect(today).toBeVisible({ timeout: 15_000 });
+  await expect(today.getByText(NOTE)).toHaveCount(1);
+  await expectNoViolations(page, today, 'panel Hoy');
 });

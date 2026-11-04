@@ -30,7 +30,10 @@ import {
 } from '@/lib/odontogram/dentition';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
-import { formatCivilDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Callout } from '@/components/ui/callout';
 import { Button } from '@/components/ui/button';
@@ -122,13 +125,6 @@ interface DentitionDialogState {
   reason: DentitionReason;
 }
 
-/** Hoy (YYYY-MM-DD) en la zona del navegador, tope del selector de fecha. */
-function todayLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 /**
  * Composes `OdontogramChart` with `ToothTimeline` + `ToothRecordPanel`. Loads
  * the odontogram, the patient's dentition and the dental catalog, then:
@@ -205,6 +201,12 @@ export function OdontogramTab({
   // Solo lectura en cuanto se pide una fecha y hasta que vuelve la carta de hoy.
   const readOnly = asOf !== null || shownAsOf !== null;
   const role = getTokenRole(token);
+  // DX-354b: la fecha «a la fecha de» con el formato de la sede de la pantalla.
+  const stamp = useSedeStamp(token);
+  // DX-354b (E9): el tope de la fecha («hoy») es el de la sede de la pantalla, no el del navegador.
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
+  const today = timeZone ? sedeToday(timeZone) : null;
   const userId = getTokenUserId(token);
 
   useEffect(() => {
@@ -410,14 +412,20 @@ export function OdontogramTab({
           <div className="flex flex-wrap items-end gap-2">
             {/* Fecha médico-legal: segmentos en el formato de la sede, nunca el
                 `type=date` del navegador (mm/dd/yyyy en un Chrome en inglés). */}
-            <DatePicker
-              id="odo-as-of"
-              label={copy.asOfLabel}
-              max={todayLocal()}
-              value={asOfDraft}
-              onChange={handleAsOfChange}
-              className="w-48"
-            />
+            {zone.status === 'error' ? (
+              // Sin la zona de la sede no hay «hoy» con el que topar la fecha: el campo se sustituye por su error (escalón 2).
+              <SedeConfigError kind="timeZone" variant="field" retryId="odo-as-of" onRetry={zone.retry} className="w-48" />
+            ) : (
+              <DatePicker
+                id="odo-as-of"
+                label={copy.asOfLabel}
+                disabled={today === null}
+                max={today ?? undefined}
+                value={asOfDraft}
+                onChange={handleAsOfChange}
+                className="w-48"
+              />
+            )}
             {readOnly ? (
               <Button type="button" variant="ghost" onClick={() => setAsOf(null)}>
                 {copy.backToToday}
@@ -428,9 +436,10 @@ export function OdontogramTab({
 
         {shownAsOf ? (
           <Callout tone="warning" role="status">
-            {copy.asOfNotice(formatCivilDate(`${shownAsOf}T00:00:00.000Z`))}
+            {copy.asOfNotice(stamp.civilDate(shownAsOf))}
           </Callout>
         ) : null}
+        <SedeStampNote stamp={stamp} />
 
         {/* The chart and its key read as one object: the field, then its
             caption. The refresh notice rides on that same line so nothing

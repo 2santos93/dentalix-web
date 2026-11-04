@@ -116,12 +116,11 @@ export function PostOpPrintView({
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {data ? (
           <>
-            {format === null ? (
-              <DocumentFormatNote
-                onRetry={() => setReloadKey((k) => k + 1)}
-                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
-              />
-            ) : null}
+            <DocumentFormatNote
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              active={format === null}
+            />
             <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
               <PostOpDocument delivery={data} format={format} />
             </div>

@@ -5,6 +5,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { listAppointments, type ListAppointment } from '@/lib/appointments/appointments-api';
 import { medicalAlertLines, ANAMNESIS_EXPIRED_LABEL, ANAMNESIS_MISSING_LABEL } from '@/lib/clinical/medical-alerts';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { NO_SEDE_FORMAT, sedeNumber } from '@/lib/format/sede-number';
 import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { wallDayRange } from '@/lib/time/wall-clock';
@@ -120,7 +121,8 @@ export function TodaySection({
   // la cabecera, las cuentas y el «hoy» siguen siendo los de la sede de la pantalla. Un solo aviso.
   const stamp = useSedeStamp(token, load.status === 'ready' ? load.data.map((a) => a.locationId) : []);
   const heading = mine ? copy.headingMine : copy.heading;
-  const dayLabel = fmt ? capitalize(fmt.civilLongDate(today, { year: false })) : today;
+  // Sin formato de la sede, «—» y el aviso: nunca el día ISO crudo (E4).
+  const dayLabel = fmt ? capitalize(fmt.civilLongDate(today, { year: false })) : NO_SEDE_FORMAT;
 
   return (
     <section aria-labelledby="inicio-today-title" className="flex flex-col gap-3">
@@ -171,7 +173,7 @@ function TodayBody({
   staffNames: Record<string, string>;
 }) {
   const counts = countToday(appointments);
-  const n = (value: number) => (fmt ? fmt.number(value) : String(value));
+  const n = (value: number) => sedeNumber(value, fmt);
   if (counts.total === 0 && counts.cancelled === 0) {
     return (
       <EmptyState

@@ -312,7 +312,7 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
  * DX-354b (W3), criterio 4: «Hoy» en «Todas las sedes» pinta la hora de cada
  * cita con el reloj de SU sede, y no con el de la pantalla ni con el del
  * navegador. La suite de arriba no lo distingue (el navegador y la sede están
- * en la misma zona); aquí el navegador está en `Asia/Tokyo` y la clínica tiene
+ * en la misma zona); aquí el navegador está en otra zona (`BROWSER_TZ`, con otro desfase) y la clínica tiene
  * dos sedes:
  * - la principal (la de la pantalla en «Todas las sedes»): la zona de la suite
  *   (`SEDE_TODAY_TZ`, con al menos 3 h hasta su medianoche), `es-VE`, 12 h;
@@ -322,8 +322,26 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
  * `regionalFormat` con la zona y el reloj de cada sede, sobre el instante que
  * devolvió la API. Capturas a 390 y 1440 px (claro y oscuro) en `E2E_QA_DIR`.
  */
+/** Desfase de una zona respecto de UTC, en minutos, en este instante. */
+function offsetMinutes(zone: string, at = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' }).formatToParts(at);
+  const name = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+  const m = /GMT([+-])(\d{2}):?(\d{2})?/.exec(name);
+  return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] ?? 0)) : 0;
+}
+
+/**
+ * El navegador va en una zona con OTRO desfase que la sede principal y que
+ * Berlín: de madrugada en Caracas la zona de hoy de la suite puede ser UTC+9
+ * (support/clock.ts), y con el navegador en Tokio las dos horas coinciden y la
+ * prueba no distingue el reloj de la sede del del navegador.
+ */
+const BROWSER_TZ = ['Asia/Tokyo', 'Pacific/Honolulu', 'Asia/Kolkata'].find(
+  (zone) => offsetMinutes(zone) !== offsetMinutes(SEDE_TODAY_TZ) && offsetMinutes(zone) !== offsetMinutes('Europe/Berlin'),
+)!;
+
 test.describe('Inicio: «Todas las sedes» con el navegador en otra zona (DX-354b)', () => {
-  test.use({ timezoneId: 'Asia/Tokyo' });
+  test.use({ timezoneId: BROWSER_TZ });
 
   const MAIN: RegionalSettings = { ...E2E_TODAY_REGION, hourCycle: 'h12' };
   const DE: { name: string } & RegionalSettings = {
@@ -427,12 +445,13 @@ test.describe('Inicio: «Todas las sedes» con el navegador en otra zona (DX-354
     // Cada reloj es el de su sede: 12 h con «a. m./p. m.» en la principal, 24 h «HH:MM» en Berlín.
     expect(times[0]).toMatch(/^\d{1,2}:\d{2} [ap]\. m\.$/);
     expect(times[1]).toMatch(/^\d{2}:\d{2}$/);
-    // Ni el reloj del navegador (Tokio) ni el aviso de formato.
-    const tokyo = regionalFormat({ locale: MAIN.locale, hourCycle: MAIN.hourCycle }).time(
+    // Ni el reloj del navegador (otra zona, otro desfase) ni el aviso de formato.
+    const browserTime = regionalFormat({ locale: MAIN.locale, hourCycle: MAIN.hourCycle }).time(
       new Date(booked[0].start),
-      'Asia/Tokyo',
+      BROWSER_TZ,
     );
-    await expect(today.getByText(tokyo, { exact: true })).toHaveCount(0);
+    expect(browserTime).not.toBe(times[0]);
+    await expect(today.getByText(browserTime, { exact: true })).toHaveCount(0);
     await expect(page.getByText(/No se pudo saber el formato regional/)).toHaveCount(0);
 
     for (const viewport of [

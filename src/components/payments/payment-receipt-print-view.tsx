@@ -142,13 +142,12 @@ export function PaymentReceiptPrintView({
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {receipt ? (
           <>
-            {docFormat === null ? (
-              <DocumentFormatNote
-                locationId={receipt.snapshot.location.id}
-                onRetry={() => setReloadKey((k) => k + 1)}
-                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
-              />
-            ) : null}
+            <DocumentFormatNote
+              locationId={receipt.snapshot.location.id}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              active={docFormat === null}
+            />
             <div
               className={cn(
                 'mx-auto sm:border sm:border-border print:border-0',

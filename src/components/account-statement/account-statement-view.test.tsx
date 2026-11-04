@@ -15,6 +15,9 @@ import {
   openingBalanceStatementFixture,
 } from '@/lib/test/account-statement';
 import { tokenForRole } from '@/lib/test/data-consents';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { regionalFormat } from '@/lib/format/regional-format';
 
 jest.mock('../../lib/payments/payments-api', () => ({
   voidPayment: jest.fn(),
@@ -29,8 +32,10 @@ jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
   createPaymentPlan: jest.fn(),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({
+  // El fixture trae abonos de dos sedes (loc-1, loc-2): cada fila usa la suya (DX-354b, E1).
   listLocations: jest.fn().mockResolvedValue([
     jest.requireActual('../../lib/test/locations').clinicLocation(),
+    jest.requireActual('../../lib/test/locations').clinicLocation({ id: 'loc-2', name: 'Sede Principal' }),
   ]),
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
@@ -65,6 +70,10 @@ beforeEach(() => {
   mockedBillable.mockReset();
   mockedCreatePlan.mockReset();
   mockedPlanBalance.mockReset();
+  (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([
+    clinicLocation(),
+    clinicLocation({ id: 'loc-2', name: 'Sede Principal' }),
+  ]);
 });
 
 
@@ -118,6 +127,38 @@ it('lista movimientos con método y sede, marcando los anulados', async () => {
   expect(rows[1]).not.toHaveTextContent(/anulado/i);
   expect(rows[1]).toHaveTextContent('Plan del');
   expect(rows[2]).toHaveTextContent(/sin método/i);
+});
+
+it('DX-354b: el día de cada abono sale con el formato de SU sede y el de las cuotas, con el de la pantalla', async () => {
+  const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+  const screenSede = clinicLocation({ id: 'loc-1', name: 'Sede Norte', locale: 'de-DE', hourCycle: 'h23' });
+  const otherSede = clinicLocation({ id: 'loc-2', name: 'Sede Principal', locale: 'en-US', hourCycle: 'h12' });
+  mockedLocations.mockResolvedValue([screenSede, otherSede]);
+  mockedGet.mockResolvedValue(accountStatementFixture());
+  render(<AccountStatementView token="tok" patientId="pat-1" />);
+
+  const de = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
+  const us = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+  const table = await screen.findByRole('table', { name: /movimientos/i });
+  const rows = within(table).getAllByRole('row').slice(1);
+  expect(rows[0]).toHaveTextContent(de.civilDate('2026-09-20'));
+  expect(rows[1]).toHaveTextContent(us.civilDate('2026-09-10'));
+  expect(rows[1]).not.toHaveTextContent(de.civilDate('2026-09-10'));
+  const ves = screen.getByRole('region', { name: /resumen en VES/i });
+  expect(within(ves).getByText(/próxima cuota/i).parentElement).toHaveTextContent(de.civilDate('2026-11-10'));
+});
+
+it('DX-354b (M1): sin formato de la sede las filas de abonos se anuncian sin «—»', async () => {
+  (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([
+    clinicLocation({ locale: null, hourCycle: null }),
+    clinicLocation({ id: 'loc-2', locale: null, hourCycle: null }),
+  ]);
+  mockedGet.mockResolvedValue(accountStatementFixture());
+  render(<AccountStatementView token="tok" patientId="pat-1" />);
+  const table = await screen.findByRole('table', { name: /movimientos/i });
+  await screen.findAllByText(/No se pudo saber el formato regional/);
+  const buttons = within(table).getAllByRole('button', { name: /^acciones de abono/i });
+  for (const b of buttons) expect(b.getAttribute('aria-label')).not.toContain('—');
 });
 
 it('DX-395: la vista imprimible también lleva «Pago móvil · Ref. ABC 123»', async () => {

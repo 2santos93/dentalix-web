@@ -2,6 +2,7 @@ import { render as rtlRender, screen, waitFor, within } from '@testing-library/r
 import type { ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import { DashboardView } from './dashboard-view';
+import { TodaySection } from './today-section';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { listStaff } from '@/lib/appointments/staff-api';
@@ -585,6 +586,32 @@ describe('Inicio · Hoy: la hora de cada fila con el reloj de SU sede (DX-354b, 
     await within(today).findByRole('list', { name: 'Citas de hoy' });
     await waitFor(() => expect(within(rowOf('Carolina Ruiz')).getByText(timeIn('caracas', at))).toBeInTheDocument());
     expect(within(today).queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Inicio · Hoy sin formato de la sede (DX-354b, T26-ter)', () => {
+  it('el día y las cuentas salen «—» con el aviso, no como el día ISO crudo ni como un número sin formato', async () => {
+    m.listLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', locale: null, hourCycle: null })]);
+    m.listAppointments.mockResolvedValue([
+      appointment({ id: 'c', patientId: 'p-c', patientFirstName: 'Carolina', patientLastName: 'Ruiz', start: '2026-08-15T13:00:00.000Z', locationId: 'loc-1' }),
+    ]);
+    render(
+      <TodaySection
+        token={tokenForRole('ADMIN')}
+        role="ADMIN"
+        userId={null}
+        timeZone="America/Caracas"
+        today="2026-08-15"
+        scopeLabel="todas las sedes"
+        scopeKey="all"
+        fmt={null}
+        staffNames={{}}
+      />,
+    );
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    expect(await within(today).findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    expect(today).not.toHaveTextContent('2026-08-15');
+    expect(within(today).getAllByText('—').length).toBeGreaterThan(0);
   });
 });
 

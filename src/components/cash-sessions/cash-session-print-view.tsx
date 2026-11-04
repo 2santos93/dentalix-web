@@ -112,13 +112,12 @@ export function CashSessionPrintView({ token, sessionId, allowed = true }: CashS
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {session ? (
           <>
-            {docFormat === null ? (
-              <DocumentFormatNote
-                locationId={session.location.id}
-                onRetry={() => setReloadKey((k) => k + 1)}
-                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
-              />
-            ) : null}
+            <DocumentFormatNote
+              locationId={session.location.id}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              active={docFormat === null}
+            />
             <div className="mx-auto max-w-[210mm] sm:rounded-xl sm:border sm:border-border print:border-0">
               <CashSessionReport session={session} linkSessions={false} />
             </div>

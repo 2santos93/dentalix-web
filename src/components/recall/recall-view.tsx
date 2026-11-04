@@ -6,8 +6,8 @@ import { CalendarPlus, Lock, MessageCircle, NotebookPen, Phone, PhoneCall } from
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { fetchClinicName } from '@/lib/clinic-branding';
-import { formatCivilDate } from '@/lib/format/date';
-import { useSedeClock } from '@/lib/locations/sede-clock';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import {
   CHANNEL_LABELS,
@@ -15,7 +15,6 @@ import {
   KIND_ORDER,
   OUTCOME_LABELS,
   RECALL_SOON_DAYS,
-  contactMoment,
   intervalLabel,
   overdueLabel,
   recallWhatsAppHref,
@@ -123,13 +122,16 @@ function ContactButtons({ item, clinicName }: { item: RecallDueItem; clinicName:
 export function RecallView({ token }: { token: string }) {
   const router = useRouter();
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
-  const sede = useSedeClock(token);
-  const clock = sede.status === 'ready' ? sede.clock : null;
   const [kind, setKind] = useState<RecallKind | 'ALL'>('ALL');
   const [soon, setSoon] = useState(false);
   const [sort, setSort] = useState<RecallDueSort>('MOST_OVERDUE');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<RecallDuePage | null>(null);
+  // DX-354b: cada fila con el formato y el reloj de SU sede (`locationId`); un solo aviso por pantalla.
+  const stamp = useSedeStamp(
+    token,
+    data?.items.map((r) => r.locationId),
+  );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
@@ -257,7 +259,7 @@ export function RecallView({ token }: { token: string }) {
       cell: (r) => (
         <span className="block whitespace-nowrap tabular-nums">
           <span className="block">{overdueLabel(r.daysOverdue)}</span>
-          <span className="block text-xs text-muted">{formatCivilDate(r.dueAt)}</span>
+          <span className="block text-xs text-muted">{stamp.civilDate(r.dueAt, r.locationId)}</span>
         </span>
       ),
       mobileCell: (r) => overdueLabel(r.daysOverdue),
@@ -272,7 +274,7 @@ export function RecallView({ token }: { token: string }) {
             <span className="block">
               {CHANNEL_LABELS[r.lastContact.channel]} · {OUTCOME_LABELS[r.lastContact.outcome]}
             </span>
-            <span className="block text-xs text-muted tabular-nums">{contactMoment(r.lastContact.createdAt, clock)}</span>
+            <span className="block text-xs text-muted tabular-nums">{stamp.dateTime(r.lastContact.createdAt, r.locationId)}</span>
           </span>
         ) : (
           <span className="text-muted">{copy.noContact}</span>
@@ -343,6 +345,7 @@ export function RecallView({ token }: { token: string }) {
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
+        <SedeStampNote stamp={stamp} />
 
         {forbidden ? (
           <EmptyState role="status" icon={<Lock aria-hidden />} title={copy.forbiddenTitle} description={copy.forbiddenHint} />

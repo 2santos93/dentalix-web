@@ -121,13 +121,12 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {card ? (
           <div className="mx-auto flex w-full max-w-[180mm] flex-col gap-3 print:max-w-none">
-            {format === null ? (
-              <DocumentFormatNote
-                locationId={card.locations.length === 1 ? card.locations[0].id : undefined}
-                onRetry={() => setReloadKey((k) => k + 1)}
-                className="mx-4 sm:mx-0"
-              />
-            ) : null}
+            <DocumentFormatNote
+              locationId={card.locations.length === 1 ? card.locations[0].id : undefined}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-4 sm:mx-0"
+              active={format === null}
+            />
             <div className="shadow-sm print:shadow-none">
               <ImplantCardDocument card={card} format={format} />
             </div>

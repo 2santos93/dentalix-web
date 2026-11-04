@@ -115,6 +115,55 @@ describe('NewEvolutionModal (DX-170)', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  describe('DX-354b (E9): «hoy» es el de la sede, no el del navegador', () => {
+    // 02:30Z del 5 de noviembre: en Caracas (UTC-4) aún es el 4; el navegador (UTC) y Tokio ya están en el 5.
+    beforeEach(() => {
+      jest.useFakeTimers({
+        now: new Date('2026-11-05T02:30:00Z'),
+        doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+      });
+    });
+    afterEach(() => jest.useRealTimers());
+
+    async function typeEntryDate(user: ReturnType<typeof userEvent.setup>, ddmmyyyy: string) {
+      const group = await screen.findByRole('group', { name: /fecha de atención/i });
+      await user.click(within(group).getAllByRole('spinbutton')[0]);
+      await user.keyboard(ddmmyyyy);
+    }
+
+    it('rechaza el 5 de noviembre, que en la sede todavía es futuro', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await pickResin(user);
+      await typeEntryDate(user, '05112026');
+      await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+      expect(await screen.findByText('La fecha de atención no puede ser futura.')).toBeInTheDocument();
+      expect(mockedCreate).not.toHaveBeenCalled();
+    });
+
+    it('acepta el 4 de noviembre, el día de la sede', async () => {
+      const user = userEvent.setup();
+      mockedCreate.mockResolvedValue(created);
+      renderModal();
+      await pickResin(user);
+      await typeEntryDate(user, '04112026');
+      await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+      await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+      expect(mockedCreate.mock.calls[0][2]).toMatchObject({ entryDate: '2026-11-04T00:00:00.000Z' });
+    });
+
+    it('sin la zona de la sede el campo de fecha se sustituye por su error y no se puede guardar', async () => {
+      const { listLocations } = jest.requireMock('../../lib/locations/locations-api') as { listLocations: jest.Mock };
+      listLocations.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+      listLocations.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+      listLocations.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+      renderModal();
+      expect(await screen.findByText('Sin formato de sede')).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: /fecha de atención/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /guardar evolución/i })).toBeDisabled();
+    });
+  });
+
   it('«Omitir» deja el hueco «[sin respuesta]» aunque haya valor por defecto', async () => {
     const user = userEvent.setup();
     renderModal();

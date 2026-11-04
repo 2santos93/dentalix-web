@@ -1,10 +1,12 @@
 'use client';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canEditProviderSchedules } from '@/lib/locations/provider-schedule-api';
-import { localDateString } from '@/lib/locations/provider-schedule';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsPage } from '@/components/settings/settings-page';
 import { BusinessHoursForm } from '@/components/locations/business-hours-form';
 import { ProviderSchedulesPanel } from '@/components/locations/provider-schedules-panel';
@@ -51,7 +53,9 @@ function SchedulesRoute() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const tab = resolveScheduleTab(searchParams.get('tab'));
-  const [today] = useState(() => localDateString(new Date()));
+  // DX-354b (E9): el «hoy» del cuadrante es el de la sede de la pantalla, no el del navegador.
+  const zone = useSedeTimeZone(accessToken ?? '');
+  const timeZone = readyTimeZone(zone);
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -85,7 +89,15 @@ function SchedulesRoute() {
         <div role="tabpanel" id={schedulePanelId(tab)} aria-labelledby={scheduleTabId(tab)}>
           {tab === 'sede' ? <BusinessHoursForm token={accessToken} /> : null}
           {tab === 'profesionales' ? <ProviderSchedulesPanel token={accessToken} canEdit={canEdit} /> : null}
-          {tab === 'cuadrante' ? <ScheduleRoster token={accessToken} today={today} /> : null}
+          {tab === 'cuadrante' ? (
+            zone.status === 'error' ? (
+              <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
+            ) : timeZone ? (
+              <ScheduleRoster token={accessToken} today={sedeToday(timeZone)} />
+            ) : (
+              <Skeleton className="h-64 w-full" />
+            )
+          ) : null}
         </div>
       </div>
     </SettingsPage>

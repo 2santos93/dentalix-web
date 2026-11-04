@@ -175,12 +175,11 @@ function ReceiptBody({
 
   return (
     <>
-      {documentFormat(receipt.regional) === null ? (
-        <DocumentFormatNote
-          locationId={receipt.snapshot.location.id}
-          onRetry={() => setReloadKey((k) => k + 1)}
-        />
-      ) : null}
+      <DocumentFormatNote
+        locationId={receipt.snapshot.location.id}
+        onRetry={() => setReloadKey((k) => k + 1)}
+        active={documentFormat(receipt.regional) === null}
+      />
       <div className="overflow-hidden rounded-lg border border-border">
         <PaymentReceiptDocument receipt={receipt} />
       </div>

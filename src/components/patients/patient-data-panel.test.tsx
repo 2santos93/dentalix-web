@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { PatientDataPanel } from './patient-data-panel';
+import { testStamp } from '@/lib/test/stamp';
+import { clinicLocation } from '@/lib/test/locations';
 import type { Patient } from '@/lib/patients/patients-api';
 
 function patient(overrides: Partial<Patient> = {}): Patient {
@@ -71,7 +73,7 @@ describe('PatientDataPanel', () => {
   it('muestra identificación con la edad calculada', () => {
     // Edad fija: el test no puede depender del día en que corre.
     jest.useFakeTimers().setSystemTime(new Date('2026-08-01T12:00:00.000Z'));
-    render(<PatientDataPanel patient={patient()} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={patient()} />);
 
     expect(screen.getByText('Documento nacional')).toBeInTheDocument();
     expect(screen.getByText('1002')).toBeInTheDocument();
@@ -81,6 +83,7 @@ describe('PatientDataPanel', () => {
   it("shows the clinic's name for the type, or the generic one, never the code", () => {
     const { rerender } = render(
       <PatientDataPanel
+        stamp={testStamp()}
         patient={patient({ docType: 'RESIDENCE_PERMIT', docTypeLabel: 'Documento A', docTypeName: 'Documento A' })}
         docTypeNames={{ RESIDENCE_PERMIT: 'ID local' }}
       />,
@@ -89,28 +92,28 @@ describe('PatientDataPanel', () => {
     expect(screen.getByText('ID local')).toBeInTheDocument();
     expect(screen.queryByText('RESIDENCE_PERMIT')).not.toBeInTheDocument();
 
-    rerender(<PatientDataPanel patient={patient({ docType: 'TAX_ID' })} />);
+    rerender(<PatientDataPanel stamp={testStamp()} patient={patient({ docType: 'TAX_ID' })} />);
     expect(screen.getByText('Identificación fiscal')).toBeInTheDocument();
     expect(screen.queryByText('TAX_ID')).not.toBeInTheDocument();
   });
 
   it('shows the document name only when there is one', () => {
     const { rerender } = render(
-      <PatientDataPanel patient={patient({ docTypeLabel: 'Documento A', docTypeName: 'Documento A' })} />,
+      <PatientDataPanel stamp={testStamp()} patient={patient({ docTypeLabel: 'Documento A', docTypeName: 'Documento A' })} />,
     );
     const term = screen.getByText('Nombre del documento');
     expect(term.tagName).toBe('DT');
     expect(term.nextElementSibling).toHaveTextContent('Documento A');
     expect(screen.getByText('Documento nacional')).toBeInTheDocument();
 
-    rerender(<PatientDataPanel patient={patient({ docTypeLabel: null })} />);
+    rerender(<PatientDataPanel stamp={testStamp()} patient={patient({ docTypeLabel: null })} />);
     expect(screen.queryByText('Nombre del documento')).not.toBeInTheDocument();
   });
 
   it('formatea la fecha de nacimiento con día y mes en dos dígitos', () => {
     // `toLocaleDateString('es')` (la implementación anterior) no rellena con
     // cero: un 5 de enero se mostraba "5/1/1992" en vez de "05/01/1992".
-    render(<PatientDataPanel patient={patient({ birthDate: '1992-01-05T00:00:00.000Z' })} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={patient({ birthDate: '1992-01-05T00:00:00.000Z' })} />);
     expect(screen.getByText(/05\/01\/1992/)).toBeInTheDocument();
     expect(screen.queryByText(/(^|[^0])5\/1\/1992/)).not.toBeInTheDocument();
   });
@@ -122,13 +125,13 @@ describe('PatientDataPanel', () => {
     // implementación anterior leía `birthDate` con getters locales y perdía
     // el desfase de un día, dando 26.
     jest.useFakeTimers().setSystemTime(new Date('2026-08-01T04:00:00.000Z'));
-    render(<PatientDataPanel patient={patient({ birthDate: '2000-08-01T00:00:00.000Z' })} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={patient({ birthDate: '2000-08-01T00:00:00.000Z' })} />);
     expect(screen.getByText(/25 años/)).toBeInTheDocument();
     expect(screen.queryByText(/26 años/)).not.toBeInTheDocument();
   });
 
   it('oculta por completo un bloque sin datos', () => {
-    render(<PatientDataPanel patient={patient()} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={patient()} />);
     // Sin contacto de emergencia ni tutor cargados.
     expect(screen.queryByText(/^Emergencia$/)).not.toBeInTheDocument();
   });
@@ -136,6 +139,7 @@ describe('PatientDataPanel', () => {
   it('muestra el bloque de emergencia cuando hay datos', () => {
     render(
       <PatientDataPanel
+        stamp={testStamp()}
         patient={patient({ emergencyContactName: 'Ana Pérez', emergencyContactRelationship: 'Madre' })}
        
       />,
@@ -149,6 +153,7 @@ describe('PatientDataPanel', () => {
     // `alwaysShown`), así que necesita otro dato administrativo presente.
     render(
       <PatientDataPanel
+        stamp={testStamp()}
         patient={patient({
           occupation: 'Docente',
           dataConsentAccepted: true,
@@ -160,9 +165,31 @@ describe('PatientDataPanel', () => {
     expect(screen.getByText(/consentimiento/i)).toBeInTheDocument();
   });
 
+  it('DX-354b: nacimiento y consentimiento con el formato de la sede (es-VE, en-US, de-DE); el consentimiento en su zona', () => {
+    const sede = (locale: string, timeZone: string) => testStamp([clinicLocation({ locale, timeZone, hourCycle: 'h23' })]);
+    const p = patient({
+      birthDate: '1992-03-12T00:00:00.000Z',
+      occupation: 'Docente',
+      dataConsentAccepted: true,
+      // 02:30Z del 13: en Caracas aún es el 12, en Berlín ya es el 13.
+      dataConsentAt: '2026-03-13T02:30:00.000Z',
+    });
+    const { unmount } = render(<PatientDataPanel stamp={sede('es-VE', 'America/Caracas')} patient={p} />);
+    expect(screen.getByText(/^12\/03\/1992 · /)).toBeInTheDocument();
+    expect(screen.getByText(/Aceptado · 12\/03\/2026/)).toBeInTheDocument();
+    unmount();
+    const de = render(<PatientDataPanel stamp={sede('de-DE', 'Europe/Berlin')} patient={p} />);
+    expect(screen.getByText(/^12\.03\.1992 · /)).toBeInTheDocument();
+    expect(screen.getByText(/Aceptado · 13\.03\.2026/)).toBeInTheDocument();
+    de.unmount();
+    render(<PatientDataPanel stamp={sede('en-US', 'America/Caracas')} patient={p} />);
+    expect(screen.getByText(/^03\/12\/1992 · /)).toBeInTheDocument();
+  });
+
   it('muestra la versión de la política cuando el consentimiento la trae', () => {
     render(
       <PatientDataPanel
+        stamp={testStamp()}
         patient={patient({
           occupation: 'Docente',
           dataConsentAccepted: true,
@@ -178,7 +205,7 @@ describe('PatientDataPanel', () => {
   it('oculta el bloque administrativo aunque el consentimiento esté pendiente', () => {
     // El consentimiento siempre produce un valor ("Pendiente" o "Aceptado ·
     // fecha"), así que sin marcarlo `alwaysShown` el bloque nunca se ocultaría.
-    render(<PatientDataPanel patient={patient()} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={patient()} />);
     expect(screen.queryByText(/^Administrativo$/)).not.toBeInTheDocument();
   });
 
@@ -186,7 +213,7 @@ describe('PatientDataPanel', () => {
     // Era un botón secundario alineado a la derecha sobre el primer bloque,
     // dentro de una Card sin título. La acción es de la ficha entera, no de
     // esta pestaña, y su contrato está en `patient-record-header.test.tsx`.
-    render(<PatientDataPanel patient={patient()} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={patient()} />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
@@ -203,7 +230,7 @@ describe('PatientDataPanel · sin aseguradora en texto libre (DX-322)', () => {
     // DX-322: el texto libre de aseguradora sale del contrato; aunque una
     // respuesta antigua lo traiga, la ficha no lo pinta.
     const stale = { ...patient({ occupation: 'Docente', coverage: coverage('NONE') }), legacyInsurerName: 'Sanavida' };
-    render(<PatientDataPanel patient={stale} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={stale} />);
     expect(screen.queryByText('Aseguradora (dato anterior)')).not.toBeInTheDocument();
     expect(screen.queryByText('Aseguradora / ' + 'EPS')).not.toBeInTheDocument();
     expect(screen.queryByText('Sanavida')).not.toBeInTheDocument();
@@ -212,14 +239,14 @@ describe('PatientDataPanel · sin aseguradora en texto libre (DX-322)', () => {
 
 describe('paciente importado (DX-107)', () => {
   it('marca el origen y la autorización de datos como pendiente, aunque no tenga datos administrativos', () => {
-    render(<PatientDataPanel patient={patient({ importBatchId: 'batch-1' })} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={patient({ importBatchId: 'batch-1' })} />);
     expect(screen.getByText('Origen de la ficha')).toBeInTheDocument();
     expect(screen.getByText('Importado desde archivo')).toBeInTheDocument();
     expect(screen.getByText(/Pendiente · importado sin autorización/)).toBeInTheDocument();
   });
 
   it('un alta a mano no lleva la marca de importado', () => {
-    render(<PatientDataPanel patient={patient({ importBatchId: null, occupation: 'Docente' })} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={patient({ importBatchId: null, occupation: 'Docente' })} />);
     expect(screen.queryByText('Importado desde archivo')).not.toBeInTheDocument();
     expect(screen.getByText('Pendiente')).toBeInTheDocument();
   });
@@ -228,11 +255,11 @@ describe('paciente importado (DX-107)', () => {
 describe('PatientDataPanel · teléfono (DX-387)', () => {
   it('shows the international phone of the API, or the stored one when it has none', () => {
     const { rerender } = render(
-      <PatientDataPanel patient={patient({ phone: '0412-1234567', phoneInternational: '+58 412 1234567' })} />,
+      <PatientDataPanel stamp={testStamp()} patient={patient({ phone: '0412-1234567', phoneInternational: '+58 412 1234567' })} />,
     );
     expect(screen.getByText('+58 412 1234567')).toBeInTheDocument();
     expect(screen.queryByText('0412-1234567')).not.toBeInTheDocument();
-    rerender(<PatientDataPanel patient={patient({ phone: 'oficina 2', phoneInternational: null })} />);
+    rerender(<PatientDataPanel stamp={testStamp()} patient={patient({ phone: 'oficina 2', phoneInternational: null })} />);
     expect(screen.getByText('oficina 2')).toBeInTheDocument();
   });
 });
@@ -243,7 +270,7 @@ describe('PatientDataPanel · maquetación', () => {
     // de la rejilla mide lo que el correo entero y `<main>` se desplaza en
     // horizontal en móvil (QA G2G3, DX-328).
     const email = 'nombre.apellido.consultorio@una-empresa-de-nombre-largo.example.com';
-    render(<PatientDataPanel patient={patient({ email })} />);
+    render(<PatientDataPanel stamp={testStamp()} patient={patient({ email })} />);
     const value = screen.getByText(email);
     expect(value).toHaveClass('break-words');
     expect(value.parentElement).toHaveClass('min-w-0');

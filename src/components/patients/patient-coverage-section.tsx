@@ -250,7 +250,7 @@ export function PatientCoverageSection({
                     {copy.policyHolder(c.policyHolderName)}
                   </span>
                 ) : null}
-                <span className="text-sm text-muted tabular-nums">{coverageValidityLabel(c)}</span>
+                <span className="text-sm text-muted tabular-nums">{coverageValidityLabel(c, stamp)}</span>
                 {c.isPrimary || statusBadge || verification ? (
                   <span className="flex flex-wrap gap-1.5">
                     {c.isPrimary ? <Badge variant="success">{copy.primary}</Badge> : null}

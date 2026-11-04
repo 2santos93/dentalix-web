@@ -1,7 +1,13 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ToothTimeline } from './tooth-timeline';
 import { getToothTimeline, voidToothRecord } from '@/lib/odontogram/odontogram-api';
+import { listLocations } from '@/lib/locations/locations-api';
+import { dateIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { clinicLocation } from '@/lib/test/locations';
+
+// DX-354b: la fecha de cada registro y el día de la carta son los de la sede de la pantalla (Caracas, es-VE, por defecto).
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -46,6 +52,7 @@ describe('ToothTimeline', () => {
   beforeEach(() => {
     mockedGetTimeline.mockReset();
     mockedVoid.mockReset();
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation()]);
   });
 
   it('shows a loading state while fetching', () => {
@@ -170,6 +177,7 @@ describe('ToothTimeline', () => {
     render(<ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} />);
 
     const items = await screen.findAllByRole('listitem');
+    await waitFor(() => expect(items[0].querySelector('time')).not.toHaveTextContent('—'));
 
     // COMPLETED -> success tint; PLANNED -> warning tint (status only, never decoration).
     expect(within(items[0]).getByText('Completado').className).toContain('text-success-text');
@@ -208,6 +216,7 @@ describe('ToothTimeline — origen y anulación (DX-120)', () => {
   beforeEach(() => {
     mockedGetTimeline.mockReset();
     mockedVoid.mockReset();
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation()]);
   });
 
   it('muestra el anulado tachado, con motivo y autor, y el origen de lo que no es de la clínica', async () => {
@@ -219,7 +228,9 @@ describe('ToothTimeline — origen y anulación (DX-120)', () => {
     expect(voidedItem).toHaveAttribute('data-voided', 'true');
     expect(within(voidedItem).getByText('Anulado')).toBeInTheDocument();
     expect(within(voidedItem).getByText('Caries')).toHaveClass('line-through');
-    expect(voidedItem).toHaveTextContent(/Anulado por Dr\. Admin el \d{2}\/\d{2}\/2026/);
+    await waitFor(() =>
+      expect(voidedItem).toHaveTextContent(`Anulado por Dr. Admin el ${dateIn('caracas', '2026-01-10T15:00:00.000Z')}`),
+    );
     expect(voidedItem).toHaveTextContent('Registrado en el diente equivocado');
     expect(within(items[0]).getByText('Ya presente')).toBeInTheDocument();
   });
@@ -294,5 +305,31 @@ describe('ToothTimeline — origen y anulación (DX-120)', () => {
     // `newer` es de febrero: no existía. La anulación (10 de enero) tampoco.
     expect(items).toHaveLength(1);
     expect(items[0]).not.toHaveAttribute('data-voided');
+  });
+
+  it('DX-354b: la fecha de cada registro sale con el formato y la zona de la sede (es-VE, de-DE, en-US)', async () => {
+    mockedGetTimeline.mockResolvedValue([newer]);
+    const instant = '2026-02-01T02:30:00.000Z';
+    mockedGetTimeline.mockResolvedValue([{ ...newer, recordedAt: instant }]);
+    for (const key of ['caracas', 'berlin', 'miami'] as const) {
+      (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([STAMP_SEDES[key]]);
+      const { unmount } = render(<ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} />);
+      const expected = STAMP_FORMATS[key].date(new Date(instant), STAMP_SEDES[key].timeZone!);
+      await waitFor(() => expect(screen.getByRole('listitem').querySelector('time')).toHaveTextContent(expected));
+      unmount();
+    }
+    // El 1 de febrero a las 02:30Z: en Caracas y Miami aún es el 31 de enero; en Berlín, el 1.
+    expect(dateIn('caracas', instant)).not.toBe(dateIn('berlin', instant));
+  });
+
+  it('DX-354b (E9): el día de la carta es el de la sede, no el del navegador', async () => {
+    // 02:30Z del 6 de enero: en UTC (el navegador de la suite) ya es el 6; en Caracas todavía es el 5.
+    const lateOnTheFifth = { ...newer, id: 'rec-late', recordedAt: '2026-01-06T02:30:00.000Z' };
+    mockedGetTimeline.mockResolvedValue([lateOnTheFifth]);
+    render(
+      <ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} asOf="2026-01-05" />,
+    );
+    // Con la zona de la sede (Caracas) el registro es del 5: cuenta en la carta al 5.
+    expect(await screen.findAllByRole('listitem')).toHaveLength(1);
   });
 });
