@@ -146,7 +146,11 @@ for (const viewport of [
     await reference.fill(`PM ${tag}`);
     await dialog.getByRole('button', { name: 'Registrar abono' }).click();
     await expect(dialog).toBeHidden({ timeout: 15_000 });
-    await expect(page.getByText(/Cobro registrado: .* en 2 formas de pago/)).toBeVisible();
+    // DX-414: el aviso del cobro (con su recibo) queda a la vista —en pantalla,
+    // no solo en el DOM— a 390 y a 1440 px; lleva el número del recibo único.
+    const notice = page.getByText(/Cobro registrado: .* en 2 formas de pago .* recibo [A-Z0-9]+-\d+/);
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeInViewport();
 
     // Dos abonos con el MISMO recibo, y el recibo lleva las dos formas de pago.
     const list = await request.get(`${API_URL}/treatment-plans/${seeded.planId}/payments`, {
@@ -167,6 +171,61 @@ for (const viewport of [
       ['VES', 'Pago móvil'],
     ]);
     expect(body.split?.total.currency).toBe(DEMO_CURRENCY);
+    await expectNoHorizontalScroll(page);
+
+    // DX-414 (C1): en el estado de cuenta las dos líneas se ven juntas con el distintivo del recibo único.
+    const receiptNumber = payments[0].receiptNumber;
+    const splitLabel = `Cobro dividido · 2 formas · ${receiptNumber}`;
+    await page.goto(`${origin}/patients/${seeded.patientId}?tab=account-statement`);
+    const statement = page.locator('#tabpanel-account-statement');
+    await expect(statement.getByRole('button', { name: 'Registrar abono' })).toBeVisible({ timeout: 15_000 });
+    await expect(statement.getByText(splitLabel).locator('visible=true')).toHaveCount(2, { timeout: 15_000 });
+    await expectNoHorizontalScroll(page);
+
+    // DX-414 (C2): a 390 px, «Registrar abono», el pie del recibo y los botones de anular miden 44 px
+    // (con `expect.poll` tras la animación del diálogo).
+    if (viewport.width === 390) {
+      await expectTouchTarget(statement.getByRole('button', { name: 'Registrar abono' }), {
+        label: 'Registrar abono (estado de cuenta)',
+      });
+      await statement.getByRole('button', { name: /^Acciones de abono/ }).first().click();
+      await page.getByRole('menuitem', { name: 'Recibo' }).click();
+      const receiptDialog = page.getByRole('dialog', { name: /recibo de caja/i });
+      await expect(receiptDialog.getByTestId('receipt-document')).toBeVisible({ timeout: 15_000 });
+      for (const name of ['Cerrar', /imprimir a4/i]) {
+        const control = receiptDialog.getByRole(name === 'Cerrar' ? 'button' : 'link', { name }).last();
+        await expectTouchTarget(control, { scope: receiptDialog, label: `Recibo: ${String(name)}` });
+      }
+      await page.keyboard.press('Escape');
+      await expect(receiptDialog).toBeHidden();
+
+      await statement.getByRole('button', { name: /^Acciones de abono/ }).first().click();
+      await page.getByRole('menuitem', { name: 'Anular' }).click();
+      const voidDialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
+      await expect(voidDialog).toBeVisible();
+      await expectTouchTarget(voidDialog.getByRole('button', { name: 'Anular abono' }), {
+        scope: voidDialog,
+        label: 'Anular abono',
+      });
+      await expectTouchTarget(voidDialog.getByRole('button', { name: 'Cancelar' }), {
+        scope: voidDialog,
+        label: 'Cancelar anular',
+      });
+      await page.keyboard.press('Escape');
+      await expect(voidDialog).toBeHidden();
+    }
+
+    // DX-414 (C4): la pestaña Plan dice el medio real («Pago móvil») y su referencia, no «Transferencia».
+    await page.goto(`${origin}/patients/${seeded.patientId}?tab=treatment-plans`);
+    const plan = page.locator('#tabpanel-treatment-plans');
+    await expect(plan.getByRole('heading', { name: 'Detalle del plan' })).toBeVisible({ timeout: 15_000 });
+    const disclosure = plan.getByRole('button', { name: /^Abonos registrados\s+\d+ abonos?$/ });
+    if ((await disclosure.getAttribute('aria-expanded')) === 'false') await disclosure.click();
+    await expect(plan.getByText('Pago móvil').first()).toBeVisible({ timeout: 15_000 });
+    await expect(plan.getByText(`Ref. PM ${tag}`).first()).toBeVisible();
+    await expect(plan.getByText('Transferencia')).toHaveCount(0);
+    // (a 390 px la línea del teléfono dice «Cobro dividido · 2 formas»; el recibo ya va en su línea)
+    await expect(plan.getByText(/Cobro dividido · 2 formas/).first()).toBeVisible();
     await expectNoHorizontalScroll(page);
     await context.close();
   });

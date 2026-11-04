@@ -13105,6 +13105,11 @@ export interface components {
              * @example 2
              */
             splitLines: number | null;
+            /**
+             * @description DX-414: número del recibo de caja del abono (DX-136); todas las líneas de un cobro dividido llevan el de su recibo único. `null` en un abono anterior a la numeración.
+             * @example PRI-000123
+             */
+            receiptNumber: string | null;
             /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
             adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
             /**
@@ -14390,6 +14395,11 @@ export interface components {
              * @example 2
              */
             splitLines: number | null;
+            /**
+             * @description DX-414: número del recibo de caja del abono (DX-136); todas las líneas de un cobro dividido llevan el de su recibo único. `null` en un abono anterior a la numeración.
+             * @example PRI-000123
+             */
+            receiptNumber: string | null;
             location: components["schemas"]["AccountStatementLocationRefDto"];
             /**
              * Format: uuid

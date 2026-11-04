@@ -135,3 +135,14 @@ it('DX-354: sin región de la sede el recibo sale con «—» y el aviso; Reinte
   expect(within(dialog).getByTestId('receipt-document')).not.toHaveTextContent(/Emitido\s*—/);
   expect(mockedGet).toHaveBeenCalledTimes(2);
 });
+
+it('DX-414: el pie del recibo (Cerrar, Enviar, imprimir) mide 44 px a 390 px', async () => {
+  mockedGet.mockResolvedValue(paymentReceiptFixture());
+  render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
+  const dialog = await screen.findByRole('dialog', { name: /recibo de caja/i });
+  await within(dialog).findByTestId('receipt-document');
+  const footer = within(dialog).getByRole('link', { name: /imprimir a4/i }).parentElement!;
+  expect(footer.className).toContain('max-sm:[&>*]:min-h-11');
+  // Cerrar, Enviar y las dos impresiones cuelgan del mismo pie.
+  expect(within(footer).getAllByRole('button').length + within(footer).getAllByRole('link').length).toBe(4);
+});

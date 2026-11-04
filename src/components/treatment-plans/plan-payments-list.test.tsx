@@ -46,3 +46,50 @@ describe('PlanPaymentsList: sin avisos de anidación (DX-394)', () => {
     errors.mockRestore();
   });
 });
+
+/**
+ * DX-414: la pestaña Plan dice el medio REAL del abono (el de la clínica, con
+ * su referencia) y no el método antiguo, que llama «Transferencia» al pago móvil.
+ */
+describe('PlanPaymentsList: medio real del abono (DX-414)', () => {
+  function renderList(payments: Payment[]) {
+    return render(
+      <PlanPaymentsList
+        payments={payments}
+        voidingPaymentId={null}
+        onVoid={jest.fn()}
+        onReceipt={jest.fn()}
+        fmt={fmt}
+      />,
+    );
+  }
+
+  it('«Pago móvil» y su referencia, no «Transferencia»', () => {
+    renderList([
+      payment({
+        method: 'TRANSFER',
+        paymentMethodName: 'Pago móvil',
+        reference: 'PM 123456',
+        exchangeRateStatus: 'NOT_NEEDED',
+      }),
+    ]);
+    expect(screen.getAllByText(/Pago móvil/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Ref\. PM 123456/).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Transferencia')).not.toBeInTheDocument();
+  });
+
+  it('sin medio de la clínica, el método antiguo', () => {
+    renderList([payment({ method: 'CASH', paymentMethodName: null, exchangeRateStatus: 'NOT_NEEDED' })]);
+    expect(screen.getAllByText('Efectivo').length).toBeGreaterThan(0);
+  });
+
+  it('las líneas de un cobro dividido llevan el distintivo con el recibo único', () => {
+    renderList([
+      payment({ id: 'a', splitId: 'a', exchangeRateStatus: 'NOT_NEEDED', receiptNumber: 'PRI-000007' }),
+      payment({ id: 'b', splitId: 'a', exchangeRateStatus: 'NOT_NEEDED', receiptNumber: 'PRI-000007' }),
+      payment({ id: 'c', splitId: null, exchangeRateStatus: 'NOT_NEEDED', receiptNumber: 'PRI-000008' }),
+    ]);
+    expect(screen.getAllByText('Cobro dividido · 2 formas · PRI-000007').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/PRI-000008.*dividido/)).not.toBeInTheDocument();
+  });
+});

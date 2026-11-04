@@ -56,6 +56,7 @@ import {
   voidPaymentSubject,
   type VoidPaymentTarget,
 } from '@/components/payments/use-void-payment';
+import { SplitPaymentBadge, splitPaymentLabel } from '@/components/payments/split-payment-badge';
 import { RecordPaymentModal } from '@/components/payments/record-payment-modal';
 import { StatementPaymentPlanModal } from './statement-payment-plan-modal';
 import { PlanItemsBalance } from './plan-items-balance';
@@ -251,7 +252,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
                 <Button
                   type="button"
                   variant={owes ? 'default' : 'secondary'}
-                  className="w-full sm:w-auto"
+                  className="w-full max-sm:min-h-11 sm:w-auto"
                   onClick={() => openCharge('payment')}
                 >
                   <HandCoins aria-hidden />
@@ -260,7 +261,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
                 <Button
                   type="button"
                   variant="secondary"
-                  className="w-full sm:w-auto"
+                  className="w-full max-sm:min-h-11 sm:w-auto"
                   onClick={() => openCharge('payment-plan')}
                 >
                   <CalendarClock aria-hidden />
@@ -269,7 +270,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
               </>
             ) : null}
             {showPrint ? (
-              <Button asChild variant="secondary" className="w-full sm:w-auto">
+              <Button asChild variant="secondary" className="w-full max-sm:min-h-11 sm:w-auto">
                 <a href={accountStatementPrintHref(patientId)} target="_blank" rel="noopener">
                   <Printer aria-hidden />
                   {copy.print}
@@ -605,6 +606,10 @@ function StatementBody({
                         {movementReferenceLabel(m)}
                       </span>
                     ) : null}
+                    {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
+                    <div>
+                      <SplitPaymentBadge splitLines={m.splitLines} receiptNumber={m.receiptNumber} />
+                    </div>
                     {/* DX-515: la factura fiscal emitida fuera. */}
                     {movementInvoiceLabel(m) ? (
                       <span className="t-caption mt-1 block break-all font-mono text-muted">
@@ -615,7 +620,12 @@ function StatementBody({
                   </>
                 ),
                 mobileCell: (m) =>
-                  [m.method ? movementMediumName(m) : methodLabel(null), movementReferenceLabel(m), movementInvoiceLabel(m)]
+                  [
+                    m.method ? movementMediumName(m) : methodLabel(null),
+                    movementReferenceLabel(m),
+                    movementInvoiceLabel(m),
+                    splitPaymentLabel(m),
+                  ]
                     .filter(Boolean)
                     .join(' · '),
               },

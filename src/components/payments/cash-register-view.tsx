@@ -43,6 +43,7 @@ import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
 import { ResultCount } from '@/components/shared/list-toolbar';
 import { InlineError } from '@/components/errors/inline-error';
+import { SplitPaymentBadge, splitPaymentLabel } from './split-payment-badge';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
@@ -404,6 +405,10 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           {payment.reference ? (
             <span className="t-caption mt-1 block font-mono text-muted">{copy.referenceLabel(payment.reference)}</span>
           ) : null}
+          {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
+          <div>
+            <SplitPaymentBadge splitLines={payment.splitLines} receiptNumber={payment.receiptNumber} />
+          </div>
           {payment.externalInvoiceNumber ? (
             <span className="t-caption mt-1 block break-all font-mono text-muted">
               {externalInvoiceCopy.inline(payment.externalInvoiceNumber)}
@@ -417,6 +422,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           payment.method ? (payment.paymentMethod?.name ?? PAYMENT_METHOD_LABELS[payment.method]) : null,
           payment.reference ? copy.referenceLabel(payment.reference) : null,
           payment.externalInvoiceNumber ? externalInvoiceCopy.inline(payment.externalInvoiceNumber) : null,
+          splitPaymentLabel(payment),
         ]
           .filter(Boolean)
           .join(' · ') || null,

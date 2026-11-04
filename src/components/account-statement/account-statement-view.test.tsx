@@ -742,3 +742,34 @@ describe('AccountStatementView: proveedor de tasas (DX-472)', () => {
     expect(await screen.findByRole('region', { name: /resumen en USD/i })).toBeInTheDocument();
   });
 });
+
+describe('las líneas de un cobro dividido, juntas por su recibo (DX-414)', () => {
+  it('cada línea lleva «Cobro dividido · 3 formas · PRI-000007»; un abono suelto, ninguna', async () => {
+    const fixture = accountStatementFixture();
+    mockedGet.mockResolvedValue({
+      ...fixture,
+      movements: fixture.movements.map((m) =>
+        m.id === 'pay-2'
+          ? { ...m, splitId: 'pay-2', splitLines: 3, receiptNumber: 'PRI-000007' }
+          : m.id === 'pay-1'
+            ? { ...m, splitId: 'pay-2', splitLines: 3, receiptNumber: 'PRI-000007' }
+            : m,
+      ),
+    });
+    render(<AccountStatementView token="tok" patientId="pat-1" />);
+    const table = await screen.findByRole('table', { name: /movimientos/i });
+    expect(within(table).getAllByText('Cobro dividido · 3 formas · PRI-000007').length).toBeGreaterThanOrEqual(2);
+    const single = within(table).getByRole('row', { name: /20\/09\/2026/ });
+    expect(within(single).queryByText(/Cobro dividido/)).not.toBeInTheDocument();
+  });
+});
+
+describe('botones táctiles del estado de cuenta (DX-414)', () => {
+  it('«Registrar abono» y «Plan de cuotas» miden 44 px a 390 px', async () => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    render(<AccountStatementView token={tokenForRole('RECEPTION')} patientId="pat-1" />);
+    await screen.findByRole('table', { name: /movimientos/i });
+    expect(screen.getByRole('button', { name: 'Registrar abono' }).className).toContain('max-sm:min-h-11');
+    expect(screen.getByRole('button', { name: 'Plan de cuotas' }).className).toContain('max-sm:min-h-11');
+  });
+});
