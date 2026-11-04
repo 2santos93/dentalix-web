@@ -4,7 +4,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { fillDate, fillTime } from './support/dates';
-import { expectNoHorizontalScroll } from './support/layout';
+import { expectGlyphsFit, expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -229,10 +229,18 @@ test('Semana y Mes llevan el sillón en el chip; 390 px sin scroll horizontal', 
     expect(fit.patientWidth).toBeGreaterThan(0);
     expect(fit.rowOverflow).toBeLessThanOrEqual(0);
   }
+  // DX-536: en la fila compacta (15 min, `leading-none`) el paciente y el sillón no cortan tildes ni rabos.
+  for (const id of [short[0].id, short[1].id]) {
+    const chip = page.locator(`[data-testid="week-grid-appointment"][data-id="${id}"]`);
+    await expectGlyphsFit(chip.getByTestId('week-appointment-chair'), 'sillón del chip de 15 min');
+    await expectGlyphsFit(chip.getByTestId('week-appointment-chair').locator('xpath=preceding-sibling::span[1]'), 'paciente del chip de 15 min');
+  }
   await page.getByRole('button', { name: 'Mes', exact: true }).click();
   await expect(page.getByTestId('month-appointment-chair').filter({ hasText: 'Sillón 1' }).first()).toBeVisible({
     timeout: 15_000,
   });
+  await expectGlyphsFit(page.getByTestId('month-appointment-chair'), 'sillón del chip del Mes');
+  await expectGlyphsFit(page.getByTestId('month-appointment-patient'), 'paciente del chip del Mes');
 
   await page.setViewportSize({ width: 390, height: 800 });
   await expectNoHorizontalScroll(page);

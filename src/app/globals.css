@@ -103,6 +103,17 @@
   }
 }
 
+/*
+ * DX-536: una línea con `truncate` y `leading-none` recorta (overflow: hidden)
+ * la tilde de las mayúsculas («Á», «Ñ») y el rabo de «g»/«y»: el glifo se sale
+ * de una caja de 1em. 2 px de relleno arriba y abajo, devueltos con margen
+ * negativo, agrandan la caja de recorte sin cambiar el alto de la fila.
+ */
+@utility glyph-room {
+  padding-block: 2px;
+  margin-block: -2px;
+}
+
 @layer components {
   /* Type scale v2 (DESIGN.md → Typography). Roles, not sizes. */
   .t-display {

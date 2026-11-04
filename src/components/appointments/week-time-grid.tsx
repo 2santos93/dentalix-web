@@ -89,7 +89,7 @@ interface WeekTimeGridProps {
 function WeekChairLabel({ chair }: { chair: string | null }) {
   if (!chair) return null;
   return (
-    <span data-testid="week-appointment-chair" className="min-w-0 max-w-[45%] truncate font-normal">
+    <span data-testid="week-appointment-chair" className="min-w-0 max-w-[45%] truncate glyph-room font-normal">
       {chair}
     </span>
   );
@@ -101,7 +101,7 @@ function WeekChairLabel({ chair }: { chair: string | null }) {
  * encoge mientras quepa; un peso de encogimiento no basta: le quitaría una
  * fracción de píxel y saldría «Silló…».
  */
-const PATIENT_CLASS = 'min-w-[4ch] max-w-max flex-1 truncate font-semibold';
+const PATIENT_CLASS = 'min-w-[4ch] max-w-max flex-1 truncate glyph-room font-semibold';
 
 const WHOLE_DAY = { start: 0, end: DAY_MINUTES };
 

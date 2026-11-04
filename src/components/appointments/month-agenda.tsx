@@ -213,8 +213,9 @@ export function MonthAgenda({
                           {sedeTime(a.start, clock.of(a.locationId))}
                         </span>
                         <span
+                          data-testid="month-appointment-patient"
                           className={cn(
-                            'min-w-0 flex-1 truncate font-medium',
+                            'min-w-0 flex-1 truncate glyph-room font-medium',
                             isInactive(a.status) && 'text-muted line-through',
                           )}
                         >
@@ -232,7 +233,7 @@ export function MonthAgenda({
                         ) : null}
                         {/* DX-492: en su línea: en una celda estrecha no le quita sitio al paciente. */}
                         {chair ? (
-                          <span data-testid="month-appointment-chair" className="w-full truncate text-muted">
+                          <span data-testid="month-appointment-chair" className="w-full truncate glyph-room text-muted">
                             {chair}
                           </span>
                         ) : null}
