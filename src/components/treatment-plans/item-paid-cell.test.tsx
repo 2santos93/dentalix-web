@@ -97,3 +97,24 @@ describe('ItemPaidLine', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+// DX-406: la tarjeta móvil mete «Cubierto» (Badge) y «—» dentro de un <p>; un
+// elemento de bloque ahí es HTML inválido y React lo avisa en consola.
+describe('ItemPaidLine — anidación válida (DX-406)', () => {
+  const BLOCK = new Set(['DIV', 'UL', 'OL', 'LI', 'P', 'TABLE', 'SECTION', 'ARTICLE', 'FORM', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+  const cases: Array<[string, PlanItemBalance]> = [
+    ['cubierto', balanceOf({ paid: 100, balance: 0 })],
+    ['pendiente', balanceOf()],
+    ['sin importe', balanceOf({ status: 'PROPOSED', billable: 0, paid: 0, balance: 0 })],
+  ];
+
+  it.each(cases)('%s: ningún elemento de bloque dentro de un <p> y sin aviso de React', (_name, item) => {
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { container } = render(<ItemPaidLine item={item} currency="USD" fmt={ES_CO} />);
+    const blocks = Array.from(container.querySelectorAll('p *')).filter((el) => BLOCK.has(el.tagName));
+    expect(blocks.map((el) => el.outerHTML)).toEqual([]);
+    const warned = errors.mock.calls.map((c) => c.join(' ')).filter((m) => /cannot be a descendant of <p>|validateDOMNesting|cannot contain/.test(m));
+    errors.mockRestore();
+    expect(warned).toEqual([]);
+  });
+});
