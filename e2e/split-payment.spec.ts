@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectTouchTarget } from './support/touch-targets';
+import { dataList, dataListRows } from './support/data-list';
 import { DEMO_CURRENCY } from './support/demo';
 
 /**
@@ -188,18 +189,28 @@ for (const viewport of [
       await expectTouchTarget(statement.getByRole('button', { name: 'Registrar abono' }), {
         label: 'Registrar abono (estado de cuenta)',
       });
-      await statement.getByRole('button', { name: /^Acciones de abono/ }).first().click();
+      // El abono que creó este test (el de «Pago móvil» con su referencia), no «el primero».
+      const ownRow = dataListRows(dataList(statement, 'Movimientos (abonos)')).filter({ hasText: `Ref. PM ${tag}` });
+      await expect(ownRow).toHaveCount(1);
+      await ownRow.getByRole('button', { name: /^Acciones de abono/ }).click();
       await page.getByRole('menuitem', { name: 'Recibo' }).click();
       const receiptDialog = page.getByRole('dialog', { name: /recibo de caja/i });
       await expect(receiptDialog.getByTestId('receipt-document')).toBeVisible({ timeout: 15_000 });
-      for (const name of ['Cerrar', /imprimir a4/i]) {
-        const control = receiptDialog.getByRole(name === 'Cerrar' ? 'button' : 'link', { name }).last();
-        await expectTouchTarget(control, { scope: receiptDialog, label: `Recibo: ${String(name)}` });
+      const footerControls = [
+        receiptDialog.getByRole('button', { name: 'Cerrar', exact: true }).last(),
+        receiptDialog.getByRole('button', { name: /enviar/i }),
+        receiptDialog.getByRole('link', { name: /tirilla 80 mm/i }),
+        receiptDialog.getByRole('link', { name: /imprimir a4/i }),
+      ];
+      for (const control of footerControls) {
+        await expect
+          .poll(async () => (await control.boundingBox())?.height ?? 0, { message: 'pie del recibo: 44 px' })
+          .toBeGreaterThanOrEqual(44);
       }
       await page.keyboard.press('Escape');
       await expect(receiptDialog).toBeHidden();
 
-      await statement.getByRole('button', { name: /^Acciones de abono/ }).first().click();
+      await ownRow.getByRole('button', { name: /^Acciones de abono/ }).click();
       await page.getByRole('menuitem', { name: 'Anular' }).click();
       const voidDialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
       await expect(voidDialog).toBeVisible();
@@ -223,7 +234,10 @@ for (const viewport of [
     if ((await disclosure.getAttribute('aria-expanded')) === 'false') await disclosure.click();
     await expect(plan.getByText('Pago móvil').first()).toBeVisible({ timeout: 15_000 });
     await expect(plan.getByText(`Ref. PM ${tag}`).first()).toBeVisible();
-    await expect(plan.getByText('Transferencia')).toHaveCount(0);
+    // Solo el texto visible de la lista de abonos del plan (no el panel entero ni el DOM oculto).
+    await expect(
+      dataList(plan, 'Abonos del plan de tratamiento').getByText('Transferencia').locator('visible=true'),
+    ).toHaveCount(0);
     // (a 390 px la línea del teléfono dice «Cobro dividido · 2 formas»; el recibo ya va en su línea)
     await expect(plan.getByText(/Cobro dividido · 2 formas/).first()).toBeVisible();
     await expectNoHorizontalScroll(page);

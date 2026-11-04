@@ -406,9 +406,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
             <span className="t-caption mt-1 block font-mono text-muted">{copy.referenceLabel(payment.reference)}</span>
           ) : null}
           {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
-          <div>
-            <SplitPaymentBadge splitLines={payment.splitLines} receiptNumber={payment.receiptNumber} />
-          </div>
+          <SplitPaymentBadge splitLines={payment.splitLines} receiptNumber={payment.receiptNumber} />
           {payment.externalInvoiceNumber ? (
             <span className="t-caption mt-1 block break-all font-mono text-muted">
               {externalInvoiceCopy.inline(payment.externalInvoiceNumber)}

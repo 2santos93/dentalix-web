@@ -607,9 +607,7 @@ function StatementBody({
                       </span>
                     ) : null}
                     {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
-                    <div>
-                      <SplitPaymentBadge splitLines={m.splitLines} receiptNumber={m.receiptNumber} />
-                    </div>
+                    <SplitPaymentBadge splitLines={m.splitLines} receiptNumber={m.receiptNumber} />
                     {/* DX-515: la factura fiscal emitida fuera. */}
                     {movementInvoiceLabel(m) ? (
                       <span className="t-caption mt-1 block break-all font-mono text-muted">

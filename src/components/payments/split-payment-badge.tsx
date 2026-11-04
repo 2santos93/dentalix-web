@@ -21,7 +21,7 @@ export function SplitPaymentBadge(info: SplitPaymentInfo) {
   const label = splitPaymentLabel(info);
   if (!label) return null;
   return (
-    <Badge variant="info" className="mt-1" data-testid="split-payment-badge">
+    <Badge variant="info" className="mt-1 flex w-fit" data-testid="split-payment-badge">
       {label}
     </Badge>
   );

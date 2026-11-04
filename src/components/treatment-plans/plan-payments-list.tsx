@@ -117,9 +117,7 @@ export function PlanPaymentsList({
             <span className="text-muted">{copy.paymentReceiptLegacy}</span>
           )}
           {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
-          <div>
-            <SplitPaymentBadge splitLines={splitCounts.get(p.splitId ?? '') ?? null} receiptNumber={p.receiptNumber} />
-          </div>
+          <SplitPaymentBadge splitLines={splitCounts.get(p.splitId ?? '') ?? null} receiptNumber={p.receiptNumber} />
           {/* DX-515: la factura fiscal emitida fuera, bajo su recibo. */}
           {p.externalInvoiceNumber ? (
             <span className="t-caption mt-0.5 block break-all font-mono text-muted">
