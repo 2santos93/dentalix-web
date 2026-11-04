@@ -196,7 +196,7 @@ for (const viewport of [
     await dialog.getByLabel('Método').selectOption({ label: 'Efectivo' });
     await submit.click();
     await expect(dialog).toBeHidden({ timeout: 10_000 });
-    await expect(page.getByRole('status').filter({ hasText: 'Abono registrado' })).toBeVisible();
+    await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Abono registrado' })).toBeVisible();
 
     const paidRow = openings.getByRole('row').filter({ hasText: 'Cartera anterior' });
     await expect(paidRow).toContainText('40.000,00', { timeout: 10_000 });

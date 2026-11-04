@@ -2,11 +2,11 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { Toaster } from './toaster';
-import { notifyError } from './notify';
+import { SUCCESS_DURATION_MS, notifyError, notifySuccess } from './notify';
 
 jest.mock('sonner', () => {
   const actual = jest.requireActual('sonner');
-  return { ...actual, toast: { ...actual.toast, error: jest.fn(actual.toast.error) } };
+  return { ...actual, toast: { ...actual.toast, error: jest.fn(actual.toast.error), success: jest.fn(actual.toast.success) } };
 });
 
 function Harness({ onRetry }: { onRetry?: () => void }) {
@@ -76,5 +76,18 @@ describe('notifyError', () => {
 
   it('devuelve el id del aviso para poder cerrarlo cuando el fallo se resuelve', () => {
     expect(notifyError('Fallo de prueba')).toBe('error:Fallo de prueba');
+  });
+});
+
+describe('notifySuccess (DX-075)', () => {
+  it('un éxito corriente dura 10 s', () => {
+    notifySuccess('Abono registrado.');
+    expect(toast.success).toHaveBeenLastCalledWith('Abono registrado.', { duration: SUCCESS_DURATION_MS });
+    expect(SUCCESS_DURATION_MS).toBe(10_000);
+  });
+
+  it('el que lleva una advertencia o un recibo no caduca', () => {
+    notifySuccess('Abono registrado. Quedó sin tasa.', { persistent: true });
+    expect(toast.success).toHaveBeenLastCalledWith('Abono registrado. Quedó sin tasa.', { duration: Infinity });
   });
 });

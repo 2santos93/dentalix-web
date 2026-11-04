@@ -1075,6 +1075,51 @@ describe('TreatmentPlansTab', () => {
     expect(await screen.findByText(sedeCurrencyText(updatedBalance.paid))).toBeInTheDocument();
   });
 
+  it('DX-075: un día posterior a hoy en la sede se rechaza junto al campo, con el foco y sin llamar a la API', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([]);
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+    await user.click(await screen.findByRole('button', { name: /^registrar abono$/i }));
+
+    await user.type(screen.getByLabelText(/^monto$/i), '25000');
+    const [day] = within(screen.getByRole('group', { name: /^fecha$/i })).getAllByRole('spinbutton');
+    await user.click(day);
+    await user.keyboard('01012099');
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+
+    expect(await screen.findByText('La fecha de pago no puede ser posterior a hoy.')).toBeInTheDocument();
+    expect(mockedRecordPayment).not.toHaveBeenCalled();
+    expect(document.activeElement).toHaveAttribute('role', 'spinbutton');
+    expect(document.activeElement?.closest('#tp-payment-date')).not.toBeNull();
+  });
+
+  it('DX-075: tras registrar el abono sale el aviso de éxito (toast) con el monto', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([]);
+    mockedRecordPayment.mockResolvedValue({ ...payment1, id: 'pay-2', amount: 25000, currency: 'USD' });
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <TreatmentPlansTab patientId="pat-1" token={tok} />
+        <Toaster />
+      </>,
+    );
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+    await user.click(await screen.findByRole('button', { name: /^registrar abono$/i }));
+    await user.type(screen.getByLabelText(/^monto$/i), '25000');
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+
+    expect(await screen.findByText(/^Abono registrado: .*25\.000,00/)).toBeInTheDocument();
+  });
+
   it('DX-377: el abono del plan usa los medios de la clínica, exige la referencia y confirma la repetida con motivo', async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedGetPlan.mockResolvedValue(plan1Detail);

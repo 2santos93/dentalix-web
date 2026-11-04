@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { AccountStatementView } from './account-statement-view';
 import { AccountStatementPrintView } from './account-statement-print-view';
 import { ApiError } from '@/lib/api/client';
+import { Toaster } from '@/components/errors/toaster';
 import { getAccountStatement } from '@/lib/account-statement/account-statement-api';
 import { getPlanBalance, recordPayment, voidPayment } from '@/lib/payments/payments-api';
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
@@ -443,7 +444,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     });
     const user = userEvent.setup();
     const onChanged = jest.fn();
-    render(<AccountStatementView token={RECEPTION} patientId="pat-1" onChanged={onChanged} />);
+    render(<><AccountStatementView token={RECEPTION} patientId="pat-1" onChanged={onChanged} /><Toaster /></>);
     await screen.findByRole('region', { name: /resumen en VES/i });
 
     await user.click(screen.getByRole('button', { name: 'Registrar abono' }));
@@ -478,7 +479,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     ]);
     mockedCreatePlan.mockResolvedValue({} as Awaited<ReturnType<typeof createPaymentPlan>>);
     const user = userEvent.setup();
-    render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
+    render(<><AccountStatementView token={RECEPTION} patientId="pat-1" /><Toaster /></>);
     await screen.findByRole('region', { name: /resumen en VES/i });
 
     await user.click(screen.getByRole('button', { name: 'Plan de cuotas' }));
