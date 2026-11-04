@@ -331,7 +331,10 @@
   margin: 14mm;
 }
 @media print {
-  .statement-print-root {
+  /* La página con nombre va en `html`, no en el documento: un `page` distinto
+   * al del padre FUERZA un salto antes y otro después del elemento, y el de
+   * después abría una hoja en blanco al final (DX-047). */
+  html:has(.statement-print-page) {
     page: statement;
   }
   .statement-print-root,
@@ -346,6 +349,20 @@
   }
   .statement-print-root thead {
     display: table-header-group;
+  }
+  /* A4 vertical (182 mm útiles): las tablas caben sin recortar. Letra menor,
+   * relleno corto, cabeceras y textos que envuelven; los importes siguen en
+   * una línea (tabular-nums) y la tabla nunca pasa del ancho útil. */
+  .statement-print-root table {
+    width: 100%;
+    font-size: 8.5pt;
+  }
+  .statement-print-root :is(th, td) {
+    padding: 3pt 4pt;
+    overflow-wrap: anywhere;
+  }
+  .statement-print-root th {
+    white-space: normal;
   }
 }
 

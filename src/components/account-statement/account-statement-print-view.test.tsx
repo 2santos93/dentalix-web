@@ -101,3 +101,22 @@ it('DX-354: usa el formato de la sede del estado de cuenta; sin él, «—» y e
   await waitFor(() => expect(screen.getByTestId('statement-header')).toHaveTextContent('10/15/2026 11:30 a. m.'));
   expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument();
 });
+
+// DX-047: la hoja en blanco final venía de dar `page: statement` a un elemento
+// interior (fuerza un salto antes y después). La página con nombre va en `html`
+// vía `:has(.statement-print-page)` y el envoltorio no impone altura mínima.
+it('el envoltorio marca la página de impresión y no fuerza altura al imprimir', async () => {
+  mockedGet.mockResolvedValue(accountStatementFixture());
+  const { container } = render(<AccountStatementPrintView token="tok" patientId="pat-1" />);
+  await screen.findByRole('heading', { level: 1, name: /estado de cuenta/i });
+  const page = container.querySelector('.statement-print-page');
+  expect(page).not.toBeNull();
+  expect(page?.className).toMatch(/print:min-h-0/);
+});
+
+it('el CSS de impresión no pone `page` en el documento interior', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../app/globals.css'), 'utf8') as string;
+  expect(css).toMatch(/html:has\(\.statement-print-page\)\s*{\s*page: statement;/);
+  expect(css).not.toMatch(/\.statement-print-root\s*{\s*page:/);
+});

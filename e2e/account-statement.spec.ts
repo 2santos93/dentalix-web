@@ -177,4 +177,23 @@ test('estado de cuenta: ficha → pestaña → imprimir muestra un documento lim
   await printPage.emulateMedia({ media: 'print' });
   await expect(toolbar).toBeHidden();
   await expect(printPage.getByRole('heading', { level: 1, name: 'Estado de cuenta' })).toBeVisible();
+
+  // DX-047 — papel A4: un documento corto sale en UNA hoja (sin hoja en blanco
+  // final) y ninguna tabla ni celda se recorta a lo ancho. Un estado de cuenta
+  // largo no se siembra aquí (exigiría decenas de abonos por la API); el salto
+  // en blanco tenía causa en el CSS (`page` en un elemento interior), no en la
+  // cantidad de filas, y queda cubierto con el caso corto.
+  const pdf = await printPage.pdf({ format: 'A4', preferCSSPageSize: true });
+  const pageCount = (pdf.toString('latin1').match(/\/Type\s*\/Page(?![s\w])/g) ?? []).length;
+  expect(pageCount).toBe(1);
+
+  await printPage.setViewportSize({ width: 794, height: 1123 });
+  const clipped = await printPage.evaluate(() =>
+    Array.from(
+      document.querySelectorAll('.statement-print-root table, .statement-print-root :is(th, td)'),
+    )
+      .filter((el) => el.scrollWidth > el.clientWidth + 1)
+      .map((el) => `${el.tagName}:${(el.textContent ?? '').slice(0, 30)}`),
+  );
+  expect(clipped).toEqual([]);
 });
