@@ -15,6 +15,8 @@ export interface FollowUpGroup {
   patientWhatsApp: string | null;
   /** La presentación MÁS antigua del grupo: la que decide a quién llamar primero. */
   presentedAt: string;
+  /** La sede donde se presentó esa opción más antigua: con su reloj sale la fecha, el importe y el WhatsApp de la fila. */
+  presentedLocationId: string;
   daysSincePresented: number;
   /** Las opciones por seguir, en el orden de la API (de la más antigua a la más nueva). */
   options: PendingFollowUpItem[];
@@ -42,13 +44,17 @@ export function groupFollowUp(items: readonly PendingFollowUpItem[]): FollowUpGr
         patientPhone: item.patientPhone,
         patientWhatsApp: item.patientWhatsApp,
         presentedAt: item.presentedAt,
+        presentedLocationId: item.presentedLocationId,
         daysSincePresented: item.daysSincePresented,
         options: [item],
       });
       continue;
     }
     group.options.push(item);
-    if (item.presentedAt < group.presentedAt) group.presentedAt = item.presentedAt;
+    if (item.presentedAt < group.presentedAt) {
+      group.presentedAt = item.presentedAt;
+      group.presentedLocationId = item.presentedLocationId;
+    }
     group.daysSincePresented = Math.max(group.daysSincePresented, item.daysSincePresented);
   }
   return [...groups.values()];

@@ -18,9 +18,8 @@ import { listLocations, type ClinicLocation } from '@/lib/locations/locations-ap
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
-import { sedeMoney } from '@/lib/format/sede-number';
-import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import { formatDate } from '@/lib/format/date';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { NativeSelect } from '@/components/ui/native-select';
 import { FormField } from '@/components/shared/form-field';
@@ -54,6 +53,8 @@ export const pendingFollowUpCopy = {
   whatsapp: 'WhatsApp',
   whatsappLabel: (name: string) => `WhatsApp a ${name}`,
   noWhatsApp: 'El teléfono no sirve para WhatsApp',
+  whatsappUnavailableLabel: (name: string) =>
+    `WhatsApp a ${name}: no disponible hasta que la sede tenga su formato regional`,
   reject: 'Marcar rechazado',
   rejectAll: (n: number) => `Marcar rechazadas las ${n} opciones`,
   rejectOne: (label: string) => `Marcar rechazada: ${label}`,
@@ -94,8 +95,6 @@ function telHref(phone: string): string {
  * fila (rango de montos, un solo Llamar/WhatsApp), y la API pagina por grupo.
  */
 export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
-  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
-  const fmt = readyFormat(useSedeFormat(token));
   const [olderThanDays, setOlderThanDays] = useState<number>(AGE_OPTIONS[0]);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<PendingFollowUpPage | null>(null);
@@ -164,6 +163,12 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
 
   // D2: una fila por conversación (las opciones A/B del mismo plan juntas).
   const groups = groupFollowUp(data?.items ?? []);
+  // DX-354b: fecha, importe y WhatsApp de cada fila, con el reloj de la sede donde se
+  // presentó (E1); un solo aviso para la pantalla si alguna sede no tiene formato.
+  const stamp = useSedeStamp(
+    token,
+    groups.map((g) => g.presentedLocationId),
+  );
 
   function rejectActions(group: FollowUpGroup) {
     const open = (planIds: string[], subject: string) => () => {
@@ -228,7 +233,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
               {row.options.map((o) => (
                 // Una línea por opción (Z1): a 1440 px el monto bajaba solo a otra línea.
                 <li key={o.planId} className="t-caption whitespace-nowrap text-muted tabular-nums">
-                  {o.optionLabel ?? copy.noOption} · {sedeMoney(o.total, o.currency, fmt)}
+                  {o.optionLabel ?? copy.noOption} · {stamp.money(o.total, o.currency, row.presentedLocationId)}
                 </li>
               ))}
             </ul>
@@ -244,14 +249,14 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
       header: copy.colAmount,
       numeric: true,
       mobile: 'trailing',
-      cell: (row) => <span className="whitespace-nowrap font-medium text-ink">{followUpAmount(row.options, (amount, code) => sedeMoney(amount, code, fmt))}</span>,
+      cell: (row) => <span className="whitespace-nowrap font-medium text-ink">{followUpAmount(row.options, (amount, code) => stamp.money(amount, code, row.presentedLocationId))}</span>,
     },
     {
       id: 'presented',
       header: copy.colPresented,
       cell: (row) => (
         <span className="tabular-nums">
-          {formatDate(row.presentedAt)}
+          {stamp.date(row.presentedAt, row.presentedLocationId)}
           <span className="t-caption block text-muted">{copy.daysAgo(row.daysSincePresented)}</span>
         </span>
       ),
@@ -261,7 +266,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
     {
       id: 'contact',
       header: copy.colPhone,
-      cell: (row) => <ContactLinks row={row} clinicName={clinicName} />,
+      cell: (row) => <ContactLinks row={row} clinicName={clinicName} stamp={stamp} />,
     },
   ];
 
@@ -284,6 +289,8 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
             </NativeSelect>
           </FormField>
         </div>
+
+        <SedeStampNote stamp={stamp} />
 
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
@@ -365,9 +372,20 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
 }
 
 /** Llamar (\`tel:\`) y WhatsApp prellenado: el bloque de contacto de la fila. */
-function ContactLinks({ row, clinicName }: { row: FollowUpGroup; clinicName: string | null }) {
+function ContactLinks({
+  row,
+  clinicName,
+  stamp,
+}: {
+  row: FollowUpGroup;
+  clinicName: string | null;
+  stamp: SedePainters;
+}) {
   if (!row.patientPhone) return <span className="text-muted">{copy.noPhone}</span>;
-  const whatsapp = followUpWhatsAppHref(row, clinicName);
+  const whatsapp = followUpWhatsAppHref(row, clinicName, stamp);
+  // El mensaje lleva la fecha de la presentación con el formato de la sede: sin él no se
+  // envía (nunca «—» dentro del texto). El botón se deshabilita y el aviso de la pantalla dice por qué.
+  const blockedByFormat = Boolean(row.patientWhatsApp) && stamp.maybe.date(row.presentedAt, row.presentedLocationId) === null;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
       <a
@@ -389,6 +407,16 @@ function ContactLinks({ row, clinicName }: { row: FollowUpGroup; clinicName: str
           <MessageCircle aria-hidden className="size-4 text-muted" />
           {copy.whatsapp}
         </a>
+      ) : blockedByFormat ? (
+        <button
+          type="button"
+          disabled
+          aria-label={copy.whatsappUnavailableLabel(row.patientName)}
+          className={`${contactLinkClass} cursor-not-allowed text-muted opacity-60 no-underline hover:no-underline`}
+        >
+          <MessageCircle aria-hidden className="size-4 text-muted" />
+          {copy.whatsapp}
+        </button>
       ) : (
         <span className="t-caption text-muted">{copy.noWhatsApp}</span>
       )}

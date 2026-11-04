@@ -4,6 +4,7 @@ import { setupUser } from '@/lib/test/user';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 import { InventoryView } from './inventory-view';
 import {
   listInventoryItems,
@@ -439,5 +440,43 @@ describe('contrato de vista de listado', () => {
     render(<InventoryView token="tok" />);
 
     expect(await screen.findByText('1 insumo')).toBeInTheDocument();
+  });
+});
+
+describe('historial de movimientos con el formato de la sede (DX-354b)', () => {
+  // 02:30Z: el día anterior a las 10:30 p. m. en Caracas; en Berlín, 04:30 del mismo día.
+  const at = '2026-07-31T02:30:00.000Z';
+  async function openHistory() {
+    mockedList.mockResolvedValue(page([guantes]));
+    mockedListMovements.mockResolvedValue([
+      { id: 'm1', itemId: 'i1', type: 'IN', quantity: 10, reason: 'Compra', occurredAt: at, createdById: null, createdAt: at },
+    ]);
+    const user = setupUser();
+    render(<InventoryView token="tok" />);
+    await screen.findByRole('table', { name: /inventario/i });
+    await user.click(screen.getByRole('button', { name: /acciones de /i }));
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: /historial/i }));
+    return screen.findByRole('dialog');
+  }
+
+  it('Caracas (12 h): fecha y hora con su reloj', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+    const dialog = await openHistory();
+    expect(await within(dialog).findAllByText(dateTimeIn('caracas', at))).not.toHaveLength(0);
+  });
+
+  it('Berlín (24 h): la misma entrada sale distinta', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.berlin]);
+    const dialog = await openHistory();
+    expect(await within(dialog).findAllByText(dateTimeIn('berlin', at))).not.toHaveLength(0);
+    expect(dateTimeIn('berlin', at)).not.toBe(dateTimeIn('caracas', at));
+  });
+
+  it('sin formato de la sede: «—», un solo aviso dentro del modal, y la celda móvil se omite', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    const dialog = await openHistory();
+    expect(await within(dialog).findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    expect(within(dialog).getAllByText('Sin dato').length).toBeGreaterThan(0);
+    expect(dialog).not.toHaveTextContent('2026');
   });
 });

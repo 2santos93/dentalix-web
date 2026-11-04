@@ -30,7 +30,8 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { PageHeader } from '@/components/shared/page-header';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
-import { formatDate } from '@/lib/format/date';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_VARIANT, signedQuantity } from '@/components/inventory/movement-format';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -79,22 +80,24 @@ const copy = {
   colReason: 'Motivo',
 };
 
-const LEDGER_COLUMNS: DataListColumn<InventoryMovement>[] = [
-  { id: 'date', header: copy.colDate, cell: (m) => <span className="tabular-nums">{formatDate(m.occurredAt)}</span> },
-  {
-    id: 'type',
-    header: copy.colType,
-    mobile: 'primary',
-    cell: (m) => <Badge variant={MOVEMENT_TYPE_VARIANT[m.type]}>{MOVEMENT_TYPE_LABELS[m.type]}</Badge>,
-  },
-  { id: 'quantity', header: copy.colQuantity, numeric: true, mobile: 'trailing', cell: (m) => signedQuantity(m) },
-  {
-    id: 'reason',
-    header: copy.colReason,
-    cell: (m) => <span className="text-muted">{m.reason ?? copy.fallback}</span>,
-    mobileCell: (m) => m.reason ?? null,
-  },
-];
+function ledgerColumns(stamp: Pick<SedePainters, 'date'>): DataListColumn<InventoryMovement>[] {
+  return [
+    { id: 'date', header: copy.colDate, cellClassName: 'tabular-nums', cell: (m) => stamp.date(m.occurredAt) },
+    {
+      id: 'type',
+      header: copy.colType,
+      mobile: 'primary',
+      cell: (m) => <Badge variant={MOVEMENT_TYPE_VARIANT[m.type]}>{MOVEMENT_TYPE_LABELS[m.type]}</Badge>,
+    },
+    { id: 'quantity', header: copy.colQuantity, numeric: true, mobile: 'trailing', cell: (m) => signedQuantity(m) },
+    {
+      id: 'reason',
+      header: copy.colReason,
+      cell: (m) => <span className="text-muted">{m.reason ?? copy.fallback}</span>,
+      mobileCell: (m) => m.reason ?? null,
+    },
+  ];
+}
 
 interface InventoryItemDetailProps {
   token: string;
@@ -116,6 +119,8 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // DX-354b: el movimiento no trae sede: sus fechas salen con la sede de la pantalla.
+  const stamp = useSedeStamp(token);
 
   // Movement form
   const [mType, setMType] = useState<InventoryMovementType>('IN');
@@ -394,6 +399,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
 
         <section className="flex flex-col gap-3" aria-labelledby="inventory-ledger-heading">
           <SectionHeader title={copy.ledgerHeading} titleId="inventory-ledger-heading" />
+          <SedeStampNote stamp={stamp} />
           {movements.length === 0 ? (
             <p role="status" className="text-sm text-muted">
               {copy.ledgerEmpty}
@@ -402,7 +408,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
             <DataList
               label={copy.ledgerHeading}
               rows={movements}
-              columns={LEDGER_COLUMNS}
+              columns={ledgerColumns(stamp)}
               getRowKey={(m) => m.id}
             />
           )}
