@@ -306,22 +306,23 @@ test('a11y: la bandeja de anamnesis con «Sin dato» y el aviso, axe limpio en c
   await page.goto(`${origin}/anamnesis-por-revisar`);
   await expect(page.getByRole('heading', { level: 1, name: 'Anamnesis por revisar' })).toBeVisible({ timeout: 15_000 });
   // Con formato: la región de estado ya existe y está vacía (no hay aviso).
-  await expect(page.getByRole('row').filter({ hasText: 'PacienteUS' })).toBeVisible();
-  await expect(page.getByText(NOTE)).toHaveCount(0);
-  expect(await page.getByRole('status').count()).toBeGreaterThan(0);
+  const main = page.getByRole('main');
+  await expect(main.getByRole('row').filter({ hasText: 'PacienteUS' })).toBeVisible();
+  await expect(main.getByText(NOTE)).toHaveCount(0);
+  expect(await main.getByRole('status').count()).toBeGreaterThan(0);
 
   await withoutHourCycle(page);
   await page.reload();
-  await expect(page.getByRole('row').filter({ hasText: 'PacienteUS' })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(NOTE)).toHaveCount(1);
-  await expect(page.getByText('Sin dato').first()).toBeAttached();
-  await expectNoViolations(page, page.getByRole('main'), 'bandeja de anamnesis');
+  await expect(main.getByRole('row').filter({ hasText: 'PacienteUS' })).toBeVisible({ timeout: 15_000 });
+  await expect(main.getByText(NOTE)).toHaveCount(1);
+  await expect(main.getByText('Sin dato').first()).toBeAttached();
+  await expectNoViolations(page, main, 'bandeja de anamnesis');
 
   // Reintentar con el formato bueno: el aviso se va y la región de estado sigue ahí.
   await page.unroute('**/locations');
-  await page.getByRole('button', { name: 'Reintentar' }).click();
-  await expect(page.getByText(NOTE)).toHaveCount(0);
-  expect(await page.getByRole('status').count()).toBeGreaterThan(0);
+  await main.getByRole('button', { name: 'Reintentar' }).click();
+  await expect(main.getByText(NOTE)).toHaveCount(0);
+  expect(await main.getByRole('status').count()).toBeGreaterThan(0);
 });
 
 test('a11y: la caja con el aviso de la sede, axe limpio en claro y oscuro', async ({ page }) => {
@@ -329,9 +330,10 @@ test('a11y: la caja con el aviso de la sede, axe limpio en claro y oscuro', asyn
   await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
   await withoutHourCycle(page);
   await page.goto(`${origin}/caja`);
-  await expect(page.getByRole('heading', { level: 1, name: 'Caja' })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(NOTE)).toHaveCount(1);
-  await expectNoViolations(page, page.getByRole('main'), 'caja');
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { level: 1, name: 'Caja' })).toBeVisible({ timeout: 15_000 });
+  await expect(main.getByText(NOTE)).toHaveCount(1);
+  await expectNoViolations(page, main, 'caja');
 });
 
 test('a11y: el panel «Hoy» con el aviso de la sede, axe limpio en claro y oscuro', async ({ page }) => {
