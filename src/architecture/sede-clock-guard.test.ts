@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
+import * as dateModule from '../lib/format/date';
 
 /**
  * DX-378 (FE-076, FE-078): la hora, las fechas y los números se pintan con la
@@ -9,16 +10,14 @@ import ts from 'typescript';
  * `lib/format/**` (donde viven los helpers), los tests, `lib/test/**` y
  * `schema.d.ts`:
  *
- * 1. Nadie importa de `@/lib/format/date` los helpers sin sede
- *    (`SEDELESS_HELPERS`: zona del navegador y 24 h fijas, la zona sin el
- *    reloj, o `formatCivilDate`, que compone `dd/mm/yyyy` a mano), salvo las
- *    pantallas que aún no se migraron, listadas una a una en `PENDING` con su
- *    motivo (y, solo para `formatCivilDate`, en `CIVIL_PENDING`, DX-354b W4).
- *    Una pantalla nueva no entra en las listas: usa `useSedeStamp`/
- *    `useSedeClock`/`useSedeFormat`. Las listas solo encogen: una entrada que
- *    ya no los importa hace fallar la prueba hasta que se quita, y
- *    `MAX_PENDING`/`MAX_CIVIL_PENDING` impiden añadir entradas aunque la lista
- *    «solo encoja» en este comentario.
+ * 1. De `@/lib/format/date` solo se importan los neutros de lógica
+ *    (`WHITELIST`: `civilDateInZone`, `civilDateLabel`, `firstOfMonth`,
+ *    `zonedDayStart`, `zoneCityLabel`). Los siete ayudantes que pintaban sin
+ *    la sede (`RETIRED_HELPERS`: zona del navegador y 24 h fijas, la zona sin
+ *    el reloj, o `dd/mm/yyyy` a mano) se retiraron en DX-354b (W4) y `date.ts`
+ *    ya no los exporta: esta regla impide que vuelvan por otra puerta
+ *    (`import *`, un alias, una ruta relativa). No hay lista de excepciones:
+ *    una pantalla usa `useSedeStamp`/`useSedeClock`/`useSedeFormat`.
  * 2. Nadie llama a `Intl.*Format`/`Intl.PluralRules` ni a
  *    `toLocale(Date|Time)?String` con un locale literal (`'es'`, `"en-US"`…):
  *    el formato lo da la sede; las palabras, `UI_LANGUAGE` dentro de
@@ -33,33 +32,24 @@ import ts from 'typescript';
  */
 const SRC = join(__dirname, '..');
 const FORMAT_DATE_MODULES = new Set(['@/lib/format/date']);
-const SEDELESS_HELPERS = new Set([
+/** Lo único que se importa de `@/lib/format/date`: lógica de calendario, no pinta nada. */
+const WHITELIST: ReadonlySet<string> = new Set([
+  'civilDateInZone',
+  'civilDateLabel',
+  'firstOfMonth',
+  'zonedDayStart',
+  'zoneCityLabel',
+]);
+/** Los siete ayudantes retirados: `date.ts` no los exporta (prueba abajo). */
+const RETIRED_HELPERS = [
   'formatTime',
   'formatDate',
   'formatDateTime',
   'formatTimeInZone',
   'formatDateTimeInZone',
   'formatDateLabel',
-  // DX-354b: el mismo defecto (`dd/mm/yyyy` fijo, ajeno al locale de la sede).
   'formatCivilDate',
-]);
-
-const STAMP = 'Fecha de registro (createdAt, firmas, envíos) en la hora del navegador: pendiente de migrar a la sede.';
-
-/** Pantallas aún sin migrar (DX-378, pendiente). Solo puede encoger. */
-const PENDING: Readonly<Record<string, string>> = {
-};
-
-/**
- * Aserción del máximo (DX-354b, M2): nadie añade entradas a `PENDING` aunque el
- * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
- * cierre, `PENDING` desaparece.
- */
-const MAX_PENDING = 0;
-
-/** Ficheros que solo importan `formatCivilDate`: vacía desde DX-354b W4 (T23); la retira T26. */
-const CIVIL_PENDING: Readonly<Record<string, string>> = {};
-const MAX_CIVIL_PENDING = 0;
+] as const;
 
 /** Las pantallas de DX-378 (y las migradas después): no pueden volver a la lista. */
 const MIGRATED = [
@@ -227,7 +217,7 @@ function isFormatDateModule(specifier: string, fileName: string): boolean {
   return resolved === 'lib/format/date' || resolved === 'lib/format/date.ts';
 }
 
-/** Los helpers sin sede que importa el fichero (o `*` si importa el módulo entero). */
+/** Lo que el fichero importa de `@/lib/format/date` fuera de la lista blanca (o `*` si importa el módulo entero). */
 function sedelessImports(source: ts.SourceFile): string[] {
   const found: string[] = [];
   for (const statement of source.statements) {
@@ -238,7 +228,7 @@ function sedelessImports(source: ts.SourceFile): string[] {
     if (bindings && ts.isNamedImports(bindings)) {
       for (const element of bindings.elements) {
         const name = (element.propertyName ?? element.name).text;
-        if (SEDELESS_HELPERS.has(name)) found.push(name);
+        if (!WHITELIST.has(name)) found.push(name);
       }
     }
   }
@@ -290,18 +280,10 @@ function symbolMoneyCalls(source: ts.SourceFile): string[] {
   return found;
 }
 
-/** Regla 1: ficheros que importan un ayudante sin sede sin estar en las listas (`formatCivilDate` solo se tolera en `civilPending`). */
-function rule1Offenders(
-  scannedFiles: readonly { rel: string; source: ts.SourceFile }[],
-  pending: Readonly<Record<string, string>>,
-  civilPending: Readonly<Record<string, string>>,
-): string[] {
+/** Regla 1: ficheros que importan de `@/lib/format/date` algo que no es un neutro de la lista blanca. */
+function rule1Offenders(scannedFiles: readonly { rel: string; source: ts.SourceFile }[]): string[] {
   return scannedFiles
-    .filter(({ rel }) => !(rel in pending))
-    .map(({ rel, source }) => ({
-      rel,
-      used: sedelessImports(source).filter((name) => !(name === 'formatCivilDate' && rel in civilPending)),
-    }))
+    .map(({ rel, source }) => ({ rel, used: sedelessImports(source) }))
     .filter(({ used }) => used.length > 0)
     .map(({ rel, used }) => `${rel}: ${used.join(', ')}`);
 }
@@ -331,36 +313,20 @@ const files = sourceFiles(SRC)
   .map(({ path, rel }) => ({ rel, source: parse(path, readFileSync(path, 'utf8')) }));
 
 describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
-  it('no file imports the sede-less date helpers outside the pending lists', () => {
-    expect(rule1Offenders(files, PENDING, CIVIL_PENDING)).toEqual([]);
+  it('no file imports anything but the neutral helpers from lib/format/date (no pending list)', () => {
+    expect(rule1Offenders(files)).toEqual([]);
   });
 
-  it('every pending entry still exists and still needs the exception (the list only shrinks)', () => {
-    const stale = Object.keys(PENDING).filter((rel) => {
-      const file = files.find((f) => f.rel === rel);
-      return !file || sedelessImports(file.source).length === 0;
-    });
-    expect(stale).toEqual([]);
+  it('date.ts does not export the seven retired sede-less helpers (DX-354b, E6)', () => {
+    const exported = Object.keys(dateModule);
+    for (const retired of RETIRED_HELPERS) expect(exported).not.toContain(retired);
+    // Y lo que sí exporta es exactamente la lista blanca: un ayudante nuevo se añade aquí a propósito.
+    expect([...exported].sort()).toEqual([...WHITELIST].sort());
   });
 
-  it('every civil-pending entry still imports formatCivilDate and is not also in PENDING (the list only shrinks)', () => {
-    const stale = Object.keys(CIVIL_PENDING).filter((rel) => {
-      const file = files.find((f) => f.rel === rel);
-      return !file || !sedelessImports(file.source).includes('formatCivilDate') || rel in PENDING;
-    });
-    expect(stale).toEqual([]);
-  });
-
-  it('the pending lists never grow beyond their maximum (DX-354b)', () => {
-    expect(Object.keys(PENDING).length).toBeLessThanOrEqual(MAX_PENDING);
-    expect(Object.keys(CIVIL_PENDING).length).toBeLessThanOrEqual(MAX_CIVIL_PENDING);
-  });
-
-  it('the agenda and the FE-078 screens are migrated and cannot return to the list', () => {
+  it('the agenda and the FE-078 screens are migrated and exist (no exceptions list to return to)', () => {
     for (const rel of MIGRATED) {
       expect([rel, existsSync(join(SRC, rel))]).toEqual([rel, true]);
-      expect([rel, rel in PENDING]).toEqual([rel, false]);
-      expect([rel, rel in CIVIL_PENDING]).toEqual([rel, false]);
     }
   });
 
@@ -415,23 +381,19 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
     expect(relativeImports('lib/format/x.ts', "import { formatDate } from './date';")).toEqual(['formatDate']);
     expect(relativeImports('lib/appointments/x.ts', "import { formatTime } from './date';")).toEqual([]);
 
-    // Mutaciones (DX-354b): una entrada de más hace fallar el máximo; un fichero nuevo
-    // que importa `formatCivilDate` fuera de las listas hace fallar la regla 1.
-    // Mutación: falla solo si PENDING ya está EXACTAMENTE en su máximo, y eso es a propósito:
-    // obliga a bajar `MAX_PENDING` en cada PR que migra pantallas.
-    const grown = { ...PENDING, 'components/nueva/pantalla.tsx': STAMP };
-    expect(Object.keys(grown).length <= MAX_PENDING).toBe(false);
-    const fresh = [
-      { rel: 'components/nueva/pantalla.tsx', source: parse('x.tsx', "import { formatCivilDate } from '@/lib/format/date';") },
-    ];
-    expect(rule1Offenders(fresh, PENDING, CIVIL_PENDING)).toEqual(['components/nueva/pantalla.tsx: formatCivilDate']);
-    expect(rule1Offenders(fresh, PENDING, { 'components/nueva/pantalla.tsx': 'motivo' })).toEqual([]);
-    const both = [
-      { rel: 'components/nueva/pantalla.tsx', source: parse('x.tsx', "import { formatCivilDate, formatDate } from '@/lib/format/date';") },
-    ];
-    expect(rule1Offenders(both, PENDING, { 'components/nueva/pantalla.tsx': 'motivo' })).toEqual([
-      'components/nueva/pantalla.tsx: formatDate',
+    // Mutación (DX-354b): sin lista de excepciones, cualquier fichero que importe un ayudante retirado,
+    // por nombre, con alias o con `import *`, hace fallar la regla 1; un neutro de la lista blanca, no.
+    const offender = (code: string) => [{ rel: 'components/nueva/pantalla.tsx', source: parse('x.tsx', code) }];
+    expect(rule1Offenders(offender("import { formatCivilDate } from '@/lib/format/date';"))).toEqual([
+      'components/nueva/pantalla.tsx: formatCivilDate',
     ]);
+    expect(rule1Offenders(offender("import { formatCivilDate, formatDate } from '@/lib/format/date';"))).toEqual([
+      'components/nueva/pantalla.tsx: formatCivilDate, formatDate',
+    ]);
+    expect(rule1Offenders(offender("import * as dates from '@/lib/format/date';"))).toEqual([
+      'components/nueva/pantalla.tsx: *',
+    ]);
+    expect(rule1Offenders(offender("import { civilDateInZone, zoneCityLabel } from '@/lib/format/date';"))).toEqual([]);
 
     // Mutación de la regla 4: otra carpeta que importe `platformInstant` falla; la consola, no; ni alias ni ruta relativa se escapan.
     const platformImport = "import { platformInstant } from '@/lib/format/platform-instant';";
