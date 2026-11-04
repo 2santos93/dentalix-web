@@ -11,6 +11,8 @@ import { fetchClinicName } from '@/lib/clinic-branding';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { ApiError } from '@/lib/api/client';
 import { notifyError } from '@/components/errors/notify';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -21,6 +23,7 @@ jest.mock('../../lib/receivables/receivables-api', () => ({
 jest.mock('../../lib/clinic-branding', () => ({ fetchClinicName: jest.fn() }));
 jest.mock('../../lib/auth/token-role', () => ({ getTokenRole: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn().mockResolvedValue([
     { userId: 'dr-1', fullName: 'Dra. Ríos', role: 'DENTIST' },
@@ -113,6 +116,7 @@ describe('ReceivablesView (DX-145)', () => {
     mockedAging.mockReset();
     mockedCsv.mockReset();
     mockedNotify.mockReset();
+    jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
     mockedClinic.mockResolvedValue('Clínica Demo');
     mockedRole.mockReturnValue('RECEPTION');
   });
@@ -134,8 +138,8 @@ describe('ReceivablesView (DX-145)', () => {
     // La fecha aproximada: «*» en la fila (con texto para el lector) y UNA nota al pie.
     expect(within(tableRow).getByText('(fecha aproximada)')).toBeInTheDocument();
     expect(screen.getByText(/^\* Fecha aproximada: parte del saldo no está en cuotas/)).toBeInTheDocument();
-    expect(money(tableRow.textContent)).toContain('500.000,00');
-    expect(money(tableRow.textContent)).toContain('A favor: 20.000,00');
+    expect(money(tableRow.textContent)).toContain('VES 500.000,00');
+    expect(money(tableRow.textContent)).toContain('A favor: VES 20.000,00');
     expect(within(tableRow).getByText('30/09/2026')).toBeInTheDocument();
     expect(within(tableRow).getByRole('link', { name: 'Llamar a Ana Pérez: 412 111 2222' })).toHaveAttribute(
       'href',
@@ -162,7 +166,7 @@ describe('ReceivablesView (DX-145)', () => {
     const summary = await screen.findByTestId('aging-total-VES');
     expect(money(summary.textContent)).toContain('1 deudor');
     expect(within(summary).getByText('Más de 90 días')).toBeInTheDocument();
-    expect(money(summary.textContent)).toContain('Saldo a favor 20.000,00');
+    expect(money(summary.textContent)).toContain('Saldo a favor VES 20.000,00');
   });
 
   it('filtra por más de 90 días y vuelve a la página 1', async () => {
@@ -441,7 +445,7 @@ describe('ReceivablesView (DX-145)', () => {
       expect(screen.queryByRole('table')).not.toBeInTheDocument();
       const card = within(list).getByRole('link', { name: /Ana Pérez/ });
       expect(card).toHaveAttribute('href', '/patients/pat-1?tab=account-statement');
-      expect(money(card.textContent)).toContain('500.000,00');
+      expect(money(card.textContent)).toContain('VES 500.000,00');
       expect(card).toHaveTextContent('Más de 90 días');
       await waitFor(() => expect(mockedClinic).toHaveBeenCalled());
       await openRowMenu(user);
@@ -465,7 +469,7 @@ describe('ReceivablesView (DX-145)', () => {
     render(<ReceivablesView token="tok" />);
     const summary = await screen.findByTestId('aging-total-USD');
     expect(within(summary).queryByText('Por vencer')).toBeNull();
-    expect(money(summary.textContent)).toContain('Saldo a favor 50,00');
+    expect(money(summary.textContent)).toContain('Saldo a favor USD 50,00');
   });
 
   describe('DX-472-bis: abonos en otra moneda sin contar', () => {

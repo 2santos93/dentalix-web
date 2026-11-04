@@ -114,6 +114,7 @@ export function SplitLineFields({
   fields,
   token,
   defaultCurrency,
+  money,
   disabled,
   onPatch,
   onRemove,
@@ -124,6 +125,8 @@ export function SplitLineFields({
   fields: PaymentMethodFieldsState;
   token: string;
   defaultCurrency: string;
+  /** El formato de la sede de la pantalla para los importes (`sedeMoney`). */
+  money: (amount: number, currency: string) => string;
   disabled: boolean;
   onPatch: (next: Partial<Omit<SplitLineState, 'key' | 'method'>>) => void;
   onRemove: () => void;
@@ -160,6 +163,7 @@ export function SplitLineFields({
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor={`${prefix}-amount`} label="Importe" error={line.amountError}>
           <MoneyInput
+            money={money}
             id={`${prefix}-amount`}
             currency={currency}
             requirePositive
@@ -189,6 +193,7 @@ export function SplitLineFields({
         method={fields.selected}
         amount={lineAmount(line.amount, currency)}
         currency={currency}
+        money={money}
       />
     </fieldset>
   );

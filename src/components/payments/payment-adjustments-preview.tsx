@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { formatCurrency } from '@/lib/format/currency';
 import { contractRoundingDigits } from '@/lib/money/line-rounding';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import type { ClinicPaymentMethod } from '@/lib/payments/payment-methods-api';
@@ -49,6 +48,7 @@ export function PaymentAdjustmentsPreview({
   amount,
   currency,
   id,
+  money,
 }: {
   token: string;
   method: ClinicPaymentMethod | null;
@@ -56,6 +56,8 @@ export function PaymentAdjustmentsPreview({
   amount: number | null;
   currency: string;
   id: string;
+  /** Cómo se pintan los importes: el formato de la sede de la pantalla (`stamp.money`, DX-354b). */
+  money: (amount: number, currency: string) => string;
 }) {
   const rules = (method?.adjustments ?? []).filter((a) => adjustmentApplies(a, currency));
   const [digits, setDigits] = useState<Map<string, number> | null>(null);
@@ -98,7 +100,7 @@ export function PaymentAdjustmentsPreview({
                 {rule.label}
                 <span className="sr-only"> ({PAYMENT_ADJUSTMENT_TYPE_LABELS[rule.type]})</span>
               </span>
-              <span className="shrink-0 tabular-nums text-ink">{line ? signedAdjustmentAmount(line) : '—'}</span>
+              <span className="shrink-0 tabular-nums text-ink">{line ? signedAdjustmentAmount(line, money) : '—'}</span>
             </li>
           );
         })}
@@ -106,7 +108,7 @@ export function PaymentAdjustmentsPreview({
       <p className="flex items-baseline justify-between gap-3 border-t border-border-subtle pt-1.5" aria-live="polite">
         <span className="font-medium text-ink">{copy.collected}</span>
         <span className="shrink-0 font-semibold tabular-nums text-ink">
-          {lines && amount !== null ? formatCurrency(collectedAmount(amount, lines), currency) : copy.pending}
+          {lines && amount !== null ? money(collectedAmount(amount, lines), currency) : copy.pending}
         </span>
       </p>
       <p className="t-caption text-muted">{copy.note}</p>

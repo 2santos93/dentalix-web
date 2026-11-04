@@ -3,12 +3,11 @@ import * as React from 'react';
 import { Download } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
-import { formatCurrency } from '@/lib/format/currency';
 import { 
   isInProgress,
   type ImportBatch} from '@/lib/patient-imports/patient-imports-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { sedeNumber } from '@/lib/format/sede-number';
+import { sedeMoney, sedeNumber } from '@/lib/format/sede-number';
 
 const copy = {
   title: (name: string) => `Importación de ${name}`,
@@ -91,7 +90,7 @@ export function ImportProgress({
           {batch.balances.imported.length > 0 ? (
             <p className="break-words tabular-nums text-muted">
               {copy.balancesImported}{' '}
-              {batch.balances.imported.map((t) => formatCurrency(t.amount, t.currency)).join(' · ')}
+              {batch.balances.imported.map((t) => sedeMoney(t.amount, t.currency, fmt)).join(' · ')}
             </p>
           ) : null}
           {batch.balances.progress.skipped > 0 ? (

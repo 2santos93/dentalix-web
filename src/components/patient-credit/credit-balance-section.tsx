@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { ArrowRightLeft, Undo2 } from 'lucide-react';
 import type { AccountStatement } from '@/lib/account-statement/account-statement-api';
 import type { CreditRefund } from '@/lib/patient-credit/patient-credit-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { SectionHeader } from '@/components/ui/section-header';
 import {
@@ -49,6 +50,7 @@ export function CreditBalanceSection({
   onRefunded,
 }: CreditBalanceSectionProps) {
   const sources = creditSources(statement);
+  const stamp = useSedeStamp(token);
   const [action, setAction] = useState<{ kind: 'transfer' | 'refund'; source: CreditSource } | null>(null);
   if (sources.length === 0) return null;
 
@@ -66,13 +68,13 @@ export function CreditBalanceSection({
       mobile: 'trailing',
       cell: (source) => (
         <span data-testid="credit-row" className="t-data whitespace-nowrap text-ink">
-          {formatCurrency(source.credit, source.currency)} <span className="text-muted">{copy.inFavor}</span>
+          {stamp.money(source.credit, source.currency)} <span className="text-muted">{copy.inFavor}</span>
         </span>
       ),
       // En el teléfono solo la cifra: «a favor» ya lo dice el título, y así el plan no se corta.
       mobileCell: (source) => (
         <span data-testid="credit-row" className="t-data whitespace-nowrap text-ink">
-          {formatCurrency(source.credit, source.currency)}
+          {stamp.money(source.credit, source.currency)}
         </span>
       ),
     },
@@ -81,6 +83,7 @@ export function CreditBalanceSection({
   return (
     <section aria-labelledby="credit-balance-heading" className="flex flex-col gap-3" data-testid="credit-balance">
       <SectionHeader as="h3" titleId="credit-balance-heading" title={copy.heading} description={copy.hint} />
+      <SedeStampNote stamp={stamp} />
       {/* B7: una fila por plan con saldo; «Aplicar a otro plan» y «Devolver» en el «⋯». */}
       <DataList
         label={copy.heading}

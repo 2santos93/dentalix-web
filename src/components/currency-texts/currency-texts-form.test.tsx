@@ -115,4 +115,13 @@ describe('Ajustes › Monedas (DX-517)', () => {
     expect(screen.getByText('Solo administración cambia cómo se escribe cada moneda.')).toBeInTheDocument();
     expect(mockedGet).not.toHaveBeenCalled();
   });
+
+  it('ninguna sede con formato: el ejemplo sale «—» (nunca con otro formato) y un aviso con Reintentar (DX-354b)', async () => {
+    jest.mocked(listLocations).mockResolvedValue(SEDES.map((s) => ({ ...s, locale: null, hourCycle: null })) as ClinicLocation[]);
+    mockedGet.mockResolvedValue({ entries: [] });
+    render(<CurrencyTextsForm token="tok" allowed />);
+    expect((await screen.findAllByText('Así se verá: —')).length).toBe(2);
+    expect(screen.getAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+  });
 });

@@ -5,6 +5,8 @@ import { accountStatementFixture } from '@/lib/test/account-statement';
 import { refundCredit, transferCredit } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatement } from '@/lib/account-statement/account-statement-api';
 import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { STAMP_SEDES } from '@/lib/test/stamp';
 
 jest.mock('../../lib/patient-credit/patient-credit-api', () => ({
   ...jest.requireActual('../../lib/patient-credit/patient-credit-api'),
@@ -17,9 +19,9 @@ jest.mock('../../lib/locations/locations-api', () => ({
 }));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const SEDES = [
-  { id: 'loc-1', name: 'Sede Principal', isActive: true },
-  { id: 'loc-2', name: 'Sede Norte', isActive: true },
-] as never;
+  clinicLocation({ id: 'loc-1', name: 'Sede Principal' }),
+  clinicLocation({ id: 'loc-2', name: 'Sede Norte' }),
+];
 
 const mockedTransfer = transferCredit as jest.MockedFunction<typeof transferCredit>;
 const mockedRefund = refundCredit as jest.MockedFunction<typeof refundCredit>;
@@ -245,4 +247,27 @@ it('D1: con una sede activa, el efectivo nombra la caja de esa sede', async () =
   expect(await screen.findByTestId('refund-cash-location')).toHaveTextContent(
     'El efectivo sale de tu caja en Sede Norte.',
   );
+});
+
+
+describe('CreditBalanceSection con el formato de la sede (DX-354b)', () => {
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+
+  it.each([
+    ['caracas', 'VES 300.000,00'],
+    ['berlin', '300.000,00 VES'],
+    ['miami', 'VES 300,000.00'],
+  ] as const)('el saldo a favor sale con el formato de la sede de la pantalla (%s)', async (key, expected) => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES[key]]);
+    renderSection(vesCredit());
+    await waitFor(() => expect(norm(screen.getByTestId('credit-row').textContent)).toContain(expected));
+  });
+
+  it('sin formato de la sede: «—» en el saldo y un solo aviso con Reintentar', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    renderSection(vesCredit());
+    expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+    expect(norm(screen.getByTestId('credit-row').textContent)).toContain('—');
+    expect(norm(screen.getByTestId('credit-row').textContent)).not.toContain('300');
+  });
 });

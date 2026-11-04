@@ -90,6 +90,7 @@ export function CloseCashSessionModal({
   const baseId = useId();
   // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
   const fmt = readyFormat(useSedeFormat(token));
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const blind = session.blindHidden;
   // Con arqueo ciego no se sabe qué monedas se cobraron: las del fondo, la de
   // la sede y las de los ajustes y salidas de caja de este turno (esos sí se
@@ -214,6 +215,7 @@ export function CloseCashSessionModal({
                 </div>
                 <div className="flex min-w-0 items-start gap-3 sm:justify-end">
                   <MoneyInput
+                    money={money}
                     id={inputId}
                     aria-label={copy.countedLabel(method, row.currency)}
                     currency={row.currency}

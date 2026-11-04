@@ -1,5 +1,4 @@
 import type { components } from '@/lib/api/schema';
-import { formatCurrency } from '@/lib/format/currency';
 import { formatPercent } from '@/lib/format/percent';
 import {
   basisPoints,
@@ -130,15 +129,18 @@ export function percentText(percent: number): string {
 }
 
 /** «3 %» o «2,00 USD»: cómo se calcula un ajuste configurado. */
-export function adjustmentCalculationText(rule: Pick<AdjustmentRule, 'calculation' | 'percent' | 'fixedAmount' | 'fixedCurrency'>): string {
+export function adjustmentCalculationText(
+  rule: Pick<AdjustmentRule, 'calculation' | 'percent' | 'fixedAmount' | 'fixedCurrency'>,
+  money: Money,
+): string {
   if (rule.calculation === 'PERCENT') return percentText(rule.percent ?? 0);
-  return formatCurrency(rule.fixedAmount ?? 0, rule.fixedCurrency ?? '');
+  return money(rule.fixedAmount ?? 0, rule.fixedCurrency ?? '');
 }
 
 /** El importe con signo de una línea: «+3,00 USD» o «−5,00 USD». */
 export function signedAdjustmentAmount(
   line: { type: PaymentAdjustmentType; amount: number; currency: string },
-  money: Money = formatCurrency,
+  money: Money,
 ): string {
   return `${adjustmentSign(line.type) < 0 ? '−' : '+'}${money(line.amount, line.currency)}`;
 }
@@ -149,7 +151,7 @@ export function signedAdjustmentAmount(
  */
 export function adjustmentBasisText(
   line: Pick<ComputedAdjustment, 'calculation' | 'percent' | 'base' | 'currency'>,
-  money: Money = formatCurrency,
+  money: Money,
 ): string {
   return line.calculation === 'PERCENT'
     ? `${percentText(line.percent ?? 0)} de ${money(line.base, line.currency)}`

@@ -2,7 +2,9 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
-import { formatCurrency } from '@/lib/format/currency';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { listLocations } from '@/lib/locations/locations-api';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 import {
   getPaymentAllocations,
   replacePaymentAllocations,
@@ -15,12 +17,23 @@ jest.mock('../../lib/payments/payment-allocations-api', () => ({
   replacePaymentAllocations: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+
+const mockedLocations = jest.mocked(listLocations);
 const mockedGet = jest.mocked(getPaymentAllocations);
 const mockedPut = jest.mocked(replacePaymentAllocations);
 
-/** Lo que pinta `formatCurrency`, con el espacio duro de Intl como espacio normal (así compara Testing Library). */
+/** La sede de la pantalla: Caracas (es-VE) por defecto; Berlín (de-DE) en la prueba de dos sedes (DX-354b). */
+let sede: 'caracas' | 'berlin' = 'caracas';
+
+/** Lo que pinta el modal: `moneyWithCode` con el formato de la sede, con el espacio duro de Intl como espacio normal. */
 function money(amount: number, currency: string): string {
-  return formatCurrency(amount, currency).replace(/ /g, ' ');
+  return moneyWithCode(amount, currency, STAMP_FORMATS[sede]).replace(/\u00a0/g, ' ');
+}
+
+/** El día 2026-10-20 con el formato de la sede. */
+function day(): string {
+  return STAMP_FORMATS[sede].civilDate('2026-10-20');
 }
 
 const VERSION = 'b'.repeat(64);
@@ -93,6 +106,8 @@ async function loaded() {
 describe('ReallocatePaymentModal (DX-051)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    sede = 'caracas';
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
     mockedGet.mockResolvedValue(DATA);
   });
 
@@ -100,7 +115,27 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     renderModal();
     const modal = await dialog();
     await loaded();
-    expect(within(modal).getByText(`NOR-000123 · ${money(120, 'USD')} · 20/10/2026`)).toBeInTheDocument();
+    expect(within(modal).getByText(`NOR-000123 · ${money(120, 'USD')} · ${day()}`)).toBeInTheDocument();
+  });
+
+  it('con la sede de Berlín (de-DE) el mismo abono sale con su formato, no con el de Caracas (DX-354b)', async () => {
+    sede = 'berlin';
+    mockedLocations.mockResolvedValue([STAMP_SEDES.berlin, STAMP_SEDES.caracas]);
+    renderModal();
+    const modal = await dialog();
+    await loaded();
+    expect(within(modal).getByText(`NOR-000123 · ${money(120, 'USD')} · ${day()}`)).toBeInTheDocument();
+    expect(money(120, 'USD')).toBe('120,00 USD');
+    expect(day()).toBe('20.10.2026');
+    expect(screen.getByText(`Disponible para imputar: ${money(108.5, 'EUR')}`)).toBeInTheDocument();
+  });
+
+  it('sin formato de la sede: «—» en lugar de los importes y un solo aviso con Reintentar', async () => {
+    mockedLocations.mockResolvedValue([{ ...STAMP_SEDES.caracas, locale: null, hourCycle: null }]);
+    renderModal();
+    await loaded();
+    expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+    expect(screen.getByText('Disponible para imputar: —')).toBeInTheDocument();
   });
 
   it('subtitle without receipt series shows only amount and date', async () => {
@@ -108,7 +143,7 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     renderModal();
     const modal = await dialog();
     await loaded();
-    expect(within(modal).getByText(`${money(120, 'USD')} · 20/10/2026`)).toBeInTheDocument();
+    expect(within(modal).getByText(`${money(120, 'USD')} · ${day()}`)).toBeInTheDocument();
   });
 
   it('shows Disponible para imputar and the conversion line for another currency', async () => {
@@ -116,7 +151,7 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     await loaded();
     expect(screen.getByText(`Disponible para imputar: ${money(108.5, 'EUR')}`)).toBeInTheDocument();
     expect(
-      screen.getByText(`Convertido de ${money(120, 'USD')} con la tasa del 20/10/2026.`),
+      screen.getByText(`Convertido de ${money(120, 'USD')} con la tasa del ${day()}.`),
     ).toBeInTheDocument();
   });
 

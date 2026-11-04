@@ -149,6 +149,7 @@ const forms: Record<string, FormDriver> = {
           onOpenChange={() => undefined}
           token="tok"
           sessionId="cs-1"
+          locationId="loc-1"
           defaultCurrency={currency}
           onCreated={() => undefined}
         />,
@@ -253,7 +254,7 @@ describe.each(formNames)('%s (DX-241)', (name) => {
     const previewId = (input.getAttribute('aria-describedby') ?? '').split(' ').find((id) => id.endsWith('-preview'));
     const preview = document.getElementById(previewId ?? '');
     expect(preview).toHaveAttribute('aria-live', 'polite');
-    await waitFor(() => expect(preview).toHaveTextContent(/^Se guardará: 150,50\sUSD$/));
+    await waitFor(() => expect(preview).toHaveTextContent(/^Se guardará: USD\s150,50$/));
     expect(within(document.body).getAllByText(/^Se guardará:/)).toHaveLength(1);
   });
 });

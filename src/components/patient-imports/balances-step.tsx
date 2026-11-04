@@ -7,7 +7,6 @@ import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { IMPORT_READ_BY_STATUS } from './import-read-busy';
-import { formatCurrency } from '@/lib/format/currency';
 import {
   IMPORT_ACCEPT,
   MAX_IMPORT_BYTES,
@@ -22,7 +21,7 @@ import {
 import { saveCsv } from '@/lib/files/save-csv';
 import { ImportIssuesTable } from './import-issues-table';
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { sedeNumber } from '@/lib/format/sede-number';
+import { sedeMoney, sedeNumber } from '@/lib/format/sede-number';
 import { Checkbox } from '@/components/ui/checkbox';
 
 export const balancesCopy = {
@@ -253,7 +252,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
               </div>
             ))}
           </dl>
-          <CurrencyTotalsTable fileTotals={sheet.fileTotals} validTotals={sheet.validTotals} />
+          <CurrencyTotalsTable fileTotals={sheet.fileTotals} validTotals={sheet.validTotals} fmt={fmt} />
           <p className="max-w-prose text-sm text-muted">{balancesCopy.totalsNote}</p>
           <p className="max-w-prose text-sm text-muted">{balancesCopy.approxNote}</p>
           {batch.balanceIssuesTotal > 0 ? (
@@ -304,9 +303,12 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
 export function CurrencyTotalsTable({
   fileTotals,
   validTotals,
+  fmt,
 }: {
   fileTotals: BalanceCurrencyTotal[];
   validTotals: BalanceCurrencyTotal[];
+  /** Formato de la sede de la pantalla para los importes; sin él, «—». */
+  fmt: RegionalFormat | null;
 }) {
   const currencies = [...new Set([...fileTotals, ...validTotals].map((t) => t.currency))].sort();
   const amountOf = (list: BalanceCurrencyTotal[], currency: string) =>
@@ -329,12 +331,13 @@ export function CurrencyTotalsTable({
                 {currency}
               </TableCell>
               <TableCell data-label={balancesCopy.importTotal} className="tabular-nums sm:text-right">
-                {formatCurrency(amountOf(validTotals, currency), currency)}
+                {sedeMoney(amountOf(validTotals, currency), currency, fmt)}
               </TableCell>
               <TableCell data-label={balancesCopy.errorTotal} className="tabular-nums sm:text-right">
-                {formatCurrency(
+                {sedeMoney(
                   Math.max(0, Math.round((amountOf(fileTotals, currency) - amountOf(validTotals, currency)) * 100) / 100),
                   currency,
+                  fmt,
                 )}
               </TableCell>
             </TableRow>

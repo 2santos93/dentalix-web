@@ -23,6 +23,7 @@ import { useExchangeRates } from '@/components/payments/use-exchange-rates';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { copy } from './treatment-plans-tab-copy';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 interface PlanPaymentFormModalProps {
   token: string;
@@ -61,6 +62,7 @@ export function PlanPaymentFormModal({
   locationHint,
   onRecorded,
 }: PlanPaymentFormModalProps) {
+  const stamp = useSedeStamp(token);
   const sedeTimeZone = readyTimeZone(sedeZone);
   // DX-377: medio de la clínica, referencia y aviso de repetida (el mismo que
   // «Registrar abono» del estado de cuenta).
@@ -162,6 +164,7 @@ export function PlanPaymentFormModal({
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel} error={amountError}>
           <MoneyInput
+            money={stamp.money}
             id="tp-payment-amount"
             currency={paymentCurrency}
             requirePositive

@@ -17,6 +17,8 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { clinicLocation } from '@/lib/test/locations';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 
 
 /** UX v2: Recibo y Anular viven en el «⋯» de cada fila («Acciones de abono de …»). */
@@ -197,6 +199,8 @@ beforeEach(() => {
       timeZone: SEDE_ZONE,
       createdAt: '2026-01-01T00:00:00.000Z',
     }),
+    // La sede de Beto: sin ella, su fila saldría «—» (cada fila usa la suya, DX-354b).
+    clinicLocation({ id: 'loc-2', name: 'Sede Norte', timeZone: SEDE_ZONE, createdAt: '2026-02-01T00:00:00.000Z' }),
   ]);
 });
 
@@ -1076,5 +1080,143 @@ describe('factura fiscal externa en la caja (DX-515)', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Exportar CSV' }));
     await waitFor(() => expect(mockedCsv).toHaveBeenCalledWith('tok', { ...today, externalInvoice: 'WITHOUT' }));
+  });
+});
+
+
+describe('cada abono con el formato de su sede, también en «Todas las sedes» (DX-354b, DX-517-bis)', () => {
+  // Tres sedes distintas: la de la pantalla (Caracas, es-VE 12 h), Berlín (de-DE, EUR) y Miami (en-US, USD).
+  const berlinPayment: CashPayment = {
+    ...betoCard,
+    id: 'pay-berlin',
+    amount: 1234.5,
+    currency: 'EUR',
+    collectedAmount: 1234.5,
+    paidOn: '2026-10-20',
+    registeredOn: '2026-10-12',
+    registeredToday: false,
+    location: { id: 'sede-berlin', name: 'Berlín' },
+    patient: { id: 'pat-b', fullName: 'Greta Weber' },
+  };
+  const miamiPayment: CashPayment = {
+    ...betoCard,
+    id: 'pay-miami',
+    amount: 1234.5,
+    currency: 'USD',
+    collectedAmount: 1234.5,
+    paidOn: '2026-10-20',
+    registeredOn: '2026-10-12',
+    registeredToday: false,
+    location: { id: 'sede-miami', name: 'Miami' },
+    patient: { id: 'pat-m', fullName: 'Mia Torres' },
+  };
+  const caracasPayment: CashPayment = {
+    ...anaCash,
+    id: 'pay-caracas',
+    amount: 1234.5,
+    currency: 'VES',
+    collectedAmount: 1234.5,
+    paidOn: '2026-10-20',
+    registeredOn: '2026-10-12',
+    registeredToday: false,
+    location: { id: 'sede-caracas', name: 'Caracas' },
+    patient: { id: 'pat-c', fullName: 'Carla Pérez' },
+  };
+
+  function rowText(row: HTMLElement): string {
+    return (row.textContent ?? '').replace(/\s/g, ' ');
+  }
+
+  it('importe, fecha de pago, de registro y del plan salen con el formato de la sede de cada fila', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedList.mockResolvedValue(
+      response({ items: [caracasPayment, berlinPayment, miamiPayment], scope: { ...response().scope, location: null } }),
+    );
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    const norm = (text: string) => text.replace(/\s/g, ' ');
+    for (const [name, key, payment, code] of [
+      ['carla pérez', 'caracas', caracasPayment, 'VES'],
+      ['greta weber', 'berlin', berlinPayment, 'EUR'],
+      ['mia torres', 'miami', miamiPayment, 'USD'],
+    ] as const) {
+      const row = within(table).getByRole('row', { name: new RegExp(name, 'i') });
+      const text = rowText(row);
+      const fmt = STAMP_FORMATS[key];
+      expect(text).toContain(norm(moneyWithCode(1234.5, code, fmt)));
+      expect(text).toContain(norm(fmt.civilDate(payment.paidOn)));
+      expect(text).toContain(`Registrado el ${norm(fmt.civilDate('2026-10-12'))}`);
+      expect(text).toContain(`Plan del ${norm(fmt.date(new Date(payment.treatmentPlan!.createdAt), STAMP_SEDES[key].timeZone!))}`);
+    }
+    // Literales de los tres formatos: Caracas «VES 1.234,50», Berlín «1.234,50 EUR», Miami «USD 1,234.50».
+    expect(rowText(within(table).getByRole('row', { name: /greta weber/i }))).toContain('1.234,50 EUR');
+    expect(rowText(within(table).getByRole('row', { name: /greta weber/i }))).toContain('20.10.2026');
+    expect(rowText(within(table).getByRole('row', { name: /mia torres/i }))).toContain('USD 1,234.50');
+    expect(rowText(within(table).getByRole('row', { name: /mia torres/i }))).toContain('10/20/2026');
+    expect(rowText(within(table).getByRole('row', { name: /carla pérez/i }))).toContain('VES 1.234,50');
+  });
+
+  it('un abono de una sede que no está en la lista sale «—» (no con el formato de la pantalla) y un solo aviso', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+    mockedList.mockResolvedValue(response({ items: [berlinPayment] }));
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    const row = within(table).getByRole('row', { name: /greta weber/i });
+    expect(rowText(row)).not.toContain('1.234,50');
+    expect(rowText(row)).toContain('—');
+    expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+  });
+
+  it('con la lista de sedes cargando el abono sale «—» y sin aviso', async () => {
+    mockedLocations.mockReturnValue(new Promise(() => undefined));
+    mockedList.mockResolvedValue(response({ items: [berlinPayment] }));
+    render(<CashRegisterView token="tok" />);
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+  });
+});
+
+describe('anular un abono de otra sede en «Todas las sedes» (DX-354b, E1)', () => {
+  const berlin: CashPayment = {
+    ...anaCash,
+    id: 'pay-berlin-void',
+    amount: 120,
+    currency: 'EUR',
+    collectedAmount: 120,
+    paidOn: '2026-10-20',
+    registeredOn: '2026-10-20',
+    location: { id: 'sede-berlin', name: 'Berlín' },
+    patient: { id: 'pat-b', fullName: 'Greta Weber' },
+  };
+
+  it('el diálogo y el aviso usan el formato de la sede del abono (Berlín), no el de la pantalla (Caracas)', async () => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+    mockedList.mockResolvedValue(response({ items: [berlin], total: 1 }));
+    mockedVoid.mockResolvedValue(undefined);
+    render(<CashRegisterView token="tok" />);
+    await screen.findByRole('table', { name: /abonos/i });
+    await pickRowAction(user, /greta weber/, 'Anular');
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    const text = (dialog.textContent ?? '').replace(/\s/g, ' ');
+    expect(text).toContain('120,00 EUR');
+    expect(text).toContain('20.10.2026');
+    expect(text).not.toContain('EUR 120,00');
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste('Cobro registrado dos veces');
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const notice = await screen.findByText(/Abono anulado/i);
+    expect((notice.textContent ?? '').replace(/\s/g, ' ')).toContain('120,00 EUR · 20.10.2026');
+  });
+
+  it('un abono de una sede que no está en la lista se nombra con «—», no con el formato de la pantalla', async () => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+    mockedList.mockResolvedValue(response({ items: [berlin], total: 1 }));
+    render(<CashRegisterView token="tok" />);
+    await screen.findByRole('table', { name: /abonos/i });
+    await pickRowAction(user, /greta weber/, 'Anular');
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(dialog.textContent).not.toMatch(/120/);
   });
 });

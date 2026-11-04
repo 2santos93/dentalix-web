@@ -1,7 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
-import { formatCurrency } from '@/lib/format/currency';
 import type { DocumentFormat } from '@/lib/format/document-format';
 import { statementCopy } from '@/lib/account-statement/presentation';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
@@ -53,7 +52,7 @@ export type MoneyFormatter = (amount: number, currency: string) => string;
 export function billablePlanLabel(
   plan: BillablePlan,
   dates: DocumentFormat | null,
-  money: MoneyFormatter = formatCurrency,
+  money: MoneyFormatter,
 ): string {
   const balance =
     plan.balance < 0 ? `${money(-plan.balance, plan.currency)} ${statementCopy.inFavor}` : money(plan.balance, plan.currency);

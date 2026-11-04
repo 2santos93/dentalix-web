@@ -85,9 +85,9 @@ const paymentAmount = 250;
 
 // The income amount is asserted against a value formatted INSIDE the browser
 // (see `page.evaluate` below) with the same options as the app's
-// `formatCurrency` (`src/lib/format/currency.ts`): es locale and two FIXED
+// `moneyWithCode` (DX-354b): the sede's locale, the ISO code and two FIXED
 // fraction digits (DX-098). Relying on ICU's default for USD breaks on recent
-// builds, which give USD 0 decimals ("250 USD" vs the app's "250,00 USD").
+// builds, which give USD 0 decimals.
 
 /**
  * La sede y el navegador van en `SEDE_TODAY_TZ` (support/clock.ts): la cita de
@@ -276,18 +276,22 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   await expect(pending.getByTestId('pending-follow-up-value')).toHaveText('Al día');
 
   // --- «Resultados del período» → «Cobrado, en USD»: total + count ---
-  // Format the expected amount with the browser's own Intl and the app's
-  // options (two fixed decimals, as `formatCurrency` since DX-098).
+  // DX-354b: el importe sale con el formato de la sede y el código ISO
+  // (`moneyWithCode`): se calcula con el Intl del navegador, el locale de la
+  // sede de la suite, dos decimales fijos y dígitos latinos.
   const expectedIncome = await page.evaluate(
-    (amount) =>
-      new Intl.NumberFormat('es', {
+    ([amount, locale]) =>
+      new Intl.NumberFormat(locale, {
         style: 'currency',
         currency: 'USD',
         currencyDisplay: 'code',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-      }).format(amount),
-    paymentAmount,
+        numberingSystem: 'latn',
+      })
+        .format(amount)
+        .replace(/[\u200e\u200f\u061c]/g, ''),
+    [paymentAmount, E2E_TODAY_REGION.locale] as const,
   );
   const incomes = page.getByTestId('dashboard-incomes');
   await expect(incomes.getByText('Cobrado, en USD', { exact: true })).toBeVisible({ timeout: 10_000 });

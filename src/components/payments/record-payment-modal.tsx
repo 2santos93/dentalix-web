@@ -590,6 +590,7 @@ export function RecordPaymentModal({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField htmlFor="rp-amount" label={copy.amount} error={amountError}>
                     <MoneyInput
+                      money={money}
                       id="rp-amount"
                       currency={currency}
                       requirePositive
@@ -652,6 +653,7 @@ export function RecordPaymentModal({
                   method={methodFields.selected}
                   amount={previewAmount}
                   currency={currency}
+                  money={money}
                 />
               </div>
               {plan && !opening
@@ -663,6 +665,7 @@ export function RecordPaymentModal({
                       fields={split.fields(line)}
                       token={token}
                       defaultCurrency={plan.currency}
+                      money={money}
                       disabled={submitting}
                       onPatch={(next) => split.patch(line.key, next)}
                       onRemove={() => {
