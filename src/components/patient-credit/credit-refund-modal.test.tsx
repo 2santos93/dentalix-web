@@ -1,4 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { ApiError } from '@/lib/api/client';
+import { refundCredit } from '@/lib/patient-credit/patient-credit-api';
 import { CreditRefundModal } from './credit-refund-modal';
 import type { CreditSource } from './credit-balance';
 import type { AccountStatementMovement } from '@/lib/account-statement/account-statement-api';
@@ -58,5 +61,27 @@ describe('CreditRefundModal con el formato de la sede (DX-354b)', () => {
     expect(await within(dialog).findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
     expect(within(dialog).getByRole('button', { name: 'Devolver' })).toBeDisabled();
     expect(norm(dialog.textContent)).not.toContain('120');
+  });
+});
+
+describe('CreditRefundModal: tope diario de RECEPCIÓN (DX-462)', () => {
+  beforeEach(() => mockedLocations.mockReset().mockResolvedValue([STAMP_SEDES.caracas]));
+
+  it('el 403 de la API con lo que queda del tope diario se ve junto al formulario, en español', async () => {
+    const message =
+      'Supera tu tope diario de devoluciones en esta sede. Te quedan VES\u00a040,00 hoy; pide a un administrador que la registre.';
+    jest.mocked(refundCredit).mockRejectedValueOnce(new ApiError(403, message));
+    const user = userEvent.setup();
+    renderModal();
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Devolver' })).toBeEnabled());
+    await user.type(dialog.querySelector('#cr-amount') as HTMLInputElement, '60');
+    await user.type(dialog.querySelector('#cr-reason') as HTMLTextAreaElement, 'El paciente se muda de ciudad');
+    await user.click(within(dialog).getByRole('button', { name: 'Devolver' }));
+
+    const alert = await within(dialog).findByText(/Supera tu tope diario de devoluciones en esta sede/);
+    expect(norm(alert.textContent)).toBe(norm(message));
+    // El formulario sigue abierto con lo escrito: se puede corregir el importe.
+    expect(dialog.querySelector('#cr-reason')).toHaveValue('El paciente se muda de ciudad');
   });
 });
