@@ -57,7 +57,11 @@ type Mode = ReplacePaymentAllocationsInput['mode'];
 
 /** Recibo · importe · fecha civil; sin serie (abonos anteriores a DX-136), solo importe y fecha. */
 function allocationSubject(data: PaymentAllocations, stamp: SedeStamp): string {
-  return [data.receiptNumber, stamp.money(data.paymentAmount, data.paymentCurrency), stamp.civilDate(data.paidOn)]
+  return [
+    data.receiptNumber,
+    stamp.money(data.paymentAmount, data.paymentCurrency, data.locationId),
+    stamp.civilDate(data.paidOn, data.locationId),
+  ]
     .filter(Boolean)
     .join(' · ');
 }
@@ -95,8 +99,11 @@ export function ReallocatePaymentModal({
   onSaved,
   onCloseAutoFocus,
 }: ReallocatePaymentModalProps) {
-  const stamp = useSedeStamp(token);
   const { data, loading, error, reload, save, saving, saveError } = usePaymentAllocations(token, paymentId);
+  // El abono y su plan se pintan con el formato de la sede del abono (DX-354c), no con el de la pantalla.
+  const stamp = useSedeStamp(token, [data?.locationId]);
+  const sedeId = data?.locationId;
+  const money = (amount: number, currency: string) => stamp.money(amount, currency, sedeId);
   const baseId = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
   // «Volver a cargar» y «Reintentar» sustituyen el contenido por el esqueleto:
@@ -244,13 +251,13 @@ export function ReallocatePaymentModal({
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-0.5">
                   <p className="font-medium text-ink tabular-nums">
-                    {copy.available(stamp.money(data.planAmount, data.planCurrency))}
+                    {copy.available(money(data.planAmount, data.planCurrency))}
                   </p>
                   {data.paymentCurrency !== data.planCurrency ? (
                     <p className="text-sm text-muted tabular-nums">
                       {copy.converted(
-                        stamp.money(data.paymentAmount, data.paymentCurrency),
-                        stamp.civilDate(data.paidOn),
+                        money(data.paymentAmount, data.paymentCurrency),
+                        stamp.civilDate(data.paidOn, sedeId),
                       )}
                     </p>
                   ) : null}
@@ -323,14 +330,14 @@ export function ReallocatePaymentModal({
                                   <StatusBadge kind="treatmentPlanItem" status={item.status} />
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums" data-label={copy.colFree}>
-                                  {stamp.money(item.free, data.planCurrency)}
+                                  {money(item.free, data.planCurrency)}
                                 </TableCell>
                                 <TableCell className="sm:w-56" data-label={copy.colAmount}>
                                   <label htmlFor={fieldId} className="sr-only">
                                     {copy.amountLabel(item.procedureName, item.toothNumber)}
                                   </label>
                                   <MoneyInput
-                                    money={stamp.money}
+                                    money={money}
                                     id={fieldId}
                                     value={text}
                                     onValueChange={(next) => setAmount(item.itemId, next)}
@@ -347,7 +354,7 @@ export function ReallocatePaymentModal({
                                     </InlineError>
                                   ) : overItem ? (
                                     <p id={overItemId} className="t-caption text-danger-text tabular-nums">
-                                      {copy.overItem(stamp.money(item.free, data.planCurrency))}
+                                      {copy.overItem(money(item.free, data.planCurrency))}
                                     </p>
                                   ) : null}
                                 </TableCell>
@@ -364,15 +371,15 @@ export function ReallocatePaymentModal({
                       >
                         <p className="font-medium">
                           {copy.footer(
-                            stamp.money(allocatedCents / 100, data.planCurrency),
+                            money(allocatedCents / 100, data.planCurrency),
                             // Nunca negativo: cuánto se pasa lo dice el aviso de abajo.
-                            stamp.money(Math.max(0, planCents - allocatedCents) / 100, data.planCurrency),
+                            money(Math.max(0, planCents - allocatedCents) / 100, data.planCurrency),
                           )}
                         </p>
                         {/* Solo el aviso es alerta: el Σ cambia con cada tecla y no debe leerse cada vez. */}
                         {over ? (
                           <p role="alert">
-                            {copy.over(stamp.money((allocatedCents - planCents) / 100, data.planCurrency))}
+                            {copy.over(money((allocatedCents - planCents) / 100, data.planCurrency))}
                           </p>
                         ) : null}
                       </div>

@@ -42,6 +42,7 @@ const VERSION = 'b'.repeat(64);
 const DATA: PaymentAllocations = {
   paymentId: 'pay-1',
   receiptNumber: 'NOR-000123',
+  locationId: STAMP_SEDES.caracas.id,
   treatmentPlanId: 'plan-1',
   paymentAmount: 120,
   paymentCurrency: 'USD',
@@ -121,6 +122,7 @@ describe('ReallocatePaymentModal (DX-051)', () => {
   it('con la sede de Berlín (de-DE) el mismo abono sale con su formato, no con el de Caracas (DX-354b)', async () => {
     sede = 'berlin';
     mockedLocations.mockResolvedValue([STAMP_SEDES.berlin, STAMP_SEDES.caracas]);
+    mockedGet.mockResolvedValue({ ...DATA, locationId: STAMP_SEDES.berlin.id });
     renderModal();
     const modal = await dialog();
     await loaded();
@@ -128,6 +130,20 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     expect(money(120, 'USD')).toBe('120,00 USD');
     expect(day()).toBe('20.10.2026');
     expect(screen.getByText(`Disponible para imputar: ${money(108.5, 'EUR')}`)).toBeInTheDocument();
+  });
+
+  it('la pantalla es de Caracas pero el abono es de Miami (en-US): importe y fecha salen con el formato de Miami (DX-354c)', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.miami]);
+    mockedGet.mockResolvedValue({ ...DATA, locationId: STAMP_SEDES.miami.id, planCurrency: 'USD', planAmount: 120 });
+    renderModal();
+    const modal = await dialog();
+    await loaded();
+    const miami = moneyWithCode(120, 'USD', STAMP_FORMATS.miami).replace(/\u00a0/g, ' ');
+    const miamiDay = STAMP_FORMATS.miami.civilDate('2026-10-20');
+    expect(miami).toBe('USD 120.00');
+    expect(miamiDay).not.toBe(STAMP_FORMATS.caracas.civilDate('2026-10-20'));
+    expect(within(modal).getByText(`NOR-000123 · ${miami} · ${miamiDay}`)).toBeInTheDocument();
+    expect(screen.getByText(`Disponible para imputar: ${miami}`)).toBeInTheDocument();
   });
 
   it('sin formato de la sede: «—» en lugar de los importes y un solo aviso con Reintentar', async () => {

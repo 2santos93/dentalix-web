@@ -2978,6 +2978,7 @@ describe('TreatmentPlansTab', () => {
       const allocations = {
         paymentId: 'pay-1',
         receiptNumber: 'PRI-000001',
+        locationId: 'loc-1',
         treatmentPlanId: 'plan-1',
         paymentAmount: 50000,
         paymentCurrency: 'USD',

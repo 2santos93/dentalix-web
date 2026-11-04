@@ -40,6 +40,7 @@ const voidFee = voidCancellationFee as jest.Mock;
 function view(over: Partial<CancellationFeeView> = {}): CancellationFeeView {
   return {
     appointmentId: 'a-1',
+    locationId: clinicLocation().id,
     patientId: 'p-1',
     eligible: true,
     status: 'NONE',
@@ -380,11 +381,30 @@ describe('CancellationFeePanel con el formato de la sede (DX-354b)', () => {
     ['miami', 'VES 50,000.00'],
   ] as const)('el importe sugerido sale con el formato de la sede de la pantalla (%s)', async (key, expected) => {
     mockedLocations.mockResolvedValue([STAMP_SEDES[key]]);
-    get.mockResolvedValue(view());
+    get.mockResolvedValue(view({ locationId: STAMP_SEDES[key].id }));
     render(<CancellationFeePanel token="t" appointmentId="a-1" />);
     const line = await screen.findByText(/Importe sugerido:/);
     expect(norm(line.textContent)).toContain(norm(moneyWithCode(50000, 'VES', STAMP_FORMATS[key])));
     expect(norm(line.textContent)).toContain(expected);
+  });
+
+  it('la pantalla es de Caracas pero la cita es de Miami (en-US): sugerido, cargo y modal salen con el formato de Miami (DX-354c)', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.miami]);
+    get.mockResolvedValue(view({ locationId: STAMP_SEDES.miami.id }));
+    render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+    const line = await screen.findByText(/Importe sugerido:/);
+    expect(norm(line.textContent)).toContain(norm(moneyWithCode(50000, 'VES', STAMP_FORMATS.miami)));
+    expect(norm(line.textContent)).toContain('VES 50,000.00');
+    expect(norm(line.textContent)).not.toContain('50.000,00');
+    fireEvent.click(screen.getByRole('button', { name: /Generar cargo/ }));
+    expect(norm((await screen.findByText(/Como mucho/)).textContent)).toContain('VES 50,000.00');
+  });
+
+  it('el cargo ya generado de una cita de Miami sale con el formato de Miami aunque la pantalla sea de Caracas (DX-354c)', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.miami]);
+    get.mockResolvedValue({ ...charged, locationId: STAMP_SEDES.miami.id });
+    render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+    expect(norm((await screen.findByText(/Cargo generado:/)).textContent)).toContain('VES 40,000.00');
   });
 
   it('sin formato de la sede no dice ninguna cifra, avisa una vez y no deja generar el cargo a ciegas', async () => {
