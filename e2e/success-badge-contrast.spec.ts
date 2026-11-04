@@ -92,6 +92,12 @@ test('DX346: success badges and covered items meet AA on cash shifts, plan and s
   expect(done.ok(), await done.text()).toBeTruthy();
   await apiPost(page.request, session, `/treatment-plans/${plan.id}/payments`, {
     amount: 100, currency: 'USD', paidAt: new Date().toISOString(), method: 'CASH' });
+  // DX-406: ni la tarjeta móvil ni la tabla del plan (con «Cubierto») pueden
+  // anidar un bloque dentro de un <p>: React lo avisa por consola.
+  const nesting: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && /descendant of <p>|In HTML, <div> cannot be a descendant|validateDOMNesting/.test(msg.text())) nesting.push(msg.text());
+  });
   const measurements = [];
   for (const width of [390, 1440]) for (const colorScheme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
@@ -128,4 +134,5 @@ test('DX346: success badges and covered items meet AA on cash shifts, plan and s
     }
   }
   writeFileSync(path.join(evidence, 'contrast.json'), JSON.stringify(measurements, null, 2));
+  expect(nesting, 'DX-406: anidación HTML inválida en consola').toEqual([]);
 });
