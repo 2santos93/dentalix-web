@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { AuthLayout } from './auth-layout';
+import { HERO_IMAGES } from '@/lib/auth/hero-images';
 
 jest.mock('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light', setTheme: jest.fn() }),
@@ -36,8 +37,36 @@ describe('AuthLayout', () => {
     );
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Inicia sesión');
     expect(container.textContent?.match(/Dentalix/g)).toHaveLength(1);
-    // Sin fotografía: el panel lateral es tipográfico.
+    // Sin heroImage: el panel lateral es tipográfico.
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByText('Tu clínica, siempre al día')).toBeInTheDocument();
+  });
+
+  it('with a heroImage the side panel shows that photo with its alt, and the caption over a veil', () => {
+    const hero = HERO_IMAGES[2];
+    const { container } = render(
+      <AuthLayout clinic={null} task="Inicia sesión" caption="Tu clínica, siempre al día" heroImage={hero}>
+        <form />
+      </AuthLayout>,
+    );
+    const img = screen.getByAltText(hero.alt);
+    expect(img).toHaveAttribute('src', hero.src);
+    expect(img).toHaveAttribute('loading', 'lazy');
+    expect(img.className).toContain('object-cover');
+    // El panel es el único con foto, y la frase sigue ahí, en blanco.
+    expect(container.querySelectorAll('img')).toHaveLength(1);
+    expect(screen.getByText('Tu clínica, siempre al día')).toHaveClass('text-white');
+    expect(img.parentElement).toHaveClass('hidden', 'lg:flex');
+    // Velo neutro, sin color de marca.
+    expect(container.querySelector('[aria-hidden].bg-gradient-to-t')?.className).toMatch(/from-black\//);
+  });
+
+  it('the H1 and header are unchanged by the photo', () => {
+    render(
+      <AuthLayout clinic={null} task="Inicia sesión" heroImage={HERO_IMAGES[0]}>
+        <form />
+      </AuthLayout>,
+    );
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Inicia sesión');
   });
 });

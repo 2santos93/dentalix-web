@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { AuthLayout } from '@/components/auth/auth-layout';
+import { randomHeroImage } from '@/lib/auth/hero-images';
 import { VerifyRegistration } from '@/components/auth/verify-registration';
 
 // Copy as constants (i18n-ready) — es first.
@@ -24,6 +25,7 @@ export default async function VerifyRegistrationPage({
       clinic={null}
       task={copy.task}
       caption={copy.caption}
+      heroImage={randomHeroImage()}
       footer={
         <>
           {copy.loginPrompt}{' '}
