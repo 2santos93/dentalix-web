@@ -1,21 +1,21 @@
 /**
- * Central date/time display helpers. Every user-facing date renders as
- * `dd/mm/yyyy` (zero-padded) and every time as 24h `HH:mm`, deterministically —
- * we compose the parts by hand instead of relying on `toLocaleDateString`'s
- * locale-default ordering, which is neither guaranteed zero-padded nor
- * guaranteed day-first across browsers/OSes.
+ * Neutral date helpers: calendar logic only, nothing that PAINTS a date or a
+ * time. Every date, time and amount a screen shows goes through the sede of the
+ * data (`RegionalFormat` / `SedeClock` / `useSedeStamp`): its zone, its locale
+ * and its 12/24 h clock, never the browser's and never a hand-composed
+ * `dd/mm/yyyy` or `HH:mm` (DX-378, DX-354b).
  *
- * Timezone convention (see the two variants below): the database always stores
- * UTC. Genuine instants (appointment times, server timestamps) are shown in the
- * user's local timezone; civil dates (a birthday, the day a payment was made)
- * are shown exactly as they were picked.
+ * What stays here is pure logic: `civilDateInZone` (which day an instant is in a
+ * zone), `zonedDayStart` (the instant a civil day starts in a zone),
+ * `civilDateLabel` (a civil day in words of the product language), `firstOfMonth`
+ * and `zoneCityLabel`. The sede-less painters (`formatDate`, `formatTime`,
+ * `formatDateTime`, `formatTimeInZone`, `formatDateTimeInZone`, `formatDateLabel`
+ * and `formatCivilDate`) were retired in DX-354b; `src/architecture/sede-clock-guard`
+ * fails if they come back.
  *
- * DX-378: las pantallas pintan horas y fechas con la zona y el formato de la
- * sede (`SedeClock`/`RegionalFormat`). `formatTime`, `formatDate`,
- * `formatDateTime`, `formatTimeInZone`, `formatDateTimeInZone` y
- * `formatDateLabel` quedan para las pantallas aún sin migrar que lista
- * `src/architecture/sede-clock-guard.test.ts`; la prueba falla si otra los
- * importa.
+ * Timezone convention: the database always stores UTC. A genuine instant is read
+ * in the zone of its sede; a civil date (a birthday, the day a payment was made)
+ * is a `YYYY-MM-DD` day with no zone at all.
  */
 
 import { UI_LANGUAGE } from '@/lib/format/regional-format';
@@ -28,66 +28,6 @@ function toDate(value: string | number | Date | null | undefined): Date | null {
   if (value === null || value === undefined || value === '') return null;
   const d = value instanceof Date ? value : new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
-}
-
-/**
- * A **civil (calendar) date** — a day with no meaningful time-of-day, e.g. a
- * birth date or the date a payment was recorded. These are stored as UTC
- * midnight (a `type="date"` value round-tripped through `new Date(str)`), so we
- * read the UTC parts: that renders the day the user actually picked, free of
- * the off-by-one a local-timezone conversion would introduce west of UTC.
- */
-export function formatCivilDate(
-  value: string | number | Date | null | undefined,
-  fallback: string = FALLBACK,
-): string {
-  const d = toDate(value);
-  if (!d) return fallback;
-  const dd = String(d.getUTCDate()).padStart(2, '0');
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const yyyy = d.getUTCFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-/**
- * The date of a **genuine instant** (a server timestamp such as `createdAt` /
- * `recordedAt`, or "now"), rendered `dd/mm/yyyy` in the user's local timezone.
- */
-export function formatDate(
-  value: string | number | Date | null | undefined,
-  fallback: string = FALLBACK,
-): string {
-  const d = toDate(value);
-  if (!d) return fallback;
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-/**
- * The time-of-day of a genuine instant, rendered 24h `HH:mm` in the user's
- * local timezone.
- */
-export function formatTime(
-  value: string | number | Date | null | undefined,
-  fallback: string = FALLBACK,
-): string {
-  const d = toDate(value);
-  if (!d) return fallback;
-  const hh = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${min}`;
-}
-
-/** `dd/mm/yyyy HH:mm` for a genuine instant, in the user's local timezone. */
-export function formatDateTime(
-  value: string | number | Date | null | undefined,
-  fallback: string = FALLBACK,
-): string {
-  const d = toDate(value);
-  if (!d) return fallback;
-  return `${formatDate(d)} ${formatTime(d)}`;
 }
 
 const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
@@ -117,38 +57,6 @@ function zonedParts(d: Date, timeZone: string): Record<string, number> | null {
     if (part.type !== 'literal') parts[part.type] = Number(part.value);
   }
   return parts;
-}
-
-/**
- * `dd/mm/yyyy HH:mm` for a genuine instant in a given IANA zone — e.g. an
- * audit event shown in its location's zone (DX-009), so every viewer reads the
- * same wall-clock time the clinic saw. An unknown zone falls back to the
- * browser's local time rather than breaking the row.
- */
-export function formatDateTimeInZone(
-  value: string | number | Date | null | undefined,
-  timeZone: string,
-  fallback: string = FALLBACK,
-): string {
-  const d = toDate(value);
-  if (!d) return fallback;
-  const p = zonedParts(d, timeZone);
-  if (!p) return formatDateTime(d, fallback);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(p.day)}/${pad(p.month)}/${p.year} ${pad(p.hour)}:${pad(p.minute)}`;
-}
-
-/** `HH:mm` of a genuine instant in a given IANA zone (unknown zone: local time). */
-export function formatTimeInZone(
-  value: string | number | Date | null | undefined,
-  timeZone: string,
-  fallback: string = FALLBACK,
-): string {
-  const d = toDate(value);
-  if (!d) return fallback;
-  const p = zonedParts(d, timeZone);
-  if (!p) return formatTime(d, fallback);
-  return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
 }
 
 /**
@@ -182,33 +90,6 @@ export function zonedDayStart(day: string, timeZone: string): string | null {
  */
 export function zoneCityLabel(timeZone: string): string {
   return zoneCityName(timeZone);
-}
-
-/**
- * Fecha en texto («lunes, 15 de marzo», «marzo de 2026») SIEMPRE en español,
- * sin depender del idioma del navegador, y sin lanzar con un valor inválido.
- * Para las etiquetas largas de la agenda; los listados usan `dd/mm/yyyy`.
- *
- * - `YYYY-MM-DD` es un día civil del calendario (el que eligió la persona): se
- *   lee a medianoche LOCAL, no UTC, para que no se corra al día anterior al
- *   oeste de Greenwich.
- * - Cualquier otro valor es un instante, en la zona local.
- */
-export function formatDateLabel(
-  value: string | number | Date | null | undefined,
-  options: Intl.DateTimeFormatOptions,
-  fallback: string = FALLBACK,
-): string {
-  const civil = typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
-  const d = civil
-    ? new Date(Number(civil[1]), Number(civil[2]) - 1, Number(civil[3]))
-    : toDate(value);
-  if (!d || Number.isNaN(d.getTime())) return fallback;
-  try {
-    return d.toLocaleDateString('es', options);
-  } catch {
-    return fallback;
-  }
 }
 
 /** Partes con palabras de un día civil: nunca un mes en cifras (su orden lo decide el locale de la sede). */
