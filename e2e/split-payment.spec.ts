@@ -227,8 +227,12 @@ for (const viewport of [
     }
 
     // DX-414 (C4): la pestaña Plan dice el medio real («Pago móvil») y su referencia, no «Transferencia».
-    await page.goto(`${origin}/patients/${seeded.patientId}?tab=treatment-plans`);
-    const plan = page.locator('#tabpanel-treatment-plans');
+    // Recepción no ve la pestaña Plan (`patientTabAccess`: solo roles clínicos y ADMIN): la mira un ADMIN.
+    const adminContext = await browser.newContext({ viewport });
+    const adminPage = await adminContext.newPage();
+    await login(adminPage, origin, ADMIN_EMAIL);
+    await adminPage.goto(`${origin}/patients/${seeded.patientId}?tab=treatment-plans`);
+    const plan = adminPage.locator('#tabpanel-treatment-plans');
     await expect(plan.getByRole('heading', { name: 'Detalle del plan' })).toBeVisible({ timeout: 15_000 });
     const disclosure = plan.getByRole('button', { name: /^Abonos registrados\s+\d+ abonos?$/ });
     if ((await disclosure.getAttribute('aria-expanded')) === 'false') await disclosure.click();
@@ -240,7 +244,8 @@ for (const viewport of [
     ).toHaveCount(0);
     // (a 390 px la línea del teléfono dice «Cobro dividido · 2 formas»; el recibo ya va en su línea)
     await expect(plan.getByText(/Cobro dividido · 2 formas/).first()).toBeVisible();
-    await expectNoHorizontalScroll(page);
+    await expectNoHorizontalScroll(adminPage);
+    await adminContext.close();
     await context.close();
   });
 }
