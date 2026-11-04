@@ -25,7 +25,7 @@ import {
   type SiteValues,
   type ToothValues,
 } from '@/lib/perio/perio-grid';
-import { formatCivilDate } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -95,6 +95,8 @@ interface PerioExamEditorProps {
   onDeleted: () => void;
   /** Formato de la sede de la pantalla (lo lee la pestaña): los porcentajes salen con él, o «—». */
   sedeFormat: SedeFormatState;
+  /** El día del examen con el formato de la sede de la pantalla (DX-354b). */
+  stamp: SedePainters;
 }
 
 function EditorSkeleton() {
@@ -130,6 +132,7 @@ export function PerioExamEditor({
   onChanged,
   onDeleted,
   sedeFormat,
+  stamp,
 }: PerioExamEditorProps) {
   const [exam, setExam] = useState<PerioExamDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -360,7 +363,7 @@ export function PerioExamEditor({
               <div className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-semibold text-ink">
-                    {copy.heading(formatCivilDate(exam.examDate))}
+                    {copy.heading(stamp.civilDate(exam.examDate))}
                   </h2>
                   <StatusBadge kind="perioExam" status={exam.status} />
                 </div>
@@ -433,7 +436,7 @@ export function PerioExamEditor({
 
             {previous ? (
               <Checkbox
-                label={copy.compare(formatCivilDate(previous.examDate))}
+                label={copy.compare(stamp.civilDate(previous.examDate))}
                 checked={comparing}
                 onChange={(e) => setComparing(e.target.checked)}
               />

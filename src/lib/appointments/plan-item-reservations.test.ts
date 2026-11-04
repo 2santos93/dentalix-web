@@ -10,6 +10,8 @@ import {
   reservationCopy,
   validStatusReason,
 } from './plan-item-reservations';
+import { stampPainters } from '@/lib/locations/sede-stamp';
+import { testAgendaClock, utcSede } from '@/lib/test/sede-clock';
 import { regionalFormat } from '@/lib/format/regional-format';
 
 const item = {
@@ -66,18 +68,24 @@ describe('plan-item-reservations (DX-273)', () => {
     expect(validStatusReason('x'.repeat(501))).toBe(false);
   });
 
-  it('resume el mínimo de la visita siguiente tras la salida', () => {
-    expect(
-      completedExitSummary({
-        visitMinimums: [
-          { planId: 'p', visit: 2, minimumDayBefore: '2027-01-20', minimumDayAfter: null, anchorAppointmentIdAfter: null },
-          { planId: 'p', visit: 3, minimumDayBefore: '2027-03-01', minimumDayAfter: '2027-02-10', anchorAppointmentIdAfter: 'a' },
-        ],
-      }),
-    ).toEqual([
+  it('resume el mínimo de la visita siguiente tras la salida, con el formato de la sede (es-VE, en-US, de-DE)', () => {
+    const exit = {
+      visitMinimums: [
+        { planId: 'p', visit: 2, minimumDayBefore: '2027-01-20', minimumDayAfter: null, anchorAppointmentIdAfter: null },
+        { planId: 'p', visit: 3, minimumDayBefore: '2027-03-01', minimumDayAfter: '2027-02-10', anchorAppointmentIdAfter: 'a' },
+      ],
+    };
+    const sede = (locale: string, hourCycle: 'h12' | 'h23') =>
+      stampPainters(testAgendaClock([utcSede({ locale, hourCycle })]));
+    const summary = (locale: string, hourCycle: 'h12' | 'h23') => completedExitSummary(exit, (d) => sede(locale, hourCycle).civilDate(d));
+    expect(summary('es-VE', 'h12')).toEqual([
       'Visita 2: ahora se puede agendar desde hoy: ya no queda ninguna cita completada de la visita anterior.',
       'Visita 3: ahora se puede agendar desde el 10/02/2027 (última cita que sigue completada).',
     ]);
+    expect(summary('en-US', 'h12')[1]).toContain('desde el 02/10/2027');
+    expect(summary('de-DE', 'h23')[1]).toContain('desde el 10.02.2027');
+    // Sin formato de la sede, «—».
+    expect(completedExitSummary(exit, (d) => stampPainters(null).civilDate(d))[1]).toContain('desde el —');
   });
 });
 

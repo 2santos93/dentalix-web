@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { PatientRecordHeader } from './patient-record-header';
 import type { Patient } from '@/lib/patients/patients-api';
 import { retentionChip } from './patient-retention-section';
+import { testStamp } from '@/lib/test/stamp';
 import { FORMAT_ES } from '@/lib/test/document-regional';
 
 function patient(overrides: Partial<Patient> = {}): Patient {
@@ -503,10 +504,10 @@ describe('PatientRecordHeader: cabecera compacta (UX v2 · K3)', () => {
       clinicRetentionYears: 20,
       retentionFromPreviousTerm: false,
     });
-    expect(retentionChip(base)?.hint).toBe(
+    expect(retentionChip(base, testStamp())?.hint).toBe(
       'Se conserva 20 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
     );
-    const previous = retentionChip({ ...base, retentionUntil: '2039-02-28', retentionFromPreviousTerm: true });
+    const previous = retentionChip({ ...base, retentionUntil: '2039-02-28', retentionFromPreviousTerm: true }, testStamp());
     expect(previous?.hint).toBe(
       'Se conserva hasta el 28/02/2039 por el plazo anterior de la clínica. Mientras dure, el paciente no se puede archivar.',
     );

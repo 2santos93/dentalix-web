@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PatientDocumentsTab } from './patient-documents-tab';
 import { PatientTabPanel } from '@/components/patients/patient-tab-panel';
 import type { PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
@@ -325,6 +325,27 @@ describe('PatientDocumentsTab (DX-151)', () => {
     const row = await screen.findByRole('listitem', { name: 'logo.svg' });
     expect(within(row).getByRole('alert')).toHaveTextContent(/Tipo de archivo no admitido/);
     expect(mockedUpload).not.toHaveBeenCalled();
+  });
+
+  it('DX-354b (E9, M3): sin la zona de la sede la fecha clínica queda deshabilitada y el aviso lo explica; con zona se habilita', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ timeZone: null })]);
+    const { unmount } = render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    dropFiles([pdf('remision.pdf')]);
+    let row = await screen.findByRole('listitem', { name: 'remision.pdf' });
+    expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede|zona horaria/)).not.toHaveLength(0);
+    for (const seg of within(within(row).getByRole('group', { name: 'Fecha clínica (opcional)' })).getAllByRole('spinbutton')) {
+      expect(seg).toHaveAttribute('aria-disabled', 'true');
+    }
+    unmount();
+    mockedLocations.mockResolvedValue([clinicLocation()]);
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    dropFiles([pdf('remision.pdf')]);
+    row = await screen.findByRole('listitem', { name: 'remision.pdf' });
+    await waitFor(() =>
+      expect(within(within(row).getByRole('group', { name: 'Fecha clínica (opcional)' })).getAllByRole('spinbutton')[0]).not.toHaveAttribute('aria-disabled', 'true'),
+    );
   });
 
   it('cola: sube con categoría, dientes, fecha y notas, con progreso; el documento entra en la lista', async () => {

@@ -9,23 +9,14 @@ import type { components } from '@/lib/api/schema';
  */
 export type ExchangeRates = components['schemas']['RatesResponseDto'];
 
-function todayLocalDateString(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 /**
  * `GET /exchange/rates?date=YYYY-MM-DD` — the backend's `date` query param is
- * required (a historical day to fetch USD-base rates for), so this defaults
- * it to today's local date when the caller omits it, keeping the call
- * ergonomic for "just give me the current supported currencies" callers like
- * `DashboardView`'s currency `<select>`.
+ * required (a day to fetch USD-base rates for). The caller passes the day: for
+ * "today" it is the sede's (`sedeToday(timeZone)`), never the browser's
+ * (DX-354b, E9), so there is no default here.
  */
-export async function getExchangeRates(token: string, date?: string): Promise<ExchangeRates> {
-  const search = new URLSearchParams({ date: date ?? todayLocalDateString() });
+export async function getExchangeRates(token: string, date: string): Promise<ExchangeRates> {
+  const search = new URLSearchParams({ date });
   return apiFetch<ExchangeRates>(`/exchange/rates?${search.toString()}`, {
     token,
   });

@@ -550,7 +550,7 @@ export function ReceivablesView({ token }: { token: string }) {
 
               {data ? (
                 <div className="flex flex-col gap-1 text-xs text-muted">
-                  <p className="tabular-nums">{receivablesCopy.asOf(data.asOf.split('-').reverse().join('/'))}</p>
+                  <p className="tabular-nums">{receivablesCopy.asOf(stamp.civilDate(data.asOf))}</p>
                   {anyApproximate ? <p>{debtorCopy.approximateNote}</p> : null}
                 </div>
               ) : null}

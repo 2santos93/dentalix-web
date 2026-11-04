@@ -15,7 +15,6 @@ import {
 } from '@/lib/locations/provider-schedule-api';
 import {
   buildSchedulePayload,
-  localDateString,
   mondayOf,
   toScheduleDraft,
   type ScheduleDraft,
@@ -23,6 +22,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { InlineError } from '@/components/errors/inline-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -78,8 +79,12 @@ export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPane
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [rosterKey, setRosterKey] = useState(0);
   const [providerId, setProviderId] = useState<string | null>(null);
+  // DX-354b (E9): la semana de partida es la del «hoy» de la sede, no la del navegador.
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
 
   useEffect(() => {
+    if (!timeZone) return;
     let cancelled = false;
     async function load() {
       setRoster(null);
@@ -87,7 +92,7 @@ export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPane
         // DX-089: `GET /staff` trae las sedes permitidas de cada profesional
         // (como las columnas de la agenda); el editor solo le ofrece esas.
         const [r, members] = await Promise.all([
-          getRoster(token, { weekStart: mondayOf(localDateString(new Date())), days: 1 }),
+          getRoster(token, { weekStart: mondayOf(sedeToday(timeZone!)), days: 1 }),
           listStaff(token),
         ]);
         if (cancelled) return;
@@ -102,8 +107,11 @@ export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPane
     return () => {
       cancelled = true;
     };
-  }, [token, rosterKey]);
+  }, [token, rosterKey, timeZone]);
 
+  if (zone.status === 'error') {
+    return <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />;
+  }
   if (rosterError) {
     return <SectionError description={rosterError} onRetry={() => setRosterKey((k) => k + 1)} retryLabel={copy.retry} />;
   }

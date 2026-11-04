@@ -9,35 +9,21 @@ import ts from 'typescript';
  * `formatCurrency`, que no conoce la sede (idioma fijo y símbolo «US$»).
  * Mientras la sede carga o no tiene formato se pinta `NO_SEDE_FORMAT`.
  *
- * Plan, presupuesto, listas de precios, caja, estado de cuenta e impresos ya
- * cumplen; el resto de pantallas de importes se migra en DX-354b (W2, W3), y
- * `MAX_PENDING` baja con cada PR hasta que `PENDING` desaparece. Ningún fichero de `components/`, `app/` ni `lib/` importa
- * `formatCurrency` salvo los de `PENDING`, cada uno con su motivo (DX-354 amplía
- * la guarda a `lib/`, salvo `lib/format/**`, donde vive el formateador,
- * `lib/test/**` y `schema.d.ts`). La lista solo encoge: una entrada que ya no
- * lo importa hace fallar la prueba hasta que se quita. Un fichero nuevo no
- * debería entrar: DX-354 solo añadió dos ayudantes de `lib/` que reciben el
- * `money` por parámetro y se migran con sus pantallas (DX-354b); las ya
- * migradas están en `MIGRATED`.
+ * Sin lista de excepciones (DX-354b, W4): las 24 pantallas pendientes de DX-522 se
+ * migraron en W2 y W3 y `PENDING` desapareció. Ningún fichero de `components/`,
+ * `app/` ni `lib/` importa `formatCurrency` (DX-354 amplía la guarda a `lib/`,
+ * salvo `lib/format/**`, donde vive el formateador, `lib/test/**` y
+ * `schema.d.ts`). `formatCurrency` se queda exportado en `lib/format/currency.ts`
+ * para `moneyWithCode` y el CSV. `MIGRATED` fija que los documentos, los
+ * ayudantes y las 24 pantallas migradas siguen existiendo y no vuelven a
+ * importarlo.
  */
 const SRC = join(__dirname, '..');
 const CURRENCY_MODULE = '@/lib/format/currency';
 
-
-/**
- * Aserción del máximo (DX-354b, M2): nadie añade entradas a `PENDING` aunque el
- * comentario diga que «solo encoge». Cada PR de DX-354b baja la constante; al
- * cierre, `PENDING` desaparece.
- */
-const MAX_PENDING = 0;
-
-/** Ficheros que aún importan `formatCurrency`. Solo puede encoger. */
-const PENDING: Readonly<Record<string, string>> = {};
-
 /**
  * DX-354: documentos y ayudantes que ya pintan sus importes con `moneyWithCode`
- * (`sedeMoney`/`documentTexts`): no pueden volver a `formatCurrency` ni a
- * `PENDING`.
+ * (`sedeMoney`/`documentTexts`): no pueden volver a `formatCurrency`.
  */
 const MIGRATED = [
   'components/account-statement/account-statement-document.tsx',
@@ -119,28 +105,15 @@ const views = ['components', 'app', 'lib']
   .map(({ rel, path }) => ({ rel, uses: importsFormatCurrency(parse(path, readFileSync(path, 'utf8'))) }));
 
 describe('arquitectura: importes con la sede (DX-522)', () => {
-  it('no file imports formatCurrency outside the pending list', () => {
-    expect(views.filter(({ rel, uses }) => uses && !(rel in PENDING)).map(({ rel }) => rel)).toEqual([]);
+  it('no file imports formatCurrency (there is no pending list)', () => {
+    expect(views.filter(({ uses }) => uses).map(({ rel }) => rel)).toEqual([]);
   });
 
-  it('every pending entry still imports formatCurrency (the list only shrinks)', () => {
-    const stale = Object.keys(PENDING).filter((rel) => !views.find((v) => v.rel === rel)?.uses);
-    expect(stale).toEqual([]);
-  });
-
-  it('the pending list never grows beyond its maximum (DX-354b)', () => {
-    expect(Object.keys(PENDING).length).toBeLessThanOrEqual(MAX_PENDING);
-    // Una entrada de más hace fallar el máximo. Solo es falsa si PENDING está EXACTAMENTE en el
-    // máximo, a propósito: obliga a bajar `MAX_PENDING` en cada PR que migra pantallas.
-    expect(Object.keys({ ...PENDING, 'components/nueva/pantalla.tsx': 'Pantalla nueva: no entra en la lista.' }).length <= MAX_PENDING).toBe(false);
-  });
-
-  it('the migrated documents and helpers cannot return to formatCurrency or the pending list', () => {
+  it('the migrated documents, helpers and screens exist and cannot return to formatCurrency', () => {
     for (const rel of MIGRATED) {
       const file = views.find((v) => v.rel === rel);
       expect([rel, file !== undefined]).toEqual([rel, true]);
       expect([rel, file?.uses]).toEqual([rel, false]);
-      expect([rel, rel in PENDING]).toEqual([rel, false]);
     }
   });
 

@@ -12,6 +12,8 @@ import { setupUser } from '@/lib/test/user';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { tokenFor } from '@/lib/test/prescriptions';
 import { regionalFormat } from '@/lib/format/regional-format';
+import { testStamp } from '@/lib/test/stamp';
+import { clinicLocation } from '@/lib/test/locations';
 import type { SedeFormatState } from '@/lib/locations/use-sede-format';
 
 jest.mock('../../lib/perio/perio-api', () => ({
@@ -82,7 +84,10 @@ function site(
   };
 }
 
-const DE_DE: SedeFormatState = { status: 'ready', fmt: regionalFormat({ locale: 'de-DE', hourCycle: 'h23' }) };
+const DE_FORMAT = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
+const DE_DE: SedeFormatState = { status: 'ready', fmt: DE_FORMAT };
+// DX-354b: la sede de la suite es de-DE; el día del examen sale con su formato («16.10.2026»), no con dd/mm/aaaa fijo.
+const DE_STAMP = testStamp([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
 
 function renderEditor(
   previous: { id: string; examDate: string } | null = null,
@@ -101,6 +106,7 @@ function renderEditor(
       onChanged={onChanged}
       onDeleted={onDeleted}
       sedeFormat={sedeFormat}
+      stamp={DE_STAMP}
     />,
   );
   return { onChanged, onBack, onDeleted };
@@ -183,7 +189,7 @@ describe('PerioExamEditor', () => {
     expect(screen.getByRole('status', { name: /cargando examen/i })).toBeInTheDocument();
     expect(await screen.findByRole('alert')).toHaveTextContent('Examen periodontal no encontrado');
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
-    expect(await screen.findByText('Examen del 16/10/2026')).toBeInTheDocument();
+    expect(await screen.findByText(`Examen del ${DE_FORMAT.civilDate('2026-10-16')}`)).toBeInTheDocument();
   });
 
   it('captura rápida: un dígito fija el valor y salta al siguiente sitio; las flechas navegan', async () => {
@@ -356,7 +362,7 @@ describe('PerioExamEditor', () => {
     renderEditor({ id: 'e0', examDate: '2026-04-15' });
     await user.click(
       await screen.findByRole('checkbox', {
-        name: /comparar con el examen anterior \(15\/04\/2026\)/i,
+        name: new RegExp(`comparar con el examen anterior \\(${DE_FORMAT.civilDate('2026-04-15').replace(/\./g, '\\.')}\\)`, 'i'),
       }),
     );
     const upper = screen.getByRole('table', { name: 'Arcada superior' });

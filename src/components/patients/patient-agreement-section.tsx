@@ -171,7 +171,7 @@ export function PatientAgreementSection({
           </span>
           <span className="break-words text-sm text-ink">{a.agreement.payer.name}</span>
           <span className="text-sm text-muted">{AGREEMENT_KIND_LABELS[a.agreement.kind]}</span>
-          <span className="text-sm text-muted tabular-nums">{agreementValidityLabel(a)}</span>
+          <span className="text-sm text-muted tabular-nums">{agreementValidityLabel(a, stamp)}</span>
           {a.notes ? <span className="break-words text-sm text-muted">{a.notes}</span> : null}
         </div>
         <div className="flex shrink-0 gap-2">

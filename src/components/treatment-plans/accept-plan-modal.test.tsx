@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AcceptPlanModal } from './accept-plan-modal';
 import { acceptPlan, getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { ApiError } from '@/lib/api/client';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { regionalFormat } from '@/lib/format/regional-format';
 import { planQuoteFixture, SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
@@ -58,6 +59,25 @@ describe('AcceptPlanModal (DX-012)', () => {
     mockedGet.mockReset();
     (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-VE' })]);
     mockedAccept.mockReset();
+  });
+
+  it('DX-354b: la vigencia sale con el formato de la sede (de-DE, en-US) y sin formato dice «—» con el aviso', async () => {
+    mockedGet.mockResolvedValue(planQuoteFixture());
+    for (const [locale, hourCycle] of [['de-DE', 'h23'], ['en-US', 'h12']] as const) {
+      (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale, hourCycle })]);
+      renderModal();
+      const dialog = screen.getByRole('dialog', { name: 'Aceptar presupuesto con firma' });
+      const summary = await within(dialog).findByRole('region', { name: 'Presupuesto a firmar' });
+      const day = regionalFormat({ locale, hourCycle }).civilDate('2026-11-15');
+      await waitFor(() => expect(summary).toHaveTextContent(`Válido 30 días, hasta el ${day}`));
+      cleanup();
+    }
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    renderModal();
+    const dialog = screen.getByRole('dialog', { name: 'Aceptar presupuesto con firma' });
+    const summary = await within(dialog).findByRole('region', { name: 'Presupuesto a firmar' });
+    expect(summary).toHaveTextContent('Válido 30 días, hasta el —');
+    expect(await within(dialog).findByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
   });
 
   it('enseña lo que se va a firmar: procedimientos, total y validez', async () => {

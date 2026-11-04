@@ -1,5 +1,5 @@
 import { statusPresentation, type StatusTone } from '@/lib/status/tones';
-import { formatCivilDate } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import type { PatientAgreement } from '@/lib/patients/patient-agreement-api';
 import type { AgreementSummary } from '@/lib/patients/patients-api';
 
@@ -8,11 +8,14 @@ import type { AgreementSummary } from '@/lib/patients/patients-api';
 
 type AgreementValidity = Pick<PatientAgreement, 'status' | 'validFrom' | 'validTo'>;
 
+/** El pintor de un día civil de la sede (`SedePainters.civilDate`): el formato lo da la sede, no esta función (DX-354b). */
+export type CivilDayPainter = Pick<SedePainters, 'civilDate'>;
+
 /** Vigencia en una línea: «Vigente hasta …», «Desde …», «Sin fecha de fin», «Venció el …». */
-export function agreementValidityLabel(a: AgreementValidity): string {
-  if (a.status === 'EXPIRED') return `Venció el ${formatCivilDate(a.validTo)}`;
-  if (a.status === 'NOT_STARTED') return `Desde ${formatCivilDate(a.validFrom)}`;
-  return a.validTo ? `Vigente hasta ${formatCivilDate(a.validTo)}` : 'Sin fecha de fin';
+export function agreementValidityLabel(a: AgreementValidity, stamp: CivilDayPainter): string {
+  if (a.status === 'EXPIRED') return `Venció el ${stamp.civilDate(a.validTo)}`;
+  if (a.status === 'NOT_STARTED') return `Desde ${stamp.civilDate(a.validFrom)}`;
+  return a.validTo ? `Vigente hasta ${stamp.civilDate(a.validTo)}` : 'Sin fecha de fin';
 }
 
 export interface AgreementBadge {

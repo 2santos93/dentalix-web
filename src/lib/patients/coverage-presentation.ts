@@ -1,5 +1,5 @@
 import { statusPresentation, type StatusTone } from '@/lib/status/tones';
-import { formatCivilDate } from '@/lib/format/date';
+import type { CivilDayPainter } from '@/lib/patients/agreement-presentation';
 import type { PatientCoverage } from '@/lib/patients/coverages-api';
 import type { CoverageSummary } from '@/lib/patients/patients-api';
 
@@ -21,10 +21,10 @@ export function coverageChipText(summary: CoverageSummary | null | undefined): s
 type CoverageValidity = Pick<PatientCoverage, 'status' | 'validFrom' | 'validTo'>;
 
 /** Vigencia en una línea: «Vigente hasta …», «Desde …», «Sin fecha de fin», «Venció el …». */
-export function coverageValidityLabel(c: CoverageValidity): string {
-  if (c.status === 'EXPIRED') return `Venció el ${formatCivilDate(c.validTo)}`;
-  if (c.status === 'NOT_STARTED') return `Desde ${formatCivilDate(c.validFrom)}`;
-  return c.validTo ? `Vigente hasta ${formatCivilDate(c.validTo)}` : 'Sin fecha de fin';
+export function coverageValidityLabel(c: CoverageValidity, stamp: CivilDayPainter): string {
+  if (c.status === 'EXPIRED') return `Venció el ${stamp.civilDate(c.validTo)}`;
+  if (c.status === 'NOT_STARTED') return `Desde ${stamp.civilDate(c.validFrom)}`;
+  return c.validTo ? `Vigente hasta ${stamp.civilDate(c.validTo)}` : 'Sin fecha de fin';
 }
 
 export interface CoverageBadge {
@@ -43,11 +43,11 @@ export function coverageStatusBadge(c: Pick<PatientCoverage, 'status'>): Coverag
  * Línea «Cobertura: …» del detalle de la cita. Vacía cuando el paciente no tiene
  * cobertura. Nunca lleva el número de afiliado.
  */
-export function coverageDetailText(coverage: CoverageSummary | null | undefined): string {
+export function coverageDetailText(coverage: CoverageSummary | null | undefined, stamp: CivilDayPainter): string {
   if (!coverage || coverage.status === 'NONE' || !coverage.payerName) return '';
   const detail =
     coverage.status === 'EXPIRED'
-      ? `venció el ${formatCivilDate(coverage.validTo)}`
+      ? `venció el ${stamp.civilDate(coverage.validTo)}`
       : coverage.status === 'NOT_STARTED'
         ? 'pendiente de inicio'
         : coverage.planName;

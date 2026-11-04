@@ -3,7 +3,8 @@ import * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { createPaymentPromise, type PaymentPromise } from '@/lib/collections/collections-api';
-import { todayLocal } from '@/lib/collections/presentation';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -72,7 +73,8 @@ export function PaymentPromiseDialog({
     }
   }
 
-  const today = todayLocal();
+  // DX-354b (E9): «hoy» es el de la sede de la pantalla, no el del navegador.
+  const today = stamp.clock ? sedeToday(stamp.clock.timeZone) : null;
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -85,7 +87,7 @@ export function PaymentPromiseDialog({
     else if (parsed.value <= 0) next.amount = promiseDialogCopy.amountRequired;
     if (!currency) next.currency = promiseDialogCopy.currencyRequired;
     if (!dueDate) next.dueDate = promiseDialogCopy.dueDateRequired;
-    else if (dueDate < today) next.dueDate = promiseDialogCopy.dueDatePast;
+    else if (today !== null && dueDate < today) next.dueDate = promiseDialogCopy.dueDatePast;
     setErrors(next);
     if (Object.keys(next).length > 0 || amount === null) return;
     setSubmitting(true);
@@ -110,6 +112,8 @@ export function PaymentPromiseDialog({
       onSubmit={(e) => void submit(e)}
       submitLabel={promiseDialogCopy.submit}
       submitting={submitting}
+      // Sin el día de la sede no se puede comprobar que la fecha no sea pasada (la API la valida igual).
+      submitDisabled={today === null}
       error={submitError}
     >
       <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
@@ -148,11 +152,13 @@ export function PaymentPromiseDialog({
           id="pp-due"
           value={dueDate || null}
           onChange={(day) => setDueDate(day ?? '')}
-          min={today}
+          min={today ?? undefined}
+          disabled={today === null}
           aria-invalid={errors.dueDate ? true : undefined}
           aria-describedby={errors.dueDate ? fieldErrorId('pp-due') : undefined}
         />
       </FormField>
+      <SedeStampNote stamp={stamp} />
     </FormModal>
   );
 }

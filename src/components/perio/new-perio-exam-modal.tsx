@@ -7,6 +7,8 @@ import { FormField } from '@/components/shared/form-field';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 
 const copy = {
   title: 'Nuevo examen periodontal',
@@ -18,14 +20,6 @@ const copy = {
   error: 'No pudimos crear el examen.',
   futureDate: 'La fecha del examen no puede ser futura.',
 };
-
-/** Hoy en la zona horaria del navegador, `YYYY-MM-DD`. */
-function today(): string {
-  const now = new Date();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${mm}-${dd}`;
-}
 
 interface NewPerioExamModalProps {
   open: boolean;
@@ -45,10 +39,15 @@ export function NewPerioExamModal({
   hasPrevious,
   onCreated,
 }: NewPerioExamModalProps) {
-  const [examDate, setExamDate] = useState(today);
+  // DX-354b (E9): «hoy» es el de la sede de la pantalla, no el del navegador (Tokio ya está en el 5 cuando Caracas va por el 4).
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
+  const today = timeZone ? sedeToday(timeZone) : null;
   // Sin tocar la fecha no se envía: la API pone «hoy» en la zona horaria de la
-  // clínica, que puede no coincidir con la del navegador cerca de medianoche.
-  const [dateTouched, setDateTouched] = useState(false);
+  // clínica. `null` = sin tocar: se muestra el «hoy» de la sede.
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
+  const dateTouched = pickedDate !== null;
+  const examDate = pickedDate ?? today ?? '';
   const [notes, setNotes] = useState('');
   const [copySkipped, setCopySkipped] = useState(hasPrevious);
   const [submitting, setSubmitting] = useState(false);
@@ -56,7 +55,7 @@ export function NewPerioExamModal({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (examDate > today()) {
+    if (today !== null && examDate > today) {
       setError(copy.futureDate);
       return;
     }
@@ -86,20 +85,23 @@ export function NewPerioExamModal({
       onSubmit={(e) => void handleSubmit(e)}
       submitLabel={copy.submit}
       submitting={submitting}
-      submitDisabled={examDate === ''}
+      submitDisabled={examDate === '' || today === null}
       error={error}
     >
       <FormField htmlFor="perio-exam-date" label={copy.date}>
-        <DatePicker
-          id="perio-exam-date"
-          required
-          max={today()}
-          value={examDate === '' ? null : examDate}
-          onChange={(next) => {
-            setExamDate(next ?? '');
-            setDateTouched(true);
-          }}
-        />
+        {zone.status === 'error' ? (
+          // Sin la zona de la sede no hay «hoy» con el que topar la fecha: el campo se sustituye por su error (escalón 2).
+          <SedeConfigError kind="timeZone" variant="field" retryId="perio-exam-date" onRetry={zone.retry} />
+        ) : (
+          <DatePicker
+            id="perio-exam-date"
+            required
+            disabled={today === null}
+            max={today ?? undefined}
+            value={examDate === '' ? null : examDate}
+            onChange={(next) => setPickedDate(next ?? '')}
+          />
+        )}
       </FormField>
       <FormField htmlFor="perio-exam-notes" label={copy.notes}>
         <Textarea

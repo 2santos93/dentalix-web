@@ -103,6 +103,21 @@ describe('ImplantCardPrintView (DX-191)', () => {
     expect(window.print).not.toHaveBeenCalled();
   });
 
+  it('DX-354b (E7.2, criterio 9): la región de estado del aviso se monta siempre; vacía con formato, con el aviso sin él', async () => {
+    const noteRegion = () => screen.getAllByRole('status').find((r) => r.classList.contains('print:hidden'));
+    mockedGet.mockResolvedValueOnce(makeImplantCard({ regional: REGIONAL_US }));
+    const first = render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    await screen.findByRole('article');
+    expect(noteRegion()).toBeDefined();
+    expect(noteRegion()).toBeEmptyDOMElement();
+    first.unmount();
+
+    mockedGet.mockResolvedValueOnce(makeImplantCard({ regional: null }));
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    await screen.findByRole('article');
+    expect(noteRegion()).toHaveTextContent('No se pudo saber el formato regional o el reloj de la sede');
+  });
+
   it('Reintentar vuelve a leer la tarjeta, que trae el formato de su sede', async () => {
     const user = setupUser();
     mockedGet.mockResolvedValueOnce(makeImplantCard({ regional: null }));

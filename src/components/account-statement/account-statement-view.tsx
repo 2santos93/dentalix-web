@@ -30,7 +30,8 @@ import { planQuotePrintHref } from '@/lib/treatment-plans/plan-quote-api';
 import { sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { readyClock, useSedeClock } from '@/lib/locations/sede-clock';
-import { formatCivilDate } from '@/lib/format/date';
+import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
@@ -116,6 +117,7 @@ const copy = {
   receiptAction: 'Recibo',
   // El «⋯» de cada movimiento: «Acciones de abono de 150,00 USD del 15/10/2026».
   rowLabel: (amount: string, date: string) => `abono de ${amount} del ${date}`,
+  rowLabelBare: 'abono',
   colDue: 'Vencimiento',
   colInstallment: 'Cuota',
   colOutstanding: 'Pendiente',
@@ -411,9 +413,15 @@ function StatementBody({
   const clock = readyClock(useSedeClock(token));
   const planName = planNamer(statement.plans, clock);
   const money: Money = (amount, code) => sedeMoney(amount, code, fmt);
+  // DX-354b: los días civiles (cuotas, abonos) con el formato de la sede; el abono trae la suya, la cuota no.
+  const stamp = useSedeStamp(
+    token,
+    statement.movements.map((m) => m.location.id),
+  );
   const summary = shownSummaryRows(statement.summary);
   return (
     <div className="flex flex-col gap-8">
+      <SedeStampNote stamp={stamp} />
       {statement.rateProviderTimedOut ? (
         <RateProviderNotice
           paymentsCount={statement.plans.reduce((n, p) => n + p.paymentsWithoutRate.length, 0)}
@@ -427,7 +435,7 @@ function StatementBody({
       {summary.length > 0 ? (
         <div className="flex flex-col gap-3">
           {summary.map((row) => (
-            <CurrencySummary key={row.currency} row={row} money={money} />
+            <CurrencySummary key={row.currency} row={row} money={money} stamp={stamp} />
           ))}
         </div>
       ) : null}
@@ -517,7 +525,7 @@ function StatementBody({
             rows={statement.installments}
             getRowKey={(inst) => `${inst.paymentPlanId}-${inst.kind}-${inst.sequence ?? 0}`}
             columns={[
-              { id: 'due', header: copy.colDue, cell: (inst) => <span className="tabular-nums">{formatCivilDate(inst.dueDate)}</span> },
+              { id: 'due', header: copy.colDue, cell: (inst) => <span className="tabular-nums">{stamp.civilDate(inst.dueDate)}</span> },
               {
                 id: 'installment',
                 header: copy.colInstallment,
@@ -555,13 +563,17 @@ function StatementBody({
             label={copy.movementsTable}
             rows={statement.movements}
             getRowKey={(m) => m.id}
-            getRowLabel={(m) => copy.rowLabel(money(m.amount, m.currency), formatCivilDate(m.paidOn))}
+            getRowLabel={(m) => {
+              // Una etiqueta que se anuncia nunca lleva «—» (DESIGN.md): sin formato, solo «abono».
+              const day = stamp.maybe.civilDate(m.paidOn, m.location.id);
+              return day && fmt ? copy.rowLabel(money(m.amount, m.currency), day) : copy.rowLabelBare;
+            }}
             columns={[
               {
                 id: 'date',
                 header: copy.colDate,
                 mobile: 'primary',
-                cell: (m) => <span className={cn('tabular-nums', m.voided && 'text-muted')}>{formatCivilDate(m.paidOn)}</span>,
+                cell: (m) => <span className={cn('tabular-nums', m.voided && 'text-muted')}>{stamp.civilDate(m.paidOn, m.location.id)}</span>,
               },
               {
                 id: 'destination',
@@ -801,7 +813,7 @@ function SubSection({ title, children }: { title: string; children: React.ReactN
  * columnas hasta `lg`, cuatro desde ahí; una moneda por bloque, a todo el ancho. Lo vencido es lo único que se
  * tiñe, y solo cuando hay algo vencido.
  */
-function CurrencySummary({ row, money }: { row: AccountStatementSummary; money: Money }) {
+function CurrencySummary({ row, money, stamp }: { row: AccountStatementSummary; money: Money; stamp: SedeStamp }) {
   const hasOverdue = row.overdueCount > 0;
   const inFavor = row.convertedBalance < 0;
   return (
@@ -818,7 +830,7 @@ function CurrencySummary({ row, money }: { row: AccountStatementSummary; money: 
             <span>{copy.nextInstallment}</span>{' '}
             <span className="font-medium text-ink tabular-nums">
               {copy.nextInstallmentValue(
-                formatCivilDate(row.nextInstallment.dueDate),
+                stamp.civilDate(row.nextInstallment.dueDate),
                 money(row.nextInstallment.amount, row.currency),
               )}
             </span>

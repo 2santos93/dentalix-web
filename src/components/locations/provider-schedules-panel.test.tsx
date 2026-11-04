@@ -15,6 +15,8 @@ import {
 } from '@/lib/locations/provider-schedule-api';
 import { ApiError } from '@/lib/api/client';
 import { listStaff } from '@/lib/appointments/staff-api';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 // Ruta relativa: el literal de `jest.mock` no pasa por el alias (ver
 // business-hours-form.test.tsx).
@@ -32,6 +34,7 @@ jest.mock('../../lib/locations/provider-schedule-api', () => {
     updateProviderScheduleSettings: jest.fn(),
   };
 });
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/appointments/staff-api', () => ({ listStaff: jest.fn() }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() } }));
 
@@ -83,6 +86,7 @@ const configured: ProviderSchedule = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedRoster.mockResolvedValue(roster);
+  (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation()]);
   mockedStaff.mockResolvedValue([
     { userId: 'dra-x', fullName: 'Dra. Ximena', role: 'DENTIST', locationIds: null },
     { userId: 'dr-y', fullName: 'Dr. Yepes', role: 'DENTIST', locationIds: null },
@@ -118,6 +122,30 @@ describe('ProviderSchedulesPanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Profesional' })).toHaveValue('dra-x');
+  });
+
+  it('DX-354b (E9): la semana de partida es la del «hoy» de la sede (Caracas, 4 de nov. 22:30) y no la del navegador', async () => {
+    // 02:30Z del lunes 9 de noviembre: en el navegador (UTC) ya empezó la semana del 9,
+    // pero en Caracas (22:30 del domingo 8) todavía es la semana que empezó el lunes 2.
+    jest.useFakeTimers({
+      now: new Date('2026-11-09T02:30:00Z'),
+      doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    });
+    try {
+      render(<ProviderSchedulesPanel token="tok" canEdit />);
+      await waitFor(() => expect(mockedRoster).toHaveBeenCalled());
+      expect(mockedRoster).toHaveBeenCalledWith('tok', { weekStart: '2026-11-02', days: 1 });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('sin la zona de la sede muestra su error con Reintentar y no pide el cuadrante', async () => {
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ timeZone: null })]);
+    render(<ProviderSchedulesPanel token="tok" canEdit />);
+    expect(await screen.findByText(/zona horaria de la sede/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    expect(mockedRoster).not.toHaveBeenCalled();
   });
 
   it('un fallo de carga es escalón 1 con reintento', async () => {

@@ -1,10 +1,12 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
+import { testStamp } from '@/lib/test/stamp';
+import { stampPainters } from '@/lib/locations/sede-stamp';
+import { clinicLocation } from '@/lib/test/locations';
 import {
   PatientRetentionDialogs,
   PatientRetentionSection,
-  formatCivilDate,
   retentionChip,
   retentionHint,
   type RetentionDialog,
@@ -66,7 +68,7 @@ function patient(overrides: Partial<Patient> = {}): Patient {
 }
 
 function renderSection(p: Patient) {
-  render(<PatientRetentionSection patient={p} />);
+  render(<PatientRetentionSection stamp={testStamp()} patient={p} />);
 }
 
 /**
@@ -121,9 +123,21 @@ beforeEach(() => {
   mockedCount.mockResolvedValue(NO_LINKS);
 });
 
-test('formatCivilDate no pasa por la zona del navegador', () => {
-  expect(formatCivilDate('2039-02-28')).toBe('28/02/2039');
-  expect(formatCivilDate('2026-10-16T23:30:00.000Z')).toBe('16/10/2026');
+test('DX-354b: la fecha de retención sale con el formato de la sede (es-VE, en-US, de-DE) y sin zona', () => {
+  const sede = (locale: string) =>
+    testStamp([clinicLocation({ locale, hourCycle: locale === 'de-DE' ? 'h23' : 'h12' })]);
+  expect(retentionChip(patient(), sede('es-VE'))?.text).toBe('Retención hasta 28/02/2039');
+  expect(retentionChip(patient(), sede('en-US'))?.text).toBe('Retención hasta 02/28/2039');
+  expect(retentionChip(patient(), sede('de-DE'))?.text).toBe('Retención hasta 28.02.2039');
+  // Un día civil no pasa por ninguna zona: la medianoche UTC sigue siendo el 28.
+  expect(retentionChip(patient({ retentionUntil: '2039-02-28T00:00:00.000Z' }), sede('es-VE'))?.text).toBe(
+    'Retención hasta 28/02/2039',
+  );
+});
+
+test('DX-354b: sin formato de la sede la retención dice «—», nunca dd/mm/aaaa', () => {
+  const none = stampPainters(null);
+  expect(retentionChip(patient(), none)?.text).toBe('Retención hasta —');
 });
 
 test('muestra la fecha hasta la que se conserva, sin controles en la sección', () => {
@@ -136,18 +150,18 @@ test('muestra la fecha hasta la que se conserva, sin controles en la sección', 
 });
 
 test('chip de la cabecera: corto y neutro, con la frase del plazo de ayuda', () => {
-  expect(retentionChip(patient())).toEqual({
+  expect(retentionChip(patient(), testStamp())).toEqual({
     text: 'Retención hasta 28/02/2039',
     hint: 'Se conserva 15 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
   });
-  expect(retentionChip(patient({ retentionExtended: 'PERMANENT', retentionUntil: null }))?.text).toBe(
+  expect(retentionChip(patient({ retentionExtended: 'PERMANENT', retentionUntil: null }), testStamp())?.text).toBe(
     'Retención permanente',
   );
   expect(
-    retentionChip(patient({ retentionUntil: '2020-01-01', underRetention: false })),
+    retentionChip(patient({ retentionUntil: '2020-01-01', underRetention: false }), testStamp()),
   ).toEqual({ text: 'Retención vencida el 01/01/2020', hint: null });
   expect(
-    retentionChip(patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false })),
+    retentionChip(patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false }), testStamp()),
   ).toBeNull();
 });
 
@@ -162,13 +176,14 @@ describe('DX-330: el plazo es el de la clínica', () => {
   const twenty = { clinicRetentionYears: 20, retentionUntil: '2044-02-28' } as const;
 
   test('con N = 20 la sección dice 20 y el plazo doble 40, nunca 15 ni «legal»', () => {
-    const { unmount } = render(<PatientRetentionSection patient={patient(twenty)} />);
+    const { unmount } = render(<PatientRetentionSection stamp={testStamp()} patient={patient(twenty)} />);
     expect(
       screen.getByText('Se conserva 20 años desde la última atención. Mientras dure, el paciente no se puede archivar.'),
     ).toBeInTheDocument();
     unmount();
     const { container } = render(
       <PatientRetentionSection
+      stamp={testStamp()}
         patient={patient({ ...twenty, retentionExtended: 'DOUBLE', retentionUntil: '2064-02-28' })}
       />,
     );
@@ -199,16 +214,16 @@ describe('DX-330: el plazo es el de la clínica', () => {
       'Se conserva hasta el 28/02/2039 por el plazo anterior de la clínica. Mientras dure, el paciente no se puede archivar.';
     renderSection(previous);
     expect(screen.getByText(hint)).toBeInTheDocument();
-    expect(retentionChip(previous)?.hint).toBe(hint);
-    expect(retentionHint(previous)).toBe(hint);
+    expect(retentionChip(previous, testStamp())?.hint).toBe(hint);
+    expect(retentionHint(previous, testStamp())).toBe(hint);
   });
 
   it('without clinicRetentionYears no number is painted', () => {
     const old = patient({ retentionExtended: 'DOUBLE', clinicRetentionYears: undefined });
-    const { container } = render(<PatientRetentionSection patient={old} />);
+    const { container } = render(<PatientRetentionSection stamp={testStamp()} patient={old} />);
     expect(screen.getByText('Plazo doble')).toBeInTheDocument();
     expect(container).not.toHaveTextContent(/\b(15|30|2\d|40)\s+años/);
-    expect(retentionHint(patient({ clinicRetentionYears: undefined }))).toBe(
+    expect(retentionHint(patient({ clinicRetentionYears: undefined }), testStamp())).toBe(
       'Se conserva el plazo de la clínica desde la última atención. Mientras dure, el paciente no se puede archivar.',
     );
   });
@@ -216,7 +231,7 @@ describe('DX-330: el plazo es el de la clínica', () => {
 
 test('retención permanente, vencida y sin atenciones', () => {
   const { unmount } = render(
-    <PatientRetentionSection patient={patient({ retentionExtended: 'PERMANENT', retentionUntil: null })} />,
+    <PatientRetentionSection stamp={testStamp()} patient={patient({ retentionExtended: 'PERMANENT', retentionUntil: null })} />,
   );
   expect(screen.getByText('Historia en retención permanente')).toBeInTheDocument();
   expect(

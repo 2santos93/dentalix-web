@@ -1,5 +1,4 @@
 import { whatsAppUrl } from '@/lib/appointments/confirmation-message';
-import type { SedeClock } from '@/lib/locations/sede-clock';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { RecallContactChannel, RecallContactOutcome, RecallKind } from './recall-api';
 
@@ -77,9 +76,4 @@ export function recallWhatsAppHref(
 ): string | null {
   if (!item.patientWhatsApp) return null;
   return whatsAppUrl(item.patientWhatsApp, recallMessage(item.patientName, clinicName));
-}
-
-/** Fecha y hora de un contacto, en el reloj de la sede (DX-378); «—» hasta tenerlo. */
-export function contactMoment(iso: string, clock: SedeClock | null): string {
-  return clock ? clock.fmt.dateTime(new Date(iso), clock.timeZone) : '—';
 }
