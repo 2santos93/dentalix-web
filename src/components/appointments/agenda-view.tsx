@@ -1137,7 +1137,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   /** DX-273: la cita salió de «Completada»: aviso con el mínimo recalculado. */
   async function handleCompletedExitDone(result: AppointmentWriteDetail) {
     setCompletedExit(null);
-    const summary = result.completedExit ? completedExitSummary(result.completedExit) : [];
+    const summary = result.completedExit ? completedExitSummary(result.completedExit, (day) => stampPainters(clock).civilDate(day, result.locationId))
+      : [];
     toast.success(copy.completedExitDone(STATUS_LABELS[result.status]), {
       description: summary.length ? summary.join(' ') : undefined,
     });
