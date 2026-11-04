@@ -148,6 +148,19 @@ it('DX-354b: el día de cada abono sale con el formato de SU sede y el de las cu
   expect(within(ves).getByText(/próxima cuota/i).parentElement).toHaveTextContent(de.civilDate('2026-11-10'));
 });
 
+it('DX-354b (M1): sin formato de la sede las filas de abonos se anuncian sin «—»', async () => {
+  (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([
+    clinicLocation({ locale: null, hourCycle: null }),
+    clinicLocation({ id: 'loc-2', locale: null, hourCycle: null }),
+  ]);
+  mockedGet.mockResolvedValue(accountStatementFixture());
+  render(<AccountStatementView token="tok" patientId="pat-1" />);
+  const table = await screen.findByRole('table', { name: /movimientos/i });
+  await screen.findAllByText(/No se pudo saber el formato regional/);
+  const buttons = within(table).getAllByRole('button', { name: /^acciones de abono/i });
+  for (const b of buttons) expect(b.getAttribute('aria-label')).not.toContain('—');
+});
+
 it('DX-395: la vista imprimible también lleva «Pago móvil · Ref. ABC 123»', async () => {
   mockedGet.mockResolvedValue(accountStatementFixture());
   render(<AccountStatementPrintView token="tok" patientId="pat-1" />);

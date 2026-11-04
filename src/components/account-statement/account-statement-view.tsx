@@ -117,6 +117,7 @@ const copy = {
   receiptAction: 'Recibo',
   // El «⋯» de cada movimiento: «Acciones de abono de 150,00 USD del 15/10/2026».
   rowLabel: (amount: string, date: string) => `abono de ${amount} del ${date}`,
+  rowLabelBare: 'abono',
   colDue: 'Vencimiento',
   colInstallment: 'Cuota',
   colOutstanding: 'Pendiente',
@@ -562,7 +563,11 @@ function StatementBody({
             label={copy.movementsTable}
             rows={statement.movements}
             getRowKey={(m) => m.id}
-            getRowLabel={(m) => copy.rowLabel(money(m.amount, m.currency), stamp.civilDate(m.paidOn, m.location.id))}
+            getRowLabel={(m) => {
+              // Una etiqueta que se anuncia nunca lleva «—» (DESIGN.md): sin formato, solo «abono».
+              const day = stamp.maybe.civilDate(m.paidOn, m.location.id);
+              return day && fmt ? copy.rowLabel(money(m.amount, m.currency), day) : copy.rowLabelBare;
+            }}
             columns={[
               {
                 id: 'date',

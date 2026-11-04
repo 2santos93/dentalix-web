@@ -36,6 +36,7 @@ const copy = {
   colPlaque: 'Placa',
   colDeep: 'Sitios ≥4 / ≥6 mm',
   open: (date: string) => `Abrir examen del ${date}`,
+  openBare: 'Abrir examen',
   openShort: 'Abrir',
   deep: (d4: number, d6: number) => `${d4} / ${d6}`,
 };
@@ -141,7 +142,11 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
         variant="secondary"
         size="sm"
         onClick={() => setOpenExamId(exam.id)}
-        aria-label={copy.open(stamp.civilDate(exam.examDate))}
+        aria-label={(() => {
+          // Una etiqueta que se anuncia nunca lleva «—» (DESIGN.md): sin formato, solo «Abrir examen».
+          const day = stamp.maybe.civilDate(exam.examDate);
+          return day ? copy.open(day) : copy.openBare;
+        })()}
         className="w-full sm:w-auto"
       >
         {copy.openShort}

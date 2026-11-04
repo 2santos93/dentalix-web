@@ -102,6 +102,15 @@ describe('PerioTab', () => {
     expect(rows[2]).toHaveTextContent('18 / 4');
   });
 
+  it('DX-354b (M1): sin formato de la sede el nombre accesible de «Abrir» no lleva «—»', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedList.mockResolvedValue([summary('e1', '2026-04-15', 'FINAL', 62.5)]);
+    render(<PerioTab token="tok" patientId="p1" />);
+    const table = await screen.findByRole('table', { name: /histórico/i });
+    expect(await within(table).findByRole('button', { name: 'Abrir examen' })).toBeInTheDocument();
+    expect(within(table).queryByRole('button', { name: /—/ })).not.toBeInTheDocument();
+  });
+
   it('perio percent en-US 12.5% and de-DE 12,5 %: con una sede en-US, «12.5%»', async () => {
     mockedLocations.mockResolvedValue([clinicLocation({ locale: 'en-US', hourCycle: 'h12' })]);
     mockedList.mockResolvedValue([summary('e1', '2026-04-15', 'FINAL', 62.5)]);
