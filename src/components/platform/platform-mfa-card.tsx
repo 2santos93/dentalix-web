@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatDate, formatDateTime } from '@/lib/format/date';
+import { platformInstant } from '@/lib/format/platform-instant';
 import {
   getPlatformMfa,
   regeneratePlatformRecoveryCodes,
@@ -15,6 +15,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import { ReauthDialog, RecoveryCodesDialog } from '@/components/profile/mfa-settings';
 
+// La consola de plataforma no tiene sede (E8): los instantes salen en UTC con la palabra «UTC».
 const copy = {
   title: 'Verificación en dos pasos',
   description: (date: string) =>
@@ -95,10 +96,10 @@ export function PlatformMfaCard({ token }: { token: string }) {
       <SectionHeader
         titleId="platform-mfa-title"
         title={copy.title}
-        description={status.enabledAt ? copy.description(formatDate(status.enabledAt)) : undefined}
+        description={status.enabledAt ? copy.description(platformInstant(status.enabledAt)) : undefined}
       />
       {cooldownUntil ? (
-        <Callout tone="warning">{copy.pendingCooldown(formatDateTime(cooldownUntil))}</Callout>
+        <Callout tone="warning">{copy.pendingCooldown(platformInstant(cooldownUntil))}</Callout>
       ) : null}
       <SettingRows>
         <SettingRow
