@@ -17,6 +17,7 @@ describe('saveCsv', () => {
 
   beforeEach(() => {
     blobs = [];
+    jest.useFakeTimers();
     revoke.mockClear();
     click.mockClear();
     Object.assign(URL, {
@@ -28,6 +29,8 @@ describe('saveCsv', () => {
     });
   });
 
+  afterEach(() => jest.useRealTimers());
+
   afterAll(() => click.mockRestore());
 
   it('descarga el texto tal cual con el nombre pedido y suelta la URL', async () => {
@@ -36,6 +39,7 @@ describe('saveCsv', () => {
     const link = click.mock.contexts[0] as HTMLAnchorElement;
     expect(link.download).toBe('gastos.csv');
     expect(link.isConnected).toBe(false);
+    jest.runOnlyPendingTimers();
     expect(revoke).toHaveBeenCalledWith('blob:csv');
     expect(blobs[0].type).toBe('text/csv;charset=utf-8');
     expect(await bytesOf(blobs[0])).toEqual([...Buffer.from('a;b\r\n1;2')]);

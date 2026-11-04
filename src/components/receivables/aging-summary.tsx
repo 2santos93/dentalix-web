@@ -20,6 +20,10 @@ const copy = {
  * grande / etiqueta pequeña» como estructura. Son de TODAS las filas
  * filtradas, no de la página visible.
  *
+ * DX-181 (FE-044): los importes nunca se recortan: la rejilla reparte los
+ * tramos en las columnas que caben y una cifra larga (millones, sin decimales)
+ * salta de línea en vez de cortarse con «…».
+ *
  * Una moneda sin nada por cobrar (solo saldo a favor) no pinta cinco tramos a
  * cero; en el teléfono, los tramos a cero tampoco salen (crítica ops §5).
  */
@@ -58,19 +62,19 @@ function CurrencyTotals({ total, stamp }: { total: AgingTotal; stamp: SedePainte
       {hasBuckets ? (
         <dl
           aria-labelledby={labelId}
-          className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 sm:grid-cols-5 sm:gap-0 sm:divide-x sm:divide-border-subtle"
+          className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 sm:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] sm:gap-x-6 sm:gap-y-3"
         >
           {BUCKET_ORDER.map((bucket) => {
             const amount = total.buckets[bucket];
             return (
               <div
                 key={bucket}
-                className={cn('contents min-w-0 sm:block sm:px-3 sm:first:pl-0', amount === 0 && 'max-sm:hidden')}
+                className={cn('contents min-w-0 sm:block', amount === 0 && 'max-sm:hidden')}
               >
                 <dt className="t-label text-muted">{BUCKET_LABELS[bucket]}</dt>
                 <dd
                   className={cn(
-                    'text-right font-medium tabular-nums sm:truncate sm:text-left',
+                    'text-right font-medium tabular-nums [overflow-wrap:anywhere] sm:text-left',
                     bucket === 'over90' && amount > 0 ? 'text-danger-text' : 'text-ink',
                   )}
                 >
