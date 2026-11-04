@@ -234,6 +234,10 @@ test('el gasto de la sede US se ve con el formato de su sede: «USD 1,234.50», 
   await page.getByLabel('Buscar por proveedor o descripción').fill(supplier);
   const listing = page.getByRole('table', { name: /^Gastos del periodo/ });
   await expect(listing).toContainText(supplier, { timeout: 15_000 });
+  // La FILA del gasto, antes de abrir el detalle: importe y fecha con el formato de SU sede (US), no el de la pantalla.
+  const expenseRow = listing.getByRole('row').filter({ hasText: supplier });
+  await expectContains(expenseRow, AMOUNT_TEXT.us);
+  await expectContains(expenseRow, civilDate(SEDES.us, expense.invoiceDate));
   await listing.getByRole('button', { name: /^Insumos clínicos/ }).click();
 
   const detail = page.getByRole('dialog', { name: `Insumos clínicos · ${supplier}` });

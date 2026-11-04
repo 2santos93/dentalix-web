@@ -149,6 +149,7 @@ const forms: Record<string, FormDriver> = {
           onOpenChange={() => undefined}
           token="tok"
           sessionId="cs-1"
+          locationId="loc-1"
           defaultCurrency={currency}
           onCreated={() => undefined}
         />,

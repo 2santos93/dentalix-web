@@ -16,9 +16,8 @@ import {
 } from '@/lib/expenses/expenses-api';
 import { EXPENSE_STATUS_FILTERS, expensesCsvFileName } from '@/lib/expenses/presentation';
 import { saveCsv } from '@/lib/files/save-csv';
-import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
-import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { firstOfMonth } from '@/lib/format/date';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { expenseZoneError, useExpenseToday } from './use-expense-today';
@@ -112,9 +111,6 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
   const isAdmin = canManageExpenses(getTokenRole(token));
   const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
   const sedes = useExpenseLocations(token);
-  // DX-378 (FE-078): importes y fechas con el formato de la sede, no con «es».
-  const sedeFormat = useSedeFormat(token);
-  const fmt = readyFormat(sedeFormat);
   const reference = activeLocationId ? sedes.locations.find((location) => location.id === activeLocationId) : sedes.locations[0];
   const { today, error: scheduleError, retry: retrySchedule } = useExpenseToday(token, reference?.id);
   const [from, setFrom] = useState<string | null>(null);
@@ -125,6 +121,8 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ExpensePage | null>(null);
+  // DX-354b (E1): cada gasto con el formato de SU sede (`expense.locationId`), no con el de la pantalla.
+  const stamp = useSedeStamp(token, data?.items.map((expense) => expense.locationId));
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
@@ -284,7 +282,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
     {
       id: 'date',
       header: expensesCopy.colDate,
-      cell: (expense) => <span className="tabular-nums">{sedeCivilDate(expense.invoiceDate, fmt)}</span>,
+      cell: (expense) => <span className="tabular-nums">{stamp.civilDate(expense.invoiceDate, expense.locationId)}</span>,
     },
     {
       id: 'supplier',
@@ -309,7 +307,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
       mobile: 'trailing',
       cell: (expense) => (
         <span className={cn(expense.status === 'VOIDED' && 'text-muted line-through')}>
-          {sedeMoney(expense.amount, expense.currency, fmt)}
+          {stamp.money(expense.amount, expense.currency, expense.locationId)}
         </span>
       ),
     },
@@ -320,11 +318,11 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
       // Pagado 0 no es un dato: en gris, para que la columna se lea por lo que sí se pagó.
       cell: (expense) => (
         <span className={cn(expense.paidAmount === 0 && 'text-muted')}>
-          {sedeMoney(expense.paidAmount, expense.currency, fmt)}
+          {stamp.money(expense.paidAmount, expense.currency, expense.locationId)}
         </span>
       ),
       mobileCell: (expense) =>
-        expense.paidAmount > 0 ? expensesCopy.paidOn(sedeMoney(expense.paidAmount, expense.currency, fmt)) : null,
+        expense.paidAmount > 0 ? expensesCopy.paidOn(stamp.money(expense.paidAmount, expense.currency, expense.locationId)) : null,
     },
     {
       id: 'status',
@@ -440,15 +438,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
               </div>
             ) : null}
 
-            {sedeFormat.status === 'error' ? (
-              <SedeConfigError
-                kind="locale"
-                variant="note"
-                description={sedeFormat.message}
-                onRetry={sedeFormat.retry}
-                locationId={sedeFormat.locationId}
-              />
-            ) : null}
+            <SedeStampNote stamp={stamp} />
             <AsyncSection
               loading={showLoading}
               error={zoneError ?? loadError}

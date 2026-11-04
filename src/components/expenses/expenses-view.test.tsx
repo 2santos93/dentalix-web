@@ -13,6 +13,7 @@ import { listExpenseCategories } from '@/lib/expenses/expense-categories-api';
 import { saveCsv } from '@/lib/files/save-csv';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { notifyError } from '@/components/errors/notify';
+import { STAMP_SEDES } from '@/lib/test/stamp';
 import { expenseDetailFixture, expenseFixture, expenseLocations } from '@/lib/test/expenses';
 import { setupUser } from '@/lib/test/user';
 import { getLocationSchedule } from '@/lib/locations/schedule-api';
@@ -91,6 +92,26 @@ describe('ExpensesView (DX-274)', () => {
     render(<ExpensesView token="tok" />);
     expect(await screen.findByText(/No pudimos obtener la zona horaria de la sede/)).toBeInTheDocument();
     expect(mockedList).not.toHaveBeenCalled();
+  });
+
+  it('DX-354b (E1): en «Todas las sedes» cada gasto sale con el formato de SU sede (Caracas, Berlín y Miami)', async () => {
+    mockRequestLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedList.mockResolvedValue(
+      page([
+        expenseFixture({ id: 'e-c', locationId: 'sede-caracas', supplier: 'Prov Caracas', currency: 'VES', amount: 1234.5, invoiceDate: '2026-10-20' }),
+        expenseFixture({ id: 'e-b', locationId: 'sede-berlin', supplier: 'Prov Berlin', currency: 'EUR', amount: 1234.5, invoiceDate: '2026-10-20' }),
+        expenseFixture({ id: 'e-m', locationId: 'sede-miami', supplier: 'Prov Miami', currency: 'USD', amount: 1234.5, invoiceDate: '2026-10-20' }),
+      ]),
+    );
+    render(<ExpensesView token="tok" />);
+    const table = await screen.findByRole('table', { name: /^Gastos del periodo/ });
+    const norm = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
+    await waitFor(() => expect(norm(within(table).getByRole('row', { name: /Prov Berlin/ }))).toContain('1.234,50 EUR'));
+    expect(norm(within(table).getByRole('row', { name: /Prov Berlin/ }))).toContain('20.10.2026');
+    expect(norm(within(table).getByRole('row', { name: /Prov Miami/ }))).toContain('USD 1,234.50');
+    expect(norm(within(table).getByRole('row', { name: /Prov Miami/ }))).toContain('10/20/2026');
+    expect(norm(within(table).getByRole('row', { name: /Prov Caracas/ }))).toContain('VES 1.234,50');
+    expect(norm(within(table).getByRole('row', { name: /Prov Caracas/ }))).toContain('20/10/2026');
   });
 
   it('DX-378 (FE-078): la fecha y los importes con el formato de la sede (en-US), no con «es»', async () => {
