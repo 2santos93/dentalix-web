@@ -485,6 +485,18 @@ describe('AppointmentForm', () => {
       expect(await screen.findByText(/horario de ese día: 09:00–13:00/i)).toBeInTheDocument();
     });
 
+    it('DX-116: con el horario caído lo dice y sigue dejando guardar', async () => {
+      mockedGetSchedule.mockRejectedValue(new Error('500'));
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+
+      expect(await screen.findByText(/no pudimos leer el horario/i)).toHaveAttribute('role', 'status');
+      await fillValidForm(user);
+      await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
+
+      await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalled());
+    });
+
     it('bloquea el submit fuera del horario, diciendo cuándo SÍ se atiende', async () => {
       mockedGetSchedule.mockResolvedValue(hoursForFutureDate());
       const user = userEvent.setup();
