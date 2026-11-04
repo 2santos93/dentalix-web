@@ -420,7 +420,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                         <span className="absolute -right-3 -top-1.5">{countBadge(href, 'inline')}</span>
                       )}
                     </span>
-                    <span className="max-w-full truncate px-0.5">{text}</span>
+                    <span className="max-w-full truncate glyph-room px-0.5">{text}</span>
                   </Link>
                 </li>
               );
