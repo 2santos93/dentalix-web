@@ -538,6 +538,24 @@ describe('AuditLogView', () => {
     );
   });
 
+  it('SEC-043-bis: un rango de la URL más largo que el tope se recorta por el principio, sin error', () => {
+    expect(auditFiltersFromSearch(new URLSearchParams({ from: '2024-01-01', to: '2026-11-03' }))).toEqual({
+      from: '2025-11-03',
+      to: '2026-11-03',
+    });
+  });
+
+  it('SEC-043-bis: un usuario de la URL que ya no está en el personal sale como «Persona ya no activa»', async () => {
+    mockedList.mockResolvedValue(page());
+    render(
+      <AuditLogView token="tok" initialFilters={{ actorUserId: '0193f2a0-1b2c-7d3e-8f40-5a6b7c8d9e0f' }} />,
+    );
+    const select = await screen.findByLabelText('Usuario');
+    await waitFor(() => expect(select).toBeEnabled());
+    expect(select).toHaveValue('0193f2a0-1b2c-7d3e-8f40-5a6b7c8d9e0f');
+    expect(within(select).getByRole('option', { name: 'Persona ya no activa' })).toBeInTheDocument();
+  });
+
   it('SEC-043-bis: los filtros de la URL que no se reconocen se ignoran', () => {
     expect(
       auditFiltersFromSearch(
