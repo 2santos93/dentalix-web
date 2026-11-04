@@ -263,9 +263,11 @@ export function WaitlistPanel({
               type="button"
               size="sm"
               variant="secondary"
-              className="self-start"
-              disabled={loadingMore}
-              onClick={loadMore}
+              aria-disabled={loadingMore}
+              className="self-start aria-disabled:pointer-events-none aria-disabled:opacity-60"
+              onClick={() => {
+                if (!loadingMore) loadMore();
+              }}
             >
               {loadingMore ? waitlistCopy.loadingMore : waitlistCopy.loadMore}
             </Button>

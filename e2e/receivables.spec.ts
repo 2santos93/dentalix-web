@@ -50,7 +50,8 @@ test.beforeAll(async ({ playwright }) => {
       kind: 'PROCEDURE',
       labelEs: `Corona ${suffix}`,
       color: '#3366CC',
-      defaultPrice: 400,
+      // Nueve dígitos: con el recorte viejo (`sm:truncate`) el resumen no cabría.
+      defaultPrice: 987_654_321,
     });
     const plan = await apiPost<{ id: string }>(api, admin, `/patients/${patientId}/treatment-plans`, {
       currency: DEMO_CURRENCY,
@@ -209,6 +210,8 @@ for (const width of [640, 768, 1024, 1440]) {
     await page.goto(`${origin}/caja/cartera`);
     const summary = page.getByRole('region', { name: 'Resumen por antigüedad' });
     await expect(summary).toBeVisible({ timeout: 15_000 });
+    // El importe largo sembrado está en el resumen (si no, la prueba pasaría en vacío).
+    await expect(summary.locator('dd', { hasText: /\d{1,3}(?:[.,\s\u00a0]\d{3}){2,}/ }).first()).toBeVisible();
     const clipped = await summary.locator('dd').evaluateAll((cells) =>
       cells.flatMap((dd) => {
         const style = getComputedStyle(dd);
@@ -232,6 +235,7 @@ for (const width of [390, 1440]) {
     await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
     await page.goto(`${origin}/caja/cartera`);
     await expect(page.getByRole('region', { name: 'Resumen por antigüedad' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('list', { name: 'Deudores' }).or(page.getByRole('table')).first()).toBeVisible({ timeout: 15_000 });
     const axe = await new AxeBuilder({ page }).analyze();
     expect(axe.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
   });

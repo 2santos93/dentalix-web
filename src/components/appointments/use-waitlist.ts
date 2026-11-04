@@ -52,10 +52,15 @@ export function useWaitlist(token: string, reloadKey = 0): WaitlistState {
   const [moreError, setMoreError] = useState<string | null>(null);
   const [lastBatch, setLastBatch] = useState<WaitlistState['lastBatch']>(null);
   const loadingMoreRef = useRef(false);
+  // Sube en cada recarga: una respuesta de «Cargar más» de una generación anterior se descarta.
+  const generationRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      generationRef.current += 1;
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
       setLoading(true);
       try {
         const page = await listWaitlist(token, { page: 1, pageSize: WAITLIST_PAGE_SIZE });
@@ -85,35 +90,60 @@ export function useWaitlist(token: string, reloadKey = 0): WaitlistState {
     [],
   );
 
-  const hasMore = loaded.length < loadedTotal;
   const loadMore = useCallback(() => {
     if (loadingMoreRef.current) return;
     loadingMoreRef.current = true;
     setLoadingMore(true);
     setMoreError(null);
+    const generation = generationRef.current;
     const nextPage = pagesLoaded + 1;
-    listWaitlist(token, { page: nextPage, pageSize: WAITLIST_PAGE_SIZE })
-      .then((page) => {
-        // Si algo se resolvió entre páginas, la API puede repetir una entrada: no se duplica.
-        const known = new Set(loaded.map((e) => e.id));
-        const fresh = page.items.filter((e) => !known.has(e.id));
-        setLoaded((prev) => {
-          const have = new Set(prev.map((e) => e.id));
-          return [...prev, ...fresh.filter((e) => !have.has(e.id))];
-        });
-        setLoadedTotal(page.total);
+    // Con entradas resueltas aquí desde la última carga, el servidor ya las
+    // contó fuera y las páginas se corrieron: pedir solo la N+1 se saltaría
+    // pacientes. Entonces se piden de nuevo las páginas 1..N+1 y se reemplaza.
+    const rebuild = removed.length > 0;
+    const firstPage = rebuild ? 1 : nextPage;
+    void (async () => {
+      try {
+        const items: WaitlistEntry[] = [];
+        let total = 0;
+        for (let p = firstPage; p <= nextPage; p += 1) {
+          const page = await listWaitlist(token, { page: p, pageSize: WAITLIST_PAGE_SIZE });
+          if (generationRef.current !== generation) return; // la lista se recargó: respuesta vieja
+          items.push(...page.items);
+          total = page.total;
+        }
+        const previous = rebuild ? [] : loaded;
+        const seen = new Set(previous.map((e) => e.id));
+        const merged = [...previous];
+        for (const e of items) {
+          if (!seen.has(e.id)) {
+            seen.add(e.id);
+            merged.push(e);
+          }
+        }
+        const before = new Set(loaded.map((e) => e.id));
+        const fresh = merged.filter((e) => !before.has(e.id) && !removed.includes(e.id));
+        setLoaded(merged);
+        setLoadedTotal(total);
+        if (rebuild) setRemoved([]);
         setPagesLoaded(nextPage);
-        if (fresh[0]) setLastBatch((prev) => ({ token: (prev?.token ?? 0) + 1, count: fresh.length, firstId: fresh[0].id }));
-      })
-      .catch((err: unknown) => setMoreError(apiErrorMessage(err, WAITLIST_MORE_ERROR)))
-      .finally(() => {
-        loadingMoreRef.current = false;
-        setLoadingMore(false);
-      });
-  }, [token, pagesLoaded, loaded]);
+        if (fresh[0]) {
+          setLastBatch((prev) => ({ token: (prev?.token ?? 0) + 1, count: fresh.length, firstId: fresh[0].id }));
+        }
+      } catch (err) {
+        if (generationRef.current === generation) setMoreError(apiErrorMessage(err, WAITLIST_MORE_ERROR));
+      } finally {
+        if (generationRef.current === generation) {
+          loadingMoreRef.current = false;
+          setLoadingMore(false);
+        }
+      }
+    })();
+  }, [token, pagesLoaded, loaded, removed]);
 
   const entries = loaded.filter((e) => !removed.includes(e.id));
   const total = Math.max(0, loadedTotal - (loaded.length - entries.length));
+  const hasMore = entries.length < total;
   return {
     entries,
     total,

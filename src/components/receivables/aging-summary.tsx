@@ -62,7 +62,7 @@ function CurrencyTotals({ total, stamp }: { total: AgingTotal; stamp: SedePainte
       {hasBuckets ? (
         <dl
           aria-labelledby={labelId}
-          className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] sm:gap-x-6 sm:gap-y-3"
+          className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 sm:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] sm:gap-x-6 sm:gap-y-3"
         >
           {BUCKET_ORDER.map((bucket) => {
             const amount = total.buckets[bucket];
