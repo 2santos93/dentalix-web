@@ -803,6 +803,14 @@ policies) — and each entry's label is **exactly** its page's title.
   Desactivar = reversible, Eliminar = irreversible with consequences). Empty list: no
   «0 items» count, the primary lives inside the `EmptyState`.
 
+### Access pages (login, register, reset, invitation)
+- One `AuthLayout`. From `lg` up, the right half is a full-bleed photograph that rotates on every
+  load (`randomHeroImage()`, picked in the server component and passed as a prop; owner decision,
+  2026-11-04, which supersedes the earlier "no photography" rule). Neutral black veil
+  (`from-black/80` to `black/20`, never a brand-coloured gradient) and the caption in white on it;
+  AA in light and dark, under any tenant accent. Without a photo: `surface-sunken` and the caption.
+- Below `lg` there is no photo and it is never downloaded (lazy image inside a `display: none` panel).
+
 ### Odontogram (signature)
 - FDI-numbered tooth map on a paper field; teeth are precise vector marks, 5 selectable surfaces
   each, colored only from the catalog/semantic tokens. Selection uses the accent; keyboard-navigable.

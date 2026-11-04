@@ -1,5 +1,6 @@
 import { ForgotPasswordForm } from '@/components/auth/forgot-password-form';
 import { AuthLayout } from '@/components/auth/auth-layout';
+import { randomHeroImage } from '@/lib/auth/hero-images';
 import { authContext } from '@/components/auth/auth-clinic';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -14,7 +15,8 @@ export default async function ForgotPasswordPage() {
   const { clinic } = await authContext();
 
   return (
-    <AuthLayout clinic={clinic} fromHost task={copy.task} caption={copy.caption}>
+    <AuthLayout clinic={clinic} fromHost task={copy.task} caption={copy.caption}
+      heroImage={randomHeroImage()}>
       <ForgotPasswordForm />
     </AuthLayout>
   );

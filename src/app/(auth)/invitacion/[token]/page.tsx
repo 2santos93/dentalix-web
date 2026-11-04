@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { AcceptInvitationForm } from '@/components/auth/accept-invitation-form';
 import { AuthLayout } from '@/components/auth/auth-layout';
+import { randomHeroImage } from '@/lib/auth/hero-images';
 import { authContext } from '@/components/auth/auth-clinic';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -29,6 +30,7 @@ export default async function AcceptInvitationPage({
       fromHost
       task={copy.task}
       caption={copy.caption}
+      heroImage={randomHeroImage()}
       footer={
         <>
           {copy.loginPrompt}{' '}

@@ -76,3 +76,15 @@ test('el registro dice, al escribir, si la dirección web está libre, en uso o 
   await address.fill('sonrisa-');
   await expect(status).toContainText('sin guion al principio ni al final');
 });
+
+// DX-532: el panel lateral del acceso lleva una foto rotativa del banco, solo ≥ lg.
+test('login: el panel lateral muestra una foto del banco a 1440 px y ninguna a 390 px', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/login');
+  const hero = page.locator('img[src^="/auth/hero-"]');
+  await expect(hero).toBeVisible();
+  await expect.poll(() => hero.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(hero).toBeHidden();
+});

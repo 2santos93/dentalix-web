@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { LoginForm } from '@/components/auth/login-form';
 import { AuthLayout } from '@/components/auth/auth-layout';
+import { randomHeroImage } from '@/lib/auth/hero-images';
 import { authContext } from '@/components/auth/auth-clinic';
 import { INVITATION_ACCEPTED_PARAM, PASSWORD_RESET_DONE_PARAM } from '@/lib/auth/password-reset-api';
 
@@ -32,6 +33,7 @@ export default async function LoginPage({
       fromHost
       task={clinic ? copy.clinicTask : copy.task}
       caption={copy.caption}
+      heroImage={randomHeroImage()}
       footer={
         <>
           {copy.registerPrompt}{' '}

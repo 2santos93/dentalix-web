@@ -4,6 +4,7 @@ import { useClinicBranding } from '@/components/brand/branding-context';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { ClinicLogo } from '@/components/brand/clinic-brand';
 import { Logo } from '@/components/ui/logo';
+import type { HeroImage } from '@/lib/auth/hero-images';
 
 /** La clínica del host (white-label). `null` en el apex o si no tiene nombre. */
 export interface AuthClinic {
@@ -32,6 +33,12 @@ interface AuthLayoutProps {
   description?: string;
   /** Frase del panel lateral (solo ≥ lg). */
   caption?: string;
+  /**
+   * Foto del panel lateral (solo ≥ lg), elegida por la página en el servidor
+   * (`randomHeroImage()`) para que viaje como prop y no haya hydration
+   * mismatch. Sin ella el panel es la superficie hundida con la frase.
+   */
+  heroImage?: HeroImage;
   children: React.ReactNode;
   /** Enlace secundario al pie del bloque («¿Ya tienes cuenta? Inicia sesión»). */
   footer?: React.ReactNode;
@@ -52,11 +59,13 @@ export const AUTH_LINK_CLASS =
  * todas las páginas hermanas comparten la misma vertical. El bloque arranca
  * arriba, no centrado, para que el teclado del móvil no tape el botón.
  *
- * Panel lateral (≥ lg): una superficie hundida y una frase, sin fotografía —
- * una foto cálida o íntima no casa con una ficha clínica ni con el color de
- * cualquier clínica.
+ * Panel lateral (≥ lg): una fotografía a sangre que rota en cada carga (decisión
+ * del dueño, 2026-11-04), con un velo neutro y la frase en blanco encima. Sin
+ * `heroImage`, una superficie hundida con la frase. Bajo lg el panel está
+ * oculto y la foto, `loading="lazy"` dentro de un `display: none`, no se
+ * descarga.
  */
-export function AuthLayout({ clinic: serverClinic, fromHost = false, task, description, caption, children, footer }: AuthLayoutProps) {
+export function AuthLayout({ clinic: serverClinic, fromHost = false, task, description, caption, heroImage, children, footer }: AuthLayoutProps) {
   const branding = useClinicBranding();
   const clinic: AuthClinic | null =
     serverClinic ?? (fromHost && branding.name ? { name: branding.name, logoUrl: branding.logoUrl } : null);
@@ -92,11 +101,29 @@ export function AuthLayout({ clinic: serverClinic, fromHost = false, task, descr
         </main>
       </div>
 
-      <div className="hidden border-l border-border-subtle bg-surface-sunken lg:flex lg:w-1/2 lg:flex-col lg:justify-end lg:p-12">
+      <div
+        className={`relative hidden overflow-hidden border-l border-border-subtle lg:flex lg:w-1/2 lg:flex-col lg:justify-end lg:p-12 ${
+          heroImage ? 'bg-black' : 'bg-surface-sunken'
+        }`}
+      >
+        {heroImage ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- foto local de public/auth, sin optimizador (images.unoptimized) */}
+            <img
+              src={heroImage.src}
+              alt={heroImage.alt}
+              loading="lazy"
+              decoding="async"
+              className="absolute inset-0 size-full object-cover"
+            />
+            {/* Velo neutro (negro con opacidad, sin color de marca): AA para la frase sobre cualquier foto. */}
+            <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
+          </>
+        ) : null}
         {caption ? (
-          <div className="max-w-md">
-            <div aria-hidden className="mb-4 h-px w-12 bg-border" />
-            <p className="t-display text-muted">{caption}</p>
+          <div className="relative max-w-md">
+            <div aria-hidden className={`mb-4 h-px w-12 ${heroImage ? 'bg-white/60' : 'bg-border'}`} />
+            <p className={`t-display ${heroImage ? 'text-white' : 'text-muted'}`}>{caption}</p>
           </div>
         ) : null}
       </div>
