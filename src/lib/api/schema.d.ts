@@ -1400,6 +1400,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/lookup-by-phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * «¿Quién llama?»: pacientes que tienen ese teléfono (DX-224)
+         * @description Lee el número en cualquier formato (sin «+», con el prefijo de la sede activa) y lo compara por E.164 completo con el teléfono del paciente y el de su responsable de pago. Varios pacientes con el mismo número (grupo familiar) salen todos, hasta 20. Cada uno trae su próxima cita, su última visita (solo de las sedes del miembro) y su saldo. `hasCriticalAlert` solo para los roles clínicos. Un evento de lectura por paciente; el número no se registra.
+         */
+        post: operations["CallerLookupController_find"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/medical-history": {
         parameters: {
             query?: never;
@@ -9012,6 +9032,66 @@ export interface components {
             upserted: number;
             /** @description Precios quitados (filas con price null). */
             removed: number;
+        };
+        CallerLookupDto: {
+            /** @description El número, en cualquier formato (con espacios, puntos, guiones o paréntesis, con o sin «+»). Sin «+», con el prefijo por defecto de la sede activa. Va en el cuerpo: nunca en la URL ni en los logs. */
+            phone: string;
+        };
+        CallerLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description Zona horaria IANA de la sede. */
+            timeZone: string;
+        };
+        CallerNextAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start: string;
+            location: components["schemas"]["CallerLocationDto"];
+        };
+        CallerLastVisitDto: {
+            /** Format: date-time */
+            start: string;
+            location: components["schemas"]["CallerLocationDto"];
+        };
+        CallerAmountDto: {
+            /** @description Código ISO 4217. */
+            currency: string;
+            amount: number;
+        };
+        CallerOverdueDto: {
+            hasOverdue: boolean;
+            overdueDays: number | null;
+            /** @description Vencido por moneda. Solo ADMIN y RECEPTION. */
+            amounts?: components["schemas"]["CallerAmountDto"][];
+            /** @description Algún abono en otra moneda no cuenta (sin tasa). */
+            incomplete?: boolean;
+        };
+        CallerBalanceDto: {
+            overdue: components["schemas"]["CallerOverdueDto"];
+            /** @description Saldo pendiente por moneda (código ISO). Vacío para DENTIST y ASSISTANT, que solo ven la marca de vencido. */
+            pending: components["schemas"]["CallerAmountDto"][];
+        };
+        CallerMatchDto: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+            /**
+             * @description PATIENT: el número es el del paciente. RESPONSIBLE_PARTY: es el de su responsable de pago.
+             * @enum {string}
+             */
+            matchedBy: "PATIENT" | "RESPONSIBLE_PARTY";
+            nextAppointment: components["schemas"]["CallerNextAppointmentDto"] | null;
+            lastVisit: components["schemas"]["CallerLastVisitDto"] | null;
+            balance: components["schemas"]["CallerBalanceDto"];
+            /** @description Solo para los roles clínicos (DENTIST, ASSISTANT, ADMIN); RECEPTION no recibe la clave. */
+            hasCriticalAlert?: boolean;
+        };
+        CallerLookupResponseDto: {
+            matches: components["schemas"]["CallerMatchDto"][];
         };
         SafetyFlagsDto: {
             /** @description DERIVADA: true solo con un «Sí» explícito al embarazo (`pregnancy`). No dice si se contestó «No». */
@@ -23481,6 +23561,50 @@ export interface operations {
             };
             /** @description Lista de precios no encontrada en esta clínica */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CallerLookupController_find: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CallerLookupDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallerLookupResponseDto"];
+                };
+            };
+            /** @description Menos de 7 dígitos: `CALLER_PHONE_TOO_SHORT`, «Escribe el número completo». */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pacientes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

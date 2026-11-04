@@ -2,7 +2,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Ellipsis, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
+import { Ellipsis, PanelLeftClose, PanelLeftOpen, Phone, Search } from 'lucide-react';
 import { UserMenu, useLogout } from '@/components/profile/user-menu';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
@@ -32,6 +32,7 @@ import {
 } from './nav-config';
 import { CommandPalette, ShortcutHint } from './command-palette';
 import { MoreSheet } from './more-sheet';
+import { CallerLookupDialog } from '@/components/caller-lookup/caller-lookup-dialog';
 import { TABLET_QUERY, useMediaQuery, useVirtualKeyboardOpen } from './use-shell-media';
 
 const copy = {
@@ -39,6 +40,7 @@ const copy = {
   expand: 'Expandir menú',
   search: 'Buscar',
   searchLong: 'Buscar…',
+  caller: '¿Quién llama?',
   more: 'Más',
   mainNav: 'Principal',
   sections: 'Secciones',
@@ -171,6 +173,23 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // DX-224: «¿Quién llama?» con Alt+Mayús+Q (Option+Mayús+Q en Mac). Se lee
+  // `code` y no `key`: con Option, macOS cambia el carácter. No choca con ⌘K
+  // ni con los atajos de la agenda, el odontograma y el periodontograma (que
+  // no llevan Alt).
+  const [callerOpen, setCallerOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!role) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyQ') {
+        event.preventDefault();
+        setCallerOpen((open) => !open);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [role]);
+
   const [moreOpen, setMoreOpen] = React.useState(false);
   const keyboardOpen = useVirtualKeyboardOpen();
   const { loggingOut, logout } = useLogout();
@@ -259,6 +278,31 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               </>
             )}
           </button>
+          {/* DX-224: quién llama, con su atajo a la vista. */}
+          {role ? (
+            <button
+              type="button"
+              onClick={() => setCallerOpen(true)}
+              aria-label={collapsed ? copy.caller : undefined}
+              aria-keyshortcuts="Alt+Shift+Q"
+              aria-haspopup="dialog"
+              title={collapsed ? `${copy.caller} (Alt Mayús Q)` : undefined}
+              className={cn(
+                'mt-1.5 flex items-center rounded-md border border-border bg-surface text-sm text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                collapsed ? 'size-10 justify-center' : 'h-9 w-full gap-2 px-2.5',
+              )}
+            >
+              <Phone aria-hidden className="size-4 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 text-left">{copy.caller}</span>
+                  <kbd aria-hidden className="rounded border border-border px-1.5 text-xs text-faint">
+                    Alt ⇧ Q
+                  </kbd>
+                </>
+              )}
+            </button>
+          ) : null}
         </div>
         <nav
           aria-label={copy.sections}
@@ -364,6 +408,17 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           <LocationSwitcher variant="phone" />
+          {role ? (
+            <button
+              type="button"
+              onClick={() => setCallerOpen(true)}
+              aria-label={copy.caller}
+              aria-haspopup="dialog"
+              className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Phone aria-hidden className="size-5" />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
@@ -456,6 +511,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
         loggingOut={loggingOut}
       />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} token={accessToken} role={role} />
+      <CallerLookupDialog open={callerOpen} onOpenChange={setCallerOpen} token={accessToken} role={role} />
     </div>
   );
 }
