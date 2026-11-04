@@ -129,8 +129,6 @@ export function ReceivablesView({ token }: { token: string }) {
   const router = useRouter();
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
   const isAdmin = getTokenRole(token) === 'ADMIN';
-  // Importes y fechas con el formato de la sede de la pantalla (DX-354b): el deudor agrega sedes.
-  const stamp = useSedeStamp(token);
   const [ageFilter, setAgeFilter] = useState<string>('all');
   const [minBalanceText, setMinBalanceText] = useState('');
   const [minBalance, setMinBalance] = useState<number | undefined>(undefined);
@@ -138,6 +136,8 @@ export function ReceivablesView({ token }: { token: string }) {
   const [knownCurrencies, setKnownCurrencies] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ReceivablesAgingPage | null>(null);
+  // DX-354b (E1): cada deuda con el formato de SU sede (`row.locationId`); sin ella, la de la pantalla.
+  const stamp = useSedeStamp(token, data?.items.map((row) => row.locationId));
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
@@ -310,15 +310,15 @@ export function ReceivablesView({ token }: { token: string }) {
       headerClassName: 'whitespace-nowrap',
       cell: (r) => (
         <>
-          <DebtCell currencies={r.currencies} stamp={stamp} />
+          <DebtCell currencies={r.currencies} stamp={stamp} locationId={r.locationId} />
           {r.paymentsWithoutRateCount > 0 ? <IncompleteMark /> : null}
           {/* Con un solo tramo ya lo dice la antigüedad; con varios, el desglose. */}
-          {bucketLineCount(r) > 1 ? <BucketList currencies={r.currencies} stamp={stamp} className="mt-1" /> : null}
+          {bucketLineCount(r) > 1 ? <BucketList currencies={r.currencies} stamp={stamp} locationId={r.locationId} className="mt-1" /> : null}
         </>
       ),
       mobileCell: (r) => (
         <>
-          <DebtCell currencies={r.currencies} stamp={stamp} compact />
+          <DebtCell currencies={r.currencies} stamp={stamp} locationId={r.locationId} compact />
           {r.paymentsWithoutRateCount > 0 ? <IncompleteMark /> : null}
         </>
       ),

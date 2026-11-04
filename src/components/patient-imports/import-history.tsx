@@ -96,9 +96,9 @@ export function ImportHistory({
   fmt: RegionalFormat | null;
 }) {
   const n = (value: number) => sedeNumber(value, fmt);
-  // La fecha de confirmación: zona, formato y reloj de la sede de la pantalla (DX-354b); el aviso lo pone la pantalla.
-  const stamp = useSedeStamp(token);
   const [items, setItems] = React.useState<ImportBatch[]>([]);
+  // La fecha de confirmación con zona, formato y reloj de la sede del lote (`b.locationId`, DX-354b); el aviso lo pone la pantalla.
+  const stamp = useSedeStamp(token, items.map((b) => b.locationId));
   const [page, setPage] = React.useState(1);
   const [total, setTotal] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(0);
@@ -273,7 +273,7 @@ export function ImportHistory({
                 </span>
               </div>
               <p className="tabular-nums text-muted">
-                {historyCopy.meta(stamp.dateTime(b.confirmedAt ?? b.createdAt), b.createdBy.fullName)}
+                {historyCopy.meta(stamp.dateTime(b.confirmedAt ?? b.createdAt, b.locationId), b.createdBy.fullName)}
               </p>
               {b.balances && b.balances.progress.ambiguous > 0 ? (
                 <p className="text-warning-text">{historyCopy.ambiguous(b.balances.progress.ambiguous, n(b.balances.progress.ambiguous))}</p>

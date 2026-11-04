@@ -321,7 +321,7 @@ describe('ImportHistory: la fecha de confirmación con la sede de la pantalla (D
   const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
 
   it.each(['caracas', 'berlin', 'miami'] as const)('con la sede de %s la fecha y la hora salen con su zona, formato y reloj', async (key) => {
-    jest.mocked(listLocations).mockResolvedValue([STAMP_SEDES[key]]);
+    jest.mocked(listLocations).mockResolvedValue([{ ...STAMP_SEDES[key], id: 'loc-1' }]);
     mockedList.mockResolvedValue(page());
     render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
     const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
@@ -329,7 +329,7 @@ describe('ImportHistory: la fecha de confirmación con la sede de la pantalla (D
   });
 
   it('las 14:05Z del 21 de octubre: Caracas 10:05 a. m., Berlín 16:05 (24 h), no la hora del navegador (UTC)', async () => {
-    jest.mocked(listLocations).mockResolvedValue([STAMP_SEDES.berlin]);
+    jest.mocked(listLocations).mockResolvedValue([{ ...STAMP_SEDES.berlin, id: 'loc-1' }]);
     mockedList.mockResolvedValue(page());
     render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
     const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
@@ -344,5 +344,20 @@ describe('ImportHistory: la fecha de confirmación con la sede de la pantalla (D
     const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
     expect(norm(list.textContent)).toContain('—');
     expect(norm(list.textContent)).not.toContain('2026');
+  });
+
+  it('el lote de otra sede se fecha con el reloj de ESA sede (Berlín y Miami) aunque la pantalla sea de Caracas', async () => {
+    jest.mocked(listLocations).mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedList.mockResolvedValue(
+      page([
+        { ...completed, id: 'b-berlin', fileName: 'berlin.csv', locationId: 'sede-berlin' },
+        { ...completed, id: 'b-miami', fileName: 'miami.csv', locationId: 'sede-miami' },
+      ]),
+    );
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    await waitFor(() => expect(norm(list.textContent)).toContain(norm(dateTimeIn('berlin', '2026-10-21T14:05:00.000Z'))));
+    expect(norm(list.textContent)).toContain(norm(dateTimeIn('miami', '2026-10-21T14:05:00.000Z')));
+    expect(norm(list.textContent)).not.toContain(norm(dateTimeIn('caracas', '2026-10-21T14:05:00.000Z')));
   });
 });

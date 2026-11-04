@@ -64,4 +64,31 @@ describe('piezas del deudor (DX-145, DX-354b)', () => {
     expect(norm(container.textContent)).not.toMatch(/1[.,]234/);
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
+
+  it('la deuda de otra sede se pinta con el formato de ESA sede (Miami y Berlín) en una pantalla de Caracas; con locationId null, la de la pantalla', () => {
+    const screenCaracas = stampPainters(testAgendaClock([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]));
+    const text = (locationId: string | null) => {
+      const row = { ...ROW, locationId } as unknown as AgingRow;
+      const { container, unmount } = render(
+        <div>
+          <DebtCell currencies={row.currencies} stamp={screenCaracas} locationId={row.locationId} />
+          <LastPayment row={row} stamp={screenCaracas} />
+          <NextInstallment row={row} stamp={screenCaracas} />
+        </div>,
+      );
+      const out = norm(container.textContent);
+      unmount();
+      return out;
+    };
+    const miami = text('sede-miami');
+    expect(miami).toContain('USD 1,234.50');
+    expect(miami).toContain('10/20/2026');
+    expect(miami).not.toContain('USD 1.234,50');
+    const berlin = text('sede-berlin');
+    expect(berlin).toContain('1.234,50 USD');
+    expect(berlin).toContain('20.10.2026');
+    const none = text(null);
+    expect(none).toContain('USD 1.234,50');
+    expect(none).toContain('20/10/2026');
+  });
 });
