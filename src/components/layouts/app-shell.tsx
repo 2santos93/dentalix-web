@@ -181,7 +181,15 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!role) return;
     function onKey(event: KeyboardEvent) {
-      if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyQ') {
+      if (
+        event.altKey &&
+        event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.repeat &&
+        !event.defaultPrevented &&
+        event.code === 'KeyQ'
+      ) {
         event.preventDefault();
         setCallerOpen((open) => !open);
       }

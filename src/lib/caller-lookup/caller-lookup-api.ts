@@ -23,11 +23,17 @@ export function hasEnoughCallerDigits(text: string): boolean {
   return callerDigitCount(text) >= MIN_CALLER_DIGITS;
 }
 
-export async function lookupCaller(token: string, phone: string): Promise<CallerMatch[]> {
+export interface CallerLookupResult {
+  matches: CallerMatch[];
+  /** Hay más pacientes con ese número que los mostrados. */
+  truncated: boolean;
+}
+
+export async function lookupCaller(token: string, phone: string): Promise<CallerLookupResult> {
   const res = await apiFetch<CallerLookupResponse>('/patients/lookup-by-phone', {
     method: 'POST',
     body: { phone: phone.trim() },
     token,
   });
-  return res.matches;
+  return { matches: res.matches, truncated: res.truncated === true };
 }

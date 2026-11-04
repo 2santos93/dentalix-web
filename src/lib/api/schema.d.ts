@@ -1411,7 +1411,7 @@ export interface paths {
         put?: never;
         /**
          * «¿Quién llama?»: pacientes que tienen ese teléfono (DX-224)
-         * @description Lee el número en cualquier formato (sin «+», con el prefijo de la sede activa) y lo compara por E.164 completo con el teléfono del paciente y el de su responsable de pago. Varios pacientes con el mismo número (grupo familiar) salen todos, hasta 20. Cada uno trae su próxima cita, su última visita (solo de las sedes del miembro) y su saldo. `hasCriticalAlert` solo para los roles clínicos. Un evento de lectura por paciente; el número no se registra.
+         * @description Lee el número en cualquier formato (sin «+», con el prefijo de la sede activa) y lo compara por E.164 completo con el teléfono del paciente y el de sus responsables (contacto o paciente). Varios pacientes con el mismo número (grupo familiar) salen todos, hasta 20 (`truncated` avisa si hay más). Cada uno trae su próxima cita, su última visita (solo de las sedes del miembro) y su saldo. `hasCriticalAlert` solo para los roles clínicos. Un evento de lectura por paciente; el número no se registra.
          */
         post: operations["CallerLookupController_find"];
         delete?: never;
@@ -9080,7 +9080,7 @@ export interface components {
             firstName: string;
             lastName: string;
             /**
-             * @description PATIENT: el número es el del paciente. RESPONSIBLE_PARTY: es el de su responsable de pago.
+             * @description PATIENT: el número es el del paciente. RESPONSIBLE_PARTY: es el de alguno de sus responsables (contacto o paciente).
              * @enum {string}
              */
             matchedBy: "PATIENT" | "RESPONSIBLE_PARTY";
@@ -9092,6 +9092,8 @@ export interface components {
         };
         CallerLookupResponseDto: {
             matches: components["schemas"]["CallerMatchDto"][];
+            /** @description Hay más pacientes con ese número que los 20 devueltos: afinar la búsqueda. */
+            truncated: boolean;
         };
         SafetyFlagsDto: {
             /** @description DERIVADA: true solo con un «Sí» explícito al embarazo (`pregnancy`). No dice si se contestó «No». */

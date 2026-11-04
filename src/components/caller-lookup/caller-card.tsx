@@ -18,7 +18,7 @@ export const callerCardCopy = {
   pendingBalance: 'Saldo pendiente',
   noPendingBalance: 'Al día',
   criticalAlert: 'Alerta clínica',
-  viaResponsible: 'Coincide con el teléfono de su responsable de pago',
+  viaResponsible: 'Coincide con el teléfono de su responsable',
   newAppointment: 'Nueva cita',
   openRecord: 'Abrir ficha',
   at: (when: string, place: string) => `${when} · ${place}`,
@@ -55,7 +55,10 @@ export function CallerCard({
   const { nextAppointment, lastVisit, balance } = match;
   const amounts = seesCallerAmounts(role);
   // El esquema generado tipa `incomplete` como boolean; el chip espera `true`.
-  const overdue = { ...balance.overdue, incomplete: balance.overdue.incomplete ? (true as const) : undefined };
+  const overdue = {
+    ...balance.overdue,
+    incomplete: balance.overdue.incomplete ? (true as const) : undefined,
+  };
   return (
     <li
       aria-label={name}
@@ -118,11 +121,7 @@ export function CallerCard({
           {callerCardCopy.newAppointment}
         </Button>
         <Button asChild variant="secondary" className="max-sm:min-h-11 max-sm:w-full">
-          <Link
-            href={`/patients/${match.id}`}
-            onClick={onOpenRecord}
-            aria-label={callerCardCopy.openRecordOf(name)}
-          >
+          <Link href={`/patients/${match.id}`} onClick={onOpenRecord} aria-label={callerCardCopy.openRecordOf(name)}>
             <FolderOpen aria-hidden />
             {callerCardCopy.openRecord}
           </Link>

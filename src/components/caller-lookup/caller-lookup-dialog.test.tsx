@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import { lookupCaller, type CallerMatch } from '@/lib/caller-lookup/caller-lookup-api';
-import { peekPrefillPhone, clearPrefillPhone } from '@/lib/patients/prefill-phone';
+import { peekPrefillPhone, clearPrefillPhone, setPrefillPhone } from '@/lib/patients/prefill-phone';
 import { listLocations } from '@/lib/locations/locations-api';
 import { getPatient } from '@/lib/patients/patients-api';
 import { clinicLocation } from '@/lib/test/locations';
@@ -12,7 +12,9 @@ import { callerCardCopy } from './caller-card';
 
 const push = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
-jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn(),
+}));
 jest.mock('../../lib/patients/patients-api', () => ({ getPatient: jest.fn() }));
 jest.mock('../../lib/caller-lookup/caller-lookup-api', () => ({
   ...jest.requireActual('../../lib/caller-lookup/caller-lookup-api'),
@@ -79,32 +81,41 @@ describe('CallerLookupDialog (DX-224)', () => {
   });
 
   it('coincidencia única: próxima cita y última visita con la zona de SU sede, y saldo con código ISO', async () => {
-    mockedLookup.mockResolvedValue([
-      match({
-        nextAppointment: {
-          id: 'a1',
-          start: '2026-11-10T14:00:00.000Z',
-          location: { id: STAMP_SEDES.berlin.id, name: 'Berlín', timeZone: 'Europe/Berlin' },
-        },
-        lastVisit: {
-          start: '2026-10-01T15:30:00.000Z',
-          location: { id: STAMP_SEDES.caracas.id, name: 'Caracas', timeZone: 'America/Caracas' },
-        },
-        balance: {
-          overdue: { hasOverdue: false, overdueDays: null },
-          pending: [{ currency: 'USD', amount: 80 }],
-        },
-      }),
-    ]);
+    mockedLookup.mockResolvedValue({
+      truncated: false,
+      matches: [
+        match({
+          nextAppointment: {
+            id: 'a1',
+            start: '2026-11-10T14:00:00.000Z',
+            location: {
+              id: STAMP_SEDES.berlin.id,
+              name: 'Berlín',
+              timeZone: 'Europe/Berlin',
+            },
+          },
+          lastVisit: {
+            start: '2026-10-01T15:30:00.000Z',
+            location: {
+              id: STAMP_SEDES.caracas.id,
+              name: 'Caracas',
+              timeZone: 'America/Caracas',
+            },
+          },
+          balance: {
+            overdue: { hasOverdue: false, overdueDays: null },
+            pending: [{ currency: 'USD', amount: 80 }],
+          },
+        }),
+      ],
+    });
     setup('RECEPTION');
     await search('0412 1234567');
 
     const card = await screen.findByTestId('caller-card');
     expect(mockedLookup).toHaveBeenCalledWith('tok', '0412 1234567');
     expect(within(card).getByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument();
-    await waitFor(() =>
-      expect(card).toHaveTextContent(`${dateTimeIn('berlin', '2026-11-10T14:00:00.000Z')} · Berlín`),
-    );
+    await waitFor(() => expect(card).toHaveTextContent(`${dateTimeIn('berlin', '2026-11-10T14:00:00.000Z')} · Berlín`));
     expect(card).toHaveTextContent(`${dateIn('caracas', '2026-10-01T15:30:00.000Z')} · Caracas`);
     expect(card).toHaveTextContent(/80,00\s*USD|USD\s*80[.,]00/);
     expect(screen.getByTestId('caller-status')).toHaveTextContent('1 paciente con ese número');
@@ -116,7 +127,7 @@ describe('CallerLookupDialog (DX-224)', () => {
   });
 
   it('sin cita ni visitas: lo dice con palabras, no con guiones', async () => {
-    mockedLookup.mockResolvedValue([match()]);
+    mockedLookup.mockResolvedValue({ matches: [match()], truncated: false });
     setup();
     await search('04121234567');
     const card = await screen.findByTestId('caller-card');
@@ -126,10 +137,18 @@ describe('CallerLookupDialog (DX-224)', () => {
   });
 
   it('varios pacientes con el mismo número (grupo familiar): una tarjeta por cada uno y el responsable aclarado', async () => {
-    mockedLookup.mockResolvedValue([
-      match({ id: 'p1', firstName: 'Ana', lastName: 'Pérez' }),
-      match({ id: 'p2', firstName: 'Luis', lastName: 'Pérez', matchedBy: 'RESPONSIBLE_PARTY' }),
-    ]);
+    mockedLookup.mockResolvedValue({
+      truncated: false,
+      matches: [
+        match({ id: 'p1', firstName: 'Ana', lastName: 'Pérez' }),
+        match({
+          id: 'p2',
+          firstName: 'Luis',
+          lastName: 'Pérez',
+          matchedBy: 'RESPONSIBLE_PARTY',
+        }),
+      ],
+    });
     setup();
     await search('04121234567');
     const cards = await screen.findAllByTestId('caller-card');
@@ -140,7 +159,10 @@ describe('CallerLookupDialog (DX-224)', () => {
   });
 
   it('roles clínicos ven «Alerta clínica»; RECEPTION no (la API no manda la clave) ni el saldo si no es suyo', async () => {
-    mockedLookup.mockResolvedValue([match({ hasCriticalAlert: true })]);
+    mockedLookup.mockResolvedValue({
+      matches: [match({ hasCriticalAlert: true })],
+      truncated: false,
+    });
     const { unmount } = setup('DENTIST');
     await search('04121234567');
     expect(await screen.findByTestId('caller-critical-alert')).toHaveTextContent(callerCardCopy.criticalAlert);
@@ -148,7 +170,7 @@ describe('CallerLookupDialog (DX-224)', () => {
     expect(screen.queryByText(callerCardCopy.pendingBalance)).not.toBeInTheDocument();
     unmount();
 
-    mockedLookup.mockResolvedValue([match()]);
+    mockedLookup.mockResolvedValue({ matches: [match()], truncated: false });
     setup('RECEPTION');
     await search('04121234567');
     await screen.findByTestId('caller-card');
@@ -158,19 +180,31 @@ describe('CallerLookupDialog (DX-224)', () => {
   });
 
   it('muestra «Saldo vencido» con los días', async () => {
-    mockedLookup.mockResolvedValue([
-      match({ balance: { overdue: { hasOverdue: true, overdueDays: 12 }, pending: [] } }),
-    ]);
+    mockedLookup.mockResolvedValue({
+      truncated: false,
+      matches: [
+        match({
+          balance: {
+            overdue: { hasOverdue: true, overdueDays: 12 },
+            pending: [],
+          },
+        }),
+      ],
+    });
     setup('DENTIST');
     await search('04121234567');
     expect(await screen.findByTestId('overdue-chip')).toHaveTextContent(/vencido/i);
   });
 
   it('sin coincidencias: «Ningún paciente con ese número» y «Crear paciente» con el teléfono prellenado', async () => {
-    mockedLookup.mockResolvedValue([]);
+    mockedLookup.mockResolvedValue({ matches: [], truncated: false });
     const { onOpenChange } = setup();
     const user = await search('0412 5559999');
-    expect(await screen.findByRole('button', { name: callerLookupCopy.createPatient })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', {
+        name: callerLookupCopy.createPatient,
+      }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText(callerLookupCopy.noMatchTitle)).toHaveLength(2);
     await user.click(screen.getByRole('button', { name: callerLookupCopy.createPatient }));
     expect(peekPrefillPhone()).toBe('0412 5559999');
@@ -179,9 +213,7 @@ describe('CallerLookupDialog (DX-224)', () => {
   });
 
   it('error de la API: mensaje en español con «Reintentar», que vuelve a buscar', async () => {
-    mockedLookup
-      .mockRejectedValueOnce(new ApiError(500, 'Internal Server Error'))
-      .mockResolvedValueOnce([match()]);
+    mockedLookup.mockRejectedValueOnce(new ApiError(500, 'Internal Server Error')).mockResolvedValueOnce({ matches: [match()], truncated: false });
     setup();
     const user = await search('04121234567');
     const alert = await screen.findByRole('alert');
@@ -196,13 +228,17 @@ describe('CallerLookupDialog (DX-224)', () => {
     mockedLookup.mockRejectedValue(new ApiError(500, 'Internal Server Error'));
     setup();
     const user = await search('04121234567');
-    await user.click(within(await screen.findByRole('alert')).getByRole('button', { name: /reintentar/i }));
+    await user.click(
+      within(await screen.findByRole('alert')).getByRole('button', {
+        name: /reintentar/i,
+      }),
+    );
     await waitFor(() => expect(mockedLookup).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole('alert')).toHaveTextContent(callerLookupCopy.loadError);
   });
 
   it('pegar un número completo busca al instante', async () => {
-    mockedLookup.mockResolvedValue([match()]);
+    mockedLookup.mockResolvedValue({ matches: [match()], truncated: false });
     setup();
     const user = userEvent.setup();
     await user.click(screen.getByLabelText(callerLookupCopy.fieldLabel));
@@ -212,7 +248,7 @@ describe('CallerLookupDialog (DX-224)', () => {
   });
 
   it('«Nueva cita» abre el formulario con el paciente puesto', async () => {
-    mockedLookup.mockResolvedValue([match()]);
+    mockedLookup.mockResolvedValue({ matches: [match()], truncated: false });
     (getPatient as jest.MockedFunction<typeof getPatient>).mockResolvedValue({
       id: 'p1',
       firstName: 'Ana',
@@ -225,8 +261,34 @@ describe('CallerLookupDialog (DX-224)', () => {
     expect(getPatient).toHaveBeenCalledWith('tok', 'p1');
   });
 
+  it('M3: con más de 20 pacientes avisa de que hay más coincidencias', async () => {
+    mockedLookup.mockResolvedValue({ matches: [match()], truncated: true });
+    setup();
+    await search('04121234567');
+    expect(await screen.findByTestId('caller-truncated')).toHaveTextContent(callerLookupCopy.truncated);
+  });
+
+  it('M6: la ayuda del campo se lee con el campo; con error, lo que se lee es el error', async () => {
+    setup();
+    const input = screen.getByLabelText(callerLookupCopy.fieldLabel);
+    const hint = document.getElementById(input.getAttribute('aria-describedby')!);
+    expect(hint).toHaveTextContent(callerLookupCopy.fieldHint);
+    await search('412');
+    expect(screen.getByLabelText(callerLookupCopy.fieldLabel).getAttribute('aria-describedby')).not.toBe(hint?.id);
+  });
+
+  it('M7: cerrar el diálogo sin ir al alta olvida el teléfono prellenado', async () => {
+    mockedLookup.mockResolvedValue({ matches: [], truncated: false });
+    const { rerender } = render(<CallerLookupDialog open onOpenChange={jest.fn()} token="tok" role="ADMIN" />);
+    await search('0412 5559999');
+    await screen.findByRole('button', { name: callerLookupCopy.createPatient });
+    setPrefillPhone('0412 5559999');
+    rerender(<CallerLookupDialog open={false} onOpenChange={jest.fn()} token="tok" role="ADMIN" />);
+    expect(peekPrefillPhone()).toBe('');
+  });
+
   it('«Abrir ficha» cierra el diálogo', async () => {
-    mockedLookup.mockResolvedValue([match()]);
+    mockedLookup.mockResolvedValue({ matches: [match()], truncated: false });
     const { onOpenChange } = setup();
     const user = await search('04121234567');
     await user.click(await screen.findByRole('link', { name: /abrir la ficha de ana pérez/i }));

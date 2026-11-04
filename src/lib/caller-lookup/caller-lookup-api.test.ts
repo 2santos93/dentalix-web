@@ -8,12 +8,15 @@ describe('caller-lookup-api (DX-224)', () => {
 
   it('manda el número en el CUERPO de un POST, nunca en la URL', async () => {
     const matches = [{ id: 'p1', firstName: 'Ana', lastName: 'Pérez' }];
-    const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ matches }) });
+    const spy = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ matches, truncated: true }),
+    });
     global.fetch = spy as unknown as typeof fetch;
 
     const out = await lookupCaller('tok', '  0412-123.45.67 ');
 
-    expect(out).toEqual(matches);
+    expect(out).toEqual({ matches, truncated: true });
     const [url, init] = spy.mock.calls[0];
     expect(String(url)).toMatch(/\/patients\/lookup-by-phone$/);
     expect(String(url)).not.toContain('123');

@@ -3,24 +3,14 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Phone, UserPlus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import {
-  hasEnoughCallerDigits,
-  lookupCaller,
-  type CallerMatch,
-} from '@/lib/caller-lookup/caller-lookup-api';
-import { setPrefillPhone } from '@/lib/patients/prefill-phone';
+import { hasEnoughCallerDigits, lookupCaller, type CallerMatch } from '@/lib/caller-lookup/caller-lookup-api';
+import { clearPrefillPhone, setPrefillPhone } from '@/lib/patients/prefill-phone';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -40,6 +30,7 @@ export const callerLookupCopy = {
   noMatchTitle: 'Ningún paciente con ese número',
   noMatchDescription: 'Revisa el número o crea el paciente con este teléfono.',
   createPatient: 'Crear paciente',
+  truncated: 'Hay más coincidencias; afina el número o busca por nombre.',
   found: (n: number) => (n === 1 ? '1 paciente con ese número' : `${n} pacientes con ese número`),
   loadError: 'No pudimos buscar por ese número.',
   errorTitle: 'No se pudo buscar',
@@ -50,7 +41,7 @@ type State =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'done'; matches: CallerMatch[] };
+  | { kind: 'done'; matches: CallerMatch[]; truncated: boolean };
 
 /**
  * «¿Quién llama?» (DX-224): diálogo para pegar o escribir un número, abierto
@@ -73,11 +64,13 @@ export function CallerLookupDialog({
 }) {
   const router = useRouter();
   const inputId = React.useId();
+  const hintId = `${inputId}-hint`;
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [phone, setPhone] = React.useState('');
   const [fieldError, setFieldError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState<Search | null>(null);
   const [state, setState] = React.useState<State>({ kind: 'idle' });
+  const creatingRef = React.useRef(false);
   const [scheduling, setScheduling] = React.useState<CallerMatch | null>(null);
 
   // Al cerrar se limpia todo: el número no se queda en pantalla para el
@@ -85,6 +78,11 @@ export function CallerLookupDialog({
   React.useEffect(() => {
     if (open) return;
     const reset = () => {
+      // M7: el número que se dejó para «Crear paciente» no sobrevive a un
+      // cierre cualquiera; solo al cerrar para ir al alta se conserva.
+      if (!creatingRef.current) clearPrefillPhone();
+      creatingRef.current = false;
+
       setPhone('');
       setFieldError(null);
       setSearch(null);
@@ -100,11 +98,16 @@ export function CallerLookupDialog({
     async function run() {
       setState({ kind: 'loading' });
       try {
-        const matches = await lookupCaller(token!, search!.phone);
-        if (!cancelled) setState({ kind: 'done', matches });
+        const { matches, truncated } = await lookupCaller(token!, search!.phone);
+        if (!cancelled) setState({ kind: 'done', matches, truncated });
       } catch (err: unknown) {
         if (!cancelled) {
-          setState({ kind: 'error', message: apiErrorMessage(err, { fallback: callerLookupCopy.loadError }) });
+          setState({
+            kind: 'error',
+            message: apiErrorMessage(err, {
+              fallback: callerLookupCopy.loadError,
+            }),
+          });
         }
       }
     }
@@ -115,6 +118,7 @@ export function CallerLookupDialog({
   }, [search, token]);
 
   const matches = state.kind === 'done' ? state.matches : [];
+  const truncated = state.kind === 'done' && state.truncated;
   const stamp = useSedeStamp(
     token ?? '',
     matches.flatMap((m) => [m.nextAppointment?.location.id, m.lastVisit?.location.id]),
@@ -134,6 +138,7 @@ export function CallerLookupDialog({
 
   function createPatient() {
     setPrefillPhone(search?.phone ?? phone);
+    creatingRef.current = true;
     onOpenChange(false);
     router.push('/patients/new');
   }
@@ -176,6 +181,7 @@ export function CallerLookupDialog({
               label={callerLookupCopy.fieldLabel}
               error={fieldError ?? undefined}
               hint={callerLookupCopy.fieldHint}
+              hintId={hintId}
               className="min-w-0 flex-1"
             >
               <Input
@@ -189,7 +195,7 @@ export function CallerLookupDialog({
                 placeholder={callerLookupCopy.placeholder}
                 value={phone}
                 aria-invalid={fieldError ? true : undefined}
-                aria-describedby={fieldError ? fieldErrorId(inputId) : undefined}
+                aria-describedby={fieldError ? fieldErrorId(inputId) : hintId}
                 onChange={(event) => {
                   setPhone(event.target.value);
                   if (fieldError) setFieldError(null);
@@ -260,6 +266,11 @@ export function CallerLookupDialog({
                     />
                   ))}
                 </ul>
+                {truncated ? (
+                  <p role="status" data-testid="caller-truncated" className="text-sm text-muted">
+                    {callerLookupCopy.truncated}
+                  </p>
+                ) : null}
                 <SedeStampNote stamp={stamp} />
               </>
             ) : null}
