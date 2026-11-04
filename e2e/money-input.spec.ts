@@ -136,18 +136,18 @@ for (const v of viewports) {
     await expect(promise.getByText(/No sabemos leer «1\.50\.0»/)).toBeVisible();
     await expect(promise.getByLabel('Importe')).toHaveAttribute('aria-invalid', 'true');
     await promise.getByLabel('Importe').fill('150,50');
-    await expect(promise.getByText(money('Se guardará: 150,50 USD'))).toBeVisible();
+    await expect(promise.getByText(money('Se guardará: USD 150,50'))).toBeVisible();
     await promise.getByRole('button', { name: 'Guardar compromiso' }).click();
     await expect(promise).toBeHidden({ timeout: 10_000 });
     const status = debtor.getByTestId('promise-status');
     await expect(status.getByText('Abierto')).toBeVisible({ timeout: 15_000 });
-    await expect(status).toContainText(money('150,50 USD'));
+    await expect(status).toContainText(money('USD 150,50'));
     await expectNoHorizontalScroll(page);
 
     // Ficha → «Registrar abono» de «150.000» al plan en VES.
     await page.goto(`${origin}/patients/${patient.id}?tab=account-statement`);
     const block = page.getByTestId('patient-collections');
-    await expect(block.getByTestId('promise-row')).toContainText(money('150,50 USD'), { timeout: 15_000 });
+    await expect(block.getByTestId('promise-row')).toContainText(money('USD 150,50'), { timeout: 15_000 });
     const panel = page.locator('#tabpanel-account-statement');
     await panel.getByRole('button', { name: 'Registrar abono' }).click();
     const payment = page.getByRole('dialog', { name: 'Registrar abono' });
@@ -158,7 +158,7 @@ for (const v of viewports) {
     await expect(payment.getByLabel('Moneda')).toHaveValue('VES');
     await expectDialogInsideViewport(page, payment);
     await payment.getByLabel('Importe').fill('150.000');
-    await expect(payment.getByText(money('Se guardará: 150.000,00 VES'))).toBeVisible();
+    await expect(payment.getByText(money('Se guardará: VES 150.000,00'))).toBeVisible();
     await payment.getByLabel('Método').selectOption({ label: 'Efectivo' });
     await payment.getByRole('button', { name: 'Registrar abono' }).click();
     await expect(payment).toBeHidden({ timeout: 10_000 });
@@ -175,8 +175,8 @@ for (const v of viewports) {
     // Cartera: el saldo en VES bajó 150.000 (no 150), y el compromiso sigue en 150,50 USD.
     await page.goto(`${origin}/caja/cartera`);
     const after = debtorIn(page, v.width, patient.fullName);
-    await expect(after).toContainText(money('250.000,00 VES'), { timeout: 15_000 });
-    await expect(after.getByTestId('promise-status')).toContainText(money('150,50 USD'));
+    await expect(after).toContainText(money('VES 250.000,00'), { timeout: 15_000 });
+    await expect(after.getByTestId('promise-status')).toContainText(money('USD 150,50'));
     await expectNoHorizontalScroll(page);
   });
 }

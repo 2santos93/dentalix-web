@@ -208,7 +208,7 @@ for (const viewport of [
     // Un pago parcial por transferencia.
     await detail.getByRole('button', { name: 'Registrar pago' }).click();
     const pay = page.getByRole('dialog', { name: 'Registrar pago' });
-    await expect(pay.getByText(/Pendiente: 150,00/)).toBeVisible();
+    await expect(pay.getByText(/Pendiente: (USD\s)?150,00/)).toBeVisible();
     await pay.getByLabel('Medio de pago').selectOption({ label: 'Transferencia' });
     await expect(pay.getByLabel('Desde mi caja abierta')).toHaveCount(0);
     await pay.getByLabel(`Importe (${DEMO_CURRENCY})`).fill('200');
@@ -217,13 +217,13 @@ for (const viewport of [
     await pay.getByLabel(`Importe (${DEMO_CURRENCY})`).fill('50');
     await pay.getByRole('button', { name: 'Registrar pago' }).click();
     await expect(pay).toBeHidden({ timeout: 15_000 });
-    await expect(detail.getByText(/Pago de 50,00\sUSD registrado\./)).toBeVisible();
+    await expect(detail.getByText(/Pago de (USD\s50,00|50,00\sUSD) registrado\./)).toBeVisible();
     await expect(detail.getByText(/Transferencia/)).toBeVisible();
     await expect(detail).toContainText('Parcial');
     await auditBothSchemes(page, evidence, `expense-detail-${viewport.width}`, detail);
 
     // Anular el pago: el motivo es obligatorio.
-    await detail.getByRole('button', { name: /^Anular pago de 50,00/ }).click();
+    await detail.getByRole('button', { name: /^Anular pago de (USD\s)?50,00/ }).click();
     const voidPayment = page.getByRole('dialog', { name: '¿Anular este pago?' });
     await voidPayment.getByRole('button', { name: 'Anular pago' }).click();
     await expect(voidPayment.getByText('Escribe el motivo (al menos 5 caracteres).')).toBeVisible();
