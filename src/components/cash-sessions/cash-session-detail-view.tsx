@@ -170,13 +170,12 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
           className="mb-4"
         />
       ) : null}
-      {documentFormat(session.regional) === null ? (
-        <DocumentFormatNote
-          locationId={session.location.id}
-          onRetry={() => setReloadKey((k) => k + 1)}
-          className="mb-4"
-        />
-      ) : null}
+      <DocumentFormatNote
+        locationId={session.location.id}
+        onRetry={() => setReloadKey((k) => k + 1)}
+        className="mb-4"
+        active={documentFormat(session.regional) === null}
+      />
       <div className="overflow-hidden rounded-xl border border-border">
         <CashSessionReport session={session} titleAs="h2" paper={false} />
       </div>

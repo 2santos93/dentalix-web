@@ -102,12 +102,11 @@ export function FamilyAccountStatementPrintView({
       <main className="flex-1 sm:px-4 sm:py-8 print:p-0">
         {data ? (
           <>
-            {format === null ? (
-              <DocumentFormatNote
-                onRetry={() => setReloadKey((k) => k + 1)}
-                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
-              />
-            ) : null}
+            <DocumentFormatNote
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              active={format === null}
+            />
             <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
               <FamilyAccountStatementDocument statement={data} format={format} />
             </div>

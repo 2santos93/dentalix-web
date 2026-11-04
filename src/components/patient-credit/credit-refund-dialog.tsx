@@ -63,9 +63,7 @@ export function CreditRefundDialog({
             <DialogTitle>{copy.title}</DialogTitle>
             <DialogDescription>{copy.description}</DialogDescription>
           </DialogHeader>
-          {documentFormat(refund.regional) === null ? (
-            <DocumentFormatNote locationId={refund.locationId} onRetry={() => void retryFormat()} />
-          ) : null}
+          <DocumentFormatNote locationId={refund.locationId} onRetry={() => void retryFormat()} active={documentFormat(refund.regional) === null} />
           <div className="overflow-hidden rounded-lg border border-border">
             <CreditRefundDocument refund={refund} />
           </div>

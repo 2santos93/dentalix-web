@@ -29,6 +29,11 @@ import * as dateModule from '../lib/format/date';
  * 4. `platformInstant` (el instante en UTC de la consola de plataforma, sin
  *    sede, DX-354b E8) solo se importa desde `components/platform/**`: en
  *    cualquier otra pantalla sería «un formato que no es el de la sede».
+ * 5. `DocumentFormatNote` (el aviso de un impreso sin formato de sede, DX-354b
+ *    E7.2) se monta SIEMPRE, con `active={falta el formato}`, y nunca dentro de
+ *    un condicional (`cond ? <DocumentFormatNote/> : null`, `cond && <…/>`): su
+ *    región `role="status"` tiene que existir vacía antes de llenarse para que
+ *    los lectores de pantalla anuncien el aviso.
  */
 const SRC = join(__dirname, '..');
 const FORMAT_DATE_MODULES = new Set(['@/lib/format/date']);
@@ -307,6 +312,38 @@ function rule4Offenders(scannedFiles: readonly { rel: string; source: ts.SourceF
     .map(({ rel }) => rel);
 }
 
+/** Regla 5: usos de `<DocumentFormatNote>` sin `active=` o montados dentro de un condicional. */
+function documentFormatNoteMisuses(source: ts.SourceFile): string[] {
+  const found: string[] = [];
+  const isNote = (name: ts.JsxTagNameExpression) => ts.isIdentifier(name) && name.text === 'DocumentFormatNote';
+  // Condicional que envuelve DIRECTAMENTE al aviso (`cond ? <Note/> : null`, `cond && <Note/>`); un
+  // condicional más arriba (`data ? (<>…<Note/>…</>) : null`) es el de toda la sección y no cuenta.
+  const conditional = (node: ts.Node): boolean => {
+    let child: ts.Node = node;
+    let parent = node.parent;
+    while (parent && ts.isParenthesizedExpression(parent)) {
+      child = parent;
+      parent = parent.parent;
+    }
+    if (!parent) return false;
+    if (ts.isConditionalExpression(parent)) return parent.whenTrue === child || parent.whenFalse === child;
+    return ts.isBinaryExpression(parent) && parent.right === child && parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken;
+  };
+  const visit = (node: ts.Node) => {
+    const element = ts.isJsxSelfClosingElement(node) ? node : ts.isJsxElement(node) ? node.openingElement : null;
+    if (element && isNote(element.tagName)) {
+      const hasActive = element.attributes.properties.some((a) => ts.isJsxAttribute(a) && a.name.getText(source) === 'active');
+      if (!hasActive || conditional(node)) {
+        const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+        found.push(`${line + 1}: <DocumentFormatNote> ${hasActive ? 'dentro de un condicional' : 'sin active='}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
 const files = sourceFiles(SRC)
   .map((path) => ({ path, rel: relOf(path) }))
   .filter(({ rel }) => scanned(rel))
@@ -345,6 +382,20 @@ describe('arquitectura: hora, fechas y números con la sede (DX-378)', () => {
     // La consola lo usa de verdad: la regla no se cumple por falta de uso.
     const card = files.find((f) => f.rel === 'components/platform/platform-mfa-card.tsx');
     expect(card && importsPlatformInstant(card.source)).toBe(true);
+  });
+
+  it('DocumentFormatNote is always mounted with active=, never inside a conditional (DX-354b, E7.2)', () => {
+    const misuses = files.flatMap(({ rel, source }) => documentFormatNoteMisuses(source).map((hit) => `${rel}:${hit}`));
+    expect(misuses).toEqual([]);
+    // La regla no se cumple por falta de uso: los impresos y diálogos con aviso siguen montándola.
+    const users = files.filter(({ source }) => source.getFullText().includes('<DocumentFormatNote'));
+    expect(users.length).toBeGreaterThanOrEqual(12);
+    // Mutación: condicional con `? :`, con `&&` y sin `active=` fallan; siempre montada con `active=`, no.
+    const misuse = (code: string) => documentFormatNoteMisuses(parse('x.tsx', code)).length;
+    expect(misuse('const a = <div>{missing ? <DocumentFormatNote onRetry={r} active /> : null}</div>;')).toBe(1);
+    expect(misuse('const a = <div>{missing && <DocumentFormatNote onRetry={r} active />}</div>;')).toBe(1);
+    expect(misuse('const a = <div><DocumentFormatNote onRetry={r} /></div>;')).toBe(1);
+    expect(misuse('const a = <div><DocumentFormatNote onRetry={r} active={format === null} /></div>;')).toBe(0);
   });
 
   it('the DX-386 payment screens paint amounts with the ISO code and never go back to formatCurrency', () => {

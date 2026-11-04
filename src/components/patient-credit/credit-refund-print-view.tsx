@@ -131,13 +131,12 @@ export function CreditRefundPrintView({
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {refund ? (
           <>
-            {docFormat === null ? (
-              <DocumentFormatNote
-                locationId={refund.locationId}
-                onRetry={() => setReloadKey((k) => k + 1)}
-                className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
-              />
-            ) : null}
+            <DocumentFormatNote
+              locationId={refund.locationId}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              active={docFormat === null}
+            />
             <div className={cn('mx-auto shadow-sm print:shadow-none', format === '80mm' ? 'max-w-[80mm]' : 'max-w-[210mm]')}>
               <CreditRefundDocument refund={refund} format={format} />
             </div>
