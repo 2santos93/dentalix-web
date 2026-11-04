@@ -82,10 +82,6 @@ const copy = cancellationFeeCopy;
  */
 export function CancellationFeePanel({ token, appointmentId }: { token: string; appointmentId: string }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
-  // El cargo es de la sede de la cita; la pantalla no trae su id, así que se pinta con la sede de la pantalla (DX-354b).
-  const stamp = useSedeStamp(token);
-  const money = (amount: number | null | undefined, currency: string | null | undefined): string | null =>
-    amount !== null && amount !== undefined && currency ? stamp.money(amount, currency) : null;
   // DX-343: tras generar, condonar, anular o un 409, el botón que abrió el
   // diálogo ya no existe (o ya no vale): el foco va al encabezado del panel.
   // Cerrar sin actuar lo deja volver a quien abrió.
@@ -95,6 +91,11 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [dialog, setDialog] = useState<'charge' | 'waive' | 'void' | null>(null);
+  // El cargo es de la sede de la cita (DX-354c): se pinta con su formato, no con el de la pantalla.
+  const sedeId = view?.locationId;
+  const stamp = useSedeStamp(token, [sedeId]);
+  const money = (amount: number | null | undefined, currency: string | null | undefined): string | null =>
+    amount !== null && amount !== undefined && currency ? stamp.money(amount, currency, sedeId) : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -140,6 +141,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
         <ChargeFeeModal
           token={token}
           appointmentId={appointmentId}
+          locationId={view.locationId}
           suggested={view.communicated.suggestedFee}
           currency={view.communicated.currency}
           onClose={() => setDialog(null)}
@@ -315,6 +317,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
 function ChargeFeeModal({
   token,
   appointmentId,
+  locationId,
   suggested,
   currency,
   onClose,
@@ -324,6 +327,8 @@ function ChargeFeeModal({
 }: {
   token: string;
   appointmentId: string;
+  /** La sede de la cita: con su formato se dicen el tope y el importe. */
+  locationId: string;
   suggested: number;
   currency: string;
   onClose: () => void;
@@ -332,10 +337,11 @@ function ChargeFeeModal({
   onStale: () => void;
   onCloseAutoFocus?: (event: Event) => void;
 }) {
-  const stamp = useSedeStamp(token);
+  const stamp = useSedeStamp(token, [locationId]);
+  const money = (amount: number, curr: string) => stamp.money(amount, curr, locationId);
   const id = useId();
   const amountId = `${id}-amount`;
-  const max = stamp.money(suggested, currency);
+  const max = money(suggested, currency);
   const [amountText, setAmountText] = useState(moneyInputText(suggested));
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -366,7 +372,7 @@ function ChargeFeeModal({
         appointmentId,
         parsed.value === suggested ? undefined : parsed.value,
       );
-      toast.success(copy.chargeDone(stamp.money(parsed.value, currency)));
+      toast.success(copy.chargeDone(money(parsed.value, currency)));
       onDone(next);
     } catch (err) {
       setError(apiErrorMessage(err, copy.chargeError));
@@ -405,7 +411,7 @@ function ChargeFeeModal({
         hintId={`${amountId}-hint`}
       >
         <MoneyInput
-          money={stamp.money}
+          money={money}
           id={amountId}
           value={amountText}
           onValueChange={(v) => {

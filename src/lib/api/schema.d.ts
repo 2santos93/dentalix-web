@@ -13789,6 +13789,11 @@ export interface components {
              * @example NOR-000123
              */
             receiptNumber: string | null;
+            /**
+             * Format: uuid
+             * @description Sede del abono: el importe y la fecha se pintan con el formato de esa sede
+             */
+            locationId: string;
             /** Format: uuid */
             treatmentPlanId: string;
             /**
@@ -13858,6 +13863,11 @@ export interface components {
              * @example NOR-000123
              */
             receiptNumber: string | null;
+            /**
+             * Format: uuid
+             * @description Sede del abono: el importe y la fecha se pintan con el formato de esa sede
+             */
+            locationId: string;
             /** Format: uuid */
             treatmentPlanId: string;
             /**
@@ -16415,6 +16425,11 @@ export interface components {
         CancellationFeeViewDto: {
             /** Format: uuid */
             appointmentId: string;
+            /**
+             * Format: uuid
+             * @description Sede de la cita: el importe y las fechas se pintan con el formato de esa sede
+             */
+            locationId: string;
             /** Format: uuid */
             patientId: string;
             /** @description NO_SHOW o cancelación tardía. */

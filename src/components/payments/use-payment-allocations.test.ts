@@ -18,6 +18,7 @@ const mockedPut = jest.mocked(replacePaymentAllocations);
 const DATA: PaymentAllocations = {
   paymentId: 'pay-1',
   receiptNumber: 'NOR-000123',
+  locationId: 'loc-1',
   treatmentPlanId: 'plan-1',
   paymentAmount: 120,
   paymentCurrency: 'USD',
