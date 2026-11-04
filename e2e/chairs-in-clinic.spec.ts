@@ -24,6 +24,15 @@ const dentist = { fullName: 'Luis Sillón', email: `luis.${suffix}@example.com` 
 const lastName = `Sillones${suffix}`.slice(0, 20);
 const day = sedeDayFromToday(2);
 
+/** Primer día laborable (lun–vie) de la sede a `from` días o más. */
+function weekdayFrom(from: number): string {
+  for (let n = from; ; n++) {
+    const candidate = sedeDayFromToday(n);
+    const weekday = new Date(`${candidate}T12:00:00Z`).getUTCDay();
+    if (weekday >= 1 && weekday <= 5) return candidate;
+  }
+}
+
 let session: ApiSession;
 let locationId = '';
 let dentistId = '';
@@ -283,9 +292,10 @@ test('DX-492-bis: un sobrecupo con sillón movido a una hora con el sillón ocup
   await apiPost(request, session, `/appointments/${walkIn.id}/undo-arrival`, { keepOverbooked: true });
   const kept = await request.get(`${API_URL}/appointments/${walkIn.id}`, { headers: session.headers });
   expect(await kept.json()).toMatchObject({ overbooked: true, chairId: chair.id });
-  // Destino: dentro de cuatro días a las 10:00; el odontólogo está libre, pero la titular
-  // ocupa «Sillón Caracas» de 10:00 a 10:30.
-  const target = sedeDayFromToday(4);
+  // Destino: el primer día laborable a cuatro días o más, a las 10:00 (un domingo «Buscar
+  // hueco» salta al lunes); el odontólogo está libre, pero la titular ocupa «Sillón Caracas»
+  // de 10:00 a 10:30.
+  const target = weekdayFrom(4);
   const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
   const adminId = ((await staff.json()) as { userId: string; fullName: string }[]).find(
     (s) => s.fullName === admin.fullName,
