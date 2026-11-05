@@ -28,6 +28,7 @@ import {
   type BusinessHours,
 } from '@/lib/locations/schedule-api';
 import { sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
+import { HolidayNotice } from './holiday-notice';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { civilWeekday, isCivilDay } from '@/lib/time/civil-day';
@@ -868,6 +869,7 @@ export function AppointmentForm({
               {copy.hoursUnavailable}
             </p>
           )}
+          <HolidayNotice token={token} locationId={chairLocationId} date={date} />
         </div>
         <div className="flex flex-col gap-1">
           <label id={fieldLabelId('appointment-start-time')} htmlFor="appointment-start-time" className="text-sm font-medium text-ink">

@@ -28,6 +28,7 @@ import type { Chair } from '@/lib/chairs/chairs-api';
 import { chairDisplayName } from '@/lib/chairs/chair-columns';
 import { endSentence } from '@/lib/format/text';
 import { defaultHoursNote } from '@/lib/locations/default-business-hours';
+import { HolidayNotice } from './holiday-notice';
 
 const copy = {
   title: 'Mover a…',
@@ -294,6 +295,7 @@ export function MoveAppointmentDialog({
             value={date || null}
             onChange={(next) => setDate(next ?? '')}
           />
+          <HolidayNotice token={token} locationId={appointment.locationId} date={date} />
         </FormField>
         <FormField
           htmlFor="move-time"
