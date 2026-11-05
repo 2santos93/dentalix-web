@@ -5,6 +5,7 @@
 #   - /api/v1/* llega a SU API (ruta, query y X-Forwarded-Host del host de la clínica);
 #   - la URL `inline` de un documento que da esa API tiene su origen en el
 #     `frame-src` y el `img-src` de la CSP que sirve la web (si no, el visor no la pinta);
+#   - SEC-062: ninguna respuesta de la web lleva `x-middleware-rewrite` (la URL interna de la API);
 #   - sin API_URL la imagen NO arranca en producción.
 # Usa --network host (las APIs falsas escuchan en 127.0.0.1) y node del host.
 #   scripts/docker-smoke/web.sh dentalix-web:ci
@@ -60,6 +61,23 @@ check_api() {
     const ok = r.api === process.argv[2] && r.path === "/api/v1/health/ready?x=1" && r.forwardedHost === "demo.dentalix.app";
     process.exit(ok ? 0 : 1);
   ' "$reply" "$label" || fail "[$label] /api/v1 no llegó a su API: $reply"
+
+  # 1b) SEC-062: ni la respuesta del proxy /api/v1 ni la de una página dejan ver
+  # la URL interna de la API en `x-middleware-rewrite`.
+  local path_ headers
+  for path_ in "/api/v1/health/ready?x=1" "/login"; do
+    headers="$(curl -sS -o /dev/null -D - -H 'Host: demo.dentalix.app' "http://127.0.0.1:${WEB_PORT}${path_}" | tr -d '\r')"
+    if grep -qi '^x-middleware-rewrite:' <<<"$headers"; then
+      fail "[$label] ${path_} expone x-middleware-rewrite: $(grep -i '^x-middleware-rewrite:' <<<"$headers")"
+    fi
+    grep -qi '^HTTP/[0-9.]* 200' <<<"$headers" || fail "[$label] ${path_} no respondió 200"
+    # Solo en la respuesta del proxy: la CSP de las páginas lleva el origen de la
+    # API en `img-src` a propósito (csp.ts), así que /login no se mira aquí.
+    if [[ "$path_" == /api/v1/* ]] && grep -q "127.0.0.1:${api_port}" <<<"$headers"; then
+      fail "[$label] ${path_} deja ver la URL interna de la API en las cabeceras"
+    fi
+  done
+  echo "[$label] sin x-middleware-rewrite en /api/v1 ni en /login"
 
   # 2) El origen de la URL inline del documento está en la CSP servida.
   local inline origin csp

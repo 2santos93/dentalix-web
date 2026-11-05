@@ -28,13 +28,16 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3001 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    NODE_OPTIONS="--require /app/strip-middleware-rewrite.cjs"
 # `server.js` mínimo + las dependencias que traza Next; los estáticos y
 # public/ no van en standalone y se copian aparte. Todo es del root y de solo
 # lectura para el usuario `node` (sin root) que corre el proceso.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
+# SEC-062: quita `x-middleware-rewrite` (la URL interna de la API) de las respuestas.
+COPY scripts/docker/strip-middleware-rewrite.cjs ./strip-middleware-rewrite.cjs
 USER node
 EXPOSE 3001
 CMD ["node", "server.js"]
