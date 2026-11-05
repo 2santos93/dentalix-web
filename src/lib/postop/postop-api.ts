@@ -58,21 +58,32 @@ export function canDeliverPostOp(role: ClinicRole | null): boolean {
   return role !== null;
 }
 
+/** Citas que ya se atienden o se atendieron: su fecha no las hace «futuras». */
+const ATTENDED: ReadonlySet<AppointmentStatus> = new Set([
+  'COMPLETED',
+  'ARRIVED',
+  'IN_CHAIR',
+  'READY_FOR_CHECKOUT',
+]);
+
 /**
- * DX-250: ¿se ofrecen las indicaciones en el detalle de esta cita? No en una
- * cancelada ni en un no-show, ni en una de un día civil (en la zona de la
- * sede) que aún no llega: ahí no se monta el panel ni se pide su lista. Sin
- * reloj de la sede no se puede saber el día: se ofrece (la API rechaza igual
- * una entrega de una cita futura).
+ * DX-250: qué se ofrece de las indicaciones en el detalle de una cita.
+ * - `none`: nada (ni se monta el panel ni se pide su lista): una cita de un
+ *   día civil (en la zona de la sede) que aún no llega y no se atiende.
+ * - `readonly`: cancelada o no-show. No se entrega nada, pero lo que ya se
+ *   entregó antes de cancelarse se sigue viendo (sin acciones).
+ * - `full`: el panel completo.
+ * Sin reloj de la sede no se puede saber el día: se ofrece (la API rechaza
+ * igual una entrega de una cita futura).
  */
-export function canOfferPostOp(
+export function postOpPanelMode(
   appointment: { status: AppointmentStatus; start: string },
   clock: SedeClock | null,
   now: Date = new Date(),
-): boolean {
-  if (appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW') return false;
-  if (!clock) return true;
-  return wallDay(appointment.start, clock.timeZone) <= wallDay(now, clock.timeZone);
+): 'full' | 'readonly' | 'none' {
+  if (appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW') return 'readonly';
+  if (!clock || ATTENDED.has(appointment.status)) return 'full';
+  return wallDay(appointment.start, clock.timeZone) <= wallDay(now, clock.timeZone) ? 'full' : 'none';
 }
 
 /**
@@ -143,11 +154,17 @@ export async function deliverPostOp(
   token: string,
   appointmentId: string,
   input: DeliverPostOpInput,
+  /**
+   * DX-250: `Idempotency-Key` (UUID) generado una vez por clic y reutilizado
+   * en los reintentos: la API devuelve la entrega ya registrada, sin `publicUrl`.
+   */
+  idempotencyKey?: string,
 ): Promise<PostOpDeliveryCreated> {
   return apiFetch<PostOpDeliveryCreated>(`${appointmentPostOpPath(appointmentId)}/deliveries`, {
     method: 'POST',
     body: input,
     token,
+    ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}),
   });
 }
 

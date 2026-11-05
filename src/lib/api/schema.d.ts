@@ -17675,6 +17675,11 @@ export interface components {
         };
         /** @enum {string} */
         PostOpDeliveryChannel: "PRINT" | "EMAIL" | "WHATSAPP_LINK";
+        /**
+         * @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null en PRINT y WHATSAPP_LINK.
+         * @enum {string}
+         */
+        PostOpEmailStatus: "QUEUED" | "SENT" | "NOT_SENT";
         PostOpDeliverySummaryDto: {
             /** Format: uuid */
             id: string;
@@ -17708,6 +17713,8 @@ export interface components {
              * @description Caducidad del enlace público; null en PRINT
              */
             linkExpiresAt: string | null;
+            /** @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null en PRINT y WHATSAPP_LINK. */
+            emailStatus: components["schemas"]["PostOpEmailStatus"] | null;
         };
         PostOpSuggestionsDto: {
             /** Format: uuid */
@@ -17788,6 +17795,8 @@ export interface components {
              * @description Caducidad del enlace público; null en PRINT
              */
             linkExpiresAt: string | null;
+            /** @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null en PRINT y WHATSAPP_LINK. */
+            emailStatus: components["schemas"]["PostOpEmailStatus"] | null;
             /** @description Texto tal como se entregó */
             renderedText: string;
             clinic: components["schemas"]["PostOpClinicBrandingDto"];
@@ -34071,7 +34080,10 @@ export interface operations {
     AppointmentPostOpController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-250: UUID generado una vez por clic y reutilizado en los reintentos. Repetir la petición con la misma clave en la misma cita devuelve la entrega ya registrada (sin `publicUrl` ni `whatsapp`: el token solo sale en la primera respuesta) en vez de crear otra, y no vuelve a encolar el email. */
+                "Idempotency-Key"?: string;
+            };
             path: {
                 appointmentId: string;
             };

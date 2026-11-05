@@ -7,7 +7,7 @@ import type { SedeClock } from '@/lib/locations/sede-clock';
 import {
   POSTOP_VARIABLES,
   canDeliverPostOp,
-  canOfferPostOp,
+  postOpPanelMode,
   canRetryDeliver,
   canManagePostOpTemplates,
   createPostOpTemplate,
@@ -153,34 +153,41 @@ describe('postop-api', () => {
 });
 
 // DX-250
-describe('canOfferPostOp', () => {
+describe('postOpPanelMode', () => {
   // Caracas es UTC−4: 21/10 02:30Z sigue siendo el 20/10 en la sede.
   const caracas = { timeZone: 'America/Caracas' } as SedeClock;
   const now = new Date('2026-10-20T15:00:00.000Z');
 
-  it.each(['CANCELLED', 'NO_SHOW'] as const)('una cita %s nunca', (status) => {
-    expect(canOfferPostOp({ status, start: '2026-10-20T14:00:00.000Z' }, caracas, now)).toBe(false);
+  it.each(['CANCELLED', 'NO_SHOW'] as const)('una cita %s: solo lectura de lo ya entregado', (status) => {
+    expect(postOpPanelMode({ status, start: '2026-10-20T14:00:00.000Z' }, caracas, now)).toBe('readonly');
+    expect(postOpPanelMode({ status, start: '2030-10-20T14:00:00.000Z' }, null, now)).toBe('readonly');
   });
 
   it.each(['SCHEDULED', 'CONFIRMED', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT', 'COMPLETED'] as const)(
-    'una cita %s de hoy o de un día pasado sí',
+    'una cita %s de hoy o de un día pasado: completo',
     (status) => {
-      expect(canOfferPostOp({ status, start: '2026-10-20T14:00:00.000Z' }, caracas, now)).toBe(true);
+      expect(postOpPanelMode({ status, start: '2026-10-20T14:00:00.000Z' }, caracas, now)).toBe('full');
       // Más tarde hoy (en la sede) también.
-      expect(canOfferPostOp({ status, start: '2026-10-21T02:30:00.000Z' }, caracas, now)).toBe(true);
-      expect(canOfferPostOp({ status, start: '2026-10-01T14:00:00.000Z' }, caracas, now)).toBe(true);
+      expect(postOpPanelMode({ status, start: '2026-10-21T02:30:00.000Z' }, caracas, now)).toBe('full');
+      expect(postOpPanelMode({ status, start: '2026-10-01T14:00:00.000Z' }, caracas, now)).toBe('full');
     },
   );
 
-  it('un día civil posterior en la zona de la sede no, aunque en UTC sea hoy', () => {
+  it('un día civil posterior en la zona de la sede: nada, aunque en UTC sea hoy', () => {
     // 21/10 04:30Z = 21/10 00:30 en Caracas: mañana.
-    expect(canOfferPostOp({ status: 'SCHEDULED', start: '2026-10-21T04:30:00.000Z' }, caracas, now)).toBe(false);
-    expect(canOfferPostOp({ status: 'SCHEDULED', start: '2026-10-25T14:00:00.000Z' }, caracas, now)).toBe(false);
+    expect(postOpPanelMode({ status: 'SCHEDULED', start: '2026-10-21T04:30:00.000Z' }, caracas, now)).toBe('none');
+    expect(postOpPanelMode({ status: 'CONFIRMED', start: '2026-10-25T14:00:00.000Z' }, caracas, now)).toBe('none');
   });
 
-  it('sin reloj de la sede no se sabe el día: solo descarta por el estado', () => {
-    expect(canOfferPostOp({ status: 'SCHEDULED', start: '2030-01-01T10:00:00.000Z' }, null, now)).toBe(true);
-    expect(canOfferPostOp({ status: 'CANCELLED', start: '2030-01-01T10:00:00.000Z' }, null, now)).toBe(false);
+  it.each(['COMPLETED', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const)(
+    'una cita %s con fecha posterior sí se ofrece (ya se atiende o se atendió)',
+    (status) => {
+      expect(postOpPanelMode({ status, start: '2026-10-25T14:00:00.000Z' }, caracas, now)).toBe('full');
+    },
+  );
+
+  it('sin reloj de la sede no se sabe el día: solo decide el estado', () => {
+    expect(postOpPanelMode({ status: 'SCHEDULED', start: '2030-01-01T10:00:00.000Z' }, null, now)).toBe('full');
   });
 });
 

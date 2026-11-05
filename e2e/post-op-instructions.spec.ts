@@ -242,6 +242,12 @@ for (const viewport of VIEWPORTS) {
       email: patientEmail,
       phone: '+58 414 555 0101',
     });
+    // DX-250: una plantilla sin vínculos, para el selector «Otras indicaciones».
+    await call('post', '/post-op-templates', {
+      code: 'POI-OTRA',
+      title: 'Profilaxis dental',
+      body: 'Evita comer durante una hora, {{paciente}}.',
+    });
     const me = await call<{ id: string }>('get', '/me');
     await call('post', '/appointments', {
       patientId: patient.id,
@@ -274,6 +280,13 @@ for (const viewport of VIEWPORTS) {
     await expect(panel.getByRole('button', { name: 'Enviar por email' })).toHaveAccessibleDescription(
       /Se enviará a .+@example\.com\./,
     );
+    // DX-250: con sugeridas, las otras siguen a mano; la elección manual gana.
+    const otherSelect = panel.getByRole('combobox', { name: /otras indicaciones/i });
+    await otherSelect.selectOption({ label: 'Profilaxis dental (POI-OTRA v1)' });
+    await expect(suggested).not.toBeChecked();
+    await suggested.check();
+    await expect(otherSelect).toHaveValue('');
+    await expect(suggested).toBeChecked();
     {
       const found = await axeInBothThemes(page, panel);
       for (const scheme of ['light', 'dark'] as const) {
@@ -325,10 +338,10 @@ for (const viewport of VIEWPORTS) {
 
     // «Enviar por email»: confirma el destinatario; el asunto no lleva el procedimiento.
     await panel.getByRole('button', { name: 'Enviar por email' }).click();
-    await expect(page.getByText(/^Indicaciones enviadas a .+@example\.com\.$/)).toBeVisible({
+    await expect(page.getByText(/^Entrega registrada; el email a .+@example\.com está en cola\.$/)).toBeVisible({
       timeout: 10_000,
     });
-    await expect(panel.getByText(/^POI-EXO v1 · Email · /)).toBeVisible({ timeout: 10_000 });
+    await expect(panel.getByText(/^POI-EXO v1 · Email(?: · en cola)? · /).first()).toBeVisible({ timeout: 10_000 });
     if (MAIL_DIR) {
       const mail = await lastMailTo(patientEmail);
       expect(mail.subject).toContain(clinicName);
@@ -354,7 +367,47 @@ for (const viewport of VIEWPORTS) {
     expect(new URL(publicUrl).host).toBe(new URL(origin).host);
     await waPage.close();
     await expect(panel.getByText(/^POI-EXO v1 · WhatsApp · /)).toBeVisible({ timeout: 10_000 });
-    await expect(panel.getByRole('listitem')).toHaveCount(3);
+
+    // DX-250: un 502 ofrece «Reintentar» (relee la lista y repite con la misma
+    // Idempotency-Key) y, si el email no se encola, el aviso persistente con el
+    // enlace y «Copiar enlace». La respuesta del servidor se reescribe a
+    // `emailQueued: false` (la entrega y el email reales siguen su curso).
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+    let failedOnce = false;
+    const deliveriesRoute = '**/appointments/*/post-op-instructions/deliveries';
+    await page.route(deliveriesRoute, async (route) => {
+      if (!failedOnce) {
+        failedOnce = true;
+        await route.fulfill({
+          status: 502,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Bad Gateway' }),
+        });
+        return;
+      }
+      const real = await route.fetch();
+      const body = (await real.json()) as Record<string, unknown> & { delivery: Record<string, unknown> };
+      await route.fulfill({
+        response: real,
+        json: { ...body, emailQueued: false, sentTo: null, delivery: { ...body.delivery, emailStatus: 'NOT_SENT' } },
+      });
+    });
+    await panel.getByRole('button', { name: 'Enviar por email' }).click();
+    const retry = page.locator('[data-sonner-toast]').getByRole('button', { name: 'Reintentar' });
+    await expect(retry).toBeVisible({ timeout: 10_000 });
+    await retry.click();
+    await expect(panel.getByText('El email no salió')).toBeVisible({ timeout: 10_000 });
+    await page.unroute(deliveriesRoute);
+    const linkField = panel.getByLabel('Enlace público de las indicaciones');
+    await expect(linkField).toHaveValue(/\/indicaciones\/[A-Za-z0-9_-]+$/);
+    await panel.getByRole('button', { name: 'Copiar enlace' }).click();
+    await expect(panel.getByText('Copiado')).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await linkField.inputValue());
+    await expectNoHorizontalScroll(page);
+    await shoot(page, `panel-email-no-salio-${vw}`);
+    await panel.getByRole('button', { name: 'Entendido' }).click();
+    await expect(panel.getByText('El email no salió')).toHaveCount(0);
+    await expect(panel.getByRole('listitem')).toHaveCount(4);
     await expectNoHorizontalScroll(page);
     // Que los avisos no tapen la lista en la captura.
     await expect(page.locator('[data-sonner-toast]')).toHaveCount(0, { timeout: 20_000 });
@@ -415,13 +468,13 @@ for (const viewport of VIEWPORTS) {
       timeout: 15_000,
     });
     const deliveries = page.getByRole(vw >= 640 ? 'table' : 'list', { name: 'Indicaciones entregadas' });
-    await expect(deliveries.getByText('POI-EXO · v1')).toHaveCount(3, { timeout: 15_000 });
+    await expect(deliveries.getByText('POI-EXO · v1')).toHaveCount(4, { timeout: 15_000 });
     await expect(deliveries.getByText('POI-EXO · v2')).toHaveCount(0);
     for (const channel of ['Impresa', 'Email', 'WhatsApp']) {
       await expect(deliveries.getByText(new RegExp(`\\b${channel}\\b`)).first()).toBeVisible();
     }
     // La apertura del enlace público quedó registrada en la entrega de WhatsApp.
-    await expect(deliveries.getByText(/^Abierto el \d{2}\/\d{2}\/\d{4}/)).toHaveCount(1);
+    await expect(deliveries.getByText(/^Abierto el \d{1,4}\D\d{1,2}\D\d{1,4}/)).toHaveCount(1);
     await expect(deliveries.getByText(ownerName).first()).toBeVisible();
     await deliveries.scrollIntoViewIfNeeded();
     await expectNoHorizontalScroll(page);

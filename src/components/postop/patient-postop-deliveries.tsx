@@ -37,6 +37,7 @@ const copy = {
   } satisfies Record<PostOpChannel, string>,
   // DX-250: la historia clínica no afirma un email que no salió.
   emailNotSent: 'Email · no enviado',
+  emailQueued: 'Email · en cola',
   opened: 'Abierto',
   // La fecha va en texto visible, no solo en un `title` (no se ve en el móvil).
   openedOn: (when: string) => `Abierto el ${when}`,
@@ -72,9 +73,9 @@ function OpenedBadge({ at, stamp }: { at: string | null; stamp: SedePainters }) 
 
 /** El canal tal como se lee: un email que no salió lo dice. */
 function channelText(d: PostOpDeliverySummary): string {
-  return d.channel === 'EMAIL' && d.emailStatus === 'NOT_SENT'
-    ? copy.emailNotSent
-    : copy.channel[d.channel];
+  if (d.channel === 'EMAIL' && d.emailStatus === 'NOT_SENT') return copy.emailNotSent;
+  if (d.channel === 'EMAIL' && d.emailStatus === 'QUEUED') return copy.emailQueued;
+  return copy.channel[d.channel];
 }
 
 /**

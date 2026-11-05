@@ -46,9 +46,10 @@ const copy = {
   whatsapp: 'Abrir WhatsApp',
   emailBlocked: 'No se puede enviar por email a este paciente.',
   whatsappBlocked: 'El teléfono del paciente no sirve para WhatsApp: revísalo en su ficha o escríbelo con + y su prefijo.',
-  emailSent: (to: string) => `Indicaciones enviadas a ${to}.`,
+  // El email entra en la cola del servidor: no se afirma que ya salió.
+  emailSent: (to: string) => `Entrega registrada; el email a ${to} está en cola.`,
   emailSentToResponsible: (to: string) =>
-    `Indicaciones enviadas al responsable del paciente (${to}).`,
+    `Entrega registrada; el email al responsable del paciente (${to}) está en cola.`,
   emailTo: (to: string, toResponsible: boolean) =>
     toResponsible
       ? `Se enviará a ${to} (responsable del paciente).`
@@ -86,6 +87,7 @@ const copy = {
   } satisfies Record<PostOpChannel, string>,
   // DX-250: la historia clínica no afirma un email que no salió.
   emailNotSent: 'Email · no enviado',
+  emailQueued: 'Email · en cola',
   version: (code: string, version: number) => `${code} v${version}`,
 };
 
@@ -94,14 +96,26 @@ interface AppointmentPostOpPanelProps {
   appointmentId: string;
   /** DX-378: reloj de la sede de la cita, para la hora de cada entrega. */
   clock: SedeClock | null;
+  /**
+   * DX-250: cita cancelada o no-show. Solo se leen las entregas anteriores:
+   * sin selector, sin botones de entrega y, si no hay ninguna, sin nada.
+   */
+  readOnly?: boolean;
 }
 
 /** Abre la pestaña ya registrada la entrega; si el navegador la bloqueó, deja el enlace en el aviso. */
 /** El canal de una entrega tal como se lee en la lista (un email que no salió lo dice). */
 function channelLabel(d: PostOpDeliverySummary): string {
-  return d.channel === 'EMAIL' && d.emailStatus === 'NOT_SENT'
-    ? copy.emailNotSent
-    : copy.channel[d.channel];
+  if (d.channel === 'EMAIL' && d.emailStatus === 'NOT_SENT') return copy.emailNotSent;
+  if (d.channel === 'EMAIL' && d.emailStatus === 'QUEUED') return copy.emailQueued;
+  return copy.channel[d.channel];
+}
+
+/** Un UUID por clic (`Idempotency-Key`); `crypto.randomUUID` solo existe en contextos seguros. */
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const hex = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  return `${hex(8)}-${hex(4)}-4${hex(3)}-${'89ab'[Math.floor(Math.random() * 4)]}${hex(3)}-${hex(12)}`;
 }
 
 function finishInTab(
@@ -128,7 +142,7 @@ function finishInTab(
  * enlace de WhatsApp. Cada entrega queda registrada con la versión exacta de
  * la plantilla. El padre lo monta con `key` por cita.
  */
-export function AppointmentPostOpPanel({ token, appointmentId, clock }: AppointmentPostOpPanelProps) {
+export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly = false }: AppointmentPostOpPanelProps) {
   const ids = useId();
   const headingId = `${ids}-heading`;
   const emailHintId = `${ids}-email-hint`;
@@ -151,6 +165,8 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
   // DX-250: el enlace de un email que no salió solo existe en esa respuesta.
   const [notQueued, setNotQueued] = useState<{ url: string | null } | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  // Cada clic en «Copiar enlace» remonta el texto del aviso: se anuncia otra vez.
+  const [copyCount, setCopyCount] = useState(0);
   const linkInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -185,9 +201,11 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
   async function deliver(
     templateId: string,
     channel: PostOpChannel,
-    attempt: { knownIds: ReadonlySet<string>; recheck: boolean } = {
+    attempt: { knownIds: ReadonlySet<string>; recheck: boolean; key: string } = {
       knownIds: new Set(dataRef.current?.deliveries.map((d) => d.id) ?? []),
       recheck: false,
+      // Un UUID por clic; el reintento lo reutiliza y la API no duplica.
+      key: newIdempotencyKey(),
     },
   ) {
     if (deliveringRef.current) return;
@@ -216,17 +234,28 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
         );
         if (landed) {
           win?.close();
-          toast.info(
-            channel === 'EMAIL' && landed.emailStatus === 'NOT_SENT'
-              ? copy.alreadyRecordedEmailNotSent
-              : channel === 'WHATSAPP_LINK'
-                ? copy.alreadyRecordedLinkLost
-                : copy.alreadyRecorded,
-          );
+          if (channel === 'PRINT') {
+            // La pestaña ya se cerró: se ofrece abrir la vista imprimible.
+            const href = postOpPrintHref(landed.patientId, landed.id);
+            toast.info(copy.alreadyRecorded, {
+              action: {
+                label: copy.openPrint,
+                onClick: () => window.open(href, '_blank', 'noopener,noreferrer'),
+              },
+            });
+          } else {
+            toast.info(
+              channel === 'EMAIL' && landed.emailStatus === 'NOT_SENT'
+                ? copy.alreadyRecordedEmailNotSent
+                : channel === 'WHATSAPP_LINK'
+                  ? copy.alreadyRecordedLinkLost
+                  : copy.alreadyRecorded,
+            );
+          }
           return;
         }
       }
-      const result = await deliverPostOp(token, appointmentId, { templateId, channel });
+      const result = await deliverPostOp(token, appointmentId, { templateId, channel }, attempt.key);
       if (channel === 'EMAIL' && !result.emailQueued) {
         // La API registró la entrega pero el email no entró en la cola: aviso
         // persistente con el enlace (solo existe en esta respuesta).
@@ -250,7 +279,10 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
           action: copy.openWhatsApp,
         });
       } else {
+        // WhatsApp sin mensaje: la API devolvió la entrega ya registrada por
+        // una repetición (su enlace no se puede recuperar).
         win?.close();
+        if (channel === 'WHATSAPP_LINK') toast.info(copy.alreadyRecordedLinkLost);
       }
       // La respuesta ya confirma esta entrega aunque falle la recarga siguiente.
       setData((current) =>
@@ -267,7 +299,7 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
       const message = apiErrorMessage(err, { fallback: copy.deliverError });
       if (canRetryDeliver(err)) {
         notifyError(message, {
-          onRetry: () => void deliver(templateId, channel, { knownIds: attempt.knownIds, recheck: true }),
+          onRetry: () => void deliver(templateId, channel, { ...attempt, recheck: true }),
         });
       } else {
         notifyError(message);
@@ -282,10 +314,12 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
     try {
       await navigator.clipboard.writeText(url);
       setCopyState('copied');
+      setCopyCount((n) => n + 1);
     } catch {
       // Contexto no seguro o permiso denegado: el enlace queda seleccionado.
       linkInputRef.current?.select();
       setCopyState('failed');
+      setCopyCount((n) => n + 1);
     }
   }
 
@@ -393,6 +427,31 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
         .filter(Boolean)
         .join(' ') || undefined;
 
+    const delivered = (
+      <div className="flex flex-col gap-2">
+        <h4 id={deliveredId} className="t-caption text-muted">
+          {copy.deliveredHeading}
+        </h4>
+        {data.deliveries.length === 0 ? (
+          <p className="text-sm text-muted">{copy.noDeliveries}</p>
+        ) : (
+          <ul aria-labelledby={deliveredId} className="flex flex-col divide-y divide-border-subtle">
+            {data.deliveries.map((d) => (
+              <li key={d.id} className="t-data py-2 text-sm text-ink first:pt-0 last:pb-0">
+                {[
+                  copy.version(d.templateCode, d.templateVersion),
+                  channelLabel(d),
+                  clock ? clock.fmt.dateTime(new Date(d.deliveredAt), clock.timeZone) : NO_SEDE_FORMAT,
+                  d.deliveredByName,
+                ].join(' · ')}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+    if (readOnly) return delivered;
+
     return (
       <>
         {error && (
@@ -491,7 +550,9 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
                   className="font-mono text-xs text-ink"
                 />
                 <p role="status" aria-live="polite" className="text-xs empty:hidden">
-                  {copyState === 'copied' ? copy.copied : copyState === 'failed' ? copy.copyFailed : ''}
+                  {copyState === 'idle' ? null : (
+                    <span key={copyCount}>{copyState === 'copied' ? copy.copied : copy.copyFailed}</span>
+                  )}
                 </p>
               </>
             )}
@@ -518,30 +579,13 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock }: Appointm
           </div>
         )}
 
-        <div className="flex flex-col gap-2">
-          <h4 id={deliveredId} className="t-caption text-muted">
-            {copy.deliveredHeading}
-          </h4>
-          {data.deliveries.length === 0 ? (
-            <p className="text-sm text-muted">{copy.noDeliveries}</p>
-          ) : (
-            <ul aria-labelledby={deliveredId} className="flex flex-col divide-y divide-border-subtle">
-              {data.deliveries.map((d) => (
-                <li key={d.id} className="t-data py-2 text-sm text-ink first:pt-0 last:pb-0">
-                  {[
-                    copy.version(d.templateCode, d.templateVersion),
-                    channelLabel(d),
-                    clock ? clock.fmt.dateTime(new Date(d.deliveredAt), clock.timeZone) : NO_SEDE_FORMAT,
-                    d.deliveredByName,
-                  ].join(' · ')}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {delivered}
       </>
     );
   }
+
+  // DX-250: en una cita cancelada o no-show, sin nada que mostrar, nada.
+  if (readOnly && (!data || data.deliveries.length === 0)) return null;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 border-t border-border-subtle pt-4">
