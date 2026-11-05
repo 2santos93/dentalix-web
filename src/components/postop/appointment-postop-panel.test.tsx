@@ -651,6 +651,23 @@ describe('AppointmentPostOpPanel: fix round 1 de DX-250', () => {
     expect((toast.error as jest.Mock).mock.calls[1][1].action).toBeUndefined();
   });
 
+  it('el toast de error de la entrega sale UNA vez por fallo: ni los renders ni las recargas lo vuelven a lanzar', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'));
+    const view = renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    // Re-renders y una recarga de la lista (clave de recarga) no lo repiten.
+    view.rerender(<AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="appt-1" />);
+    view.rerender(<AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="appt-1" />);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(mockedDeliver).toHaveBeenCalledTimes(1);
+    // El id del toast deduplica por mensaje: un segundo fallo igual lo actualiza, no lo apila.
+    const [, opts] = (toast.error as jest.Mock).mock.calls[0];
+    expect(opts.id).toBe(`error:${(toast.error as jest.Mock).mock.calls[0][0]}`);
+  });
+
   describe('solo lectura (cita cancelada o no-show)', () => {
     it('muestra las entregas anteriores sin selector ni botones', async () => {
       mockedGet.mockResolvedValue(
