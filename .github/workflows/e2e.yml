@@ -119,7 +119,7 @@ jobs:
       # specs, package-lock) son los de `web_sha`. Por eso un sha anterior a las
       # fases que el YAML de main llama (`skips`, `schema`) falla con «Fase
       # desconocida».
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.web_sha || github.sha }}
           path: dentalix-web
@@ -129,7 +129,7 @@ jobs:
       # paso «API» falla, el resumen dice contra qué commit (DX-494).
       - name: Checkout de dentalix-api
         id: api-checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: 2santos93/dentalix-api
           ref: ${{ inputs.api_ref || 'main' }}
@@ -140,7 +140,7 @@ jobs:
         run: scripts/e2e-ci.sh sync
         timeout-minutes: 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -261,7 +261,7 @@ jobs:
       - name: Subir los flaky de la run (tendencia)
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('dentalix-web/e2e-flaky.json') != ''
         timeout-minutes: 2
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-flaky
           path: dentalix-web/e2e-flaky.json
@@ -278,7 +278,7 @@ jobs:
       - name: Subir informe, trazas y logs
         if: always()
         timeout-minutes: 5
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
