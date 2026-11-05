@@ -3,8 +3,8 @@ import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
-import { LATE_BROWSER_TIME, SEDE_TZ, atSede, lastSlotToday, sedeDayFromToday } from './support/clock';
-import { E2E_REGION } from './support/regional';
+import { LATE_BROWSER_TIME, SEDE_TODAY_TZ, atSede, lastSlotToday, sedeDayFromToday } from './support/clock';
+import { E2E_REGION, E2E_TODAY_REGION } from './support/regional';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
@@ -53,10 +53,14 @@ async function api(page: Page, origin: string) {
   };
 }
 
+// DX-460: la sede y el navegador en la zona segura de la suite: la franja de hoy vale a cualquier hora.
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
+
 for (const viewport of VIEWPORTS) {
   test(`plantilla «Resina» desde Ajustes, la cita y la ficha (${viewport.name})`, async ({ page }) => {
     test.setTimeout(150_000);
-    await page.clock.install({ time: atSede(sedeDayFromToday(0), LATE_BROWSER_TIME) });
+    await page.clock.install({ time: atSede(sedeDayFromToday(0, ZONE), LATE_BROWSER_TIME, ZONE) });
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const tag = `${suffix}${viewport.width}`;
     const origin = await registerAndLogin(page, {
@@ -65,6 +69,7 @@ for (const viewport of VIEWPORTS) {
       fullName: ownerName,
       email: `test.user.notes.${tag}@example.com`,
       password,
+      location: E2E_TODAY_REGION,
     });
     await disableBusinessHours(page, origin);
     const call = await api(page, origin);
@@ -109,7 +114,7 @@ for (const viewport of VIEWPORTS) {
       sex: 'F',
     });
     const me = await call<{ id: string }>('get', '/me');
-    const slot = lastSlotToday();
+    const slot = lastSlotToday('23:55', '23:59', ZONE);
     await call<{ id: string }>('post', '/appointments', {
       patientId: patient.id,
       providerId: me.id,
@@ -132,7 +137,7 @@ for (const viewport of VIEWPORTS) {
     const evolution = page.getByRole('dialog', { name: 'Registrar evolución' });
     // DX-520: el día/mes exacto con la regla de la sede (patrón corto del
     // locale: «1/11» en es-*), calculado con el mismo helper que la UI.
-    const visitLine = `Cita del ${regionalFormat(E2E_REGION).dayMonth(slot.start, SEDE_TZ)} · ${ownerName}`;
+    const visitLine = `Cita del ${regionalFormat(E2E_REGION).dayMonth(slot.start, ZONE)} · ${ownerName}`;
     await expect(evolution.getByText(visitLine, { exact: true })).toBeVisible();
     await evolution.getByRole('radio', { name: /Resina/ }).click();
     await evolution.getByRole('radio', { name: 'O', exact: true }).check();
