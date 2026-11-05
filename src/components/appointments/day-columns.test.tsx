@@ -264,6 +264,19 @@ describe('DayColumns (DX-121)', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 
+  it('DX-133: la columna vacía no tapa los huecos, y solo su botón recibe toques', () => {
+    renderColumns({ appointments: [] });
+    const button = screen.getAllByRole('button', { name: /Nueva cita/ })[0];
+    expect(button).toHaveClass('pointer-events-auto');
+    expect(button.parentElement?.closest('.pointer-events-none')).not.toBeNull();
+  });
+
+  it('DX-133: «Mover a…» amplía su zona táctil a 44 px en móvil', () => {
+    renderColumns();
+    const [move] = screen.getAllByRole('button', { name: /^Mover a…/ });
+    expect(move.className).toContain('max-sm:after:-inset-2');
+  });
+
   it('«Mover a…» se ofrece por teclado; sin permiso no hay ni «Mover a…» ni arrastre', async () => {
     const user = userEvent.setup();
     const { onMoveRequest } = renderColumns();

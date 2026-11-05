@@ -184,6 +184,26 @@ function cardColors(appointment: Appointment): React.CSSProperties | undefined {
  * escritorio, hasta 6 columnas sin scroll y de 7 a 12 con scroll interno (la
  * página nunca se desplaza en horizontal).
  */
+const ACTIVE_COLUMN_KEY = 'dentalix:agenda:active-column';
+
+/** El almacenamiento puede fallar (modo privado): entonces, la primera columna. */
+function readActiveColumn(): string | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(ACTIVE_COLUMN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveActiveColumn(id: string | null): void {
+  try {
+    if (id) window.localStorage.setItem(ACTIVE_COLUMN_KEY, id);
+    else window.localStorage.removeItem(ACTIVE_COLUMN_KEY);
+  } catch {
+    // Solo es una comodidad: sin guardar, sigue funcionando.
+  }
+}
+
 export function DayColumns({
   date,
   clock,
@@ -218,7 +238,12 @@ export function DayColumns({
   const canDrag = canMove && !byChair;
   const [mountedAt] = useState(() => new Date());
   const now = nowProp ?? mountedAt;
-  const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
+  // DX-133: la columna elegida en el teléfono se recuerda al volver a la agenda.
+  const [activeProviderId, setActiveProviderId] = useState<string | null>(readActiveColumn);
+  const chooseColumn = (id: string | null) => {
+    setActiveProviderId(id);
+    saveActiveColumn(id);
+  };
   const [drag, setDrag] = useState<DragState | null>(null);
   const columnRefs = useRef(new Map<string, HTMLDivElement>());
   // Un arrastre que termina dispara también un `click` en la tarjeta: este
@@ -369,7 +394,7 @@ export function DayColumns({
         className="sm:hidden"
         aria-label={byChair ? copy.chairPicker : copy.providerPicker}
         value={active ?? ''}
-        onValueChange={setActiveProviderId}
+        onValueChange={chooseColumn}
         options={columns.map((c) => ({ value: c.id, label: c.label }))}
       />
 
@@ -592,7 +617,8 @@ export function DayColumns({
                 {columnAppointments.length === 0 && (
                   <div
                     className={cn(
-                      'absolute inset-x-2 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface/90 px-3 py-4 text-center',
+                      // DX-133: no tapa los huecos: solo su botón recibe toques.
+                      'pointer-events-none absolute inset-x-2 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface/90 px-3 py-4 text-center',
                       // Debajo de la etiqueta de un bloqueo, que va arriba a la izquierda.
                       columnBlocks.length > 0 ? 'top-9' : 'top-2',
                     )}
@@ -602,6 +628,7 @@ export function DayColumns({
                       type="button"
                       size="sm"
                       variant="secondary"
+                      className="pointer-events-auto"
                       aria-label={byChair ? copy.newAppointmentIn(p.label) : copy.newAppointmentFor(p.label)}
                       onClick={() => onNewAppointment(p.id)}
                     >
@@ -736,7 +763,7 @@ export function DayColumns({
                             // la rodea tiene su propio botón.
                             onFillOpening?.(p.id, { start: a.start, end: a.end }, a.locationId)
                           }
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary-text shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary-text shadow-sm max-sm:after:absolute max-sm:after:-inset-2 max-sm:after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
                           <UserPlus className="size-4" aria-hidden />
                         </button>
@@ -747,7 +774,7 @@ export function DayColumns({
                           aria-label={copy.moveToFor(patient)}
                           title={copy.moveTo}
                           onClick={() => onMoveRequest(a)}
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface/90 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current"
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface/90 text-ink max-sm:after:absolute max-sm:after:-inset-2 max-sm:after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current"
                         >
                           <MoveRight className="size-4" aria-hidden />
                         </button>
