@@ -59,14 +59,12 @@ jobs:
     # Si un paso se pasa, falla ESE paso (la run queda `failure`) y el informe
     # se sube igual; si se pasara el job, GitHub la marcaría `cancelled` y el
     # rojo no se vería. Pasos: ~3 min de checkout y Node + 1 (referencias
-    # compartidas con la API) + 10 + 5 + 5 + 2 + 8 + 50 (Playwright) + 1 + 2 + 2
-    # + 2 + 2 + 5 = 98 de topes por paso, más que el del job a propósito: no se
-    # agotan todos a la vez. Lo normal es mucho menos (Playwright, la suite
-    # entera: ~35 min en las runs de main de nov. 2026; DX-452 avisa al pasar del
-    # 70 % de su tope, en «Duración de Playwright»).
+    # compartidas con la API) + 10 + 5 + 5 + 2 + 8 + 50 + 1 + 2 + 2 + 2 + 2 + 5
+    # = 98, y caben en 100 (Playwright: ~35 min la suite entera; DX-452 avisa
+    # al pasar del 70 % de su tope).
     # DX-413: un run de repetición (repeat_each > 1, solo workflow_dispatch)
     # corre muchas veces los mismos tests y sin reintentos: tope de 4 h.
-    timeout-minutes: ${{ (inputs.repeat_each != '' && inputs.repeat_each != '1') && 240 || 80 }}
+    timeout-minutes: ${{ (inputs.repeat_each != '' && inputs.repeat_each != '1') && 240 || 100 }}
     services:
       postgres:
         image: postgres:16

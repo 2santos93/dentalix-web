@@ -116,12 +116,22 @@ describe('scripts/check-e2e-flaky-trend.mjs (DX-452)', () => {
       return readFileSync(path.join(dir, 'a.zip'));
     }
 
-    async function viaApi(current: RunFile, past: RunFile[], branchOf: (r: RunFile) => string = () => 'main') {
+    async function viaApi(
+      current: RunFile,
+      past: RunFile[],
+      branchOf: (r: RunFile) => string = () => 'main',
+      brokenZips: number[] = [],
+    ) {
       const calls: string[] = [];
       const server = createServer((req, res) => {
         calls.push(req.url ?? '');
         expect(req.headers.authorization).toBe('Bearer tok');
         const zip = /^\/zip\/(\d+)$/.exec(req.url ?? '');
+        if (zip && brokenZips.includes(Number(zip[1]))) {
+          res.statusCode = 500;
+          res.end('boom');
+          return;
+        }
         if (zip) {
           res.end(zipOf(past.find((r) => r.runId === Number(zip[1]))!));
           return;
@@ -172,6 +182,28 @@ describe('scripts/check-e2e-flaky-trend.mjs (DX-452)', () => {
       expect(res.out).toContain('salió flaky en 3 de las últimas 10 runs');
       expect(res.calls.filter((c) => c.startsWith('/repos/o/r/actions/artifacts?name=e2e-flaky'))).toHaveLength(1);
       expect(res.calls.filter((c) => c.startsWith('/zip/'))).toHaveLength(9);
+    });
+
+    it('con más de 9 runs en la lista descarga solo las 9 más recientes, una por run', async () => {
+      const res = await viaApi(run(101, SPEC), [...history(14, [0, 1]), run(100, SPEC)]);
+      expect(res.calls.filter((c) => c.startsWith('/zip/'))).toHaveLength(9);
+      expect(res.code).toBe(1);
+    });
+
+    it('un artefacto que no se descarga se salta y avisa; los demás cuentan', async () => {
+      const res = await viaApi(run(101, SPEC), past([0, 1]), () => 'main', [100]);
+      expect(res.out).toContain('::warning title=Artefacto de flaky ilegible::');
+      // 100 estaba roto: queda la actual + 1 flaky (99) = 2 de 9 runs leídas -> verde.
+      expect(res.code).toBe(0);
+      const still = await viaApi(run(101, SPEC), past([1, 2, 3]), () => 'main', [100]);
+      expect(still.code).toBe(1);
+    });
+
+    it('si ningún artefacto se puede leer: avisa y sale con 0', async () => {
+      const ids = past([0, 1, 2]).map((r) => r.runId);
+      const res = await viaApi(run(101, SPEC), past([0, 1, 2]), () => 'main', ids);
+      expect(res.code).toBe(0);
+      expect(res.out).toContain('::warning title=Tendencia de flaky sin historial::');
     });
 
     it('2 de 10: 0; y los artefactos de otras ramas no cuentan', async () => {
