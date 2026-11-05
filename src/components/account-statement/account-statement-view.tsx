@@ -52,6 +52,7 @@ import {
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { PaymentAllocationDetailDialog } from '@/components/payments/payment-allocation-detail-dialog';
+import { paymentProofViewerCopy, usePaymentProofViewer } from '@/components/payments/payment-proof-viewer';
 import {
   useVoidPayment,
   voidPaymentSubject,
@@ -190,6 +191,8 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // (sale marcado «ANULADO»).
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
   const [allocationPaymentId, setAllocationPaymentId] = useState<string | null>(null);
+  // DX-389: «Ver comprobante» del abono (ADMIN y recepción).
+  const proofViewer = usePaymentProofViewer(token);
   // Saldo a favor (DX-253): traspaso y devolución (con su comprobante).
   const canCredit = canMoveCredit(getTokenRole(token));
   // `reprint`: el comprobante viene del historial (DX-432), no de una devolución recién hecha.
@@ -351,6 +354,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
               onVoid={voiding.request}
               onReceipt={setReceiptPaymentId}
               onViewAllocation={setAllocationPaymentId}
+              onViewProof={canCharge ? proofViewer.open : undefined}
               canCredit={canCredit}
               onRetry={() => setReloadKey((k) => k + 1)}
               actBlockedReason={receptionCapZero ? RECEPTION_CAP_ZERO_MESSAGE : null}
@@ -417,9 +421,12 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         }}
       />
 
+      {proofViewer.dialog}
+
       <PaymentReceiptDialog
         token={token}
         paymentId={receiptPaymentId}
+        hasProof={data?.movements.find((m) => m.id === receiptPaymentId)?.hasProof ?? false}
         onOpenChange={(open) => {
           if (!open) setReceiptPaymentId(null);
         }}
@@ -453,6 +460,7 @@ function StatementBody({
   onVoid,
   onReceipt,
   onViewAllocation,
+  onViewProof,
   canCredit,
   actBlockedReason,
   patientId,
@@ -468,6 +476,8 @@ function StatementBody({
   onReceipt: (paymentId: string) => void;
   /** DX-399: abre «Imputación del abono» (solo lectura). */
   onViewAllocation: (paymentId: string) => void;
+  /** DX-389: abre el comprobante del cobro (solo ADMIN y recepción, y si el abono lo tiene). */
+  onViewProof?: (paymentId: string) => void;
   /** DX-253: ADMIN y recepción ven «Aplicar a otro plan» y «Devolver». */
   canCredit: boolean;
   /** DX-432: por qué las acciones del saldo a favor no se pueden ahora (tope de recepción en 0). */
@@ -736,6 +746,9 @@ function StatementBody({
               // Un abono a un plan que no está anulado: el de un saldo migrado no se imputa a ítems.
               ...(m.treatmentPlanId && !m.voided
                 ? [{ label: copy.allocationAction, onSelect: () => onViewAllocation(m.id) }]
+                : []),
+              ...(onViewProof && m.hasProof
+                ? [{ label: paymentProofViewerCopy.action, onSelect: () => onViewProof(m.id) }]
                 : []),
               ...(m.canVoid
                 ? [

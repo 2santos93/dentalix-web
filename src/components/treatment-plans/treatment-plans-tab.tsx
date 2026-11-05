@@ -48,6 +48,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { Disclosure } from '@/components/shared/disclosure';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
+import { usePaymentProofViewer } from '@/components/payments/payment-proof-viewer';
 import { ExternalInvoiceModal, type ExternalInvoiceTarget } from '@/components/payments/external-invoice-modal';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
@@ -273,6 +274,8 @@ export function TreatmentPlansTab({
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
   // DX-399: el abono cuya imputación se está mirando (solo lectura).
   const [viewAllocationPaymentId, setViewAllocationPaymentId] = useState<string | null>(null);
+  // DX-389: «Ver comprobante» del abono (ADMIN y recepción).
+  const proofViewer = usePaymentProofViewer(token);
   // DX-515: el abono cuyo nº de factura fiscal externa se anota.
   const [invoiceTarget, setInvoiceTarget] = useState<ExternalInvoiceTarget | null>(null);
 
@@ -1283,6 +1286,7 @@ export function TreatmentPlansTab({
                           manualPaymentIds={manualPaymentIds}
                           onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
                           onViewAllocation={role === 'ADMIN' ? setViewAllocationPaymentId : undefined}
+                          onViewProof={canSeeBilling ? (p) => proofViewer.open(p.id) : undefined}
                           fmt={sedeFmt}
                           onExternalInvoice={(p) =>
                             setInvoiceTarget({
@@ -1389,9 +1393,12 @@ export function TreatmentPlansTab({
         />
       ) : null}
 
+      {proofViewer.dialog}
+
       <PaymentReceiptDialog
         token={token}
         paymentId={receiptPaymentId}
+        hasProof={payments.find((p) => p.id === receiptPaymentId)?.hasProof ?? false}
         onOpenChange={(open) => {
           if (!open) setReceiptPaymentId(null);
         }}

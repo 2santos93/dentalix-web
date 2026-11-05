@@ -12,6 +12,7 @@ import { statusLabel } from '@/lib/status/tones';
 import { movementReferenceLabel } from '@/lib/account-statement/presentation';
 import { SplitPaymentBadge, splitPaymentLabel } from '@/components/payments/split-payment-badge';
 import { copy } from './treatment-plans-tab-copy';
+import { paymentProofViewerCopy } from '@/components/payments/payment-proof-viewer';
 import { externalInvoiceCopy } from '@/components/payments/external-invoice-modal';
 
 /**
@@ -54,6 +55,8 @@ interface PlanPaymentsListProps {
   fmt: RegionalFormat | null;
   /** DX-515: anota el nº de la factura fiscal externa del abono (ADMIN y recepción). */
   onExternalInvoice?: (payment: Payment) => void;
+  /** DX-389: abre el comprobante del cobro; solo ADMIN y recepción (y solo si el abono lo tiene). */
+  onViewProof?: (payment: Payment) => void;
 }
 
 /** El nombre de la fila para el «⋯»: «Acciones de abono PRI-000001» (o su importe, sin serie). */
@@ -94,6 +97,7 @@ export function PlanPaymentsList({
   onViewAllocation,
   fmt,
   onExternalInvoice,
+  onViewProof,
 }: PlanPaymentsListProps) {
   // DX-414: cuántas líneas tiene cada cobro dividido entre los abonos del plan.
   const splitCounts = new Map<string, number>();
@@ -203,6 +207,9 @@ export function PlanPaymentsList({
   function actionsFor(p: Payment): RowAction[] {
     const voiding = voidingPaymentId === p.id;
     const actions: RowAction[] = [{ label: copy.receiptAction, onSelect: () => onReceipt(p.id) }];
+    if (onViewProof && p.hasProof) {
+      actions.push({ label: paymentProofViewerCopy.action, onSelect: () => onViewProof(p) });
+    }
     if (onExternalInvoice) {
       actions.push({ label: externalInvoiceCopy.action, onSelect: () => onExternalInvoice(p) });
     }
