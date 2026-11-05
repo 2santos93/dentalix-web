@@ -38,6 +38,7 @@ import { AgingSummary } from './aging-summary';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { ScopeMarker } from './scope-marker';
+import { carteraNavFor, carteraPanelProps, type CarteraViewTabs } from './cartera-tabs';
 import {
   AgeCell,
   AgeMeta,
@@ -125,7 +126,7 @@ function parseMinBalance(text: string, currency: string): number | undefined {
  * por tramo, conteo, `DataList` y páginas. Toda la fila abre el estado de
  * cuenta; gestión y compromiso van en el «⋯».
  */
-export function ReceivablesView({ token }: { token: string }) {
+export function ReceivablesView({ token, tabs }: { token: string; tabs?: CarteraViewTabs }) {
   const router = useRouter();
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
   const isAdmin = getTokenRole(token) === 'ADMIN';
@@ -364,7 +365,10 @@ export function ReceivablesView({ token }: { token: string }) {
         meta={data ? <ScopeMarker location={location} /> : null}
       />
 
-      <div className="flex flex-col gap-3">
+      {/* Sin acceso (403) no hay otra vista que ofrecer: solo el aviso. */}
+      {!forbidden ? carteraNavFor(token, tabs) : null}
+
+      <div className="flex flex-col gap-3" {...carteraPanelProps(tabs)}>
         {/* Sin acceso (403) no hay filas que filtrar ni exportar: solo el aviso. */}
         {!forbidden ? (
           // Teléfono: los dos filtros a lo ancho (sus textos no caben en media

@@ -3711,6 +3711,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/receivables/credit-balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pacientes con saldo a favor, por sede y moneda
+         * @description Una fila por paciente, sede y moneda, con el saldo a favor que dice su estado de cuenta (mismo cálculo: lo abonado de más o en un plan cancelado o rechazado, ya descontados traspasos y devoluciones; un plan con deuda no lo compensa; la suma de las filas de un paciente en una moneda es la del estado de cuenta). La sede es donde está el dinero: la del plan que lo originó o, sin ella, la del abono que lo creó, no la de la última cita. `locationId` y las sedes del miembro filtran por esa sede. Antigüedad: día civil del abono que originó el saldo, en la zona de su sede. Orden: moneda (código ISO), importe descendente, paciente. Paginada por desplazamiento como la cartera por antigüedad. Sin datos clínicos. Solo administración y recepción.
+         */
+        get: operations["ReceivablesController_creditBalances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/receivables/aging.csv": {
         parameters: {
             query?: never;
@@ -14793,6 +14813,62 @@ export interface components {
             /** @description DX-472-bis: Σ `paymentsWithoutRateCount` de TODAS las filas filtradas */
             paymentsWithoutRateCount: number;
             /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo para alguna fila filtrada: cifras incompletas; volver a pedirla las completa */
+            rateProviderTimedOut: boolean;
+        };
+        CreditBalanceLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        CreditBalancesScopeDto: {
+            location: components["schemas"]["CreditBalanceLocationDto"] | null;
+        };
+        CreditBalancePatientDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        CreditBalanceRowDto: {
+            patient: components["schemas"]["CreditBalancePatientDto"];
+            /** @description Sede donde está el dinero: la del plan que lo originó (aceptación, si no presentación) o, si el plan no tiene, la del abono que lo creó; no la de la última cita del paciente. null = sin sede */
+            location: components["schemas"]["CreditBalanceLocationDto"] | null;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Saldo a favor en esa moneda: el del estado de cuenta, ya descontados traspasos y devoluciones */
+            amount: number;
+            /**
+             * @description Día civil, en la zona de la sede del abono, del abono que originó el saldo: el que dejó el plan por encima de lo facturable (en un plan cancelado o rechazado, el primero); con varios planes en la fila, el más antiguo. null si no hay abono fechable
+             * @example 2026-10-19
+             */
+            since: string | null;
+            /** @description Días de calendario desde `since` hasta hoy en la sede */
+            ageDays: number | null;
+        };
+        CreditBalanceTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Pacientes con saldo a favor en esta moneda */
+            patients: number;
+            amount: number;
+        };
+        CreditBalancesPageDto: {
+            /**
+             * @description «Hoy» en la zona de la sede del alcance
+             * @example 2026-11-03
+             */
+            asOf: string;
+            scope: components["schemas"]["CreditBalancesScopeDto"];
+            /** @description Una fila por paciente, sede y moneda, ordenadas por moneda (código ISO) y luego por importe descendente; a igual importe, por paciente. La suma de las filas de un paciente en una moneda es su saldo a favor del estado de cuenta */
+            items: components["schemas"]["CreditBalanceRowDto"][];
+            /** @description Filas de la lista completa. La paginación es por desplazamiento (page/pageSize) sobre una lista que se recalcula en cada petición: si un saldo cambia entre dos páginas, una fila puede repetirse o saltarse */
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @description Por moneda, de TODAS las filas (no solo la página) */
+            totals: components["schemas"]["CreditBalanceTotalDto"][];
+            /** @description DX-472-bis: abonos en otra moneda que no suman por falta de tasa: el saldo a favor puede ser mayor */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo: cifras incompletas; volver a pedirla las completa */
             rateProviderTimedOut: boolean;
         };
         TransferCreditDto: {
@@ -29510,6 +29586,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReceivablesAgingPageDto"];
+                };
+            };
+            /** @description Filtro inválido o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la cartera: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceivablesController_creditBalances: {
+        parameters: {
+            query?: {
+                /** @description Sede de la deuda. Sin él, la de la cabecera X-Location-Id; sin ninguna, toda la clínica. */
+                locationId?: string;
+                /** @description Solo esta moneda (ISO 4217), sin convertir */
+                currency?: string;
+                page?: number;
+                /** @description Tope: 100 (un valor mayor se recorta) */
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditBalancesPageDto"];
                 };
             };
             /** @description Filtro inválido o sede que no es de esta clínica */
