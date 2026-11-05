@@ -8,6 +8,7 @@ export const resinTemplate: NoteTemplate = {
   category: 'Operatoria',
   body: 'Resina en superficie {{Superficie}} con {{Material}}. Observaciones: {{Observaciones}}.',
   active: true,
+  version: 1,
   prompts: [
     {
       id: 'p-sup',

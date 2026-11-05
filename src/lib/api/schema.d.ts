@@ -1602,7 +1602,7 @@ export interface paths {
         head?: never;
         /**
          * Editar o desactivar una plantilla
-         * @description Las evoluciones ya guardadas no cambian: llevan su texto compuesto. `prompts`, si viene, sustituye todas las preguntas.
+         * @description Las evoluciones ya guardadas no cambian: llevan su texto compuesto. `prompts`, si viene, sustituye todas las preguntas: las que llevan el `id` de una pregunta de la plantilla lo conservan (una evolución en curso sigue guardándose), las demás son nuevas. `version` activa el control optimista (409 si cambió).
          */
         patch: operations["ClinicalNoteTemplatesController_update"];
         trace?: never;
@@ -9258,7 +9258,7 @@ export interface components {
         CreateClinicalEntryDto: {
             /**
              * Format: date-time
-             * @description Fecha de atención (fecha civil). Si falta: el día de la cita ligada en la zona de su sede o, sin cita, ahora.
+             * @description Fecha de atención (fecha civil). Si falta: el día de la cita ligada en la zona de su sede o, sin cita, ahora. Con cita debe ser el día de la cita y sin cita no puede ser futura (día civil de la sede): si no, 400. Una hora exactamente 00:00:00.000Z se lee como fecha civil (ese día); con otra hora es un instante y se lee en la zona de la sede.
              */
             entryDate?: string;
             reason?: string;
@@ -9402,6 +9402,8 @@ export interface components {
             /** @example Resina en superficie {{Superficie}} con {{Material}}. */
             body: string;
             active: boolean;
+            /** @description Versión optimista: se envía de vuelta en el PATCH; sube en 1 con cada edición */
+            version: number;
             prompts: components["schemas"]["ClinicalNoteTemplatePromptDto"][];
             /** Format: date-time */
             createdAt: string;
@@ -9409,6 +9411,11 @@ export interface components {
             updatedAt: string;
         };
         NotePromptInputDto: {
+            /**
+             * Format: uuid
+             * @description Id de la pregunta existente que se conserva al editar (upsert por id). Sin id, o con uno que no es de la plantilla, es una pregunta nueva.
+             */
+            id?: string;
             label: string;
             type: components["schemas"]["ClinicalNotePromptType"];
             /** @description Obligatorias (1 a 20) en ONE y MULTI; vacías en TEXT */
@@ -9434,6 +9441,8 @@ export interface components {
             prompts?: components["schemas"]["NotePromptInputDto"][];
             /** @description false = desactivarla (sale del selector) */
             active?: boolean;
+            /** @description Versión que el cliente leyó (la `version` de la plantilla). Si la plantilla ya cambió: 409 «La plantilla cambió, recárgala». Obligatoria. */
+            version: number;
         };
         AnestheticProductDto: {
             /** Format: uuid */
