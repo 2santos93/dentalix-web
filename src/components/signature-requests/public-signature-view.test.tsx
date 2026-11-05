@@ -130,13 +130,22 @@ describe('PublicSignatureView (DX-243)', () => {
     expect(doc).toHaveTextContent('a realizar la exodoncia del 38.');
     expect(mockedDocument).toHaveBeenCalledWith('tok', 'S'.repeat(43));
 
-    // Sin confirmar la lectura ni firmar: dice qué falta.
+    // DX-441: al llegar al paso, el foco va a su título.
+    expect(within(doc).getByRole('heading', { level: 1 })).toHaveFocus();
+
+    // Sin confirmar la lectura ni firmar: dice qué falta y lleva al primer error.
     await user.click(screen.getByRole('button', { name: 'Firmar' }));
     expect(screen.getByText('Confirma que leíste el documento completo.')).toBeInTheDocument();
     expect(screen.getByText('Firma en el recuadro.')).toBeInTheDocument();
     expect(mockedSign).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: /he leído el documento completo/i })).toHaveFocus();
 
     await user.click(screen.getByRole('checkbox', { name: /he leído el documento completo/i }));
+    // DX-441: sin firma, el foco va al lienzo, que describe el error.
+    await user.click(screen.getByRole('button', { name: 'Firmar' }));
+    const canvas = screen.getByRole('img', { name: 'Tu firma' });
+    expect(canvas).toHaveFocus();
+    expect(canvas).toHaveAccessibleDescription(expect.stringContaining('Firma en el recuadro.'));
     draw(screen.getByRole('img', { name: 'Tu firma' }));
     await user.click(screen.getByRole('button', { name: 'Firmar' }));
     await waitFor(() =>
@@ -145,7 +154,7 @@ describe('PublicSignatureView (DX-243)', () => {
         accepted: true,
       }),
     );
-    expect(await screen.findByRole('heading', { name: 'Documento firmado' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Documento firmado' })).toHaveFocus();
     expect(screen.getByText('a'.repeat(64))).toBeInTheDocument();
     // La copia que imprime lleva la firma que acaba de dibujar.
     expect(screen.getByRole('img', { name: 'Firma de Laura Castro' })).toHaveAttribute(

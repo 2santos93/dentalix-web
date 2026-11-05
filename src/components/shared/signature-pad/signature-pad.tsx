@@ -43,6 +43,10 @@ export interface SignaturePadProps {
   /** Alto del lienzo en px CSS (el ancho llena el contenedor). */
   height?: number;
   className?: string;
+  /** `id` del lienzo: permite llevarle el foco cuando falta la firma. */
+  canvasId?: string;
+  /** `id` del mensaje de error, para enlazarlo con `aria-describedby`. */
+  errorId?: string;
 }
 
 /**
@@ -66,6 +70,8 @@ export function SignaturePad({
   clearLabel = copy.clear,
   height = 160,
   className,
+  canvasId,
+  errorId,
 }: SignaturePadProps) {
   const baseId = useId();
   const labelId = `${baseId}-label`;
@@ -194,7 +200,9 @@ export function SignaturePad({
           ref={canvasRef}
           role="img"
           aria-labelledby={labelId}
-          aria-describedby={hint ? hintId : undefined}
+          id={canvasId}
+          tabIndex={canvasId ? -1 : undefined}
+          aria-describedby={[hint ? hintId : null, errorId].filter(Boolean).join(' ') || undefined}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={finishStroke}

@@ -159,15 +159,18 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       await page.getByRole('button', { name: 'Ver el documento' }).click();
       const document = page.getByRole('article', { name: 'Texto del documento' });
       await expect(document.getByRole('heading', { name: TEMPLATE_TITLE })).toBeVisible();
+      // DX-441: el foco llega al título del paso.
+      await expect(document.getByRole('heading', { name: TEMPLATE_TITLE })).toBeFocused();
       await expect(document).toContainText('Laura Castro Jiménez');
       await expectNoHorizontalScroll(page);
 
       await page.getByRole('button', { name: 'Firmar' }).click();
       await expect(page.getByText('Confirma que leíste el documento completo.')).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: /he leído el documento completo/i })).toBeFocused();
       await page.getByRole('checkbox', { name: /he leído el documento completo/i }).check();
       await drawSignature(page, page.getByRole('img', { name: 'Tu firma' }));
       await page.getByRole('button', { name: 'Firmar' }).click();
-      await expect(page.getByRole('heading', { name: 'Documento firmado' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Documento firmado' })).toBeFocused();
       // La copia que puede imprimir lleva su firma.
       await expect(page.getByRole('img', { name: 'Firma de Laura Castro Jiménez' })).toBeVisible();
       await expect(page.getByRole('button', { name: /imprimir o guardar en pdf/i })).toBeVisible();
