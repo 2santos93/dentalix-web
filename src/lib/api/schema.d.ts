@@ -11029,6 +11029,24 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        CheckoutChecklistDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: date-time */
+            nextAppointmentStart: string | null;
+            /** @description Día civil del recall activo más cercano. */
+            recallDueOn: string | null;
+            hasPhone: boolean;
+            hasEmail: boolean;
+            /** @description Dio de baja los recordatorios: tener el dato no basta. */
+            remindersOptedOut: boolean;
+            /** @description Saldo vencido (`hasOverdue`, `overdueDays`, `amounts`); null si el rol no cobra. */
+            balance: {
+                [key: string]: unknown;
+            } | null;
+        };
         UpdateAppointmentDto: {
             /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
             planItemIds?: string[];
@@ -11076,6 +11094,8 @@ export interface components {
             overrideReason?: string;
             /** @description DX-509: al reactivar (desde CANCELLED o NO_SHOW) una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional, `true` la mantiene en sobrecupo a sabiendas (`audit_event` `WALK_IN_OVERBOOK_KEPT`). Sin él ese caso es 409 `OVERBOOK_SLOT_TAKEN`. Con el hueco libre deja de ser sobrecupo sola (`WALK_IN_OVERBOOK_CLEARED`); moverla a otra hora u otro profesional también. En cualquier otro cambio se ignora. */
             keepOverbooked?: boolean;
+            /** @description DX-202: lo que faltaba al completar la cita desde la salida del paciente. No bloquea: queda en la auditoría. */
+            checkoutPending?: ("NEXT_VISIT" | "PAYMENT" | "PHONE" | "EMAIL")[];
         };
         UndoArrivalDto: {
             /** @description DX-509: para una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional, `true` la deja agendada y en sobrecupo a sabiendas (`audit_event` `WALK_IN_OVERBOOK_KEPT`). Sin él ese caso es 409 `OVERBOOK_SLOT_TAKEN`. Con el hueco libre deja de ser sobrecupo sola (`WALK_IN_OVERBOOK_CLEARED`). Se ignora en una cita que no es sobrecupo. */
