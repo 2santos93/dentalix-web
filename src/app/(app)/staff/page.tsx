@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { StaffView } from '@/components/staff/staff-view';
+import { RouteRoleGate } from '@/components/layouts/route-role-gate';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -38,6 +39,8 @@ export default function StaffPage() {
   }
 
   return (
-    <StaffView token={accessToken} />
+    <RouteRoleGate href="/staff" token={accessToken}>
+      <StaffView token={accessToken} />
+    </RouteRoleGate>
   );
 }

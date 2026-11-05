@@ -3,6 +3,7 @@ import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { CatalogView } from '@/components/catalog/catalog-view';
+import { RouteRoleGate } from '@/components/layouts/route-role-gate';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app's
 // copy convention until next-intl wiring lands.
@@ -51,6 +52,8 @@ function CatalogPageView() {
   }
 
   return (
-    <CatalogView token={accessToken} initialItemId={searchParams.get('item')} />
+    <RouteRoleGate href="/catalog" token={accessToken}>
+      <CatalogView token={accessToken} initialItemId={searchParams.get('item')} />
+    </RouteRoleGate>
   );
 }
