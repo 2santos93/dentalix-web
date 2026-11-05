@@ -6,23 +6,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 export type Agreement = components['schemas']['AgreementDto'];
 export type AgreementKind = components['schemas']['AgreementKind'];
 
-/**
- * El generado declara `percent` como `Record<string, never>` en el alta (el
- * decorador no sabe que es un número), así que las entradas se tipan a mano
- * con el mismo cuerpo que valida la API.
- */
-export interface CreateAgreementInput {
-  name: string;
-  payerId: string;
-  kind: AgreementKind;
-  percent?: number;
-  percentByCategory?: Record<string, number>;
-  priceListId?: string;
-  locationId?: string;
-  validFrom?: string;
-  validTo?: string;
-  active?: boolean;
-}
+export type CreateAgreementInput = components['schemas']['CreateAgreementDto'];
 
 export type UpdateAgreementInput = components['schemas']['UpdateAgreementDto'];
 

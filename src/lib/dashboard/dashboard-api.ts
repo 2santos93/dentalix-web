@@ -3,31 +3,7 @@ import type { components, paths } from '@/lib/api/schema';
 
 export type GetDashboardParams = paths['/api/v1/dashboard']['get']['parameters']['query'];
 
-/**
- * `DashboardDto` (and its nested `DashboardIncomesDto`) are fully
- * `@ApiProperty()`-decorated response DTOs (`DashboardController` uses
- * `@ApiOkResponse` with them, see `schema.d.ts`), so the generated shape is
- * otherwise reliable to reuse directly — same convention as
- * `TreatmentPlan`/`TreatmentPlanItem` in `treatment-plans-api.ts`.
- *
- * The one exception is `incomes.byCurrency`: on the backend it's a plain
- * `Record<string, number>` (documented via `@ApiProperty({ example: {...} })`
- * with no explicit `additionalProperties` schema), which openapi-typescript
- * can't infer from an example alone — it generates `Record<string, never>`
- * for it. `Dashboard` overrides just that field to the real wire shape;
- * everything else is the generated `DashboardDto` verbatim. Keep this override
- * in sync if the backend ever adds an explicit `additionalProperties` schema
- * (at which point it could be dropped).
- *
- * NOTE (PAY-T4): the backend field was renamed `sales` → `incomes` (the
- * dashboard now sums abonos/payments, not sales) — see
- * `DashboardIncomesDto`/`DashboardDto.incomes` in `schema.d.ts`.
- */
-export type Dashboard = Omit<components['schemas']['DashboardDto'], 'incomes'> & {
-  incomes: Omit<components['schemas']['DashboardIncomesDto'], 'byCurrency'> & {
-    byCurrency: Record<string, number>;
-  };
-};
+export type Dashboard = components['schemas']['DashboardDto'];
 
 /**
  * `GET /dashboard?from&to&currency&upcomingLimit` — owner/admin-only summary

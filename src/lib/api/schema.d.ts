@@ -8740,7 +8740,7 @@ export interface components {
             payerId: string;
             kind: components["schemas"]["AgreementKind"];
             /** @description Obligatorio con PERCENT_DISCOUNT; no va con PRICE_LIST. */
-            percent?: Record<string, never>;
+            percent?: number | null;
             /** @description { "<categoría del catálogo>": <0–100> }, hasta 50 categorías de 80 caracteres. Solo PERCENT_DISCOUNT. */
             percentByCategory?: {
                 [key: string]: number;
@@ -11150,7 +11150,7 @@ export interface components {
             /** @description Dio de baja los recordatorios: tener el dato no basta. */
             remindersOptedOut: boolean;
             /** @description Saldo vencido (`hasOverdue`, `overdueDays`, `amounts`); null si el rol no cobra. */
-            balance: Record<string, never> | null;
+            balance: components["schemas"]["OverdueBalanceDto"] | null;
         };
         UpdateAppointmentDto: {
             /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
@@ -11687,7 +11687,7 @@ export interface components {
             /** @description Tramos de ese día en esa sede (prevalecen sobre el semanal); como mucho 7. Vacío = «no trabaja» ese día en esa sede. */
             ranges: components["schemas"]["MinuteRangeDto"][];
             /** @example Cubre a la Dra. Ruiz */
-            note?: Record<string, never> | null;
+            note?: string | null;
             /** @description DX-267: guardar aunque deje citas fuera. Sin esto, 409 con el recuento y una muestra. Las citas no se mueven. */
             confirmAffected?: boolean;
         };
@@ -13266,7 +13266,7 @@ export interface components {
         };
         UpdateClinicSettingsDto: {
             /** @description Nombre comercial (obligatorio si se envía). 1..120. */
-            name?: Record<string, never>;
+            name?: string;
             /** @description Razón social. Vacío o null = sin dato. 1..160. */
             legalName?: string | null;
             /** @description Identificador fiscal, texto libre sin formato de ningún país. 1..64. */
@@ -13283,7 +13283,7 @@ export interface components {
              * @description Color de la marca, #RRGGBB.
              * @example #0E7490
              */
-            primaryColor?: Record<string, never>;
+            primaryColor?: string;
         };
         CurrencyDto: {
             /**
@@ -14480,7 +14480,7 @@ export interface components {
              * @description Número de cuota; null si el próximo vencimiento es el down payment
              * @example 2
              */
-            sequence: Record<string, never> | null;
+            sequence: number | null;
             /** Format: date-time */
             dueDate: string;
             /** @example 100 */
@@ -17394,7 +17394,9 @@ export interface components {
              */
             count: number;
             /** @description Breakdown of the ORIGINAL (unconverted) amounts grouped by each payment's own currency, keyed by its ISO 4217 code (3 letters). */
-            byCurrency: Record<string, never>;
+            byCurrency: {
+                [key: string]: number;
+            };
         };
         DashboardLowStockItemDto: {
             /** Format: uuid */

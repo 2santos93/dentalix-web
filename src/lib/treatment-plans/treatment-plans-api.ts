@@ -35,9 +35,8 @@ export type TreatmentPlanItem = components['schemas']['TreatmentPlanItemDto'];
  * `TreatmentPlan`/`TreatmentPlanDetail` entity, with no `@Exclude`/serializer
  * stripping — but the presentation `TreatmentPlanDto` class used purely for
  * Swagger documentation isn't `@ApiProperty()`-annotated for it, so
- * `openapi-typescript` doesn't generate it. Same situation/fix as
- * `Dashboard.incomes.byCurrency` in `dashboard-api.ts`: this intersects the
- * generated shape with the field by hand; drop it if the backend DTO is ever
+ * `openapi-typescript` doesn't generate it. This intersects the generated
+ * shape with the field by hand; drop it if the backend DTO is ever
  * annotated.
  */
 export type TreatmentPlan = Omit<components['schemas']['TreatmentPlanDto'], 'items'> & {
