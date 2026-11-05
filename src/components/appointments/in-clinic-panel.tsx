@@ -148,10 +148,11 @@ export function InClinicPanel({
   } | null>(null);
   const [focusCompletion, setFocusCompletion] = useState(0);
   const panelRunner: PatientFlowRunner = {
+    token: runner.token,
     pendingId: runner.pendingId,
     claimingKey: runner.claimingKey,
     claim: runner.claim,
-    run: async (id, action, name) => {
+    run: async (id, action, name, checkoutPending) => {
       const source = GROUPS.find((group) => view?.[group].some((item) => item.appointmentId === id)) ?? 'waiting';
       const destination = action === 'SEAT' ? 'inChair' : action === 'READY' ? 'readyForCheckout' : source;
       const intent = {
@@ -164,7 +165,7 @@ export function InClinicPanel({
         failed: false,
       };
       pendingFocus.current = intent;
-      const succeeded = await runner.run(id, action, name);
+      const succeeded = await runner.run(id, action, name, checkoutPending);
       if (pendingFocus.current === intent) {
         intent.settled = true;
         intent.failed = succeeded === false;
