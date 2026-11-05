@@ -178,6 +178,12 @@ test('1440 px: llegó → en sillón → listo para cobrar → completada', asyn
   await page.goto(`${origin}/agenda/en-clinica`);
   const readyHere = page.getByTestId('in-clinic-group-readyForCheckout');
   await readyHere.getByRole('button', { name: 'Completar' }).click();
+  // DX-202: la salida del paciente: dice qué falta y deja completar igual.
+  const checkout = page.getByRole('dialog', { name: `Salida de Ana ${last}` });
+  await expect(checkout.getByTestId('checkout-NEXT_VISIT')).toHaveAttribute('data-done', 'false', { timeout: 10_000 });
+  await expectNoHorizontalScroll(page);
+  await checkout.getByRole('button', { name: /^Completar con \d+ pendientes?$/ }).click();
+  await expect(checkout).toBeHidden();
   await expect(page.getByText(`Cita de Ana ${last} completada.`)).toBeVisible();
   await expect(page.getByText('Nadie en espera')).toBeVisible({ timeout: 10_000 });
   await expect(readyHere.getByRole('heading')).toBeFocused();

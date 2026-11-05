@@ -1,3 +1,4 @@
+import { getCheckoutChecklist } from '@/lib/appointments/checkout-checklist';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
@@ -14,6 +15,10 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 
+jest.mock('../../lib/appointments/checkout-checklist', () => ({
+  ...jest.requireActual('../../lib/appointments/checkout-checklist'),
+  getCheckoutChecklist: jest.fn(),
+}));
 jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
   getInClinic: jest.fn(),
@@ -512,8 +517,19 @@ describe('InClinicPanel (DX-200)', () => {
   it('DX-242: completar la última cita lleva foco al encabezado de su grupo', async () => {
     mockedGet.mockResolvedValueOnce(view({ readyForCheckout: [item({ appointmentId:'last', status:'READY_FOR_CHECKOUT' })] })).mockResolvedValueOnce(view());
     mockedUpdate.mockResolvedValue({} as never);
+    jest.mocked(getCheckoutChecklist).mockResolvedValue({
+      appointmentId: 'last',
+      patientId: 'p1',
+      nextAppointmentStart: null,
+      recallDueOn: '2027-01-01',
+      hasPhone: true,
+      hasEmail: true,
+      remindersOptedOut: false,
+      balance: { hasOverdue: false },
+    });
     render(<Harness role="RECEPTION"/>);
     await userEvent.click(await screen.findByRole('button', {name:'Completar'}));
+    await userEvent.click(await screen.findByRole('button', {name:'Completar la cita'}));
     await waitFor(() => expect(within(screen.getByTestId('in-clinic-group-readyForCheckout')).getByRole('heading')).toHaveFocus());
     expect(document.body).not.toHaveFocus();
   });

@@ -25,6 +25,8 @@ import { notifyError } from '@/components/errors/notify';
 import { ApiError } from '@/lib/api/api-error';
 import { OVERBOOK_SLOT_TAKEN } from '@/lib/appointments/walk-in';
 import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
+import { CheckoutDialog } from '@/components/appointments/checkout-dialog';
+import type { CheckoutItem } from '@/lib/appointments/checkout-checklist';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -54,7 +56,14 @@ export interface PatientFlowRunner {
   /** Cita cuyo cambio está en curso (sus botones quedan deshabilitados). */
   pendingId: string | null;
   /** false: la API rechazó el paso; el aviso y el refresco ya se gestionaron. */
-  run: (appointmentId: string, action: FlowAction, patientName: string) => Promise<boolean>;
+  run: (
+    appointmentId: string,
+    action: FlowAction,
+    patientName: string,
+    checkoutPending?: CheckoutItem[],
+  ) => Promise<boolean>;
+  /** DX-202: la sesión para leer la lista de la salida; sin ella, se completa directo. */
+  token?: string;
   /** DX-273: `${appointmentId}:${planItemId}` que se está trayendo, si hay. */
   claimingKey?: string | null;
   /**
@@ -152,7 +161,12 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     }
   }
 
-  async function run(appointmentId: string, action: FlowAction, patientName: string) {
+  async function run(
+    appointmentId: string,
+    action: FlowAction,
+    patientName: string,
+    checkoutPending?: CheckoutItem[],
+  ) {
     setPendingId(appointmentId);
     try {
       let reserved: PlanItemReservedElsewhere[] = [];
@@ -161,6 +175,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       } else {
         const result = await updateAppointment(token, appointmentId, {
           status: FLOW_ACTION_STATUS[action],
+          ...(checkoutPending?.length ? { checkoutPending } : {}),
         });
         reserved = result.planItemsReservedElsewhere ?? [];
       }
@@ -230,7 +245,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       // El reintento cierra sobre la propia operación (cita y paso): no hay
       // estado ambiente que pueda quedar viejo.
       notifyError(apiErrorMessage(err, patientFlowCopy.error), {
-        onRetry: () => void run(appointmentId, action, patientName),
+        onRetry: () => void run(appointmentId, action, patientName, checkoutPending),
       });
       return false;
     } finally {
@@ -243,6 +258,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
   return {
     pendingId,
     run,
+    token,
     claimingKey,
     claim,
     overbookDialog: <KeepOverbookedDialog prompt={overbookPrompt} onClose={() => setOverbookPrompt(null)} />,
@@ -279,6 +295,7 @@ export function PatientFlowActions({
   // Se pulsó un paso aquí: al cambiar los botones (el pulsado desaparece) el
   // foco iría al <body>; se lleva al primer botón del grupo (WCAG 2.4.3).
   const clicked = useRef(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const actionsKey = actions.join(',');
   useEffect(() => {
     if (!clicked.current) return;
@@ -309,7 +326,9 @@ export function PatientFlowActions({
             loading={pending}
             onClick={() => {
               clicked.current = true;
-              void runner.run(appointmentId, action, patientName);
+              // DX-202: completar pasa por la salida del paciente.
+              if (action === 'CHECKOUT' && runner.token) setCheckoutOpen(true);
+              else void runner.run(appointmentId, action, patientName);
             }}
             data-flow-action={action}
             className="h-11 sm:h-9"
@@ -319,6 +338,15 @@ export function PatientFlowActions({
           </Button>
         );
       })}
+      {checkoutOpen && runner.token ? (
+        <CheckoutDialog
+          token={runner.token}
+          appointmentId={appointmentId}
+          patientName={patientName}
+          onOpenChange={setCheckoutOpen}
+          onComplete={(checkoutPending) => runner.run(appointmentId, 'CHECKOUT', patientName, checkoutPending)}
+        />
+      ) : null}
     </div>
   );
 }
